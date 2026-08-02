@@ -2,6 +2,16 @@
 
 Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md).
 
+## Plan 02 — quality guardrails (approved 2026-08-02, archived 2026-08-02)
+
+[docs/plan/02_quality-guardrails.md](./plan/02_quality-guardrails.md) hardened the repo in three slices (PRs #12, #20, and the archival PR; issue #11):
+
+1. **Cross-platform + CI hardening** — `.gitattributes` (LF everywhere, kills the Windows CRLF noise class), a 3-OS verify matrix (ubuntu/windows/macos) behind a stable `ci-ok` join check, zero-warning lint, SHA-pinned actions, Dependabot (npm + actions, grouped), CodeQL, a trivy HIGH/CRITICAL gate on the Docker image (which caught 6 real fixable CVEs on its first run), Playwright failure artifacts, and an axe-core a11y smoke (which caught 5 unlabeled controls). Branch protection on `main` and secret scanning codified via API.
+2. **Coverage ≥90% enforced** — Vitest v8 coverage gates CI over everything we wrote (`src/**` minus vendored `src/components/ui/**`); the suite grew 20 → 415 tests, landing at 99.6% lines / 96.8% branches against an honest 10.3% baseline.
+3. **Codex as second reviewer** — via the Codex GitHub App (installed org-side, no repo workflow), joined by an `AGENTS.md` mirroring the platform repo's pattern so automated reviewers see the repo's conventions. The merge gate — CI green plus zero unresolved review threads — was already author-agnostic, so Codex threads block merges with no gate change.
+
+Decisions of record: GitHub App over an API-key review workflow (operator choice, 2026-08-02); declined as ceremony without payoff today — bundle-size budgets, license scanning, commit-message lint, CODEOWNERS, preview deployments, and scheduled live-tier CI (live acceptance stays a manual, credentialed run).
+
 ## Plan 01 — v1 console (approved 2026-08-02, archived 2026-08-02)
 
 [docs/plan/01_v1-console.md](./plan/01_v1-console.md) delivered the entire operator console in five slices (PRs #1–#9):
