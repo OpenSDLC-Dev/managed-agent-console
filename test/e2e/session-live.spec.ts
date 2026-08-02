@@ -88,12 +88,14 @@ test("the composer sends a message and the reply streams in", async ({
     .fill("Now run the linter too.");
   await page.getByRole("button", { name: "Send" }).click();
 
-  await expect(page.getByText("Now run the linter too.")).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(page.getByText("Working on it now.")).toBeVisible({
-    timeout: 15_000,
-  });
+  // Scope to event rows: the composer textarea also holds the typed text
+  // until the send clears it, which strict mode would (rightly) flag.
+  await expect(
+    page.getByTestId("event-row").getByText("Now run the linter too."),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.getByTestId("event-row").getByText("Working on it now."),
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test("interrupt while running lands a user.interrupt in the log", async ({

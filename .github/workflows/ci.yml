@@ -31,7 +31,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm test:coverage
       - run: pnpm exec playwright install --with-deps chromium
       # test:e2e runs `next build` first, so the build is covered here too.
       - run: pnpm test:e2e
