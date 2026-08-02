@@ -146,7 +146,7 @@ export function AgentEditor({
   const create = useCreateAgent();
   const update = useUpdateAgent(agentId ?? "");
   const mutation = mode === "create" ? create : update;
-  const skillsQuery = useSkills({});
+  const skillsQuery = useSkills({ limit: 100 });
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));

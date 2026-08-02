@@ -1,6 +1,8 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   DetailSection,
@@ -14,8 +16,17 @@ import {
   IdCode,
   Time,
 } from "@/components/console/bits";
+import {
+  ArchiveButton,
+  DeleteButton,
+} from "@/components/console/archive-button";
 import { Badge } from "@/components/ui/badge";
-import { useEnvironment } from "@/lib/platform/queries";
+import { Button } from "@/components/ui/button";
+import {
+  useArchiveEnvironment,
+  useDeleteEnvironment,
+  useEnvironment,
+} from "@/lib/platform/queries";
 
 export default function EnvironmentDetailPage({
   params,
@@ -23,7 +34,11 @@ export default function EnvironmentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: environment, error, isPending } = useEnvironment(id);
+  const archive = useArchiveEnvironment(id);
+  const remove = useDeleteEnvironment(id);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !environment) {
@@ -36,8 +51,47 @@ export default function EnvironmentDetailPage({
       <PageHeader
         title={environment.name}
         subtitle={environment.description || undefined}
-        actions={<ArchivedBadge archivedAt={environment.archived_at} />}
+        actions={
+          <span className="flex items-center gap-2">
+            <ArchivedBadge archivedAt={environment.archived_at} />
+            {!environment.archived_at && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => router.push(`/environments/${id}/edit`)}
+                >
+                  <Pencil className="size-4" /> Edit
+                </Button>
+                <ArchiveButton
+                  resource="environment"
+                  warning="Sessions can no longer be created in it."
+                  onConfirm={() => archive.mutate()}
+                  pending={archive.isPending}
+                />
+              </>
+            )}
+            <DeleteButton
+              resource="environment"
+              description="Deleting is permanent and cannot be undone. The platform refuses if any session still references this environment."
+              pending={remove.isPending}
+              onConfirm={() =>
+                remove.mutate(undefined, {
+                  onSuccess: () => router.push("/environments"),
+                  onError: (err) =>
+                    setDeleteError(
+                      err instanceof Error ? err.message : "delete failed",
+                    ),
+                })
+              }
+            />
+          </span>
+        }
       />
+      {deleteError && (
+        <p className="pb-4 text-sm text-destructive">{deleteError}</p>
+      )}
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">

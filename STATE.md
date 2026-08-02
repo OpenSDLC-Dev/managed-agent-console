@@ -11,5 +11,5 @@ What is being worked on right now, and how far along it is — nothing else. **S
 - [x] Slice 1 — Next.js scaffold (TS strict, Tailwind, shadcn), toolchain, CI, Dockerfile, BFF proxy, login gate, nav shell, connection probe — PR #1 (unit 5/5, e2e 4/4, Chrome fidelity pass vs reference)
 - [x] Slice 2 — read-only resource pages — part 1 (agents/environments/sessions + trace viewer) PR #2; part 2 (vaults/skills/files) PR #4 (e2e 12/12, fidelity pass)
 - [x] Slice 3 — live session trace + HITL — PR #5 merged (unit 14/14, e2e 16/16 vs mock SSE; live acceptance vs a real compose stack + model endpoint still pending — needs user-supplied credentials)
-- [ ] Slice 4 — write paths — 4a agent editor (JSON↔YAML) in PR #6 (e2e 21/21); 4b environments+create-session and 4c vault/skill/file writes remain
+- [ ] Slice 4 — write paths — 4a agent editor merged (PR #6); 4b environments+create-session in PR #7 (e2e 24/24); 4c vault/skill/file writes remain
 - [ ] Slice 5 — polish + deploy docs

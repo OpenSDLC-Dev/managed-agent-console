@@ -76,3 +76,31 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+export async function platformPostForm<T>(
+  path: string,
+  form: FormData,
+): Promise<T> {
+  const response = await fetch(`/api/platform/${path}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    const envelope = (await response
+      .json()
+      .catch(() => null)) as ErrorEnvelope | null;
+    throw new PlatformError(response.status, envelope);
+  }
+  return (await response.json()) as T;
+}
+
+export async function platformDelete<T>(path: string): Promise<T> {
+  const response = await fetch(`/api/platform/${path}`, { method: "DELETE" });
+  if (!response.ok) {
+    const envelope = (await response
+      .json()
+      .catch(() => null)) as ErrorEnvelope | null;
+    throw new PlatformError(response.status, envelope);
+  }
+  return (await response.json()) as T;
+}
