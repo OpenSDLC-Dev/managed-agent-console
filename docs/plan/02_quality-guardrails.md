@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 issue: 11
 ---
 
@@ -24,8 +24,8 @@ Requested 2026-08-02: the console must be developable and runnable on **Windows,
    - → verify: matrix green on all three OSes; a deliberately warned lint fails; artifacts appear on a forced e2e failure (spot check).
 2. **Coverage ≥90% enforced** (one or more PRs): Vitest v8 coverage over `src/**` **excluding `src/components/ui/**`** (vendored shadcn primitives — third-party code, documented exclusion; everything we wrote counts). Thresholds in config: lines/statements/functions ≥90, branches ≥85. CI runs `test:coverage`; the suite grows until the gate passes honestly — component tests for every page and console component (jsdom + Testing Library + mocked BFF fetch), node-env tests for the BFF proxy route and login/proxy middleware, hook tests for `queries.ts`/`use-session-trace`.
    - → verify: `pnpm test:coverage` green locally and in CI on all three OSes; thresholds in `vitest.config.ts`, not in a script flag.
-3. **Codex reviewer** (one PR + operator step): `.github/workflows/codex-review.yml` runs Codex CLI on each PR diff (read-only sandbox) and posts a review; skips cleanly when the `OPENAI_API_KEY` secret is absent. Operator either sets the secret (`gh secret set OPENAI_API_KEY`) or installs the Codex GitHub App and we drop the workflow — decision pending. The merge gate needs no change: it already counts every unresolved thread regardless of author.
-   - → verify: on a PR with the secret set, a Codex review lands and an unresolved Codex thread blocks the merge gate until resolved.
+3. **Codex reviewer** (operator step + one PR): decided 2026-08-02 — the **Codex GitHub App** (`chatgpt-codex-connector`), not an API-key workflow; the operator installed it on the org with code review enabled, so no repo-side workflow ships. The repo adds `AGENTS.md` (mirroring the platform repo's pattern) so Codex and similar tools review against the repo's actual conventions. The merge gate needs no change: it already counts every unresolved thread regardless of author.
+   - → verified 2026-08-02 on the archival PR itself: Codex's first review landed there, caught a real defect (a changelog-mangling edit, P2), and its unresolved thread blocked the squash merge until fixed and resolved.
 
 ## Declined (with reasons)
 
