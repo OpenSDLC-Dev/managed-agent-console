@@ -37,6 +37,7 @@ export function Composer({
   return (
     <div className="rounded-lg border bg-card p-3">
       <textarea
+        aria-label="Message to the session"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

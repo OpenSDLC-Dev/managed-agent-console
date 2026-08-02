@@ -33,6 +33,7 @@ const store = new Map();
 
 function resetStore() {
   for (const state of store.values()) {
+    for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
   }
   store.clear();
@@ -41,6 +42,7 @@ function resetStore() {
       session: structuredClone(fixture),
       events: structuredClone(eventFixtures[fixture.id] ?? []),
       subscribers: new Set(),
+      timers: new Set(),
     });
   }
 }
@@ -88,6 +90,20 @@ function pendingAsks(state) {
   return ids.filter((id) => !answered.has(id));
 }
 
+function schedule(state, ms, fn) {
+  const timer = setTimeout(() => {
+    state.timers.delete(timer);
+    fn();
+  }, ms);
+  state.timers.add(timer);
+}
+
+/** An interrupt cancels any in-flight streamed reply. */
+function cancelStreams(state) {
+  for (const timer of state.timers) clearTimeout(timer);
+  state.timers.clear();
+}
+
 /** Streamed agent reply: event_start + content_delta frames, then persist. */
 function streamReply(state, text) {
   const id = nextEventId();
@@ -101,7 +117,7 @@ function streamReply(state, text) {
   // Spaced enough that e2e can interact (e.g. click Interrupt) mid-stream.
   let delay = 250;
   for (const piece of pieces) {
-    setTimeout(() => {
+    schedule(state, delay, () => {
       broadcastRaw(state, "event_delta", {
         type: "event_delta",
         event_id: id,
@@ -111,10 +127,10 @@ function streamReply(state, text) {
           content: { type: "text", text: piece },
         },
       });
-    }, delay);
+    });
     delay += 250;
   }
-  setTimeout(() => {
+  schedule(state, delay + 40, () => {
     const event = {
       id,
       type: "agent.message",
@@ -123,7 +139,7 @@ function streamReply(state, text) {
     };
     broadcast(state, event);
     setStatus(state, "idle", { type: "end_turn" });
-  }, delay + 40);
+  });
 }
 
 function handleInbound(state, incoming) {
@@ -161,6 +177,7 @@ function handleInbound(state, incoming) {
   const messages = incoming.filter((e) => e.type === "user.message");
 
   if (hasInterrupt) {
+    cancelStreams(state);
     for (const id of pendingAsks(state)) {
       appendEvent(state, "agent.tool_result", {
         tool_use_id: id,
@@ -202,7 +219,10 @@ function handleInbound(state, incoming) {
     }
   }
 
-  if (messages.length > 0 && !hasInterrupt && confirmations.length === 0) {
+  // A message runs the session — including the interrupt+message redirect
+  // batch, where the interrupt settles the old turn and the message starts
+  // the next one.
+  if (messages.length > 0 && confirmations.length === 0) {
     setStatus(state, "running", undefined);
     streamReply(state, "Working on it now.");
   }

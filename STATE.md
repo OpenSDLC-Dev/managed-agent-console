@@ -4,7 +4,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan [01_v1-console](./docs/plan/01_v1-console.md)** (`in-progress`) — approved 2026-08-02 with one scope addition (raw editor gets a JSON↔YAML toggle in v1). Currently on **slice 2: read-only resource pages**.
+**Plan [01_v1-console](./docs/plan/01_v1-console.md)** (`in-progress`) — approved 2026-08-02 with one scope addition (raw editor gets a JSON↔YAML toggle in v1). Currently on **slice 3: live session trace + HITL**.
 
 ## Tasks
 

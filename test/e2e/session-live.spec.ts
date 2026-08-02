@@ -46,6 +46,11 @@ test("denying with a message lands as an error tool result", async ({
 }) => {
   await signIn(page);
   await page.goto(GATED);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+    { timeout: 15_000 },
+  );
   await expect(page.getByTestId("approval-banner")).toBeVisible();
 
   await page.getByRole("button", { name: "Deny…" }).click();

@@ -66,7 +66,7 @@ export function useSessionTrace(sessionId: string) {
           if (!response.ok || !response.body) {
             throw new Error(`stream failed: HTTP ${response.status}`);
           }
-          setConnection("live");
+          if (!cancelled) setConnection("live");
           backoff = 1_000;
           for await (const frame of parseSseStream(response.body)) {
             let data: unknown;
@@ -77,7 +77,7 @@ export function useSessionTrace(sessionId: string) {
             }
             update(applyFrame(traceRef.current, data));
             if (traceRef.current.deleted) {
-              setConnection("closed");
+              if (!cancelled) setConnection("closed");
               return;
             }
           }

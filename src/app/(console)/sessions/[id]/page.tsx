@@ -99,6 +99,11 @@ export default function SessionDetailPage({
       ? trace.events.filter((e) => types.includes(e.type))
       : trace.events;
   }, [filter, trace.events]);
+  // Streaming previews are agent messages — visible under All and Messages.
+  const visiblePreviews =
+    filter === "all" || filter === "messages"
+      ? [...trace.previews.values()]
+      : [];
 
   if (session.error) return <ErrorState error={session.error} />;
   if (session.isPending || !session.data) {
@@ -183,7 +188,7 @@ export default function SessionDetailPage({
             {CONNECTION_LABEL[connection]}
           </Badge>
         </div>
-        {visible.length === 0 && trace.previews.size === 0 ? (
+        {visible.length === 0 && visiblePreviews.length === 0 ? (
           connection === "connecting" ? (
             <div className="text-sm text-muted-foreground">Loading events…</div>
           ) : (
@@ -194,32 +199,31 @@ export default function SessionDetailPage({
             {visible.map((e) => (
               <EventRow key={e.id} event={e} />
             ))}
-            {filter === "all" &&
-              [...trace.previews.values()].map((preview) => (
-                <div
-                  key={preview.id}
-                  data-testid="preview-row"
-                  className="flex gap-3 border-b py-2.5 last:border-b-0"
-                >
-                  <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
-                    …
-                  </div>
-                  <div className="w-52 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className="animate-pulse font-mono text-[11px] font-normal"
-                    >
-                      {preview.type}
-                    </Badge>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="whitespace-pre-wrap">
-                      {preview.parts.join("")}
-                      <span className="animate-pulse">▍</span>
-                    </p>
-                  </div>
+            {visiblePreviews.map((preview) => (
+              <div
+                key={preview.id}
+                data-testid="preview-row"
+                className="flex gap-3 border-b py-2.5 last:border-b-0"
+              >
+                <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
+                  …
                 </div>
-              ))}
+                <div className="w-52 shrink-0">
+                  <Badge
+                    variant="outline"
+                    className="animate-pulse font-mono text-[11px] font-normal"
+                  >
+                    {preview.type}
+                  </Badge>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="whitespace-pre-wrap">
+                    {preview.parts.join("")}
+                    <span className="animate-pulse">▍</span>
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </DetailSection>

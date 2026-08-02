@@ -40,6 +40,7 @@ function PendingTool({
       {denying ? (
         <span className="flex items-center gap-1.5">
           <Input
+            aria-label="Deny reason"
             value={denyMessage}
             onChange={(e) => setDenyMessage(e.target.value)}
             placeholder="Reason (optional)"
