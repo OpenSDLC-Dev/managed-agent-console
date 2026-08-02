@@ -14,4 +14,4 @@ Archived plans, summarized. The full narrative of individual changes lives in [C
 
 Scope decisions of record: platform-implemented surface only (no deployments/memory stores/outcomes/multiagent/MCP execution); single-tenant with a deployment-protection gate rather than a user system; visual fidelity to Anthropic's Claude Console verified in Chrome per slice; the raw editor's YAML view is client-side sugar — JSON is what saves.
 
-Residual (tracked in STATE.md until done): live acceptance against a real compose stack with a configured model endpoint — needs operator credentials; all default suites run against the mock platform.
+Live acceptance ran 2026-08-02 against a real compose stack (MiniMax-M3 endpoint) and passed — the full UI-driven loop: `always_ask` bash agent, file upload + mount, vault + sealed credential, live SSE trace, deny-then-approve HITL round trip to completion (record in CHANGELOG.md). Default suites continue to run against the in-repo mock platform.
