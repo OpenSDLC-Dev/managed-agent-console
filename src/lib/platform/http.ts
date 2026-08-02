@@ -61,3 +61,18 @@ export async function platformGet<T>(
   }
   return (await response.json()) as T;
 }
+
+export async function platformPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`/api/platform/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const envelope = (await response
+      .json()
+      .catch(() => null)) as ErrorEnvelope | null;
+    throw new PlatformError(response.status, envelope);
+  }
+  return (await response.json()) as T;
+}
