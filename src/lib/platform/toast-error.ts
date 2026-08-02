@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "./http";
 
 /**
@@ -22,7 +23,7 @@ export function toastPlatformError(error: unknown, title?: string) {
           action: {
             label: "Copy request-id",
             onClick: () => {
-              void navigator.clipboard.writeText(requestId);
+              void copyText(requestId);
             },
           },
         }

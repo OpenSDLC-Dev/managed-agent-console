@@ -195,6 +195,11 @@ function PaletteResults({
   const clamped = Math.min(active, Math.max(0, items.length - 1));
   const activeRef = useRef<HTMLButtonElement | null>(null);
 
+  // Keep the parent's index (and aria-activedescendant) on a real item.
+  useEffect(() => {
+    if (active !== clamped) setActive(clamped);
+  }, [active, clamped, setActive]);
+
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
   }, [clamped]);

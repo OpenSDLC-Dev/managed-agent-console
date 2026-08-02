@@ -146,16 +146,6 @@ export default function SkillDetailPage({
           </span>
         }
       />
-      {(uploadVersion.error instanceof Error ||
-        deleteSkill.error instanceof Error ||
-        deleteVersion.error instanceof Error) && (
-        <p className="pb-4 text-sm text-destructive">
-          {
-            (uploadVersion.error ?? deleteSkill.error ?? deleteVersion.error)
-              ?.message
-          }
-        </p>
-      )}
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">

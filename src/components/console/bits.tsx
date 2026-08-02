@@ -1,7 +1,11 @@
-import { Copy } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
 
 /** Monospace resource id, truncated with the full value on hover. */
@@ -68,6 +72,7 @@ export function ArchivedBadge({ archivedAt }: { archivedAt?: string | null }) {
 
 /** Request-id from the platform's error envelope, one click to copy. */
 export function RequestId({ id }: { id: string }) {
+  const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
   return (
     <span className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
       request-id: {id}
@@ -77,10 +82,19 @@ export function RequestId({ id }: { id: string }) {
         title="Copy request-id"
         className="rounded p-0.5 hover:bg-secondary hover:text-foreground"
         onClick={() => {
-          void navigator.clipboard.writeText(id);
+          void copyText(id).then((ok) => {
+            setCopied(ok ? "ok" : "fail");
+            window.setTimeout(() => setCopied(null), 1500);
+          });
         }}
       >
-        <Copy className="size-3" />
+        {copied === "ok" ? (
+          <Check className="size-3" />
+        ) : copied === "fail" ? (
+          <X className="size-3 text-destructive" />
+        ) : (
+          <Copy className="size-3" />
+        )}
       </button>
     </span>
   );

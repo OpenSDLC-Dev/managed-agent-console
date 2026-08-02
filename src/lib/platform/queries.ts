@@ -304,7 +304,7 @@ export function useArchiveEnvironment(id: string) {
 export function useDeleteEnvironment(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: { errorTitle: "Delete failed" },
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/environments/${id}`),
     onSuccess: () => {
@@ -472,7 +472,7 @@ export function useUploadSkill() {
 export function useUploadSkillVersion(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: { errorTitle: "Upload failed" },
     mutationFn: (skillFiles: File[]) => {
       const form = new FormData();
       for (const file of skillFiles) form.append("files[]", file);
@@ -493,7 +493,7 @@ export function useUploadSkillVersion(skillId: string) {
 export function useDeleteSkillVersion(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: { errorTitle: "Delete failed" },
     mutationFn: (version: string) =>
       platformDelete<{ id: string; type: string }>(
         `v1/skills/${skillId}/versions/${version}`,
@@ -510,7 +510,7 @@ export function useDeleteSkillVersion(skillId: string) {
 export function useDeleteSkill(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: { errorTitle: "Delete failed" },
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/skills/${skillId}`),
     onSuccess: () => {
@@ -523,7 +523,7 @@ export function useDeleteSkill(skillId: string) {
 export function useDeleteFile() {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: { errorTitle: "Delete failed" },
     mutationFn: (fileId: string) =>
       platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
     onSuccess: () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
@@ -39,7 +39,6 @@ export default function EnvironmentDetailPage({
   const { data: environment, error, isPending } = useEnvironment(id);
   const archive = useArchiveEnvironment(id);
   const remove = useDeleteEnvironment(id);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !environment) {
@@ -80,19 +79,12 @@ export default function EnvironmentDetailPage({
               onConfirm={() =>
                 remove.mutate(undefined, {
                   onSuccess: () => router.push("/environments"),
-                  onError: (err) =>
-                    setDeleteError(
-                      err instanceof Error ? err.message : "delete failed",
-                    ),
                 })
               }
             />
           </span>
         }
       />
-      {deleteError && (
-        <p className="pb-4 text-sm text-destructive">{deleteError}</p>
-      )}
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">
