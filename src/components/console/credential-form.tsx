@@ -50,29 +50,34 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
   };
 
   const submit = () => {
+    const hosts = allowedHosts
+      .split("\n")
+      .map((h) => h.trim())
+      .filter(Boolean);
     const auth =
       kind === "environment_variable"
         ? {
             type: kind,
-            secret_name: secretName,
+            secret_name: secretName.trim(),
             secret_value: secretValue,
-            ...(allowedHosts.trim()
-              ? {
-                  networking: {
-                    type: "limited",
-                    allowed_hosts: allowedHosts
-                      .split("\n")
-                      .map((h) => h.trim())
-                      .filter(Boolean),
-                  },
-                }
-              : {}),
+            // networking is required on the wire; unrestricted when no hosts.
+            networking:
+              hosts.length > 0
+                ? { type: "limited", allowed_hosts: hosts }
+                : { type: "unrestricted" },
           }
         : kind === "static_bearer"
-          ? { type: kind, mcp_server_url: serverUrl, token }
-          : { type: kind, mcp_server_url: serverUrl, access_token: token };
+          ? { type: kind, mcp_server_url: serverUrl.trim(), token }
+          : {
+              type: kind,
+              mcp_server_url: serverUrl.trim(),
+              access_token: token,
+            };
     add.mutate(
-      { ...(displayName ? { display_name: displayName } : {}), auth },
+      {
+        ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
+        auth,
+      },
       {
         onSuccess: () => {
           reset();
@@ -84,8 +89,8 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
 
   const valid =
     kind === "environment_variable"
-      ? secretName && secretValue
-      : serverUrl && token;
+      ? secretName.trim() && secretValue
+      : serverUrl.trim() && token;
 
   return (
     <>
@@ -97,7 +102,16 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
       >
         <Plus className="size-4" /> Add credential
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            reset();
+            add.reset();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add credential</DialogTitle>

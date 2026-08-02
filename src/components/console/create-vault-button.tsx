@@ -26,7 +26,16 @@ export function CreateVaultButton() {
       <Button className="h-8" onClick={() => setOpen(true)}>
         <Plus className="size-4" /> Create vault
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            setName("");
+            create.reset();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create vault</DialogTitle>
@@ -47,10 +56,10 @@ export function CreateVaultButton() {
               Cancel
             </Button>
             <Button
-              disabled={!name || create.isPending}
+              disabled={!name.trim() || create.isPending}
               onClick={() =>
                 create.mutate(
-                  { display_name: name },
+                  { display_name: name.trim() },
                   { onSuccess: (vault) => router.push(`/vaults/${vault.id}`) },
                 )
               }

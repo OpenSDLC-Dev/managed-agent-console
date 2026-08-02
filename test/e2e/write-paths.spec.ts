@@ -189,10 +189,16 @@ test("skill upload, new version, and deletes", async ({ page }) => {
     page.getByRole("row").filter({ hasText: "Uploaded via console" }),
   ).toHaveCount(2);
 
-  // Delete both versions, then the skill.
-  const deleteButtons = page.getByRole("button", { name: /Delete version/ });
-  await deleteButtons.first().click();
-  await deleteButtons.first().click();
+  // Delete both versions (confirm dialog each), then the skill.
+  for (let i = 0; i < 2; i++) {
+    await page
+      .getByRole("button", { name: /Delete version 17/ })
+      .first()
+      .click();
+    await page
+      .getByRole("button", { name: "Delete version", exact: true })
+      .click();
+  }
   await expect(page.getByText("No versions")).toBeVisible();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.getByRole("button", { name: "Delete skill" }).click();

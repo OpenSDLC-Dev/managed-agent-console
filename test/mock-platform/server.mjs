@@ -1130,7 +1130,7 @@ const server = createServer(async (req, res) => {
     const skillItemMatch = url.pathname.match(/^\/v1\/skills\/([^/]+)$/);
 
     const mintVersion = (skillId, name) => {
-      const version = `17540000000${String(skillVersionCounter++).padStart(5, "0")}`;
+      const version = `17549000000${String(skillVersionCounter++).padStart(5, "0")}`;
       const entry = {
         id: `skillver_mock${String(skillVersionCounter).padStart(4, "0")}`,
         type: "skill_version",

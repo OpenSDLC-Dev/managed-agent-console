@@ -20,6 +20,7 @@ import {
 } from "@/components/console/bits";
 import {
   ArchiveButton,
+  ConfirmIconButton,
   DeleteButton,
 } from "@/components/console/archive-button";
 import { AddCredentialButton } from "@/components/console/credential-form";
@@ -45,7 +46,7 @@ function CredentialActions({
 }: {
   credential: VaultCredential;
   vaultId: string;
-  onValidated: (message: string) => void;
+  onValidated: (message: string, failed?: boolean) => void;
 }) {
   const validate = useValidateOAuthCredential(vaultId);
   const remove = useDeleteCredential(vaultId);
@@ -66,6 +67,7 @@ function CredentialActions({
               onError: (error) =>
                 onValidated(
                   error instanceof Error ? error.message : "validation failed",
+                  true,
                 ),
             })
           }
@@ -73,16 +75,15 @@ function CredentialActions({
           <ShieldCheck className="size-3.5" /> Validate
         </Button>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 text-muted-foreground"
-        aria-label={`Delete credential ${credential.id}`}
-        disabled={remove.isPending}
-        onClick={() => remove.mutate(credential.id)}
+      <ConfirmIconButton
+        label={`Delete credential ${credential.id}`}
+        title="Delete credential"
+        description="Deleting a credential is permanent; its sealed secret is destroyed."
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(credential.id)}
       >
         <Trash2 className="size-3.5" />
-      </Button>
+      </ConfirmIconButton>
     </span>
   );
 }
@@ -98,7 +99,10 @@ export default function VaultDetailPage({
   const credentials = useVaultCredentials(id);
   const archive = useArchiveVault(id);
   const removeVault = useDeleteVault(id);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{
+    message: string;
+    failed: boolean;
+  } | null>(null);
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !vault) {
@@ -135,7 +139,9 @@ export default function VaultDetailPage({
         <CredentialActions
           credential={c}
           vaultId={id}
-          onValidated={setNotice}
+          onValidated={(message, failed) =>
+            setNotice({ message, failed: !!failed })
+          }
         />
       ),
     },
@@ -192,8 +198,15 @@ export default function VaultDetailPage({
           {!vault.archived_at && <AddCredentialButton vaultId={id} />}
         </div>
         {notice && (
-          <p className="pb-2 text-[13px]" data-testid="credential-notice">
-            {notice}
+          <p
+            className={
+              notice.failed
+                ? "pb-2 text-[13px] text-destructive"
+                : "pb-2 text-[13px]"
+            }
+            data-testid="credential-notice"
+          >
+            {notice.message}
           </p>
         )}
         {credentials.error ? (

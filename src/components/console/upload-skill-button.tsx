@@ -29,7 +29,17 @@ export function UploadSkillButton() {
       <Button className="h-8" onClick={() => setOpen(true)}>
         <Upload className="size-4" /> Upload skill
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) {
+            setTitle("");
+            setFiles([]);
+            upload.reset();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload skill</DialogTitle>

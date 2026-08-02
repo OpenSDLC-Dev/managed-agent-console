@@ -72,7 +72,7 @@ export default function VaultsPage() {
             empty={
               <EmptyState
                 title="No vaults yet"
-                hint="Vaults are created through the API until slice 4 lands."
+                hint="Create your first vault to get started."
               />
             }
           />

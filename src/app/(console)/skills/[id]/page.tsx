@@ -12,7 +12,10 @@ import {
   IdCode,
   Time,
 } from "@/components/console/bits";
-import { DeleteButton } from "@/components/console/archive-button";
+import {
+  ConfirmIconButton,
+  DeleteButton,
+} from "@/components/console/archive-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -79,16 +82,15 @@ export default function SkillDetailPage({
             <Download className="size-3.5" />
           </a>
           {custom && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-muted-foreground"
-              aria-label={`Delete version ${v.version}`}
-              disabled={deleteVersion.isPending}
-              onClick={() => deleteVersion.mutate(v.version)}
+            <ConfirmIconButton
+              label={`Delete version ${v.version}`}
+              title="Delete version"
+              description="Deleting a skill version is permanent."
+              pending={deleteVersion.isPending}
+              onConfirm={() => deleteVersion.mutate(v.version)}
             >
               <Trash2 className="size-3.5" />
-            </Button>
+            </ConfirmIconButton>
           )}
         </span>
       ),

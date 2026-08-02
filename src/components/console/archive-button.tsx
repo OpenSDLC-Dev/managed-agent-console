@@ -116,3 +116,59 @@ export function DeleteButton({
     />
   );
 }
+
+/** Icon-only confirm-then-act control for table-row deletes. */
+export function ConfirmIconButton({
+  label,
+  title,
+  description,
+  onConfirm,
+  pending,
+  children,
+}: {
+  label: string;
+  title: string;
+  description: string;
+  onConfirm: () => void;
+  pending?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 text-muted-foreground"
+        aria-label={label}
+        disabled={pending}
+        onClick={() => setOpen(true)}
+      >
+        {children}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                onConfirm();
+                setOpen(false);
+              }}
+            >
+              {title}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
