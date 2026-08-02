@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
-import { Time } from "@/components/console/bits";
+import { Time, WARNING_BOX } from "@/components/console/bits";
 
 function textOf(content: ContentBlock[] | null | undefined): string {
   if (!content) return "";
@@ -46,7 +46,7 @@ function Body({ event }: { event: SessionEvent }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-[13px]">{event.name}</span>
           {event.evaluated_permission === "ask" && (
-            <Badge className="bg-amber-100 text-amber-800" variant="outline">
+            <Badge className={WARNING_BOX} variant="outline">
               needs approval
             </Badge>
           )}
@@ -94,15 +94,28 @@ function Body({ event }: { event: SessionEvent }) {
             : ""}
         </p>
       );
-    case "span.model_request_end":
-      return event.model_usage ? (
+    case "span.model_request_end": {
+      const usage = event.model_usage;
+      // Upstream JSON is not runtime-validated; a missing counter must not
+      // abort the whole event list.
+      if (
+        !usage ||
+        [
+          usage.input_tokens,
+          usage.output_tokens,
+          usage.cache_read_input_tokens,
+        ].some((n) => typeof n !== "number")
+      ) {
+        return null;
+      }
+      return (
         <p className="text-[13px] text-muted-foreground">
-          {event.model_usage.input_tokens.toLocaleString()} in ·{" "}
-          {event.model_usage.output_tokens.toLocaleString()} out ·{" "}
-          {event.model_usage.cache_read_input_tokens.toLocaleString()} cache
-          read
+          {usage.input_tokens.toLocaleString()} in ·{" "}
+          {usage.output_tokens.toLocaleString()} out ·{" "}
+          {usage.cache_read_input_tokens.toLocaleString()} cache read
         </p>
-      ) : null;
+      );
+    }
     case "session.error":
       return (
         <p className="text-[13px] text-destructive">

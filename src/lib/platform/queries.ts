@@ -91,28 +91,51 @@ export function useSession(id: string, refetchInterval?: number) {
 }
 
 /**
- * Event log via polling (ascending, newest last). SSE tailing arrives with
- * slice 3; the poll interval tightens while the session is running.
+ * Incremental tail cache: each poll resumes from the cursor of the last page
+ * it fetched instead of re-walking the whole log (the log is append-only, so
+ * re-fetching the final page plus id-dedup covers the overlap). SSE tailing
+ * replaces the poll in slice 3.
+ */
+const eventTails = new Map<
+  string,
+  { pageCursor: string | undefined; events: SessionEvent[] }
+>();
+
+/**
+ * Event log via polling (ascending, newest last). The poll interval tightens
+ * while the session is running.
  */
 export function useSessionEvents(
   id: string,
   options: { running: boolean; types?: string[] },
 ) {
+  const cacheKey = `${id}|${(options.types ?? []).join(",")}`;
   return useQuery({
     queryKey: ["session-events", id, options.types],
     queryFn: async () => {
-      const events: SessionEvent[] = [];
-      let page: string | undefined;
+      const cached = eventTails.get(cacheKey) ?? {
+        pageCursor: undefined,
+        events: [],
+      };
+      const seen = new Set(cached.events.map((event) => event.id));
+      const events = [...cached.events];
+      let page = cached.pageCursor;
       // The platform caps event pages at 1000; follow next_page to the tip.
       for (;;) {
         const result = await platformGet<Page<SessionEvent>>(
           `v1/sessions/${id}/events`,
           { limit: 1000, order: "asc", page, types: options.types },
         );
-        events.push(...result.data);
+        for (const event of result.data) {
+          if (!seen.has(event.id)) {
+            seen.add(event.id);
+            events.push(event);
+          }
+        }
         if (!result.next_page) break;
         page = result.next_page;
       }
+      eventTails.set(cacheKey, { pageCursor: page, events });
       return events;
     },
     refetchInterval: options.running ? 3_000 : 15_000,

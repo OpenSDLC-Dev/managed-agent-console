@@ -67,11 +67,19 @@ export const agents = [
 
 // Version history for the researcher (agentJSON shape; updated_at is the
 // version row's created_at).
+// Every agent has a version history (the platform snapshots version 1 at
+// create), so the mock must serve /versions for all of them.
 export const agentVersions = {
   agent_researcher00000000001: [3, 2, 1].map((version) => ({
     ...agents[0],
     version,
     updated_at: version === 3 ? T2 : version === 2 ? T1 : T0,
+  })),
+  agent_taskrunner0000000001: [{ ...agents[1] }],
+  agent_retired000000000001: [2, 1].map((version) => ({
+    ...agents[2],
+    version,
+    updated_at: version === 2 ? T1 : T0,
   })),
 };
 
@@ -118,31 +126,29 @@ export const environments = [
   },
 ];
 
-const researcherSnapshot = {
+// Session agent snapshots mirror domain.ResolvedAgent: the agent's spec at
+// the pinned version, without metadata/created_at/archived_at.
+const snapshotOf = (agent) => ({
   type: "agent",
-  id: "agent_researcher00000000001",
-  version: 3,
-  name: "Deep researcher",
-  model: { id: "claude-opus-4-8" },
-  system: "You are a careful researcher.",
-  description: "Multi-step web research with citations.",
-  tools: [{ type: "agent_toolset_20260401" }],
-  mcp_servers: [],
-  skills: [{ type: "anthropic", skill_id: "xlsx", version: "latest" }],
+  id: agent.id,
+  version: agent.version,
+  name: agent.name,
+  model: agent.model,
+  system: agent.system,
+  description: agent.description,
+  tools: agent.tools,
+  mcp_servers: agent.mcp_servers,
+  skills: agent.skills,
   multiagent: null,
-};
+});
+
+const researcherSnapshot = snapshotOf(agents[0]);
 
 export const sessions = [
   {
     id: "sesn_gatedbash00000000001",
     type: "session",
-    agent: {
-      ...researcherSnapshot,
-      id: "agent_taskrunner0000000001",
-      version: 1,
-      name: "General task agent",
-      model: { id: "claude-sonnet-4-8", speed: "fast" },
-    },
+    agent: snapshotOf(agents[1]),
     environment_id: "env_cloudlimited000000001",
     status: "idle",
     title: "Install deps and run tests",

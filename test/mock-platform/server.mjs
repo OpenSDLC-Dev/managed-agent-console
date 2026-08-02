@@ -85,7 +85,13 @@ function route(req, url) {
       rows = rows.filter((r) => statuses.includes(r.status));
     const agentId = url.searchParams.get("agent_id");
     if (agentId) rows = rows.filter((r) => r.agent.id === agentId);
-    if (url.searchParams.get("order") === "asc") rows = [...rows].reverse();
+    // Platform keyset order is (created_at, id), descending by default.
+    const ascending = url.searchParams.get("order") === "asc";
+    rows = [...rows].sort((a, b) => {
+      const byTime = a.created_at.localeCompare(b.created_at);
+      const key = byTime !== 0 ? byTime : a.id.localeCompare(b.id);
+      return ascending ? key : -key;
+    });
     return keysetPage(rows, url, { bi: true });
   }
   const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);

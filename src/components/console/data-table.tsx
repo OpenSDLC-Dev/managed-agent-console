@@ -66,7 +66,20 @@ export function DataTable<T>({
             <TableRow
               key={rowKey(row)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={cn(onRowClick && "cursor-pointer")}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onRowClick(row);
+                      }
+                    }
+                  : undefined
+              }
+              className={cn(
+                onRowClick && "cursor-pointer focus-visible:bg-secondary/60",
+              )}
             >
               {columns.map((column) => (
                 <TableCell

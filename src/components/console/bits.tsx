@@ -11,7 +11,7 @@ export function IdCode({ id }: { id: string }) {
   );
 }
 
-/** Deterministic short timestamp, e.g. "Aug 2, 2026, 09:12". */
+/** Deterministic short UTC timestamp, e.g. "Aug 2, 2026, 09:12". */
 export function Time({ iso }: { iso: string | null | undefined }) {
   if (!iso) return <span className="text-muted-foreground">—</span>;
   const formatted = new Intl.DateTimeFormat("en-US", {
@@ -21,9 +21,18 @@ export function Time({ iso }: { iso: string | null | undefined }) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "UTC",
   }).format(new Date(iso));
   return <span title={iso}>{formatted}</span>;
 }
+
+/**
+ * Warning surface, one definition for every approval-related callout so the
+ * palette stays consistent and keeps contrast in dark mode.
+ */
+export const WARNING_BOX =
+  "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200";
+export const WARNING_MUTED = "text-amber-700 dark:text-amber-300";
 
 const SESSION_STATUS_STYLE: Record<string, string> = {
   running: "bg-emerald-50 text-emerald-700 border-emerald-200",

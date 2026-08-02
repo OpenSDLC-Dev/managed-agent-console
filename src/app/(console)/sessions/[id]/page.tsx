@@ -10,6 +10,8 @@ import {
   ErrorState,
   IdCode,
   StatusBadge,
+  WARNING_BOX,
+  WARNING_MUTED,
 } from "@/components/console/bits";
 import { EventRow } from "@/components/console/event-row";
 import { Badge } from "@/components/ui/badge";
@@ -137,23 +139,23 @@ export default function SessionDetailPage({
       {pending.length > 0 && (
         <div
           data-testid="approval-banner"
-          className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4"
+          className={cn("mb-6 rounded-lg border p-4", WARNING_BOX)}
         >
-          <p className="text-sm font-medium text-amber-900">
+          <p className="text-sm font-medium">
             Waiting on {pending.length} tool approval
             {pending.length === 1 ? "" : "s"}
           </p>
           <ul className="mt-2 space-y-1">
             {pending.map((event) => (
-              <li key={event.id} className="text-[13px] text-amber-900">
+              <li key={event.id} className="text-[13px]">
                 <span className="font-mono">{event.name}</span>{" "}
-                <span className="text-amber-700">
+                <span className={WARNING_MUTED}>
                   {JSON.stringify(event.input)}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-[12px] text-amber-700">
+          <p className={cn("mt-2 text-[12px]", WARNING_MUTED)}>
             Approve / deny controls arrive with slice 3.
           </p>
         </div>
@@ -186,6 +188,8 @@ export default function SessionDetailPage({
         </div>
         {events.error ? (
           <ErrorState error={events.error} />
+        ) : events.isPending ? (
+          <div className="text-sm text-muted-foreground">Loading events…</div>
         ) : (events.data ?? []).length === 0 ? (
           <EmptyState title="No events" />
         ) : (
