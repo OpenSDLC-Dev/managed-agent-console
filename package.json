@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:e2e": "next build && playwright test"
+    "test:e2e": "next build && playwright test",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -42,6 +43,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "jsdom": "^30.0.1",
