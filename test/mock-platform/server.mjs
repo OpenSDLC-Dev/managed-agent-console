@@ -35,6 +35,12 @@ const store = new Map();
 let agentsStore = [];
 let agentVersionsStore = {};
 let agentCounter = 1;
+let environmentsStore = [];
+let environmentCounter = 1;
+let filesStore = [];
+let fileCounter = 1;
+let sessionCounter = 1;
+let resourceCounter = 1;
 
 function resetStore() {
   for (const state of store.values()) {
@@ -52,6 +58,8 @@ function resetStore() {
   }
   agentsStore = structuredClone(agents);
   agentVersionsStore = structuredClone(agentVersions);
+  environmentsStore = structuredClone(environments);
+  filesStore = structuredClone(files);
 }
 resetStore();
 
@@ -383,12 +391,15 @@ function route(req, url) {
 
   if (path === "/v1/environments") {
     return keysetPage(
-      includeArchived ? environments : environments.filter(notArchived),
+      includeArchived
+        ? environmentsStore
+        : environmentsStore.filter(notArchived),
       url,
     );
   }
   const envMatch = path.match(/^\/v1\/environments\/([^/]+)$/);
-  if (envMatch) return environments.find((e) => e.id === envMatch[1]) ?? null;
+  if (envMatch)
+    return environmentsStore.find((e) => e.id === envMatch[1]) ?? null;
 
   if (path === "/v1/sessions") {
     let rows = [...store.values()].map((s) => s.session);
@@ -456,7 +467,7 @@ function route(req, url) {
     // Classic Files pagination: after_id/before_id + has_more envelope.
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 1000);
     const afterId = url.searchParams.get("after_id");
-    let rows = files;
+    let rows = filesStore;
     if (afterId) {
       const at = rows.findIndex((f) => f.id === afterId);
       rows = at === -1 ? [] : rows.slice(at + 1);
@@ -470,7 +481,7 @@ function route(req, url) {
     };
   }
   const fileMatch = path.match(/^\/v1\/files\/([^/]+)$/);
-  if (fileMatch) return files.find((f) => f.id === fileMatch[1]) ?? null;
+  if (fileMatch) return filesStore.find((f) => f.id === fileMatch[1]) ?? null;
 
   return null;
 }
@@ -537,6 +548,320 @@ const server = createServer(async (req, res) => {
       clearInterval(ping);
       state.subscribers.delete(res);
     });
+    return;
+  }
+
+  // Environment writes: create, update (kind immutable), archive, delete.
+  if (url.pathname.startsWith("/v1/environments")) {
+    const idMatch = url.pathname.match(/^\/v1\/environments\/([^/]+)$/);
+    const archiveMatch = url.pathname.match(
+      /^\/v1\/environments\/([^/]+)\/archive$/,
+    );
+    if (req.method === "DELETE" && idMatch) {
+      res.setHeader("content-type", "application/json");
+      const env = environmentsStore.find((e) => e.id === idMatch[1]);
+      if (!env) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such environment"));
+        return;
+      }
+      const inUse = [...store.values()].some(
+        (s) => s.session.environment_id === env.id,
+      );
+      if (inUse) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "environment still has sessions"),
+        );
+        return;
+      }
+      environmentsStore = environmentsStore.filter((e) => e.id !== env.id);
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: env.id, type: "environment_deleted" }));
+      return;
+    }
+    if (req.method === "POST" && archiveMatch) {
+      res.setHeader("content-type", "application/json");
+      const env = environmentsStore.find((e) => e.id === archiveMatch[1]);
+      if (!env) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such environment"));
+        return;
+      }
+      env.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(env));
+      return;
+    }
+    if (
+      req.method === "POST" &&
+      (url.pathname === "/v1/environments" || idMatch)
+    ) {
+      res.setHeader("content-type", "application/json");
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      const allowed = new Set([
+        "name",
+        "description",
+        "config",
+        "scope",
+        "metadata",
+      ]);
+      for (const key of Object.keys(body)) {
+        if (!allowed.has(key)) {
+          res.writeHead(400);
+          res.end(envelope("invalid_request_error", `unknown field "${key}"`));
+          return;
+        }
+      }
+      if (url.pathname === "/v1/environments") {
+        if (typeof body.name !== "string" || !body.name) {
+          res.writeHead(400);
+          res.end(envelope("invalid_request_error", "name is required"));
+          return;
+        }
+        const kind = body.config?.type;
+        if (kind !== "cloud" && kind !== "self_hosted") {
+          res.writeHead(400);
+          res.end(
+            envelope(
+              "invalid_request_error",
+              'config.type must be "cloud" or "self_hosted"',
+            ),
+          );
+          return;
+        }
+        const timestamp = now();
+        const env = {
+          id: `env_mock${String(environmentCounter++).padStart(6, "0")}`,
+          type: "environment",
+          name: body.name,
+          description: body.description ?? "",
+          config:
+            kind === "self_hosted"
+              ? { type: "self_hosted" }
+              : {
+                  type: "cloud",
+                  networking: body.config.networking ?? {
+                    type: "unrestricted",
+                  },
+                  packages: {
+                    apt: [],
+                    cargo: [],
+                    gem: [],
+                    go: [],
+                    npm: [],
+                    pip: [],
+                    ...(body.config.packages ?? {}),
+                  },
+                },
+          scope: "organization",
+          metadata: body.metadata ?? {},
+          created_at: timestamp,
+          updated_at: timestamp,
+          archived_at: null,
+        };
+        environmentsStore.unshift(env);
+        res.writeHead(200);
+        res.end(JSON.stringify(env));
+        return;
+      }
+      const env = environmentsStore.find((e) => e.id === idMatch[1]);
+      if (!env) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such environment"));
+        return;
+      }
+      if (body.config?.type && body.config.type !== env.config.type) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "environment kind is immutable"),
+        );
+        return;
+      }
+      if (body.name !== undefined) env.name = body.name;
+      if (body.description !== undefined) env.description = body.description;
+      if (body.config && env.config.type === "cloud") {
+        if (body.config.networking)
+          env.config.networking = body.config.networking;
+        if (body.config.packages)
+          env.config.packages = {
+            ...env.config.packages,
+            ...body.config.packages,
+          };
+      }
+      env.updated_at = now();
+      res.writeHead(200);
+      res.end(JSON.stringify(env));
+      return;
+    }
+  }
+
+  // File upload (multipart) — minimal parse: filename + rough size.
+  if (req.method === "POST" && url.pathname === "/v1/files") {
+    res.setHeader("content-type", "application/json");
+    const body = await readBody(req);
+    const filename =
+      /filename="([^"]+)"/.exec(body)?.[1] ?? `upload-${fileCounter}`;
+    const mime =
+      /Content-Type:\s*([^\r\n]+)/i.exec(body)?.[1] ??
+      "application/octet-stream";
+    const file = {
+      id: `file_mock${String(fileCounter++).padStart(6, "0")}`,
+      type: "file",
+      filename,
+      mime_type: mime.trim(),
+      size_bytes: Buffer.byteLength(body),
+      downloadable: false,
+      scope: null,
+      created_at: now(),
+    };
+    filesStore.unshift(file);
+    res.writeHead(200);
+    res.end(JSON.stringify(file));
+    return;
+  }
+  const fileDeleteMatch = url.pathname.match(/^\/v1\/files\/([^/]+)$/);
+  if (req.method === "DELETE" && fileDeleteMatch) {
+    res.setHeader("content-type", "application/json");
+    const file = filesStore.find((f) => f.id === fileDeleteMatch[1]);
+    if (!file) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such file"));
+      return;
+    }
+    filesStore = filesStore.filter((f) => f.id !== file.id);
+    res.writeHead(200);
+    res.end(JSON.stringify({ id: file.id, type: "file_deleted" }));
+    return;
+  }
+
+  // Session create — exact top-level keys; initial_events is NOT accepted.
+  if (req.method === "POST" && url.pathname === "/v1/sessions") {
+    res.setHeader("content-type", "application/json");
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "invalid JSON body"));
+      return;
+    }
+    const allowed = new Set([
+      "agent",
+      "environment_id",
+      "title",
+      "metadata",
+      "resources",
+      "vault_ids",
+    ]);
+    for (const key of Object.keys(body)) {
+      if (!allowed.has(key)) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", `unknown field "${key}"`));
+        return;
+      }
+    }
+    const agentId =
+      typeof body.agent === "string" ? body.agent : body.agent?.id;
+    const agent = agentsStore.find((a) => a.id === agentId);
+    if (!agent) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such agent"));
+      return;
+    }
+    const env = environmentsStore.find((e) => e.id === body.environment_id);
+    if (!env || env.archived_at) {
+      res.writeHead(env ? 400 : 404);
+      res.end(
+        envelope(
+          env ? "invalid_request_error" : "not_found_error",
+          env ? "environment is archived" : "no such environment",
+        ),
+      );
+      return;
+    }
+    const resources = [];
+    for (const resource of body.resources ?? []) {
+      if (resource.type !== "file") {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `'${resource.type}' resources are not supported yet`,
+          ),
+        );
+        return;
+      }
+      if (!filesStore.some((f) => f.id === resource.file_id)) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such file"));
+        return;
+      }
+      const timestamp = now();
+      resources.push({
+        id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
+        type: "file",
+        file_id: resource.file_id,
+        mount_path:
+          resource.mount_path ?? `/mnt/session/uploads/${resource.file_id}`,
+        created_at: timestamp,
+        updated_at: timestamp,
+      });
+    }
+    const timestamp = now();
+    const session = {
+      id: `sesn_mock${String(sessionCounter++).padStart(6, "0")}`,
+      type: "session",
+      agent: {
+        type: "agent",
+        id: agent.id,
+        version: agent.version,
+        name: agent.name,
+        model: agent.model,
+        system: agent.system,
+        description: agent.description,
+        tools: agent.tools,
+        mcp_servers: agent.mcp_servers,
+        skills: agent.skills,
+        multiagent: null,
+      },
+      environment_id: env.id,
+      status: "idle",
+      title: body.title ?? "",
+      metadata: body.metadata ?? {},
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation: {
+          ephemeral_1h_input_tokens: 0,
+          ephemeral_5m_input_tokens: 0,
+        },
+      },
+      stats: { active_seconds: 0, duration_seconds: 0 },
+      outcome_evaluations: [],
+      resources,
+      vault_ids: body.vault_ids ?? [],
+      deployment_id: null,
+      created_at: timestamp,
+      updated_at: timestamp,
+      archived_at: null,
+    };
+    store.set(session.id, {
+      session,
+      events: [],
+      subscribers: new Set(),
+      timers: new Set(),
+    });
+    res.writeHead(200);
+    res.end(JSON.stringify(session));
     return;
   }
 

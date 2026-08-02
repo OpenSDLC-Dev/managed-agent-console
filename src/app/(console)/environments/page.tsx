@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
@@ -51,6 +53,14 @@ export default function EnvironmentsPage() {
       <PageHeader
         title="Environments"
         subtitle="Configuration templates for session sandboxes."
+        actions={
+          <Button
+            className="h-8"
+            onClick={() => router.push("/environments/new")}
+          >
+            <Plus className="size-4" /> Create environment
+          </Button>
+        }
       />
       <div className="flex items-center gap-2 pb-4">
         <StatusFilter

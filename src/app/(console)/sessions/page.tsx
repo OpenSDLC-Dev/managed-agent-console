@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
@@ -79,7 +81,15 @@ export default function SessionsPage() {
 
   return (
     <div>
-      <PageHeader title="Sessions" subtitle="Trace and debug agent sessions." />
+      <PageHeader
+        title="Sessions"
+        subtitle="Trace and debug agent sessions."
+        actions={
+          <Button className="h-8" onClick={() => router.push("/sessions/new")}>
+            <Plus className="size-4" /> Create session
+          </Button>
+        }
+      />
       <div className="flex items-center gap-1.5 pb-4 text-sm">
         <span className="text-muted-foreground">Status</span>
         <Select

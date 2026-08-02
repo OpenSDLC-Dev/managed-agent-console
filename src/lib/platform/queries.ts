@@ -6,7 +6,14 @@ import {
   useQueryClient,
   keepPreviousData,
 } from "@tanstack/react-query";
-import { platformGet, platformPost, type ClassicPage, type Page } from "./http";
+import {
+  platformDelete,
+  platformGet,
+  platformPost,
+  platformPostForm,
+  type ClassicPage,
+  type Page,
+} from "./http";
 import type {
   Agent,
   Environment,
@@ -237,6 +244,92 @@ export function useArchiveAgent(id: string) {
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+export interface EnvironmentWriteBody {
+  name?: string;
+  description?: string;
+  config?: unknown;
+  metadata?: Record<string, string>;
+}
+
+export function useCreateEnvironment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EnvironmentWriteBody) =>
+      platformPost<Environment>("v1/environments", body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["environments"] });
+    },
+  });
+}
+
+export function useUpdateEnvironment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EnvironmentWriteBody) =>
+      platformPost<Environment>(`v1/environments/${id}`, body),
+    onSuccess: (environment) => {
+      queryClient.setQueryData(["environment", id], environment);
+      void queryClient.invalidateQueries({ queryKey: ["environments"] });
+    },
+  });
+}
+
+export function useArchiveEnvironment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      platformPost<Environment>(`v1/environments/${id}/archive`, {}),
+    onSuccess: (environment) => {
+      queryClient.setQueryData(["environment", id], environment);
+      void queryClient.invalidateQueries({ queryKey: ["environments"] });
+    },
+  });
+}
+
+export function useDeleteEnvironment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      platformDelete<{ id: string; type: string }>(`v1/environments/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["environments"] });
+    },
+  });
+}
+
+export interface SessionCreateBody {
+  agent: string | { type: "agent"; id: string; version?: number };
+  environment_id: string;
+  title?: string;
+  vault_ids?: string[];
+  resources?: { type: "file"; file_id: string; mount_path?: string }[];
+}
+
+export function useCreateSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SessionCreateBody) =>
+      platformPost<Session>("v1/sessions", body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useUploadFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return platformPostForm<PlatformFile>("v1/files", form);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["files"] });
     },
   });
 }
