@@ -21,6 +21,26 @@ Method: `getComputedStyle` on live elements in Chrome.
 | Inputs (search)                               | height `32px`, `14px`                                                                                                  |
 | Nav items                                     | `14px`, active item gets a subtle darker pill on the sidebar background                                                |
 
+## Dark palette — extracted 2026-08-02 from the reference's stylesheet tokens
+
+Method: enumerated the CSS custom-property blocks in platform.claude.com's stylesheets. Two findings:
+
+- The reference's own **console theme pins dark mode to the light palette** (`[data-theme="console"], [data-theme="console"][data-mode="dark"]` share one block) — the reference console ships light-only today.
+- Its sibling **claude theme carries real dark tokens** (`[data-theme="claude"][data-mode="dark"]`). Our dark mode uses those, mapped onto the same roles as the light palette:
+
+| Token (reference)   | Value                                   | Our role                     |
+| ------------------- | --------------------------------------- | ---------------------------- |
+| `bg-100`            | `hsl(60 2.7% 14.5%)` (#262624)          | page background              |
+| `bg-000`            | `hsl(60 2.1% 18.4%)` (#30302e)          | cards, popovers              |
+| `bg-200`            | `hsl(30 3.3% 11.8%)` (#1f1e1d)          | sidebar                      |
+| `text-100`          | `hsl(48 33.3% 97.1%)` (#faf9f5)         | foreground                   |
+| `text-300`          | `hsl(50 9% 73.7%)` (#c2c0b6)            | muted foreground             |
+| `pictogram-200`     | `hsl(60 2.5% 23.3%)` (#3c3c39)          | secondary/muted/accent fills |
+| `border-200`        | `hsl(51 16.5% 84.5%)` at 0.12–0.4 alpha | borders, inputs, rings       |
+| `danger-100` (dark) | `hsl(0 67% 59.6%)`                      | destructive                  |
+
+Shipping a real dark mode is therefore a **deliberate divergence** from the reference console, built entirely from the reference design system's own dark tokens.
+
 ## Deliberate divergences
 
 - **Font:** `anthropicSans` is Anthropic's proprietary face and cannot be shipped. We use its own fallback stack (`system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`) as our primary stack.

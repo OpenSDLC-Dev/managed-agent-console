@@ -42,7 +42,7 @@ pnpm dev          # console against a platform base URL from .env.local
 pnpm build        # production build
 pnpm test         # unit/component tests — no network, no money
 pnpm test:e2e     # Playwright against the mock platform server
-pnpm lint         # eslint + prettier check + tsc --noEmit
+pnpm lint         # eslint; format:check (prettier) and typecheck (tsc) are separate scripts — CI runs all three
 ```
 
 Testing mirrors the platform's tiered philosophy: the default suites run against **recorded fixtures and a mock platform server** and spend nothing; a live tier (opt-in via `RUN_LIVE_CONSOLE_TESTS=1`) drives a real local platform stack (`deploy/compose` in the platform repo). Once opted in, missing configuration **fails** rather than skips. `.env*` files are gitignored — never commit a real key.

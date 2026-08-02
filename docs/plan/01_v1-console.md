@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 ---
 
 # managed-agent-console v1 — web console for managed-agent-platform

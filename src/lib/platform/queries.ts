@@ -117,6 +117,7 @@ export function useSession(id: string, refetchInterval?: number) {
 export function useSendEvents(sessionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (events: object[]) =>
       platformPost<{ data: SessionEvent[] }>(
         `v1/sessions/${sessionId}/events`,
@@ -220,6 +221,7 @@ export interface AgentWriteBody {
 export function useCreateAgent() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: AgentWriteBody) =>
       platformPost<Agent>("v1/agents", body),
     onSuccess: () => {
@@ -231,6 +233,7 @@ export function useCreateAgent() {
 export function useUpdateAgent(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: AgentWriteBody) =>
       platformPost<Agent>(`v1/agents/${id}`, body),
     onSuccess: (agent) => {
@@ -244,6 +247,7 @@ export function useUpdateAgent(id: string) {
 export function useArchiveAgent(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Archive failed" },
     mutationFn: () => platformPost<Agent>(`v1/agents/${id}/archive`, {}),
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
@@ -262,6 +266,7 @@ export interface EnvironmentWriteBody {
 export function useCreateEnvironment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: EnvironmentWriteBody) =>
       platformPost<Environment>("v1/environments", body),
     onSuccess: () => {
@@ -273,6 +278,7 @@ export function useCreateEnvironment() {
 export function useUpdateEnvironment(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: EnvironmentWriteBody) =>
       platformPost<Environment>(`v1/environments/${id}`, body),
     onSuccess: (environment) => {
@@ -285,6 +291,7 @@ export function useUpdateEnvironment(id: string) {
 export function useArchiveEnvironment(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Archive failed" },
     mutationFn: () =>
       platformPost<Environment>(`v1/environments/${id}/archive`, {}),
     onSuccess: (environment) => {
@@ -297,6 +304,7 @@ export function useArchiveEnvironment(id: string) {
 export function useDeleteEnvironment(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/environments/${id}`),
     onSuccess: () => {
@@ -317,6 +325,7 @@ export interface SessionCreateBody {
 export function useCreateSession() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: SessionCreateBody) =>
       platformPost<Session>("v1/sessions", body),
     onSuccess: () => {
@@ -328,6 +337,7 @@ export function useCreateSession() {
 export function useUploadFile() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (file: File) => {
       const form = new FormData();
       form.append("file", file);
@@ -342,6 +352,7 @@ export function useUploadFile() {
 export function useCreateVault() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: { display_name: string }) =>
       platformPost<Vault>("v1/vaults", body),
     onSuccess: () => {
@@ -353,6 +364,7 @@ export function useCreateVault() {
 export function useArchiveVault(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Archive failed" },
     mutationFn: () => platformPost<Vault>(`v1/vaults/${id}/archive`, {}),
     onSuccess: (vault) => {
       queryClient.setQueryData(["vault", id], vault);
@@ -367,6 +379,7 @@ export function useArchiveVault(id: string) {
 export function useDeleteVault(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Delete failed" },
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/vaults/${id}`),
     onSuccess: () => {
@@ -379,6 +392,7 @@ export function useDeleteVault(id: string) {
 export function useAddCredential(vaultId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (body: { display_name?: string; auth: unknown }) =>
       platformPost<VaultCredential>(`v1/vaults/${vaultId}/credentials`, body),
     onSuccess: () => {
@@ -392,6 +406,7 @@ export function useAddCredential(vaultId: string) {
 export function useArchiveCredential(vaultId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Archive failed" },
     mutationFn: (credentialId: string) =>
       platformPost<VaultCredential>(
         `v1/vaults/${vaultId}/credentials/${credentialId}/archive`,
@@ -408,6 +423,7 @@ export function useArchiveCredential(vaultId: string) {
 export function useDeleteCredential(vaultId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorTitle: "Delete failed" },
     mutationFn: (credentialId: string) =>
       platformDelete<{ id: string; type: string }>(
         `v1/vaults/${vaultId}/credentials/${credentialId}`,
@@ -422,6 +438,7 @@ export function useDeleteCredential(vaultId: string) {
 
 export function useValidateOAuthCredential(vaultId: string) {
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (credentialId: string) =>
       platformPost<Record<string, unknown>>(
         `v1/vaults/${vaultId}/credentials/${credentialId}/mcp_oauth_validate`,
@@ -433,6 +450,7 @@ export function useValidateOAuthCredential(vaultId: string) {
 export function useUploadSkill() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: ({
       files: skillFiles,
       displayTitle,
@@ -454,6 +472,7 @@ export function useUploadSkill() {
 export function useUploadSkillVersion(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (skillFiles: File[]) => {
       const form = new FormData();
       for (const file of skillFiles) form.append("files[]", file);
@@ -474,6 +493,7 @@ export function useUploadSkillVersion(skillId: string) {
 export function useDeleteSkillVersion(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (version: string) =>
       platformDelete<{ id: string; type: string }>(
         `v1/skills/${skillId}/versions/${version}`,
@@ -490,6 +510,7 @@ export function useDeleteSkillVersion(skillId: string) {
 export function useDeleteSkill(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/skills/${skillId}`),
     onSuccess: () => {
@@ -502,6 +523,7 @@ export function useDeleteSkill(skillId: string) {
 export function useDeleteFile() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorToast: false },
     mutationFn: (fileId: string) =>
       platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
     onSuccess: () => {

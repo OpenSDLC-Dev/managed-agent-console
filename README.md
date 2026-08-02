@@ -2,19 +2,84 @@
 
 The web console for [managed-agent-platform](https://github.com/OpenSDLC-Dev/managed-agent-platform) — an open-source, self-hostable platform for long-horizon AI agents, wire-compatible with Anthropic's Claude Managed Agents API.
 
-This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents**, **environments**, and **sessions** — including live session event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, and **files**. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
+This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents** (rendered form or raw JSON↔YAML editor), **environments**, and **sessions** — including live event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, and **files**. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
 
-> **Status: docs-only.** The v1 design plan is [docs/plan/01_v1-console.md](./docs/plan/01_v1-console.md); implementation has not started. Progress is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
+The v1 feature set is complete. Changes are recorded in [CHANGELOG.md](./CHANGELOG.md); active work is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
-## Planned shape (see the plan for rationale)
+## How it holds your key
 
-- **Next.js** (App Router, TypeScript) with a thin server-side proxy: the platform management key lives on the console server only and **never reaches the browser**.
-- Ships as a single **Docker** image, deployable next to the platform's [compose stack](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/compose) or Helm release.
-- Default test suites run against a mock platform server; an opt-in live tier drives a real local stack.
+The console is a Next.js app with a thin server-side proxy: every platform call — SSE streams included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** An optional shared-password login gate (`CONSOLE_PASSWORD`) protects non-loopback deployments; unset, the console is open (fine for `localhost`).
+
+| Variable            | Required | Meaning                                                |
+| ------------------- | -------- | ------------------------------------------------------ |
+| `PLATFORM_BASE_URL` | yes      | Control-plane base URL, e.g. `http://localhost:8080`   |
+| `PLATFORM_API_KEY`  | yes      | The platform's management key (`CONTROLPLANE_API_KEY`) |
+| `CONSOLE_PASSWORD`  | no       | Enables the login gate when set; unset ⇒ no gate       |
+
+## Quickstart (Docker)
+
+Build the image and run it against a platform control plane:
+
+```bash
+docker build -t managed-agent-console .
+docker run --rm -p 3000:3000 \
+  -e PLATFORM_BASE_URL=http://host.docker.internal:8080 \
+  -e PLATFORM_API_KEY=your-controlplane-api-key \
+  -e CONSOLE_PASSWORD=choose-a-password \
+  managed-agent-console
+```
+
+Then open http://localhost:3000.
+
+### Next to the platform's compose stack
+
+If the platform is running via its [deploy/compose](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/compose) stack, join its network and talk to the `controlplane` service directly:
+
+```bash
+docker run --rm -p 3000:3000 \
+  --network managed-agent-platform_default \
+  -e PLATFORM_BASE_URL=http://controlplane:8080 \
+  -e PLATFORM_API_KEY=your-controlplane-api-key \
+  -e CONSOLE_PASSWORD=choose-a-password \
+  managed-agent-console
+```
+
+Or as a service inside the same `docker-compose.yml`:
+
+```yaml
+console:
+  build: ../../managed-agent-console # or image: managed-agent-console
+  ports:
+    - "127.0.0.1:3000:3000"
+  environment:
+    PLATFORM_BASE_URL: http://controlplane:8080
+    PLATFORM_API_KEY: ${CONTROLPLANE_API_KEY:?set CONTROLPLANE_API_KEY in .env}
+    CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:-}
+  depends_on:
+    - controlplane
+```
+
+## Development
+
+```bash
+pnpm install
+cp .env.example .env.local   # fill in PLATFORM_BASE_URL / PLATFORM_API_KEY
+pnpm dev                     # console on http://localhost:3000
+```
+
+Checks — the default suites spend no money and need no network:
+
+```bash
+pnpm test       # Vitest unit/component tests
+pnpm test:e2e   # Playwright against the in-repo mock platform server
+pnpm lint       # eslint; pnpm typecheck and pnpm format:check also exist
+```
+
+The e2e tier builds the production bundle first, and the mock platform (`test/mock-platform/`) speaks the same wire shapes as the real control plane. A live acceptance pass against a real compose stack is opt-in (`RUN_LIVE_CONSOLE_TESTS=1`) and requires a configured model endpoint.
 
 ## Contributing
 
-Read [CLAUDE.md](./CLAUDE.md) first — it documents the design principles (notably: the platform's implemented API is the single source of truth; never guess at wire shapes) and the PR-based iteration workflow.
+Read [CLAUDE.md](./CLAUDE.md) first — it documents the design principles (notably: the platform's implemented API is the single source of truth; never guess at wire shapes) and the PR-based iteration workflow. The v1 design narrative lives in [docs/plan/01_v1-console.md](./docs/plan/01_v1-console.md) and [docs/HISTORY.md](./docs/HISTORY.md).
 
 ## License
 

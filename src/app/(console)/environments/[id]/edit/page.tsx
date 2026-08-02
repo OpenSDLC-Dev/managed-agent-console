@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { PageHeader } from "@/components/shell/page-header";
-import { ErrorState } from "@/components/console/bits";
+import { ErrorState, DetailSkeleton } from "@/components/console/bits";
 import {
   EnvironmentEditor,
   formFromEnvironment,
@@ -19,7 +19,7 @@ export default function EditEnvironmentPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !environment) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   return (

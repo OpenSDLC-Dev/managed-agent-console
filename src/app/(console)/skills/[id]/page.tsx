@@ -11,6 +11,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  DetailSkeleton,
 } from "@/components/console/bits";
 import {
   ConfirmIconButton,
@@ -43,7 +44,7 @@ export default function SkillDetailPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !skill) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   const custom = skill.source === "custom";

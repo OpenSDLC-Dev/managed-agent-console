@@ -15,6 +15,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  DetailSkeleton,
 } from "@/components/console/bits";
 import {
   ArchiveButton,
@@ -42,7 +43,7 @@ export default function EnvironmentDetailPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !environment) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   const config = environment.config;

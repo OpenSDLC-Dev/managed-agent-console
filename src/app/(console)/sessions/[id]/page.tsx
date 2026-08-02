@@ -10,6 +10,8 @@ import {
   ErrorState,
   IdCode,
   StatusBadge,
+  DetailSkeleton,
+  ListSkeleton,
 } from "@/components/console/bits";
 import { EventRow } from "@/components/console/event-row";
 import { ApprovalBanner } from "@/components/console/approval-banner";
@@ -107,7 +109,7 @@ export default function SessionDetailPage({
 
   if (session.error) return <ErrorState error={session.error} />;
   if (session.isPending || !session.data) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
   const data = session.data;
 
@@ -181,8 +183,9 @@ export default function SessionDetailPage({
             variant="outline"
             className={cn(
               "ml-2 font-normal",
-              connection === "live" && "text-emerald-700",
-              connection === "reconnecting" && "text-amber-700",
+              connection === "live" && "text-emerald-700 dark:text-emerald-400",
+              connection === "reconnecting" &&
+                "text-amber-700 dark:text-amber-300",
             )}
           >
             {CONNECTION_LABEL[connection]}
@@ -190,7 +193,7 @@ export default function SessionDetailPage({
         </div>
         {visible.length === 0 && visiblePreviews.length === 0 ? (
           connection === "connecting" ? (
-            <div className="text-sm text-muted-foreground">Loading events…</div>
+            <ListSkeleton rows={4} />
           ) : (
             <EmptyState title="No events" />
           )
