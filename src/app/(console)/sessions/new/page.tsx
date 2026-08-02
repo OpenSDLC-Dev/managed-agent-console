@@ -1,5 +1,6 @@
 "use client";
 
+import { RequestId } from "@/components/console/bits";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Paperclip, X } from "lucide-react";
@@ -225,8 +226,8 @@ export default function NewSessionPage() {
             <span className="text-sm text-destructive">
               {error.message}
               {error instanceof PlatformError && error.requestId && (
-                <span className="pl-2 font-mono text-[11px]">
-                  request-id: {error.requestId}
+                <span className="pl-2">
+                  <RequestId id={error.requestId} />
                 </span>
               )}
             </span>

@@ -19,6 +19,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  DetailSkeleton,
 } from "@/components/console/bits";
 import {
   useAgent,
@@ -55,7 +56,7 @@ export default function AgentDetailPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !agent) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   return (

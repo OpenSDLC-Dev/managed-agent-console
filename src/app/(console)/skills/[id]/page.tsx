@@ -11,6 +11,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  DetailSkeleton,
 } from "@/components/console/bits";
 import {
   ConfirmIconButton,
@@ -43,7 +44,7 @@ export default function SkillDetailPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !skill) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   const custom = skill.source === "custom";
@@ -145,16 +146,6 @@ export default function SkillDetailPage({
           </span>
         }
       />
-      {(uploadVersion.error instanceof Error ||
-        deleteSkill.error instanceof Error ||
-        deleteVersion.error instanceof Error) && (
-        <p className="pb-4 text-sm text-destructive">
-          {
-            (uploadVersion.error ?? deleteSkill.error ?? deleteVersion.error)
-              ?.message
-          }
-        </p>
-      )}
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">

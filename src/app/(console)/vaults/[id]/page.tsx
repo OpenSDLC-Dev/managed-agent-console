@@ -17,6 +17,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  DetailSkeleton,
 } from "@/components/console/bits";
 import {
   ArchiveButton,
@@ -106,7 +107,7 @@ export default function VaultDetailPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !vault) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   const columns: Column<VaultCredential>[] = [

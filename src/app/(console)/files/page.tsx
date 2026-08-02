@@ -131,11 +131,6 @@ export default function FilesPage() {
           Upload failed: {upload.error.message}
         </p>
       )}
-      {remove.error instanceof Error && (
-        <p className="pb-4 text-sm text-destructive">
-          Delete failed: {remove.error.message}
-        </p>
-      )}
       {error ? (
         <ErrorState error={error} />
       ) : (

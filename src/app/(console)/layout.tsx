@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Nav } from "@/components/shell/nav";
+import { CommandPalette } from "@/components/shell/command-palette";
 import { ConnectionStatus } from "@/components/shell/connection-status";
 import { Providers } from "@/components/shell/providers";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 
 export default function ConsoleLayout({
   children,
@@ -19,9 +21,15 @@ export default function ConsoleLayout({
                 self-hosted console
               </div>
             </div>
+            <div className="flex flex-col pt-3">
+              <CommandPalette />
+            </div>
             <Nav />
           </div>
           <div>
+            <div className="px-4 pb-3">
+              <ThemeToggle />
+            </div>
             <div className="px-4 pb-2 text-[13px]">
               <a
                 href="https://github.com/OpenSDLC-Dev/managed-agent-platform"

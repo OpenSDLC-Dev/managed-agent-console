@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { PageHeader } from "@/components/shell/page-header";
-import { ErrorState } from "@/components/console/bits";
+import { ErrorState, DetailSkeleton } from "@/components/console/bits";
 import { AgentEditor, formFromAgent } from "@/components/console/agent-editor";
 import { useAgent } from "@/lib/platform/queries";
 
@@ -16,7 +16,7 @@ export default function EditAgentPage({
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !agent) {
-    return <div className="text-sm text-muted-foreground">Loading…</div>;
+    return <DetailSkeleton />;
   }
 
   return (
