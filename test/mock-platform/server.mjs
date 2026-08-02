@@ -7,8 +7,13 @@ import {
   agents,
   agentVersions,
   environments,
+  files,
   sessions,
   sessionEvents,
+  skills,
+  skillVersions,
+  vaultCredentials,
+  vaults,
 } from "./fixtures.mjs";
 
 const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
@@ -108,6 +113,55 @@ function route(req, url) {
     if (types.length > 0) rows = rows.filter((r) => types.includes(r.type));
     return keysetPage(rows, url);
   }
+
+  if (path === "/v1/vaults") {
+    return keysetPage(
+      includeArchived ? vaults : vaults.filter(notArchived),
+      url,
+    );
+  }
+  const vaultMatch = path.match(/^\/v1\/vaults\/([^/]+)$/);
+  if (vaultMatch) return vaults.find((v) => v.id === vaultMatch[1]) ?? null;
+  const credsMatch = path.match(/^\/v1\/vaults\/([^/]+)\/credentials$/);
+  if (credsMatch) {
+    const creds = vaultCredentials[credsMatch[1]];
+    if (!creds) return null; // missing vault → 404, not an empty page
+    return keysetPage(includeArchived ? creds : creds.filter(notArchived), url);
+  }
+
+  if (path === "/v1/skills") {
+    let rows = skills;
+    const source = url.searchParams.get("source");
+    if (source) rows = rows.filter((s) => s.source === source);
+    return keysetPage(rows, url);
+  }
+  const skillVersionsMatch = path.match(/^\/v1\/skills\/([^/]+)\/versions$/);
+  if (skillVersionsMatch) {
+    const versions = skillVersions[skillVersionsMatch[1]];
+    return versions ? keysetPage(versions, url) : null;
+  }
+  const skillMatch = path.match(/^\/v1\/skills\/([^/]+)$/);
+  if (skillMatch) return skills.find((s) => s.id === skillMatch[1]) ?? null;
+
+  if (path === "/v1/files") {
+    // Classic Files pagination: after_id/before_id + has_more envelope.
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 1000);
+    const afterId = url.searchParams.get("after_id");
+    let rows = files;
+    if (afterId) {
+      const at = rows.findIndex((f) => f.id === afterId);
+      rows = at === -1 ? [] : rows.slice(at + 1);
+    }
+    const data = rows.slice(0, limit);
+    return {
+      data,
+      has_more: rows.length > limit,
+      first_id: data.length > 0 ? data[0].id : null,
+      last_id: data.length > 0 ? data[data.length - 1].id : null,
+    };
+  }
+  const fileMatch = path.match(/^\/v1\/files\/([^/]+)$/);
+  if (fileMatch) return files.find((f) => f.id === fileMatch[1]) ?? null;
 
   return null;
 }

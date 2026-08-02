@@ -109,3 +109,62 @@ test("session detail shows the trace and the pending-approval banner", async ({
       .getByText("5,412 in · 890 out · 3,100 cache read"),
   ).toBeVisible();
 });
+
+test("vaults list and detail render secret-free credentials", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole("link", { name: "Credential vaults", exact: true })
+    .click();
+  await expect(page.getByRole("cell", { name: /GitHub access/ })).toBeVisible();
+  await expect(page.getByText("Old Jira vault")).toBeHidden();
+
+  await page.getByRole("cell", { name: /GitHub access/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "GitHub access" }),
+  ).toBeVisible();
+  // Both credentials, typed by their auth union arm.
+  await expect(page.getByText("environment_variable")).toBeVisible();
+  await expect(page.getByText("mcp_oauth")).toBeVisible();
+  await expect(page.getByText("GITHUB_TOKEN")).toBeVisible();
+  await expect(
+    page.getByText("Secrets are write-only", { exact: false }),
+  ).toBeVisible();
+});
+
+test("skills list filters by source; detail shows versions", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Skills", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "Excel spreadsheets" }),
+  ).toBeVisible();
+
+  await page.getByRole("combobox").click();
+  await page.getByRole("option", { name: "custom" }).click();
+  await expect(page.getByText("Excel spreadsheets")).toBeHidden();
+  await expect(
+    page.getByRole("cell", { name: "Weekly report writer" }),
+  ).toBeVisible();
+
+  await page.getByRole("cell", { name: "Weekly report writer" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Weekly report writer" }),
+  ).toBeVisible();
+  await expect(page.getByText("Initial version.")).toBeVisible();
+});
+
+test("files list renders the classic envelope fields", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "research-notes.md" }),
+  ).toBeVisible();
+  await expect(page.getByRole("cell", { name: "summary.xlsx" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "47.1 KB" })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "session output" }),
+  ).toBeVisible();
+});

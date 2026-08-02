@@ -286,3 +286,152 @@ export const sessionEvents = {
     },
   ],
 };
+
+export const vaults = [
+  {
+    id: "vlt_github00000000000001",
+    type: "vault",
+    display_name: "GitHub access",
+    metadata: { owner: "platform-team" },
+    created_at: T0,
+    updated_at: T1,
+    archived_at: null,
+  },
+  {
+    id: "vlt_retiredvault00000001",
+    type: "vault",
+    display_name: "Old Jira vault",
+    metadata: {},
+    created_at: T0,
+    updated_at: T2,
+    archived_at: T2,
+  },
+];
+
+// Secret-free auth documents, exactly as the platform renders them
+// (vaultcredauth.go — write-only fields never appear).
+export const vaultCredentials = {
+  vlt_github00000000000001: [
+    {
+      id: "vcred_ghtoken000000000001",
+      type: "vault_credential",
+      vault_id: "vlt_github00000000000001",
+      display_name: "Repo token",
+      auth: {
+        type: "environment_variable",
+        secret_name: "GITHUB_TOKEN",
+        networking: { type: "limited", allowed_hosts: ["api.github.com"] },
+        injection_location: { body: false, header: true },
+      },
+      metadata: {},
+      created_at: T0,
+      updated_at: T0,
+      archived_at: null,
+    },
+    {
+      id: "vcred_ghmcp0000000000001",
+      type: "vault_credential",
+      vault_id: "vlt_github00000000000001",
+      display_name: null,
+      auth: {
+        type: "mcp_oauth",
+        mcp_server_url: "https://api.githubcopilot.com/mcp/",
+        expires_at: "2026-09-01T00:00:00Z",
+        refresh: {
+          client_id: "iv1.abc",
+          token_endpoint: "https://github.com/login/oauth/access_token",
+          token_endpoint_auth: { type: "client_secret_basic" },
+          resource: null,
+          scope: "repo",
+        },
+      },
+      metadata: {},
+      created_at: T1,
+      updated_at: T1,
+      archived_at: null,
+    },
+  ],
+  vlt_retiredvault00000001: [],
+};
+
+export const skills = [
+  {
+    id: "xlsx",
+    type: "skill",
+    display_title: "Excel spreadsheets",
+    latest_version: "1754000000000001",
+    source: "anthropic",
+    created_at: T0,
+    updated_at: T0,
+  },
+  {
+    id: "skill_reportwriter0000001",
+    type: "skill",
+    display_title: "Weekly report writer",
+    latest_version: "1754100000000002",
+    source: "custom",
+    created_at: T1,
+    updated_at: T2,
+  },
+];
+
+export const skillVersions = {
+  skill_reportwriter0000001: [
+    {
+      id: "skillver_rw2000000000001",
+      type: "skill_version",
+      skill_id: "skill_reportwriter0000001",
+      version: "1754100000000002",
+      name: "report-writer",
+      description: "Writes the weekly status report from repo activity.",
+      directory: "report-writer",
+      created_at: T2,
+    },
+    {
+      id: "skillver_rw1000000000001",
+      type: "skill_version",
+      skill_id: "skill_reportwriter0000001",
+      version: "1754000000000001",
+      name: "report-writer",
+      description: "Initial version.",
+      directory: "report-writer",
+      created_at: T1,
+    },
+  ],
+  xlsx: [
+    {
+      id: "skillver_xlsx00000000001",
+      type: "skill_version",
+      skill_id: "xlsx",
+      version: "1754000000000001",
+      name: "xlsx",
+      description: "Read and write Excel workbooks.",
+      directory: "xlsx",
+      created_at: T0,
+    },
+  ],
+};
+
+export const files = [
+  {
+    id: "file_notes0000000000001",
+    type: "file",
+    filename: "research-notes.md",
+    mime_type: "text/markdown",
+    size_bytes: 48213,
+    downloadable: false,
+    scope: null,
+    created_at: T1,
+  },
+  {
+    id: "file_output000000000001",
+    type: "file",
+    filename: "summary.xlsx",
+    mime_type:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    size_bytes: 120400,
+    downloadable: true,
+    scope: { id: "sesn_research0000000000001", type: "session" },
+    created_at: T2,
+  },
+];
