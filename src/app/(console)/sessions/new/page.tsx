@@ -30,9 +30,9 @@ interface AttachedFile {
 
 export default function NewSessionPage() {
   const router = useRouter();
-  const agents = useAgents({});
-  const environments = useEnvironments({});
-  const vaults = useVaults({});
+  const agents = useAgents({ limit: 100 });
+  const environments = useEnvironments({ limit: 100 });
+  const vaults = useVaults({ limit: 100 });
   const upload = useUploadFile();
   const create = useCreateSession();
 
@@ -168,9 +168,6 @@ export default function NewSessionPage() {
               >
                 <Paperclip className="size-3.5 text-muted-foreground" />
                 {file.filename}
-                <span className="font-mono text-[12px] text-muted-foreground">
-                  /mnt/session/uploads/{file.file_id}
-                </span>
                 <button
                   aria-label={`Remove ${file.filename}`}
                   onClick={() =>

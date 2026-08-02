@@ -30,6 +30,7 @@ import type {
 export function useAgents(params: {
   page?: string;
   include_archived?: boolean;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["agents", params],
@@ -61,6 +62,7 @@ export function useAgentVersions(id: string, page?: string) {
 export function useEnvironments(params: {
   page?: string;
   include_archived?: boolean;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["environments", params],
@@ -129,6 +131,7 @@ export function useSendEvents(sessionId: string) {
 export function useVaults(params: {
   page?: string;
   include_archived?: boolean;
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["vaults", params],
@@ -161,6 +164,7 @@ export function useVaultCredentials(vaultId: string, page?: string) {
 export function useSkills(params: {
   page?: string;
   source?: "custom" | "anthropic";
+  limit?: number;
 }) {
   return useQuery({
     queryKey: ["skills", params],
@@ -296,6 +300,7 @@ export function useDeleteEnvironment(id: string) {
     mutationFn: () =>
       platformDelete<{ id: string; type: string }>(`v1/environments/${id}`),
     onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["environment", id] });
       void queryClient.invalidateQueries({ queryKey: ["environments"] });
     },
   });

@@ -124,7 +124,7 @@ export default function SessionsPage() {
             empty={
               <EmptyState
                 title="No sessions yet"
-                hint="Sessions will appear here once created through the API."
+                hint="Create a session to get started."
               />
             }
           />

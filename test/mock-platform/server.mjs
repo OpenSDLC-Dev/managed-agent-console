@@ -60,6 +60,11 @@ function resetStore() {
   agentVersionsStore = structuredClone(agentVersions);
   environmentsStore = structuredClone(environments);
   filesStore = structuredClone(files);
+  agentCounter = 1;
+  environmentCounter = 1;
+  fileCounter = 1;
+  sessionCounter = 1;
+  resourceCounter = 1;
 }
 resetStore();
 
@@ -488,9 +493,9 @@ function route(req, url) {
 
 function readBody(req) {
   return new Promise((resolve) => {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => resolve(body));
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
   });
 }
 
@@ -717,7 +722,7 @@ const server = createServer(async (req, res) => {
       type: "file",
       filename,
       mime_type: mime.trim(),
-      size_bytes: Buffer.byteLength(body),
+      size_bytes: body.length,
       downloadable: false,
       scope: null,
       created_at: now(),

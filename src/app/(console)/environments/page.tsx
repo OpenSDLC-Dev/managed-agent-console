@@ -81,7 +81,7 @@ export default function EnvironmentsPage() {
             empty={
               <EmptyState
                 title="No environments yet"
-                hint="Environments are created through the API until slice 4 lands."
+                hint="Create your first environment to get started."
               />
             }
           />

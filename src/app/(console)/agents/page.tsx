@@ -88,7 +88,7 @@ export default function AgentsPage() {
             empty={
               <EmptyState
                 title="No agents yet"
-                hint="Agents are created through the API until slice 4 lands."
+                hint="Create your first agent to get started."
               />
             }
           />

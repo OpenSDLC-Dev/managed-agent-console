@@ -46,7 +46,8 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await page.getByRole("button", { name: "Archive", exact: true }).click();
   await page.getByRole("button", { name: "Archive environment" }).click();
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete environment" }).click();
   await expect(page).toHaveURL(/\/environments$/);
   await expect(page.getByText("staging-sandbox-2")).toBeHidden();
 });
@@ -56,7 +57,8 @@ test("deleting an in-use environment surfaces the platform 400", async ({
 }) => {
   await signIn(page);
   await page.goto("/environments/env_cloudlimited000000001");
-  await page.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete environment" }).click();
   await expect(page.getByText("environment still has sessions")).toBeVisible();
 });
 

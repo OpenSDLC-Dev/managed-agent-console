@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   DetailSection,
@@ -16,7 +16,10 @@ import {
   IdCode,
   Time,
 } from "@/components/console/bits";
-import { ArchiveButton } from "@/components/console/archive-button";
+import {
+  ArchiveButton,
+  DeleteButton,
+} from "@/components/console/archive-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,12 +72,11 @@ export default function EnvironmentDetailPage({
                 />
               </>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-destructive"
-              disabled={remove.isPending}
-              onClick={() =>
+            <DeleteButton
+              resource="environment"
+              description="Deleting is permanent and cannot be undone. The platform refuses if any session still references this environment."
+              pending={remove.isPending}
+              onConfirm={() =>
                 remove.mutate(undefined, {
                   onSuccess: () => router.push("/environments"),
                   onError: (err) =>
@@ -83,9 +85,7 @@ export default function EnvironmentDetailPage({
                     ),
                 })
               }
-            >
-              <Trash2 className="size-4" /> Delete
-            </Button>
+            />
           </span>
         }
       />
