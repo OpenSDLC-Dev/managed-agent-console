@@ -165,9 +165,11 @@ test("files list renders the classic envelope fields", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
-    page.getByRole("cell", { name: "research-notes.md" }),
+    page.getByRole("cell", { name: "research-notes.md", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("cell", { name: "summary.xlsx" })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "summary.xlsx", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("cell", { name: "47.1 KB" })).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "session output" }),

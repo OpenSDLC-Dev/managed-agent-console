@@ -41,6 +41,14 @@ let filesStore = [];
 let fileCounter = 1;
 let sessionCounter = 1;
 let resourceCounter = 1;
+let vaultsStore = [];
+let vaultCredsStore = {};
+let vaultCounter = 1;
+let credCounter = 1;
+let skillsStore = [];
+let skillVersionsStore = {};
+let skillCounter = 1;
+let skillVersionCounter = 1;
 
 function resetStore() {
   for (const state of store.values()) {
@@ -60,11 +68,19 @@ function resetStore() {
   agentVersionsStore = structuredClone(agentVersions);
   environmentsStore = structuredClone(environments);
   filesStore = structuredClone(files);
+  vaultsStore = structuredClone(vaults);
+  vaultCredsStore = structuredClone(vaultCredentials);
+  skillsStore = structuredClone(skills);
+  skillVersionsStore = structuredClone(skillVersions);
   agentCounter = 1;
   environmentCounter = 1;
   fileCounter = 1;
   sessionCounter = 1;
   resourceCounter = 1;
+  vaultCounter = 1;
+  credCounter = 1;
+  skillCounter = 1;
+  skillVersionCounter = 1;
 }
 resetStore();
 
@@ -441,32 +457,34 @@ function route(req, url) {
 
   if (path === "/v1/vaults") {
     return keysetPage(
-      includeArchived ? vaults : vaults.filter(notArchived),
+      includeArchived ? vaultsStore : vaultsStore.filter(notArchived),
       url,
     );
   }
   const vaultMatch = path.match(/^\/v1\/vaults\/([^/]+)$/);
-  if (vaultMatch) return vaults.find((v) => v.id === vaultMatch[1]) ?? null;
+  if (vaultMatch)
+    return vaultsStore.find((v) => v.id === vaultMatch[1]) ?? null;
   const credsMatch = path.match(/^\/v1\/vaults\/([^/]+)\/credentials$/);
   if (credsMatch) {
-    const creds = vaultCredentials[credsMatch[1]];
+    const creds = vaultCredsStore[credsMatch[1]];
     if (!creds) return null; // missing vault → 404, not an empty page
     return keysetPage(includeArchived ? creds : creds.filter(notArchived), url);
   }
 
   if (path === "/v1/skills") {
-    let rows = skills;
+    let rows = skillsStore;
     const source = url.searchParams.get("source");
     if (source) rows = rows.filter((s) => s.source === source);
     return keysetPage(rows, url);
   }
   const skillVersionsMatch = path.match(/^\/v1\/skills\/([^/]+)\/versions$/);
   if (skillVersionsMatch) {
-    const versions = skillVersions[skillVersionsMatch[1]];
+    const versions = skillVersionsStore[skillVersionsMatch[1]];
     return versions ? keysetPage(versions, url) : null;
   }
   const skillMatch = path.match(/^\/v1\/skills\/([^/]+)$/);
-  if (skillMatch) return skills.find((s) => s.id === skillMatch[1]) ?? null;
+  if (skillMatch)
+    return skillsStore.find((s) => s.id === skillMatch[1]) ?? null;
 
   if (path === "/v1/files") {
     // Classic Files pagination: after_id/before_id + has_more envelope.
@@ -868,6 +886,373 @@ const server = createServer(async (req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify(session));
     return;
+  }
+
+  // Vault + credential writes. Secrets are write-only: the stored render is
+  // built here without them, mirroring vaultcredauth.go.
+  if (url.pathname.startsWith("/v1/vaults")) {
+    const vaultIdMatch = url.pathname.match(/^\/v1\/vaults\/([^/]+)$/);
+    const vaultArchiveMatch = url.pathname.match(
+      /^\/v1\/vaults\/([^/]+)\/archive$/,
+    );
+    const credsPostMatch = url.pathname.match(
+      /^\/v1\/vaults\/([^/]+)\/credentials$/,
+    );
+    const credItemMatch = url.pathname.match(
+      /^\/v1\/vaults\/([^/]+)\/credentials\/([^/]+)$/,
+    );
+    const credArchiveMatch = url.pathname.match(
+      /^\/v1\/vaults\/([^/]+)\/credentials\/([^/]+)\/archive$/,
+    );
+    const credValidateMatch = url.pathname.match(
+      /^\/v1\/vaults\/([^/]+)\/credentials\/([^/]+)\/mcp_oauth_validate$/,
+    );
+
+    if (req.method === "POST" && url.pathname === "/v1/vaults") {
+      res.setHeader("content-type", "application/json");
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      if (typeof body.display_name !== "string" || !body.display_name) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "display_name is required"));
+        return;
+      }
+      const timestamp = now();
+      const vault = {
+        id: `vlt_mock${String(vaultCounter++).padStart(6, "0")}`,
+        type: "vault",
+        display_name: body.display_name,
+        metadata: body.metadata ?? {},
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived_at: null,
+      };
+      vaultsStore.unshift(vault);
+      vaultCredsStore[vault.id] = [];
+      res.writeHead(200);
+      res.end(JSON.stringify(vault));
+      return;
+    }
+    if (req.method === "POST" && vaultArchiveMatch) {
+      res.setHeader("content-type", "application/json");
+      const vault = vaultsStore.find((v) => v.id === vaultArchiveMatch[1]);
+      if (!vault) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such vault"));
+        return;
+      }
+      vault.archived_at ??= now();
+      for (const cred of vaultCredsStore[vault.id] ?? []) {
+        cred.archived_at ??= vault.archived_at;
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify(vault));
+      return;
+    }
+    if (req.method === "DELETE" && vaultIdMatch) {
+      res.setHeader("content-type", "application/json");
+      const vault = vaultsStore.find((v) => v.id === vaultIdMatch[1]);
+      if (!vault) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such vault"));
+        return;
+      }
+      vaultsStore = vaultsStore.filter((v) => v.id !== vault.id);
+      delete vaultCredsStore[vault.id];
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: vault.id, type: "vault_deleted" }));
+      return;
+    }
+    if (req.method === "POST" && credValidateMatch) {
+      res.setHeader("content-type", "application/json");
+      const cred = (vaultCredsStore[credValidateMatch[1]] ?? []).find(
+        (c) => c.id === credValidateMatch[2],
+      );
+      if (!cred || cred.auth.type !== "mcp_oauth") {
+        res.writeHead(cred ? 400 : 404);
+        res.end(
+          envelope(
+            cred ? "invalid_request_error" : "not_found_error",
+            cred ? "credential is not mcp_oauth" : "no such credential",
+          ),
+        );
+        return;
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify({ type: "mcp_oauth_validation", status: "ok" }));
+      return;
+    }
+    if (req.method === "POST" && credsPostMatch) {
+      res.setHeader("content-type", "application/json");
+      const creds = vaultCredsStore[credsPostMatch[1]];
+      if (!creds) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such vault"));
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      const auth = body.auth ?? {};
+      // Strip write-only fields into the secret-free rendered document.
+      let rendered;
+      if (auth.type === "mcp_oauth") {
+        if (!auth.access_token) {
+          res.writeHead(400);
+          res.end(
+            envelope("invalid_request_error", "access_token is required"),
+          );
+          return;
+        }
+        rendered = {
+          type: "mcp_oauth",
+          mcp_server_url: auth.mcp_server_url ?? "",
+          expires_at: auth.expires_at ?? null,
+          refresh: auth.refresh
+            ? {
+                client_id: auth.refresh.client_id ?? "",
+                token_endpoint: auth.refresh.token_endpoint ?? "",
+                token_endpoint_auth: {
+                  type: auth.refresh.token_endpoint_auth?.type ?? "none",
+                },
+                resource: auth.refresh.resource ?? null,
+                scope: auth.refresh.scope ?? null,
+              }
+            : null,
+        };
+      } else if (auth.type === "static_bearer") {
+        if (!auth.token) {
+          res.writeHead(400);
+          res.end(envelope("invalid_request_error", "token is required"));
+          return;
+        }
+        rendered = {
+          type: "static_bearer",
+          mcp_server_url: auth.mcp_server_url ?? "",
+        };
+      } else if (auth.type === "environment_variable") {
+        if (!auth.secret_name || !auth.secret_value) {
+          res.writeHead(400);
+          res.end(
+            envelope(
+              "invalid_request_error",
+              "secret_name and secret_value are required",
+            ),
+          );
+          return;
+        }
+        rendered = {
+          type: "environment_variable",
+          secret_name: auth.secret_name,
+          networking: auth.networking ?? { type: "unrestricted" },
+          injection_location: auth.injection_location ?? {
+            body: true,
+            header: true,
+          },
+        };
+      } else {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "unknown auth type"));
+        return;
+      }
+      const timestamp = now();
+      const credential = {
+        id: `vcred_mock${String(credCounter++).padStart(6, "0")}`,
+        type: "vault_credential",
+        vault_id: credsPostMatch[1],
+        display_name: body.display_name ?? null,
+        auth: rendered,
+        metadata: body.metadata ?? {},
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived_at: null,
+      };
+      creds.unshift(credential);
+      res.writeHead(200);
+      res.end(JSON.stringify(credential));
+      return;
+    }
+    if (req.method === "POST" && credArchiveMatch) {
+      res.setHeader("content-type", "application/json");
+      const cred = (vaultCredsStore[credArchiveMatch[1]] ?? []).find(
+        (c) => c.id === credArchiveMatch[2],
+      );
+      if (!cred) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such credential"));
+        return;
+      }
+      cred.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(cred));
+      return;
+    }
+    if (req.method === "DELETE" && credItemMatch) {
+      res.setHeader("content-type", "application/json");
+      const creds = vaultCredsStore[credItemMatch[1]] ?? [];
+      const cred = creds.find((c) => c.id === credItemMatch[2]);
+      if (!cred) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such credential"));
+        return;
+      }
+      vaultCredsStore[credItemMatch[1]] = creds.filter((c) => c.id !== cred.id);
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({ id: cred.id, type: "vault_credential_deleted" }),
+      );
+      return;
+    }
+  }
+
+  // Skill writes: multipart upload, versions, deletes, zip download.
+  if (url.pathname.startsWith("/v1/skills")) {
+    const versionsPostMatch = url.pathname.match(
+      /^\/v1\/skills\/([^/]+)\/versions$/,
+    );
+    const versionItemMatch = url.pathname.match(
+      /^\/v1\/skills\/([^/]+)\/versions\/(\d+)$/,
+    );
+    const contentMatch = url.pathname.match(
+      /^\/v1\/skills\/([^/]+)\/versions\/(\d+)\/content$/,
+    );
+    const skillItemMatch = url.pathname.match(/^\/v1\/skills\/([^/]+)$/);
+
+    const mintVersion = (skillId, name) => {
+      const version = `17549000000${String(skillVersionCounter++).padStart(5, "0")}`;
+      const entry = {
+        id: `skillver_mock${String(skillVersionCounter).padStart(4, "0")}`,
+        type: "skill_version",
+        skill_id: skillId,
+        version,
+        name,
+        description: "Uploaded via console",
+        directory: name,
+        created_at: now(),
+      };
+      skillVersionsStore[skillId] = [
+        entry,
+        ...(skillVersionsStore[skillId] ?? []),
+      ];
+      return entry;
+    };
+
+    if (req.method === "POST" && url.pathname === "/v1/skills") {
+      res.setHeader("content-type", "application/json");
+      const body = await readBody(req);
+      const head = body.toString("latin1");
+      const title =
+        /name="display_title"\r?\n\r?\n([^\r\n]+)/.exec(head)?.[1] ??
+        `skill-${skillCounter}`;
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const skill = {
+        id: `skill_mock${String(skillCounter++).padStart(6, "0")}`,
+        type: "skill",
+        display_title: title,
+        latest_version: "",
+        source: "custom",
+        created_at: now(),
+        updated_at: now(),
+      };
+      const version = mintVersion(skill.id, slug);
+      skill.latest_version = version.version;
+      skillsStore.unshift(skill);
+      res.writeHead(200);
+      res.end(JSON.stringify(skill));
+      return;
+    }
+    if (req.method === "POST" && versionsPostMatch) {
+      res.setHeader("content-type", "application/json");
+      const skill = skillsStore.find((s) => s.id === versionsPostMatch[1]);
+      if (!skill) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such skill"));
+        return;
+      }
+      if (skill.source !== "custom") {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "anthropic skills are read-only"),
+        );
+        return;
+      }
+      await readBody(req);
+      const version = mintVersion(skill.id, skill.display_title);
+      skill.latest_version = version.version;
+      skill.updated_at = now();
+      res.writeHead(200);
+      res.end(JSON.stringify(version));
+      return;
+    }
+    if (req.method === "GET" && contentMatch) {
+      const zip = Buffer.from("PK\x03\x04mock-zip");
+      res.writeHead(200, {
+        "content-type": "application/zip",
+        "content-length": zip.length,
+        "content-disposition": `attachment; filename="skill.zip"`,
+      });
+      res.end(zip);
+      return;
+    }
+    if (req.method === "DELETE" && versionItemMatch) {
+      res.setHeader("content-type", "application/json");
+      const versions = skillVersionsStore[versionItemMatch[1]] ?? [];
+      const entry = versions.find((v) => v.version === versionItemMatch[2]);
+      if (!entry) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such version"));
+        return;
+      }
+      skillVersionsStore[versionItemMatch[1]] = versions.filter(
+        (v) => v.version !== entry.version,
+      );
+      const skill = skillsStore.find((s) => s.id === versionItemMatch[1]);
+      if (skill) {
+        skill.latest_version =
+          skillVersionsStore[versionItemMatch[1]][0]?.version ?? "";
+      }
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({ id: entry.version, type: "skill_version_deleted" }),
+      );
+      return;
+    }
+    if (req.method === "DELETE" && skillItemMatch) {
+      res.setHeader("content-type", "application/json");
+      const skill = skillsStore.find((s) => s.id === skillItemMatch[1]);
+      if (!skill) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such skill"));
+        return;
+      }
+      if (skill.source !== "custom") {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "anthropic skills are read-only"),
+        );
+        return;
+      }
+      if ((skillVersionsStore[skill.id] ?? []).length > 0) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "skill still has versions"));
+        return;
+      }
+      skillsStore = skillsStore.filter((s) => s.id !== skill.id);
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: skill.id, type: "skill_deleted" }));
+      return;
+    }
   }
 
   // Agent writes: create, update (optimistic version lock), archive.

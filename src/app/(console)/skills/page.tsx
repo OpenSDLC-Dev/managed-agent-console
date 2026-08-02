@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSkills } from "@/lib/platform/queries";
+import { UploadSkillButton } from "@/components/console/upload-skill-button";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Skill } from "@/lib/platform/types";
 
@@ -71,6 +72,7 @@ export default function SkillsPage() {
       <PageHeader
         title="Skills"
         subtitle="Packaged instructions and scripts agents load on demand."
+        actions={<UploadSkillButton />}
       />
       <div className="flex items-center gap-1.5 pb-4 text-sm">
         <span className="text-muted-foreground">Source</span>
