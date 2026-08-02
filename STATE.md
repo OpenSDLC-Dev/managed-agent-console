@@ -4,8 +4,12 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**None.** The repo is bootstrapped (CLAUDE.md, plan 01, CI-less docs-only state). Plan [01_v1-console](./docs/plan/01_v1-console.md) is `draft`, awaiting review; implementation starts when it flips `in-progress`.
+**Plan [01_v1-console](./docs/plan/01_v1-console.md)** (`in-progress`) — approved 2026-08-02 with one scope addition (raw editor gets a JSON↔YAML toggle in v1). Currently on **slice 1: scaffold + shell**.
 
 ## Tasks
 
-**None.**
+- [x] Slice 1 — Next.js scaffold (TS strict, Tailwind, shadcn), toolchain, CI, Dockerfile, BFF proxy, login gate, nav shell, connection probe — PR #1 (unit 5/5, e2e 4/4, Chrome fidelity pass vs reference)
+- [ ] Slice 2 — read-only resource pages
+- [ ] Slice 3 — live session trace + HITL
+- [ ] Slice 4 — write paths (incl. JSON↔YAML raw editor)
+- [ ] Slice 5 — polish + deploy docs
