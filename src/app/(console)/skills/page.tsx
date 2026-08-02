@@ -80,7 +80,11 @@ export default function SkillsPage() {
           value={source}
           onValueChange={(value) => setSource(value as typeof source)}
         >
-          <SelectTrigger size="sm" className="h-8 rounded-lg">
+          <SelectTrigger
+            size="sm"
+            className="h-8 rounded-lg"
+            aria-label="Source filter"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

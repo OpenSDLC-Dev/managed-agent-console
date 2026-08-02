@@ -99,7 +99,11 @@ export default function SessionsPage() {
             setPage(undefined);
           }}
         >
-          <SelectTrigger size="sm" className="h-8 rounded-lg">
+          <SelectTrigger
+            size="sm"
+            className="h-8 rounded-lg"
+            aria-label="Status filter"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -283,7 +283,11 @@ export function AgentEditor({
                     )
                   }
                 >
-                  <SelectTrigger size="sm" className="h-8 w-full rounded-lg">
+                  <SelectTrigger
+                    size="sm"
+                    className="h-8 w-full rounded-lg"
+                    aria-label="Model speed"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

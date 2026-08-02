@@ -153,7 +153,11 @@ export function EnvironmentEditor({
               value={form.kind}
               onValueChange={(v) => set("kind", v as EnvForm["kind"])}
             >
-              <SelectTrigger size="sm" className="h-8 w-full rounded-lg">
+              <SelectTrigger
+                size="sm"
+                className="h-8 w-full rounded-lg"
+                aria-label="Environment type"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
