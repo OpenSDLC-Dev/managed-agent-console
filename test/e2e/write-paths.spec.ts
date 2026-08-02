@@ -108,3 +108,110 @@ test("create a session with an uploaded file mount and drive it", async ({
     timeout: 15_000,
   });
 });
+
+test("vault lifecycle: create, add credentials, validate, archive", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole("link", { name: "Credential vaults", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Create vault" }).click();
+  await page.getByLabel("Display name").fill("CI secrets");
+  await page.getByRole("button", { name: "Create vault", exact: true }).click();
+  await expect(page).toHaveURL(/\/vaults\/vlt_mock/);
+
+  // Env-var credential: the secret value leaves the form and never returns.
+  await page.getByRole("button", { name: "Add credential" }).click();
+  await page.getByLabel("Secret name").fill("NPM_TOKEN");
+  await page.getByLabel("Secret value").fill("super-secret-value");
+  await page
+    .getByRole("button", { name: "Add credential", exact: true })
+    .last()
+    .click();
+  await expect(page.getByText("NPM_TOKEN")).toBeVisible();
+  await expect(page.getByText("super-secret-value")).toBeHidden();
+
+  // OAuth credential + the validation probe.
+  await page.getByRole("button", { name: "Add credential" }).first().click();
+  await page.getByLabel("Credential type").click();
+  await page.getByRole("option", { name: "mcp_oauth" }).click();
+  await page.getByLabel("MCP server URL").fill("https://mcp.example.com/");
+  await page.getByLabel("Access token").fill("oauth-token");
+  await page
+    .getByRole("button", { name: "Add credential", exact: true })
+    .last()
+    .click();
+  await expect(page.getByText("https://mcp.example.com/")).toBeVisible();
+  await page.getByRole("button", { name: "Validate" }).click();
+  await expect(page.getByTestId("credential-notice")).toHaveText(
+    /OAuth validation: ok/,
+  );
+
+  // Archive warns about the secret purge.
+  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(
+    page.getByText(/Archiving is terminal on the platform/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Archive vault" }).click();
+  await expect(
+    page.getByText("archived", { exact: true }).first(),
+  ).toBeVisible();
+});
+
+test("skill upload, new version, and deletes", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Skills", exact: true }).click();
+  await page.getByRole("button", { name: "Upload skill" }).click();
+  await page.getByLabel("Display title (optional)").fill("Release notes");
+  await page.getByLabel("Skill files").setInputFiles({
+    name: "SKILL.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("---\nname: release-notes\n---\nWrite notes."),
+  });
+  await page
+    .getByRole("button", { name: "Upload skill", exact: true })
+    .last()
+    .click();
+  await expect(page).toHaveURL(/\/skills\/skill_mock/);
+  await expect(
+    page.getByRole("heading", { name: "Release notes" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("event-row")).toHaveCount(0);
+
+  // A second version lands on top.
+  await page.getByLabel("New version files").setInputFiles({
+    name: "SKILL.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("---\nname: release-notes\n---\nv2."),
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: "Uploaded via console" }),
+  ).toHaveCount(2);
+
+  // Delete both versions, then the skill.
+  const deleteButtons = page.getByRole("button", { name: /Delete version/ });
+  await deleteButtons.first().click();
+  await deleteButtons.first().click();
+  await expect(page.getByText("No versions")).toBeVisible();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete skill" }).click();
+  await expect(page).toHaveURL(/\/skills$/);
+});
+
+test("file upload and delete from the files page", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await page.getByLabel("Upload file").setInputFiles({
+    name: "report.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4 mock"),
+  });
+  await expect(
+    page.getByRole("cell", { name: "report.pdf", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Delete report.pdf" }).click();
+  await expect(
+    page.getByRole("cell", { name: "report.pdf", exact: true }),
+  ).toBeHidden();
+});

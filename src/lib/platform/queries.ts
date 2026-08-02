@@ -338,3 +338,174 @@ export function useUploadFile() {
     },
   });
 }
+
+export function useCreateVault() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { display_name: string }) =>
+      platformPost<Vault>("v1/vaults", body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vaults"] });
+    },
+  });
+}
+
+export function useArchiveVault(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => platformPost<Vault>(`v1/vaults/${id}/archive`, {}),
+    onSuccess: (vault) => {
+      queryClient.setQueryData(["vault", id], vault);
+      void queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["vault-credentials", id],
+      });
+    },
+  });
+}
+
+export function useDeleteVault(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      platformDelete<{ id: string; type: string }>(`v1/vaults/${id}`),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["vault", id] });
+      void queryClient.invalidateQueries({ queryKey: ["vaults"] });
+    },
+  });
+}
+
+export function useAddCredential(vaultId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { display_name?: string; auth: unknown }) =>
+      platformPost<VaultCredential>(`v1/vaults/${vaultId}/credentials`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["vault-credentials", vaultId],
+      });
+    },
+  });
+}
+
+export function useArchiveCredential(vaultId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (credentialId: string) =>
+      platformPost<VaultCredential>(
+        `v1/vaults/${vaultId}/credentials/${credentialId}/archive`,
+        {},
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["vault-credentials", vaultId],
+      });
+    },
+  });
+}
+
+export function useDeleteCredential(vaultId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (credentialId: string) =>
+      platformDelete<{ id: string; type: string }>(
+        `v1/vaults/${vaultId}/credentials/${credentialId}`,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["vault-credentials", vaultId],
+      });
+    },
+  });
+}
+
+export function useValidateOAuthCredential(vaultId: string) {
+  return useMutation({
+    mutationFn: (credentialId: string) =>
+      platformPost<Record<string, unknown>>(
+        `v1/vaults/${vaultId}/credentials/${credentialId}/mcp_oauth_validate`,
+        {},
+      ),
+  });
+}
+
+export function useUploadSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      files: skillFiles,
+      displayTitle,
+    }: {
+      files: File[];
+      displayTitle?: string;
+    }) => {
+      const form = new FormData();
+      for (const file of skillFiles) form.append("files[]", file);
+      if (displayTitle) form.append("display_title", displayTitle);
+      return platformPostForm<Skill>("v1/skills", form);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+export function useUploadSkillVersion(skillId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (skillFiles: File[]) => {
+      const form = new FormData();
+      for (const file of skillFiles) form.append("files[]", file);
+      return platformPostForm<SkillVersion>(
+        `v1/skills/${skillId}/versions`,
+        form,
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skill", skillId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["skill-versions", skillId],
+      });
+    },
+  });
+}
+
+export function useDeleteSkillVersion(skillId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      platformDelete<{ id: string; type: string }>(
+        `v1/skills/${skillId}/versions/${version}`,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skill", skillId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["skill-versions", skillId],
+      });
+    },
+  });
+}
+
+export function useDeleteSkill(skillId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      platformDelete<{ id: string; type: string }>(`v1/skills/${skillId}`),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: ["skill", skillId] });
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+export function useDeleteFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileId: string) =>
+      platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["files"] });
+    },
+  });
+}

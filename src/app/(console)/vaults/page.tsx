@@ -13,6 +13,7 @@ import {
   Time,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
+import { CreateVaultButton } from "@/components/console/create-vault-button";
 import { useVaults } from "@/lib/platform/queries";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Vault } from "@/lib/platform/types";
@@ -50,6 +51,7 @@ export default function VaultsPage() {
       <PageHeader
         title="Credential vaults"
         subtitle="Credentials your agents use for MCP servers and other tools."
+        actions={<CreateVaultButton />}
       />
       <div className="flex items-center gap-2 pb-4">
         <StatusFilter
