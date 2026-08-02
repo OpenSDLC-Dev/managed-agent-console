@@ -1,0 +1,11 @@
+# Normalize all text files to LF in the repo and in every checkout —
+# the console is developed on Windows, macOS, and Linux (plan 02).
+* text=auto eol=lf
+
+# Binary files: never normalize.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary

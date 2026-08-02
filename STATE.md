@@ -4,4 +4,10 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan [01_v1-console](./docs/plan/01_v1-console.md) is complete, archived, and live-accepted** (2026-08-02; summary in [docs/HISTORY.md](./docs/HISTORY.md), acceptance record in [CHANGELOG.md](./CHANGELOG.md)). No plan is currently active; the backlog is GitHub issues.
+**Plan [02_quality-guardrails](./docs/plan/02_quality-guardrails.md)** (`in-progress`, issue #11) — cross-platform dev, hardened CI, Codex as second reviewer, 90%+ coverage. (Plan 01 is archived and live-accepted; see [docs/HISTORY.md](./docs/HISTORY.md).)
+
+## Tasks
+
+- [x] Slice 1 — .gitattributes + 3-OS CI matrix, zero-warning lint, SHA-pinned actions, Dependabot, CodeQL, trivy (caught 6 real CVEs on day one), Playwright failure artifacts, a11y smoke (caught 5 unlabeled controls); branch protection + secret scanning — PR #12
+- [ ] Slice 2 — coverage gate ≥90% (vendored `src/components/ui` excluded) + the test-suite growth to pass it (baseline: 9.7% lines)
+- [ ] Slice 3 — Codex review workflow (blocked on operator: `OPENAI_API_KEY` secret or Codex GitHub App)

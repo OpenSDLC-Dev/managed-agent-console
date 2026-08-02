@@ -23,7 +23,11 @@ export function StatusFilter({
         value={includeArchived ? "all" : "active"}
         onValueChange={(value) => onChange(value === "all")}
       >
-        <SelectTrigger size="sm" className="h-8 rounded-lg">
+        <SelectTrigger
+          size="sm"
+          className="h-8 rounded-lg"
+          aria-label="Status filter"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
