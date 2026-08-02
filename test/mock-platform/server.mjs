@@ -31,6 +31,11 @@ const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 /** @type {Map<string, {session: any, events: any[], subscribers: Set<any>}>} */
 const store = new Map();
 
+// Agents mutate too (create/update/archive) — cloned from fixtures on reset.
+let agentsStore = [];
+let agentVersionsStore = {};
+let agentCounter = 1;
+
 function resetStore() {
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
@@ -45,8 +50,99 @@ function resetStore() {
       timers: new Set(),
     });
   }
+  agentsStore = structuredClone(agents);
+  agentVersionsStore = structuredClone(agentVersions);
 }
 resetStore();
+
+// ---- agent write routes ---------------------------------------------------
+
+const AGENT_KEYS = new Set([
+  "name",
+  "model",
+  "system",
+  "description",
+  "tools",
+  "mcp_servers",
+  "skills",
+  "metadata",
+  "multiagent",
+  "version",
+]);
+
+function validateAgentBody(body, { requireCore }) {
+  for (const key of Object.keys(body)) {
+    if (!AGENT_KEYS.has(key)) return `unknown field "${key}"`;
+  }
+  if (body.multiagent != null) return "multiagent is not supported yet";
+  if (requireCore) {
+    if (typeof body.name !== "string" || body.name.length === 0)
+      return "name is required";
+    if (body.model === undefined) return "model is required";
+  }
+  if (body.model !== undefined) {
+    const ok =
+      typeof body.model === "string" ||
+      (typeof body.model === "object" &&
+        body.model !== null &&
+        typeof body.model.id === "string");
+    if (!ok) return "model must be a string or {id, speed}";
+  }
+  return null;
+}
+
+const normalizeModel = (model) =>
+  typeof model === "string" ? { id: model } : model;
+
+function createAgent(body) {
+  const timestamp = now();
+  const agent = {
+    id: `agent_mock${String(agentCounter++).padStart(6, "0")}`,
+    type: "agent",
+    name: body.name,
+    version: 1,
+    model: normalizeModel(body.model),
+    system: body.system ?? "",
+    description: body.description ?? "",
+    tools: body.tools ?? [],
+    mcp_servers: body.mcp_servers ?? [],
+    skills: body.skills ?? [],
+    multiagent: null,
+    metadata: body.metadata ?? {},
+    created_at: timestamp,
+    updated_at: timestamp,
+    archived_at: null,
+  };
+  agentsStore.unshift(agent);
+  agentVersionsStore[agent.id] = [structuredClone(agent)];
+  return agent;
+}
+
+function updateAgent(agent, body) {
+  if (body.version !== undefined && body.version !== agent.version) {
+    return { conflict: `version conflict: agent is at v${agent.version}` };
+  }
+  for (const key of ["name", "model", "system", "description"]) {
+    if (body[key] !== undefined)
+      agent[key] = key === "model" ? normalizeModel(body[key]) : body[key];
+  }
+  for (const key of ["tools", "mcp_servers", "skills"]) {
+    if (body[key] !== undefined) agent[key] = body[key] ?? [];
+  }
+  if (body.metadata !== undefined) {
+    for (const [k, v] of Object.entries(body.metadata ?? {})) {
+      if (v === null) delete agent.metadata[k];
+      else agent.metadata[k] = v;
+    }
+  }
+  agent.version += 1;
+  agent.updated_at = now();
+  agentVersionsStore[agent.id] = [
+    { ...structuredClone(agent) },
+    ...(agentVersionsStore[agent.id] ?? []),
+  ];
+  return { agent };
+}
 
 function frame(res, name, payload) {
   res.write(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
@@ -272,15 +368,16 @@ function route(req, url) {
 
   if (path === "/v1/agents") {
     return keysetPage(
-      includeArchived ? agents : agents.filter(notArchived),
+      includeArchived ? agentsStore : agentsStore.filter(notArchived),
       url,
     );
   }
   const agentMatch = path.match(/^\/v1\/agents\/([^/]+)$/);
-  if (agentMatch) return agents.find((a) => a.id === agentMatch[1]) ?? null;
+  if (agentMatch)
+    return agentsStore.find((a) => a.id === agentMatch[1]) ?? null;
   const versionsMatch = path.match(/^\/v1\/agents\/([^/]+)\/versions$/);
   if (versionsMatch) {
-    const versions = agentVersions[versionsMatch[1]];
+    const versions = agentVersionsStore[versionsMatch[1]];
     return versions ? keysetPage(versions, url) : null;
   }
 
@@ -441,6 +538,70 @@ const server = createServer(async (req, res) => {
       state.subscribers.delete(res);
     });
     return;
+  }
+
+  // Agent writes: create, update (optimistic version lock), archive.
+  if (req.method === "POST" && url.pathname.startsWith("/v1/agents")) {
+    res.setHeader("content-type", "application/json");
+    const archiveMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)\/archive$/);
+    if (archiveMatch) {
+      const agent = agentsStore.find((a) => a.id === archiveMatch[1]);
+      if (!agent) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such agent"));
+        return;
+      }
+      agent.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(agent));
+      return;
+    }
+
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "invalid JSON body"));
+      return;
+    }
+
+    const updateMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)$/);
+    if (url.pathname === "/v1/agents" || updateMatch) {
+      const problem = validateAgentBody(body, {
+        requireCore: url.pathname === "/v1/agents",
+      });
+      if (problem) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", problem));
+        return;
+      }
+      if (url.pathname === "/v1/agents") {
+        res.writeHead(200);
+        res.end(JSON.stringify(createAgent(body)));
+        return;
+      }
+      const agent = agentsStore.find((a) => a.id === updateMatch[1]);
+      if (!agent) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such agent"));
+        return;
+      }
+      if (agent.archived_at) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "agent is archived"));
+        return;
+      }
+      const outcome = updateAgent(agent, body);
+      if (outcome.conflict) {
+        res.writeHead(409);
+        res.end(envelope("invalid_request_error", outcome.conflict));
+        return;
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify(outcome.agent));
+      return;
+    }
   }
 
   // Inbound events — drives the mock state machine.

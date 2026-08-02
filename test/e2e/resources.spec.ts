@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.beforeEach(async ({ request }) => {
+  // Earlier spec files mutate the mock's stores — start from fixtures.
+  await request.post("http://127.0.0.1:18080/__reset");
+});
+
 async function signIn(page: Page) {
   await page.goto("/login");
   await page.locator("form[data-hydrated]").waitFor();

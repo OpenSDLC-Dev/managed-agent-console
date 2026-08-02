@@ -193,3 +193,50 @@ export function useFiles(afterId?: string) {
     placeholderData: keepPreviousData,
   });
 }
+
+export interface AgentWriteBody {
+  name?: string;
+  model?: unknown;
+  system?: string | null;
+  description?: string;
+  tools?: unknown[];
+  mcp_servers?: unknown[];
+  skills?: unknown[];
+  metadata?: Record<string, string>;
+  version?: number;
+}
+
+export function useCreateAgent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AgentWriteBody) =>
+      platformPost<Agent>("v1/agents", body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+export function useUpdateAgent(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AgentWriteBody) =>
+      platformPost<Agent>(`v1/agents/${id}`, body),
+    onSuccess: (agent) => {
+      queryClient.setQueryData(["agent", id], agent);
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-versions", id] });
+    },
+  });
+}
+
+export function useArchiveAgent(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => platformPost<Agent>(`v1/agents/${id}/archive`, {}),
+    onSuccess: (agent) => {
+      queryClient.setQueryData(["agent", id], agent);
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
