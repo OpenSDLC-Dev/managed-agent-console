@@ -20,7 +20,7 @@ describe("platformBaseUrl", () => {
   });
 
   it("throws when unset", () => {
-    vi.stubEnv("PLATFORM_BASE_URL", undefined);
+    vi.stubEnv("PLATFORM_BASE_URL", "");
     expect(() => platformBaseUrl()).toThrow("PLATFORM_BASE_URL is not set");
   });
 });
@@ -32,7 +32,7 @@ describe("platformApiKey", () => {
   });
 
   it("throws when unset", () => {
-    vi.stubEnv("PLATFORM_API_KEY", undefined);
+    vi.stubEnv("PLATFORM_API_KEY", "");
     expect(() => platformApiKey()).toThrow("PLATFORM_API_KEY is not set");
   });
 });
@@ -44,7 +44,7 @@ describe("consolePassword", () => {
   });
 
   it("returns undefined when unset (login gate disabled)", () => {
-    vi.stubEnv("CONSOLE_PASSWORD", undefined);
+    vi.stubEnv("CONSOLE_PASSWORD", "");
     expect(consolePassword()).toBeUndefined();
   });
 

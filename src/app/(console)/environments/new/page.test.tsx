@@ -77,6 +77,13 @@ afterEach(() => {
 
 describe("NewEnvironmentPage", () => {
   it("renders the header and a create-mode editor with cloud defaults", () => {
+    // No network guarantee: any request this page issues fails loudly.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        throw new Error(`unexpected fetch: ${String(input)}`);
+      }),
+    );
     const client = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
