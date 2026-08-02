@@ -1,13 +1,18 @@
 "use client";
 
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { platformGet, type Page } from "./http";
+import { platformGet, type ClassicPage, type Page } from "./http";
 import type {
   Agent,
   Environment,
+  PlatformFile,
   Session,
   SessionEvent,
   SessionStatus,
+  Skill,
+  SkillVersion,
+  Vault,
+  VaultCredential,
 } from "./types";
 
 export function useAgents(params: {
@@ -158,5 +163,80 @@ export function useSessionEvents(
       return events;
     },
     refetchInterval: options.running ? 3_000 : 15_000,
+  });
+}
+
+export function useVaults(params: {
+  page?: string;
+  include_archived?: boolean;
+}) {
+  return useQuery({
+    queryKey: ["vaults", params],
+    queryFn: () =>
+      platformGet<Page<Vault>>("v1/vaults", { limit: 20, ...params }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useVault(id: string) {
+  return useQuery({
+    queryKey: ["vault", id],
+    queryFn: () => platformGet<Vault>(`v1/vaults/${id}`),
+  });
+}
+
+export function useVaultCredentials(vaultId: string, page?: string) {
+  return useQuery({
+    queryKey: ["vault-credentials", vaultId, page],
+    queryFn: () =>
+      platformGet<Page<VaultCredential>>(`v1/vaults/${vaultId}/credentials`, {
+        limit: 20,
+        page,
+        include_archived: true,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSkills(params: {
+  page?: string;
+  source?: "custom" | "anthropic";
+}) {
+  return useQuery({
+    queryKey: ["skills", params],
+    queryFn: () =>
+      platformGet<Page<Skill>>("v1/skills", { limit: 20, ...params }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSkill(id: string) {
+  return useQuery({
+    queryKey: ["skill", id],
+    queryFn: () => platformGet<Skill>(`v1/skills/${id}`),
+  });
+}
+
+export function useSkillVersions(id: string, page?: string) {
+  return useQuery({
+    queryKey: ["skill-versions", id, page],
+    queryFn: () =>
+      platformGet<Page<SkillVersion>>(`v1/skills/${id}/versions`, {
+        limit: 20,
+        page,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useFiles(afterId?: string) {
+  return useQuery({
+    queryKey: ["files", afterId],
+    queryFn: () =>
+      platformGet<ClassicPage<PlatformFile>>("v1/files", {
+        limit: 20,
+        after_id: afterId,
+      }),
+    placeholderData: keepPreviousData,
   });
 }

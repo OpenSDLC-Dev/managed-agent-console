@@ -9,7 +9,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 ## Tasks
 
 - [x] Slice 1 — Next.js scaffold (TS strict, Tailwind, shadcn), toolchain, CI, Dockerfile, BFF proxy, login gate, nav shell, connection probe — PR #1 (unit 5/5, e2e 4/4, Chrome fidelity pass vs reference)
-- [ ] Slice 2 — read-only resource pages — part 1 (agents/environments/sessions + trace viewer) in PR #2 (e2e 9/9, fidelity pass); vaults/skills/files remain
+- [x] Slice 2 — read-only resource pages — part 1 (agents/environments/sessions + trace viewer) PR #2; part 2 (vaults/skills/files) PR #4 (e2e 12/12, fidelity pass)
 - [ ] Slice 3 — live session trace + HITL
 - [ ] Slice 4 — write paths (incl. JSON↔YAML raw editor)
 - [ ] Slice 5 — polish + deploy docs
