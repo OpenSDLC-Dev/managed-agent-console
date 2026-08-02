@@ -1,6 +1,10 @@
 "use client";
 
 import { use } from "react";
+import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArchiveButton } from "@/components/console/archive-button";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   DetailSection,
@@ -16,7 +20,11 @@ import {
   IdCode,
   Time,
 } from "@/components/console/bits";
-import { useAgent, useAgentVersions } from "@/lib/platform/queries";
+import {
+  useAgent,
+  useAgentVersions,
+  useArchiveAgent,
+} from "@/lib/platform/queries";
 import type { Agent } from "@/lib/platform/types";
 
 const VERSION_COLUMNS: Column<Agent>[] = [
@@ -40,8 +48,10 @@ export default function AgentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: agent, error, isPending } = useAgent(id);
   const versions = useAgentVersions(id);
+  const archive = useArchiveAgent(id);
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !agent) {
@@ -53,7 +63,28 @@ export default function AgentDetailPage({
       <PageHeader
         title={agent.name}
         subtitle={agent.description || undefined}
-        actions={<ArchivedBadge archivedAt={agent.archived_at} />}
+        actions={
+          <span className="flex items-center gap-2">
+            <ArchivedBadge archivedAt={agent.archived_at} />
+            {!agent.archived_at && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={() => router.push(`/agents/${agent.id}/edit`)}
+                >
+                  <Pencil className="size-4" /> Edit
+                </Button>
+                <ArchiveButton
+                  resource="agent"
+                  onConfirm={() => archive.mutate()}
+                  pending={archive.isPending}
+                />
+              </>
+            )}
+          </span>
+        }
       />
       <DetailSection title="Overview">
         <FieldList>
