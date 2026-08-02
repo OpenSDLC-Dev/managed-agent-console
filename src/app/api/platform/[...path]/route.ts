@@ -8,8 +8,15 @@ import { platformApiKey, platformBaseUrl } from "@/lib/env";
  */
 
 // Request headers forwarded to the platform (everything else is dropped,
-// notably any inbound x-api-key/authorization).
-const FORWARD_REQUEST_HEADERS = ["content-type", "accept", "last-event-id"];
+// notably any inbound x-api-key/authorization). anthropic-version/-beta pass
+// through for wire-neutrality; the platform accepts and ignores them.
+const FORWARD_REQUEST_HEADERS = [
+  "content-type",
+  "accept",
+  "last-event-id",
+  "anthropic-version",
+  "anthropic-beta",
+];
 
 // Response headers passed back to the browser.
 const FORWARD_RESPONSE_HEADERS = [
@@ -39,13 +46,32 @@ async function proxy(
     );
   }
 
-  const url = `${platformBaseUrl()}/${joined}${request.nextUrl.search}`;
+  let baseUrl: string;
+  let apiKey: string;
+  try {
+    baseUrl = platformBaseUrl();
+    apiKey = platformApiKey();
+  } catch (cause) {
+    return Response.json(
+      {
+        type: "error",
+        error: {
+          type: "api_error",
+          message:
+            cause instanceof Error ? cause.message : "console misconfigured",
+        },
+      },
+      { status: 500 },
+    );
+  }
+
+  const url = `${baseUrl}/${joined}${request.nextUrl.search}`;
   const headers = new Headers();
   for (const name of FORWARD_REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  headers.set("x-api-key", platformApiKey());
+  headers.set("x-api-key", apiKey);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   let upstream: Response;

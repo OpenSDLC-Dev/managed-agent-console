@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, sessionTokenFor } from "@/lib/auth";
+import { SESSION_COOKIE, isValidSession, sessionTokenFor } from "@/lib/auth";
 import { consolePassword } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
@@ -11,7 +11,11 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
     password?: string;
   } | null;
-  if (!body?.password || body.password !== password) {
+  // Comparing HMACs of the two passwords keeps the check constant-time.
+  const matches =
+    !!body?.password &&
+    (await isValidSession(await sessionTokenFor(body.password), password));
+  if (!matches) {
     return NextResponse.json(
       {
         type: "error",
