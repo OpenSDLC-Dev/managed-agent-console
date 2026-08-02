@@ -93,7 +93,7 @@ test("session detail shows the trace and the pending-approval banner", async ({
   await expect(page.getByTestId("event-row")).toHaveCount(7);
 
   // The Tools filter narrows to the single tool_use event.
-  await page.getByRole("button", { name: "Tools" }).click();
+  await page.getByRole("button", { name: "Tools", exact: true }).click();
   await expect(page.getByTestId("event-row")).toHaveCount(1);
   await expect(page.getByTestId("event-row")).toHaveAttribute(
     "data-event-type",
@@ -101,7 +101,7 @@ test("session detail shows the trace and the pending-approval banner", async ({
   );
 
   // Token usage from the model span is summarized on the span row.
-  await page.getByRole("button", { name: "All" }).click();
+  await page.getByRole("button", { name: "All", exact: true }).click();
   await expect(
     page
       .getByTestId("event-row")

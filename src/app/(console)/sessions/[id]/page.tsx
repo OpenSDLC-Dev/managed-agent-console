@@ -10,13 +10,15 @@ import {
   ErrorState,
   IdCode,
   StatusBadge,
-  WARNING_BOX,
-  WARNING_MUTED,
 } from "@/components/console/bits";
 import { EventRow } from "@/components/console/event-row";
+import { ApprovalBanner } from "@/components/console/approval-banner";
+import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useSession, useSessionEvents } from "@/lib/platform/queries";
+import { useSession } from "@/lib/platform/queries";
+import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
+import { latestStatus } from "@/lib/session-trace/store";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const FILTERS: { key: string; label: string; types?: string[] }[] = [
@@ -62,8 +64,20 @@ function pendingToolUses(events: SessionEvent[]): SessionEvent[] {
     .find((e) => e.type === "session.status_idle");
   const ids = lastIdle?.stop_reason?.event_ids;
   if (!ids || lastIdle?.stop_reason?.type !== "requires_action") return [];
-  return events.filter((e) => ids.includes(e.id));
+  const answered = new Set(
+    events
+      .filter((e) => e.type === "user.tool_confirmation")
+      .map((e) => e.tool_use_id),
+  );
+  return events.filter((e) => ids.includes(e.id) && !answered.has(e.id));
 }
+
+const CONNECTION_LABEL = {
+  connecting: "connecting…",
+  live: "live",
+  reconnecting: "reconnecting…",
+  closed: "stream closed",
+} as const;
 
 export default function SessionDetailPage({
   params,
@@ -73,16 +87,18 @@ export default function SessionDetailPage({
   const { id } = use(params);
   const [filter, setFilter] = useState("all");
   const session = useSession(id, 15_000);
-  const running = session.data?.status === "running";
-  const events = useSessionEvents(id, {
-    running: !!running,
-    types: FILTERS.find((f) => f.key === filter)?.types,
-  });
+  const { trace, connection } = useSessionTrace(id);
 
-  const pending = useMemo(
-    () => (filter === "all" ? pendingToolUses(events.data ?? []) : []),
-    [filter, events.data],
-  );
+  const status = latestStatus(trace) ?? session.data?.status;
+  const running = status === "running";
+
+  const pending = useMemo(() => pendingToolUses(trace.events), [trace.events]);
+  const visible = useMemo(() => {
+    const types = FILTERS.find((f) => f.key === filter)?.types;
+    return types
+      ? trace.events.filter((e) => types.includes(e.type))
+      : trace.events;
+  }, [filter, trace.events]);
 
   if (session.error) return <ErrorState error={session.error} />;
   if (session.isPending || !session.data) {
@@ -97,7 +113,7 @@ export default function SessionDetailPage({
         subtitle={`${data.agent.name} · v${data.agent.version}`}
         actions={
           <span className="flex items-center gap-2">
-            <StatusBadge status={data.status} />
+            {status && <StatusBadge status={status} />}
             <ArchivedBadge archivedAt={data.archived_at} />
           </span>
         }
@@ -136,30 +152,7 @@ export default function SessionDetailPage({
         </FieldList>
       </DetailSection>
 
-      {pending.length > 0 && (
-        <div
-          data-testid="approval-banner"
-          className={cn("mb-6 rounded-lg border p-4", WARNING_BOX)}
-        >
-          <p className="text-sm font-medium">
-            Waiting on {pending.length} tool approval
-            {pending.length === 1 ? "" : "s"}
-          </p>
-          <ul className="mt-2 space-y-1">
-            {pending.map((event) => (
-              <li key={event.id} className="text-[13px]">
-                <span className="font-mono">{event.name}</span>{" "}
-                <span className={WARNING_MUTED}>
-                  {JSON.stringify(event.input)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className={cn("mt-2 text-[12px]", WARNING_MUTED)}>
-            Approve / deny controls arrive with slice 3.
-          </p>
-        </div>
-      )}
+      <ApprovalBanner pending={pending} sessionId={id} />
 
       <DetailSection title="Events">
         <div className="flex items-center gap-1.5 pb-3">
@@ -177,29 +170,65 @@ export default function SessionDetailPage({
               {label}
             </button>
           ))}
-          {running && (
-            <Badge
-              variant="outline"
-              className="ml-2 font-normal text-emerald-700"
-            >
-              polling every 3s
-            </Badge>
-          )}
+          <Badge
+            data-testid="stream-state"
+            data-state={connection}
+            variant="outline"
+            className={cn(
+              "ml-2 font-normal",
+              connection === "live" && "text-emerald-700",
+              connection === "reconnecting" && "text-amber-700",
+            )}
+          >
+            {CONNECTION_LABEL[connection]}
+          </Badge>
         </div>
-        {events.error ? (
-          <ErrorState error={events.error} />
-        ) : events.isPending ? (
-          <div className="text-sm text-muted-foreground">Loading events…</div>
-        ) : (events.data ?? []).length === 0 ? (
-          <EmptyState title="No events" />
+        {visible.length === 0 && trace.previews.size === 0 ? (
+          connection === "connecting" ? (
+            <div className="text-sm text-muted-foreground">Loading events…</div>
+          ) : (
+            <EmptyState title="No events" />
+          )
         ) : (
           <div>
-            {events.data!.map((e) => (
+            {visible.map((e) => (
               <EventRow key={e.id} event={e} />
             ))}
+            {filter === "all" &&
+              [...trace.previews.values()].map((preview) => (
+                <div
+                  key={preview.id}
+                  data-testid="preview-row"
+                  className="flex gap-3 border-b py-2.5 last:border-b-0"
+                >
+                  <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
+                    …
+                  </div>
+                  <div className="w-52 shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="animate-pulse font-mono text-[11px] font-normal"
+                    >
+                      {preview.type}
+                    </Badge>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-wrap">
+                      {preview.parts.join("")}
+                      <span className="animate-pulse">▍</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </DetailSection>
+
+      <Composer
+        sessionId={id}
+        running={running}
+        disabled={!!data.archived_at || trace.deleted}
+      />
     </div>
   );
 }

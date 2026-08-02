@@ -6,6 +6,9 @@ const MOCK_PORT = 18080;
 export default defineConfig({
   testDir: "test/e2e",
   fullyParallel: false,
+  // One worker: the mock platform is stateful (session event log mutates)
+  // and shared, so files must not interleave.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: `http://127.0.0.1:${CONSOLE_PORT}`,
