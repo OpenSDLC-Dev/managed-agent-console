@@ -94,12 +94,31 @@ export function useSession(id: string, refetchInterval?: number) {
  * Incremental tail cache: each poll resumes from the cursor of the last page
  * it fetched instead of re-walking the whole log (the log is append-only, so
  * re-fetching the final page plus id-dedup covers the overlap). SSE tailing
- * replaces the poll in slice 3.
+ * replaces the poll in slice 3. Bounded LRU so histories from visited
+ * sessions don't accumulate for the browser process's lifetime.
  */
-const eventTails = new Map<
-  string,
-  { pageCursor: string | undefined; events: SessionEvent[] }
->();
+type EventTail = { pageCursor: string | undefined; events: SessionEvent[] };
+
+const EVENT_TAIL_LIMIT = 20;
+const eventTails = new Map<string, EventTail>();
+
+function tailGet(key: string): EventTail | undefined {
+  const value = eventTails.get(key);
+  if (value) {
+    // Refresh recency: Map iterates in insertion order.
+    eventTails.delete(key);
+    eventTails.set(key, value);
+  }
+  return value;
+}
+
+function tailSet(key: string, value: EventTail): void {
+  eventTails.delete(key);
+  eventTails.set(key, value);
+  while (eventTails.size > EVENT_TAIL_LIMIT) {
+    eventTails.delete(eventTails.keys().next().value as string);
+  }
+}
 
 /**
  * Event log via polling (ascending, newest last). The poll interval tightens
@@ -113,7 +132,7 @@ export function useSessionEvents(
   return useQuery({
     queryKey: ["session-events", id, options.types],
     queryFn: async () => {
-      const cached = eventTails.get(cacheKey) ?? {
+      const cached = tailGet(cacheKey) ?? {
         pageCursor: undefined,
         events: [],
       };
@@ -135,7 +154,7 @@ export function useSessionEvents(
         if (!result.next_page) break;
         page = result.next_page;
       }
-      eventTails.set(cacheKey, { pageCursor: page, events });
+      tailSet(cacheKey, { pageCursor: page, events });
       return events;
     },
     refetchInterval: options.running ? 3_000 : 15_000,
