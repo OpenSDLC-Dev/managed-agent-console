@@ -158,11 +158,23 @@ export default function SessionsPage() {
               ))}
             </SelectContent>
           </Select>
-          {agentOptions.data?.truncated && (
+          {agentOptions.error ? (
+            // A silent fallback would be indistinguishable from "no agents".
+            <span className="text-[12px] text-destructive">
+              agent options failed to load{" "}
+              <button
+                type="button"
+                className="underline"
+                onClick={() => void agentOptions.refetch()}
+              >
+                retry
+              </button>
+            </span>
+          ) : agentOptions.data?.truncated ? (
             <span className="text-[12px] text-muted-foreground">
               options truncated at 1000 agents
             </span>
-          )}
+          ) : null}
         </div>
         <CreatedFilter
           value={created.key}

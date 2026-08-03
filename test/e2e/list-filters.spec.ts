@@ -50,11 +50,13 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
     page.getByRole("option", { name: /Retired agent archived/ }),
   ).toBeVisible();
 
-  // An agent past the first options page is selectable and filters serverside.
+  // An agent past the first options page is selectable and filters
+  // serverside. The mock prepends created agents, so the newest 100 fill
+  // page one — "Fleet agent 019" (position 101) proves the second page.
   const filtered = page.waitForRequest((req) =>
     req.url().includes("agent_id="),
   );
-  await page.getByRole("option", { name: "Fleet agent 119" }).click();
+  await page.getByRole("option", { name: "Fleet agent 019" }).click();
   await filtered;
   await expect(page.getByText("No sessions yet")).toBeVisible();
 

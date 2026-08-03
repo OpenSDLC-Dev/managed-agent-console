@@ -303,6 +303,37 @@ describe("SessionsPage", () => {
     );
   });
 
+  it("surfaces an agent-options load failure with a retry", async () => {
+    let failures = 0;
+    const fetchMock = stubFetch(
+      () => json({ data: [] }),
+      () => {
+        failures++;
+        return failures === 1
+          ? json(
+              {
+                type: "error",
+                error: { type: "api_error", message: "agents down" },
+              },
+              500,
+            )
+          : json({
+              data: [{ id: "agt_1", name: "Back online", archived_at: null }],
+            });
+      },
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText(/agent options failed to load/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(
+      await screen.findByRole("button", { name: "Back online" }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
   it("shows the truncation note when the agent options cap is hit", async () => {
     stubFetch(
       () => json({ data: [] }),
