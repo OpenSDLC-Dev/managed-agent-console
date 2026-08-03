@@ -15,6 +15,9 @@ export default defineConfig({
     : [["list"]],
   use: {
     baseURL: `http://127.0.0.1:${CONSOLE_PORT}`,
+    // Assertions include toLocaleString() output — don't let the host's
+    // locale pick the digit separators.
+    locale: "en-US",
     trace: "retain-on-failure",
   },
   webServer: [

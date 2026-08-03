@@ -40,4 +40,14 @@ test("session detail with a pending approval passes axe", async ({ page }) => {
   await page.goto("/sessions/sesn_gatedbash00000000001");
   await expect(page.getByText("Waiting on 1 tool approval")).toBeVisible();
   await expectNoViolations(page);
+
+  // With the event detail panel open.
+  await page.getByTestId("event-row").first().click();
+  await expect(page.getByTestId("event-detail")).toBeVisible();
+  await expectNoViolations(page);
+
+  // And on the Debug tab.
+  await page.getByRole("button", { name: "Debug" }).click();
+  await expect(page.getByTestId("debug-row").first()).toBeVisible();
+  await expectNoViolations(page);
 });

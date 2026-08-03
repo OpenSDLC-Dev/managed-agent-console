@@ -63,6 +63,48 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
   expect(parsed[0].id).toBe("sevt_000000000000000001");
 });
 
+test("a row opens the detail panel and Debug shows the raw wire", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(GATED);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+    { timeout: 15_000 },
+  );
+
+  // Clicking the span-end row opens the panel with its token usage.
+  await page
+    .getByTestId("event-row")
+    .filter({ hasText: "span.model_request_end" })
+    .click();
+  const panel = page.getByTestId("event-detail");
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText("5,412 in · 890 out · 3,100 cache read");
+
+  // The raw event expands to the verbatim wire shape.
+  await panel.getByText("Raw event").click();
+  await expect(panel).toContainText('"model_request_start_id"');
+
+  await panel.getByRole("button", { name: "Close event details" }).click();
+  await expect(panel).toBeHidden();
+
+  // Debug renders every event verbatim — the span start included, which
+  // the transcript hides in favor of the paired duration on the end row.
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "span.model_request_start" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Debug" }).click();
+  const startRow = page
+    .getByTestId("debug-row")
+    .filter({ hasText: "span.model_request_start" });
+  await expect(startRow).toHaveCount(1);
+  await expect(startRow).toContainText('"type": "span.model_request_start"');
+});
+
 test("an unknown event type renders its payload instead of a blank row", async ({
   page,
 }) => {

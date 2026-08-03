@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   cleanup,
   render,
@@ -348,13 +348,121 @@ describe("SessionDetailPage", () => {
         .getAllByTitle("since session creation")
         .map((el) => el.textContent),
     ).toContain("1:00");
+    // The transcript folds the paired span into its end row.
+    expect(screen.getAllByTestId("event-row")).toHaveLength(3);
+    expect(screen.queryByText("span.model_request_start")).toBeNull();
+  });
+
+  it("keeps an unpaired span start visible — the request may still be running", async () => {
+    setTrace("live", [
+      {
+        id: "sp_open",
+        type: "span.model_request_start",
+        processed_at: "2026-08-01T09:12:01Z",
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+
+    const row = screen.getByTestId("event-row");
+    expect(row).toHaveAttribute("data-event-type", "span.model_request_start");
+    expect(row).toHaveTextContent("model request started");
+
+    // The Model spans filter shows it too.
+    await userEvent.click(screen.getByRole("button", { name: "Model spans" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+  });
+
+  it("opens the detail panel on row click and closes it again", async () => {
+    const text = `summary line\n${"full body ".repeat(40)}`;
+    setTrace("live", [
+      ev("sevt_1", "agent.message", { content: [{ type: "text", text }] }),
+      ev("sevt_2", "session.status_running"),
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+
+    const row = screen.getAllByTestId("event-row")[0];
+    await userEvent.click(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByTestId("event-detail");
+    // The row clamps to the first line; the panel carries the whole text.
+    expect(panel.textContent).toContain("full body full body");
+
+    await userEvent.click(
+      within(panel).getByRole("button", { name: "Close event details" }),
+    );
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    // Clicking the selected row again also deselects it.
+    await userEvent.click(row);
+    expect(screen.getByTestId("event-detail")).toBeInTheDocument();
+    await userEvent.click(row);
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+  });
+
+  it("shows every event verbatim on the Debug tab, filters and previews aside", async () => {
+    setTrace(
+      "live",
+      [
+        {
+          id: "sp_1",
+          type: "span.model_request_start",
+          processed_at: "2026-08-01T09:12:01Z",
+        } as SessionEvent,
+        ev("sevt_1", "user.message", {
+          content: [{ type: "text", text: "Hello agent" }],
+        }),
+      ],
+      [{ id: "sevt_p", type: "agent.message", parts: ["Streaming"] }],
+    );
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+
+    // Transcript: the unpaired start stays visible, the preview shows.
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(screen.getByTestId("preview-row")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+    const rows = screen.getAllByTestId("debug-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute(
+      "data-event-type",
+      "span.model_request_start",
+    );
+    expect(rows[0].textContent).toContain('"id": "sp_1"');
+    expect(screen.queryAllByTestId("event-row")).toHaveLength(0);
+    expect(screen.queryByTestId("preview-row")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tools" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(screen.queryAllByTestId("debug-row")).toHaveLength(0);
   });
 
   it("copies the full trace as JSON via Copy all", async () => {
     const writeText = vi.fn(async () => {});
+    // defineProperty escapes vi.unstubAllGlobals — restore the descriptor
+    // by hand so the mock cannot leak into later tests.
+    const original = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "clipboard",
+    );
     Object.defineProperty(window.navigator, "clipboard", {
       value: { writeText },
       configurable: true,
+    });
+    onTestFinished(() => {
+      if (original) {
+        Object.defineProperty(window.navigator, "clipboard", original);
+      } else {
+        delete (window.navigator as { clipboard?: unknown }).clipboard;
+      }
     });
     const events = [
       ev("sevt_1", "user.message", {
