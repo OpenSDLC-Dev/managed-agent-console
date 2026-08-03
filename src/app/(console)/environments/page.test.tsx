@@ -153,10 +153,14 @@ describe("EnvironmentsPage", () => {
     expect(await screen.findByText("environments down")).toBeInTheDocument();
   });
 
-  it("shows the empty state when there are no environments", async () => {
+  it("shows the empty state with a create CTA when there are no environments", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     expect(await screen.findByText("No environments yet")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /Create environment/ })[1],
+    );
+    expect(pushSpy).toHaveBeenCalledWith("/environments/new");
   });
 
   it("renders environment rows with config type and navigates on click", async () => {

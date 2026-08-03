@@ -233,15 +233,27 @@ describe("SessionDetailPage", () => {
     renderPage();
 
     expect(await screen.findByText("Debug run")).toBeInTheDocument();
-    // Subtitle and the agent overview link both carry the agent · version.
+    // Subtitle and the agent chip both carry the agent · version.
     expect(screen.getAllByText("Support bot · v2")).toHaveLength(2);
+    const chips = screen.getByTestId("session-chips");
     expect(
-      screen.getByText(
+      within(chips).getByText(
         `${(1234).toLocaleString()} in · ${(567).toLocaleString()} out · ${(89).toLocaleString()} cache read`,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("vlt_1")).toBeInTheDocument();
-    expect(screen.getByText("/mnt/data.csv")).toBeInTheDocument();
+    expect(within(chips).getByText("vlt_1")).toBeInTheDocument();
+    expect(within(chips).getByText("1 file")).toHaveAttribute(
+      "title",
+      "/mnt/data.csv",
+    );
+    expect(within(chips).getByText(/ago$/)).toHaveAttribute(
+      "title",
+      "2026-08-01T09:12:00Z",
+    );
+    // Offsets are relative to the session's created_at (same instant here).
+    expect(screen.getAllByTitle("since session creation")[0]).toHaveTextContent(
+      "0:00",
+    );
 
     expect(screen.getByTestId("stream-state")).toHaveTextContent("live");
     expect(screen.getAllByTestId("event-row")).toHaveLength(4);
@@ -295,6 +307,78 @@ describe("SessionDetailPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "All" }));
     expect(screen.getAllByTestId("event-row")).toHaveLength(3);
+  });
+
+  it("renders an idle band for a real gap and pairs span durations", async () => {
+    setTrace("live", [
+      {
+        id: "sp_1",
+        type: "span.model_request_start",
+        processed_at: "2026-08-01T09:12:01Z",
+      } as SessionEvent,
+      {
+        id: "sp_2",
+        type: "span.model_request_end",
+        processed_at: "2026-08-01T09:12:04Z",
+        model_request_start_id: "sp_1",
+      } as SessionEvent,
+      {
+        id: "sevt_idle",
+        type: "session.status_idle",
+        processed_at: "2026-08-01T09:13:00Z",
+        stop_reason: { type: "end_turn" },
+      } as SessionEvent,
+      {
+        id: "sevt_run",
+        type: "session.status_running",
+        processed_at: "2026-08-01T09:13:25Z",
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+
+    expect(screen.getByTestId("idle-band")).toHaveTextContent(
+      "Session idle · 25s",
+    );
+    expect(screen.getByTitle("model request duration")).toHaveTextContent("3s");
+    // Offset of the idle event: 09:13:00 − created 09:12:00.
+    expect(
+      screen
+        .getAllByTitle("since session creation")
+        .map((el) => el.textContent),
+    ).toContain("1:00");
+  });
+
+  it("copies the full trace as JSON via Copy all", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const events = [
+      ev("sevt_1", "user.message", {
+        content: [{ type: "text", text: "Hello agent" }],
+      }),
+    ];
+    setTrace("live", events);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+
+    await userEvent.click(screen.getByRole("button", { name: "Copy all" }));
+    expect(writeText).toHaveBeenCalledWith(JSON.stringify(events, null, 2));
+    expect(
+      await screen.findByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables Copy all while the trace is empty", async () => {
+    setTrace("live", []);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+    expect(screen.getByRole("button", { name: "Copy all" })).toBeDisabled();
   });
 
   it("shows the approval banner for unanswered requires_action tool calls and allows one", async () => {

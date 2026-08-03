@@ -89,10 +89,13 @@ test("create a session with an uploaded file mount and drive it", async ({
   await expect(
     page.getByRole("heading", { name: "Review the dataset" }),
   ).toBeVisible();
-  // The file mount landed on the session.
-  await expect(
-    page.getByText(/\/mnt\/session\/uploads\/file_mock/),
-  ).toBeVisible();
+  // The file mount landed on the session — the chip carries the mount path.
+  const fileChip = page.getByTestId("session-chips").getByText("1 file");
+  await expect(fileChip).toBeVisible();
+  await expect(fileChip).toHaveAttribute(
+    "title",
+    /\/mnt\/session\/uploads\/file_mock/,
+  );
 
   // The new session is live end to end: send a message, get the reply.
   await expect(page.getByTestId("stream-state")).toHaveAttribute(

@@ -129,6 +129,15 @@ export default function SessionsPage() {
               <EmptyState
                 title="No sessions yet"
                 hint="Create a session to get started."
+                action={
+                  <Button
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => router.push("/sessions/new")}
+                  >
+                    Create session
+                  </Button>
+                }
               />
             }
           />

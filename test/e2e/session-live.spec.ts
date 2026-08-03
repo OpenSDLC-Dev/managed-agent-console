@@ -15,6 +15,67 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+test("trace readability: chips, offsets, span durations, idle band, copy all", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await signIn(page);
+  await page.goto(GATED);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+    { timeout: 15_000 },
+  );
+
+  // The meta chip-row replaces the overview field table.
+  const chips = page.getByTestId("session-chips");
+  await expect(chips).toContainText("General task agent · v1");
+  await expect(chips).toContainText("5,412 in · 890 out · 3,100 cache read");
+
+  // Span duration pairs start/end; offsets are relative to created_at —
+  // the fixture idles 21h45m after the session was created.
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "span.model_request_end" })
+      .getByTitle("model request duration"),
+  ).toHaveText("3s");
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "session.status_idle" })
+      .getByTitle("since session creation"),
+  ).toHaveText("21:45:00");
+
+  // Approving wakes the session; the real idle interval becomes a band.
+  await page.getByRole("button", { name: "Allow" }).click();
+  await expect(page.getByTestId("idle-band")).toContainText("Session idle ·", {
+    timeout: 15_000,
+  });
+
+  // Copy all serializes the persisted trace.
+  await page.getByRole("button", { name: "Copy all" }).click();
+  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  const parsed = JSON.parse(copied) as { id: string }[];
+  expect(Array.isArray(parsed)).toBe(true);
+  expect(parsed[0].id).toBe("sevt_000000000000000001");
+});
+
+test("an unknown event type renders its payload instead of a blank row", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/sessions/sesn_research0000000000001");
+  const row = page
+    .getByTestId("event-row")
+    .filter({ hasText: "user.define_outcome" });
+  await expect(row.getByTestId("unknown-event-payload")).toContainText(
+    "Produce a comparative survey document.",
+  );
+});
+
 test("the trace goes live over SSE and approving a tool call completes the turn", async ({
   page,
 }) => {

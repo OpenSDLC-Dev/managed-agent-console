@@ -184,10 +184,14 @@ describe("SessionsPage", () => {
     expect(await screen.findByText("sessions down")).toBeInTheDocument();
   });
 
-  it("shows the empty state when there are no sessions", async () => {
+  it("shows the empty state with a create CTA when there are no sessions", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     expect(await screen.findByText("No sessions yet")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /Create session/ })[1],
+    );
+    expect(pushSpy).toHaveBeenCalledWith("/sessions/new");
   });
 
   it("renders session rows (title, status, agent, tokens) and navigates", async () => {

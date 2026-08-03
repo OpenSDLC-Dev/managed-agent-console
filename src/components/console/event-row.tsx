@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
 import { Time, WARNING_BOX } from "@/components/console/bits";
+import { durationLabel } from "@/lib/session-trace/timing";
 
 function textOf(content: ContentBlock[] | null | undefined): string {
   if (!content) return "";
@@ -126,11 +127,43 @@ function Body({ event }: { event: SessionEvent }) {
         </p>
       );
     default:
-      return null;
+      return <UnknownBody event={event} />;
   }
 }
 
-export function EventRow({ event }: { event: SessionEvent }) {
+/**
+ * Honest fallback for event types this console has no dedicated rendering
+ * for (plan 03 decision 2) — the payload as a truncated JSON preview, never
+ * a silent blank row.
+ */
+const ENVELOPE_KEYS = new Set(["id", "type", "processed_at"]);
+
+function UnknownBody({ event }: { event: SessionEvent }) {
+  const payload = Object.fromEntries(
+    Object.entries(event).filter(([key]) => !ENVELOPE_KEYS.has(key)),
+  );
+  if (Object.keys(payload).length === 0) return null;
+  return (
+    <p
+      className="line-clamp-2 break-all font-mono text-[12px] text-muted-foreground"
+      data-testid="unknown-event-payload"
+    >
+      {JSON.stringify(payload)}
+    </p>
+  );
+}
+
+export function EventRow({
+  event,
+  offset,
+  durationMs,
+}: {
+  event: SessionEvent;
+  /** Clock position since session creation, e.g. "0:09". */
+  offset?: string | null;
+  /** Paired span duration in ms (span.model_request_end rows). */
+  durationMs?: number;
+}) {
   return (
     <div
       className="flex gap-3 border-b py-2.5 last:border-b-0"
@@ -146,6 +179,29 @@ export function EventRow({ event }: { event: SessionEvent }) {
       <div className="min-w-0 flex-1">
         <Body event={event} />
       </div>
+      {(offset || durationMs !== undefined) && (
+        <div className="shrink-0 self-start text-right text-[12px] tabular-nums text-muted-foreground">
+          {durationMs !== undefined && (
+            <span title="model request duration">
+              {durationLabel(durationMs)}
+            </span>
+          )}
+          {durationMs !== undefined && offset && " · "}
+          {offset && <span title="since session creation">{offset}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Full-width divider making a real idle interval visible in the story. */
+export function IdleBand({ ms }: { ms: number }) {
+  return (
+    <div
+      className="flex items-center justify-center gap-2 border-b py-1.5 text-[12px] text-muted-foreground last:border-b-0"
+      data-testid="idle-band"
+    >
+      Session idle · {durationLabel(ms)}
     </div>
   );
 }

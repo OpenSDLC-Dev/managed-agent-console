@@ -89,6 +89,15 @@ export default function AgentsPage() {
               <EmptyState
                 title="No agents yet"
                 hint="Create your first agent to get started."
+                action={
+                  <Button
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => router.push("/agents/new")}
+                  >
+                    Create agent
+                  </Button>
+                }
               />
             }
           />
