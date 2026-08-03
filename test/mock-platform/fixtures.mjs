@@ -251,7 +251,8 @@ export const sessionEvents = {
     {
       id: "sevt_000000000000000006",
       type: "span.model_request_end",
-      processed_at: T1,
+      processed_at: "2026-08-01T10:30:03Z",
+      model_request_start_id: "sevt_000000000000000003",
       model_usage: {
         cache_creation_input_tokens: 1200,
         cache_read_input_tokens: 3100,
@@ -279,8 +280,19 @@ export const sessionEvents = {
         { type: "text", text: "Survey the agent-framework landscape." },
       ],
     },
+    // An event type the console has no dedicated rendering for (the
+    // platform's outcome surface) — e2e asserts the honest JSON fallback.
     {
       id: "sevt_000000000000000102",
+      type: "user.define_outcome",
+      processed_at: T2,
+      description: "Produce a comparative survey document.",
+      max_iterations: 3,
+      outcome_id: "outc_survey00000000000001",
+      rubric: { type: "text", content: "Covers at least five frameworks." },
+    },
+    {
+      id: "sevt_000000000000000103",
       type: "session.status_running",
       processed_at: T2,
     },

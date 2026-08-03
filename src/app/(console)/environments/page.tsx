@@ -82,6 +82,15 @@ export default function EnvironmentsPage() {
               <EmptyState
                 title="No environments yet"
                 hint="Create your first environment to get started."
+                action={
+                  <Button
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => router.push("/environments/new")}
+                  >
+                    Create environment
+                  </Button>
+                }
               />
             }
           />

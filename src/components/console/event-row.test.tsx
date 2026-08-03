@@ -3,7 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 afterEach(cleanup);
-import { EventRow } from "./event-row";
+import { EventRow, IdleBand } from "./event-row";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const ev = (type: string, extra?: object): SessionEvent =>
@@ -238,9 +238,58 @@ describe("EventRow", () => {
     expect(screen.getByText("boom")).toBeInTheDocument();
   });
 
-  it("renders no body for an unknown event type", () => {
+  it("renders no body for an unknown event type without payload keys", () => {
     const { container } = renderEvent(ev("session.status_running"));
     expect(screen.getByText("session.status_running")).toBeInTheDocument();
     expect(container.querySelector("[data-testid=event-row] p")).toBeNull();
+  });
+
+  it("renders an unknown event's payload as a JSON preview", () => {
+    renderEvent(
+      ev("user.define_outcome", {
+        description: "Produce a survey.",
+        max_iterations: 3,
+      }),
+    );
+    const preview = screen.getByTestId("unknown-event-payload");
+    expect(preview.textContent).toContain('"description":"Produce a survey."');
+    expect(preview.textContent).toContain('"max_iterations":3');
+  });
+
+  it("renders the offset and paired span duration in the trailing column", () => {
+    render(
+      <EventRow
+        event={ev("span.model_request_end", {
+          model_usage: {
+            input_tokens: 1,
+            output_tokens: 2,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 3,
+            speed: null,
+          },
+        })}
+        offset="0:09"
+        durationMs={3_000}
+      />,
+    );
+    expect(screen.getByTitle("since session creation")).toHaveTextContent(
+      "0:09",
+    );
+    expect(screen.getByTitle("model request duration")).toHaveTextContent("3s");
+  });
+
+  it("omits the trailing column without offset or duration", () => {
+    renderEvent(ev("user.message", { content: [] }));
+    expect(screen.queryByTitle("since session creation")).toBeNull();
+    expect(screen.queryByTitle("model request duration")).toBeNull();
+  });
+});
+
+describe("IdleBand", () => {
+  it("labels the idle interval", () => {
+    render(<IdleBand ms={25_000} />);
+    expect(screen.getByTestId("idle-band")).toHaveTextContent(
+      "Session idle · 25s",
+    );
   });
 });

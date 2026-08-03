@@ -144,11 +144,21 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  /** Next-step control, e.g. a create button (plan 03 slice 1). */
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex h-56 flex-col items-center justify-center gap-1">
       <p className="text-sm">{title}</p>
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+      {action && <div className="pt-2">{action}</div>}
     </div>
   );
 }

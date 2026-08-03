@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { Fragment, use, useMemo, useState } from "react";
 import Link from "next/link";
+import { Check, Copy } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { DetailSection, Field, FieldList } from "@/components/console/detail";
+import { DetailSection } from "@/components/console/detail";
 import {
   ArchivedBadge,
   EmptyState,
@@ -13,15 +14,23 @@ import {
   DetailSkeleton,
   ListSkeleton,
 } from "@/components/console/bits";
-import { EventRow } from "@/components/console/event-row";
+import { EventRow, IdleBand } from "@/components/console/event-row";
 import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/copy-text";
 import { useSession } from "@/lib/platform/queries";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { latestStatus } from "@/lib/session-trace/store";
-import type { SessionEvent } from "@/lib/platform/types";
+import {
+  ageLabel,
+  idleGaps,
+  modelSpanDurations,
+  offsetLabel,
+} from "@/lib/session-trace/timing";
+import type { Session, SessionEvent } from "@/lib/platform/types";
 
 const FILTERS: { key: string; label: string; types?: string[] }[] = [
   { key: "all", label: "All" },
@@ -81,6 +90,94 @@ const CONNECTION_LABEL = {
   closed: "stream closed",
 } as const;
 
+/**
+ * The session's metadata as one chip row (plan 03 slice 1) — the reference
+ * console's density, from fields the wire already serves. The reference's
+ * duration chip is deliberately absent: the platform serves `stats` empty by
+ * recorded divergence.
+ */
+function SessionChips({ session }: { session: Session }) {
+  const chip = "flex items-center gap-1 font-normal";
+  const age = ageLabel(session.created_at);
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1.5 pb-6"
+      data-testid="session-chips"
+    >
+      <Badge variant="outline" className={chip}>
+        <IdCode id={session.id} />
+      </Badge>
+      <Badge variant="outline" className={chip}>
+        <Link href={`/agents/${session.agent.id}`} className="hover:underline">
+          {session.agent.name} · v{session.agent.version}
+        </Link>
+      </Badge>
+      <Badge variant="outline" className={chip}>
+        <Link
+          href={`/environments/${session.environment_id}`}
+          className="hover:underline"
+        >
+          <IdCode id={session.environment_id} />
+        </Link>
+      </Badge>
+      {session.resources.length > 0 && (
+        <Badge
+          variant="outline"
+          className={chip}
+          title={session.resources.map((r) => r.mount_path).join(", ")}
+        >
+          {session.resources.length} file
+          {session.resources.length === 1 ? "" : "s"}
+        </Badge>
+      )}
+      {session.vault_ids.map((vaultId) => (
+        <Badge key={vaultId} variant="outline" className={chip}>
+          <Link href={`/vaults/${vaultId}`} className="hover:underline">
+            <IdCode id={vaultId} />
+          </Link>
+        </Badge>
+      ))}
+      <Badge variant="outline" className={cn(chip, "text-muted-foreground")}>
+        {session.usage.input_tokens.toLocaleString()} in ·{" "}
+        {session.usage.output_tokens.toLocaleString()} out ·{" "}
+        {session.usage.cache_read_input_tokens.toLocaleString()} cache read
+      </Badge>
+      {age && (
+        <Badge
+          variant="outline"
+          className={cn(chip, "text-muted-foreground")}
+          title={session.created_at}
+        >
+          {age}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+/** Copies the persisted trace as JSON — pasting a trace into an issue. */
+function CopyAllButton({ events }: { events: SessionEvent[] }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="ml-auto h-7 text-muted-foreground"
+      disabled={events.length === 0}
+      onClick={() => {
+        void copyText(JSON.stringify(events, null, 2)).then((ok) => {
+          if (!ok) return;
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? "Copied" : "Copy all"}
+    </Button>
+  );
+}
+
 export default function SessionDetailPage({
   params,
 }: {
@@ -95,6 +192,11 @@ export default function SessionDetailPage({
   const running = status === "running";
 
   const pending = useMemo(() => pendingToolUses(trace.events), [trace.events]);
+  const durations = useMemo(
+    () => modelSpanDurations(trace.events),
+    [trace.events],
+  );
+  const gaps = useMemo(() => idleGaps(trace.events), [trace.events]);
   const visible = useMemo(() => {
     const types = FILTERS.find((f) => f.key === filter)?.types;
     return types
@@ -125,39 +227,7 @@ export default function SessionDetailPage({
           </span>
         }
       />
-      <DetailSection title="Overview">
-        <FieldList>
-          <Field label="ID">
-            <IdCode id={data.id} />
-          </Field>
-          <Field label="Agent">
-            <Link href={`/agents/${data.agent.id}`} className="hover:underline">
-              {data.agent.name} · v{data.agent.version}
-            </Link>
-          </Field>
-          <Field label="Environment">
-            <Link
-              href={`/environments/${data.environment_id}`}
-              className="hover:underline"
-            >
-              <IdCode id={data.environment_id} />
-            </Link>
-          </Field>
-          <Field label="Tokens">
-            {data.usage.input_tokens.toLocaleString()} in ·{" "}
-            {data.usage.output_tokens.toLocaleString()} out ·{" "}
-            {data.usage.cache_read_input_tokens.toLocaleString()} cache read
-          </Field>
-          {data.vault_ids.length > 0 && (
-            <Field label="Vaults">{data.vault_ids.join(", ")}</Field>
-          )}
-          {data.resources.length > 0 && (
-            <Field label="Resources">
-              {data.resources.map((r) => r.mount_path).join(", ")}
-            </Field>
-          )}
-        </FieldList>
-      </DetailSection>
+      <SessionChips session={data} />
 
       <ApprovalBanner pending={pending} sessionId={id} />
 
@@ -190,6 +260,7 @@ export default function SessionDetailPage({
           >
             {CONNECTION_LABEL[connection]}
           </Badge>
+          <CopyAllButton events={trace.events} />
         </div>
         {visible.length === 0 && visiblePreviews.length === 0 ? (
           connection === "connecting" ? (
@@ -200,7 +271,14 @@ export default function SessionDetailPage({
         ) : (
           <div>
             {visible.map((e) => (
-              <EventRow key={e.id} event={e} />
+              <Fragment key={e.id}>
+                <EventRow
+                  event={e}
+                  offset={offsetLabel(data.created_at, e.processed_at)}
+                  durationMs={durations.get(e.id)}
+                />
+                {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
+              </Fragment>
             ))}
             {visiblePreviews.map((preview) => (
               <div

@@ -214,4 +214,13 @@ describe("EmptyState", () => {
     expect(screen.getByText("No agents")).toBeInTheDocument();
     expect(screen.getByText("Create one to get started")).toBeInTheDocument();
   });
+
+  it("renders the action slot", () => {
+    render(
+      <EmptyState title="No agents" action={<button>Create agent</button>} />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Create agent" }),
+    ).toBeInTheDocument();
+  });
 });

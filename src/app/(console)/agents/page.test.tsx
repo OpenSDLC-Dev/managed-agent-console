@@ -160,10 +160,14 @@ describe("AgentsPage", () => {
     expect(screen.getByText(/req_a1/)).toBeInTheDocument();
   });
 
-  it("shows the empty state when there are no agents", async () => {
+  it("shows the empty state with a create CTA when there are no agents", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     expect(await screen.findByText("No agents yet")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /Create agent/ })[1],
+    );
+    expect(pushSpy).toHaveBeenCalledWith("/agents/new");
   });
 
   it("renders agent rows and navigates on row click", async () => {
