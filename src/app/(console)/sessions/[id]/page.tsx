@@ -30,6 +30,7 @@ import {
   modelSpanDurations,
   offsetLabel,
 } from "@/lib/session-trace/timing";
+import { useNow } from "@/lib/session-trace/use-now";
 import type { Session, SessionEvent } from "@/lib/platform/types";
 
 const FILTERS: { key: string; label: string; types?: string[] }[] = [
@@ -98,7 +99,9 @@ const CONNECTION_LABEL = {
  */
 function SessionChips({ session }: { session: Session }) {
   const chip = "flex items-center gap-1 font-normal";
-  const age = ageLabel(session.created_at);
+  // Clock-driven re-render: without it the age label freezes while the
+  // page sits open with no data changes (review finding, PR #26).
+  const age = ageLabel(session.created_at, useNow());
   return (
     <div
       className="flex flex-wrap items-center gap-1.5 pb-6"
