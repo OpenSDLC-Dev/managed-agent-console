@@ -155,50 +155,70 @@ function Section({
  * Placeholders on purpose: the browser never holds the base URL or the key
  * (principle 2) — this teaches the wire shape, not a paste-runnable secret.
  */
-function CurlBlock({ body, agentId }: { body: AgentWriteBody; agentId?: string }) {
+function CurlBlock({
+  getBody,
+  agentId,
+}: {
+  getBody: () => AgentWriteBody;
+  agentId?: string;
+}) {
   const [copied, setCopied] = useState(false);
+  // Closed by default, and the command only builds while open — otherwise
+  // every keystroke in the form would pay for a JSON serialization.
+  const [open, setOpen] = useState(false);
   const url = agentId
     ? `$PLATFORM_BASE_URL/v1/agents/${agentId}`
     : "$PLATFORM_BASE_URL/v1/agents";
-  const command = [
-    `curl -X POST "${url}" \\`,
-    `  -H "x-api-key: $PLATFORM_API_KEY" \\`,
-    `  -H "content-type: application/json" \\`,
-    `  -d '${JSON.stringify(body, null, 2).replace(/'/g, `'\\''`)}'`,
-  ].join("\n");
+  const command = open
+    ? [
+        `curl -X POST "${url}" \\`,
+        `  -H "x-api-key: $PLATFORM_API_KEY" \\`,
+        `  -H "content-type: application/json" \\`,
+        `  -d '${JSON.stringify(getBody(), null, 2).replace(/'/g, `'\\''`)}'`,
+      ].join("\n")
+    : "";
   return (
-    <details className="pt-6" data-testid="curl-block">
+    <details
+      className="pt-6"
+      data-testid="curl-block"
+      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+    >
       <summary className="cursor-pointer text-[13px] text-muted-foreground">
         Equivalent API request
       </summary>
-      <div className="flex items-start justify-between gap-3 pt-2">
-        <p className="text-[12px] text-muted-foreground">
-          The same save, sent straight to the platform. Fill the placeholders
-          from your deployment — the console keeps its own key server-side.
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 text-muted-foreground"
-          onClick={() => {
-            void copyText(command).then((ok) => {
-              if (!ok) return;
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
-            });
-          }}
-        >
-          {copied ? (
-            <Check className="size-3.5" />
-          ) : (
-            <Copy className="size-3.5" />
-          )}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <pre className="mt-2 overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed">
-        {command}
-      </pre>
+      {open && (
+        <>
+          <div className="flex items-start justify-between gap-3 pt-2">
+            <p className="text-[12px] text-muted-foreground">
+              The same save, sent straight to the platform. Fill the
+              placeholders from your deployment — the console keeps its own key
+              server-side.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 text-muted-foreground"
+              onClick={() => {
+                void copyText(command).then((ok) => {
+                  if (!ok) return;
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1500);
+                });
+              }}
+            >
+              {copied ? (
+                <Check className="size-3.5" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          <pre className="mt-2 overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed">
+            {command}
+          </pre>
+        </>
+      )}
     </details>
   );
 }
@@ -542,8 +562,8 @@ export function AgentEditor({
               {form.otherTools.length > 0 && (
                 <p className="pt-2 text-[13px] text-muted-foreground">
                   {form.otherTools.length} custom/MCP tool entr
-                  {form.otherTools.length === 1 ? "y" : "ies"} — edit in the
-                  Raw tab.
+                  {form.otherTools.length === 1 ? "y" : "ies"} — edit in the Raw
+                  tab.
                 </p>
               )}
             </div>
@@ -606,7 +626,7 @@ export function AgentEditor({
           </Section>
 
           <CurlBlock
-            body={
+            getBody={() =>
               mode === "edit"
                 ? { ...configFromForm(form), version }
                 : configFromForm(form)

@@ -92,7 +92,8 @@ export function parseTools(tools: unknown[]): {
 
   const fallback: ToolSetting = {
     enabled: entry.default_config?.enabled ?? WIRE_DEFAULT.enabled,
-    policy: entry.default_config?.permission_policy?.type ?? WIRE_DEFAULT.policy,
+    policy:
+      entry.default_config?.permission_policy?.type ?? WIRE_DEFAULT.policy,
   };
   const tools_ = Object.fromEntries(
     TOOL_NAMES.map((name) => {

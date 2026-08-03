@@ -25,7 +25,10 @@ describe("toolset mapping", () => {
     ]);
     expect(others).toHaveLength(1);
     expect(toolset?.default).toEqual({ enabled: true, policy: "always_ask" });
-    expect(toolset?.tools.bash).toEqual({ enabled: true, policy: "always_ask" });
+    expect(toolset?.tools.bash).toEqual({
+      enabled: true,
+      policy: "always_ask",
+    });
     expect(toolset?.tools.read).toEqual({
       enabled: true,
       policy: "always_allow",

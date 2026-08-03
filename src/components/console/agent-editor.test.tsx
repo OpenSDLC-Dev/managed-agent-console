@@ -414,6 +414,9 @@ describe("AgentEditor", () => {
 
     const block = screen.getByTestId("curl-block");
     expect(block).toHaveTextContent("Equivalent API request");
+    // Collapsed blocks build no command — opening renders it.
+    expect(block).not.toHaveTextContent("curl -X POST");
+    await user.click(within(block).getByText("Equivalent API request"));
     expect(block).toHaveTextContent(
       'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
     );
@@ -428,8 +431,9 @@ describe("AgentEditor", () => {
     ).toBeInTheDocument();
   });
 
-  it("targets the agent's URL and carries the version in edit mode", () => {
+  it("targets the agent's URL and carries the version in edit mode", async () => {
     stubFetch();
+    const user = userEvent.setup();
     renderEditor({
       mode: "edit",
       initial: formFromAgent(agentResponse({ id: "agent_1", version: 3 })),
@@ -437,6 +441,7 @@ describe("AgentEditor", () => {
       version: 3,
     });
     const block = screen.getByTestId("curl-block");
+    await user.click(within(block).getByText("Equivalent API request"));
     expect(block).toHaveTextContent(
       'curl -X POST "$PLATFORM_BASE_URL/v1/agents/agent_1"',
     );
