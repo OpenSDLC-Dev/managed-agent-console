@@ -104,7 +104,10 @@ structure are ahead of ours on data we already hold.
    - Unknown-event fallback rendering (decision 2).
    - `Copy all` (serialized trace to clipboard) on the events header.
    - Empty states gain CTAs (e.g. sessions list → Create session).
-   - → verify: helper unit tests (null `processed_at`, unpaired spans, zero-gap);
+   - → verify: helper unit tests (null `processed_at`, unpaired spans, zero-gap, **and
+     the origin regression: a fixture whose `session.created_at` precedes the first
+     event must yield a first offset that includes that interval** — an implementation
+     still using the first event as origin fails it);
      `test/e2e/session-live.spec.ts` extended; suites green; fidelity pass noted.
 2. **Wire filters the console never surfaced**:
    - Sessions page: agent filter + created preset filter; agents page: created preset
@@ -117,8 +120,10 @@ structure are ahead of ours on data we already hold.
      Archived agents are included — archived agents' sessions remain filterable — and
      labeled with the existing archived badge.
    - → verify: e2e asserts the mock received the expected query params and rendered the
-     filtered rows, **including selecting an agent beyond the first options page**
-     (multi-page mock); suites green.
+     filtered rows, **including selecting an agent beyond the first options page and an
+     archived agent** (multi-page mock carrying one archived agent: assert the options
+     request sends `include_archived=true`, the option shows the archived badge, and
+     selecting it filters the sessions list); suites green.
 3. **Transcript | Debug split + event detail panel**:
    - Transcript tab: compact one-line rows (type chip · one-line summary · right-aligned
      tokens/duration/offset), span noise hidden; the existing filter chips fold in.
