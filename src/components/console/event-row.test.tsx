@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
@@ -235,9 +235,22 @@ describe("EventDetailPanel", () => {
 
   it("always offers the raw event and copies it as JSON", async () => {
     const writeText = vi.fn(async () => {});
+    // defineProperty escapes vi.unstubAllGlobals — restore the descriptor
+    // by hand so the mock cannot leak into later tests.
+    const original = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "clipboard",
+    );
     Object.defineProperty(window.navigator, "clipboard", {
       value: { writeText },
       configurable: true,
+    });
+    onTestFinished(() => {
+      if (original) {
+        Object.defineProperty(window.navigator, "clipboard", original);
+      } else {
+        delete (window.navigator as { clipboard?: unknown }).clipboard;
+      }
     });
     renderPanel(ev("session.status_running"));
     expect(screen.getByText("Raw event")).toBeInTheDocument();

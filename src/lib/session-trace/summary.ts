@@ -84,10 +84,18 @@ export function summaryOf(event: SessionEvent): string {
       return firstLine(
         textOf(event.content as ContentBlock[] | null | undefined),
       );
-    case "user.tool_confirmation":
-      return `${event.result === "allow" ? "Approved" : "Denied"} ${event.tool_use_id ?? ""}${
+    case "user.tool_confirmation": {
+      // Only assert a verdict the event actually carries.
+      const verdict =
+        event.result === "allow"
+          ? "Approved"
+          : event.result === "deny"
+            ? "Denied"
+            : "Answered";
+      return `${verdict} ${event.tool_use_id ?? ""}${
         event.deny_message ? ` — ${event.deny_message}` : ""
       }`;
+    }
     case "session.status_running":
       return "";
     case "session.status_idle": {
@@ -97,6 +105,10 @@ export function summaryOf(event: SessionEvent): string {
         : "";
       return `stopped: ${event.stop_reason?.type ?? "unknown"}${pending}`;
     }
+    // Only unpaired starts reach the transcript (the request is still
+    // running, or its end never persisted) — say that much and no more.
+    case "span.model_request_start":
+      return "model request started";
     case "span.model_request_end":
       return tokensLine(event) ?? "";
     case "session.error":

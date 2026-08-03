@@ -70,8 +70,7 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
   {
     key: "spans",
     label: "Model spans",
-    // Start markers carry nothing the end row lacks — they live in Debug.
-    types: ["span.model_request_end"],
+    types: ["span.model_request_start", "span.model_request_end"],
   },
 ];
 
@@ -210,9 +209,16 @@ export default function SessionDetailPage({
   const gaps = useMemo(() => idleGaps(trace.events), [trace.events]);
   const visible = useMemo(() => {
     const types = FILTERS.find((f) => f.key === filter)?.types;
-    // The transcript pairs each span into its end row; starts stay in Debug.
+    // A paired span start folds into its end row's duration; an unpaired one
+    // (request still running, or its end never persisted) stays visible —
+    // it is the only record that model work began (review finding, PR #28).
+    const pairedStarts = new Set(
+      trace.events
+        .filter((e) => e.type === "span.model_request_end")
+        .map((e) => e.model_request_start_id),
+    );
     const events = trace.events.filter(
-      (e) => e.type !== "span.model_request_start",
+      (e) => e.type !== "span.model_request_start" || !pairedStarts.has(e.id),
     );
     return types ? events.filter((e) => types.includes(e.type)) : events;
   }, [filter, trace.events]);
@@ -325,7 +331,7 @@ export default function SessionDetailPage({
           <div
             className={cn(
               selected &&
-                "grid grid-cols-[minmax(0,1fr)_minmax(320px,42%)] items-start gap-4",
+                "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,42%)]",
             )}
           >
             <div>

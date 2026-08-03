@@ -135,6 +135,18 @@ describe("summaryOf", () => {
     },
   );
 
+  it("says a bare span start began a model request", () => {
+    expect(summaryOf(ev("span.model_request_start"))).toBe(
+      "model request started",
+    );
+  });
+
+  it("does not assert a verdict a confirmation does not carry", () => {
+    expect(
+      summaryOf(ev("user.tool_confirmation", { tool_use_id: "toolu_9" })),
+    ).toBe("Answered toolu_9");
+  });
+
   it("summarizes tool confirmations with the verdict and deny message", () => {
     expect(
       summaryOf(
