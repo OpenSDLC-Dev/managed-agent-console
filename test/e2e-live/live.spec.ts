@@ -26,15 +26,21 @@ const RUN = Date.now().toString(36);
 let api: APIRequestContext;
 let modelId: string;
 let environmentId: string;
+let createdEnvironmentId: string | undefined;
 const createdAgentIds: string[] = [];
 let runnerAgentId: string;
 
 const AGENT_TOOLSET = "agent_toolset_20260401";
 
+// Like any wire-compatible client (principle 3); the platform accepts and
+// ignores the beta token today.
+const WIRE_HEADERS = {
+  "x-api-key": apiKey,
+  "anthropic-beta": "managed-agents-2025-11-06",
+};
+
 async function platformGet(path: string): Promise<Record<string, unknown>> {
-  const res = await api.get(`${baseUrl}/${path}`, {
-    headers: { "x-api-key": apiKey },
-  });
+  const res = await api.get(`${baseUrl}/${path}`, { headers: WIRE_HEADERS });
   expect(res.ok(), `GET ${path} -> ${res.status()}`).toBe(true);
   return (await res.json()) as Record<string, unknown>;
 }
@@ -44,7 +50,7 @@ async function platformPost(
   data: unknown,
 ): Promise<Record<string, unknown>> {
   const res = await api.post(`${baseUrl}/${path}`, {
-    headers: { "x-api-key": apiKey },
+    headers: WIRE_HEADERS,
     data,
   });
   expect(res.ok(), `POST ${path} -> ${res.status()}`).toBe(true);
@@ -80,15 +86,33 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  for (const id of createdAgentIds) {
-    await api
-      .post(`${baseUrl}/v1/agents/${id}/archive`, {
-        headers: { "x-api-key": apiKey },
+  // Archive everything this run created; a cleanup failure is a real
+  // failure — silent leftovers accumulate on the shared stack. The suite's
+  // sessions stay deliberately: they are the run's durable record, and the
+  // platform refuses to hard-delete an environment they still reference —
+  // which is why a fallback-created environment is archived, not deleted.
+  const failures: string[] = [];
+  const archive = async (path: string) => {
+    try {
+      const res = await api.post(`${baseUrl}/${path}`, {
+        headers: WIRE_HEADERS,
         data: {},
-      })
-      .catch(() => {});
+      });
+      if (!res.ok()) failures.push(`${path}: HTTP ${res.status()}`);
+    } catch (error) {
+      failures.push(`${path}: ${String(error)}`);
+    }
+  };
+  for (const id of createdAgentIds) {
+    await archive(`v1/agents/${id}/archive`);
+  }
+  if (createdEnvironmentId) {
+    await archive(`v1/environments/${createdEnvironmentId}/archive`);
   }
   await api.dispose();
+  if (failures.length > 0) {
+    throw new Error(`live cleanup failed: ${failures.join("; ")}`);
+  }
 });
 
 test("the console connects to the real platform and lists real agents", async ({
@@ -142,13 +166,18 @@ test("an externally-authored compact default_config survives a console save", as
 test("sessions filter by agent server-side; created presets bound real lists", async ({
   page,
 }) => {
-  // A reusable environment: the first existing one, else our own.
-  const envs = (await platformGet("v1/environments?limit=1")).data as {
+  // A reusable CLOUD environment — the compose stack's executor runs cloud
+  // sessions; a self_hosted one would park the HITL bash turn forever
+  // (review finding, PR #30). Reuse the first cloud env, else create one.
+  const envs = (await platformGet("v1/environments?limit=100")).data as {
     id: string;
+    config: { type: string };
   }[];
-  environmentId =
-    envs[0]?.id ??
-    ((
+  const cloudEnv = envs.find((env) => env.config.type === "cloud");
+  if (cloudEnv) {
+    environmentId = cloudEnv.id;
+  } else {
+    environmentId = (
       await platformPost("v1/environments", {
         name: `live-e2e-env-${RUN}`,
         config: {
@@ -157,7 +186,9 @@ test("sessions filter by agent server-side; created presets bound real lists", a
           packages: { apt: [], pip: [], npm: [], go: [], gem: [], cargo: [] },
         },
       })
-    ).id as string);
+    ).id as string;
+    createdEnvironmentId = environmentId;
+  }
 
   const [agentA, agentB] = await Promise.all(
     ["a", "b"].map((suffix) =>
@@ -374,6 +405,15 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
   await expect(page.getByTestId("approval-banner")).toBeVisible({
     timeout: turnTimeout,
   });
+  // The park-for-approval stop already emitted an idle event — remember how
+  // many exist so the settle assertion waits for a NEW one, not a stale one
+  // (review finding, PR #30: without this the test can go green while the
+  // paid post-denial turn is still running).
+  const idleRows = page
+    .getByTestId("event-row")
+    .filter({ hasText: "session.status_idle" });
+  const idleCountAtDeny = await idleRows.count();
+
   await page.getByRole("button", { name: "Deny…" }).click();
   await page.getByPlaceholder("Reason (optional)").fill("Denied by live e2e");
   await page.getByRole("button", { name: "Deny", exact: true }).click();
@@ -386,13 +426,10 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
   await expect(page.getByTestId("approval-banner")).toBeHidden({
     timeout: turnTimeout,
   });
-  // The denied turn still settles.
-  await expect(
-    page
-      .getByTestId("event-row")
-      .filter({ hasText: "session.status_idle" })
-      .last(),
-  ).toBeVisible({ timeout: turnTimeout });
+  // The denied turn settles with a fresh idle event.
+  await expect
+    .poll(() => idleRows.count(), { timeout: turnTimeout })
+    .toBeGreaterThan(idleCountAtDeny);
 
   // Copy all serializes the real trace.
   await page.getByRole("button", { name: "Copy all" }).click();
