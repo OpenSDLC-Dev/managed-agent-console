@@ -75,7 +75,15 @@ pnpm test:e2e   # Playwright against the in-repo mock platform server
 pnpm lint       # eslint; pnpm typecheck and pnpm format:check also exist
 ```
 
-The e2e tier builds the production bundle first, and the mock platform (`test/mock-platform/`) speaks the same wire shapes as the real control plane. A live acceptance pass against a real compose stack is opt-in (`RUN_LIVE_CONSOLE_TESTS=1`) and requires a configured model endpoint.
+The e2e tier builds the production bundle first, and the mock platform (`test/mock-platform/`) speaks the same wire shapes as the real control plane.
+
+The live tier (`test/e2e-live/`) drives a **real platform stack** — the platform repo's `deploy/compose` — and spends real model tokens:
+
+```bash
+RUN_LIVE_CONSOLE_TESTS=1 pnpm test:e2e:live
+```
+
+It is opt-in via `RUN_LIVE_CONSOLE_TESTS=1`; once opted in, missing configuration **fails** rather than skips. `PLATFORM_BASE_URL`/`PLATFORM_API_KEY` come from the environment or `.env.local`; the model id is inferred from an existing agent (override with `LIVE_MODEL_ID`). The suite creates `live-e2e-`-prefixed resources, archives its agents on the way out, and runs exactly one model-driven session (two HITL turns: approve, deny) — everything else asserts wire shapes without spending.
 
 ## Contributing
 
