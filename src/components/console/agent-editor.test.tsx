@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -202,7 +202,11 @@ describe("newAgentForm", () => {
     expect(form.name).toBe("");
     expect(form.modelId).toBe("claude-sonnet-4-8");
     expect(form.speed).toBe("");
-    expect(form.toolset?.bash).toEqual({
+    expect(form.toolset?.default).toEqual({
+      enabled: true,
+      policy: "always_allow",
+    });
+    expect(form.toolset?.tools.bash).toEqual({
       enabled: true,
       policy: "always_allow",
     });
@@ -237,11 +241,11 @@ describe("formFromAgent", () => {
     expect(form.speed).toBe("fast");
     expect(form.system).toBe("sys");
     expect(form.description).toBe("desc");
-    expect(form.toolset?.bash).toEqual({
+    expect(form.toolset?.tools.bash).toEqual({
       enabled: false,
       policy: "always_allow",
     });
-    expect(form.toolset?.read).toEqual({
+    expect(form.toolset?.tools.read).toEqual({
       enabled: true,
       policy: "always_allow",
     });
@@ -331,6 +335,112 @@ describe("AgentEditor", () => {
         ],
       },
     ]);
+  });
+
+  it("lays out the sections with tool descriptions", () => {
+    stubFetch();
+    renderEditor();
+    for (const title of ["General", "Tools", "Skills"]) {
+      expect(
+        screen.getByRole("heading", { name: title, level: 3 }),
+      ).toBeInTheDocument();
+    }
+    expect(screen.getByText("— Execute bash commands")).toBeInTheDocument();
+    expect(screen.getByText("— Search the web")).toBeInTheDocument();
+  });
+
+  it("flows the toolset-level default into default_config, per-tool deviations relative to it", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+
+    await choose(user, "default policy", "always ask");
+    // read deviates back to allow relative to the ask default.
+    await choose(user, "read policy", "always allow");
+
+    await user.click(screen.getByRole("button", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      {
+        type: "agent_toolset_20260401",
+        default_config: { permission_policy: { type: "always_ask" } },
+        configs: [
+          { name: "read", permission_policy: { type: "always_allow" } },
+        ],
+      },
+    ]);
+  });
+
+  it("disabling the default disables every following tool compactly", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByRole("checkbox", { name: "default enabled" }));
+    expect(
+      screen.getByRole("checkbox", { name: "bash enabled" }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "default policy" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      { type: "agent_toolset_20260401", default_config: { enabled: false } },
+    ]);
+  });
+
+  it("shows the equivalent curl with placeholders and copies it", async () => {
+    stubFetch();
+    // Stub the clipboard after setup — user-event installs its own stub —
+    // and restore the descriptor so the mock cannot leak into later tests.
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => {});
+    const original = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "clipboard",
+    );
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    onTestFinished(() => {
+      if (original) {
+        Object.defineProperty(window.navigator, "clipboard", original);
+      } else {
+        delete (window.navigator as { clipboard?: unknown }).clipboard;
+      }
+    });
+    renderEditor();
+
+    const block = screen.getByTestId("curl-block");
+    expect(block).toHaveTextContent("Equivalent API request");
+    expect(block).toHaveTextContent(
+      'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
+    );
+    expect(block).toHaveTextContent("x-api-key: $PLATFORM_API_KEY");
+
+    await user.click(within(block).getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining("$PLATFORM_API_KEY"),
+    );
+    expect(
+      await within(block).findByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("targets the agent's URL and carries the version in edit mode", () => {
+    stubFetch();
+    renderEditor({
+      mode: "edit",
+      initial: formFromAgent(agentResponse({ id: "agent_1", version: 3 })),
+      agentId: "agent_1",
+      version: 3,
+    });
+    const block = screen.getByTestId("curl-block");
+    expect(block).toHaveTextContent(
+      'curl -X POST "$PLATFORM_BASE_URL/v1/agents/agent_1"',
+    );
+    expect(block).toHaveTextContent('"version": 3');
   });
 
   it("removes and re-adds the built-in toolset", async () => {

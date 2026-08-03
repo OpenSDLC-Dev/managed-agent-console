@@ -33,6 +33,32 @@ test("create an agent through the rendered form", async ({ page }) => {
   await expect(page.getByText('"skill_id": "xlsx"')).toBeVisible();
 });
 
+test("create an agent from a starter template", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/agents/new");
+
+  // The template seeds the whole form through the wire parse path.
+  await page.getByRole("button", { name: /Code task runner/ }).click();
+  await expect(page.getByLabel("Name")).toHaveValue("Code task runner");
+  await expect(page.getByLabel("bash policy")).toContainText("always ask");
+
+  // The equivalent-curl block teaches the wire shape with placeholders only.
+  await page.getByText("Equivalent API request").click();
+  await expect(page.getByTestId("curl-block")).toContainText(
+    'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
+  );
+  await expect(page.getByTestId("curl-block")).toContainText(
+    "x-api-key: $PLATFORM_API_KEY",
+  );
+
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await expect(page).toHaveURL(/\/agents\/agent_mock/);
+  await expect(
+    page.getByRole("heading", { name: "Code task runner" }),
+  ).toBeVisible();
+  await expect(page.getByText("always_ask")).toBeVisible();
+});
+
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
   await signIn(page);
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
