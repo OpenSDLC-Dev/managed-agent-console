@@ -4,4 +4,4 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-None. Plans 01 (v1 console, live-accepted) and 02 (quality guardrails) are archived — summaries in [docs/HISTORY.md](./docs/HISTORY.md). New work starts from a GitHub issue.
+**[docs/plan/03_ux-parity.md](./docs/plan/03_ux-parity.md) (draft, issue #24)** — UX parity with the reference console from already-served data; awaiting approval, no slice started. Plans 01 and 02 are archived — summaries in [docs/HISTORY.md](./docs/HISTORY.md).
