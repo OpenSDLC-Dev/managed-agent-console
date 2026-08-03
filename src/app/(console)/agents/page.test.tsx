@@ -226,6 +226,27 @@ describe("AgentsPage", () => {
     expect(url.searchParams.get("include_archived")).toBe("true");
   });
 
+  it("filters by created preset with a created_at[gte] bound and resets paging", async () => {
+    const fetchMock = stubFetch(() =>
+      json({ data: [agent({ id: "agt_1", name: "Support bot" })] }),
+    );
+    renderPage();
+    await screen.findByText("Support bot");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Last 24 hours" }),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const url = new URL(
+      String(fetchMock.mock.calls[1][0]),
+      "http://console.test",
+    );
+    const gte = Date.parse(url.searchParams.get("created_at[gte]")!);
+    expect(gte).toBeGreaterThan(Date.now() - 25 * 3600_000);
+    expect(gte).toBeLessThan(Date.now() - 23 * 3600_000);
+    expect(url.searchParams.get("page")).toBeNull();
+  });
+
   it("pages forward with the cursor and back through the stack", async () => {
     const fetchMock = stubFetch((url) =>
       url.searchParams.get("page") === "cur_2"

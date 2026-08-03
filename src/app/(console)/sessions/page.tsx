@@ -22,7 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSessions } from "@/lib/platform/queries";
+import {
+  CreatedFilter,
+  createdGte,
+  type CreatedPresetKey,
+} from "@/components/console/created-filter";
+import { useAgentOptions, useSessions } from "@/lib/platform/queries";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
@@ -72,11 +77,20 @@ const STATUS_OPTIONS: (SessionStatus | "all")[] = [
 export default function SessionsPage() {
   const router = useRouter();
   const [status, setStatus] = useState<SessionStatus | "all">("all");
+  const [agentId, setAgentId] = useState<string>("all");
+  // The gte freezes at selection time so the query key stays stable.
+  const [created, setCreated] = useState<{
+    key: CreatedPresetKey;
+    gte?: string;
+  }>({ key: "all" });
   // Sessions are the one bidirectional list: the wire supplies both cursors.
   const [page, setPage] = useState<string | undefined>(undefined);
+  const agentOptions = useAgentOptions();
   const { data, error, isPending } = useSessions({
     page,
     statuses: status === "all" ? undefined : [status],
+    agent_id: agentId === "all" ? undefined : agentId,
+    "created_at[gte]": created.gte,
   });
 
   return (
@@ -90,30 +104,73 @@ export default function SessionsPage() {
           </Button>
         }
       />
-      <div className="flex items-center gap-1.5 pb-4 text-sm">
-        <span className="text-muted-foreground">Status</span>
-        <Select
-          value={status}
-          onValueChange={(value) => {
-            setStatus(value as SessionStatus | "all");
+      <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Status</span>
+          <Select
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value as SessionStatus | "all");
+              setPage(undefined);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 rounded-lg"
+              aria-label="Status filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option === "all" ? "All" : option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Agent</span>
+          <Select
+            value={agentId}
+            onValueChange={(value) => {
+              setAgentId(value ?? "all");
+              setPage(undefined);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 rounded-lg"
+              aria-label="Agent filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {(agentOptions.data?.agents ?? []).map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  <span className="flex items-center gap-2">
+                    {agent.name}
+                    <ArchivedBadge archivedAt={agent.archived_at} />
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {agentOptions.data?.truncated && (
+            <span className="text-[12px] text-muted-foreground">
+              options truncated at 1000 agents
+            </span>
+          )}
+        </div>
+        <CreatedFilter
+          value={created.key}
+          onChange={(key) => {
+            setCreated({ key, gte: createdGte(key) });
             setPage(undefined);
           }}
-        >
-          <SelectTrigger
-            size="sm"
-            className="h-8 rounded-lg"
-            aria-label="Status filter"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option === "all" ? "All" : option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
       {error ? (
         <ErrorState error={error} />
