@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   useAddCredential,
   useAgent,
+  useAgentOptions,
   useAgents,
   useAgentVersions,
   useArchiveAgent,
@@ -97,11 +98,21 @@ const queryCases: QueryCase[] = [
     search: { limit: "20" },
   },
   {
-    name: "useAgents (page, include_archived, limit override)",
+    name: "useAgents (page, include_archived, limit override, created bound)",
     useHook: () =>
-      useAgents({ page: "cur_1", include_archived: true, limit: 5 }),
+      useAgents({
+        page: "cur_1",
+        include_archived: true,
+        limit: 5,
+        "created_at[gte]": "2026-08-01T00:00:00.000Z",
+      }),
     path: "/api/platform/v1/agents",
-    search: { limit: "5", page: "cur_1", include_archived: "true" },
+    search: {
+      limit: "5",
+      page: "cur_1",
+      include_archived: "true",
+      "created_at[gte]": "2026-08-01T00:00:00.000Z",
+    },
   },
   {
     name: "useAgent",
@@ -141,6 +152,7 @@ const queryCases: QueryCase[] = [
         agent_id: "agt_1",
         order: "desc",
         include_archived: true,
+        "created_at[gte]": "2026-08-01T00:00:00.000Z",
       }),
     path: "/api/platform/v1/sessions",
     search: {
@@ -149,6 +161,7 @@ const queryCases: QueryCase[] = [
       agent_id: "agt_1",
       order: "desc",
       include_archived: "true",
+      "created_at[gte]": "2026-08-01T00:00:00.000Z",
     },
   },
   {
@@ -226,6 +239,52 @@ describe("query hooks", () => {
     expect(init).toBeUndefined(); // plain GET
     expect(new URL(url, "http://console.test").pathname).toBe(path);
     expect(searchOf(url)).toEqual(search);
+  });
+});
+
+describe("useAgentOptions", () => {
+  it("pages v1/agents to exhaustion with archived included", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      const url = new URL(String(input), "http://console.test");
+      return jsonResponse(
+        url.searchParams.get("page") === "cur_2"
+          ? { data: [{ id: "agt_2" }], next_page: null }
+          : { data: [{ id: "agt_1" }], next_page: "cur_2" },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useAgentOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      agents: [{ id: "agt_1" }, { id: "agt_2" }],
+      truncated: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({
+      limit: "100",
+      include_archived: "true",
+    });
+    expect(searchOf(fetchMock.mock.calls[1][0])).toEqual({
+      limit: "100",
+      include_archived: "true",
+      page: "cur_2",
+    });
+  });
+
+  it("stops at the page cap and reports truncation", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: [{ id: "agt_x" }], next_page: "again" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useAgentOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(result.current.data?.truncated).toBe(true);
+    expect(result.current.data?.agents).toHaveLength(10);
   });
 });
 

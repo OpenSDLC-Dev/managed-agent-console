@@ -129,10 +129,13 @@ const json = (payload: unknown, status = 200) =>
 
 function stubFetch(
   handler: (url: URL, init?: RequestInit) => Response | undefined,
+  agentsHandler: (url: URL) => Response = () => json({ data: [] }),
 ) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
+      // The agent-filter options query rides along on every mount.
+      if (url.pathname === "/api/platform/v1/agents") return agentsHandler(url);
       const response = handler(url, init);
       if (!response) throw new Error(`unmatched fetch: ${url.pathname}`);
       return response;
@@ -140,6 +143,13 @@ function stubFetch(
   );
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/** URLs of the session-list fetches only, options traffic excluded. */
+function sessionUrls(fetchMock: ReturnType<typeof stubFetch>): URL[] {
+  return fetchMock.mock.calls
+    .map((call) => new URL(String(call[0]), "http://console.test"))
+    .filter((url) => url.pathname === "/api/platform/v1/sessions");
 }
 
 function renderPage() {
@@ -248,13 +258,114 @@ describe("SessionsPage", () => {
     await userEvent.click(
       screen.getAllByRole("button", { name: "rescheduling" })[0],
     );
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const url = new URL(
-      String(fetchMock.mock.calls[1][0]),
-      "http://console.test",
-    );
+    await waitFor(() => expect(sessionUrls(fetchMock)).toHaveLength(2));
+    const url = sessionUrls(fetchMock)[1];
     expect(url.searchParams.getAll("statuses")).toEqual(["rescheduling"]);
     expect(url.searchParams.get("page")).toBeNull();
+  });
+
+  it("filters by agent (archived included) and resets the page cursor", async () => {
+    const fetchMock = stubFetch(
+      () => json({ data: [session({ id: "sess_1" })] }),
+      (url) => {
+        expect(url.searchParams.get("include_archived")).toBe("true");
+        expect(url.searchParams.get("limit")).toBe("100");
+        return json({
+          data: [
+            {
+              id: "agt_live",
+              name: "Deep researcher",
+              archived_at: null,
+            },
+            {
+              id: "agt_old",
+              name: "Retired agent",
+              archived_at: "2026-08-01T00:00:00Z",
+            },
+          ],
+        });
+      },
+    );
+    renderPage();
+    await screen.findByText("Nightly run");
+
+    const option = await screen.findByRole("button", {
+      name: /Retired agent/,
+    });
+    expect(within(option).getByText("archived")).toBeInTheDocument();
+    await userEvent.click(option);
+    await waitFor(() =>
+      expect(
+        sessionUrls(fetchMock).some(
+          (url) => url.searchParams.get("agent_id") === "agt_old",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("surfaces an agent-options load failure with a retry", async () => {
+    let failures = 0;
+    const fetchMock = stubFetch(
+      () => json({ data: [] }),
+      () => {
+        failures++;
+        return failures === 1
+          ? json(
+              {
+                type: "error",
+                error: { type: "api_error", message: "agents down" },
+              },
+              500,
+            )
+          : json({
+              data: [{ id: "agt_1", name: "Back online", archived_at: null }],
+            });
+      },
+    );
+    renderPage();
+
+    expect(
+      await screen.findByText(/agent options failed to load/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(
+      await screen.findByRole("button", { name: "Back online" }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("shows the truncation note when the agent options cap is hit", async () => {
+    stubFetch(
+      () => json({ data: [] }),
+      () =>
+        json({
+          data: [{ id: "agt_1", name: "Repeating", archived_at: null }],
+          next_page: "tok_more",
+        }),
+    );
+    renderPage();
+    expect(
+      await screen.findByText("options truncated at 1000 agents"),
+    ).toBeInTheDocument();
+  });
+
+  it("filters by created preset with a created_at[gte] bound", async () => {
+    const fetchMock = stubFetch(() => json({ data: [] }));
+    renderPage();
+    await screen.findByText("No sessions yet");
+
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Last 7 days" })[0],
+    );
+    await waitFor(() => {
+      const bounded = sessionUrls(fetchMock).find((url) =>
+        url.searchParams.get("created_at[gte]"),
+      );
+      expect(bounded).toBeDefined();
+      const gte = Date.parse(bounded!.searchParams.get("created_at[gte]")!);
+      expect(gte).toBeGreaterThan(Date.now() - 8 * 86_400_000);
+      expect(gte).toBeLessThan(Date.now() - 6 * 86_400_000);
+    });
   });
 
   it("pages both directions with the wire's prev/next cursors", async () => {
@@ -269,18 +380,13 @@ describe("SessionsPage", () => {
     await screen.findByText("Nightly run");
 
     await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    let url = new URL(
-      String(fetchMock.mock.calls[1][0]),
-      "http://console.test",
-    );
-    expect(url.searchParams.get("page")).toBe("tok_next");
+    await waitFor(() => expect(sessionUrls(fetchMock)).toHaveLength(2));
+    expect(sessionUrls(fetchMock)[1].searchParams.get("page")).toBe("tok_next");
 
     await userEvent.click(
       screen.getByRole("button", { name: "Previous page" }),
     );
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    url = new URL(String(fetchMock.mock.calls[2][0]), "http://console.test");
-    expect(url.searchParams.get("page")).toBe("tok_prev");
+    await waitFor(() => expect(sessionUrls(fetchMock)).toHaveLength(3));
+    expect(sessionUrls(fetchMock)[2].searchParams.get("page")).toBe("tok_prev");
   });
 });

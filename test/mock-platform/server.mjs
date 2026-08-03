@@ -396,10 +396,10 @@ function route(req, url) {
   if (req.method !== "GET") return null;
 
   if (path === "/v1/agents") {
-    return keysetPage(
-      includeArchived ? agentsStore : agentsStore.filter(notArchived),
-      url,
-    );
+    let rows = includeArchived ? agentsStore : agentsStore.filter(notArchived);
+    const createdGte = url.searchParams.get("created_at[gte]");
+    if (createdGte) rows = rows.filter((r) => r.created_at >= createdGte);
+    return keysetPage(rows, url);
   }
   const agentMatch = path.match(/^\/v1\/agents\/([^/]+)$/);
   if (agentMatch)
@@ -431,6 +431,8 @@ function route(req, url) {
       rows = rows.filter((r) => statuses.includes(r.status));
     const agentId = url.searchParams.get("agent_id");
     if (agentId) rows = rows.filter((r) => r.agent.id === agentId);
+    const createdGte = url.searchParams.get("created_at[gte]");
+    if (createdGte) rows = rows.filter((r) => r.created_at >= createdGte);
     // Platform keyset order is (created_at, id), descending by default.
     const ascending = url.searchParams.get("order") === "asc";
     rows = [...rows].sort((a, b) => {

@@ -15,6 +15,11 @@ import {
   Time,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
+import {
+  CreatedFilter,
+  createdGte,
+  type CreatedPresetKey,
+} from "@/components/console/created-filter";
 import { useAgents } from "@/lib/platform/queries";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
@@ -52,10 +57,16 @@ const COLUMNS: Column<Agent>[] = [
 export default function AgentsPage() {
   const router = useRouter();
   const [includeArchived, setIncludeArchived] = useState(false);
-  const pager = useCursorPage(String(includeArchived));
+  // The gte freezes at selection time so the query key stays stable.
+  const [created, setCreated] = useState<{
+    key: CreatedPresetKey;
+    gte?: string;
+  }>({ key: "all" });
+  const pager = useCursorPage(`${includeArchived}|${created.key}`);
   const { data, error, isPending } = useAgents({
     page: pager.page,
     include_archived: includeArchived || undefined,
+    "created_at[gte]": created.gte,
   });
 
   return (
@@ -69,10 +80,14 @@ export default function AgentsPage() {
           </Button>
         }
       />
-      <div className="flex items-center gap-2 pb-4">
+      <div className="flex items-center gap-3 pb-4">
         <StatusFilter
           includeArchived={includeArchived}
           onChange={setIncludeArchived}
+        />
+        <CreatedFilter
+          value={created.key}
+          onChange={(key) => setCreated({ key, gte: createdGte(key) })}
         />
       </div>
       {error ? (

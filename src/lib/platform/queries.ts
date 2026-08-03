@@ -31,12 +31,44 @@ export function useAgents(params: {
   page?: string;
   include_archived?: boolean;
   limit?: number;
+  "created_at[gte]"?: string;
 }) {
   return useQuery({
     queryKey: ["agents", params],
     queryFn: () =>
       platformGet<Page<Agent>>("v1/agents", { limit: 20, ...params }),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Options page size × page cap for the agent-filter dropdown (plan 03 slice 2). */
+const AGENT_OPTIONS_PAGE_LIMIT = 100;
+const AGENT_OPTIONS_PAGE_CAP = 10;
+
+/**
+ * Every agent, for filter options: pages `v1/agents` to exhaustion
+ * (archived included — their sessions stay filterable). `truncated` flips
+ * when the sanity cap (1000 agents) is hit, so the UI can say so instead
+ * of silently offering a partial list.
+ */
+export function useAgentOptions() {
+  return useQuery({
+    queryKey: ["agent-options"],
+    queryFn: async () => {
+      const agents: Agent[] = [];
+      let page: string | undefined;
+      for (let i = 0; i < AGENT_OPTIONS_PAGE_CAP; i++) {
+        const res = await platformGet<Page<Agent>>("v1/agents", {
+          limit: AGENT_OPTIONS_PAGE_LIMIT,
+          include_archived: true,
+          page,
+        });
+        agents.push(...res.data);
+        if (!res.next_page) return { agents, truncated: false };
+        page = res.next_page;
+      }
+      return { agents, truncated: true };
+    },
   });
 }
 
@@ -88,6 +120,7 @@ export function useSessions(params: {
   agent_id?: string;
   order?: "asc" | "desc";
   include_archived?: boolean;
+  "created_at[gte]"?: string;
 }) {
   return useQuery({
     queryKey: ["sessions", params],

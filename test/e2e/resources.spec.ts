@@ -25,7 +25,7 @@ test("agents list renders fixtures and the archived filter", async ({
   ).toBeVisible();
   await expect(page.getByText("Retired agent")).toBeHidden();
 
-  await page.getByRole("combobox").click();
+  await page.getByRole("combobox", { name: "Status filter" }).click();
   await page.getByRole("option", { name: "All" }).click();
   await expect(page.getByText("Retired agent")).toBeVisible();
 });
@@ -75,7 +75,7 @@ test("sessions list filters by status", async ({ page }) => {
   // Tokens column renders the usage counters.
   await expect(page.getByRole("cell", { name: "5,412 / 890" })).toBeVisible();
 
-  await page.getByRole("combobox").click();
+  await page.getByRole("combobox", { name: "Status filter" }).click();
   await page.getByRole("option", { name: "running" }).click();
   await expect(
     page.getByRole("cell", { name: "Install deps and run tests" }),
