@@ -2,6 +2,17 @@
 
 Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md).
 
+## Plan 03 — UX parity from already-served data (approved 2026-08-03, archived 2026-08-04)
+
+[docs/plan/03_ux-parity.md](./plan/03_ux-parity.md) closed the UX gap to the reference console using only data the platform already serves (PRs #25–#29, issue #24; sourced from a frame-by-frame read of the reference launch video plus a live survey of platform.claude.com):
+
+1. **Trace readability** — session header chips, per-event offsets since `created_at`, model-call durations by `model_request_start_id` pairing, explicit idle bands, honest JSON fallback for unknown event types (the platform's outcome family), Copy all, empty-state CTAs.
+2. **Wire filters surfaced** — sessions filter by agent (options paged to exhaustion, archived included and badged) and created presets; agents likewise — all served since v1, never rendered.
+3. **Transcript | Debug split** — one-line transcript rows opening a master-detail panel (full content, tool input JSON, raw event, Copy JSON); paired span starts fold into their end row's duration while unpaired ones stay visible; Debug renders every event verbatim.
+4. **Agent editor reshape** — two-column explainer/controls sections; toolset-level default policy with per-tool overrides and plain-language descriptions; compact emission that round-trips externally-authored `default_config` shapes unchanged (pinned regression); an equivalent-curl block with `$PLATFORM_BASE_URL`/`$PLATFORM_API_KEY` placeholders; starter templates on create.
+
+Decisions of record: offsets measure from the session's `created_at`, not the first event; no search box (no server search on the wire — recorded divergence); no session-duration chip (platform serves `stats` empty); model-credential surfaces (describe→generate, "Ask Claude") rejected on the key posture; the timeline color strip deferred as a follow-up issue.
+
 ## Plan 02 — quality guardrails (approved 2026-08-02, archived 2026-08-02)
 
 [docs/plan/02_quality-guardrails.md](./plan/02_quality-guardrails.md) hardened the repo in three slices (PRs #12, #20, and the archival PR; issue #11):

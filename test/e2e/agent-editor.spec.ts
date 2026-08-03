@@ -40,7 +40,8 @@ test("create an agent from a starter template", async ({ page }) => {
   // The template seeds the whole form through the wire parse path.
   await page.getByRole("button", { name: /Code task runner/ }).click();
   await expect(page.getByLabel("Name")).toHaveValue("Code task runner");
-  await expect(page.getByLabel("bash policy")).toContainText("always ask");
+  // The trigger renders the wire value verbatim.
+  await expect(page.getByLabel("bash policy")).toContainText("always_ask");
 
   // The equivalent-curl block teaches the wire shape with placeholders only.
   await page.getByText("Equivalent API request").click();
