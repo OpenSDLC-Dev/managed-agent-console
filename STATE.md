@@ -10,5 +10,5 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 - [x] Slice 1 — trace readability quick wins (chips, offsets, span durations, idle bands, unknown-event fallback, Copy all, empty-state CTAs)
 - [x] Slice 2 — wire filters the console never surfaced (sessions agent/created, agents created)
-- [ ] Slice 3 — Transcript | Debug split + event detail panel
+- [x] Slice 3 — Transcript | Debug split + event detail panel
 - [ ] Slice 4 — agent editor reshape (default_config first-class, curl block, templates)

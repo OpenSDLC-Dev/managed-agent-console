@@ -242,9 +242,8 @@ describe("EventDetailPanel", () => {
     renderPanel(ev("session.status_running"));
     expect(screen.getByText("Raw event")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Copy JSON/ }));
-    expect(writeText).toHaveBeenCalledTimes(1);
-    expect(String(writeText.mock.calls[0][0])).toContain(
-      '"type": "session.status_running"',
+    expect(writeText).toHaveBeenCalledWith(
+      expect.stringContaining('"type": "session.status_running"'),
     );
     expect(await screen.findByText("Copied")).toBeInTheDocument();
   });

@@ -59,7 +59,9 @@ describe("tokensLine", () => {
   };
 
   it("formats the three counters", () => {
-    expect(tokensLine(ev("span.model_request_end", { model_usage: usage }))).toBe(
+    expect(
+      tokensLine(ev("span.model_request_end", { model_usage: usage })),
+    ).toBe(
       `${(1200).toLocaleString()} in · ${(345).toLocaleString()} out · ${(6789).toLocaleString()} cache read`,
     );
   });
@@ -160,7 +162,9 @@ describe("summaryOf", () => {
 
   it("summarizes status_idle stop reasons with pending counts", () => {
     expect(
-      summaryOf(ev("session.status_idle", { stop_reason: { type: "end_turn" } })),
+      summaryOf(
+        ev("session.status_idle", { stop_reason: { type: "end_turn" } }),
+      ),
     ).toBe("stopped: end_turn");
     expect(summaryOf(ev("session.status_idle"))).toBe("stopped: unknown");
     expect(
