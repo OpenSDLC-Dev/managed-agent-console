@@ -389,6 +389,27 @@ describe("AgentEditor", () => {
     ]);
   });
 
+  it("disabling the default also disables a policy-deviant tool", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+
+    await choose(user, "bash policy", "always ask");
+    await user.click(screen.getByRole("checkbox", { name: "default enabled" }));
+    expect(
+      screen.getByRole("checkbox", { name: "bash enabled" }),
+    ).not.toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      {
+        type: "agent_toolset_20260401",
+        default_config: { enabled: false },
+        configs: [{ name: "bash", permission_policy: { type: "always_ask" } }],
+      },
+    ]);
+  });
+
   it("shows the equivalent curl with placeholders and copies it", async () => {
     stubFetch();
     // Stub the clipboard after setup — user-event installs its own stub —

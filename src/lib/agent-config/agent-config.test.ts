@@ -94,15 +94,31 @@ describe("toolset mapping", () => {
     expect(buildToolset(toolset!)).toEqual(wire);
   });
 
-  it("withDefault moves tools at the old default and keeps deviants", () => {
+  it("withDefault moves each field at the old default and keeps per-field deviations", () => {
     const form = defaultToolsetForm();
     form.tools.bash = { enabled: false, policy: "always_allow" };
     const next = withDefault(form, { enabled: true, policy: "always_ask" });
     expect(next.default).toEqual({ enabled: true, policy: "always_ask" });
     expect(next.tools.read).toEqual({ enabled: true, policy: "always_ask" });
-    expect(next.tools.bash).toEqual({
+    // bash's enabled deviation holds; its policy sat at the default and follows.
+    expect(next.tools.bash).toEqual({ enabled: false, policy: "always_ask" });
+  });
+
+  it("disabling the default disables a policy-deviant tool too", () => {
+    // The wire overrides enabled and permission_policy independently — a
+    // policy override must not leave a dangerous tool enabled after the
+    // operator disables the toolset default (review finding, PR #29).
+    const form = defaultToolsetForm();
+    form.tools.bash = { enabled: true, policy: "always_ask" };
+    const next = withDefault(form, {
       enabled: false,
-      policy: "always_allow",
+      policy: form.default.policy,
+    });
+    expect(next.tools.bash).toEqual({ enabled: false, policy: "always_ask" });
+    expect(buildToolset(next)).toEqual({
+      type: "agent_toolset_20260401",
+      default_config: { enabled: false },
+      configs: [{ name: "bash", permission_policy: { type: "always_ask" } }],
     });
   });
 

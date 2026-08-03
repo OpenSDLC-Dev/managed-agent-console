@@ -142,17 +142,29 @@ export function buildToolset(form: ToolsetForm): ToolsetEntry {
 }
 
 /**
- * Change the toolset-level default. Tools sitting exactly at the old default
- * follow it; explicit deviants keep their settings.
+ * Change the toolset-level default. Each field follows it independently —
+ * the wire overrides `enabled` and `permission_policy` separately, so a
+ * tool's policy override must not pin its enabled state (or vice versa):
+ * disabling the default must still disable a policy-deviant tool
+ * (review finding, PR #29).
  */
 export function withDefault(form: ToolsetForm, next: ToolSetting): ToolsetForm {
   const tools = Object.fromEntries(
     TOOL_NAMES.map((name) => {
       const setting = form.tools[name];
-      const follows =
-        setting.enabled === form.default.enabled &&
-        setting.policy === form.default.policy;
-      return [name, follows ? { ...next } : setting];
+      return [
+        name,
+        {
+          enabled:
+            setting.enabled === form.default.enabled
+              ? next.enabled
+              : setting.enabled,
+          policy:
+            setting.policy === form.default.policy
+              ? next.policy
+              : setting.policy,
+        },
+      ];
     }),
   ) as ToolsetSettings;
   return { default: { ...next }, tools };
