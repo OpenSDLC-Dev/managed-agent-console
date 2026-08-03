@@ -1,17 +1,20 @@
+"use client";
+
+import { useState } from "react";
+import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/copy-text";
 import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
 import { Time, WARNING_BOX } from "@/components/console/bits";
+import { JsonBlock } from "@/components/console/detail";
 import { durationLabel } from "@/lib/session-trace/timing";
-
-function textOf(content: ContentBlock[] | null | undefined): string {
-  if (!content) return "";
-  return content
-    .map((block) =>
-      block.type === "text" ? (block.text ?? "") : `[${block.type}]`,
-    )
-    .join("");
-}
+import {
+  isKnownEventType,
+  summaryOf,
+  tokensLine,
+} from "@/lib/session-trace/summary";
 
 function TypeBadge({ type }: { type: string }) {
   const domain = type.split(".")[0];
@@ -30,145 +33,55 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
-function Body({ event }: { event: SessionEvent }) {
-  switch (event.type) {
-    case "user.message":
-    case "agent.message":
-      return <p className="whitespace-pre-wrap">{textOf(event.content)}</p>;
-    case "agent.thinking":
-      return (
-        <p className="whitespace-pre-wrap italic text-muted-foreground">
-          {textOf(event.content)}
-        </p>
-      );
-    case "agent.tool_use":
-    case "agent.custom_tool_use":
-      return (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[13px]">{event.name}</span>
-          {event.evaluated_permission === "ask" && (
-            <Badge className={WARNING_BOX} variant="outline">
-              needs approval
-            </Badge>
-          )}
-          <details className="w-full">
-            <summary className="cursor-pointer text-[13px] text-muted-foreground">
-              input
-            </summary>
-            <pre className="mt-1 overflow-x-auto rounded-md border bg-card p-2 font-mono text-[12px]">
-              {JSON.stringify(event.input, null, 2)}
-            </pre>
-          </details>
-        </div>
-      );
-    case "agent.tool_result":
-    case "user.tool_result":
-    case "user.custom_tool_result":
-      return (
-        <div>
-          {event.is_error && (
-            <Badge variant="outline" className="mb-1 text-destructive">
-              error
-            </Badge>
-          )}
-          <p className="line-clamp-3 whitespace-pre-wrap text-[13px]">
-            {textOf(event.content as ContentBlock[] | null)}
-          </p>
-        </div>
-      );
-    case "user.tool_confirmation":
-      return (
-        <p className="text-[13px]">
-          {event.result === "allow" ? "Approved" : "Denied"}{" "}
-          <span className="font-mono text-muted-foreground">
-            {event.tool_use_id}
-          </span>
-          {event.deny_message ? ` — ${event.deny_message}` : ""}
-        </p>
-      );
-    case "session.status_idle":
-      return (
-        <p className="text-[13px] text-muted-foreground">
-          stopped: {event.stop_reason?.type ?? "unknown"}
-          {event.stop_reason?.event_ids
-            ? ` (${event.stop_reason.event_ids.length} pending tool call${event.stop_reason.event_ids.length === 1 ? "" : "s"})`
-            : ""}
-        </p>
-      );
-    case "span.model_request_end": {
-      const usage = event.model_usage;
-      // Upstream JSON is not runtime-validated; a missing counter must not
-      // abort the whole event list.
-      if (
-        !usage ||
-        [
-          usage.input_tokens,
-          usage.output_tokens,
-          usage.cache_read_input_tokens,
-        ].some((n) => typeof n !== "number")
-      ) {
-        return null;
-      }
-      return (
-        <p className="text-[13px] text-muted-foreground">
-          {usage.input_tokens.toLocaleString()} in ·{" "}
-          {usage.output_tokens.toLocaleString()} out ·{" "}
-          {usage.cache_read_input_tokens.toLocaleString()} cache read
-        </p>
-      );
-    }
-    case "session.error":
-      return (
-        <p className="text-[13px] text-destructive">
-          {event.error?.message ?? "error"}
-          {event.error?.retry_status
-            ? ` (${event.error.retry_status.type})`
-            : ""}
-        </p>
-      );
-    default:
-      return <UnknownBody event={event} />;
-  }
-}
-
-/**
- * Honest fallback for event types this console has no dedicated rendering
- * for (plan 03 decision 2) — the payload as a truncated JSON preview, never
- * a silent blank row.
- */
-const ENVELOPE_KEYS = new Set(["id", "type", "processed_at"]);
-
-function UnknownBody({ event }: { event: SessionEvent }) {
-  const payload = Object.fromEntries(
-    Object.entries(event).filter(([key]) => !ENVELOPE_KEYS.has(key)),
-  );
-  if (Object.keys(payload).length === 0) return null;
-  return (
-    <p
-      className="line-clamp-2 break-all font-mono text-[12px] text-muted-foreground"
-      data-testid="unknown-event-payload"
-    >
-      {JSON.stringify(payload)}
-    </p>
-  );
-}
-
-export function EventRow({
-  event,
+function MetaColumn({
   offset,
   durationMs,
 }: {
-  event: SessionEvent;
-  /** Clock position since session creation, e.g. "0:09". */
   offset?: string | null;
-  /** Paired span duration in ms (span.model_request_end rows). */
   durationMs?: number;
 }) {
+  if (!offset && durationMs === undefined) return null;
   return (
-    <div
-      className="flex gap-3 border-b py-2.5 last:border-b-0"
+    <div className="shrink-0 self-start text-right text-[12px] tabular-nums text-muted-foreground">
+      {durationMs !== undefined && (
+        <span title="model request duration">{durationLabel(durationMs)}</span>
+      )}
+      {durationMs !== undefined && offset && " · "}
+      {offset && <span title="since session creation">{offset}</span>}
+    </div>
+  );
+}
+
+/**
+ * One-line transcript row (plan 03 slice 3): type badge, single-line
+ * summary, right-aligned timing. Clicking opens the detail panel — the
+ * full content lives there, never clamped away.
+ */
+export function TranscriptRow({
+  event,
+  offset,
+  durationMs,
+  selected,
+  onSelect,
+}: {
+  event: SessionEvent;
+  offset?: string | null;
+  durationMs?: number;
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
+  const summary = summaryOf(event);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-expanded={selected}
       data-testid="event-row"
       data-event-type={event.type}
+      className={cn(
+        "flex w-full items-center gap-3 border-b px-1 py-2.5 text-left last:border-b-0 hover:bg-secondary/40",
+        selected && "bg-secondary/60",
+      )}
     >
       <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
         <Time iso={event.processed_at} />
@@ -176,21 +89,174 @@ export function EventRow({
       <div className="w-52 shrink-0">
         <TypeBadge type={event.type} />
       </div>
-      <div className="min-w-0 flex-1">
-        <Body event={event} />
-      </div>
-      {(offset || durationMs !== undefined) && (
-        <div className="shrink-0 self-start text-right text-[12px] tabular-nums text-muted-foreground">
-          {durationMs !== undefined && (
-            <span title="model request duration">
-              {durationLabel(durationMs)}
-            </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span
+          className={cn(
+            "truncate text-[13px]",
+            event.type === "agent.thinking" && "italic text-muted-foreground",
+            !isKnownEventType(event.type) &&
+              "font-mono text-[12px] text-muted-foreground",
           )}
-          {durationMs !== undefined && offset && " · "}
-          {offset && <span title="since session creation">{offset}</span>}
+          data-testid={
+            isKnownEventType(event.type) ? undefined : "unknown-event-payload"
+          }
+        >
+          {summary}
+        </span>
+        {event.evaluated_permission === "ask" && (
+          <Badge className={cn("shrink-0", WARNING_BOX)} variant="outline">
+            needs approval
+          </Badge>
+        )}
+        {event.is_error === true && (
+          <Badge variant="outline" className="shrink-0 text-destructive">
+            error
+          </Badge>
+        )}
+      </div>
+      <MetaColumn offset={offset} durationMs={durationMs} />
+    </button>
+  );
+}
+
+/** Debug view: every event verbatim — the wire is the truth. */
+export function DebugRow({ event }: { event: SessionEvent }) {
+  return (
+    <div
+      className="border-b py-2.5 last:border-b-0"
+      data-testid="debug-row"
+      data-event-type={event.type}
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
+          <Time iso={event.processed_at} />
         </div>
-      )}
+        <TypeBadge type={event.type} />
+      </div>
+      <pre className="mt-1.5 overflow-x-auto rounded-md border bg-card p-2 font-mono text-[12px] leading-relaxed">
+        {JSON.stringify(event, null, 2)}
+      </pre>
     </div>
+  );
+}
+
+function CopyJsonButton({ value }: { value: unknown }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-7 text-muted-foreground"
+      onClick={() => {
+        void copyText(JSON.stringify(value, null, 2)).then((ok) => {
+          if (!ok) return;
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      {copied ? "Copied" : "Copy JSON"}
+    </Button>
+  );
+}
+
+/**
+ * Master-detail panel: the selected event in full — content blocks
+ * untruncated and scrollable, tool input as JSON, the raw event verbatim.
+ */
+export function EventDetailPanel({
+  event,
+  offset,
+  durationMs,
+  onClose,
+}: {
+  event: SessionEvent;
+  offset?: string | null;
+  durationMs?: number;
+  onClose: () => void;
+}) {
+  const content = event.content as ContentBlock[] | null | undefined;
+  const tokens = tokensLine(event);
+  const summary = summaryOf(event);
+  return (
+    <aside
+      data-testid="event-detail"
+      aria-label="Event details"
+      className="sticky top-4 max-h-[75vh] self-start overflow-y-auto rounded-lg border bg-card p-4"
+    >
+      <div className="flex items-center gap-2 pb-3">
+        <TypeBadge type={event.type} />
+        <span className="text-[12px] text-muted-foreground">
+          <Time iso={event.processed_at} />
+        </span>
+        <MetaColumn offset={offset} durationMs={durationMs} />
+        <span className="ml-auto flex items-center gap-1">
+          <CopyJsonButton value={event} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-muted-foreground"
+            aria-label="Close event details"
+            onClick={onClose}
+          >
+            <X className="size-4" />
+          </Button>
+        </span>
+      </div>
+      {event.evaluated_permission === "ask" && (
+        <Badge className={cn("mb-2", WARNING_BOX)} variant="outline">
+          needs approval
+        </Badge>
+      )}
+      {event.is_error === true && (
+        <Badge variant="outline" className="mb-2 ml-1 text-destructive">
+          error
+        </Badge>
+      )}
+      {event.name !== undefined && (
+        <p className="pb-2 font-mono text-[13px]">{String(event.name)}</p>
+      )}
+      {content?.map((block, index) =>
+        block.type === "text" ? (
+          <pre
+            key={index}
+            className="mb-2 whitespace-pre-wrap rounded-md border bg-background p-2.5 font-sans text-[13px]"
+          >
+            {block.text ?? ""}
+          </pre>
+        ) : (
+          <div key={index} className="mb-2">
+            <p className="pb-1 text-[12px] text-muted-foreground">
+              [{block.type}]
+            </p>
+            <JsonBlock value={block} />
+          </div>
+        ),
+      )}
+      {event.input !== undefined && (
+        <section className="pb-2">
+          <h3 className="pb-1 text-[12px] font-medium text-muted-foreground">
+            Input
+          </h3>
+          <JsonBlock value={event.input} />
+        </section>
+      )}
+      {tokens && (
+        <p className="pb-2 text-[13px] text-muted-foreground">{tokens}</p>
+      )}
+      {!content && event.input === undefined && !tokens && summary && (
+        <p className="pb-2 text-[13px]">{summary}</p>
+      )}
+      <details>
+        <summary className="cursor-pointer text-[12px] text-muted-foreground">
+          Raw event
+        </summary>
+        <div className="pt-1.5">
+          <JsonBlock value={event} />
+        </div>
+      </details>
+    </aside>
   );
 }
 

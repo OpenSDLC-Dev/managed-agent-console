@@ -14,7 +14,12 @@ import {
   DetailSkeleton,
   ListSkeleton,
 } from "@/components/console/bits";
-import { EventRow, IdleBand } from "@/components/console/event-row";
+import {
+  DebugRow,
+  EventDetailPanel,
+  IdleBand,
+  TranscriptRow,
+} from "@/components/console/event-row";
 import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +70,8 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
   {
     key: "spans",
     label: "Model spans",
-    types: ["span.model_request_start", "span.model_request_end"],
+    // Start markers carry nothing the end row lacks — they live in Debug.
+    types: ["span.model_request_end"],
   },
 ];
 
@@ -188,6 +194,8 @@ export default function SessionDetailPage({
 }) {
   const { id } = use(params);
   const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState<"transcript" | "debug">("transcript");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const session = useSession(id, 15_000);
   const { trace, connection } = useSessionTrace(id);
 
@@ -202,10 +210,15 @@ export default function SessionDetailPage({
   const gaps = useMemo(() => idleGaps(trace.events), [trace.events]);
   const visible = useMemo(() => {
     const types = FILTERS.find((f) => f.key === filter)?.types;
-    return types
-      ? trace.events.filter((e) => types.includes(e.type))
-      : trace.events;
+    // The transcript pairs each span into its end row; starts stay in Debug.
+    const events = trace.events.filter(
+      (e) => e.type !== "span.model_request_start",
+    );
+    return types ? events.filter((e) => types.includes(e.type)) : events;
   }, [filter, trace.events]);
+  const selected = selectedId
+    ? trace.events.find((e) => e.id === selectedId)
+    : undefined;
   // Streaming previews are agent messages — visible under All and Messages.
   const visiblePreviews =
     filter === "all" || filter === "messages"
@@ -236,20 +249,43 @@ export default function SessionDetailPage({
 
       <DetailSection title="Events">
         <div className="flex items-center gap-1.5 pb-3">
-          {FILTERS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={cn(
-                "h-7 rounded-full border px-3 text-[13px]",
-                filter === key
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-secondary",
-              )}
-            >
-              {label}
-            </button>
-          ))}
+          <div className="flex items-center rounded-lg border p-0.5">
+            {(
+              [
+                ["transcript", "Transcript"],
+                ["debug", "Debug"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                aria-pressed={tab === key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  "h-6 rounded-md px-2.5 text-[13px]",
+                  tab === key
+                    ? "bg-secondary font-medium"
+                    : "text-muted-foreground hover:bg-secondary/50",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab === "transcript" &&
+            FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "h-7 rounded-full border px-3 text-[13px]",
+                  filter === key
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           <Badge
             data-testid="stream-state"
             data-state={connection}
@@ -265,49 +301,84 @@ export default function SessionDetailPage({
           </Badge>
           <CopyAllButton events={trace.events} />
         </div>
-        {visible.length === 0 && visiblePreviews.length === 0 ? (
+        {tab === "debug" ? (
+          trace.events.length === 0 ? (
+            connection === "connecting" ? (
+              <ListSkeleton rows={4} />
+            ) : (
+              <EmptyState title="No events" />
+            )
+          ) : (
+            <div>
+              {trace.events.map((e) => (
+                <DebugRow key={e.id} event={e} />
+              ))}
+            </div>
+          )
+        ) : visible.length === 0 && visiblePreviews.length === 0 ? (
           connection === "connecting" ? (
             <ListSkeleton rows={4} />
           ) : (
             <EmptyState title="No events" />
           )
         ) : (
-          <div>
-            {visible.map((e) => (
-              <Fragment key={e.id}>
-                <EventRow
-                  event={e}
-                  offset={offsetLabel(data.created_at, e.processed_at)}
-                  durationMs={durations.get(e.id)}
-                />
-                {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
-              </Fragment>
-            ))}
-            {visiblePreviews.map((preview) => (
-              <div
-                key={preview.id}
-                data-testid="preview-row"
-                className="flex gap-3 border-b py-2.5 last:border-b-0"
-              >
-                <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
-                  …
+          <div
+            className={cn(
+              selected &&
+                "grid grid-cols-[minmax(0,1fr)_minmax(320px,42%)] items-start gap-4",
+            )}
+          >
+            <div>
+              {visible.map((e) => (
+                <Fragment key={e.id}>
+                  <TranscriptRow
+                    event={e}
+                    offset={offsetLabel(data.created_at, e.processed_at)}
+                    durationMs={durations.get(e.id)}
+                    selected={e.id === selectedId}
+                    onSelect={() =>
+                      setSelectedId((current) =>
+                        current === e.id ? null : e.id,
+                      )
+                    }
+                  />
+                  {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
+                </Fragment>
+              ))}
+              {visiblePreviews.map((preview) => (
+                <div
+                  key={preview.id}
+                  data-testid="preview-row"
+                  className="flex gap-3 border-b py-2.5 last:border-b-0"
+                >
+                  <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
+                    …
+                  </div>
+                  <div className="w-52 shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="animate-pulse font-mono text-[11px] font-normal"
+                    >
+                      {preview.type}
+                    </Badge>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-wrap">
+                      {preview.parts.join("")}
+                      <span className="animate-pulse">▍</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="w-52 shrink-0">
-                  <Badge
-                    variant="outline"
-                    className="animate-pulse font-mono text-[11px] font-normal"
-                  >
-                    {preview.type}
-                  </Badge>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="whitespace-pre-wrap">
-                    {preview.parts.join("")}
-                    <span className="animate-pulse">▍</span>
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            {selected && (
+              <EventDetailPanel
+                event={selected}
+                offset={offsetLabel(data.created_at, selected.processed_at)}
+                durationMs={durations.get(selected.id)}
+                onClose={() => setSelectedId(null)}
+              />
+            )}
           </div>
         )}
       </DetailSection>

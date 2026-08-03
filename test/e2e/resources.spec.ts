@@ -94,8 +94,8 @@ test("session detail shows the trace and the pending-approval banner", async ({
   await expect(page.getByTestId("approval-banner")).toBeVisible();
   await expect(page.getByText("Waiting on 1 tool approval")).toBeVisible();
 
-  // Full trace: 7 fixture events.
-  await expect(page.getByTestId("event-row")).toHaveCount(7);
+  // Full trace: 7 fixture events, minus the span start the transcript hides.
+  await expect(page.getByTestId("event-row")).toHaveCount(6);
 
   // The Tools filter narrows to the single tool_use event.
   await page.getByRole("button", { name: "Tools", exact: true }).click();
