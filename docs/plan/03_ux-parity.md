@@ -64,6 +64,10 @@ structure are ahead of ours on data we already hold.
    pure client-side functions over the served event log — rendering computations, not
    session-state recomputation, so principle 4 (thin console) holds. Each lands as a
    unit-tested helper in `src/lib/session-trace/`, null-safe on `processed_at`.
+   **Offsets are relative to the session's `created_at`**, not the first event — the
+   console's own create flow sends the first message from the session view, so a real
+   pre-first-message idle interval exists and must not be hidden by a first-event origin
+   (review finding, PR #25).
 2. **Unknown events render honestly, never blank.** The fallback shows the event's
    payload as a muted, truncated JSON preview (expandable in the slice-3 detail panel).
    This is deliberate forward-compatibility: outcome events become _legible_ the day the
@@ -88,9 +92,13 @@ structure are ahead of ours on data we already hold.
 
 1. **Trace readability quick wins** (session detail only):
    - Meta chip-row replaces the vertical Overview `FieldList` (agent, environment,
-     vaults, resources, tokens, created — links preserved).
-   - Every event row gains a right-aligned relative offset (`0:09` since first event);
-     `span.model_request_end` rows additionally show paired duration.
+     vaults, resources, tokens, created-age — links preserved). The reference's
+     additional **duration chip (`5m 34s (2m 44s active)`) is deliberately absent**: it
+     renders the session `stats` the platform serves as empty by recorded divergence —
+     see Declined.
+   - Every event row gains a right-aligned relative offset (`0:09` since the session's
+     `created_at`, decision 1); `span.model_request_end` rows additionally show paired
+     duration.
    - Idle gaps ≥ a threshold render as `Session idle · Ns` bands (status_idle →
      status_running pairing).
    - Unknown-event fallback rendering (decision 2).
@@ -99,12 +107,18 @@ structure are ahead of ours on data we already hold.
    - → verify: helper unit tests (null `processed_at`, unpaired spans, zero-gap);
      `test/e2e/session-live.spec.ts` extended; suites green; fidelity pass noted.
 2. **Wire filters the console never surfaced**:
-   - Sessions page: agent filter (options from the loaded agents list) + created preset
-     filter; agents page: created preset filter. Params wired through
-     `useSessions`/`useAgents`; `test/mock-platform/server.mjs` honors `agent_id` and
-     `created_at[gte]` so e2e asserts true server-side filtering.
+   - Sessions page: agent filter + created preset filter; agents page: created preset
+     filter. Params wired through `useSessions`/`useAgents`;
+     `test/mock-platform/server.mjs` honors `agent_id` and `created_at[gte]` so e2e
+     asserts true server-side filtering.
+   - **The agent filter's options must be complete** (review finding, PR #25): the
+     dropdown pages through `v1/agents` to exhaustion (limit 100 per page, following
+     `next_page`; sanity cap 1000 with a visible "options truncated" note if ever hit).
+     Archived agents are included — archived agents' sessions remain filterable — and
+     labeled with the existing archived badge.
    - → verify: e2e asserts the mock received the expected query params and rendered the
-     filtered rows; suites green.
+     filtered rows, **including selecting an agent beyond the first options page**
+     (multi-page mock); suites green.
 3. **Transcript | Debug split + event detail panel**:
    - Transcript tab: compact one-line rows (type chip · one-line summary · right-aligned
      tokens/duration/offset), span noise hidden; the existing filter chips fold in.
