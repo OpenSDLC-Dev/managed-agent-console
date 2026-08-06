@@ -48,6 +48,13 @@ dependency.
   42 `import type { … } from "@/lib/platform/types"`, zero value imports. This is the fact that makes
   deriving the types from runtime schemas free — nothing pulls the module at runtime today, so
   nothing will pull zod into a client bundle tomorrow.
+- **The mock does not only replay fixtures — it constructs write-path responses field by field, and
+  exposes no handle to drive it in-process.** `createAgent` (`test/mock-platform/server.mjs:126-147`)
+  assembles an agent from the request body rather than a fixture, and the session, event, skill,
+  vault, and file write paths do the same. The module also has **zero exports** and calls
+  `server.listen` on import, so nothing can start it on an ephemeral port today. Both facts shape
+  link A: validating the exported collections alone would leave every create/update/upload/stream
+  response unchecked.
 - **The mock platform runs as plain Node, with no TS transform.**
   [playwright.config.ts](../../playwright.config.ts):26 starts it as `node test/mock-platform/server.mjs`.
   Fixtures must therefore stay `.mjs` and stay plain-Node-loadable; conformance has to be asserted
@@ -123,10 +130,13 @@ dependency.
    forbids client-side validation stricter than the wire's, and principle 3's wire-neutrality means a
    wire-compatible endpoint that renders one extra key must not be rejected. Strictness lives in the
    tests that assert _our fixtures_ are complete, not in the console's runtime path.
-3. **Two links, two tiers, one vocabulary.** Link A (fixtures ↔ schemas) runs in CI on every PR and
-   catches fixture drift. Link B (schemas ↔ the real platform) runs only in the live tier, where real
-   responses exist, and catches transcription drift. Neither alone is sufficient: A can be green
-   against a stale transcription; B cannot run in CI.
+3. **Two links, two tiers, one vocabulary.** Link A (**everything the mock serves** ↔ schemas — its
+   static fixtures _and_ the responses it constructs on write paths) runs in CI on every PR and
+   catches mock drift. Link B (schemas ↔ the real platform) runs only in the live tier, where real
+   responses exist, and catches transcription drift. Neither alone is sufficient, and the failure
+   each misses is the other's whole point: A stays green against a stale transcription that the
+   fixtures faithfully match, and B cannot run in CI. Both must be built, or decision 3 is a claim
+   the plan does not deliver.
 4. **`BLOCKED` is adopted as a distinct outcome in the live tier only.** A surface the deployment does
    not serve is _not observable_ — distinct from a surface observed and wrong. This does **not** relax
    the existing live-tier contract: missing _configuration_ still fails loudly (CLAUDE.md, enforced in
@@ -186,9 +196,32 @@ dependency.
      `test/mock-platform/fixtures.mjs` (including the `sessionEvents` / `agentVersions` /
      `skillVersions` / `vaultCredentials` maps, whose values are arrays), failing with the zod issue
      path so a mismatch names the field.
+   - **Link A must also cover the mock's _constructed_ responses, not just its static exports**
+     (review finding, PR #32). Every write and stream path builds its payload in `server.mjs`
+     independently of `fixtures.mjs` — `createAgent` at :126-147 assembles an agent field by field,
+     and sessions, events, skills, vaults, and files do the same. Validating only the exported
+     collections would let a malformed generated shape keep conformance green while the whole default
+     e2e suite runs against the wrong wire, which is the exact failure this slice exists to prevent.
+     Two changes: make `server.mjs` export its `server` and guard the auto-`listen` behind a
+     run-as-main check (it has no exports today and listens on import, so nothing can drive it
+     in-process), then have the conformance test start it on an ephemeral port and validate the
+     response of each write path it exercises — create/update agent, create session, send event,
+     create environment/vault/credential, upload skill and file — against the same schemas.
+   - **Link B — validate real platform responses in the live tier** (review finding, PR #32).
+     Decision 3 declares two links and, as first drafted, no slice delivered the second: fixtures and
+     transcription could stay mutually consistent while both drift from the platform, and link A
+     would still pass. `test/e2e-live/live.spec.ts:41-58` already funnels every real call through
+     `platformGet` / `platformPost`, so this is a schema parse at two existing helpers rather than a
+     new suite. Parse there, and surface a mismatch as a failure naming the field and the endpoint.
+     Coverage follows whatever the live suite already touches — agents, sessions, events,
+     environments; anything it does not reach is honestly out of link B's reach too, and the plan
+     does not pretend otherwise.
    - → verify: the divergence table lands under `docs/`, with every entry either a fixed
      transcription bug (named in the PR and the CHANGELOG) or a divergence carrying its platform
-     cite, and no SDK entry in `package.json`; conformance green; a
+     cite, and no SDK entry in `package.json`; conformance green over both the static fixtures **and**
+     the mock's constructed write-path responses; the live tier parses real responses through the
+     schemas and `pnpm test:e2e:live` stays 5/5 against the local stack (link B is not verifiable in
+     CI by construction — the run and its output go in the PR); a
      deliberately corrupted field locally produces a readable
      `path: ["sessions", 0, "usage", "input_tokens"]`-style failure and that transcript goes in the PR;
      the existing 474 unit / 38 e2e stay green untouched (the inferred types are structurally identical
