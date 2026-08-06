@@ -4,7 +4,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan 04 — verification hardening** ([docs/plan/04_verification-hardening.md](./docs/plan/04_verification-hardening.md), `draft`, drafted 2026-08-07). Awaiting approval + a tracking issue; no code yet.
+**Plan 04 — verification hardening** ([docs/plan/04_verification-hardening.md](./docs/plan/04_verification-hardening.md), `approved`, issue #31, drafted and approved 2026-08-07).
 
 - [ ] Slice 1 — wire schemas become the source of truth (zod; `types.ts` → `z.infer`; fixture conformance; one-shot reference-wire audit against `@anthropic-ai/sdk`'s types)
 - [ ] Slice 2 — the suite proves it can fail (schema canary + contract-violation fixtures for the trace layer)

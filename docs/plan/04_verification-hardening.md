@@ -1,5 +1,6 @@
 ---
-status: draft
+status: approved
+issue: 31
 ---
 
 # Verification hardening — make the fixtures provable, make the suite provably able to fail
