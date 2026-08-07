@@ -8,6 +8,6 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 The console releases itself now. Conventional-Commit PR titles feed release-please, which keeps a release PR open; `pnpm release:prepare X.Y.Z` files the changelog section a release ships with; merging that PR tags, publishes the Release with that section as its body, and pushes a multi-arch image to `ghcr.io/opensdlc-dev/managed-agent-console`. Steps in [docs/releasing.md](./docs/releasing.md). **0.2.0 went out that way** on 2026-08-08.
 
-One thing still needs a human, once: the GHCR package is **private on first publish** and must be flipped to public in its package settings, or the README's `docker run` fails for anyone outside the org.
+One release step still needs a human and is not done: the GHCR package is **private on first publish**, so README's `docker run` fails for anyone outside the org until it is flipped in package settings. Tracked as [issue #56](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/56) — the backlog, not this file.
 
 The backlog is [GitHub issues](https://github.com/OpenSDLC-Dev/managed-agent-console/issues) — see them there, not here.
