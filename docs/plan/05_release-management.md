@@ -137,7 +137,14 @@ gate CI uses, pushes `ghcr.io/opensdlc-dev/managed-agent-console:{X.Y.Z,X.Y,late
 digest to the release. README's Quickstart switches from `docker build` to
 `docker run ghcr.io/opensdlc-dev/managed-agent-console:X.Y.Z`, and the compose snippet's `build:` line
 becomes an `image:` line. `docs/releasing.md` documents the whole flow end to end. Triggered by tag
-push for now, so it works before slice 3 exists and keeps working after.
+push for now, so it works before slice 3 exists and keeps working after — **plus `workflow_dispatch`
+taking a tag input**, because tag-push triggers do not fire retroactively and slice 1's `v0.1.0` is
+pushed before this workflow exists: without a manual path, the README would point at a tag that never
+produced an image. Two one-time steps belong to this slice and are recorded in `docs/releasing.md`,
+not left to be rediscovered: dispatching the workflow once against `v0.1.0`, and **flipping the GHCR
+package to public** — a container package is private on first publish even when its repository is
+public, and the OCI `source` label links the package without making it anonymously pullable, so the
+unauthenticated `docker run` this slice puts in the README would 401 for every external reader.
 
 **Slice 3 — automate the cut.** `release-please-config.json` (`release-type: node`,
 `skip-changelog: true`, `bump-minor-pre-major: true`), `.release-please-manifest.json` seeded
@@ -147,7 +154,7 @@ the release body from the changelog section. `scripts/cut-changelog.mjs` + a `ch
 implement decision 2's transform, with a unit test over the transform (idempotence, footer links, an
 empty Unreleased refusing to cut). CLAUDE.md's iteration workflow gains the Conventional-Commit title
 rule; a PR-title lint job enforces it; `dependabot.yml` gets `commit-message.prefix: chore`.
-**Blocked on the secret existing** (decision 3).
+Prerequisite: the GitHub App credential of decision 3 must exist before this slice can land.
 
 **Slice 4 — the console says which version it is.** A line in the sidebar's bottom stack, server
 rendered from `package.json`, styled as the muted 13px sibling of the platform-documentation link. A
