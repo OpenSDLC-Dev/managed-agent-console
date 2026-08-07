@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows [Keep a Changelog](https://kee
 
 ## [Unreleased]
 
-Nothing yet.
+- **Plan 05 archived — 0.2.0 went out through the machinery it built** (2026-08-08): the plan closes on evidence rather than on its slices being ticked. release-please proposed the version and opened the release PR as `opensdlc-console-release[bot]`; `pnpm release:prepare 0.2.0` filed the changelog section and bumped README; merging that PR tagged `v0.2.0` and published the Release; `release.yml` fired on the release event and replaced the body with the `[0.2.0]` section, links absolutised against the tag, while both architectures built and were scanned natively before one manifest list went out as `0.2.0` / `0.2` / `latest` at `sha256:f020009704`. Summary in [docs/HISTORY.md](./docs/HISTORY.md). One item is deliberately left open rather than quietly dropped: the GHCR package is still **private**, as it is on first publish for any repository, so README's `docker run` fails for readers outside the org until someone flips it in package settings — there is no REST endpoint for that, which is why it is a recorded human step and not an automated one, now tracked as [issue #56](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/56).
 
 ## [0.2.0] - 2026-08-08
 
