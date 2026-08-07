@@ -46,6 +46,7 @@ Shipping a real dark mode is therefore a **deliberate divergence** from the refe
 - **Font:** `anthropicSans` is Anthropic's proprietary face and cannot be shipped. We use its own fallback stack (`system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`) as our primary stack.
 - **Branding:** the wordmark is our own ("Managed Agents" / project name), never "Claude Console" or Anthropic marks.
 - Navigation contains only the sections the platform serves (no Billing/API keys/Workbench), plus console-specific connection status.
+- **The sidebar states the console's version** (`v0.1.0`, muted 13px, above the connection status). The reference shows none, and correctly so: nobody wonders which build of a hosted product they are looking at. A self-hosted deployment has no other way to tell — the operator debugging it is the operator who upgrades it — so the version sits where the connection state already is, in the same muted register, rather than as a badge competing with navigation.
 
 ## Fidelity verification
 
