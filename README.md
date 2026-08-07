@@ -4,7 +4,7 @@ The web console for [managed-agent-platform](https://github.com/OpenSDLC-Dev/man
 
 This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents** (rendered form or raw JSON↔YAML editor), **environments**, and **sessions** — including live event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, and **files**. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
 
-The v1 feature set is complete. Changes are recorded in [CHANGELOG.md](./CHANGELOG.md); active work is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
+**Status: v0.1.0 — the v1 feature set is complete.** Changes are recorded in [CHANGELOG.md](./CHANGELOG.md); active work is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
 ## How it holds your key
 
