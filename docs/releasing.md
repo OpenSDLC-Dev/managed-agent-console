@@ -56,6 +56,12 @@ gh workflow run release.yml -f tag=vX.Y.Z
 This is how `v0.1.0` got its image: the tag was pushed by the release cut, one
 slice before the workflow that publishes images existed.
 
+A backfill publishes only its immutable `X.Y.Z`. The rolling aliases `latest`
+and `X.Y` move only when the version being published really is the newest (of
+all tags, and of its own minor line respectively), so republishing an old tag
+cannot silently downgrade whoever pulls `latest`. Publishes are serialized by a
+workflow-level concurrency group for the same reason.
+
 The build uses the tag's own tree, which is the point — the image matches what
 the tag says. One consequence for `v0.1.0` specifically: that tree predates the
 Dockerfile's OCI labels, so its image carries none, and the `--build-arg` the

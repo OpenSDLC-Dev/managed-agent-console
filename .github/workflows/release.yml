@@ -16,6 +16,13 @@ on:
 permissions:
   contents: read
 
+# Publishes mutate rolling tags, so they run one at a time — queued, never
+# cancelled: dropping a publish would leave an architecture image pushed with
+# no manifest list pointing at it.
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/opensdlc-dev/managed-agent-console
 
@@ -57,12 +64,16 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Not github.sha: on the dispatch path that is the sha of the ref the
+          # run was launched from (the default branch), not the tag checked out
+          # above — which would label the image with an unrelated commit.
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: |
           docker build \
             --build-arg VERSION="${{ steps.version.outputs.version }}" \
-            --build-arg REVISION="${{ github.sha }}" \
+            --build-arg REVISION="${{ steps.version.outputs.revision }}" \
             -t "$IMAGE:${{ steps.version.outputs.version }}-${{ matrix.arch }}" .
 
       - name: Scan image (trivy, HIGH/CRITICAL gate)
@@ -92,26 +103,48 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
+          # Rolling-tag decisions below read the full tag list.
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve version
+      # X.Y.Z is immutable and always published. `latest` and `X.Y` are rolling
+      # aliases, so they move only when this version really is the newest —
+      # otherwise a backfill of an older tag (the documented dispatch recovery,
+      # or two runs finishing out of order) would quietly downgrade whoever
+      # pulls `latest`.
+      - name: Resolve version and rolling aliases
         id: version
         run: |
           ref="${{ inputs.tag || github.ref_name }}"
           version="${ref#v}"
+          minor="${version%.*}"
+          newest="$(git tag -l 'v[0-9]*' | sed 's/^v//' | sort -V | tail -1)"
+          newest_in_minor="$(git tag -l "v$minor.*" | sed 's/^v//' | sort -V | tail -1)"
+          tags="-t $IMAGE:$version"
+          if [ "$version" = "$newest_in_minor" ]; then
+            tags="$tags -t $IMAGE:$minor"
+          else
+            echo "$version is not the newest $minor.x — leaving $IMAGE:$minor where it is"
+          fi
+          if [ "$version" = "$newest" ]; then
+            tags="$tags -t $IMAGE:latest"
+          else
+            echo "$version is not the newest release ($newest) — leaving $IMAGE:latest where it is"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
           echo "tag=$ref" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
       - name: Create the manifest list
         id: manifest
         env:
           V: ${{ steps.version.outputs.version }}
-          MINOR: ${{ steps.version.outputs.minor }}
+          TAGS: ${{ steps.version.outputs.tags }}
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker buildx imagetools create \
-            -t "$IMAGE:$V" -t "$IMAGE:$MINOR" -t "$IMAGE:latest" \
+          # $TAGS is a built-here list of -t flags; word splitting is the point.
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $TAGS \
             "$IMAGE:$V-amd64" "$IMAGE:$V-arm64"
           digest="$(docker buildx imagetools inspect "$IMAGE:$V" --format '{{.Manifest.Digest}}')"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
@@ -119,9 +152,11 @@ jobs:
             echo "### Published"
             echo
             echo '```'
-            echo "$IMAGE:$V"
-            echo "$IMAGE:$MINOR"
-            echo "$IMAGE:latest"
+            # Echo the aliases actually moved, not the ones a release usually
+            # moves — a backfill publishes fewer, and the summary should say so.
+            for t in $TAGS; do
+              [ "$t" = "-t" ] || echo "$t"
+            done
             echo
             echo "digest: $digest"
             echo '```'
