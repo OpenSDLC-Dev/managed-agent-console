@@ -1,0 +1,31 @@
+name: pr-title
+
+# Squash merge makes the pull request title the commit subject, and
+# release-please reads those subjects to decide the next version. A prose title
+# is therefore not a style preference here — it is a release that silently does
+# not happen.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Title must be a Conventional Commit
+        # Via env, never interpolated into the script: a title is attacker-
+        # controlled text on a fork PR.
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s' "$TITLE" |
+            grep -Eq '^(feat|fix|docs|chore|refactor|test|perf|build|ci|revert)(\([^)]+\))?!?: .+'; then
+            echo "ok: $TITLE"
+          else
+            echo "::error::PR title must be a Conventional Commit — squash merge makes it the commit subject and release-please reads it to decide the version bump. Examples: 'feat: publish the console image', 'fix(trace): guard a missing token counter', 'docs: record the release flow', 'chore(deps): bump next'."
+            exit 1
+          fi

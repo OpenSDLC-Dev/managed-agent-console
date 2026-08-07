@@ -53,8 +53,10 @@ Every change lands through a PR; **never commit directly to `main`** (the repo-b
 
 1. Branch off fresh `main`: `git checkout -b <type>/<short-name>` (`feat/`, `fix/`, `chore/`, `docs/`).
 2. Develop on the branch. **Docs move with code, in the same PR:** a CHANGELOG.md entry for every notable change; STATE.md updated whenever the change starts, advances, or finishes tracked work; the active plan's frontmatter status flipped by the PR that changes its lifecycle.
-3. Push, open the PR (`gh pr create`), wait for CI green (`gh pr checks --watch`); settle every review thread.
+3. Push, open the PR (`gh pr create`), wait for CI green (`gh pr checks --watch`); settle every review thread. **The PR title is a Conventional Commit** (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `ci:`, `revert:`, optional `(scope)`, `!` for breaking) — squash merge makes it the commit subject and release-please reads those subjects to decide the next version, so a prose title is not a style slip but a release that silently does not happen. Enforced by the `pr-title` check.
 4. **Squash merge** (`gh pr merge --squash --delete-branch`), then sync local `main`.
+
+Releases are their own flow — release-please proposes the version, a human writes the narrative: [docs/releasing.md](./docs/releasing.md).
 
 ## How to work here
 

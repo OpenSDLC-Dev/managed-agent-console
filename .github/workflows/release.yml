@@ -1,11 +1,14 @@
 name: release
 
-# Publishes the console image for a tag. Tag pushes fire this automatically;
-# workflow_dispatch exists because tag-push triggers do not run retroactively —
-# v0.1.0 was pushed before this workflow existed and still needs an image.
+# Publishes the console image for a release, and gives that release its notes.
+#
+# The trigger is the GitHub Release, not a tag push: release-please creates the
+# release through the API, which fires no push event, and a bare tag with no
+# release is not a release. workflow_dispatch stays because tag-push triggers
+# never fire retroactively — it is how v0.1.0 got an image at all.
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -48,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
           persist-credentials: false
 
       # The tag is the version. Disagreeing with package.json means the release
@@ -56,7 +59,7 @@ jobs:
       - name: Resolve version
         id: version
         run: |
-          ref="${{ inputs.tag || github.ref_name }}"
+          ref="${{ inputs.tag || github.event.release.tag_name }}"
           version="${ref#v}"
           pkg="$(node -p "require('./package.json').version")"
           if [ "$version" != "$pkg" ]; then
@@ -102,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
           # Rolling-tag decisions below read the full tag list.
           fetch-depth: 0
           persist-credentials: false
@@ -115,7 +118,7 @@ jobs:
       - name: Resolve version and rolling aliases
         id: version
         run: |
-          ref="${{ inputs.tag || github.ref_name }}"
+          ref="${{ inputs.tag || github.event.release.tag_name }}"
           version="${ref#v}"
           minor="${version%.*}"
           newest="$(git tag -l 'v[0-9]*' | sed 's/^v//' | sort -V | tail -1)"
@@ -162,9 +165,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Idempotent: re-dispatching the same tag replaces the block rather than
-      # stacking a second one.
-      - name: Record the image on the GitHub Release
+      # release-please writes a release body from commit subjects; the changelog
+      # section is the narrative that body should have been. It is regenerated
+      # from the tag's own CHANGELOG every time, so re-dispatching a tag is
+      # idempotent by construction rather than by marker-matching.
+      - name: Give the release its notes and the image
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -172,14 +177,17 @@ jobs:
           DIGEST: ${{ steps.manifest.outputs.digest }}
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "no GitHub Release for $TAG yet — skipping"
+            echo "::warning::no GitHub Release for $TAG — image published, notes not written"
             exit 0
           fi
-          notes="$(gh release view "$TAG" --json body --jq .body)"
-          notes="${notes%%<!-- image -->*}"
-          {
-            printf '%s' "$notes"
-            printf '\n<!-- image -->\n\n## Image\n\n```\ndocker pull %s:%s\n```\n\nMulti-arch (`linux/amd64`, `linux/arm64`), digest `%s`.\n' \
-              "$IMAGE" "$V" "$DIGEST"
-          } > /tmp/notes.md
-          gh release edit "$TAG" --notes-file /tmp/notes.md
+          if node scripts/changelog.mjs notes "$V" > "$RUNNER_TEMP/notes.md"; then
+            echo "notes taken from the [$V] section of CHANGELOG.md"
+          else
+            # Never leave a release with no body because the section is missing.
+            echo "::warning::no [$V] section in CHANGELOG.md — keeping the existing release body"
+            gh release view "$TAG" --json body --jq .body \
+              | awk '/^<!-- image -->/{exit} {print}' > "$RUNNER_TEMP/notes.md"
+          fi
+          printf '\n<!-- image -->\n\n## Image\n\n```\ndocker pull %s:%s\n```\n\nMulti-arch (`linux/amd64`, `linux/arm64`), digest `%s`.\n' \
+            "$IMAGE" "$V" "$DIGEST" >> "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"

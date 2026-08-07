@@ -8,7 +8,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 - [x] Slice 1 — cut v0.1.0 by hand (Keep-a-Changelog frame, dated section, compare footer). The `v0.1.0` tag and its GitHub Release are created on `main` at this slice's squash-merge; new work accumulates under CHANGELOG's `[Unreleased]`.
 - [x] Slice 2 — publish the image (OCI labels, native amd64 + arm64 build, trivy gate before push, GHCR, README quickstart). Two one-time steps at merge: dispatch `release.yml` against `v0.1.0`, then flip the GHCR package to public.
-- [ ] Slice 3 — automate the cut (release-please with `skip-changelog`, `changelog:cut` script, Conventional-Commit PR titles) — **blocked**: needs the GitHub App credential the maintainer is creating (plan decision 3)
+- [x] Slice 3 — automate the cut (release-please with `skip-changelog`, `pnpm release:prepare`, Conventional-Commit PR titles). The `opensdlc-console-release` App is installed and its credential stored; the first real proof is the release PR that appears after this merges.
 - [ ] Slice 4 — the console shows its version in the sidebar (28-surface fidelity re-shoot)
 
 Plan 04 (verification hardening, issue #31) completed and archived 2026-08-07; summary in [docs/HISTORY.md](./docs/HISTORY.md). Plans 01–03 archived there too. The console is feature-complete against the platform's implemented surface, with 515 unit / 39 e2e / 5 live tests, a 28-surface fidelity manifest, and a probe ratchet.

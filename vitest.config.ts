@@ -9,7 +9,13 @@ export default defineConfig({
     // test/fidelity holds no product code, but the shot manifest has an
     // invariant CI should enforce: a duplicate id silently overwrites another
     // surface's screenshot, which reads as coverage while losing it.
-    include: ["src/**/*.test.{ts,tsx}", "test/fidelity/*.test.ts"],
+    include: [
+      "src/**/*.test.{ts,tsx}",
+      "test/fidelity/*.test.ts",
+      // The changelog transform releasing leans on: a bad cut corrupts the one
+      // file that carries every change's narrative.
+      "scripts/*.test.mts",
+    ],
     coverage: {
       provider: "v8",
       // Everything we wrote counts; src/components/ui is vendored shadcn

@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # release-please reads commit subjects; an unprefixed "Bump x from y to z"
+    # is invisible to it and would also fail the pr-title check.
+    commit-message:
+      prefix: chore
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
@@ -15,3 +19,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore

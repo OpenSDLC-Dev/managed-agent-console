@@ -15,6 +15,7 @@
     "test:e2e:live": "next build && playwright test --config playwright.live.config.ts",
     "test:coverage": "vitest run --coverage",
     "probes:check": "node scripts/check-probes.mjs",
+    "release:prepare": "node scripts/changelog.mjs prepare",
     "fidelity:shots": "node -e \"require('fs').rmSync('fidelity-shots',{recursive:true,force:true})\" && next build && playwright test --config playwright.fidelity.config.ts"
   },
   "dependencies": {
