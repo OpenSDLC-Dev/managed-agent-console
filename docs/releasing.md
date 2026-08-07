@@ -14,40 +14,53 @@ Versioning is the console's own 0.x semver, independent of the platform's. Each
 release states the platform version its live tier last ran green against; that is
 a fact about what was exercised, not a handshake the console enforces.
 
+## Who does what
+
+release-please owns the version number, the tag, and the GitHub Release. It
+never touches `CHANGELOG.md` (`skip-changelog`), because this repository's
+changelog is hand-written prose and CLAUDE.md says a change's narrative is
+written once. So one step per release stays human — the one that requires a
+human — and everything mechanical around it is automated.
+
 ## Cutting one
 
-1. **File the changelog section.** `## [Unreleased]` becomes
-   `## [X.Y.Z] - YYYY-MM-DD`, a fresh empty `[Unreleased]` goes above it with
-   `Nothing yet.`, and the compare-link footer gains the new pair. Bump the image
-   tag in README's quickstart in the same PR. Land it, then sync `main`.
-2. **Tag `main` at the merge commit:**
+1. **Land work with Conventional Commit PR titles.** Squash merge makes each
+   title a commit subject; release-please reads them and keeps an open release PR
+   proposing the next version (`chore(main): release X.Y.Z`).
+2. **File the changelog section** for the version that PR proposes:
 
    ```bash
-   git checkout main && git pull
-   git tag -a vX.Y.Z -m "vX.Y.Z — <one line>"
-   git push origin vX.Y.Z
+   pnpm release:prepare X.Y.Z
    ```
 
-3. **Create the GitHub Release** from that changelog section. Extract it, and
-   rewrite the repo-relative links — a release body resolves `./docs/...` against
-   `/releases/`, not against the repository root, so every link in a
-   copied-verbatim section would 404:
+   This moves everything under `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`,
+   restores an empty `[Unreleased]`, repoints the compare-link footer, and bumps
+   README's pinned image tag. Land it as its own PR — title `docs: prepare X.Y.Z`.
 
-   ```bash
-   awk '/^## \[X\.Y\.Z\] - /{f=1;next} /^\[Unreleased\]: /{f=0} f' CHANGELOG.md \
-     | sed 's#](\./#](https://github.com/OpenSDLC-Dev/managed-agent-console/blob/vX.Y.Z/#g' \
-     > /tmp/notes.md
-   gh release create vX.Y.Z --title "vX.Y.Z — <one line>" --notes-file /tmp/notes.md --verify-tag
-   ```
+3. **Merge release-please's release PR.** It bumps `package.json` and
+   `.release-please-manifest.json`, tags `vX.Y.Z`, and publishes the GitHub
+   Release.
+4. Publishing that release runs [release.yml](../.github/workflows/release.yml),
+   in two independent halves:
+   - **notes** — replaces the release body with the `[X.Y.Z]` changelog section
+     (release-please's own body is a list of PR titles; the section is the
+     narrative). It depends on nothing, so a release whose image fails to build
+     still says what it is.
+   - **build → publish** — both architectures on native runners, each gated on
+     trivy (HIGH/CRITICAL, unfixed ignored) **before** anything is pushed, joined
+     into one manifest list, with the image coordinates and digest appended to
+     the body notes wrote.
 
-4. The tag push runs [release.yml](../.github/workflows/release.yml), which builds
-   both architectures on native runners, gates each on trivy (HIGH/CRITICAL,
-   unfixed ignored) **before** pushing anything, joins the two scanned images into
-   one manifest list, and appends the image coordinates and digest to the Release.
+Repo-relative links in the section are absolutised against the tag on the way out
+— a release body resolves `./docs/…` against `/releases/`, not the repository
+root, so a section copied verbatim would 404 on every link it carries. Both
+halves are idempotent: notes regenerates the body from the tag's own CHANGELOG,
+and the image block is cut at its marker before being re-appended.
 
-## If a tag already exists but has no image
+## If a release exists but has no image
 
-Tag-push triggers do not fire retroactively. Publish an existing tag by hand:
+Publish an existing tag by hand — the workflow is triggered by a release being
+published, and a run can always be repeated:
 
 ```bash
 gh workflow run release.yml -f tag=vX.Y.Z
