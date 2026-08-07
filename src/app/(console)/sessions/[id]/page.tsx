@@ -24,7 +24,7 @@ import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, tokenCount } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { useSession } from "@/lib/platform/queries";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
@@ -145,10 +145,14 @@ function SessionChips({ session }: { session: Session }) {
           </Link>
         </Badge>
       ))}
-      <Badge variant="outline" className={cn(chip, "text-muted-foreground")}>
-        {session.usage.input_tokens.toLocaleString()} in ·{" "}
-        {session.usage.output_tokens.toLocaleString()} out ·{" "}
-        {session.usage.cache_read_input_tokens.toLocaleString()} cache read
+      <Badge
+        variant="outline"
+        className={cn(chip, "text-muted-foreground")}
+        data-testid="usage-chip"
+      >
+        {tokenCount(session.usage?.input_tokens)} in ·{" "}
+        {tokenCount(session.usage?.output_tokens)} out ·{" "}
+        {tokenCount(session.usage?.cache_read_input_tokens)} cache read
       </Badge>
       {age && (
         <Badge

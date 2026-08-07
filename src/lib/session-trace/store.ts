@@ -44,6 +44,14 @@ export function applyPersisted(
   const seen = new Set(state.seen);
   let previews = state.previews;
   for (const event of incoming) {
+    // Same guard the frame path applies (see `applyFrame`'s default arm): an
+    // event with no id cannot be keyed, deduped, or opened in the detail
+    // panel, and two of them would collapse into one row — silently rendering
+    // one event where the wire sent two. The seed path had no such guard, so
+    // identical input behaved differently depending on which door it arrived
+    // through (plan 04 slice 2).
+    if (typeof event?.id !== "string" || typeof event.type !== "string")
+      continue;
     if (seen.has(event.id)) continue;
     seen.add(event.id);
     events.push(event);

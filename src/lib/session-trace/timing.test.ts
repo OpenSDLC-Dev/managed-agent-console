@@ -32,7 +32,7 @@ describe("offsetLabel", () => {
     );
   });
 
-  it("is null-safe and clamps skew to zero", () => {
+  it("probe: is null-safe and clamps skew to zero", () => {
     expect(offsetLabel(null, "2026-08-01T09:00:00Z")).toBeNull();
     expect(offsetLabel("2026-08-01T09:00:00Z", null)).toBeNull();
     expect(offsetLabel("not-a-date", "2026-08-01T09:00:00Z")).toBeNull();
@@ -62,7 +62,7 @@ describe("modelSpanDurations", () => {
     expect(modelSpanDurations([start, end])).toEqual(new Map([["e1", 3_000]]));
   });
 
-  it("skips unpaired, unstamped, and negative spans", () => {
+  it("probe: skips unpaired, unstamped, and negative spans", () => {
     const orphan = ev("e2", "span.model_request_end", "2026-08-01T09:00:05Z", {
       model_request_start_id: "missing",
     });
@@ -91,7 +91,7 @@ describe("idleGaps", () => {
     expect(idleGaps(events)).toEqual(new Map([["i1", 25_000]]));
   });
 
-  it("ignores sub-threshold churn, trailing idles, and unstamped pairs", () => {
+  it("probe: ignores sub-threshold churn, trailing idles, and unstamped pairs", () => {
     const events = [
       ev("i1", "session.status_idle", "2026-08-01T09:00:00Z"),
       ev("r1", "session.status_running", "2026-08-01T09:00:02Z"),
@@ -127,7 +127,7 @@ describe("ageLabel", () => {
     expect(ageLabel("2026-08-04T11:00:00Z", now)).toBe("1 hour ago");
     expect(ageLabel("2026-08-02T12:00:00Z", now)).toBe("2 days ago");
   });
-  it("is null-safe", () => {
+  it("probe: is null-safe", () => {
     expect(ageLabel(null, now)).toBeNull();
     expect(ageLabel("bogus", now)).toBeNull();
   });

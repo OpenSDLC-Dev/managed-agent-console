@@ -120,6 +120,76 @@ describe("mock fixtures conform to the platform wire", () => {
   });
 });
 
+/**
+ * The canary (plan 04 slice 2). Everything above asserts shapes *pass*; a suite
+ * built only from passing assertions cannot tell "the schemas match" from "the
+ * check silently stopped running". These fixtures are deliberately wrong and
+ * asserted to **fail**, so deleting or neutering the gate turns this file red
+ * instead of green.
+ *
+ * They stay inline rather than in `fixtures.mjs`, which the mock server loads
+ * and which must remain valid.
+ */
+describe("probe: the conformance gate catches lies, not only truths", () => {
+  const violations: { label: string; schema: z.ZodType; value: unknown }[] = [
+    {
+      label: "a token counter serialized as a string",
+      schema: SessionSchema,
+      value: {
+        ...fixtures.sessions[0],
+        usage: { ...fixtures.sessions[0].usage, input_tokens: "5412" },
+      },
+    },
+    {
+      label: "a required field dropped entirely",
+      schema: AgentSchema,
+      value: Object.fromEntries(
+        Object.entries(fixtures.agents[0]).filter(([k]) => k !== "multiagent"),
+      ),
+    },
+    {
+      label: "an enum value the platform's validation rejects",
+      schema: SessionSchema,
+      value: { ...fixtures.sessions[0], status: "paused" },
+    },
+    {
+      label: "a reserved seam carrying a value instead of null",
+      schema: AgentSchema,
+      value: { ...fixtures.agents[0], multiagent: { mode: "swarm" } },
+    },
+    {
+      label: "a discriminated union arm missing its required member",
+      schema: EnvironmentSchema,
+      value: {
+        ...fixtures.environments[0],
+        config: { type: "cloud", networking: { type: "unrestricted" } }, // no packages
+      },
+    },
+  ];
+
+  for (const { label, schema, value } of violations) {
+    it(`rejects ${label}`, () => {
+      const result = schema.safeParse(value);
+      expect(
+        result.success,
+        `${label} passed validation — the conformance gate is not doing anything`,
+      ).toBe(false);
+    });
+  }
+
+  it("the canaries are wrong only in the way intended", () => {
+    // Each violation is a one-field mutation of a fixture that DOES conform, so
+    // a red canary means the gate broke — not that the fixture rotted.
+    expectConforms(SessionSchema, fixtures.sessions[0], "canary base session");
+    expectConforms(AgentSchema, fixtures.agents[0], "canary base agent");
+    expectConforms(
+      EnvironmentSchema,
+      fixtures.environments[0],
+      "canary base environment",
+    );
+  });
+});
+
 describe("the mock's constructed write-path responses conform too", () => {
   let base: string;
 
