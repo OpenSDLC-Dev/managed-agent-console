@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  bumpImageTag,
-  cutChangelog,
-  releaseNotes,
-  today,
-} from "./changelog.mjs";
+import { bumpReadme, cutChangelog, releaseNotes, today } from "./changelog.mjs";
 
 const CHANGELOG = `# Changelog
 
@@ -137,14 +132,14 @@ describe("releaseNotes", () => {
   });
 });
 
-describe("bumpImageTag", () => {
+describe("bumpReadme", () => {
   it("repoints every pinned image reference", () => {
     const readme = [
       "  ghcr.io/opensdlc-dev/managed-agent-console:0.1.0",
       "image: ghcr.io/opensdlc-dev/managed-agent-console:0.1.0",
     ].join("\n");
 
-    expect(bumpImageTag(readme, { version: "0.2.0" })).toBe(
+    expect(bumpReadme(readme, { version: "0.2.0" })).toBe(
       [
         "  ghcr.io/opensdlc-dev/managed-agent-console:0.2.0",
         "image: ghcr.io/opensdlc-dev/managed-agent-console:0.2.0",
@@ -152,11 +147,21 @@ describe("bumpImageTag", () => {
     );
   });
 
+  it("repoints the status line, which nothing else would ever correct", () => {
+    // release-please touches package.json and its manifest and nothing else,
+    // so a status line left behind would contradict the release it sits in.
+    const readme = "**Status: v0.1.0 — the v1 feature set is complete.** More.";
+
+    expect(bumpReadme(readme, { version: "0.2.0" })).toBe(
+      "**Status: v0.2.0 — the v1 feature set is complete.** More.",
+    );
+  });
+
   it("leaves rolling tags and other images alone", () => {
     const text =
       "managed-agent-console:latest and managed-agent-platform:0.1.0 and node:24-alpine";
 
-    expect(bumpImageTag(text, { version: "0.2.0" })).toBe(text);
+    expect(bumpReadme(text, { version: "0.2.0" })).toBe(text);
   });
 });
 

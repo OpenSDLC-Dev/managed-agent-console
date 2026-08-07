@@ -1,5 +1,5 @@
 ---
-status: archived
+status: approved
 ---
 
 # Release management — the console gets versions, tags, and an image anyone can run
