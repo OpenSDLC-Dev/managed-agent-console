@@ -4,6 +4,7 @@ import { CommandPalette } from "@/components/shell/command-palette";
 import { ConnectionStatus } from "@/components/shell/connection-status";
 import { Providers } from "@/components/shell/providers";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
+import { ConsoleVersion } from "@/components/shell/version";
 
 export default function ConsoleLayout({
   children,
@@ -40,6 +41,7 @@ export default function ConsoleLayout({
                 Platform documentation ↗
               </a>
             </div>
+            <ConsoleVersion />
             <ConnectionStatus />
           </div>
         </aside>
