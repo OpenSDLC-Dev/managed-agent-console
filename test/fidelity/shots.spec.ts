@@ -28,7 +28,13 @@ async function signIn(page: Page) {
 }
 
 test.beforeEach(async ({ request }) => {
-  await request.post("http://127.0.0.1:18081/__reset");
+  // `request.post` resolves on 4xx/5xx too, so an unchecked call would let a
+  // failed reset carry the previous surface's mutations into this shot — and
+  // a shot of stale state still looks like a shot.
+  const reset = await request.post("http://127.0.0.1:18081/__reset");
+  if (!reset.ok()) {
+    throw new Error(`mock-platform reset failed: ${reset.status()}`);
+  }
 });
 
 for (const surface of SURFACES) {
