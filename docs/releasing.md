@@ -90,12 +90,19 @@ worse than the cosmetic gap it fixes.
 
 ## One-time setup
 
-- **The GHCR package must be public.** A container package is private on first
-  publish even when its repository is public, and
+- **The GHCR package must be public** — done 2026-08-08 (issue #56). A container
+  package is private on first publish even when its repository is public, and
   `org.opencontainers.image.source` links the package to the repository without
   making it anonymously pullable. Until it is flipped, the README's `docker run`
   fails with an authorization error for everyone outside the org: package page →
-  Package settings → Change visibility → Public.
+  Package settings → Change visibility → Public. There is no REST endpoint for
+  this. If the console is ever published under a different package name, it
+  applies again. Verify from a shell with no GHCR credentials:
+
+  ```bash
+  docker buildx imagetools inspect ghcr.io/opensdlc-dev/managed-agent-console:X.Y.Z
+  ```
+
 - **The release automation runs as a GitHub App** (`RELEASE_BOT_APP_ID` variable,
   `RELEASE_BOT_PRIVATE_KEY` secret), not as `GITHUB_TOKEN`: a pull request opened
   by `GITHUB_TOKEN` triggers no workflows, so it would never collect the `ci-ok`
