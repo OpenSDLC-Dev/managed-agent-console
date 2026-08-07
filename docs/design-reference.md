@@ -49,4 +49,13 @@ Shipping a real dark mode is therefore a **deliberate divergence** from the refe
 
 ## Fidelity verification
 
-Per CLAUDE.md: after building UI, load the local console in Chrome next to the reference, screenshot both, compare (layout, spacing, type scale, color), and note the outcome in the PR. The reference screenshots from the 2026-08-02 survey live in the session notes; re-capture as needed.
+Per CLAUDE.md: after building UI, load the local console in Chrome next to the reference, screenshot both, compare (layout, spacing, type scale, color), and note the outcome in the PR. The surfaces to walk are enumerated in [test/fidelity/surfaces.ts](../test/fidelity/surfaces.ts); `pnpm fidelity:shots` writes one shot per surface per theme. The reference screenshots from the 2026-08-02 survey live in the session notes; re-capture as needed.
+
+### Checks against this table
+
+| Date       | Method                                                                          | Result                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-07 | `getComputedStyle` on the running console in Chrome, 1440×900, light, `/agents` | 9 of 10 facts matched. Primary button padding-x was `10px` against the recorded `12px` — upstream shadcn's `px-2.5`. Filed #37. |
+| 2026-08-07 | Same extraction after #37                                                       | **10 of 10 matched.**                                                                                                           |
+
+This table is the point of the file: a recorded fact nobody re-measures is a fact that quietly stops being true.
