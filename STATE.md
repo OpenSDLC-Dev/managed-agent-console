@@ -4,9 +4,9 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan 05 — release management** ([docs/plan/05_release-management.md](./docs/plan/05_release-management.md), `approved`, drafted and approved 2026-08-07). The console has never been released: no tag, no GitHub Release, and clone-and-build as the only path to a running instance.
+**Plan 05 — release management** ([docs/plan/05_release-management.md](./docs/plan/05_release-management.md), `approved`, drafted and approved 2026-08-07). The console had never been released — no tag, no GitHub Release, and clone-and-build as the only path to a running instance. Slice 1 lands the first cut; the rest makes releases repeatable and the image pullable.
 
-- [ ] Slice 1 — cut v0.1.0 by hand (Keep-a-Changelog frame, dated section, compare footer; tag on `main` after merge)
+- [x] Slice 1 — cut v0.1.0 by hand (Keep-a-Changelog frame, dated section, compare footer). The `v0.1.0` tag and its GitHub Release are created on `main` at this slice's squash-merge; new work accumulates under CHANGELOG's `[Unreleased]`.
 - [ ] Slice 2 — publish the image (OCI labels, native amd64 + arm64 build, trivy gate before push, GHCR, README quickstart)
 - [ ] Slice 3 — automate the cut (release-please with `skip-changelog`, `changelog:cut` script, Conventional-Commit PR titles) — **blocked**: needs the GitHub App credential the maintainer is creating (plan decision 3)
 - [ ] Slice 4 — the console shows its version in the sidebar (28-surface fidelity re-shoot)
