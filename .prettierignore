@@ -4,3 +4,7 @@ node_modules
 playwright-report
 test-results
 src/components/ui
+
+# release-please rewrites this file compactly on every release PR; prettier
+# would reformat it and fail format:check on a file no human edits.
+.release-please-manifest.json
