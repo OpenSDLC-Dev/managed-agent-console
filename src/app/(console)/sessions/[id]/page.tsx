@@ -265,13 +265,25 @@ export default function SessionDetailPage({
       <DetailSection title="Events">
         {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
             and filter are active, and how much of the log they leave visible.
-            e2e reads these instead of the rendered strings. */}
+            e2e reads these instead of the rendered strings.
+
+            Both values are read off the *active* tab, not off state alone.
+            Debug renders `trace.events` whole and hides the filter chips, so
+            the retained `filter` applies to nothing there — reporting it (or
+            the transcript's count) would have the attribute contradict the
+            rendered surface, the one failure this convention exists to
+            prevent. `data-filter` is therefore absent in Debug, on the same
+            rule as `tokenAttr`: say nothing rather than something untrue. */}
         <div
           className="flex items-center gap-1.5 pb-3"
           data-testid="events-toolbar"
           data-tab={tab}
-          data-filter={filter}
-          data-visible-events={visible.length + visiblePreviews.length}
+          data-filter={tab === "transcript" ? filter : undefined}
+          data-visible-events={
+            tab === "debug"
+              ? trace.events.length
+              : visible.length + visiblePreviews.length
+          }
           data-total-events={trace.events.length}
         >
           <div className="flex items-center rounded-lg border p-0.5">

@@ -237,7 +237,7 @@ describe("SessionDetailPage", () => {
     expect(screen.getAllByText("Support bot · v2")).toHaveLength(2);
     const chips = screen.getByTestId("session-chips");
     // Counters as raw integers (CLAUDE.md's data-* convention); the rendered
-    // string has its own dedicated assertion below.
+    // string is owned by `utils.test.ts` and the e2e formatting test.
     const usage = within(chips).getByTestId("usage-chip");
     expect(usage).toHaveAttribute("data-input-tokens", "1234");
     expect(usage).toHaveAttribute("data-output-tokens", "567");
@@ -454,6 +454,44 @@ describe("SessionDetailPage", () => {
     expect(screen.queryAllByTestId("debug-row")).toHaveLength(0);
   });
 
+  it("reports toolbar state for the tab actually rendered, not the retained filter", async () => {
+    setTrace("live", [
+      ev("sevt_1", "user.message", {
+        content: [{ type: "text", text: "Hello agent" }],
+      }),
+      ev("sevt_2", "agent.tool_use", {
+        name: "bash",
+        input: { command: "ls" },
+      }),
+      ev("sevt_4", "session.status_running"),
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByText("Debug run");
+    const toolbar = () => screen.getByTestId("events-toolbar");
+
+    // Narrow the transcript: 1 of 3 events survives the Tools filter.
+    await userEvent.click(screen.getByRole("button", { name: "Tools" }));
+    expect(toolbar()).toHaveAttribute("data-filter", "tools");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "1");
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+
+    // Debug renders the log whole and drops the filter chips. `filter` is
+    // still "tools" in state, but it governs nothing here — so the attributes
+    // must describe the rendered surface, not the stale state (review
+    // finding, PR #36: both attributes previously kept transcript values).
+    await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+    expect(toolbar()).not.toHaveAttribute("data-filter");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "3");
+    expect(toolbar()).toHaveAttribute("data-total-events", "3");
+    expect(screen.getAllByTestId("debug-row")).toHaveLength(3);
+
+    // Going back restores the filter that was never discarded.
+    await userEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(toolbar()).toHaveAttribute("data-filter", "tools");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "1");
+  });
+
   it("copies the full trace as JSON via Copy all", async () => {
     const writeText = vi.fn(async () => {});
     // defineProperty escapes vi.unstubAllGlobals — restore the descriptor
@@ -613,16 +651,16 @@ describe("SessionDetailPage under a violated wire contract", () => {
     // The page still loads and the rest of the header is intact…
     expect(await screen.findByText("Debug run")).toBeInTheDocument();
     const chips = screen.getByTestId("session-chips");
-    // …and the chip claims only the counters that arrived. This is the one
-    // probe that also asserts the rendered dash; the rest read attributes, so
-    // changing the marker reddens here alone (CLAUDE.md's data-* convention).
+    // …and the chip claims only the counters that arrived.
     const usage = within(chips).getByTestId("usage-chip");
     expect(usage).toHaveAttribute("data-input-tokens", "1234");
     expect(usage).not.toHaveAttribute("data-output-tokens");
     expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
-    expect(usage).toHaveTextContent(
-      `${(1234).toLocaleString()} in · — out · ${(89).toLocaleString()} cache read`,
-    );
+    // The absent attribute cannot prove what an operator *sees* in that slot,
+    // so the dash marker is asserted too — but only the marker. `tokenCount`'s
+    // populated format is owned by the e2e formatting test, so a separator or
+    // copy edit there leaves this probe green (review finding, PR #36).
+    expect(usage).toHaveTextContent("— out");
   });
 
   it("probe: renders the session when usage is absent entirely", async () => {
