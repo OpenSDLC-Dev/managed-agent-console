@@ -20,3 +20,13 @@ export function cn(...inputs: ClassValue[]) {
  */
 export const tokenCount = (n: unknown) =>
   typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
+
+/**
+ * The same counter as a `data-*` attribute value, and **absent** exactly when
+ * `tokenCount` renders a dash — so the machine-readable value and the visible
+ * one never tell different stories. Without this, an overflowed counter would
+ * show "—" while the attribute read `Infinity`, and a test reading the
+ * attribute would assert a number no operator can see.
+ */
+export const tokenAttr = (n: unknown) =>
+  typeof n === "number" && Number.isFinite(n) ? n : undefined;

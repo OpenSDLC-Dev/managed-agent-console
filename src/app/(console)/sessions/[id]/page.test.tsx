@@ -236,11 +236,12 @@ describe("SessionDetailPage", () => {
     // Subtitle and the agent chip both carry the agent · version.
     expect(screen.getAllByText("Support bot · v2")).toHaveLength(2);
     const chips = screen.getByTestId("session-chips");
-    expect(
-      within(chips).getByText(
-        `${(1234).toLocaleString()} in · ${(567).toLocaleString()} out · ${(89).toLocaleString()} cache read`,
-      ),
-    ).toBeInTheDocument();
+    // Counters as raw integers (CLAUDE.md's data-* convention); the rendered
+    // string has its own dedicated assertion below.
+    const usage = within(chips).getByTestId("usage-chip");
+    expect(usage).toHaveAttribute("data-input-tokens", "1234");
+    expect(usage).toHaveAttribute("data-output-tokens", "567");
+    expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
     expect(within(chips).getByText("vlt_1")).toBeInTheDocument();
     expect(within(chips).getByText("1 file")).toHaveAttribute(
       "title",
@@ -256,6 +257,13 @@ describe("SessionDetailPage", () => {
     );
 
     expect(screen.getByTestId("stream-state")).toHaveTextContent("live");
+    // Derived list state, machine-readable: 4 events + 1 streaming preview
+    // visible under the default "all" filter, out of 4 persisted.
+    const toolbar = screen.getByTestId("events-toolbar");
+    expect(toolbar).toHaveAttribute("data-tab", "transcript");
+    expect(toolbar).toHaveAttribute("data-filter", "all");
+    expect(toolbar).toHaveAttribute("data-visible-events", "5");
+    expect(toolbar).toHaveAttribute("data-total-events", "4");
     expect(screen.getAllByTestId("event-row")).toHaveLength(4);
     expect(screen.getByText("Hello agent")).toBeInTheDocument();
     const preview = screen.getByTestId("preview-row");
@@ -338,10 +346,11 @@ describe("SessionDetailPage", () => {
     renderPage();
     await screen.findByText("Debug run");
 
-    expect(screen.getByTestId("idle-band")).toHaveTextContent(
-      "Session idle · 25s",
+    expect(screen.getByTestId("idle-band")).toBeInTheDocument();
+    expect(screen.getByTitle("model request duration")).toHaveAttribute(
+      "data-duration-ms",
+      "3000",
     );
-    expect(screen.getByTitle("model request duration")).toHaveTextContent("3s");
     // Offset of the idle event: 09:13:00 − created 09:12:00.
     expect(
       screen
@@ -604,9 +613,14 @@ describe("SessionDetailPage under a violated wire contract", () => {
     // The page still loads and the rest of the header is intact…
     expect(await screen.findByText("Debug run")).toBeInTheDocument();
     const chips = screen.getByTestId("session-chips");
-    // …and the token chip degrades to an honest dash for what is missing
-    // rather than printing a wrong number or taking the page down.
-    expect(within(chips).getByTestId("usage-chip")).toHaveTextContent(
+    // …and the chip claims only the counters that arrived. This is the one
+    // probe that also asserts the rendered dash; the rest read attributes, so
+    // changing the marker reddens here alone (CLAUDE.md's data-* convention).
+    const usage = within(chips).getByTestId("usage-chip");
+    expect(usage).toHaveAttribute("data-input-tokens", "1234");
+    expect(usage).not.toHaveAttribute("data-output-tokens");
+    expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
+    expect(usage).toHaveTextContent(
       `${(1234).toLocaleString()} in · — out · ${(89).toLocaleString()} cache read`,
     );
   });
@@ -619,9 +633,16 @@ describe("SessionDetailPage under a violated wire contract", () => {
     renderPage();
 
     expect(await screen.findByText("Debug run")).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("session-chips")).getByTestId("usage-chip"),
-    ).toHaveTextContent("— in · — out · — cache read");
+    const usage = within(screen.getByTestId("session-chips")).getByTestId(
+      "usage-chip",
+    );
+    for (const attr of [
+      "data-input-tokens",
+      "data-output-tokens",
+      "data-cache-read-tokens",
+    ]) {
+      expect(usage).not.toHaveAttribute(attr);
+    }
   });
 
   it("probe: renders a dash for a counter that overflowed to Infinity", async () => {
@@ -639,10 +660,12 @@ describe("SessionDetailPage under a violated wire contract", () => {
     const chip = within(screen.getByTestId("session-chips")).getByTestId(
       "usage-chip",
     );
-    expect(chip).toHaveTextContent(
-      `— in · ${(567).toLocaleString()} out · ${(89).toLocaleString()} cache read`,
-    );
-    expect(chip.textContent).not.toContain("∞");
+    // Neither the text nor the attribute may claim the overflowed counter —
+    // `tokenAttr` drops it exactly when `tokenCount` shows a dash, so the two
+    // can never tell different stories.
+    expect(chip).not.toHaveAttribute("data-input-tokens");
+    expect(chip).toHaveAttribute("data-output-tokens", "567");
+    expect(chip.textContent).not.toMatch(/∞|Infinity|NaN/);
   });
 
   it("probe: renders a trace whose events carry no processed_at", async () => {

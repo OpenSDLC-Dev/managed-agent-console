@@ -24,7 +24,7 @@ import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn, tokenCount } from "@/lib/utils";
+import { cn, tokenAttr, tokenCount } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { useSession } from "@/lib/platform/queries";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
@@ -149,6 +149,11 @@ function SessionChips({ session }: { session: Session }) {
         variant="outline"
         className={cn(chip, "text-muted-foreground")}
         data-testid="usage-chip"
+        data-input-tokens={tokenAttr(session.usage?.input_tokens)}
+        data-output-tokens={tokenAttr(session.usage?.output_tokens)}
+        data-cache-read-tokens={tokenAttr(
+          session.usage?.cache_read_input_tokens,
+        )}
       >
         {tokenCount(session.usage?.input_tokens)} in ·{" "}
         {tokenCount(session.usage?.output_tokens)} out ·{" "}
@@ -258,7 +263,17 @@ export default function SessionDetailPage({
       <ApprovalBanner pending={pending} sessionId={id} />
 
       <DetailSection title="Events">
-        <div className="flex items-center gap-1.5 pb-3">
+        {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
+            and filter are active, and how much of the log they leave visible.
+            e2e reads these instead of the rendered strings. */}
+        <div
+          className="flex items-center gap-1.5 pb-3"
+          data-testid="events-toolbar"
+          data-tab={tab}
+          data-filter={filter}
+          data-visible-events={visible.length + visiblePreviews.length}
+          data-total-events={trace.events.length}
+        >
           <div className="flex items-center rounded-lg border p-0.5">
             {(
               [

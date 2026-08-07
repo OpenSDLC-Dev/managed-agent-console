@@ -72,8 +72,16 @@ test("sessions list filters by status", async ({ page }) => {
   await expect(
     page.getByRole("cell", { name: "Survey agent frameworks" }),
   ).toBeVisible();
-  // Tokens column renders the usage counters.
-  await expect(page.getByRole("cell", { name: "5,412 / 890" })).toBeVisible();
+  // Tokens column carries the usage counters as raw integers (CLAUDE.md);
+  // the rendered string is asserted once, in session-live.spec.ts. Scoped to
+  // its row, not `.first()` — the list sorts newest-first, so position is not
+  // identity.
+  const tokens = page
+    .getByRole("row")
+    .filter({ hasText: "Install deps and run tests" })
+    .getByTestId("tokens-cell");
+  await expect(tokens).toHaveAttribute("data-input-tokens", "5412");
+  await expect(tokens).toHaveAttribute("data-output-tokens", "890");
 
   await page.getByRole("combobox", { name: "Status filter" }).click();
   await page.getByRole("option", { name: "running" }).click();
@@ -108,11 +116,8 @@ test("session detail shows the trace and the pending-approval banner", async ({
   // Token usage from the model span is summarized on the span row.
   await page.getByRole("button", { name: "All", exact: true }).click();
   await expect(
-    page
-      .getByTestId("event-row")
-      .filter({ hasText: "span.model_request_end" })
-      .getByText("5,412 in · 890 out · 3,100 cache read"),
-  ).toBeVisible();
+    page.getByTestId("event-row").filter({ hasText: "span.model_request_end" }),
+  ).toHaveAttribute("data-input-tokens", "5412");
 });
 
 test("vaults list and detail render secret-free credentials", async ({

@@ -27,6 +27,8 @@ export function StatusFilter({
           size="sm"
           className="h-8 rounded-lg"
           aria-label="Status filter"
+
+          data-value={includeArchived ? "all" : "active"}
         >
           <SelectValue />
         </SelectTrigger>

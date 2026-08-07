@@ -84,6 +84,8 @@ export default function SkillsPage() {
             size="sm"
             className="h-8 rounded-lg"
             aria-label="Source filter"
+
+            data-value={source}
           >
             <SelectValue />
           </SelectTrigger>
