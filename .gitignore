@@ -11,6 +11,8 @@ build/
 coverage/
 playwright-report/
 test-results/
+# Chrome fidelity shots: regenerated on demand, compared by eye, never a baseline
+fidelity-shots/
 
 # Local environment — carries live keys; never commit
 .env

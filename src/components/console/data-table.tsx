@@ -50,7 +50,11 @@ export function DataTable<T>({
             ))}
           </TableRow>
         </TableHeader>
-        <TableBody>
+        {/* Same loading marker as DetailSkeleton/ListSkeleton, so "is this
+            surface still loading?" has one console-wide answer — for a screen
+            reader, and for the fidelity walker, which would otherwise shoot a
+            table of skeleton bars and call it the populated surface. */}
+        <TableBody aria-busy={loading && rows.length === 0 ? true : undefined}>
           {loading &&
             rows.length === 0 &&
             Array.from({ length: 3 }).map((_, i) => (

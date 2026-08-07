@@ -103,7 +103,10 @@ export function RequestId({ id }: { id: string }) {
 export function ErrorState({ error }: { error: unknown }) {
   const platformError = error instanceof PlatformError ? error : null;
   return (
-    <div className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-sm">
+    <div
+      data-testid="error-state"
+      className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-sm"
+    >
       <span className="text-destructive">
         {platformError?.message ??
           (error instanceof Error ? error.message : "Something went wrong")}
@@ -155,7 +158,10 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex h-56 flex-col items-center justify-center gap-1">
+    <div
+      data-testid="empty-state"
+      className="flex h-56 flex-col items-center justify-center gap-1"
+    >
       <p className="text-sm">{title}</p>
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
       {action && <div className="pt-2">{action}</div>}
