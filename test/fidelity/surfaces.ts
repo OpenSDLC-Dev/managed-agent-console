@@ -193,8 +193,16 @@ export const SURFACES: Surface[] = [
   {
     id: "session-new",
     route: "/sessions/new",
-    fixture: "empty form",
+    fixture: "empty form over the agent, environment and vault lists",
     description: "Agent/environment pickers plus the file-mount control.",
+    setup: async (page) => {
+      // The vault section renders only once its query resolves
+      // (`sessions/new/page.tsx`: `vaults.data?.data.length > 0 &&`), and the
+      // form shows no skeleton meanwhile — so without this the shot is a form
+      // with a section silently missing (review finding, PR #38).
+      // Scoped to main: the sidebar carries a "Credential vaults" nav link too.
+      await page.getByRole("main").getByText("Credential vaults").waitFor();
+    },
   },
 
   // ---- the shared states every surface can fall into --------------------
@@ -233,6 +241,75 @@ export const SURFACES: Surface[] = [
       "ErrorState carrying the platform's message and request id. Also the surface behind the known gap in plan 04: a 404 is indistinguishable from an unimplemented capability.",
     setup: async (page) => {
       await page.getByTestId("error-state").waitFor();
+    },
+  },
+
+  // ---- surfaces with no route of their own ------------------------------
+  // Overlays and filter states. The route-derived coverage test cannot see
+  // these — they add no `page.tsx` — so leaving them out would let the pass
+  // report complete coverage while a broken dialog went unlooked-at (review
+  // finding, PR #38). One representative per distinct layout, not one per
+  // instance: the four resource dialogs share a shell, so `vault-create`
+  // stands for its shape and `credential-add` earns its own entry only
+  // because it is the write-only-secret form.
+  {
+    id: "command-palette",
+    route: "/agents",
+    fixture: "all resources, searched",
+    description:
+      "Ctrl+K overlay: grouped options over the whole resource space.",
+    setup: async (page) => {
+      await page.keyboard.press("Control+k");
+      await page
+        .getByPlaceholder("Search agents, sessions, environments…")
+        .fill("deep resea");
+      await page.getByRole("option", { name: /Deep researcher/ }).waitFor();
+    },
+  },
+  {
+    id: "vault-create",
+    route: "/vaults",
+    fixture: "empty dialog form",
+    description: "The create-dialog shape shared by every resource list.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create vault" }).click();
+      await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "credential-add",
+    route: `/vaults/${VAULT}`,
+    fixture: VAULT,
+    description:
+      "The write-only-secret form — the one dialog whose fields must never round-trip a value.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Add credential" })
+        .first()
+        .click();
+      await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "archive-confirm",
+    route: `/vaults/${VAULT}`,
+    fixture: VAULT,
+    description: "Destructive-confirmation dialog: the only red-button layout.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Archive", exact: true }).click();
+      await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "list-archived",
+    route: "/vaults",
+    fixture: "2 vaults, one archived",
+    description:
+      "A list including archived rows and their badge — the Status filter's other position.",
+    setup: async (page) => {
+      await page.getByLabel("Status filter").click();
+      await page.getByRole("option", { name: "All" }).click();
+      await page.getByText("archived").first().waitFor();
     },
   },
 

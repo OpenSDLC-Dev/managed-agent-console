@@ -20,6 +20,11 @@ const MOCK_PORT = 18081;
 
 export default defineConfig({
   testDir: "test/fidelity",
+  // Playwright's default testMatch takes `*.test.ts` as well as `*.spec.ts`,
+  // which would collect `surfaces.test.ts` — a Vitest file — and die on the
+  // vitest import. The two runners share this directory; only the walker is
+  // Playwright's.
+  testMatch: "**/*.spec.ts",
   fullyParallel: false,
   // The mock platform is stateful and shared; shots must not interleave.
   workers: 1,
@@ -30,6 +35,13 @@ export default defineConfig({
     // locale change the separators between one pass and the next.
     locale: "en-US",
     viewport: { width: 1440, height: 900 },
+    // Real Google Chrome, not Playwright's bundled Chromium: CLAUDE.md's
+    // clause says fidelity is verified *in Chrome*, and the reference facts in
+    // docs/design-reference.md were extracted there. Font rasterization and
+    // form-control rendering differ between the two, which is exactly what a
+    // fidelity shot is looking at. Requires Chrome on the machine — fine for
+    // an on-demand local pass that CI never runs (review finding, PR #38).
+    channel: "chrome",
   },
   // Both themes, as CLAUDE.md's fidelity clause requires. `ThemeProvider` is
   // `defaultTheme="system" enableSystem`, so emulating the media query at the
