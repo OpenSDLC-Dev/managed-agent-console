@@ -97,6 +97,18 @@ const CONNECTION_LABEL = {
 } as const;
 
 /**
+ * A wire counter, or an honest dash when one did not arrive. The platform
+ * renders all four `usage` counters as non-pointer ints
+ * (`internal/domain/session.go:20-31`), so a missing one is a broken wire —
+ * but the trace is the operator's only view of a running session, and losing
+ * the whole page to one absent counter is the worst available failure (plan 04
+ * slice 2). Same posture as `summary.ts`'s `tokensLine` and plan 03's
+ * null-safe time math: say what is known, never guess the rest.
+ */
+const count = (n: unknown) =>
+  typeof n === "number" ? n.toLocaleString() : "—";
+
+/**
  * The session's metadata as one chip row (plan 03 slice 1) — the reference
  * console's density, from fields the wire already serves. The reference's
  * duration chip is deliberately absent: the platform serves `stats` empty by
@@ -145,10 +157,14 @@ function SessionChips({ session }: { session: Session }) {
           </Link>
         </Badge>
       ))}
-      <Badge variant="outline" className={cn(chip, "text-muted-foreground")}>
-        {session.usage.input_tokens.toLocaleString()} in ·{" "}
-        {session.usage.output_tokens.toLocaleString()} out ·{" "}
-        {session.usage.cache_read_input_tokens.toLocaleString()} cache read
+      <Badge
+        variant="outline"
+        className={cn(chip, "text-muted-foreground")}
+        data-testid="usage-chip"
+      >
+        {count(session.usage?.input_tokens)} in ·{" "}
+        {count(session.usage?.output_tokens)} out ·{" "}
+        {count(session.usage?.cache_read_input_tokens)} cache read
       </Badge>
       {age && (
         <Badge

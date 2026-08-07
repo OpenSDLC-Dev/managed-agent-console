@@ -570,3 +570,80 @@ describe("SessionDetailPage", () => {
     expect(screen.getByText("archived")).toBeInTheDocument();
   });
 });
+
+/**
+ * Contract violations (plan 04 slice 2, decision 7). The platform renders
+ * `usage` with four non-pointer counters (`internal/domain/session.go:20-31`),
+ * so a session missing one is a broken wire, not a legitimate state. The
+ * console must still say what it knows instead of blanking the page — the
+ * trace is the operator's only view of a running session, and losing all of it
+ * to one absent counter is the worst possible failure mode.
+ */
+describe("SessionDetailPage under a violated wire contract", () => {
+  const brokenUsage = (over: Record<string, unknown>) =>
+    session({
+      usage: {
+        input_tokens: 1234,
+        output_tokens: 567,
+        cache_read_input_tokens: 89,
+        cache_creation: {
+          ephemeral_1h_input_tokens: 0,
+          ephemeral_5m_input_tokens: 0,
+        },
+        ...over,
+      } as Session["usage"],
+    });
+
+  it("probe: renders the session when a usage counter is missing", async () => {
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: brokenUsage({ output_tokens: undefined }),
+    });
+    renderPage();
+
+    // The page still loads and the rest of the header is intact…
+    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    const chips = screen.getByTestId("session-chips");
+    // …and the token chip degrades to an honest dash for what is missing
+    // rather than printing a wrong number or taking the page down.
+    expect(within(chips).getByTestId("usage-chip")).toHaveTextContent(
+      `${(1234).toLocaleString()} in · — out · ${(89).toLocaleString()} cache read`,
+    );
+  });
+
+  it("probe: renders the session when usage is absent entirely", async () => {
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: session({ usage: undefined as unknown as Session["usage"] }),
+    });
+    renderPage();
+
+    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("session-chips")).getByTestId("usage-chip"),
+    ).toHaveTextContent("— in · — out · — cache read");
+  });
+
+  it("probe: renders a trace whose events carry no processed_at", async () => {
+    // The platform stamps inbound events at settlement, so unstamped events
+    // are normal mid-turn — the offsets must simply be absent, not "NaN".
+    setTrace("live", [
+      {
+        id: "sevt_1",
+        type: "user.message",
+        processed_at: null,
+      } as SessionEvent,
+      {
+        id: "sevt_2",
+        type: "span.model_request_end",
+        processed_at: null,
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+
+    await screen.findByText("Debug run");
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(document.body.textContent).not.toMatch(/NaN|Invalid Date|undefined/);
+  });
+});

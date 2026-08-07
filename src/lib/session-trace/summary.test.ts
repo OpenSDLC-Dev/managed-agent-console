@@ -70,7 +70,7 @@ describe("tokensLine", () => {
     expect(tokensLine(ev("span.model_request_end"))).toBeNull();
   });
 
-  it("returns null when a counter is not a number", () => {
+  it("probe: returns null when a counter is not a number", () => {
     expect(
       tokensLine(
         ev("span.model_request_end", {
@@ -118,7 +118,7 @@ describe("summaryOf", () => {
     ).toBe('bash {"command":"ls"}');
   });
 
-  it("summarizes tool use with a missing name or input", () => {
+  it("probe: summarizes tool use with a missing name or input", () => {
     expect(summaryOf(ev("agent.custom_tool_use", { input: { a: 1 } }))).toBe(
       '{"a":1}',
     );
@@ -141,7 +141,7 @@ describe("summaryOf", () => {
     );
   });
 
-  it("does not assert a verdict a confirmation does not carry", () => {
+  it("probe: does not assert a verdict a confirmation does not carry", () => {
     expect(
       summaryOf(ev("user.tool_confirmation", { tool_use_id: "toolu_9" })),
     ).toBe("Answered toolu_9");
@@ -227,7 +227,7 @@ describe("summaryOf", () => {
     expect(summaryOf(ev("session.error"))).toBe("error");
   });
 
-  it("summarizes an unknown type as its payload JSON, empty when bare", () => {
+  it("probe: summarizes an unknown type as its payload JSON, empty when bare", () => {
     expect(
       summaryOf(ev("user.define_outcome", { description: "Survey." })),
     ).toBe('{"description":"Survey."}');
