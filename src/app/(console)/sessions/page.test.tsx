@@ -389,4 +389,40 @@ describe("SessionsPage", () => {
     await waitFor(() => expect(sessionUrls(fetchMock)).toHaveLength(3));
     expect(sessionUrls(fetchMock)[2].searchParams.get("page")).toBe("tok_prev");
   });
+
+  it("probe: lists a session whose usage counters are missing or non-finite", async () => {
+    // Same violated contract as the detail page's probes: the list read
+    // `s.usage.input_tokens.toLocaleString()` unguarded, so one broken row
+    // took the whole table down (plan 04 slice 2).
+    stubFetch(() =>
+      json({
+        data: [
+          session({
+            id: "sess_1",
+            title: "Broken usage",
+            usage: undefined as unknown as Session["usage"],
+          }),
+          session({
+            id: "sess_2",
+            title: "Overflowed usage",
+            usage: {
+              ...session({ id: "x" }).usage,
+              input_tokens: JSON.parse('{"n":1e400}').n as number,
+            },
+          }),
+        ],
+        next_page: null,
+      }),
+    );
+    renderPage();
+
+    // Both rows render, and neither prints a wrong number.
+    expect(await screen.findByText("Broken usage")).toBeInTheDocument();
+    expect(screen.getByText("Overflowed usage")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "— / —" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("cell", { name: `— / ${(567).toLocaleString()}` }),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("∞");
+  });
 });

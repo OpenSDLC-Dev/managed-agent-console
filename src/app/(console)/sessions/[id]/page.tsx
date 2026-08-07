@@ -24,7 +24,7 @@ import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, tokenCount } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { useSession } from "@/lib/platform/queries";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
@@ -97,22 +97,6 @@ const CONNECTION_LABEL = {
 } as const;
 
 /**
- * A wire counter, or an honest dash when one did not arrive. The platform
- * renders all four `usage` counters as non-pointer ints
- * (`internal/domain/session.go:20-31`), so a missing one is a broken wire —
- * but the trace is the operator's only view of a running session, and losing
- * the whole page to one absent counter is the worst available failure (plan 04
- * slice 2). Same posture as `summary.ts`'s `tokensLine` and plan 03's
- * null-safe time math: say what is known, never guess the rest.
- *
- * The finiteness check is reachable, not defensive theatre: JSON has no `NaN`
- * literal, but it does parse `1e400` to `Infinity`, which `toLocaleString`
- * renders as `∞` (review finding, PR #35).
- */
-const count = (n: unknown) =>
-  typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
-
-/**
  * The session's metadata as one chip row (plan 03 slice 1) — the reference
  * console's density, from fields the wire already serves. The reference's
  * duration chip is deliberately absent: the platform serves `stats` empty by
@@ -166,9 +150,9 @@ function SessionChips({ session }: { session: Session }) {
         className={cn(chip, "text-muted-foreground")}
         data-testid="usage-chip"
       >
-        {count(session.usage?.input_tokens)} in ·{" "}
-        {count(session.usage?.output_tokens)} out ·{" "}
-        {count(session.usage?.cache_read_input_tokens)} cache read
+        {tokenCount(session.usage?.input_tokens)} in ·{" "}
+        {tokenCount(session.usage?.output_tokens)} out ·{" "}
+        {tokenCount(session.usage?.cache_read_input_tokens)} cache read
       </Badge>
       {age && (
         <Badge

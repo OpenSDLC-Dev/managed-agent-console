@@ -28,6 +28,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgentOptions, useSessions } from "@/lib/platform/queries";
+import { tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
@@ -57,7 +58,7 @@ const COLUMNS: Column<Session>[] = [
     key: "tokens",
     header: "Tokens in / out",
     cell: (s) =>
-      `${s.usage.input_tokens.toLocaleString()} / ${s.usage.output_tokens.toLocaleString()}`,
+      `${tokenCount(s.usage?.input_tokens)} / ${tokenCount(s.usage?.output_tokens)}`,
   },
   {
     key: "created",
