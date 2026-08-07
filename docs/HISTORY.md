@@ -2,6 +2,21 @@
 
 Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md).
 
+## Plan 05 — release management (approved 2026-08-07, archived 2026-08-08)
+
+[docs/plan/05_release-management.md](./plan/05_release-management.md), four slices (PRs #42, #43, #44, #45, #48, #53, #54, plus release PR #46). The console had been feature-complete since plan 03 and verification-hardened since plan 04, and had never been released: no tag, no GitHub Release, `package.json` still at the scaffold's 0.1.0, 41 KB of changelog under a single `Unreleased` heading, and a CI job that built the image only to scan it and throw it away — leaving clone-and-build as the only way to run the thing.
+
+1. **v0.1.0 cut by hand**, into the Keep-a-Changelog frame the platform repo already uses, carrying the compatibility fact decision 9 requires.
+2. **The image is published** — `ghcr.io/opensdlc-dev/managed-agent-console`, multi-arch. Nothing reaches the registry the trivy gate has not cleared, which ruled out the standard `push-by-digest` recipe (it pushes first, scans after): each architecture builds on its own native runner, is scanned there, and only then pushes an arch tag, with a second job joining the two scanned images into a manifest list. No new third-party action — buildx ships on the runner.
+3. **The cut is automated without the narrative being automated.** release-please owns versions, tags and Releases; `skip-changelog` keeps it away from CHANGELOG.md entirely. `pnpm release:prepare X.Y.Z` files the section and bumps README; the release workflow replaces release-please's commit-derived body with that section. Conventional-Commit PR titles became the convention, enforced by a check, because squash merge makes the title the bump signal.
+4. **The console states its version** in the sidebar, server-rendered from `package.json`, a recorded divergence from the reference.
+
+**Proven by running it rather than by describing it:** 0.2.0 was cut through the finished machinery. release-please proposed the version, `release:prepare` filed the section, merging its PR tagged `v0.2.0` and published the Release, and `release.yml` fired on the release event — the body replaced from CHANGELOG with links absolutised against the tag, both architectures built and scanned natively, one manifest list published as `0.2.0` / `0.2` / `latest` at `sha256:f020009704`.
+
+Decisions of record: a GitHub App rather than a fine-grained PAT, because a PR opened with `GITHUB_TOKEN` collects no checks and `enforce_admins` would leave it unmergeable, while the org's default policy caps fine-grained PATs at 366 days and would break the pipeline silently a year on; the console's own 0.x semver rather than lockstep with the platform, with compatibility **stated** per release rather than enforced, since a version handshake the platform does not serve would violate principle 1; no `/api/version` endpoint, on plan 04 decision 6's reasoning about credentialed images; rolling `latest`/`X.Y` aliases that move only when the published version really is the newest, so a backfill cannot downgrade whoever pulls `latest`.
+
+Four things the work found by running rather than reasoning: the **first release PR would have failed CI forever** — release-please writes its manifest compactly, prettier wants spaces, and `format:check` is a CI step, over a file no human edits; the **GHCR package is private on first publish** even for a public repository, so the README's `docker run` fails for outside readers until it is flipped by hand; the release-notes rewrite, sitting behind the image build, would have left a published release wearing a placeholder body whenever a build failed; and `release:prepare` bumped README's image pins but not its status line, which nothing downstream would ever have corrected.
+
 ## Plan 04 — verification hardening (approved 2026-08-07, archived 2026-08-07)
 
 [docs/plan/04_verification-hardening.md](./plan/04_verification-hardening.md), issue #31, four slices (PRs #32, #34, #35, #36, #38). The prompt was a read of the `phase-3-verify` sample in anthropics-cwc-workshops/how-we-claude-code; the finding was that a 474-unit / 38-e2e / 5-live suite proved plenty about the console and nothing about its own trustworthiness. Three gaps, each closed by measurement rather than assertion:
