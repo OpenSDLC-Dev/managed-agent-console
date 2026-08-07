@@ -32,6 +32,9 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test:coverage
+      # Asserts the adversarial-input seams still have live probe coverage.
+      # Runs after the suite: a red suite is the more useful failure.
+      - run: pnpm probes:check
       - run: pnpm exec playwright install --with-deps chromium
       # test:e2e runs `next build` first, so the build is covered here too.
       - run: pnpm test:e2e
