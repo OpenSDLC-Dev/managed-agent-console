@@ -4,12 +4,11 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan 04 — verification hardening** ([docs/plan/04_verification-hardening.md](./docs/plan/04_verification-hardening.md), `in-progress`, issue #31, drafted and approved 2026-08-07).
+**None.** Plan 04 (verification hardening, issue #31) completed and archived 2026-08-07; summary in [docs/HISTORY.md](./docs/HISTORY.md). Plans 01–03 archived there too.
 
-- [x] Slice 1 — wire schemas are the source of truth (zod; `types.ts` → `z.infer` re-exports; link A over the mock's fixtures **and** its constructed write-path responses; link B parses real responses in the live tier; reference-wire audit landed as [docs/wire-divergences.md](./docs/wire-divergences.md) — zero transcription bugs)
-- [x] Slice 2 — the suite proves it can fail (schema canary; contract-violation probes at the trace seam and the session surface — which found and fixed a page-killing unguarded `usage` read; `probe:` convention + a `pnpm probes:check` ratchet over Vitest's collected tests)
-- [x] Slice 3 — semantic `data-*` state attributes replace formatted-text assertions (convention in CLAUDE.md; chips/list/toolbar/pager/filters/durations carry raw values; changing both number formatters now reddens 1 e2e + 2 unit tests — each the formatter's designated owner — down from 1 + 9; review caught the toolbar contradicting itself on the Debug tab)
-- [ ] Slice 4 — surface × fixture manifest + screenshot script for the Chrome fidelity pass
-- [ ] Open the recorded known gap as its own issue: principle 3's feature detection is stated but not implemented (every 404 renders as `ErrorState`)
+The console is feature-complete against the platform's implemented surface, with 515 unit / 39 e2e / 5 live tests, a 23-surface fidelity manifest, and a probe ratchet.
 
-Plan 03 (UX parity, issue #24) completed and archived 2026-08-04; summary in [docs/HISTORY.md](./docs/HISTORY.md).
+Open backlog items live in GitHub issues. Two carried out of plan 04:
+
+- #33 — principle 3's feature detection is stated but not implemented: every 404 renders as `ErrorState`, so "the platform lacks this capability" and "this resource does not exist" are indistinguishable.
+- #37 — primary-button padding drift found by the slice-4 fidelity pass: `px-2.5` (10px) against the reference's 12px. Deliberately not fixed in a tooling PR — the class sits on the shared default button size and would move every surface.

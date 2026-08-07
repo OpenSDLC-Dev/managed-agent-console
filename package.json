@@ -14,7 +14,8 @@
     "test:e2e": "next build && playwright test",
     "test:e2e:live": "next build && playwright test --config playwright.live.config.ts",
     "test:coverage": "vitest run --coverage",
-    "probes:check": "node scripts/check-probes.mjs"
+    "probes:check": "node scripts/check-probes.mjs",
+    "fidelity:shots": "next build && playwright test --config playwright.fidelity.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -6,7 +6,10 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.{ts,tsx}"],
+    // test/fidelity holds no product code, but the shot manifest has an
+    // invariant CI should enforce: a duplicate id silently overwrites another
+    // surface's screenshot, which reads as coverage while losing it.
+    include: ["src/**/*.test.{ts,tsx}", "test/fidelity/*.test.ts"],
     coverage: {
       provider: "v8",
       // Everything we wrote counts; src/components/ui is vendored shadcn
