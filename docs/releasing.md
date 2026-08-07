@@ -41,17 +41,21 @@ human — and everything mechanical around it is automated.
    `.release-please-manifest.json`, tags `vX.Y.Z`, and publishes the GitHub
    Release.
 4. Publishing that release runs [release.yml](../.github/workflows/release.yml),
-   which builds both architectures on native runners, gates each on trivy
-   (HIGH/CRITICAL, unfixed ignored) **before** pushing anything, joins the two
-   scanned images into one manifest list, **replaces the release body with the
-   `[X.Y.Z]` changelog section** (release-please's own body is a list of PR
-   titles; the section is the narrative), and appends the image coordinates and
-   digest.
+   in two independent halves:
+   - **notes** — replaces the release body with the `[X.Y.Z]` changelog section
+     (release-please's own body is a list of PR titles; the section is the
+     narrative). It depends on nothing, so a release whose image fails to build
+     still says what it is.
+   - **build → publish** — both architectures on native runners, each gated on
+     trivy (HIGH/CRITICAL, unfixed ignored) **before** anything is pushed, joined
+     into one manifest list, with the image coordinates and digest appended to
+     the body notes wrote.
 
-Nothing in step 4 reads the release body it overwrites, so re-running it is
-idempotent. Repo-relative links in the section are absolutised against the tag on
-the way out — a release body resolves `./docs/…` against `/releases/`, not the
-repository root, so a section copied verbatim would 404 on every link it carries.
+Repo-relative links in the section are absolutised against the tag on the way out
+— a release body resolves `./docs/…` against `/releases/`, not the repository
+root, so a section copied verbatim would 404 on every link it carries. Both
+halves are idempotent: notes regenerates the body from the tag's own CHANGELOG,
+and the image block is cut at its marker before being re-appended.
 
 ## If a release exists but has no image
 

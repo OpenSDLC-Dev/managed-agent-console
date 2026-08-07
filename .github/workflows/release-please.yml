@@ -23,6 +23,15 @@ jobs:
         with:
           app-id: ${{ vars.RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          # Without these the token inherits every permission the installation
+          # holds, so a permission added to the App later would silently widen
+          # this token. These two are what release-please needs: contents for
+          # the version bump and the tag, pull-requests for the release PR and
+          # its label. `permission-issues` is deliberately absent — the App is
+          # not installed with it, and asking for a permission the installation
+          # lacks makes this step fail.
+          permission-contents: write
+          permission-pull-requests: write
 
       # skip-changelog is set in release-please-config.json: this repository's
       # CHANGELOG.md is hand-written prose and stays that way. The tool owns

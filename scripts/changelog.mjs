@@ -82,18 +82,23 @@ export function cutChangelog(text, { version, date, repo = REPO }) {
 export function releaseNotes(text, { version, repo = REPO }) {
   if (!VERSION.test(version))
     throw new Error(`not a release version: ${version}`);
-  const heading = new RegExp(
-    `^## \\[${version.replace(/\./g, "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`,
-    "m",
+  // Scanned line by line rather than by a regex built from `version`: even with
+  // the check above, interpolating a value into a pattern is the shape static
+  // analysis flags, and this reads plainer anyway.
+  const marker = `## [${version}] - `;
+  const lines = text.split("\n");
+  const at = lines.findIndex(
+    (line) =>
+      line.startsWith(marker) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(line.slice(marker.length).trim()),
   );
-  const match = text.match(heading);
-  if (!match || match.index === undefined) {
-    throw new Error(`CHANGELOG.md has no [${version}] section`);
-  }
-  const from = match.index + match[0].length;
-  const rest = text.slice(from);
-  const end = rest.search(/^(## \[|\[Unreleased\]: )/m);
-  const body = (end === -1 ? rest : rest.slice(0, end)).trim();
+  if (at === -1) throw new Error(`CHANGELOG.md has no [${version}] section`);
+
+  const rest = lines.slice(at + 1);
+  const end = rest.findIndex(
+    (line) => line.startsWith("## [") || line.startsWith("[Unreleased]: "),
+  );
+  const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
   if (!body) throw new Error(`the [${version}] section is empty`);
   return body.replace(/\]\(\.\//g, `](${repo}/blob/v${version}/`) + "\n";
 }
