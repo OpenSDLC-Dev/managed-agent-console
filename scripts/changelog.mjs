@@ -104,19 +104,24 @@ export function releaseNotes(text, { version, repo = REPO }) {
 }
 
 /**
- * Repoint every pinned console image reference.
+ * Repoint every version README states: its status line and its pinned image
+ * references.
  *
  * README pins a version rather than `latest` because operators should pin —
  * and a pin nobody bumps documents an older image than the release it sits in.
+ * The status line is the same hazard one paragraph up: release-please touches
+ * only `package.json` and its manifest, so nothing else would ever correct it.
  *
  * @param {string} text
  * @param {{version: string}} opts
  * @returns {string}
  */
-export function bumpImageTag(text, { version }) {
+export function bumpReadme(text, { version }) {
   if (!VERSION.test(version))
     throw new Error(`not a release version: ${version}`);
-  return text.replace(/(managed-agent-console:)\d+\.\d+\.\d+/g, `$1${version}`);
+  return text
+    .replace(/(managed-agent-console:)\d+\.\d+\.\d+/g, `$1${version}`)
+    .replace(/(\*\*Status: v)\d+\.\d+\.\d+/g, `$1${version}`);
 }
 
 /** Local calendar date — this changelog's dates are the maintainer's, not UTC's. */
@@ -151,12 +156,14 @@ function main(argv) {
     );
     writeFileSync(
       readme,
-      bumpImageTag(readFileSync(readme, "utf8"), { version }),
+      bumpReadme(readFileSync(readme, "utf8"), { version }),
     );
     console.error(
       `CHANGELOG.md: [Unreleased] -> [${version}] - ${date}\n` +
-        `README.md: image pins -> ${version}\n\n` +
-        `Land this as its own PR, then merge release-please's release PR.`,
+        `README.md: status line and image pins -> ${version}\n\n` +
+        `Now write the section's lead-in by hand: what this release is, and the\n` +
+        `platform version the live tier last ran green against (plan 05 decision 9).\n` +
+        `Then land this as its own PR and merge release-please's release PR.`,
     );
     return;
   }

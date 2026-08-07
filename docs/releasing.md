@@ -35,7 +35,13 @@ human — and everything mechanical around it is automated.
 
    This moves everything under `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`,
    restores an empty `[Unreleased]`, repoints the compare-link footer, and bumps
-   README's pinned image tag. Land it as its own PR — title `docs: prepare X.Y.Z`.
+   README's status line and pinned image tag.
+
+   Then **write the section's lead-in by hand**: what this release is, and the
+   platform version the live tier last ran green against. Only that section
+   becomes the release notes, so a compatibility fact stated in an older section
+   is a compatibility fact this release does not carry. Land it as its own PR —
+   title `docs: prepare X.Y.Z`.
 
 3. **Merge release-please's release PR.** It bumps `package.json` and
    `.release-please-manifest.json`, tags `vX.Y.Z`, and publishes the GitHub
