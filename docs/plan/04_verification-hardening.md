@@ -1,5 +1,5 @@
 ---
-status: approved
+status: in-progress
 issue: 31
 ---
 
@@ -125,11 +125,20 @@ dependency.
    `src/lib/platform/**` and test files. Without that rule this decision quietly decays into shipping
    zod to the browser.
 2. **The schemas describe the wire as observed, and never gate the running console.** They are a
-   verification instrument only — no response is validated in the browser or the proxy. Objects are
-   **loose** (zod v4 `z.looseObject`), so a platform that adds a field passes. CLAUDE.md principle 4
-   forbids client-side validation stricter than the wire's, and principle 3's wire-neutrality means a
-   wire-compatible endpoint that renders one extra key must not be rejected. Strictness lives in the
-   tests that assert _our fixtures_ are complete, not in the console's runtime path.
+   verification instrument only — no response is validated in the browser or the proxy. An extra key
+   the platform renders must never fail: CLAUDE.md principle 4 forbids client-side validation
+   stricter than the wire's, and principle 3's wire-neutrality means a wire-compatible endpoint that
+   renders one more field must not be rejected. Strictness lives in the tests that assert _our
+   fixtures_ are complete, not in the console's runtime path.
+   **Amended in slice 1, on evidence.** This decision said "loose objects (zod v4 `z.looseObject`)".
+   Probing zod 4.4.3 showed the premise was wrong in both directions: plain `z.object` already
+   _strips_ unknown keys rather than rejecting them (only `z.strictObject` rejects), so it satisfies
+   the requirement above on its own; and `z.looseObject`'s **inferred type carries
+   `[k: string]: unknown`**, which — since `types.ts` now infers from these schemas — would have
+   silently deleted typo protection on `Agent`, `Session`, and every other shape across 42
+   consumers. The requirement is unchanged; the mechanism is `z.object`, with `z.looseObject`
+   reserved for `SessionEvent` and `ContentBlock`, the two shapes whose transcription genuinely
+   carries an index signature.
 3. **Two links, two tiers, one vocabulary.** Link A (**everything the mock serves** ↔ schemas — its
    static fixtures _and_ the responses it constructs on write paths) runs in CI on every PR and
    catches mock drift. Link B (schemas ↔ the real platform) runs only in the live tier, where real

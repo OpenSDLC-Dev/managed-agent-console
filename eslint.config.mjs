@@ -13,6 +13,58 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Keep zod out of the client bundle (plan 04 decision 1). The wire schemas
+  // are a verification instrument: consumers import the inferred types from
+  // `@/lib/platform/types`, whose `export type … from "./schemas"` is erased
+  // whole at compile time. A value import anywhere else would ship zod to the
+  // browser, so the property is pinned here rather than left to convention.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/platform/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "zod",
+              message:
+                "zod is a test-time instrument. Import the inferred types from @/lib/platform/types.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["@/lib/platform/schemas", "**/platform/schemas"],
+              message:
+                "Import wire types from @/lib/platform/types — the schema module must stay out of the bundle.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Inside the platform module, zod belongs to schemas.ts and its own test.
+    files: ["src/lib/platform/**/*.{ts,tsx}"],
+    ignores: [
+      "src/lib/platform/schemas.ts",
+      "src/lib/platform/**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "zod",
+              message:
+                "Only src/lib/platform/schemas.ts imports zod; everything else uses the inferred types.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -5,6 +5,13 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
+import type { z } from "zod";
+import {
+  AgentSchema,
+  EnvironmentSchema,
+  SessionEventSchema,
+  SessionSchema,
+} from "../../src/lib/platform/schemas";
 import { LIVE_CONSOLE_PASSWORD, resolveLiveEnv } from "./env";
 
 /**
@@ -39,10 +46,75 @@ const WIRE_HEADERS = {
   "anthropic-beta": "managed-agents-2025-11-06",
 };
 
+/**
+ * Link B of plan 04's two-link verification model: **the wire schemas must
+ * match the real platform.**
+ *
+ * Link A (`src/lib/platform/schemas.test.ts`) proves the mock matches the
+ * schemas, and runs in CI. It cannot prove the schemas match the platform —
+ * fixtures and transcription can stay mutually consistent while both drift.
+ * Only a real response settles that, so the check lives here, where real
+ * responses exist. Every call in this file already funnels through the two
+ * helpers below, which makes this a parse at two seams rather than a new suite.
+ *
+ * Coverage is exactly what this suite touches. Routes it never calls are out of
+ * link B's reach, and `assertWireShape` says so out loud instead of passing
+ * quietly.
+ */
+function itemSchemaFor(
+  path: string,
+): { schema: z.ZodType; name: string } | null {
+  const route = path.split("?")[0].replace(/\/+$/, "");
+  if (/^v1\/agents(\/[^/]+)?$/.test(route))
+    return { schema: AgentSchema, name: "Agent" };
+  if (/^v1\/environments(\/[^/]+)?$/.test(route))
+    return { schema: EnvironmentSchema, name: "Environment" };
+  if (/^v1\/sessions\/[^/]+\/events$/.test(route))
+    return { schema: SessionEventSchema, name: "SessionEvent" };
+  if (/^v1\/sessions(\/[^/]+)?$/.test(route))
+    return { schema: SessionSchema, name: "Session" };
+  return null;
+}
+
+const uncoveredRoutes = new Set<string>();
+
+/** Parses a real platform response, naming the field and the endpoint on a miss. */
+function assertWireShape(
+  method: string,
+  path: string,
+  body: Record<string, unknown>,
+): void {
+  const entry = itemSchemaFor(path);
+  if (!entry) {
+    const route = path.split("?")[0];
+    if (!uncoveredRoutes.has(route)) {
+      uncoveredRoutes.add(route);
+      console.log(`link B: no schema mapped for ${route} — not shape-checked`);
+    }
+    return;
+  }
+  const rows = Array.isArray(body.data) ? body.data : [body];
+  rows.forEach((row, index) => {
+    const result = entry.schema.safeParse(row);
+    if (result.success) return;
+    const issues = result.error.issues
+      .map(
+        (issue) => `  path: ${JSON.stringify(issue.path)} — ${issue.message}`,
+      )
+      .join("\n");
+    throw new Error(
+      `${method} ${path} → ${entry.name}[${index}] does not match ` +
+        `src/lib/platform/schemas.ts:\n${issues}`,
+    );
+  });
+}
+
 async function platformGet(path: string): Promise<Record<string, unknown>> {
   const res = await api.get(`${baseUrl}/${path}`, { headers: WIRE_HEADERS });
   expect(res.ok(), `GET ${path} -> ${res.status()}`).toBe(true);
-  return (await res.json()) as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
+  assertWireShape("GET", path, body);
+  return body;
 }
 
 async function platformPost(
@@ -54,7 +126,9 @@ async function platformPost(
     data,
   });
   expect(res.ok(), `POST ${path} -> ${res.status()}`).toBe(true);
-  return (await res.json()) as Record<string, unknown>;
+  const body = (await res.json()) as Record<string, unknown>;
+  assertWireShape("POST", path, body);
+  return body;
 }
 
 async function signIn(page: Page) {
@@ -437,6 +511,20 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
   const copied = JSON.parse(
     await page.evaluate(() => navigator.clipboard.readText()),
   ) as { type: string }[];
+  // Link B for events: "Copy all" serializes the raw wire events the console
+  // holds, so this is the real platform's event stream — the one shape the two
+  // helpers above never see, since the trace arrives over SSE.
+  copied.forEach((event, index) => {
+    const result = SessionEventSchema.safeParse(event);
+    if (result.success) return;
+    throw new Error(
+      `live trace event[${index}] (${event.type}) does not match ` +
+        `src/lib/platform/schemas.ts:\n` +
+        result.error.issues
+          .map((i) => `  path: ${JSON.stringify(i.path)} — ${i.message}`)
+          .join("\n"),
+    );
+  });
   expect(copied[0].type).toBe("user.message");
   expect(copied.some((event) => event.type === "agent.tool_use")).toBe(true);
   expect(copied.some((event) => event.type === "span.model_request_end")).toBe(
