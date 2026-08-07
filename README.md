@@ -18,18 +18,19 @@ The console is a Next.js app with a thin server-side proxy: every platform call 
 
 ## Quickstart (Docker)
 
-Build the image and run it against a platform control plane:
+Run the published image against a platform control plane:
 
 ```bash
-docker build -t managed-agent-console .
 docker run --rm -p 3000:3000 \
   -e PLATFORM_BASE_URL=http://host.docker.internal:8080 \
   -e PLATFORM_API_KEY=your-controlplane-api-key \
   -e CONSOLE_PASSWORD=choose-a-password \
-  managed-agent-console
+  ghcr.io/opensdlc-dev/managed-agent-console:0.1.0
 ```
 
 Then open http://localhost:3000.
+
+Images are multi-arch (`linux/amd64`, `linux/arm64`). Pin a version as above; `latest` follows the newest release. Building from a checkout still works — `docker build -t managed-agent-console .` — and is what CI gates on every PR.
 
 ### Next to the platform's compose stack
 
@@ -41,14 +42,14 @@ docker run --rm -p 3000:3000 \
   -e PLATFORM_BASE_URL=http://controlplane:8080 \
   -e PLATFORM_API_KEY=your-controlplane-api-key \
   -e CONSOLE_PASSWORD=choose-a-password \
-  managed-agent-console
+  ghcr.io/opensdlc-dev/managed-agent-console:0.1.0
 ```
 
 Or as a service inside the same `docker-compose.yml`:
 
 ```yaml
 console:
-  build: ../../managed-agent-console # or image: managed-agent-console
+  image: ghcr.io/opensdlc-dev/managed-agent-console:0.1.0
   ports:
     - "127.0.0.1:3000:3000"
   environment:

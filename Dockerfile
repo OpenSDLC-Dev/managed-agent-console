@@ -9,6 +9,19 @@ RUN pnpm build
 
 # Run — Next standalone output only
 FROM node:24-alpine
+# Defaults keep a plain `docker build` (CI's image gate, a local checkout)
+# working; the release workflow passes the real values.
+ARG VERSION=0.0.0-dev
+ARG REVISION=unknown
+# org.opencontainers.image.source is the label GHCR reads to link the published
+# package back to this repository. It does not make the package public — that is
+# a one-time setting, recorded in docs/releasing.md.
+LABEL org.opencontainers.image.title="managed-agent-console" \
+      org.opencontainers.image.description="Web console for managed-agent-platform" \
+      org.opencontainers.image.source="https://github.com/OpenSDLC-Dev/managed-agent-console" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
 # The runtime only ever executes `node server.js` — drop the bundled npm and
 # corepack entirely (smaller image; npm's vendored deps carry periodic CVEs
 # the app can never reach, and they'd still trip the trivy gate).
