@@ -104,9 +104,13 @@ const CONNECTION_LABEL = {
  * the whole page to one absent counter is the worst available failure (plan 04
  * slice 2). Same posture as `summary.ts`'s `tokensLine` and plan 03's
  * null-safe time math: say what is known, never guess the rest.
+ *
+ * The finiteness check is reachable, not defensive theatre: JSON has no `NaN`
+ * literal, but it does parse `1e400` to `Infinity`, which `toLocaleString`
+ * renders as `∞` (review finding, PR #35).
  */
 const count = (n: unknown) =>
-  typeof n === "number" ? n.toLocaleString() : "—";
+  typeof n === "number" && Number.isFinite(n) ? n.toLocaleString() : "—";
 
 /**
  * The session's metadata as one chip row (plan 03 slice 1) — the reference

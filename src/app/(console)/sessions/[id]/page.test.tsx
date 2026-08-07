@@ -624,6 +624,27 @@ describe("SessionDetailPage under a violated wire contract", () => {
     ).toHaveTextContent("— in · — out · — cache read");
   });
 
+  it("probe: renders a dash for a counter that overflowed to Infinity", async () => {
+    // JSON has no NaN literal, but `1e400` parses to Infinity — which
+    // toLocaleString happily renders as "∞" (review finding, PR #35).
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: brokenUsage({
+        input_tokens: JSON.parse('{"n":1e400}').n as number,
+      }),
+    });
+    renderPage();
+
+    await screen.findByText("Debug run");
+    const chip = within(screen.getByTestId("session-chips")).getByTestId(
+      "usage-chip",
+    );
+    expect(chip).toHaveTextContent(
+      `— in · ${(567).toLocaleString()} out · ${(89).toLocaleString()} cache read`,
+    );
+    expect(chip.textContent).not.toContain("∞");
+  });
+
   it("probe: renders a trace whose events carry no processed_at", async () => {
     // The platform stamps inbound events at settlement, so unstamped events
     // are normal mid-turn — the offsets must simply be absent, not "NaN".
