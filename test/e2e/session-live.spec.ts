@@ -28,10 +28,15 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
     { timeout: 15_000 },
   );
 
-  // The meta chip-row replaces the overview field table.
+  // The meta chip-row replaces the overview field table. Counters are read as
+  // raw integers (see CLAUDE.md) — the rendered string has exactly one
+  // dedicated assertion, in "token and duration formatting" below.
   const chips = page.getByTestId("session-chips");
   await expect(chips).toContainText("General task agent · v1");
-  await expect(chips).toContainText("5,412 in · 890 out · 3,100 cache read");
+  const usage = chips.getByTestId("usage-chip");
+  await expect(usage).toHaveAttribute("data-input-tokens", "5412");
+  await expect(usage).toHaveAttribute("data-output-tokens", "890");
+  await expect(usage).toHaveAttribute("data-cache-read-tokens", "3100");
 
   // Span duration pairs start/end; offsets are relative to created_at —
   // the fixture idles 21h45m after the session was created.
@@ -40,13 +45,15 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
       .getByTestId("event-row")
       .filter({ hasText: "span.model_request_end" })
       .getByTitle("model request duration"),
-  ).toHaveText("3s");
+  ).toHaveAttribute("data-duration-ms", "3000");
+  // That an offset renders at all is structure; what it reads is formatting,
+  // asserted once in "token and duration formatting".
   await expect(
     page
       .getByTestId("event-row")
       .filter({ hasText: "session.status_idle" })
       .getByTitle("since session creation"),
-  ).toHaveText("21:45:00");
+  ).toBeVisible();
 
   // Approving wakes the session; the real idle interval becomes a band.
   await page.getByRole("button", { name: "Allow" }).click();
@@ -81,7 +88,12 @@ test("a row opens the detail panel and Debug shows the raw wire", async ({
     .click();
   const panel = page.getByTestId("event-detail");
   await expect(panel).toBeVisible();
-  await expect(panel).toContainText("5,412 in · 890 out · 3,100 cache read");
+  await expect(panel).toHaveAttribute(
+    "data-event-type",
+    "span.model_request_end",
+  );
+  await expect(panel).toHaveAttribute("data-input-tokens", "5412");
+  await expect(panel).toHaveAttribute("data-output-tokens", "890");
 
   // The raw event expands to the verbatim wire shape.
   await panel.getByText("Raw event").click();
@@ -103,6 +115,38 @@ test("a row opens the detail panel and Debug shows the raw wire", async ({
     .filter({ hasText: "span.model_request_start" });
   await expect(startRow).toHaveCount(1);
   await expect(startRow).toContainText('"type": "span.model_request_start"');
+});
+
+/**
+ * The one place the *rendered* number strings are asserted (CLAUDE.md's
+ * `data-*` convention). Everything else in this suite reads raw values off
+ * attributes, so changing `tokenCount` or `durationLabel` — a copy edit, a
+ * separator, a unit — reddens this test alone instead of the trace suite.
+ */
+test("token and duration formatting", async ({ page }) => {
+  await signIn(page);
+  await page.goto(GATED);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+    { timeout: 15_000 },
+  );
+
+  await expect(page.getByTestId("usage-chip")).toHaveText(
+    "5,412 in · 890 out · 3,100 cache read",
+  );
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "span.model_request_end" })
+      .getByTitle("model request duration"),
+  ).toHaveText("3s");
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "session.status_idle" })
+      .getByTitle("since session creation"),
+  ).toHaveText("21:45:00");
 });
 
 test("an unknown event type renders its payload instead of a blank row", async ({

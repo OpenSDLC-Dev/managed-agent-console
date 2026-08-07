@@ -120,7 +120,12 @@ describe("TranscriptRow", () => {
     expect(screen.getByTitle("since session creation")).toHaveTextContent(
       "0:09",
     );
-    expect(screen.getByTitle("model request duration")).toHaveTextContent("3s");
+    // The duration's raw value is the assertion; `durationLabel`'s output has
+    // its own test in timing.test.ts (CLAUDE.md's data-* convention).
+    expect(screen.getByTitle("model request duration")).toHaveAttribute(
+      "data-duration-ms",
+      "3000",
+    );
   });
 
   it("omits the trailing column without offset or duration", () => {
@@ -263,10 +268,12 @@ describe("EventDetailPanel", () => {
 });
 
 describe("IdleBand", () => {
-  it("labels the idle interval", () => {
+  it("carries the idle interval it renders", () => {
+    // The value is the assertion; `durationLabel`'s output is asserted once,
+    // in timing.test.ts (CLAUDE.md's data-* convention).
     render(<IdleBand ms={25_000} />);
-    expect(screen.getByTestId("idle-band")).toHaveTextContent(
-      "Session idle · 25s",
-    );
+    const band = screen.getByTestId("idle-band");
+    expect(band).toHaveAttribute("data-idle-ms", "25000");
+    expect(band).toHaveTextContent("Session idle ·");
   });
 });

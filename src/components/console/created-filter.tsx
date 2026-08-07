@@ -50,6 +50,8 @@ export function CreatedFilter({
           size="sm"
           className="h-8 rounded-lg"
           aria-label="Created filter"
+
+          data-value={value}
         >
           {/* The label, not the raw preset key ("7d"), belongs on the pill. */}
           <span>{CREATED_PRESETS.find((p) => p.key === value)?.label}</span>

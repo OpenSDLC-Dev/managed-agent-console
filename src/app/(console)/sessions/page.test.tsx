@@ -228,11 +228,14 @@ describe("SessionsPage", () => {
     expect(table.getByText("idle")).toBeInTheDocument();
     expect(table.getByText("archived")).toBeInTheDocument();
     expect(table.getAllByText("Support bot · v2")).toHaveLength(2);
-    expect(
-      table.getAllByText(
-        `${(1234).toLocaleString()} / ${(567).toLocaleString()}`,
-      ),
-    ).toHaveLength(2);
+    // Counters as raw integers (CLAUDE.md); the rendered string is asserted
+    // once, in the formatting test below.
+    const cells = table.getAllByTestId("tokens-cell");
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell).toHaveAttribute("data-input-tokens", "1234");
+      expect(cell).toHaveAttribute("data-output-tokens", "567");
+    }
 
     await userEvent.click(screen.getByText("Nightly run"));
     expect(pushSpy).toHaveBeenCalledWith("/sessions/sess_1");
@@ -416,13 +419,15 @@ describe("SessionsPage", () => {
     );
     renderPage();
 
-    // Both rows render, and neither prints a wrong number.
+    // Both rows render, and neither claims a counter it does not have: the
+    // attribute is absent rather than carrying a made-up value.
     expect(await screen.findByText("Broken usage")).toBeInTheDocument();
     expect(screen.getByText("Overflowed usage")).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "— / —" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("cell", { name: `— / ${(567).toLocaleString()}` }),
-    ).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain("∞");
+    const [broken, overflowed] = screen.getAllByTestId("tokens-cell");
+    expect(broken).not.toHaveAttribute("data-input-tokens");
+    expect(broken).not.toHaveAttribute("data-output-tokens");
+    expect(overflowed).toHaveAttribute("data-output-tokens", "567");
+    // Nothing renders ∞ or NaN for the overflowed counter.
+    expect(document.body.textContent).not.toMatch(/∞|NaN/);
   });
 });

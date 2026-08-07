@@ -13,7 +13,15 @@ export function Pager({
   onNext: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 pt-4">
+    // Cursor state, machine-readable (see CLAUDE.md): whether the wire handed
+    // back a page token in either direction. Disabled buttons say the same
+    // thing, but only by inference from a control's enabled-ness.
+    <div
+      className="flex items-center gap-2 pt-4"
+      data-testid="pager"
+      data-has-prev={hasPrev}
+      data-has-next={hasNext}
+    >
       <Button
         variant="outline"
         size="icon"

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, tokenAttr } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
 import { Time, WARNING_BOX } from "@/components/console/bits";
@@ -44,12 +44,30 @@ function MetaColumn({
   return (
     <div className="shrink-0 self-start text-right text-[12px] tabular-nums text-muted-foreground">
       {durationMs !== undefined && (
-        <span title="model request duration">{durationLabel(durationMs)}</span>
+        <span title="model request duration" data-duration-ms={durationMs}>
+          {durationLabel(durationMs)}
+        </span>
       )}
       {durationMs !== undefined && offset && " · "}
       {offset && <span title="since session creation">{offset}</span>}
     </div>
   );
+}
+
+/**
+ * Machine-readable token counters for the surfaces that also render them as a
+ * formatted string (the `data-*` state convention — see CLAUDE.md). Absent
+ * when the event carries no usage, so `[data-input-tokens]` selects exactly
+ * the rows that have one.
+ */
+function usageAttrs(event: SessionEvent) {
+  const usage = event.model_usage;
+  if (!usage) return undefined;
+  return {
+    "data-input-tokens": tokenAttr(usage.input_tokens),
+    "data-output-tokens": tokenAttr(usage.output_tokens),
+    "data-cache-read-tokens": tokenAttr(usage.cache_read_input_tokens),
+  };
 }
 
 /**
@@ -78,6 +96,7 @@ export function TranscriptRow({
       aria-expanded={selected}
       data-testid="event-row"
       data-event-type={event.type}
+      {...usageAttrs(event)}
       className={cn(
         "flex w-full items-center gap-3 border-b px-1 py-2.5 text-left last:border-b-0 hover:bg-secondary/40",
         selected && "bg-secondary/60",
@@ -182,6 +201,8 @@ export function EventDetailPanel({
   return (
     <aside
       data-testid="event-detail"
+      data-event-type={event.type}
+      {...usageAttrs(event)}
       aria-label="Event details"
       className="sticky top-4 max-h-[75vh] self-start overflow-y-auto rounded-lg border bg-card p-4"
     >
@@ -266,6 +287,7 @@ export function IdleBand({ ms }: { ms: number }) {
     <div
       className="flex items-center justify-center gap-2 border-b py-1.5 text-[12px] text-muted-foreground last:border-b-0"
       data-testid="idle-band"
+      data-idle-ms={ms}
     >
       Session idle · {durationLabel(ms)}
     </div>

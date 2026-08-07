@@ -39,4 +39,31 @@ describe("Pager", () => {
     expect(onPrev).not.toHaveBeenCalled();
     expect(onNext).not.toHaveBeenCalled();
   });
+
+  it("states its cursor position machine-readably", () => {
+    // Disabled buttons imply the same thing, but only by inference from a
+    // control's enabled-ness (CLAUDE.md's data-* convention).
+    const noop = () => {};
+    const { rerender } = render(
+      <Pager hasPrev={false} hasNext onPrev={noop} onNext={noop} />,
+    );
+    expect(screen.getByTestId("pager")).toHaveAttribute(
+      "data-has-prev",
+      "false",
+    );
+    expect(screen.getByTestId("pager")).toHaveAttribute(
+      "data-has-next",
+      "true",
+    );
+
+    rerender(<Pager hasPrev hasNext={false} onPrev={noop} onNext={noop} />);
+    expect(screen.getByTestId("pager")).toHaveAttribute(
+      "data-has-prev",
+      "true",
+    );
+    expect(screen.getByTestId("pager")).toHaveAttribute(
+      "data-has-next",
+      "false",
+    );
+  });
 });

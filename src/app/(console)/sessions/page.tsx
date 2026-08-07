@@ -28,7 +28,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgentOptions, useSessions } from "@/lib/platform/queries";
-import { tokenCount } from "@/lib/utils";
+import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
@@ -57,8 +57,16 @@ const COLUMNS: Column<Session>[] = [
   {
     key: "tokens",
     header: "Tokens in / out",
-    cell: (s) =>
-      `${tokenCount(s.usage?.input_tokens)} / ${tokenCount(s.usage?.output_tokens)}`,
+    cell: (s) => (
+      <span
+        data-testid="tokens-cell"
+        data-input-tokens={tokenAttr(s.usage?.input_tokens)}
+        data-output-tokens={tokenAttr(s.usage?.output_tokens)}
+      >
+        {tokenCount(s.usage?.input_tokens)} /{" "}
+        {tokenCount(s.usage?.output_tokens)}
+      </span>
+    ),
   },
   {
     key: "created",
@@ -119,6 +127,7 @@ export default function SessionsPage() {
               size="sm"
               className="h-8 rounded-lg"
               aria-label="Status filter"
+              data-value={status}
             >
               <SelectValue />
             </SelectTrigger>
@@ -144,6 +153,7 @@ export default function SessionsPage() {
               size="sm"
               className="h-8 rounded-lg"
               aria-label="Agent filter"
+              data-value={agentId}
             >
               <SelectValue />
             </SelectTrigger>

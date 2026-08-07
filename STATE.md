@@ -8,7 +8,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 - [x] Slice 1 — wire schemas are the source of truth (zod; `types.ts` → `z.infer` re-exports; link A over the mock's fixtures **and** its constructed write-path responses; link B parses real responses in the live tier; reference-wire audit landed as [docs/wire-divergences.md](./docs/wire-divergences.md) — zero transcription bugs)
 - [x] Slice 2 — the suite proves it can fail (schema canary; contract-violation probes at the trace seam and the session surface — which found and fixed a page-killing unguarded `usage` read; `probe:` convention + a `pnpm probes:check` ratchet over Vitest's collected tests)
-- [ ] Slice 3 — semantic `data-*` state attributes replace formatted-text e2e assertions
+- [x] Slice 3 — semantic `data-*` state attributes replace formatted-text assertions (convention in CLAUDE.md; chips/list/toolbar/pager/filters/durations carry raw values; changing both number formatters now reddens 1 e2e + 2 unit tests — each the formatter's designated owner — down from 1 + 9; review caught the toolbar contradicting itself on the Debug tab)
 - [ ] Slice 4 — surface × fixture manifest + screenshot script for the Chrome fidelity pass
 - [ ] Open the recorded known gap as its own issue: principle 3's feature detection is stated but not implemented (every 404 renders as `ErrorState`)
 
