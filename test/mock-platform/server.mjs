@@ -5,6 +5,8 @@
 // truth. Sessions carry a tiny state machine so e2e can exercise the HITL
 // approval round trip and streamed replies.
 import { createServer } from "node:http";
+import { argv } from "node:process";
+import { fileURLToPath } from "node:url";
 import {
   agents,
   agentVersions,
@@ -1366,6 +1368,13 @@ const server = createServer(async (req, res) => {
   res.end(JSON.stringify(result));
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
-});
+// Playwright's webServer runs this file directly (`node …/server.mjs`); the
+// conformance suite imports it instead and drives it on an ephemeral port, so
+// the listen has to be conditional or the import would bind 18080.
+if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
+  });
+}
+
+export { API_KEY, resetStore, server };
