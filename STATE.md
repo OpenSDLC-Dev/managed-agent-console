@@ -12,8 +12,9 @@ What is being worked on right now, and how far along it is — nothing else. **S
 - [x] `.github/workflows/deploy.yml` — push to `main`: build → push → deploy → smoke, WIF identity, no GitHub secrets. Deep check by `kubectl exec` inside the pod; the public IP is asserted to be gated (`login_gate: true`, anonymous `GET /` → 307 `/login`)
 - [x] [docs/deploy-gcp.md](./docs/deploy-gcp.md), README pointer, CHANGELOG, this file
 - [x] Adversarial review of the pipeline, findings fixed (the deep lever, the unasserted gate, the no-op dispatch, base64 masking, poll bounds, secret-dir shredding)
-- [ ] First real run of the workflow — the image `…/map-images/console:9787b51` was built and pushed by hand, but no step of `deploy.yml` has executed against `map-staging`
-- [x] [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) open, CI green, every bot review thread settled — the rollback on a failed gate, `pipefail`, the liveness probe that would have restart-looped a misconfigured pod, and the prefix-matching route exemptions
+- [x] First real run of the workflow — [run 31260202296](https://github.com/OpenSDLC-Dev/managed-agent-console/actions/runs/31260202296) on `e7daf11`, green end to end in 1m44s, build through public-gate assertion. The selector-recreation guard fired for real: the by-hand Deployment carried `app: console` and the manifest carries `app.kubernetes.io/name: console`, and `spec.selector` is immutable
+- [x] [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) merged — the rollback on a failed gate, `pipefail`, the liveness probe that would have restart-looped a misconfigured pod, and the prefix-matching route exemptions all settled first
+- [x] `gha-creds-*.json` out of the image build context ([PR #65](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/65)) — the credential the deploy job mints lands in the workspace `docker build .` uses as its context; the multi-stage build kept it out of the pushed image, so this is hardening. `.claude/worktrees` and a depth-matched `**/.env*` go with it
 
 Known limitation carried on purpose: plain HTTP on a bare load-balancer IP, no domain and no TLS, which is why `CONSOLE_PASSWORD` is mandatory there.
 
