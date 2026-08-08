@@ -1,0 +1,176 @@
+# Deploying to GCP
+
+How the console reaches the staging cluster, what proves a deployment worked,
+and what to do when one does not. The objects themselves are in
+[deploy/k8s/](../deploy/k8s/); the pipeline is
+[.github/workflows/deploy.yml](../.github/workflows/deploy.yml).
+
+This is deployment, not release. A release publishes a versioned, multi-arch
+image to GHCR for anyone to pull ([docs/releasing.md](./releasing.md)); this
+pushes a commit-tagged image to a private Artifact Registry and rolls one
+cluster. The two are independent — staging runs `main`, not the newest tag.
+
+## Where it goes
+
+|           |                                                                                         |
+| --------- | --------------------------------------------------------------------------------------- |
+| Project   | `hh-opensdlc-managed-agents`                                                            |
+| Cluster   | `map-staging`, zone `us-central1-a`                                                     |
+| Namespace | `map` — the same one the platform runs in                                               |
+| Image     | `us-central1-docker.pkg.dev/hh-opensdlc-managed-agents/map-images/console:<commit-sha>` |
+
+One environment, called staging. The console sits beside the platform rather
+than in a namespace of its own, so it reaches the control plane over cluster DNS
+(`http://map-managed-agent-platform-controlplane.map.svc.cluster.local:8080`)
+and the management key never leaves the cluster.
+
+## The trigger
+
+Push to `main`, plus `workflow_dispatch`. With a single environment, "merged"
+and "deployed" are the same event; a manual promotion step would only be a
+button somebody forgets to press. Dispatch exists for the deploys that follow no
+commit — a rotated secret, a cluster rebuilt under the same name — and it does
+something on an unchanged `main` because the pod template carries a checksum of
+the two secret payloads (below), not only because the workflow re-runs.
+
+Runs are serialized and **never cancelled** (`concurrency: cancel-in-progress:
+false`). Two pushes in a minute queue; killing one mid-rollout would leave the
+cluster holding half of each revision.
+
+## Identity: no secrets in this repository
+
+There is no `GCP_SA_KEY`, and there is nothing to leak from GitHub settings. The
+job asks GitHub for a short-lived OIDC token, Workload Identity Federation
+exchanges it for an impersonation of `cd-deployer@…`, and the credentials the
+deployment itself needs are read from Secret Manager **inside** the job:
+
+| Secret Manager secret  | Becomes                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| `controlplane-api-key` | the `platform-api-key` key of the `console-secrets` Secret → `PLATFORM_API_KEY` |
+| `console-password`     | the `console-password` key of the same Secret → `CONSOLE_PASSWORD`              |
+
+`controlplane-api-key` is the same value the platform chart installs as
+`controlplane.apiKey` — one secret, two readers, which is what makes the
+console's key valid at all.
+
+Both must be a **single line**, and the job rejects the run if either is not.
+A trailing newline is the easy way to get this wrong — `--data-file=-` stores
+the Enter you pressed — so the job strips one before writing the Kubernetes
+Secret. Without that, a password nobody can type would deploy green: the smoke
+gate logs in with the container's _own_ copy of the value, so it proves the gate
+closes, never that a human can open it.
+
+The WIF provider only accepts tokens from repositories owned by `OpenSDLC-Dev`,
+and each repository is separately bound to impersonate the deploy identity. That
+identity holds exactly what CD needs — push images, drive the cluster, read
+secrets — and notably **not** the permissions to change infrastructure.
+
+**CD does not run Terraform.** The cluster, the registry, the WIF pool, the
+service account, and the secrets are human-driven and interactive on purpose.
+This pipeline owns four verbs: build, push, deploy, smoke.
+
+The image is built on the runner with `docker build` and pushed, rather than
+submitted to Cloud Build. The runner already holds the deploy identity, so
+`docker` is the shorter path — and a Cloud Build submission in this project needs
+an explicit `--service-account=cd-deployer@…`, because a project created under an
+organization no longer grants Editor to the Compute Engine default service
+account and that default identity cannot even stage the source bucket.
+
+Rotating a credential therefore means adding a Secret Manager version and
+re-running the workflow (`workflow_dispatch`) — never editing anything here, and
+never a `kubectl` command afterwards. The run writes a `console-secrets/checksum`
+annotation, a `sha256` of the two payloads, into the pod template, so a rotation
+on an unchanged `main` is a **new revision** and the pod actually rolls. Without
+that the re-applied Deployment would be byte-identical, `rollout status` would
+return instantly green, and the pod would keep running with the old credentials
+— a re-deploy that reports success and did nothing, which is the failure mode
+`workflow_dispatch` exists to avoid.
+
+## What the smoke gate proves
+
+`kubectl rollout status` only proves the container starts and answers the
+shallow readiness probe — which reads configuration and touches no network. A
+revision can pass that with a wrong key, a wrong base URL, or a platform that
+is not there.
+
+Two steps follow it, because two different things need proving and they are
+reachable from two different places.
+
+**Can this revision serve? — from inside the pod.** `GET /api/health?deep=1`
+makes the console call `/v1/agents?limit=1` on the platform with the management
+key, and must answer **200**: both environment variables are set, and the
+platform accepts the key. A wrong key answers 401 and the gate reports it; an
+unreachable control plane reports `reachable: false`. That depth answers
+sessions only — it is a lever that spends the management key, and this console
+sits on a bare public IP — so the step runs it with `kubectl exec` against the
+pod carrying the image just pushed, over `127.0.0.1`, logging in with the
+`CONSOLE_PASSWORD` the container already holds. The credential never leaves the
+pod. The response body names environment variables and a status code and carries
+no URL and no key, which is why the job prints it.
+
+**Is the public address gated? — from outside.** The last step polls the
+Service's external IP and requires three things of it: `GET /api/health` (the
+shallow depth, which stays anonymous for the kubelet's sake) answers **200**, so
+the load balancer routes and the pod is serving; that body reports `login_gate:
+true`; and an anonymous `GET /` answers **307 to `/login`** rather than a page.
+The third is the one that matters and the only one that is evidence — that a
+non-empty `console-password` existed in Secret Manager at deploy time is a
+different claim from "the pod answering on the internet is gated", and what is
+behind this IP is a full-power platform management key on plain HTTP.
+
+Two things it deliberately does not prove:
+
+- **That the platform can run anything.** `/v1/agents` answers on a control
+  plane with no model providers configured. Whether the platform is fit to serve
+  sessions is the platform's own pipeline's gate, not this one's.
+- **That the UI renders.** This is a reachability gate, not an e2e run; the
+  Playwright suites are CI's job, on the PR, before the merge that deploys.
+
+The job also fails, before it touches the cluster, if `console-password` is
+empty in Secret Manager — an unset gate on a public URL is treated as a broken
+deployment rather than a configuration choice. That check is the cheap one, and
+it is not the evidence: what proves the deployed console is gated is the
+anonymous request above, made against the address the internet uses.
+
+## Rolling back
+
+The image tag is the commit sha and is never reused, so every revision the
+cluster has run is still addressable.
+
+```bash
+gcloud container clusters get-credentials map-staging \
+  --zone us-central1-a --project hh-opensdlc-managed-agents
+
+kubectl rollout undo deployment/console -n map          # back one revision
+kubectl rollout history deployment/console -n map       # what else is there
+kubectl rollout status deployment/console -n map
+```
+
+To land on a specific commit rather than "one back":
+
+```bash
+kubectl set image deployment/console \
+  console=us-central1-docker.pkg.dev/hh-opensdlc-managed-agents/map-images/console:<sha> \
+  -n map
+```
+
+Either way the next push to `main` deploys over it — a rollback buys time to fix
+forward, it does not pin anything.
+
+## Known limitation: plain HTTP on a bare IP
+
+The console is published by a `type: LoadBalancer` Service on port 80. **There
+is no domain, no TLS, and no Ingress yet.** The login gate is the only thing
+between the internet and the console, and the password crosses the wire in the
+clear.
+
+This is a deliberate, temporary staging shape: an Ingress needs a hostname to
+key its rules off and cert-manager needs a domain to prove control of, and there
+is neither. It is why `CONSOLE_PASSWORD` is mandatory here rather than optional
+as it is everywhere else in this repository.
+
+What changes when a domain arrives is small and listed in
+[deploy/k8s/README.md](../deploy/k8s/README.md) — the Service becomes
+`ClusterIP`, an Ingress and a certificate go in front of it, and the smoke test
+targets the hostname instead of polling for an IP. Nothing in the Deployment
+changes.

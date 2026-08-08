@@ -92,4 +92,13 @@ describe("matcher exemptions", () => {
     expect(matches("/_next/image")).toBe(false);
     expect(matches("/favicon.ico")).toBe(false);
   });
+
+  it("exempts the health endpoint, which no probe can authenticate to", () => {
+    // A gated /api/health answers 401, which a readiness probe reads as an
+    // unhealthy container — the pod never becomes ready and the rollout that
+    // waits on it never finishes. The exemption is total, query string and
+    // all; the route gates its own `?deep=1` depth instead, because that one
+    // spends the management key. See deploy/k8s/README.md.
+    expect(matches("/api/health")).toBe(false);
+  });
 });

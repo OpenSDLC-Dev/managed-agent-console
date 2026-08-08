@@ -1,0 +1,24 @@
+# The console's public address.
+#
+# type: LoadBalancer, not an Ingress: there is no domain and no certificate yet,
+# so there is nothing for an Ingress' host rules or for cert-manager to key off.
+# GKE gives this Service a bare regional IP and the pipeline smoke-tests that IP
+# directly. What that costs, and exactly what changes when a domain arrives, is
+# in README.md next to this file.
+apiVersion: v1
+kind: Service
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: console
+  ports:
+    - name: http
+      protocol: TCP
+      # Plain HTTP on :80 — see the README's known limitation.
+      port: 80
+      targetPort: 3000
