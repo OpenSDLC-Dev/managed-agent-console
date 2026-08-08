@@ -55,7 +55,11 @@ describe("cutRelease", () => {
     expect(section).toContain("- **Another thing**");
     // Moved, not copied.
     expect(changelog).not.toContain("A thing landed");
-    expect(changelog).toContain("## [Unreleased]\n\nNothing yet.\n");
+    // The blank line matters: `## Released` follows immediately, and without
+    // it every cut leaves the file failing `pnpm format:check`.
+    expect(changelog).toContain(
+      "## [Unreleased]\n\nNothing yet.\n\n## Released",
+    );
   });
 
   it("climbs back out of docs/changelog when it rewrites the entries' links", () => {

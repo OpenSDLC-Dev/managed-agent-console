@@ -4,12 +4,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**[Issue #33](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/33) — principle 3's feature detection.** No plan file; the issue is the spec.
-
-- [x] Step 1 — what the platform returns for an unimplemented surface: **404 `not_found_error`, never 501**, indistinguishable from a real miss except by route (findings on the issue).
-- [x] Step 2 — the detection rule and session probe (`src/lib/platform/surfaces.ts`).
-- [x] Step 3 — nav, command palette, and the six collection pages hide instead of erroring; a test per surface.
-- [x] Step 4 — mock-platform `__unimplemented` mode + e2e proving the hiding.
+**None.** Issue #33 (principle 3's feature detection) closed 2026-08-08 in PR #60 and ships in 0.3.0 — the rule is a 404 `not_found_error` (or a 501) on a _collection_ route, since the platform has no 501 and answers an unregistered route exactly as it answers a missing resource.
 
 Plan 05 (release management) completed and archived 2026-08-08; summary in [docs/HISTORY.md](./docs/HISTORY.md), as for plans 01–04.
 

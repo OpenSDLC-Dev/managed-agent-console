@@ -71,8 +71,11 @@ export function cutRelease(text, { version, date, repo = REPO }) {
     body.trim().replace(/\]\(\.\//g, "](../../") +
     "\n";
 
+  // The blank line before the next heading is not cosmetic: `bodyEnd` lands on
+  // `## Released`, so without it the placeholder and that heading collide and
+  // every release cut leaves CHANGELOG.md failing `pnpm format:check`.
   const emptied =
-    text.slice(0, start) + `${HEADING}\n\n${EMPTY}\n` + text.slice(bodyEnd);
+    text.slice(0, start) + `${HEADING}\n\n${EMPTY}\n\n` + text.slice(bodyEnd);
   return { changelog: index(emptied, { version, date, repo }), section };
 }
 
