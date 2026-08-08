@@ -10,10 +10,12 @@ import {
   ErrorState,
   IdCode,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import type { PlatformFile } from "@/lib/platform/types";
 
 function formatBytes(bytes: number): string {
@@ -96,6 +98,8 @@ export default function FilesPage() {
       ),
     },
   ];
+
+  if (isUnimplemented(error)) return <UnavailableSurface surface="files" />;
 
   return (
     <div>

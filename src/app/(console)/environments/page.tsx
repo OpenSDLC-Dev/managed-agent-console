@@ -13,9 +13,11 @@ import {
   ErrorState,
   IdCode,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
 import { useEnvironments } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Environment } from "@/lib/platform/types";
 
@@ -47,6 +49,9 @@ export default function EnvironmentsPage() {
     page: pager.page,
     include_archived: includeArchived || undefined,
   });
+
+  if (isUnimplemented(error))
+    return <UnavailableSurface surface="environments" />;
 
   return (
     <div>

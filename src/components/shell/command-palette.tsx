@@ -23,6 +23,12 @@ import {
   useSkills,
   useVaults,
 } from "@/lib/platform/queries";
+import {
+  SURFACES,
+  surfaceRoute,
+  useSurfaces,
+  type Surface,
+} from "@/lib/platform/surfaces";
 
 interface Item {
   key: string;
@@ -31,52 +37,31 @@ interface Item {
   href: string;
   group: string;
   icon: LucideIcon;
+  /** Set on the section shortcuts; resource hits carry no surface. */
+  surface?: Surface;
 }
 
-const SECTIONS: Item[] = [
-  {
-    key: "nav-agents",
-    label: "Agents",
-    href: "/agents",
-    group: "Go to",
-    icon: Bot,
-  },
-  {
-    key: "nav-sessions",
-    label: "Sessions",
-    href: "/sessions",
-    group: "Go to",
-    icon: MessagesSquare,
-  },
-  {
-    key: "nav-environments",
-    label: "Environments",
-    href: "/environments",
-    group: "Go to",
-    icon: Boxes,
-  },
-  {
-    key: "nav-vaults",
-    label: "Credential vaults",
-    href: "/vaults",
-    group: "Go to",
-    icon: KeyRound,
-  },
-  {
-    key: "nav-skills",
-    label: "Skills",
-    href: "/skills",
-    group: "Go to",
-    icon: Sparkles,
-  },
-  {
-    key: "nav-files",
-    label: "Files",
-    href: "/files",
-    group: "Go to",
-    icon: FileText,
-  },
+// Nav order and icons, as in `nav.tsx`; label and route come from the surface
+// registry so the console names a surface in exactly one place.
+const SECTION_ICONS: [Surface, LucideIcon][] = [
+  ["agents", Bot],
+  ["sessions", MessagesSquare],
+  ["environments", Boxes],
+  ["vaults", KeyRound],
+  ["skills", Sparkles],
+  ["files", FileText],
 ];
+
+const SECTIONS: (Item & { surface: Surface })[] = SECTION_ICONS.map(
+  ([surface, icon]) => ({
+    key: `nav-${surface}`,
+    label: SURFACES[surface].label,
+    href: surfaceRoute(surface),
+    group: "Go to",
+    icon,
+    surface,
+  }),
+);
 
 const matches = (query: string, ...fields: (string | null | undefined)[]) =>
   fields.some((f) => f?.toLowerCase().includes(query));
@@ -93,11 +78,17 @@ function useSearchItems(query: string): Item[] {
   const vaults = useVaults({ limit });
   const skills = useSkills({ limit });
   const files = useFiles();
+  // The resource groups below need no gating — an unimplemented surface's
+  // query errors, so its list is simply empty. Only the "Go to" entries would
+  // still offer a dead page.
+  const surfaces = useSurfaces();
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
     const items: Item[] = SECTIONS.filter(
-      (s) => !q || s.label.toLowerCase().includes(q),
+      (s) =>
+        surfaces?.[s.surface] !== false &&
+        (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;
     for (const a of agents.data?.data ?? []) {
@@ -169,6 +160,7 @@ function useSearchItems(query: string): Item[] {
     return items;
   }, [
     query,
+    surfaces,
     agents.data,
     sessions.data,
     environments.data,
@@ -226,6 +218,7 @@ function PaletteResults({
               role="option"
               aria-selected={i === clamped}
               id={`${listId}-${i}`}
+              data-surface={item.surface}
               ref={i === clamped ? activeRef : undefined}
               onMouseEnter={() => setActive(i)}
               onClick={() => onNavigate(item.href)}

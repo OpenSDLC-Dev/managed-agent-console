@@ -5,6 +5,7 @@ import { ConnectionStatus } from "@/components/shell/connection-status";
 import { Providers } from "@/components/shell/providers";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { ConsoleVersion } from "@/components/shell/version";
+import { SurfaceGuard } from "@/components/shell/surface-guard";
 
 export default function ConsoleLayout({
   children,
@@ -45,7 +46,9 @@ export default function ConsoleLayout({
             <ConnectionStatus />
           </div>
         </aside>
-        <main className="min-w-0 flex-1 px-8 py-6">{children}</main>
+        <main className="min-w-0 flex-1 px-8 py-6">
+          <SurfaceGuard>{children}</SurfaceGuard>
+        </main>
       </div>
     </Providers>
   );

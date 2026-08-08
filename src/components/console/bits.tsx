@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
+import { PageHeader } from "@/components/shell/page-header";
 import { PlatformError } from "@/lib/platform/http";
+import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
 /** Monospace resource id, truncated with the full value on hover. */
 export function IdCode({ id }: { id: string }) {
@@ -143,6 +145,33 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <Skeleton key={i} className="h-4 w-full max-w-md" />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Stands in for a whole page whose surface this deployment does not
+ * implement (CLAUDE.md principle 3). Not an error state: the platform is
+ * healthy, the endpoint is simply absent, so the page says so calmly and
+ * drops the actions and filters that would act on it.
+ */
+export function UnavailableSurface({ surface }: { surface: Surface }) {
+  const label = SURFACES[surface].label;
+  return (
+    <div>
+      <PageHeader title={label} subtitle="Not available on this deployment." />
+      <div
+        data-testid="unavailable-surface"
+        data-surface={surface}
+        className="flex h-56 flex-col items-center justify-center gap-1"
+      >
+        <p className="text-sm">
+          This platform deployment does not implement {label.toLowerCase()}.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          The console hides surfaces the API does not serve.
+        </p>
+      </div>
     </div>
   );
 }

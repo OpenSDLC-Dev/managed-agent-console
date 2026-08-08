@@ -11,10 +11,12 @@ import {
   ErrorState,
   IdCode,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
 import { CreateVaultButton } from "@/components/console/create-vault-button";
 import { useVaults } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Vault } from "@/lib/platform/types";
 
@@ -45,6 +47,8 @@ export default function VaultsPage() {
     page: pager.page,
     include_archived: includeArchived || undefined,
   });
+
+  if (isUnimplemented(error)) return <UnavailableSurface surface="vaults" />;
 
   return (
     <div>

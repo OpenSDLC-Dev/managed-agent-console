@@ -46,7 +46,10 @@ const SEAMS = [
   {
     dir: "src/lib/platform",
     why: "wire parsing — the shapes a platform actually renders",
-    modules: ["schemas"],
+    // `surfaces` reads a status off the wire to decide whether a whole
+    // surface exists; misread it and the console silently loses a feature,
+    // which no happy-path assertion would notice (issue #33).
+    modules: ["schemas", "surfaces"],
   },
   {
     dir: "src/app/(console)/sessions/[id]",

@@ -13,6 +13,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
 import {
@@ -21,6 +22,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgents } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
 
@@ -68,6 +70,8 @@ export default function AgentsPage() {
     include_archived: includeArchived || undefined,
     "created_at[gte]": created.gte,
   });
+
+  if (isUnimplemented(error)) return <UnavailableSurface surface="agents" />;
 
   return (
     <div>

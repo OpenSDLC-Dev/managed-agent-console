@@ -105,6 +105,27 @@ describe("FilesPage", () => {
     expect(await screen.findByText("files down")).toBeInTheDocument();
   });
 
+  it("hides the surface when the deployment does not implement it", async () => {
+    stubFetch(() =>
+      json(
+        {
+          type: "error",
+          error: {
+            type: "not_found_error",
+            message: "no such endpoint: /v1/files",
+          },
+        },
+        404,
+      ),
+    );
+    renderPage();
+    const standIn = await screen.findByTestId("unavailable-surface");
+    expect(standIn.getAttribute("data-surface")).toBe("files");
+    expect(screen.queryByTestId("error-state")).toBeNull();
+    // Nothing left to act on a surface the platform does not serve.
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
   it("shows the empty state when there are no files", async () => {
     stubFetch(() => json(classicPage([])));
     renderPage();
