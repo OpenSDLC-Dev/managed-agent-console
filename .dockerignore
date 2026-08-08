@@ -1,9 +1,22 @@
+# Keep the build context small and credentials out of it. The Dockerfile's build
+# stage does COPY . ., so secret-file patterns are depth-matched (**/) — a
+# .gitignored local secret at any level stays out of the context and its cache.
 node_modules
 .next
 .git
 coverage
 playwright-report
 test-results
-.env*
+# Parallel-session worktrees: each is a whole extra checkout under the repo root,
+# so without this every live worktree lands in the build context.
+.claude/worktrees
+**/.env*
+# google-github-actions/auth writes its federated credential into the workspace
+# as gha-creds-*.json, and the delivery workflow's `docker build .` has the
+# workspace as its context. The multi-stage build means it never reaches the
+# pushed image — only .next/standalone, .next/static and public are copied
+# forward — but it would otherwise sit in the build stage's layer and its cache
+# for the life of the job.
+**/gha-creds-*.json
 *.pem
 *.log
