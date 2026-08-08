@@ -139,6 +139,19 @@ describe("releaseNotes", () => {
       releaseNotes("# 0.2.0 — 2026-08-09\n", { version: "0.2.0" }),
     ).toThrow(/no entries/);
   });
+
+  it("refuses a file whose title names another cycle", () => {
+    // release.yml asks for notes by version and would otherwise publish a
+    // copied or renamed file's narrative under this release's tag.
+    const { section } = cut();
+
+    expect(() => releaseNotes(section, { version: "0.3.0" })).toThrow(
+      /docs\/changelog\/0\.3\.0\.md does not open with/,
+    );
+    expect(() =>
+      releaseNotes("# 0.2.0\n\n- a thing\n", { version: "0.2.0" }),
+    ).toThrow(/does not open with/);
+  });
 });
 
 describe("sectionPath", () => {

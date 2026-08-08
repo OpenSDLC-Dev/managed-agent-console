@@ -33,6 +33,7 @@ const HEADING = "## [Unreleased]";
 const INDEX = "## Released";
 const EMPTY = "Nothing yet.";
 const VERSION = /^\d+\.\d+\.\d+$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Where a released cycle's file lives, relative to the repository root. */
 export function sectionPath(version) {
@@ -52,8 +53,7 @@ export function sectionPath(version) {
 export function cutRelease(text, { version, date, repo = REPO }) {
   if (!VERSION.test(version))
     throw new Error(`not a release version: ${version}`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
-    throw new Error(`not an ISO date: ${date}`);
+  if (!ISO_DATE.test(date)) throw new Error(`not an ISO date: ${date}`);
   // Running twice must not index one version twice.
   if (text.includes(sectionPath(version))) {
     throw new Error(`CHANGELOG.md already indexes ${version}`);
@@ -83,6 +83,10 @@ export function cutRelease(text, { version, date, repo = REPO }) {
  * absolutised against the tag, because a release body resolves relative paths
  * against `/releases/`, not the repository, so every link would 404.
  *
+ * The title has to *name this version* first. A file copied or renamed by hand
+ * would otherwise publish one cycle's narrative under another cycle's tag, and
+ * release.yml, which asks for notes by version, would have no way to tell.
+ *
  * @param {string} section a `docs/changelog/X.Y.Z.md`
  * @param {{version: string, repo?: string}} opts
  * @returns {string}
@@ -90,8 +94,19 @@ export function cutRelease(text, { version, date, repo = REPO }) {
 export function releaseNotes(section, { version, repo = REPO }) {
   if (!VERSION.test(version))
     throw new Error(`not a release version: ${version}`);
-  const body = section.replace(/^# .*\n/, "").trim();
-  if (!body) throw new Error(`docs/changelog/${version}.md has no entries`);
+  // A string compare rather than a regex built from `version`: the same
+  // CodeQL finding that turned the old section lookup into a line scan.
+  const [title = "", ...rest] = section.split("\n");
+  const date = title.startsWith(`# ${version} — `)
+    ? title.slice(`# ${version} — `.length)
+    : "";
+  if (!ISO_DATE.test(date)) {
+    throw new Error(
+      `${sectionPath(version)} does not open with \`# ${version} — YYYY-MM-DD\``,
+    );
+  }
+  const body = rest.join("\n").trim();
+  if (!body) throw new Error(`${sectionPath(version)} has no entries`);
   return (
     body.replace(/\]\(\.\.\/\.\.\//g, `](${repo}/blob/v${version}/`) + "\n"
   );
