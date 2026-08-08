@@ -178,7 +178,7 @@ describe("ErrorState", () => {
 
 describe("UnavailableSurface", () => {
   it("names the surface and exposes it machine-readably", () => {
-    render(<UnavailableSurface name="Credential vaults" surface="vaults" />);
+    render(<UnavailableSurface surface="vaults" />);
     const standIn = screen.getByTestId("unavailable-surface");
     expect(standIn.getAttribute("data-surface")).toBe("vaults");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -190,7 +190,7 @@ describe("UnavailableSurface", () => {
   });
 
   it("is not an error state — nothing is wrong with the platform", () => {
-    render(<UnavailableSurface name="Skills" surface="skills" />);
+    render(<UnavailableSurface surface="skills" />);
     expect(screen.queryByTestId("error-state")).toBeNull();
     expect(
       screen.getByText("Not available on this deployment."),

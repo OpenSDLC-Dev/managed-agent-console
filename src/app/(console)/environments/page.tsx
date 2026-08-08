@@ -51,7 +51,7 @@ export default function EnvironmentsPage() {
   });
 
   if (isUnimplemented(error))
-    return <UnavailableSurface name="Environments" surface="environments" />;
+    return <UnavailableSurface surface="environments" />;
 
   return (
     <div>

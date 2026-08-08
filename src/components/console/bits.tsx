@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { PageHeader } from "@/components/shell/page-header";
 import { PlatformError } from "@/lib/platform/http";
-import type { Surface } from "@/lib/platform/surfaces";
+import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
 /** Monospace resource id, truncated with the full value on hover. */
 export function IdCode({ id }: { id: string }) {
@@ -155,25 +155,18 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
  * healthy, the endpoint is simply absent, so the page says so calmly and
  * drops the actions and filters that would act on it.
  */
-export function UnavailableSurface({
-  name,
-  surface,
-}: {
-  /** Human label, e.g. "Credential vaults". */
-  name: string;
-  /** Machine-readable surface id, e.g. "vaults". */
-  surface: Surface;
-}) {
+export function UnavailableSurface({ surface }: { surface: Surface }) {
+  const label = SURFACES[surface].label;
   return (
     <div>
-      <PageHeader title={name} subtitle="Not available on this deployment." />
+      <PageHeader title={label} subtitle="Not available on this deployment." />
       <div
         data-testid="unavailable-surface"
         data-surface={surface}
         className="flex h-56 flex-col items-center justify-center gap-1"
       >
         <p className="text-sm">
-          This platform deployment does not implement {name.toLowerCase()}.
+          This platform deployment does not implement {label.toLowerCase()}.
         </p>
         <p className="text-sm text-muted-foreground">
           The console hides surfaces the API does not serve.

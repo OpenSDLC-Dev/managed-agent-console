@@ -69,8 +69,7 @@ export default function SkillsPage() {
     source: source === "all" ? undefined : source,
   });
 
-  if (isUnimplemented(error))
-    return <UnavailableSurface name="Skills" surface="skills" />;
+  if (isUnimplemented(error)) return <UnavailableSurface surface="skills" />;
 
   return (
     <div>

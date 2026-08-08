@@ -38,10 +38,13 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await page.keyboard.press("Control+k");
   const input = page.getByPlaceholder("Search agents, sessions, environments…");
   await expect(input).toBeVisible();
-  // An empty query lists exactly the section shortcuts.
-  await expect(page.getByRole("option", { name: /Sessions/ })).toBeVisible();
-  await expect(page.getByRole("option", { name: /Skills/ })).toHaveCount(0);
-  await expect(page.getByRole("option", { name: /Files/ })).toHaveCount(0);
+  // An empty query lists exactly the section shortcuts, read by surface id
+  // rather than by label (CLAUDE.md's data-* convention).
+  const option = (surface: string) =>
+    page.locator(`[role=option][data-surface=${surface}]`);
+  await expect(option("sessions")).toBeVisible();
+  await expect(option("skills")).toHaveCount(0);
+  await expect(option("files")).toHaveCount(0);
 });
 
 test("its page says so instead of rendering the platform's error", async ({
@@ -60,6 +63,25 @@ test("its page says so instead of rendering the platform's error", async ({
   await expect(page.getByTestId("error-state")).toHaveCount(0);
   // The platform's envelope must not leak through as the page's message.
   await expect(page.getByText(/no such endpoint/)).toHaveCount(0);
+});
+
+test("its nested routes stand down too, not just its list page", async ({
+  page,
+  request,
+}) => {
+  await request.post(`${MOCK}/__unimplemented`, {
+    data: { surfaces: ["skills"] },
+  });
+  await signIn(page);
+
+  // A bookmark into the subtree would otherwise open a detail page over an
+  // endpoint that is not there.
+  await page.goto("/skills/skill_reportwriter0000001");
+  await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(
+    "data-surface",
+    "skills",
+  );
+  await expect(page.getByTestId("error-state")).toHaveCount(0);
 });
 
 test("a served deployment keeps every surface", async ({ page }) => {

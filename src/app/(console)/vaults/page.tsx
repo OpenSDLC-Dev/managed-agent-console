@@ -48,8 +48,7 @@ export default function VaultsPage() {
     include_archived: includeArchived || undefined,
   });
 
-  if (isUnimplemented(error))
-    return <UnavailableSurface name="Credential vaults" surface="vaults" />;
+  if (isUnimplemented(error)) return <UnavailableSurface surface="vaults" />;
 
   return (
     <div>

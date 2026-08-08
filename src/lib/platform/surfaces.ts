@@ -22,17 +22,26 @@ import { PlatformError, platformGet } from "./http";
  * and stays an error.
  */
 export const SURFACES = {
-  agents: "v1/agents",
-  sessions: "v1/sessions",
-  environments: "v1/environments",
-  vaults: "v1/vaults",
-  skills: "v1/skills",
-  files: "v1/files",
+  agents: { path: "v1/agents", label: "Agents" },
+  sessions: { path: "v1/sessions", label: "Sessions" },
+  environments: { path: "v1/environments", label: "Environments" },
+  vaults: { path: "v1/vaults", label: "Credential vaults" },
+  skills: { path: "v1/skills", label: "Skills" },
+  files: { path: "v1/files", label: "Files" },
 } as const;
 
 export type Surface = keyof typeof SURFACES;
 
-const SURFACE_NAMES = Object.keys(SURFACES) as Surface[];
+export const SURFACE_NAMES = Object.keys(SURFACES) as Surface[];
+
+/** The console route a surface owns, list page and everything under it. */
+export const surfaceRoute = (surface: Surface) => `/${surface}`;
+
+/** The surface a console path belongs to, if any: `/skills/skill_1` → skills. */
+export function surfaceOfPath(pathname: string): Surface | undefined {
+  const segment = pathname.split("/")[1];
+  return SURFACE_NAMES.find((name) => name === segment);
+}
 
 /**
  * Whether `error` — raised by a query on one of the {@link SURFACES}
@@ -41,7 +50,15 @@ const SURFACE_NAMES = Object.keys(SURFACES) as Surface[];
  * missing endpoint.
  */
 export function isUnimplemented(error: unknown): boolean {
-  return error instanceof PlatformError && error.status === 404;
+  if (!(error instanceof PlatformError)) return false;
+  // 501 says it outright, whatever the route — the platform never sends one,
+  // but principle 3 names it and another wire-compatible endpoint may.
+  if (error.status === 501) return true;
+  // A 404 is ambiguous by status alone; the collection-route discipline above
+  // is what disambiguates it. Requiring the platform's own error type keeps an
+  // intermediary's bare 404 — an HTML page from a proxy, which parses to no
+  // envelope and so falls back to api_error — from hiding a live surface.
+  return error.status === 404 && error.errorType === "not_found_error";
 }
 
 /**
@@ -59,7 +76,7 @@ export function useSurfaces(): Record<Surface, boolean> | undefined {
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(async (surface) => {
         try {
-          await platformGet<unknown>(SURFACES[surface], { limit: 1 });
+          await platformGet<unknown>(SURFACES[surface].path, { limit: 1 });
           return [surface, true] as const;
         } catch (error) {
           return [surface, !isUnimplemented(error)] as const;

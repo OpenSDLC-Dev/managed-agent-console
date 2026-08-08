@@ -12,35 +12,22 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSurfaces, type Surface } from "@/lib/platform/surfaces";
+import {
+  SURFACES,
+  surfaceRoute,
+  useSurfaces,
+  type Surface,
+} from "@/lib/platform/surfaces";
 
-const ITEMS: {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  surface: Surface;
-}[] = [
-  { href: "/agents", label: "Agents", icon: Bot, surface: "agents" },
-  {
-    href: "/sessions",
-    label: "Sessions",
-    icon: MessagesSquare,
-    surface: "sessions",
-  },
-  {
-    href: "/environments",
-    label: "Environments",
-    icon: Boxes,
-    surface: "environments",
-  },
-  {
-    href: "/vaults",
-    label: "Credential vaults",
-    icon: KeyRound,
-    surface: "vaults",
-  },
-  { href: "/skills", label: "Skills", icon: Sparkles, surface: "skills" },
-  { href: "/files", label: "Files", icon: FileText, surface: "files" },
+// Order and iconography live here; the label and the route come from the
+// surface registry, so the console names a surface in exactly one place.
+const ITEMS: { surface: Surface; icon: LucideIcon }[] = [
+  { surface: "agents", icon: Bot },
+  { surface: "sessions", icon: MessagesSquare },
+  { surface: "environments", icon: Boxes },
+  { surface: "vaults", icon: KeyRound },
+  { surface: "skills", icon: Sparkles },
+  { surface: "files", icon: FileText },
 ];
 
 export function Nav() {
@@ -54,7 +41,8 @@ export function Nav() {
         Managed Agents
       </div>
       {ITEMS.filter(({ surface }) => surfaces?.[surface] !== false).map(
-        ({ href, label, icon: Icon, surface }) => {
+        ({ icon: Icon, surface }) => {
+          const href = surfaceRoute(surface);
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
@@ -72,7 +60,7 @@ export function Nav() {
                 className="size-4 text-muted-foreground"
                 strokeWidth={1.75}
               />
-              {label}
+              {SURFACES[surface].label}
             </Link>
           );
         },

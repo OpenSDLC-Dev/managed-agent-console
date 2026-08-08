@@ -23,7 +23,12 @@ import {
   useSkills,
   useVaults,
 } from "@/lib/platform/queries";
-import { useSurfaces, type Surface } from "@/lib/platform/surfaces";
+import {
+  SURFACES,
+  surfaceRoute,
+  useSurfaces,
+  type Surface,
+} from "@/lib/platform/surfaces";
 
 interface Item {
   key: string;
@@ -32,58 +37,31 @@ interface Item {
   href: string;
   group: string;
   icon: LucideIcon;
+  /** Set on the section shortcuts; resource hits carry no surface. */
+  surface?: Surface;
 }
 
-const SECTIONS: (Item & { surface: Surface })[] = [
-  {
-    key: "nav-agents",
-    label: "Agents",
-    href: "/agents",
-    group: "Go to",
-    icon: Bot,
-    surface: "agents",
-  },
-  {
-    key: "nav-sessions",
-    label: "Sessions",
-    href: "/sessions",
-    group: "Go to",
-    icon: MessagesSquare,
-    surface: "sessions",
-  },
-  {
-    key: "nav-environments",
-    label: "Environments",
-    href: "/environments",
-    group: "Go to",
-    icon: Boxes,
-    surface: "environments",
-  },
-  {
-    key: "nav-vaults",
-    label: "Credential vaults",
-    href: "/vaults",
-    group: "Go to",
-    icon: KeyRound,
-    surface: "vaults",
-  },
-  {
-    key: "nav-skills",
-    label: "Skills",
-    href: "/skills",
-    group: "Go to",
-    icon: Sparkles,
-    surface: "skills",
-  },
-  {
-    key: "nav-files",
-    label: "Files",
-    href: "/files",
-    group: "Go to",
-    icon: FileText,
-    surface: "files",
-  },
+// Nav order and icons, as in `nav.tsx`; label and route come from the surface
+// registry so the console names a surface in exactly one place.
+const SECTION_ICONS: [Surface, LucideIcon][] = [
+  ["agents", Bot],
+  ["sessions", MessagesSquare],
+  ["environments", Boxes],
+  ["vaults", KeyRound],
+  ["skills", Sparkles],
+  ["files", FileText],
 ];
+
+const SECTIONS: (Item & { surface: Surface })[] = SECTION_ICONS.map(
+  ([surface, icon]) => ({
+    key: `nav-${surface}`,
+    label: SURFACES[surface].label,
+    href: surfaceRoute(surface),
+    group: "Go to",
+    icon,
+    surface,
+  }),
+);
 
 const matches = (query: string, ...fields: (string | null | undefined)[]) =>
   fields.some((f) => f?.toLowerCase().includes(query));
@@ -240,6 +218,7 @@ function PaletteResults({
               role="option"
               aria-selected={i === clamped}
               id={`${listId}-${i}`}
+              data-surface={item.surface}
               ref={i === clamped ? activeRef : undefined}
               onMouseEnter={() => setActive(i)}
               onClick={() => onNavigate(item.href)}

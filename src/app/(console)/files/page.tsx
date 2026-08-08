@@ -99,8 +99,7 @@ export default function FilesPage() {
     },
   ];
 
-  if (isUnimplemented(error))
-    return <UnavailableSurface name="Files" surface="files" />;
+  if (isUnimplemented(error)) return <UnavailableSurface surface="files" />;
 
   return (
     <div>

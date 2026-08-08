@@ -71,8 +71,7 @@ export default function AgentsPage() {
     "created_at[gte]": created.gte,
   });
 
-  if (isUnimplemented(error))
-    return <UnavailableSurface name="Agents" surface="agents" />;
+  if (isUnimplemented(error)) return <UnavailableSurface surface="agents" />;
 
   return (
     <div>

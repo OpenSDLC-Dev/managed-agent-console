@@ -104,8 +104,7 @@ export default function SessionsPage() {
     "created_at[gte]": created.gte,
   });
 
-  if (isUnimplemented(error))
-    return <UnavailableSurface name="Sessions" surface="sessions" />;
+  if (isUnimplemented(error)) return <UnavailableSurface surface="sessions" />;
 
   return (
     <div>
