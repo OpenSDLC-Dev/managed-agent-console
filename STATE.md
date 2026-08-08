@@ -13,7 +13,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 - [x] [docs/deploy-gcp.md](./docs/deploy-gcp.md), README pointer, CHANGELOG, this file
 - [x] Adversarial review of the pipeline, findings fixed (the deep lever, the unasserted gate, the no-op dispatch, base64 masking, poll bounds, secret-dir shredding)
 - [ ] First real run of the workflow — the image `…/map-images/console:9787b51` was built and pushed by hand, but no step of `deploy.yml` has executed against `map-staging`
-- [ ] Open the PR
+- [x] [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) open, CI green, every bot review thread settled — the rollback on a failed gate, `pipefail`, the liveness probe that would have restart-looped a misconfigured pod, and the prefix-matching route exemptions
 
 Known limitation carried on purpose: plain HTTP on a bare load-balancer IP, no domain and no TLS, which is why `CONSOLE_PASSWORD` is mandatory there.
 
