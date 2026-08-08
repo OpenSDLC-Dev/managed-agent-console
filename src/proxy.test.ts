@@ -96,9 +96,24 @@ describe("matcher exemptions", () => {
   it("exempts the health endpoint, which no probe can authenticate to", () => {
     // A gated /api/health answers 401, which a readiness probe reads as an
     // unhealthy container — the pod never becomes ready and the rollout that
-    // waits on it never finishes. The exemption is total, query string and
-    // all; the route gates its own `?deep=1` depth instead, because that one
-    // spends the management key. See deploy/k8s/README.md.
+    // waits on it never finishes. The matcher sees a pathname and no query
+    // string, so the exemption covers `?deep=1` too — which is why the route
+    // gates that depth itself, it being the one that spends the management
+    // key. See deploy/k8s/README.md.
     expect(matches("/api/health")).toBe(false);
+  });
+
+  it("exempts those three routes and not their prefixes", () => {
+    // Each exemption is a route, not a namespace. Unanchored, `api/health`
+    // would exempt anything merely starting with it, so a route added later
+    // under a similar name would be born outside the gate — on the one
+    // deployment where the gate is all that stands in front of a management
+    // key (deploy/k8s/).
+    expect(matches("/api/health-details")).toBe(true);
+    expect(matches("/api/healthz")).toBe(true);
+    expect(matches("/api/logins")).toBe(true);
+    expect(matches("/login-as")).toBe(true);
+    // …while the prefixes stay prefixes: static assets do have paths under them.
+    expect(matches("/_next/static/chunks/main.js")).toBe(false);
   });
 });

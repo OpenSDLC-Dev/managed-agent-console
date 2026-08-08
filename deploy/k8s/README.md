@@ -81,8 +81,12 @@ annotation — a `sha256` of the two payloads — into the pod template. Without
 annotation the re-applied Deployment would be byte-identical, nothing would roll,
 `rollout status` would return instantly green, and the pod would keep serving
 with the old credentials. The platform chart carries the same annotation on its
-control-plane Deployment, for the same reason. (It is a hash, not a value — and
-anyone who can read this annotation can generally read the Secret itself.)
+control-plane Deployment, for the same reason.
+
+The annotation is a `sha256` of the two payloads, not either value, and it is
+one-way. It is not a strength control either: whoever can read the pod template
+and already knows one payload can test guesses at the other against it offline —
+one more reason for `console-password` to be generated rather than memorable.
 
 ## The health endpoint, and which depth goes where
 
@@ -90,11 +94,18 @@ anyone who can read this annotation can generally read the Secret itself.)
 ([src/app/api/health/route.ts](../../src/app/api/health/route.ts)):
 
 - **shallow** (`/api/health`) — configuration only, no network. This is what the
-  readiness and liveness probes call. A probe that also called the platform
-  would remove the console from service during a platform outage, when a console
-  that can still render its own error is the more useful thing to have.
+  **readiness** probe calls. A probe that also called the platform would remove
+  the console from service during a platform outage, when a console that can
+  still render its own error is the more useful thing to have.
 - **deep** (`/api/health?deep=1`) — additionally calls the platform with the
   management key. That is the deploy gate, run once per rollout.
+
+The **liveness** probe calls neither: it takes `/login`. A configuration error
+makes the shallow check answer 503, and a restart cannot supply a missing
+environment variable — liveness pointed at it would turn the readiness failure
+the rollout is waiting to report into a restart loop that erases it. Liveness
+asks only whether the process still answers HTTP, and `/login` answers that
+without reading any of the three variables.
 
 The route is exempt from the console's login gate
 ([src/proxy.ts](../../src/proxy.ts)) because the shallow caller cannot hold a

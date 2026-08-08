@@ -22,7 +22,15 @@ cluster. The two are independent — staging runs `main`, not the newest tag.
 One environment, called staging. The console sits beside the platform rather
 than in a namespace of its own, so it reaches the control plane over cluster DNS
 (`http://map-managed-agent-platform-controlplane.map.svc.cluster.local:8080`)
-and the management key never leaves the cluster.
+and **no request carrying the management key crosses a public network**. It
+never reaches a browser (CLAUDE.md principle 2) and it never rides the console's
+own public address; every call that spends it is pod-to-Service inside `map`.
+
+That is the runtime guarantee, and it is narrower than "the key never leaves the
+cluster": the deploy job below reads it out of Secret Manager onto a GitHub
+runner in order to write the Kubernetes Secret in the first place. What bounds
+that handling is the job, not the cluster — the value is masked, written to a
+file rather than an argv, and shredded on exit.
 
 ## The trigger
 
@@ -133,6 +141,28 @@ it is not the evidence: what proves the deployed console is gated is the
 anonymous request above, made against the address the internet uses.
 
 ## Rolling back
+
+**The pipeline rolls itself back.** A gate that only reports is not much of a
+gate: readiness is the shallow check, so a revision with a rejected key, an
+unreachable control plane, or an ungated public address passes `rollout status`
+while the RollingUpdate retires the pod that worked. If any step after the apply
+fails, the job runs `kubectl rollout undo` and waits for the previous revision,
+so a red run leaves the last working console serving rather than the broken one.
+(The platform gets the same behaviour from `helm upgrade --atomic`.) Two things
+it cannot do, both reported as warnings in the run:
+
+- **A first deployment has nothing to undo to** — and one the selector guard
+  recreated has lost its history with the old object. The job says so and tells
+  you to scale the Deployment to zero by hand; an ungated console on a public IP
+  should not stay up because the pipeline had no previous revision.
+- **It restores the image, not the credentials.** Everything below is likewise
+  image-only: `rollout undo` and `set image` change the pod template, and
+  `PLATFORM_API_KEY`/`CONSOLE_PASSWORD` are `secretKeyRef`s that keep reading
+  the _current_ `console-secrets`. After a rotation, an older image runs with
+  the newer credentials — and its restored `console-secrets/checksum`
+  annotation then names a payload the Secret no longer holds. If a rotation is
+  what broke the deploy, disable that Secret Manager version and re-run the
+  workflow; do not expect a rollback to undo it.
 
 The image tag is the commit sha and is never reused, so every revision the
 cluster has run is still addressable.

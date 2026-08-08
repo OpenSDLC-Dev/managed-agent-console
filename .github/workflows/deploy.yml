@@ -46,6 +46,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # `shell: bash` rather than the implicit `bash -e {0}`, for one word of
+    # difference: it runs `bash --noprofile --norc -eo pipefail`. Without
+    # pipefail only the *last* command of a pipeline decides the step, and the
+    # two pipelines below both end in `kubectl apply` — a `sed` that failed on
+    # one manifest would feed `apply` a partial set of objects, and the step
+    # would report success on a deployment that never received half of what it
+    # was sent.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +194,7 @@ jobs:
           echo "SECRETS_CHECKSUM=$checksum" >> "$GITHUB_ENV"
 
       - name: Apply the manifests
+        id: apply
         run: |
           # Set by the sync step. An empty value would apply an empty annotation
           # — a deployment that silently stops rolling on rotation.
@@ -227,6 +238,12 @@ jobs:
             sed -e "s|CONSOLE_IMAGE|$IMAGE:$GITHUB_SHA|g" \
                 -e "s|SECRETS_CHECKSUM|$SECRETS_CHECKSUM|g" "$f"
           done | kubectl apply -n "$NAMESPACE" -f -
+
+          # Arms the rollback below, and only here: every failure *before* this
+          # line left the cluster as it was, and rolling a healthy Deployment
+          # back because the runner could not reach Secret Manager would be this
+          # pipeline breaking staging by itself.
+          echo "applied=true" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the rollout
         run: kubectl rollout status deployment/console -n "$NAMESPACE" --timeout=5m
@@ -376,3 +393,38 @@ jobs:
             echo
             echo "Gated: anonymous \`GET /\` answered \`$code\` to \`$redirect\`."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Every gate above this point detects; without this step none of them
+      # remediates. Readiness is the *shallow* check, so a revision with a
+      # rejected key, an unreachable control plane, or — worse — an ungated
+      # public address passes `rollout status`, and the RollingUpdate has
+      # already retired the pod that worked. Reporting that in red and leaving
+      # it serving on the internet is the one outcome nobody wants. (The
+      # platform gets this free from `helm upgrade --atomic`; with raw
+      # manifests it is this step.)
+      #
+      # Armed by the apply step's output, so a failure that never touched the
+      # cluster cannot trigger it. Broad on purpose otherwise: a `rollout
+      # status` timeout means the new ReplicaSet is stuck retrying and undoing
+      # it is exactly right, and the two smoke gates mean the new revision is
+      # serving and should not be.
+      - name: Roll back the revision that failed the gate
+        if: failure() && steps.apply.outputs.applied == 'true'
+        run: |
+          echo "::warning::a step after the apply failed — rolling back to the previous revision"
+          # A first deployment, and one the selector guard recreated, has no
+          # previous revision. `undo` says so and exits non-zero; there is
+          # nothing to roll back to and the operator has to be told that
+          # plainly rather than left reading a green rollback that did nothing.
+          if ! kubectl rollout undo deployment/console -n "$NAMESPACE"; then
+            echo "::error::no previous revision to roll back to — the console is left on the revision that failed the gate. Take it out of service by hand: kubectl scale deployment/console -n $NAMESPACE --replicas=0"
+            kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console -o wide
+            exit 1
+          fi
+          kubectl rollout status deployment/console -n "$NAMESPACE" --timeout=5m
+          kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console -o wide
+          # What a rollback restores is the pod *template* — image, and the
+          # checksum annotation. It does not restore `console-secrets`, which
+          # still holds whatever this run wrote into it, so a revision rolled
+          # back after a bad rotation reads the same bad credential.
+          echo "::warning::rolled back to the previous revision. This restores the image, not console-secrets — if a rotated credential caused the failure, disable that Secret Manager version and re-run the workflow."

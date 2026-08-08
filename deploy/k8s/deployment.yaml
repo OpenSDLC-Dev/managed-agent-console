@@ -91,9 +91,19 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
+          # Not /api/health, and the difference matters: that route answers 503
+          # for a *configuration* error, and no number of restarts supplies a
+          # missing environment variable. Pointed there, liveness would turn the
+          # readiness failure the rollout is waiting to report into a restart
+          # loop that erases it — kubelet churn where `Readiness probe failed`
+          # should be. Liveness has one question, and it is not readiness's:
+          # does this process still answer HTTP at all? /login answers that
+          # without reading PLATFORM_BASE_URL, PLATFORM_API_KEY or
+          # CONSOLE_PASSWORD, and it is the one page this deployment cannot be
+          # without, since the gate is mandatory here.
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /login
               port: http
             initialDelaySeconds: 20
             periodSeconds: 20
