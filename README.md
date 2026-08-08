@@ -8,13 +8,16 @@ This console is the operator-facing frontend for a platform deployment you run y
 
 ## How it holds your key
 
-The console is a Next.js app with a thin server-side proxy: every platform call — SSE streams included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** An optional shared-password login gate (`CONSOLE_PASSWORD`) protects non-loopback deployments; unset, the console is open (fine for `localhost`).
+The console is a Next.js app with a thin server-side proxy: every platform call — SSE streams included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** A shared-password login gate (`CONSOLE_PASSWORD`) protects non-loopback deployments; unset, the console is open, which is fine for `localhost` and for nothing else — anyone who can reach an ungated console can drive the platform with a full-power management key. On any deployment reachable beyond loopback it is **mandatory**, and the GKE pipeline below refuses to deploy without it.
 
 | Variable            | Required | Meaning                                                |
 | ------------------- | -------- | ------------------------------------------------------ |
 | `PLATFORM_BASE_URL` | yes      | Control-plane base URL, e.g. `http://localhost:8080`   |
 | `PLATFORM_API_KEY`  | yes      | The platform's management key (`CONTROLPLANE_API_KEY`) |
-| `CONSOLE_PASSWORD`  | no       | Enables the login gate when set; unset ⇒ no gate       |
+| `CONSOLE_PASSWORD`  | no\*     | Enables the login gate when set; unset ⇒ no gate       |
+
+\* Optional only on `localhost`. Mandatory anywhere the console is reachable by
+anyone else.
 
 ## Quickstart (Docker)
 
@@ -59,6 +62,21 @@ console:
   depends_on:
     - controlplane
 ```
+
+## Deploying to a cluster
+
+[deploy/k8s/](./deploy/k8s/) holds the two objects the console needs beside a
+platform running in Kubernetes — a Deployment and a `LoadBalancer` Service — and
+[docs/deploy-gcp.md](./docs/deploy-gcp.md) describes the pipeline that applies
+them: build → push → deploy → smoke, on every push to `main`, with no long-lived
+credential stored in this repository (Workload Identity Federation, and the
+runtime secrets read from Secret Manager inside the job).
+
+That deployment publishes the console on a **public IP over plain HTTP**, so
+`CONSOLE_PASSWORD` is not optional there: it is the only thing between the
+internet and a management key that can do anything to the platform, and the
+pipeline both refuses to deploy without it and asserts after the rollout that an
+anonymous request is actually bounced to `/login`.
 
 ## Development
 

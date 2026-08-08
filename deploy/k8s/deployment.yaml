@@ -1,0 +1,127 @@
+# The console, next to the platform it manages.
+#
+# No namespace here on purpose: the pipeline passes `-n map`, and leaving it out
+# keeps these files applicable to a scratch namespace without an edit. See
+# README.md in this directory.
+#
+# `CONSOLE_IMAGE` and `SECRETS_CHECKSUM` are placeholders the deploy workflow
+# substitutes. The image is tagged by commit sha and a tag is never reused, so
+# every rollout on a new commit is a real pod replacement rather than a no-op
+# apply; the checksum covers the case where the commit did *not* change.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  # One replica: the console holds no state a second one would share, and a
+  # single-tenant staging deployment gains nothing from two.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: console
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: console
+      annotations:
+        # sha256 of the two Secret Manager payloads this revision was deployed
+        # with. Rotating a credential changes no other field in this file, so
+        # without this the re-run applies byte-identically, nothing rolls,
+        # `rollout status` returns instantly green, and the pod keeps serving
+        # with the old value — a re-deploy that reports success and did nothing.
+        # The platform chart carries the same annotation on its control-plane
+        # Deployment for the same reason. Substituted by the pipeline.
+        #
+        # Quoted, and not for style: annotation values are strings, and a sha256
+        # rendered in hex is all decimal digits often enough to matter — YAML
+        # then reads it as an integer and the API server refuses the whole apply
+        # with "cannot convert int64 to string", on a run nobody could reproduce
+        # from the diff. The quotes make the type independent of the digest.
+        console-secrets/checksum: "SECRETS_CHECKSUM"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # The image ends on `USER node`, a *name*. kubelet cannot prove a named
+        # user is non-root, so `runAsNonRoot: true` alone refuses to start the
+        # container ("non-numeric user (node), cannot verify user is non-root").
+        # 1000/1000 is what `node` resolves to in the node:24-alpine base image
+        # (verified with `id node`), stated numerically so the check can pass.
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: console
+          image: CONSOLE_IMAGE
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            # Cluster DNS, so the management key never crosses the cluster
+            # boundary: the console reaches the control plane over the Service
+            # the platform chart creates for release "map" in namespace "map".
+            - name: PLATFORM_BASE_URL
+              value: http://map-managed-agent-platform-controlplane.map.svc.cluster.local:8080
+            - name: PLATFORM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: console-secrets
+                  key: platform-api-key
+            # Mandatory here, not optional: this console is published on a public
+            # load-balancer IP, and an unset gate would leave a full-power
+            # management key behind an open page. The pipeline refuses to deploy
+            # an empty value.
+            - name: CONSOLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: console-secrets
+                  key: console-password
+          # The shallow check, deliberately — it reads configuration and touches
+          # no network. The deep one (`?deep=1`) also calls the platform, so a
+          # platform outage would fail the probe and take the console out of
+          # service with it, when a console that can still render its own error
+          # is worth more. The deep check is the deploy gate instead.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          # Not /api/health, and the difference matters: that route answers 503
+          # for a *configuration* error, and no number of restarts supplies a
+          # missing environment variable. Pointed there, liveness would turn the
+          # readiness failure the rollout is waiting to report into a restart
+          # loop that erases it — kubelet churn where `Readiness probe failed`
+          # should be. Liveness has one question, and it is not readiness's:
+          # does this process still answer HTTP at all? /login answers that
+          # without reading PLATFORM_BASE_URL, PLATFORM_API_KEY or
+          # CONSOLE_PASSWORD, and it is the one page this deployment cannot be
+          # without, since the gate is mandatory here.
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Sized for a Next.js server rendering for a handful of operators, not
+          # measured under load — revisit if the pod is ever throttled or OOMs.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            # readOnlyRootFilesystem is left off: Next.js writes under
+            # .next/cache at runtime, and a read-only root would trade a real
+            # startup failure for a hardening line this deployment does not need.

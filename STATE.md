@@ -4,7 +4,20 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**None.** Issue #33 (principle 3's feature detection) closed 2026-08-08 in PR #60 and ships in 0.3.0 — the rule is a 404 `not_found_error` (or a 501) on a _collection_ route, since the platform has no 501 and answers an unregistered route exactly as it answers a missing resource.
+**Continuous delivery to GCP** (branch `feat/gcp-continuous-delivery`) — the console gets a deployed environment, not just a published image.
+
+- [x] `GET /api/health`, shallow (configuration only, anonymous for the kubelet) and `?deep=1` (calls the platform, and gated whenever the console is) — 20 tests, 3 of them `probe:` for the no-leak invariant
+- [x] `/api/health` exempted from the login gate — a gated health route answers 401, which a readiness probe reads as an unhealthy container
+- [x] `deploy/k8s/` — Deployment + `type: LoadBalancer` Service, applied into namespace `map` beside the platform; pod template carries a `console-secrets/checksum` so a rotation actually rolls
+- [x] `.github/workflows/deploy.yml` — push to `main`: build → push → deploy → smoke, WIF identity, no GitHub secrets. Deep check by `kubectl exec` inside the pod; the public IP is asserted to be gated (`login_gate: true`, anonymous `GET /` → 307 `/login`)
+- [x] [docs/deploy-gcp.md](./docs/deploy-gcp.md), README pointer, CHANGELOG, this file
+- [x] Adversarial review of the pipeline, findings fixed (the deep lever, the unasserted gate, the no-op dispatch, base64 masking, poll bounds, secret-dir shredding)
+- [ ] First real run of the workflow — the image `…/map-images/console:9787b51` was built and pushed by hand, but no step of `deploy.yml` has executed against `map-staging`
+- [x] [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) open, CI green, every bot review thread settled — the rollback on a failed gate, `pipefail`, the liveness probe that would have restart-looped a misconfigured pod, and the prefix-matching route exemptions
+
+Known limitation carried on purpose: plain HTTP on a bare load-balancer IP, no domain and no TLS, which is why `CONSOLE_PASSWORD` is mandatory there.
+
+Issue #33 (principle 3's feature detection) closed 2026-08-08 in PR #60 and ships in 0.3.0.
 
 Plan 05 (release management) completed and archived 2026-08-08; summary in [docs/HISTORY.md](./docs/HISTORY.md), as for plans 01–04.
 
