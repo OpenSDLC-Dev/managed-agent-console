@@ -17,9 +17,9 @@ Conventions mirror the platform repo:
 
 - **Plans live in [docs/plan/](./docs/plan/)** — one file per plan, named `NN_short-name.md`, opening with YAML frontmatter `status: draft | approved | in-progress | archived` (plus optional `issue:`). Plan files carry no progress tracking.
 - **[STATE.md](./STATE.md)** — the active-work tracker and nothing else: current plan/issue and its task checklist, ~30-line budget. Read it at the start of a session; update it in every PR that starts, advances, or finishes tracked work.
-- **The backlog is GitHub issues** — the only backlog. A change's narrative is written once, in [CHANGELOG.md](./CHANGELOG.md).
+- **The backlog is GitHub issues** — the only backlog. A change's narrative is written once, in [CHANGELOG.md](./CHANGELOG.md) — which holds the **cycle in progress** and an index; a released cycle is filed as its own [docs/changelog/X.Y.Z.md](./docs/changelog/) by `pnpm release:prepare` and is not edited afterwards.
 
-The v1 design plan is [docs/plan/01_v1-console.md](./docs/plan/01_v1-console.md).
+Plans 01–05 are complete and archived; each is summarized in [docs/HISTORY.md](./docs/HISTORY.md), which is the fastest way to learn why the repo is shaped as it is.
 
 ## Non-negotiable design principles
 
@@ -31,18 +31,21 @@ The v1 design plan is [docs/plan/01_v1-console.md](./docs/plan/01_v1-console.md)
 
 ## Stack (settled by plan 01)
 
-Next.js (App Router, TypeScript strict) · Tailwind CSS + shadcn/ui · TanStack Query + Table · pnpm · Vitest (unit/component) + Playwright (e2e) · Docker (standalone output). The repo layout lands with the scaffold slice of plan 01; until then this repo is docs-only.
+Next.js (App Router, TypeScript strict) · Tailwind CSS + shadcn/ui · TanStack Query + Table · pnpm · Vitest (unit/component) + Playwright (e2e) · Docker (standalone output).
 
 ## Development
 
-Until the scaffold lands, there is nothing to run. Once it does (plan 01 slice 1), the contract is:
-
 ```bash
-pnpm dev          # console against a platform base URL from .env.local
-pnpm build        # production build
-pnpm test         # unit/component tests — no network, no money
-pnpm test:e2e     # Playwright against the mock platform server
-pnpm lint         # eslint; format:check (prettier) and typecheck (tsc) are separate scripts — CI runs all three
+pnpm dev             # console against a platform base URL from .env.local
+pnpm build           # production build
+pnpm test            # unit/component tests — no network, no money
+pnpm test:coverage   # the same suite under the CI thresholds
+pnpm test:e2e        # Playwright against the mock platform server
+pnpm test:e2e:live   # the live tier, against a real local platform stack
+pnpm lint            # eslint; format:check (prettier) and typecheck (tsc) are separate scripts — CI runs all three
+pnpm probes:check    # the adversarial-probe ratchet: `probe: …` tests still collected, per seam
+pnpm fidelity:shots  # one Chrome screenshot per surface per theme, into fidelity-shots/
+pnpm release:prepare # file the changelog section a release ships with — see docs/releasing.md
 ```
 
 Testing mirrors the platform's tiered philosophy: the default suites run against **recorded fixtures and a mock platform server** and spend nothing; a live tier (opt-in via `RUN_LIVE_CONSOLE_TESTS=1`) drives a real local platform stack (`deploy/compose` in the platform repo). Once opted in, missing configuration **fails** rather than skips. `.env*` files are gitignored — never commit a real key.
@@ -52,7 +55,7 @@ Testing mirrors the platform's tiered philosophy: the default suites run against
 Every change lands through a PR; **never commit directly to `main`** (the repo-bootstrap commit is the sole exception).
 
 1. Branch off fresh `main`: `git checkout -b <type>/<short-name>` (`feat/`, `fix/`, `chore/`, `docs/`).
-2. Develop on the branch. **Docs move with code, in the same PR:** a CHANGELOG.md entry for every notable change; STATE.md updated whenever the change starts, advances, or finishes tracked work; the active plan's frontmatter status flipped by the PR that changes its lifecycle.
+2. Develop on the branch. **Docs move with code, in the same PR:** a CHANGELOG.md entry under `## [Unreleased]` for every notable change; STATE.md updated whenever the change starts, advances, or finishes tracked work; the active plan's frontmatter status flipped by the PR that changes its lifecycle.
 3. Push, open the PR (`gh pr create`), wait for CI green (`gh pr checks --watch`); settle every review thread. **The PR title is a Conventional Commit** (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`, `perf:`, `build:`, `ci:`, `revert:`, optional `(scope)`, `!` for breaking) — squash merge makes it the commit subject and release-please reads those subjects to decide the next version, so a prose title is not a style slip but a release that silently does not happen. Enforced by the `pr-title` check.
 4. **Squash merge** (`gh pr merge --squash --delete-branch`), then sync local `main`.
 

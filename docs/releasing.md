@@ -5,8 +5,8 @@ choice is in [docs/plan/05_release-management.md](./plan/05_release-management.m
 
 ## What a release is
 
-- A `vX.Y.Z` tag on `main`, and a GitHub Release whose body is the matching
-  `CHANGELOG.md` section — prose, not a list of PR titles.
+- A `vX.Y.Z` tag on `main`, and a GitHub Release whose body is that version's
+  `docs/changelog/X.Y.Z.md` — prose, not a list of PR titles.
 - A multi-arch image at `ghcr.io/opensdlc-dev/managed-agent-console`, tagged
   `X.Y.Z`, `X.Y`, and `latest`.
 
@@ -22,6 +22,13 @@ changelog is hand-written prose and CLAUDE.md says a change's narrative is
 written once. So one step per release stays human — the one that requires a
 human — and everything mechanical around it is automated.
 
+The changelog is split by release: `CHANGELOG.md` carries only the cycle in
+progress plus an index, and each released cycle becomes its own
+`docs/changelog/X.Y.Z.md`, written once by the cut and never edited again.
+Entries here are narrative paragraphs, so one accumulating file would make every
+reader — and every agent — pay for the whole project's history to see what
+changed this week.
+
 ## Cutting one
 
 1. **Land work with Conventional Commit PR titles.** Squash merge makes each
@@ -33,13 +40,14 @@ human — and everything mechanical around it is automated.
    pnpm release:prepare X.Y.Z
    ```
 
-   This moves everything under `## [Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD`,
-   restores an empty `[Unreleased]`, repoints the compare-link footer, and bumps
-   README's status line and pinned image tag.
+   This moves everything under `## [Unreleased]` into `docs/changelog/X.Y.Z.md`,
+   restores an empty `[Unreleased]`, adds the version to the `## Released` index
+   with a compare link, repoints the compare-link footer, and bumps README's
+   status line and pinned image tag.
 
-   Then **write the section's lead-in by hand**: what this release is, and the
-   platform version the live tier last ran green against. Only that section
-   becomes the release notes, so a compatibility fact stated in an older section
+   Then **write that file's lead-in by hand**: what this release is, and the
+   platform version the live tier last ran green against. Only that file becomes
+   the release notes, so a compatibility fact stated in an older release's file
    is a compatibility fact this release does not carry. Land it as its own PR —
    title `docs: prepare X.Y.Z`.
 
@@ -48,8 +56,8 @@ human — and everything mechanical around it is automated.
    Release.
 4. Publishing that release runs [release.yml](../.github/workflows/release.yml),
    in two independent halves:
-   - **notes** — replaces the release body with the `[X.Y.Z]` changelog section
-     (release-please's own body is a list of PR titles; the section is the
+   - **notes** — replaces the release body with `docs/changelog/X.Y.Z.md`
+     (release-please's own body is a list of PR titles; that file is the
      narrative). It depends on nothing, so a release whose image fails to build
      still says what it is.
    - **build → publish** — both architectures on native runners, each gated on
@@ -57,11 +65,14 @@ human — and everything mechanical around it is automated.
      into one manifest list, with the image coordinates and digest appended to
      the body notes wrote.
 
-Repo-relative links in the section are absolutised against the tag on the way out
-— a release body resolves `./docs/…` against `/releases/`, not the repository
-root, so a section copied verbatim would 404 on every link it carries. Both
-halves are idempotent: notes regenerates the body from the tag's own CHANGELOG,
-and the image block is cut at its marker before being re-appended.
+Repo-relative links are rewritten twice, and for the same reason each time. The
+cut turns `./docs/…` into `../../docs/…`, because the entries move two
+directories down from where they were written; the notes step turns those into
+absolute blob URLs at the tag, because a release body resolves relative paths
+against `/releases/`, not the repository root, so a file copied verbatim would
+404 on every link it carries. Both halves of the workflow are idempotent: notes
+regenerates the body from the tag's own `docs/changelog/X.Y.Z.md`, and the image
+block is cut at its marker before being re-appended.
 
 ## If a release exists but has no image
 
