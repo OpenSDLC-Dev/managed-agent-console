@@ -4,24 +4,12 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Continuous delivery to GCP** (branch `feat/gcp-continuous-delivery`) — the console gets a deployed environment, not just a published image.
-
-- [x] `GET /api/health`, shallow (configuration only, anonymous for the kubelet) and `?deep=1` (calls the platform, and gated whenever the console is) — 20 tests, 3 of them `probe:` for the no-leak invariant
-- [x] `/api/health` exempted from the login gate — a gated health route answers 401, which a readiness probe reads as an unhealthy container
-- [x] `deploy/k8s/` — Deployment + `type: LoadBalancer` Service, applied into namespace `map` beside the platform; pod template carries a `console-secrets/checksum` so a rotation actually rolls
-- [x] `.github/workflows/deploy.yml` — push to `main`: build → push → deploy → smoke, WIF identity, no GitHub secrets. Deep check by `kubectl exec` inside the pod; the public IP is asserted to be gated (`login_gate: true`, anonymous `GET /` → 307 `/login`)
-- [x] [docs/deploy-gcp.md](./docs/deploy-gcp.md), README pointer, CHANGELOG, this file
-- [x] Adversarial review of the pipeline, findings fixed (the deep lever, the unasserted gate, the no-op dispatch, base64 masking, poll bounds, secret-dir shredding)
-- [x] First real run of the workflow — [run 31260202296](https://github.com/OpenSDLC-Dev/managed-agent-console/actions/runs/31260202296) on `e7daf11`, green end to end in 1m44s, build through public-gate assertion. The selector-recreation guard fired for real: the by-hand Deployment carried `app: console` and the manifest carries `app.kubernetes.io/name: console`, and `spec.selector` is immutable
-- [x] [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) merged — the rollback on a failed gate, `pipefail`, the liveness probe that would have restart-looped a misconfigured pod, and the prefix-matching route exemptions all settled first
-- [x] `gha-creds-*.json` out of the image build context ([PR #65](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/65)) — the credential the deploy job mints lands in the workspace `docker build .` uses as its context; the multi-stage build kept it out of the pushed image, so this is hardening. `.claude/worktrees` and a depth-matched `**/.env*` go with it
+**None.** Continuous delivery to GCP landed 2026-08-08 in [PR #63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63) and [PR #65](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/65), and ships in 0.4.0: every push to `main` builds the image, deploys it into the `map-staging` cluster beside the platform it manages, and holds the rollout red until the pod carrying that image has reached the control plane (the deep health check, run by `kubectl exec` over loopback) and the public address has answered as gated — rolling itself back on any failure after the apply. Runbook in [docs/deploy-gcp.md](./docs/deploy-gcp.md).
 
 Known limitation carried on purpose: plain HTTP on a bare load-balancer IP, no domain and no TLS, which is why `CONSOLE_PASSWORD` is mandatory there.
 
-Issue #33 (principle 3's feature detection) closed 2026-08-08 in PR #60 and ships in 0.3.0.
-
 Plan 05 (release management) completed and archived 2026-08-08; summary in [docs/HISTORY.md](./docs/HISTORY.md), as for plans 01–04.
 
-The console releases itself now. Conventional-Commit PR titles feed release-please, which keeps a release PR open; `pnpm release:prepare X.Y.Z` files the changelog section a release ships with; merging that PR tags, publishes the Release with that section as its body, and pushes a multi-arch image to `ghcr.io/opensdlc-dev/managed-agent-console`. Steps in [docs/releasing.md](./docs/releasing.md). **0.2.0 went out that way** on 2026-08-08.
+The console releases itself now. Conventional-Commit PR titles feed release-please, which keeps a release PR open; `pnpm release:prepare X.Y.Z` files the changelog section a release ships with; merging that PR tags, publishes the Release with that section as its body, and pushes a multi-arch image to `ghcr.io/opensdlc-dev/managed-agent-console`. Steps in [docs/releasing.md](./docs/releasing.md). **0.3.0 went out that way** on 2026-08-08.
 
 The backlog is [GitHub issues](https://github.com/OpenSDLC-Dev/managed-agent-console/issues) — see them there, not here.
