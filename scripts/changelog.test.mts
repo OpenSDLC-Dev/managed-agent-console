@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { bumpReadme, cutChangelog, releaseNotes, today } from "./changelog.mjs";
+import {
+  bumpReadme,
+  cutRelease,
+  releaseNotes,
+  sectionPath,
+  today,
+} from "./changelog.mjs";
+
+const REPO = "https://github.com/OpenSDLC-Dev/managed-agent-console";
 
 const CHANGELOG = `# Changelog
 
@@ -10,14 +18,24 @@ Notable changes, newest first.
 - **A thing landed** (2026-08-08): the narrative, citing [a file](./src/lib/utils.ts).
 - **Another thing** (2026-08-08): more narrative.
 
-## [0.1.0] - 2026-08-07
+## Released
 
-The first release.
+- [0.1.0](docs/changelog/0.1.0.md) — 2026-08-07 · [tag](${REPO}/releases/tag/v0.1.0)
 
-- **Repo bootstrap** (2026-08-02): the beginning, see [the plan](./docs/plan/01_v1-console.md).
+[Unreleased]: ${REPO}/compare/v0.1.0...HEAD
+`;
 
-[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/OpenSDLC-Dev/managed-agent-console/releases/tag/v0.1.0
+const FIRST_RELEASE = `# Changelog
+
+Notable changes, newest first.
+
+## [Unreleased]
+
+- **Repo bootstrap** (2026-08-02): the beginning.
+
+## Released
+
+[Unreleased]: ${REPO}/compare/HEAD...HEAD
 `;
 
 const EMPTY_CHANGELOG = CHANGELOG.replace(
@@ -25,110 +43,121 @@ const EMPTY_CHANGELOG = CHANGELOG.replace(
   "Nothing yet.",
 );
 
-describe("cutChangelog", () => {
-  it("moves the Unreleased body into a dated section and restores the placeholder", () => {
-    const out = cutChangelog(CHANGELOG, {
-      version: "0.2.0",
-      date: "2026-08-09",
-    });
+const cut = (text = CHANGELOG, version = "0.2.0", date = "2026-08-09") =>
+  cutRelease(text, { version, date });
 
-    expect(out).toContain(
-      "## [Unreleased]\n\nNothing yet.\n\n## [0.2.0] - 2026-08-09\n\n- **A thing landed**",
-    );
-    // Moved, not copied: the entry appears once, below the new heading.
-    expect(out.match(/A thing landed/g)).toHaveLength(1);
-    expect(out.indexOf("A thing landed")).toBeGreaterThan(
-      out.indexOf("## [0.2.0]"),
-    );
-    // Everything already released is untouched.
-    expect(out).toContain("## [0.1.0] - 2026-08-07");
-    expect(out).toContain("- **Repo bootstrap** (2026-08-02):");
+describe("cutRelease", () => {
+  it("moves the cycle into its own file and empties [Unreleased]", () => {
+    const { changelog, section } = cut();
+
+    expect(section).toContain("# 0.2.0 — 2026-08-09");
+    expect(section).toContain("- **A thing landed**");
+    expect(section).toContain("- **Another thing**");
+    // Moved, not copied.
+    expect(changelog).not.toContain("A thing landed");
+    expect(changelog).toContain("## [Unreleased]\n\nNothing yet.\n");
   });
 
-  it("points [Unreleased] at the new tag and gives the new version its own compare link", () => {
-    const out = cutChangelog(CHANGELOG, {
-      version: "0.2.0",
-      date: "2026-08-09",
+  it("climbs back out of docs/changelog when it rewrites the entries' links", () => {
+    // `./src/…` is written relative to the repository root, which is two
+    // directories up from where the section lands.
+    const { section } = cut();
+
+    expect(section).toContain("[a file](../../src/lib/utils.ts)");
+    expect(section).not.toContain("](./");
+  });
+
+  it("indexes the release against the one it succeeds", () => {
+    const { changelog } = cut();
+
+    expect(changelog).toContain(
+      `- [0.2.0](docs/changelog/0.2.0.md) — 2026-08-09 · [compare](${REPO}/compare/v0.1.0...v0.2.0)`,
+    );
+    // Newest first, and the older row survives.
+    expect(changelog.indexOf("[0.2.0](")).toBeLessThan(
+      changelog.indexOf("[0.1.0]("),
+    );
+    expect(changelog).toContain(`[Unreleased]: ${REPO}/compare/v0.2.0...HEAD`);
+  });
+
+  it("links a first release to its tag, there being nothing to compare against", () => {
+    const { changelog } = cutRelease(FIRST_RELEASE, {
+      version: "0.1.0",
+      date: "2026-08-07",
     });
 
-    expect(out).toContain(
-      "[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.2.0...HEAD",
+    expect(changelog).toContain(
+      `- [0.1.0](docs/changelog/0.1.0.md) — 2026-08-07 · [tag](${REPO}/releases/tag/v0.1.0)`,
     );
-    expect(out).toContain(
-      "[0.2.0]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.1.0...v0.2.0",
-    );
-    expect(out).toContain(
-      "[0.1.0]: https://github.com/OpenSDLC-Dev/managed-agent-console/releases/tag/v0.1.0",
-    );
+    // The row brings its own blank line rather than butting against the footer.
+    expect(changelog).toContain(`v0.1.0)\n\n[Unreleased]:`);
   });
 
   it("refuses to cut a release with nothing under [Unreleased]", () => {
-    expect(() =>
-      cutChangelog(EMPTY_CHANGELOG, { version: "0.2.0", date: "2026-08-09" }),
-    ).toThrow(/nothing under \[Unreleased\]/);
+    expect(() => cut(EMPTY_CHANGELOG)).toThrow(/nothing under \[Unreleased\]/);
   });
 
-  it("refuses to cut the same version twice", () => {
-    const once = cutChangelog(CHANGELOG, {
-      version: "0.2.0",
-      date: "2026-08-09",
-    });
+  it("refuses to index the same version twice", () => {
+    const once = cut().changelog;
 
-    expect(() =>
-      cutChangelog(once, { version: "0.2.0", date: "2026-08-10" }),
-    ).toThrow(/already has a \[0\.2\.0\] section/);
+    expect(() => cut(once)).toThrow(/already indexes 0\.2\.0/);
   });
 
   it("rejects anything that is not a release version and an ISO date", () => {
     for (const version of ["v0.2.0", "0.2", "0.2.0-rc.1"]) {
-      expect(() =>
-        cutChangelog(CHANGELOG, { version, date: "2026-08-09" }),
-      ).toThrow(/not a release version/);
+      expect(() => cut(CHANGELOG, version)).toThrow(/not a release version/);
     }
-    expect(() =>
-      cutChangelog(CHANGELOG, { version: "0.2.0", date: "9 Aug 2026" }),
-    ).toThrow(/not an ISO date/);
+    expect(() => cut(CHANGELOG, "0.2.0", "9 Aug 2026")).toThrow(
+      /not an ISO date/,
+    );
   });
 
   it("names the missing structure instead of corrupting the file", () => {
-    expect(() =>
-      cutChangelog("# Changelog\n\n## [0.1.0] - 2026-08-07\n\nx\n", {
-        version: "0.2.0",
-        date: "2026-08-09",
-      }),
-    ).toThrow(/no `## \[Unreleased\]` heading/);
-    expect(() =>
-      cutChangelog("# Changelog\n\n## [Unreleased]\n\n- a thing\n", {
-        version: "0.2.0",
-        date: "2026-08-09",
-      }),
-    ).toThrow(/no released section/);
+    expect(() => cut("# Changelog\n\n## Released\n\nx\n")).toThrow(
+      /no `## \[Unreleased\]` heading/,
+    );
+    expect(() => cut("# Changelog\n\n## [Unreleased]\n\n- a thing\n")).toThrow(
+      /no `## Released` heading/,
+    );
   });
 });
 
 describe("releaseNotes", () => {
-  it("returns one section's body and stops at the next heading", () => {
-    const notes = releaseNotes(CHANGELOG, { version: "0.1.0" });
+  it("drops the title and absolutises the entries' links against the tag", () => {
+    const { section } = cut();
 
-    expect(notes).toContain("The first release.");
-    expect(notes).toContain("- **Repo bootstrap** (2026-08-02):");
-    expect(notes).not.toContain("## [");
-    expect(notes).not.toContain("[Unreleased]:");
+    const notes = releaseNotes(section, { version: "0.2.0" });
+
+    expect(notes).not.toContain("# 0.2.0 —");
+    expect(notes).toContain("- **A thing landed**");
+    expect(notes).toContain(`[a file](${REPO}/blob/v0.2.0/src/lib/utils.ts)`);
+    expect(notes).not.toContain("](../../");
   });
 
-  it("absolutises repo-relative links against the tag", () => {
-    const notes = releaseNotes(CHANGELOG, { version: "0.1.0" });
-
-    expect(notes).toContain(
-      "[the plan](https://github.com/OpenSDLC-Dev/managed-agent-console/blob/v0.1.0/docs/plan/01_v1-console.md)",
-    );
-    expect(notes).not.toContain("](./");
+  it("throws rather than publishing an empty body", () => {
+    expect(() =>
+      releaseNotes("# 0.2.0 — 2026-08-09\n", { version: "0.2.0" }),
+    ).toThrow(/no entries/);
   });
 
-  it("throws rather than returning an empty body for a version it cannot find", () => {
-    expect(() => releaseNotes(CHANGELOG, { version: "9.9.9" })).toThrow(
-      /no \[9\.9\.9\] section/,
+  it("refuses a file whose title names another cycle", () => {
+    // release.yml asks for notes by version and would otherwise publish a
+    // copied or renamed file's narrative under this release's tag.
+    const { section } = cut();
+
+    expect(() => releaseNotes(section, { version: "0.3.0" })).toThrow(
+      /docs\/changelog\/0\.3\.0\.md does not open with/,
     );
+    expect(() =>
+      releaseNotes("# 0.2.0\n\n- a thing\n", { version: "0.2.0" }),
+    ).toThrow(/does not open with/);
+  });
+});
+
+describe("sectionPath", () => {
+  it("is where prepare writes and notes reads", () => {
+    expect(sectionPath("0.2.0")).toBe("docs/changelog/0.2.0.md");
+    expect(() => sectionPath("latest")).toThrow(/not a release version/);
   });
 });
 

@@ -31,9 +31,9 @@ env:
 
 jobs:
   # The narrative half, deliberately independent of the image. release-please
-  # writes a release body from commit subjects; the changelog section is the
-  # narrative that body should have been — and a release whose image build fails
-  # must still say what it is rather than keep the placeholder.
+  # writes a release body from commit subjects; the version's own changelog file
+  # is the narrative that body should have been — and a release whose image build
+  # fails must still say what it is rather than keep the placeholder.
   notes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -45,7 +45,7 @@ jobs:
           ref: ${{ inputs.tag || github.event.release.tag_name }}
           persist-credentials: false
 
-      - name: Replace the release body with its changelog section
+      - name: Replace the release body with its changelog file
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
@@ -57,10 +57,10 @@ jobs:
           fi
           if node scripts/changelog.mjs notes "$version" > "$RUNNER_TEMP/notes.md"; then
             gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
-            echo "release body taken from the [$version] section of CHANGELOG.md"
+            echo "release body taken from docs/changelog/$version.md"
           else
-            # Never leave a release with no body because a section is missing.
-            echo "::warning::no [$version] section in CHANGELOG.md — release body left as it is"
+            # Never leave a release with no body because the file is missing.
+            echo "::warning::no docs/changelog/$version.md — release body left as it is"
           fi
 
   # One native runner per architecture: emulating a Next.js build under QEMU is

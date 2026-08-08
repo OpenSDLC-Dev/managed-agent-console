@@ -1,6 +1,6 @@
 # History
 
-Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md).
+Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md) for the cycle in progress, and in [docs/changelog/](./changelog/) for every released one.
 
 ## Plan 05 — release management (approved 2026-08-07, archived 2026-08-08)
 
