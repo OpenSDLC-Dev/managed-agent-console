@@ -238,9 +238,25 @@ export const SURFACES: Surface[] = [
     route: "/agents/agent_doesnotexist0000001",
     fixture: "none — a real platform 404",
     description:
-      "ErrorState carrying the platform's message and request id. Also the surface behind the known gap in plan 04: a 404 is indistinguishable from an unimplemented capability.",
+      "ErrorState carrying the platform's message and request id. An item route's 404 stays an error; `surface-unavailable` is its twin for the same status on a collection route.",
     setup: async (page) => {
       await page.getByTestId("error-state").waitFor();
+    },
+  },
+  {
+    id: "surface-unavailable",
+    route: "/skills",
+    fixture: "a deployment that does not serve /v1/skills",
+    description:
+      "UnavailableSurface: the calm twin of ErrorState for a surface this deployment does not implement, shot beside a sidebar the Skills item has left.",
+    setup: async (page) => {
+      // Same 404 the platform's router catch-all answers with; `__reset`
+      // before the next shot puts the mock back (issue #33).
+      await page.request.post("http://127.0.0.1:18081/__unimplemented", {
+        data: { surfaces: ["skills"] },
+      });
+      await page.reload();
+      await page.getByTestId("unavailable-surface").waitFor();
     },
   },
 

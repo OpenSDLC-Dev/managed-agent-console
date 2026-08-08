@@ -115,7 +115,9 @@ describe("CommandPalette", () => {
       "Files",
     ]);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+    // Six list queries, plus the six surface probes the "Go to" entries are
+    // gated on — each fired exactly once.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(12));
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls).toEqual(
       expect.arrayContaining([

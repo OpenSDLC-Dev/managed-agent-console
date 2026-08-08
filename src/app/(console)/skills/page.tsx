@@ -10,6 +10,7 @@ import {
   ErrorState,
   IdCode,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSkills } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { UploadSkillButton } from "@/components/console/upload-skill-button";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Skill } from "@/lib/platform/types";
@@ -66,6 +68,9 @@ export default function SkillsPage() {
     page: pager.page,
     source: source === "all" ? undefined : source,
   });
+
+  if (isUnimplemented(error))
+    return <UnavailableSurface name="Skills" surface="skills" />;
 
   return (
     <div>

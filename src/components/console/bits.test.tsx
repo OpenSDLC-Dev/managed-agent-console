@@ -19,6 +19,7 @@ import {
   RequestId,
   StatusBadge,
   Time,
+  UnavailableSurface,
 } from "./bits";
 import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
@@ -172,6 +173,28 @@ describe("ErrorState", () => {
   it("falls back to a generic message for non-Error values", () => {
     render(<ErrorState error="nope" />);
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+  });
+});
+
+describe("UnavailableSurface", () => {
+  it("names the surface and exposes it machine-readably", () => {
+    render(<UnavailableSurface name="Credential vaults" surface="vaults" />);
+    const standIn = screen.getByTestId("unavailable-surface");
+    expect(standIn.getAttribute("data-surface")).toBe("vaults");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "Credential vaults",
+    );
+    expect(
+      screen.getByText(/does not implement credential vaults/),
+    ).toBeInTheDocument();
+  });
+
+  it("is not an error state — nothing is wrong with the platform", () => {
+    render(<UnavailableSurface name="Skills" surface="skills" />);
+    expect(screen.queryByTestId("error-state")).toBeNull();
+    expect(
+      screen.getByText("Not available on this deployment."),
+    ).toBeInTheDocument();
   });
 });
 

@@ -23,6 +23,7 @@ import {
   useSkills,
   useVaults,
 } from "@/lib/platform/queries";
+import { useSurfaces, type Surface } from "@/lib/platform/surfaces";
 
 interface Item {
   key: string;
@@ -33,13 +34,14 @@ interface Item {
   icon: LucideIcon;
 }
 
-const SECTIONS: Item[] = [
+const SECTIONS: (Item & { surface: Surface })[] = [
   {
     key: "nav-agents",
     label: "Agents",
     href: "/agents",
     group: "Go to",
     icon: Bot,
+    surface: "agents",
   },
   {
     key: "nav-sessions",
@@ -47,6 +49,7 @@ const SECTIONS: Item[] = [
     href: "/sessions",
     group: "Go to",
     icon: MessagesSquare,
+    surface: "sessions",
   },
   {
     key: "nav-environments",
@@ -54,6 +57,7 @@ const SECTIONS: Item[] = [
     href: "/environments",
     group: "Go to",
     icon: Boxes,
+    surface: "environments",
   },
   {
     key: "nav-vaults",
@@ -61,6 +65,7 @@ const SECTIONS: Item[] = [
     href: "/vaults",
     group: "Go to",
     icon: KeyRound,
+    surface: "vaults",
   },
   {
     key: "nav-skills",
@@ -68,6 +73,7 @@ const SECTIONS: Item[] = [
     href: "/skills",
     group: "Go to",
     icon: Sparkles,
+    surface: "skills",
   },
   {
     key: "nav-files",
@@ -75,6 +81,7 @@ const SECTIONS: Item[] = [
     href: "/files",
     group: "Go to",
     icon: FileText,
+    surface: "files",
   },
 ];
 
@@ -93,11 +100,17 @@ function useSearchItems(query: string): Item[] {
   const vaults = useVaults({ limit });
   const skills = useSkills({ limit });
   const files = useFiles();
+  // The resource groups below need no gating — an unimplemented surface's
+  // query errors, so its list is simply empty. Only the "Go to" entries would
+  // still offer a dead page.
+  const surfaces = useSurfaces();
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
     const items: Item[] = SECTIONS.filter(
-      (s) => !q || s.label.toLowerCase().includes(q),
+      (s) =>
+        surfaces?.[s.surface] !== false &&
+        (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;
     for (const a of agents.data?.data ?? []) {
@@ -169,6 +182,7 @@ function useSearchItems(query: string): Item[] {
     return items;
   }, [
     query,
+    surfaces,
     agents.data,
     sessions.data,
     environments.data,

@@ -14,6 +14,7 @@ import {
   IdCode,
   StatusBadge,
   Time,
+  UnavailableSurface,
 } from "@/components/console/bits";
 import {
   Select,
@@ -28,6 +29,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgentOptions, useSessions } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
@@ -101,6 +103,9 @@ export default function SessionsPage() {
     agent_id: agentId === "all" ? undefined : agentId,
     "created_at[gte]": created.gte,
   });
+
+  if (isUnimplemented(error))
+    return <UnavailableSurface name="Sessions" surface="sessions" />;
 
   return (
     <div>

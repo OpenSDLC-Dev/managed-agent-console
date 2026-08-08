@@ -22,6 +22,13 @@ import {
 
 const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
+/** Surfaces this run pretends not to implement, e.g. "skills,files". */
+const UNIMPLEMENTED = (process.env.MOCK_PLATFORM_UNIMPLEMENTED ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+/** Toggled per test via POST /__unimplemented; back to UNIMPLEMENTED on reset. */
+let unimplemented = [...UNIMPLEMENTED];
 
 let requestCounter = 0;
 let eventCounter = 1000;
@@ -53,6 +60,7 @@ let skillCounter = 1;
 let skillVersionCounter = 1;
 
 function resetStore() {
+  unimplemented = [...UNIMPLEMENTED];
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
@@ -536,6 +544,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Test hook: pretend to be a deployment that does not serve these surfaces.
+  // `/__reset` puts it back, so a spec that forgets cannot leak into the next.
+  if (req.method === "POST" && url.pathname === "/__unimplemented") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    unimplemented = Array.isArray(body.surfaces) ? body.surfaces : [];
+    res.setHeader("content-type", "application/json");
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true, surfaces: unimplemented }));
+    return;
+  }
+
   const key = req.headers["x-api-key"];
   if (!key || key !== API_KEY) {
     res.setHeader("content-type", "application/json");
@@ -546,6 +565,17 @@ const server = createServer(async (req, res) => {
         key ? "invalid x-api-key" : "missing x-api-key header",
       ),
     );
+    return;
+  }
+
+  // A deployment that does not serve some surfaces. The platform has no 501:
+  // an unregistered route falls through its router's catch-all to a plain
+  // 404/not_found_error (internal/api/server.go), which is what this replays
+  // so e2e can prove the console hides the surface instead of erroring.
+  if (unimplemented.some((s) => url.pathname.startsWith(`/v1/${s}`))) {
+    res.setHeader("content-type", "application/json");
+    res.writeHead(404);
+    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
     return;
   }
 
