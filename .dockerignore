@@ -1,6 +1,8 @@
 # Keep the build context small and credentials out of it. The Dockerfile's build
-# stage does COPY . ., so secret-file patterns are depth-matched (**/) — a
-# .gitignored local secret at any level stays out of the context and its cache.
+# stage does COPY . ., so the secret-file patterns below are depth-matched (**/)
+# to hold at any level — but only the patterns named here are excluded: this is
+# not generic .gitignore coverage, and a secret in a file matching none of them
+# still reaches the context and its cache.
 node_modules
 .next
 .git
