@@ -6,11 +6,12 @@ status: draft
 
 Requested 2026-08-09. Staging today is a shared password typed over plain HTTP into a bare public
 IPv4, and the thing behind it is a full-power platform management key. This plan replaces that with
-**Google sign-in restricted to `@hhstudio.ai`, enforced at the load balancer by GCP IAP**, and takes
+**Google sign-in restricted to `@${WORKSPACE_DOMAIN}`, enforced at the load balancer by GCP IAP**, and takes
 the password out of production entirely. The console gains no authentication code — it loses the
 authentication code it has.
 
-Four decisions were taken by the maintainer before drafting (2026-08-09):
+Five decisions by the maintainer bound this plan — the first four taken before drafting, the fifth
+during it (all 2026-08-09):
 
 - **D1 — Casdoor is not part of this.** The maintainer keeps a checkout of
   [casdoor/casdoor](https://github.com/casdoor/casdoor) and asked whether it could serve this; the
@@ -21,8 +22,16 @@ Four decisions were taken by the maintainer before drafting (2026-08-09):
   The GCP pod gets no password path at all.
 - **D3 — scope is the console UI.** The platform's own control-plane API keeps its public load
   balancer and its `x-api-key`, unchanged and ungated by this work.
-- **D4 — the hostname is not yet chosen.** This plan assumes `console.hhstudio.ai` throughout; it
-  appears in three places and one of them cannot be changed by redeploying (below).
+- **D4 — the hostname is not yet chosen.** It appears in three places and one of them, the OAuth
+  client's redirect URI, cannot be changed by redeploying (below).
+- **D5 — deployment identifiers are not written into this repository.** Decided 2026-08-09 while
+  drafting: the values live in the repository's Actions variables, and everything public refers to
+  them by name. See
+  [Deployment identifiers in a public repository](#deployment-identifiers-in-a-public-repository).
+
+Consequently this plan names five values it never spells out — `${PROJECT_ID}`, `${CLUSTER}`,
+`${ZONE}`, `${WORKSPACE_DOMAIN}` and `${CONSOLE_HOST}`. Commands are meant to be run with those set,
+and the reader who wants the concrete values reads them from the deployment rather than from git.
 
 ## Ground truth (verified 2026-08-09 against this checkout)
 
@@ -76,9 +85,10 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
   the `signIn()` helper, the live tier, and 29 fidelity surfaces × 2 themes all keep exercising the
   real password code path. **No test changes and no fidelity re-shoots are required by this plan.**
 - **The deployment project is parented to the Workspace organization**, so a `domain:` IAM binding and
-  an Internal consent screen are both available — checked with `gcloud projects describe <project>
---format='value(parent.type,parent.id)'` against `gcloud organizations list`, and re-checkable the
-  same way. The organization and customer identifiers are deliberately not reproduced here; see
+  an Internal consent screen are both available — checked with
+  `gcloud projects describe ${PROJECT_ID} --format='value(parent.type,parent.id)'` against
+  `gcloud organizations list`, and re-checkable the same way. The organization and customer
+  identifiers are deliberately not reproduced here; see
   [Deployment identifiers in a public repository](#deployment-identifiers-in-a-public-repository).
   The domain resolves `MX 1 smtp.google.com` on registrar nameservers — Workspace mail, DNS edited by
   hand.
@@ -99,13 +109,28 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
 - **A `gce`-class Ingress has no external-auth annotation.** There is no equivalent of ingress-nginx's
   `auth-url`/`auth-signin`. The only edge gates Google exposes there are IAP and Cloud Armor (a
   filter, not authentication). Anything else must sit _inside_ the request path as a proxy.
-- **`domain:hhstudio.ai` is a valid IAM principal**
+- **`domain:${WORKSPACE_DOMAIN}` is a valid IAM principal**
   ([cloud.google.com/iam/docs/principal-identifiers](https://docs.cloud.google.com/iam/docs/principal-identifiers)),
   and IAP documents Workspace domains as principals for `roles/iap.httpsResourceAccessor`. This is a
   membership check against the Workspace directory, not a string match on an email suffix — see the
   decision below for why that difference decides this plan.
-- **IAP is free** ([cloud.google.com/iap/pricing](https://cloud.google.com/iap/pricing)). The
-  Ingress replaces the existing network load balancer rather than adding one.
+- **IAP itself is free, the load balancer is not**
+  ([cloud.google.com/iap/pricing](https://cloud.google.com/iap/pricing) charges nothing for IAP and
+  says in the next breath that "networking and compute charges apply for required load balancing").
+  The Ingress replaces the existing network load balancer rather than adding one, so the delta is
+  small rather than zero — a global Application Load Balancer bundles its first five forwarding rules
+  at one rate and charges per rule after that, which is why **the marginal cost of applications two
+  through five behind the same Ingress genuinely is $0** while the first one is not. Take the current
+  figures from the pricing page at the time rather than from this file.
+- **Three scaling facts to know before a second application arrives**, none of which affect this plan:
+  Google-managed certificates do not support wildcards and a target proxy holds at most 15 of them, so
+  the shape that scales is one `ManagedCertificate` listing several hostnames rather than one per
+  application; IAP is incompatible with Cloud CDN; and the pod-level bypass that slice 2 closes at the
+  bind address is a cost every application pays separately, not a console-specific fix.
+- **The Google-managed OAuth client is Preview and organization-users-only.** It is what lets slice 2
+  enable IAP with no client secret in the cluster. Confirm it is still available and still fits before
+  relying on it; the fallback is a self-managed OAuth client, which reintroduces a secret and a
+  redirect URI.
 - **IAP does not process health checks**, so the GCLB health check and the kubelet probes pass
   through ungated — no allowlist rule needed for them.
 - **Two traps in the GKE edge, both silent.** The default Ingress health check is `GET /`, which this
@@ -116,7 +141,7 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
   so an SSE session trace is cut every 30 seconds; the client reconnects with backoff and re-walks
   history, so nothing surfaces as an error. Both are fixed in `BackendConfig` in slice 1.
 - **Casdoor's domain restriction is broken.** `Provider.EmailRegex` is the one field that expresses
-  "only `@hhstudio.ai`", and its reject branch at `controllers/auth.go:932-935` has no `return`;
+  "only `@${WORKSPACE_DOMAIN}`", and its reject branch at `controllers/auth.go:932-935` has no `return`;
   `ResponseError` writes JSON without aborting the Beego handler, and :938 proceeds into sign-in. The
   adjacent failure branch at :930 _does_ return, so this is an omission rather than a soft warning.
   The mechanism that does hold is `EnableSignUp=false` plus pre-created users — a whitelist with one
@@ -124,7 +149,7 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
 
 ## The decision
 
-**GCP IAP on a GKE Ingress, with access granted by the IAM binding `domain:hhstudio.ai`.** The console
+**GCP IAP on a GKE Ingress, with access granted by the IAM binding `domain:${WORKSPACE_DOMAIN}`.** The console
 keeps no identity code, gains no container, and holds no OAuth credential; production runs the image
 with `CONSOLE_PASSWORD` unset and the gate lives entirely at the load balancer.
 
@@ -135,10 +160,10 @@ Three reasons, in the order the project's principles put them:
    this change the production console has no accounts, no roles, no per-user state and no
    authorization branch anywhere in `src/` — a smaller authentication surface than today's 5 files,
    not a larger one.
-2. **`domain:hhstudio.ai` is a stronger check than any email-suffix rule.** IAM resolves the principal
+2. **`domain:${WORKSPACE_DOMAIN}` is a stronger check than any email-suffix rule.** IAM resolves the principal
    against the Workspace directory. Every application-level alternative — a hand-rolled `hd` check, an
    `--email-domain` flag on a proxy, Casdoor's `EmailRegex` — compares a string, and a consumer Google
-   account carrying a verified `@hhstudio.ai` address satisfies a string comparison while not being a
+   account carrying a verified `@${WORKSPACE_DOMAIN}` address satisfies a string comparison while not being a
    member of anything. Getting the strongest form of the rule for zero lines of code is the whole
    argument.
 3. **Nothing in the repository becomes GCP-specific.** IAP is configuration of one deployment, not
@@ -147,17 +172,27 @@ Three reasons, in the order the project's principles put them:
 
 | Option                          | Why it loses                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **GCP IAP**                     | **Chosen.** 3 lines of YAML, one IAM binding, $0, membership-based rule, nothing new to operate or patch.                                                                                                                                                                                                                                                                                                                                                                                              |
+| **GCP IAP**                     | **Chosen.** 3 lines of YAML, one IAM binding scoped to this backend service, no charge for IAP itself, a membership-based rule rather than a string comparison, nothing new to operate or patch, and a marginal cost of $0 for every browser application added behind the same Ingress afterwards.                                                                                                                                                                                                     |
 | Casdoor                         | Not disqualified — disproportionate. 88k LOC of Go, 309 module requirements, a 319-file React admin, an LDAP and a RADIUS listener started unconditionally (`main.go:144-152`), a first-boot `built-in/admin` / `123` (`object/init.go:170`), a second hostname, a second certificate and a second database — to express a rule whose working form is a one-row whitelist, via a field that is broken. See [below](#if-a-second-service-ever-needs-the-same-login) for the future in which this flips. |
 | oauth2-proxy sidecar            | The right answer to a question D1 removed. It buys issuer portability — the same container speaks OIDC to Google today and to Casdoor later — at the cost of a container to patch, two new secrets, a widening of CD's credential pipeline from two payloads to four, and a domain rule that is a string comparison rather than a membership check. Kept as the documented upgrade path, not adopted now.                                                                                              |
 | In-app OIDC relying party       | ~250 lines of production code plus ~400 of tests, a client secret in the process that already holds the management key, a session cookie format to redesign (today's has no expiry), and under D2 no way for CD's in-pod deep check to authenticate at all. Principle 4 says the console owns presentation.                                                                                                                                                                                            |
-| Cloudflare Access               | Free tier fits, but the free plan requires full-zone setup: `hhstudio.ai`'s nameservers move off Namecheap, and that zone carries the Workspace MX. The blast radius of a DNS migration is company email. Policy also lives in a dashboard rather than in git.                                                                                                                                                                                                                                         |
+| Cloudflare Access               | Free tier fits, but the free plan requires full-zone setup: `${WORKSPACE_DOMAIN}`'s nameservers move off Namecheap, and that zone carries the Workspace MX. The blast radius of a DNS migration is company email. Policy also lives in a dashboard rather than in git.                                                                                                                                                                                                                                 |
 | ingress-nginx + `auth-url`      | Run and patch an ingress controller, give up ManagedCertificate, and inherit `proxy_buffering: on` — an SSE hazard to remember to switch off.                                                                                                                                                                                                                                                                                                                                                          |
 | Cloud Armor source-IP allowlist | Not authentication; no roaming, no phones. Worth three lines only if slice 1 slips by more than a week, and it expires the moment the Service becomes ClusterIP.                                                                                                                                                                                                                                                                                                                                       |
 
-**What would reverse this:** a second service needing the same login inside the next year. IAP secures
-one load balancer; it does not become an issuer for anything else. The cost of being wrong is bounded
-and is stated in [the last section](#if-a-second-service-ever-needs-the-same-login).
+**What would reverse this — and what would not.** A second, third or fifth _browser_ application does
+**not** reverse it: IAP is configured per backend service, not per load balancer ("When you enable IAP
+on a Compute Engine backend service, only that backend service is protected by IAP", and "Multiple
+apps within a project can each have different access policies"), so N apps sit behind one Ingress with
+N `BackendConfig` objects and N independent IAM policies, at a marginal cost of $0 each. Single
+sign-on across them is a free side effect, and revoking a Workspace account closes all of them at
+once.
+
+What does reverse it is an application that must **hold** a token rather than sit behind a Google load
+balancer: a CLI, a mobile client, a third-party SaaS integration, or anything not on GCP. IAP is an
+enforcement point, never an issuer — that is the sentence that matters, and it is about the shape of
+the client, not the number of applications. The cost of being wrong is bounded and is stated in
+[the last section](#if-a-second-service-ever-needs-the-same-login).
 
 ## Precondition: a hostname and TLS
 
@@ -172,22 +207,22 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    authorization) costs an interactive cluster change to buy back an IP that was never published.
 
    ```bash
-   gcloud compute addresses create console-ip --global --project hh-opensdlc-managed-agents
+   gcloud compute addresses create console-ip --global --project ${PROJECT_ID}
    gcloud compute addresses describe console-ip --global \
-     --project hh-opensdlc-managed-agents --format='value(address)'
+     --project ${PROJECT_ID} --format='value(address)'
    ```
 
 2. **Add one A record at Namecheap.** Advanced DNS → Host Records → `A Record`, host `console`, value
    from step 1. Not a CNAME and not a URL redirect — GCP requires the record to point at the load
    balancer with nothing in the path. **Touch no MX record.** Confirm with
-   `dig +short console.hhstudio.ai @8.8.8.8`.
+   `dig +short ${CONSOLE_HOST} @8.8.8.8`.
 
 3. **Apply the edge objects by hand and wait for the certificate**, before slice 1's PR merges (see
    the slice for why):
 
    ```bash
-   gcloud container clusters get-credentials map-staging \
-     --zone us-central1-a --project hh-opensdlc-managed-agents
+   gcloud container clusters get-credentials ${CLUSTER} \
+     --zone ${ZONE} --project ${PROJECT_ID}
    kubectl apply -n map -f deploy/k8s/edge.yaml
    kubectl annotate svc console -n map \
      cloud.google.com/backend-config='{"default":"console"}'
@@ -209,16 +244,27 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
      --format='yaml(httpHealthCheck)'                                # requestPath: /api/health
    ```
 
-5. **Grant access** (slice 2's precondition). `cd-deployer` needs it too, if the smoke gate is to make
-   an authenticated request:
+5. **Grant access — on the backend service, not on the project.** the deploy service account needs it too, if the
+   smoke gate is to make an authenticated request:
 
    ```bash
-   gcloud projects add-iam-policy-binding hh-opensdlc-managed-agents \
-     --member='domain:hhstudio.ai' --role='roles/iap.httpsResourceAccessor'
-   gcloud projects add-iam-policy-binding hh-opensdlc-managed-agents \
-     --member='serviceAccount:cd-deployer@hh-opensdlc-managed-agents.iam.gserviceaccount.com' \
-     --role='roles/iap.httpsResourceAccessor'
+   gcloud iap web add-iam-policy-binding \
+     --resource-type=backend-services --service=<console-backend-service> \
+     --member='domain:<workspace-domain>' --role='roles/iap.httpsResourceAccessor'
+   gcloud iap web add-iam-policy-binding \
+     --resource-type=backend-services --service=<console-backend-service> \
+     --member='serviceAccount:<deploy-sa>' --role='roles/iap.httpsResourceAccessor'
    ```
+
+   **The scope is the point, and `gcloud projects add-iam-policy-binding` is the wrong command here.**
+   IAM inherits downward: a project-level `roles/iap.httpsResourceAccessor` applies to every
+   IAP-secured resource in the project, including ones that do not exist yet. Granted at the project,
+   the next application to switch IAP on would be **open to the whole domain the moment it was
+   enabled** — silently, with no separate grant for anyone to review — and an allow policy can be
+   added to more easily than it can be narrowed. Bound to this backend service, the second application
+   arrives closed and has to be opened deliberately. Use a Google Group rather than `domain:` as soon
+   as any application wants a narrower audience than "everyone"; group membership is managed in
+   Workspace and never reaches git.
 
 6. **Rotate `console-password`.** It has been crossing the public internet in the clear for as long as
    staging has existed. Do this even though D2 removes it — it is still the local-development and test
@@ -226,7 +272,7 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
 
 ## Slices
 
-### Slice 1 — `feat(deploy): publish the console on console.hhstudio.ai with managed TLS`
+### Slice 1 — `feat(deploy): publish the console on ${CONSOLE_HOST} with managed TLS`
 
 TLS and a hostname, **with the gate untouched**: the password stays, `307 → /login` stays the
 assertion. Independently correct and independently valuable — even if everything below were abandoned,
@@ -238,7 +284,7 @@ this stops the password and every session cookie crossing the wire in the clear.
     `kubernetes.io/ingress.global-static-ip-name: console-ip`,
     `networking.gke.io/managed-certificates: console`,
     `networking.gke.io/v1beta1.FrontendConfig: console`, one host rule.
-  - `ManagedCertificate`: `spec.domains: [console.hhstudio.ai]`.
+  - `ManagedCertificate`: `spec.domains: [${CONSOLE_HOST}]`.
   - `BackendConfig`: `healthCheck.requestPath: /api/health` and `port: 3000` — **both traps live
     here**; and `timeoutSec: 3600` for SSE. Each gets a comment naming the failure it prevents,
     because both failures are silent.
@@ -247,7 +293,7 @@ this stops the password and every session cookie crossing the wire in the clear.
 - **`deploy/k8s/service.yaml`**: drop `type: LoadBalancer` (ClusterIP is the default), add the
   backend-config annotation, rewrite the header comment at :1-7 and the `port: 80` comment at :22 —
   both now assert things that are false. ~−6/+10.
-- **`.github/workflows/deploy.yml`**: add `CONSOLE_HOST: console.hhstudio.ai` to the `env:` block;
+- **`.github/workflows/deploy.yml`**: add `CONSOLE_HOST: ${CONSOLE_HOST}` to the `env:` block;
   delete the external-IP polling loop (a ClusterIP Service has no `status.loadBalancer.ingress`) and
   target `https://$CONSOLE_HOST` directly; add a fail-fast check that `managedcertificate console`
   reports `Active`, so a still-issuing certificate reads as one clear message instead of a 300-second
@@ -257,7 +303,7 @@ this stops the password and every session cookie crossing the wire in the clear.
   its migration checklist, `docs/deploy-gcp.md`'s corresponding section and its two references to the
   bare IP, `README.md`, `CHANGELOG.md` under `## [Unreleased]`, `STATE.md`.
 - **`src/`: no change. Tests: no change. Fidelity: no re-shoots.**
-- **Proves it worked**: `curl -sSI https://console.hhstudio.ai/` returns 307 to `/login`; one green CD
+- **Proves it worked**: `curl -sSI https://${CONSOLE_HOST}/` returns 307 to `/login`; one green CD
   run.
 - **Blocked on** precondition steps 1–4.
 
@@ -297,8 +343,8 @@ this stops the password and every session cookie crossing the wire in the clear.
   `STATE.md`. `docs/design-reference.md` is untouched — no surface changes.
 - **Tests: no change**, for the reason in Ground truth. **Fidelity: no re-shoots** — no `src/` change,
   and `/login` still exists and still renders.
-- **Proves it worked**: anonymous `curl` of `https://console.hhstudio.ai/` is refused by IAP rather
-  than served; `henry@hhstudio.ai` reaches `/agents` in a browser; a Google account outside the
+- **Proves it worked**: anonymous `curl` of `https://${CONSOLE_HOST}/` is refused by IAP rather
+  than served; `henry@${WORKSPACE_DOMAIN}` reaches `/agents` in a browser; a Google account outside the
   Workspace is refused; a session trace streams for **more than two minutes** without reconnecting
   (the only proof the SSE timeout was actually raised); one green CD run.
 - **Blocked on** slice 1 and precondition step 5.
@@ -346,11 +392,23 @@ Recorded here and, where they concern the deployment, in `docs/deploy-gcp.md`.
 - **IAP is GCP-only.** Self-hosters are unaffected and keep the password gate; but this repository's
   reference deployment now demonstrates something a reader cannot reproduce off GCP. Say so in
   `deploy/k8s/README.md` rather than letting the manifests imply otherwise.
-- **This does not cover the platform API.** Per D3 the control plane keeps its own public load
-  balancer and `x-api-key`. "We added Google sign-in" will be read as broader than it is; state the
-  boundary in both deployment docs.
+- **This does not cover the platform API, and IAP is not the answer there — ever.** Per D3 the control
+  plane keeps its own public load balancer and `x-api-key`. "We added Google sign-in" will be read as
+  broader than it is, so state the boundary in both deployment docs, and state the reason with it,
+  because the obvious next thought is to put IAP in front of the platform too. **IAP cannot read
+  `x-api-key`**: it accepts only a Google-issued OIDC token, so a fully compliant wire client holding
+  a valid key is refused _before_ the platform's middleware runs — `requireAPIKey`
+  (`internal/api/auth.go`) never sees the request. That is not a 404 or a 501 the console could
+  feature-detect around; it is a pre-protocol refusal, and principle 3 exists precisely to prevent an
+  endpoint that only a Google client can drive. The platform's own two `Authorization`-bearing lanes
+  (`internal/api/envauth.go` for BYOC workers, `internal/api/gateauth.go` for the gate sidecar) would
+  collide with IAP's use of the same header on top of that. The right way to shrink the platform's
+  exposure is the one its own `docs/deploy-gcp.md` already names as the target state — `service.type`
+  back to `ClusterIP`, since nothing outside the cluster calls it today — with Cloud Armor in front of
+  a Gateway if an external worker ever appears. That work belongs to the platform repository and is
+  not in this plan's scope.
 - **The IP changes.** Anything bookmarking or allowlisting the old address breaks.
-- **`domain:hhstudio.ai` admits every current and future Workspace account.** Correct for a
+- **`domain:${WORKSPACE_DOMAIN}` admits every current and future Workspace account.** Correct for a
   single-operator staging deployment, and wider than the shared password it replaces. A Google Group
   binding narrows it later without touching anything in this repository.
 - **SSE across the new path is a real risk with a silent failure mode.** `timeoutSec` is the known
@@ -358,7 +416,7 @@ Recorded here and, where they concern the deployment, in `docs/deploy-gcp.md`.
   is why slice 2's acceptance requires a trace that streams for over two minutes rather than one that
   merely opens. IAP authorizes per request, so an expiring session mid-stream is a second unknown with
   the same shape — the client retries with backoff and reports nothing.
-- **Break-glass needs no second door on the internet.** A second `@hhstudio.ai` account is the first
+- **Break-glass needs no second door on the internet.** A second `@${WORKSPACE_DOMAIN}` account is the first
   answer. If IAP or Google is unavailable, `kubectl -n map port-forward deploy/console 3000:3000`
   reaches an ungated console — appropriate, not a hole: anyone who can port-forward can also read
   `console-secrets` and drive the platform directly, so the console grants strictly less. Note that
@@ -382,21 +440,31 @@ identifiers public does not grant anyone anything.
 
 It does two other things, and this plan takes a position on each.
 
-- **It hands a reader a target list** — the project, the cluster and the hostname of an operator
+- **It hands a reader a target list** — the project, the cluster, and the hostname of an operator
   console that holds a full-power management key. The trust policy is what actually stops an attacker,
-  so this is depth rather than a hole, but it is free to reduce. **Organization IDs and the Workspace
-  customer ID are therefore not written down here**, and no new identifier is introduced by this plan
-  beyond the hostname, which is public by definition once DNS resolves.
-- **It couples an open-source project to one operator's deployment.** Someone who clones this to run
+  so this is depth rather than a hole, but it is free to reduce.
+- **It couples an open-source project to one operator's deployment.** Someone cloning this to run
   their own console inherits manifests they must edit and documentation describing a cluster they
-  cannot reach. That is a real cost to the project's premise, and it is **out of scope here** — this
-  plan changes an authentication seam and would only make the coupling worse by adding a hostname to
-  it. Parameterising the deployment (identifiers as workflow variables or a values file, generic
-  examples in the docs, the real values held outside the public repository) is its own piece of work
-  in both repositories and belongs in its own issue.
+  cannot reach. That is a real cost to the project's premise, and the larger of the two problems.
 
-Until that happens, the honest statement in the README is that `deploy/` is **a reference deployment,
-not a template** — it demonstrates a working shape and names the one cluster it was proven against.
+**D5 settles both, and this plan is the first document written under it.** Deployment identifiers
+become Actions variables — not secrets, because they are not secret, merely the maintainer's — and
+everything in git refers to them by name. Two consequences worth stating plainly:
+
+- **This plan introduces no new identifier.** An earlier draft reproduced the organization ID and the
+  Workspace customer ID, neither of which had ever appeared in this repository; both are gone. The
+  Workspace domain and the console hostname, which this plan would otherwise have been the first to
+  publish here, are `${WORKSPACE_DOMAIN}` and `${CONSOLE_HOST}`.
+- **What is already in git history stays there.** Sweeping the existing literals out of
+  `deploy/k8s/`, `.github/workflows/deploy.yml` and `docs/deploy-gcp.md` — and the platform
+  repository's `deploy/gcp/` — is its own piece of work in both repositories, tracked separately; it
+  reduces what is published from here on and cannot retroactively unpublish anything. Rewriting the
+  history of two repositories that have already cut releases was considered and declined: these are
+  identifiers, not credentials, and the trust policy is what protects the deployment.
+
+Until that sweep lands, the honest statement in the README is that `deploy/` is **a reference
+deployment, not a template** — it demonstrates a working shape and names the one cluster it was proven
+against.
 
 ## If a second service ever needs the same login
 
@@ -423,15 +491,15 @@ surface, and it does not replace this seam — it replaces the issuer behind it.
 
 ## Open questions
 
-| Question                                                                                                                                                                                                                                                                         | What settles it                                                                                                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D4 — the hostname.** It appears in `ManagedCertificate.spec.domains`, the Ingress host rule, and (if IAP ever moves to a self-managed OAuth client) a Google OAuth client's redirect URI. The last cannot be changed by redeploying.                                           | The maintainer, before precondition step 1.                                                                                                             |
-| Is `map-staging` VPC-native? If not, the Service needs `NodePort` and `BackendConfig.healthCheck.port` must name the node port instead of 3000.                                                                                                                                  | `gcloud container clusters describe map-staging --zone us-central1-a --format='value(ipAllocationPolicy.useIpAliases)'`                                 |
-| Is the `HttpLoadBalancing` addon enabled? If not the Ingress object sits there and never gets an address.                                                                                                                                                                        | `… --format='value(addonsConfig.httpLoadBalancing.disabled)'`                                                                                           |
-| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                      | After precondition step 3: `kubectl get svc console -n map -o jsonpath='{.metadata.annotations}'`                                                       |
-| Can `cd-deployer` create `Ingress`, `BackendConfig` and `ManagedCertificate` in `map`? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                                         | `kubectl auth can-i create ingress -n map --as=<SA>`, or the first CD run after slice 1 merges.                                                         |
-| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address. | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                        |
-| Does `node:24-alpine` ship a usable BusyBox `wget` for the `exec` probes the loopback bind requires?                                                                                                                                                                             | `docker run --rm node:24-alpine wget --help`                                                                                                            |
-| Does `kubectl port-forward` still reach the container after the loopback bind? Break-glass depends on it.                                                                                                                                                                        | After slice 2: `kubectl port-forward -n map deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                        |
-| Can `map-staging` enforce a `NetworkPolicy`, if the loopback bind proves unworkable?                                                                                                                                                                                             | `gcloud container clusters describe map-staging --zone us-central1-a --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` |
-| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                           | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                                    |
+| Question                                                                                                                                                                                                                                                                         | What settles it                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **D4 — the hostname.** It appears in `ManagedCertificate.spec.domains`, the Ingress host rule, and (if IAP ever moves to a self-managed OAuth client) a Google OAuth client's redirect URI. The last cannot be changed by redeploying.                                           | The maintainer, before precondition step 1.                                                                                                      |
+| Is `${CLUSTER}` VPC-native? If not, the Service needs `NodePort` and `BackendConfig.healthCheck.port` must name the node port instead of 3000.                                                                                                                                   | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --format='value(ipAllocationPolicy.useIpAliases)'`                                 |
+| Is the `HttpLoadBalancing` addon enabled? If not the Ingress object sits there and never gets an address.                                                                                                                                                                        | `… --format='value(addonsConfig.httpLoadBalancing.disabled)'`                                                                                    |
+| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                      | After precondition step 3: `kubectl get svc console -n map -o jsonpath='{.metadata.annotations}'`                                                |
+| Can the deploy service account create `Ingress`, `BackendConfig` and `ManagedCertificate` in `map`? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                            | `kubectl auth can-i create ingress -n map --as=<SA>`, or the first CD run after slice 1 merges.                                                  |
+| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address. | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                 |
+| Does `node:24-alpine` ship a usable BusyBox `wget` for the `exec` probes the loopback bind requires?                                                                                                                                                                             | `docker run --rm node:24-alpine wget --help`                                                                                                     |
+| Does `kubectl port-forward` still reach the container after the loopback bind? Break-glass depends on it.                                                                                                                                                                        | After slice 2: `kubectl port-forward -n map deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                 |
+| Can `${CLUSTER}` enforce a `NetworkPolicy`, if the loopback bind proves unworkable?                                                                                                                                                                                              | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` |
+| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                           | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                             |
