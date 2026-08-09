@@ -1,10 +1,15 @@
-# The console's public address.
+# The console's in-cluster address, and the Ingress' backend.
 #
-# type: LoadBalancer, not an Ingress: there is no domain and no certificate yet,
-# so there is nothing for an Ingress' host rules or for cert-manager to key off.
-# GKE gives this Service a bare regional IP and the pipeline smoke-tests that IP
-# directly. What that costs, and exactly what changes when a domain arrives, is
-# in README.md next to this file.
+# ClusterIP (the default, left unwritten): the public edge is the Ingress in
+# edge.yaml, which fronts a global external Application Load Balancer with a
+# managed certificate. This Service stopped being the public address when that
+# landed, and nothing outside the cluster reaches it directly any more.
+#
+# ClusterIP is the right shape here only because the cluster is VPC-native: the
+# load balancer is then container-native and delivers to the Pod IP through a
+# NEG, with no node port in the path. On a cluster that is not VPC-native this
+# would have to be NodePort, and edge.yaml's health-check port would name the
+# node port rather than 3000.
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,13 +17,19 @@ metadata:
   labels:
     app.kubernetes.io/name: console
     app.kubernetes.io/part-of: managed-agent-platform
+  annotations:
+    # Binds edge.yaml's BackendConfig to this Service — the health-check path
+    # and the SSE timeout both arrive through here. Without this annotation the
+    # backend silently keeps the GCLB defaults, which this application does not
+    # survive; the failures are described in edge.yaml.
+    cloud.google.com/backend-config: '{"default":"console"}'
 spec:
-  type: LoadBalancer
   selector:
     app.kubernetes.io/name: console
   ports:
     - name: http
       protocol: TCP
-      # Plain HTTP on :80 — see the README's known limitation.
+      # The port the Ingress rule targets. TLS terminates at the load balancer,
+      # so this hop is plain HTTP inside the cluster.
       port: 80
       targetPort: 3000

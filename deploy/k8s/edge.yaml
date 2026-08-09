@@ -1,0 +1,125 @@
+# The console's public edge: a hostname, a Google-managed certificate, and the
+# two backend settings that this application will not survive the defaults of.
+#
+# Four objects in one file. This directory is deliberately not a chart, and the
+# workflow's apply loop already emits `---` between files, so a multi-document
+# file costs nothing and keeps the edge readable as one thing.
+#
+# **Every hostname here is a bare-word placeholder, never a shell-shaped one.**
+# The workflow's `sed` renders it exactly as it renders the placeholders in
+# deployment.yaml. `kubectl apply` substitutes nothing at all, so a placeholder
+# written with a dollar and braces that escaped that step would reach the API
+# server intact — as a DNS name, which is rejected, but only after the manifest
+# has been submitted.
+#
+# The global external Application Load Balancer.
+#
+# `gce` class, so this is a *global* ALB and its forwarding rule requires a
+# *global* static address — the reason `console-ip` is reserved by hand rather
+# than promoted from the Service's old regional IP, which cannot be converted.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+  annotations:
+    # The API server answers this with "annotation is deprecated, please use
+    # 'spec.ingressClassName' instead". Do not take that advice here: GKE's
+    # Ingress controller keys off this annotation, and `kubectl get
+    # ingressclass` on this cluster returns nothing at all — there is no
+    # IngressClass object for `ingressClassName` to name. Switching would leave
+    # an Ingress that no controller claims, which presents as an Ingress that
+    # simply never receives an address.
+    kubernetes.io/ingress.class: gce
+    # Reserved out-of-band (`gcloud compute addresses create console-ip
+    # --global`). Named rather than literal so the address is not an identifier
+    # in a public repository, and so re-creating this Ingress keeps the address
+    # the DNS record points at.
+    kubernetes.io/ingress.global-static-ip-name: console-ip
+    networking.gke.io/managed-certificates: console
+    networking.gke.io/v1beta1.FrontendConfig: console
+spec:
+  rules:
+    - host: CONSOLE_HOST
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: console
+                port:
+                  number: 80
+---
+# TLS, issued and renewed by Google.
+#
+# First issuance is typically 15–60 minutes after the A record resolves to the
+# address above, and the load balancer may take up to 30 more to serve it.
+# `FAILED_NOT_VISIBLE` is a *waiting* state, not an error: deleting and
+# recreating this object only restarts the clock. If it persists, suspect the
+# DNS record rather than this file — a CDN-proxied record (Cloudflare's orange
+# cloud) resolves to the provider's anycast addresses, so Google never sees what
+# it needs, and that failure reads as "still waiting" indefinitely.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  domains:
+    - CONSOLE_HOST
+---
+# The two GCLB defaults this application does not survive. Both failures are
+# silent, which is why each carries its own comment rather than sharing one.
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  healthCheck:
+    # The default health check is `GET /`, and this application answers `GET /`
+    # with a 307 to /login whenever the login gate is on. GCLB reads a 307 as
+    # unhealthy, so the default produces a **permanently 502 hostname while the
+    # pod is Ready, `kubectl rollout status` is green and the logs are clean** —
+    # there is nothing in the cluster that looks wrong. `/api/health` is exempt
+    # from the gate (src/proxy.ts's matcher) precisely because unauthenticated
+    # infrastructure has to be able to call it.
+    type: HTTP
+    requestPath: /api/health
+    # The Pod's port, not the Service's 80: this cluster is VPC-native, so the
+    # load balancer is container-native and delivers to the Pod IP through a
+    # NEG. On a cluster that is not VPC-native this would name the node port
+    # instead — checked before this file was written, and re-checkable with
+    # `gcloud container clusters describe … --format='value(ipAllocationPolicy.useIpAliases)'`.
+    port: 3000
+  # The GCLB backend timeout defaults to 30 seconds and is a **request-and-
+  # response** timeout, not an idle one: it caps the whole exchange regardless
+  # of traffic. A session trace is Server-Sent Events held open for as long as
+  # the session runs, so the default cuts every trace at 30 seconds while the
+  # browser silently reconnects with backoff and re-walks history — a console
+  # that looks slow and drops events, reporting nothing anywhere.
+  timeoutSec: 3600
+---
+# Plain HTTP redirects to HTTPS.
+#
+# Deliberately *not* `kubernetes.io/ingress.allow-http: "false"` on the Ingress:
+# that stops the load balancer listening on 80 at all, and a redirect needs
+# something listening to redirect from. Anyone typing the bare hostname would
+# get a connection refused instead of the console.
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  redirectToHttps:
+    enabled: true

@@ -65,14 +65,15 @@ console:
 
 ## Deploying to a cluster
 
-[deploy/k8s/](./deploy/k8s/) holds the two objects the console needs beside a
-platform running in Kubernetes — a Deployment and a `LoadBalancer` Service — and
+[deploy/k8s/](./deploy/k8s/) holds what the console needs beside a platform
+running in Kubernetes — a Deployment, a Service, and an edge that publishes it
+on a hostname with a managed certificate — and
 [docs/deploy-gcp.md](./docs/deploy-gcp.md) describes the pipeline that applies
 them: build → push → deploy → smoke, on every push to `main`, with no long-lived
 credential stored in this repository (Workload Identity Federation, and the
 runtime secrets read from Secret Manager inside the job).
 
-That deployment publishes the console on a **public IP over plain HTTP**, so
+That deployment publishes the console **on the public internet**, so
 `CONSOLE_PASSWORD` is not optional there: it is the only thing between the
 internet and a management key that can do anything to the platform, and the
 pipeline both refuses to deploy without it and asserts after the rollout that an
