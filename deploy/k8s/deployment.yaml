@@ -85,6 +85,10 @@ spec:
             # is wanted — a page this pod serves has already been authorized by
             # something the pod cannot be talked out of.
             #
+            # The Secret still carries a `console-password` key; nothing here
+            # mounts it. It stays until no revision this Deployment can roll
+            # back to references it — see README.md in this directory.
+            #
             # Two consequences that are not obvious and are handled elsewhere:
             # the deep health check stops gating itself at the same moment
             # (src/app/api/health/route.ts), and port 3000 is then open to the

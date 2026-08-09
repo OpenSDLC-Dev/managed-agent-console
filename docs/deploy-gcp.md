@@ -79,13 +79,20 @@ the job:
 | Secret Manager secret  | Becomes                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------- |
 | `controlplane-api-key` | the `platform-api-key` key of the `console-secrets` Secret → `PLATFORM_API_KEY` |
+| `console-password`     | the `console-password` key of the same Secret — mounted by no current revision  |
 
 `controlplane-api-key` is the same value the platform chart installs as
 `controlplane.apiKey` — one secret, two readers, which is what makes the
-console's key valid at all. It is the only credential this deployment has:
-`console-password` used to be the second, and authentication is IAP's now.
+console's key valid at all.
 
-It must be a **single line**, and the job rejects the run if it is not. A
+`console-password` is the console's own gate, and **this deployment does not use
+it**: authentication is IAP's. It is still written because `rollout undo` below
+can restore a revision from before that change, which mounts the key — and the
+Secret is replaced rather than patched, so dropping the key would turn a
+rollback into an outage. It stops being read now and stops existing in a
+follow-up, once no revision in history mounts it.
+
+Both must be a **single line**, and the job rejects the run if either is not. A
 trailing newline is the easy way to get this wrong — `--data-file=-` stores the
 Enter you pressed — and that byte rides into the container as an `x-api-key`
 Node refuses to send at all, so the job strips one before writing the Kubernetes
@@ -165,7 +172,7 @@ Both are also **polled** rather than asked once. Applying `iap.enabled` is a
 request to the ingress controller, which then configures the backend service, so
 on a run that turns IAP on the gate is not closed the instant `kubectl apply`
 returns — measured at about two minutes on this deployment. Polling for a
-*closed* gate is safe in the direction that matters: a console that is genuinely
+_closed_ gate is safe in the direction that matters: a console that is genuinely
 open never satisfies the condition, the deadline expires, and the run fails.
 
 This is a stronger claim than the one it replaces: the refusal now happens in a
@@ -185,11 +192,21 @@ Two things it deliberately does not prove:
 - **That the UI renders.** This is a reachability gate, not an e2e run; the
   Playwright suites are CI's job, on the PR, before the merge that deploys.
 
-The job also fails, before it touches the cluster, if `controlplane-api-key` is
-empty in Secret Manager. That check is the cheap one, and it is not evidence of
-anything about the gate: what proves the deployed console is gated is the pair
-of anonymous requests above, made against the address the internet uses, and
-checked for the header only IAP can write.
+The job also fails, before it touches the cluster, if either Secret Manager
+payload is empty. Those checks are the cheap ones, and neither is evidence about
+the gate: what proves the deployed console is gated is the pair of anonymous
+requests above, made against the address the internet uses, and checked for the
+header only IAP can write.
+
+**The order of the apply is itself part of the gate.** The production container
+has no authentication of its own, and `iap.enabled` is a _request_ to the ingress
+controller rather than an immediate state — about two minutes on this deployment.
+Applying everything at once would roll a passwordless pod into a backend whose
+gate was still opening, and noticing the IAP header afterwards does not undo
+having served. So the edge, the `NetworkPolicy` and the Service are applied
+first, the job waits for the hostname to actually refuse an anonymous request,
+and only then is the Deployment applied. Where IAP is already on — every run
+after the first — the wait returns on its first probe.
 
 ## Rolling back
 

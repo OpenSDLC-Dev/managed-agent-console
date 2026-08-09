@@ -13,6 +13,7 @@ What is being worked on right now, and how far along it is — nothing else. **S
 - [ ] Slice 2 — IAP on, `CONSOLE_PASSWORD` out of production, `NetworkPolicy` in the same PR, smoke gate rewritten around IAP's own denial header. NetworkPolicy already proven against the live cluster: a probe pod reached the control plane and timed out on the console's 3000, with the pod Ready and the backend `HEALTHY`
 - [ ] Browser verification, the maintainer's ask: sign in as a Workspace account and land on `/agents`; a non-Workspace Google account is refused
 - [ ] Precondition step 6 — rotate `console-password`. It crossed the public internet in the clear for as long as staging existed, and it is still the local-development and test credential
+- [ ] [#74](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/74) — drop the `console-password` key from `console-secrets`. Slice 2 stops the console _reading_ it; the key stays until no revision `rollout undo` can reach still mounts it, or the rollback restores a pod the kubelet cannot start
 
 Neither slice changes a test or re-shoots a fidelity surface. The same sweep is open for the platform repo as [managed-agent-platform#355](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/355).
 

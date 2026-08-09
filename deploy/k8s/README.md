@@ -20,7 +20,7 @@ asked for.
 | Placeholder        | Becomes                                                              |
 | ------------------ | -------------------------------------------------------------------- |
 | `CONSOLE_IMAGE`    | the `CONSOLE_IMAGE_REPO` variable, tagged with this run's commit sha |
-| `SECRETS_CHECKSUM` | `sha256` of the Secret Manager payload this run read                 |
+| `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read            |
 | `CONTROLPLANE_URL` | the `PLATFORM_BASE_URL` variable — the control plane's Service URL   |
 | `CONSOLE_HOST`     | the `CONSOLE_HOST` variable — the hostname the console answers on    |
 
@@ -82,39 +82,51 @@ above _after_ building and pushing an image.
 
 ## The Secret
 
-One credential, in a Secret named `console-secrets`:
+A Secret named `console-secrets` with two keys, of which the console now reads
+one:
 
 | Key                | Value              | Source (Secret Manager, in the `GCP_PROJECT_ID` project)                                                                                         |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform-api-key` | `PLATFORM_API_KEY` | `controlplane-api-key` — the same value the platform chart installs as `controlplane.apiKey`, which is what makes the console's key valid at all |
 
-There used to be a second key, `console-password`. It is gone: authentication is
-IAP's, at the load balancer, and **the production container has no
-authentication code running in it at all**. The Secret is written with `create …
---dry-run=client | apply`, which replaces rather than patches, so the first run
-of that shape removed the old key from the cluster rather than leaving it
-unreferenced.
+The second key is `console-password`, and **no current revision mounts it**. The
+Deployment stopped referencing it when authentication moved to IAP; the
+production container has no authentication code running in it at all.
 
-The workflow reads the latest enabled version and writes the Secret with
+**It is still written, deliberately.** Every revision in the Deployment's
+history from before that change still carries a `secretKeyRef` for it, and this
+Secret is written with `create … --dry-run=client | apply`, which **replaces
+rather than patches**. Stop writing the key and `kubectl rollout undo` restores
+a pod template the kubelet cannot start (`CreateContainerConfigError`) — so the
+step whose entire purpose is to leave the last working console serving would
+instead produce an outage, in exactly the situation where something has already
+gone wrong. The credential stops being _read_ now; it stops _existing_ in a
+follow-up, once no revision in history mounts it.
+
+The workflow reads the latest enabled version of each and writes the Secret with
 `kubectl create … --dry-run=client -o yaml | kubectl apply -f -`, so re-running
-it is idempotent. The value is never checked in and never echoed.
+it is idempotent. The values are never checked in and never echoed.
 
-**It may not be empty, and the pipeline fails if it is** — without it the
-console cannot authenticate to the platform at all. The pipeline does not stop
-at the Secret Manager payload either: after the rollout it asserts, against the
-public hostname, that an anonymous request is refused **and that IAP is what
-refused it**.
+**Neither may be empty, and the pipeline fails if either is.** Without
+`platform-api-key` the console cannot authenticate to the platform at all;
+without `console-password` a rollback target cannot start. That second guard
+still exists but now prevents a different failure, which is why its message
+changed rather than the guard being deleted. The pipeline does not stop at the
+Secret Manager payloads either: after the rollout it asserts, against the public
+hostname, that an anonymous request is refused **and that IAP is what refused
+it**.
 
-**Rotating the secret rolls the pod, without a commit.** Add the new version in
+**Rotating a secret rolls the pod, without a commit.** Add the new version in
 Secret Manager and re-run the workflow (`workflow_dispatch`); the run reads the
 latest version, applies the Secret, and writes a `console-secrets/checksum`
-annotation — a `sha256` of the payload — into the pod template. Without that
+annotation — a `sha256` of the two payloads — into the pod template. Without that
 annotation the re-applied Deployment would be byte-identical, nothing would roll,
 `rollout status` would return instantly green, and the pod would keep serving
 with the old credential. The platform chart carries the same annotation on its
 control-plane Deployment, for the same reason.
 
-The annotation is a `sha256`, not the value, and it is one-way.
+The annotation is a `sha256` of the payloads, not either value, and it is
+one-way.
 
 ## The health endpoint, and which depth goes where
 

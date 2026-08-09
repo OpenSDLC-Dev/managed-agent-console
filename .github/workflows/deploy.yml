@@ -154,27 +154,41 @@ jobs:
           trap 'rm -rf "$dir"' EXIT
           mkdir -p "$dir"
 
-          # One payload, not two. `console-password` used to be read here as
-          # well; authentication is IAP's now, at the load balancer, and the
-          # production container has no gate of its own by design.
+          # Still both payloads, even though the console no longer reads
+          # `console-password` — authentication is IAP's now, at the load
+          # balancer, and the production container has no gate of its own.
           #
-          # Through a shell variable rather than straight into a file, for the
+          # Deliberate, and the reason is `rollout undo` at the bottom of this
+          # job. Every revision in the Deployment's history from before the
+          # password was removed still carries a `secretKeyRef` for that key,
+          # and this Secret is written with `create … | apply`, which
+          # *replaces* rather than patches. Drop the key here and a rollback
+          # restores a pod template the kubelet cannot start
+          # (`CreateContainerConfigError`) — so the step whose whole purpose is
+          # to leave the last working console serving would instead produce an
+          # outage, in exactly the situation where something has already gone
+          # wrong. The key stops being *read* now; it stops *existing* in a
+          # follow-up, once no revision in history mounts it.
+          #
+          # Through shell variables rather than straight into files, for the
           # trailing newline: `gcloud` returns the payload byte for byte, and a
           # payload added with `--data-file=-` from a terminal — which is how
-          # the error message below tells an operator to add one — carries the
+          # the error messages below tell an operator to add one — carries the
           # newline they pressed. That byte would ride into the container as an
           # x-api-key Node refuses to send at all. Command substitution strips
           # it; nothing else here would notice.
           api_key="$(gcloud secrets versions access latest \
             --secret=controlplane-api-key --project "$PROJECT_ID")"
+          console_password="$(gcloud secrets versions access latest \
+            --secret=console-password --project "$PROJECT_ID")"
 
-          # Rejected before anything prints the value: `::add-mask::` is a
+          # Rejected before anything prints either value: `::add-mask::` is a
           # single-line workflow command, so masking a multi-line value echoes
           # every line after the first straight into this public log. A newline
           # surviving the substitution above means a genuinely multi-line
-          # payload, which this credential cannot be.
-          if [ "$(printf '%s' "$api_key" | wc -l)" -ne 0 ]; then
-            echo "::error::the controlplane-api-key payload is multi-line — it must be a single line"
+          # payload, which neither of these credentials can be.
+          if [ "$(printf '%s%s' "$api_key" "$console_password" | wc -l)" -ne 0 ]; then
+            echo "::error::a Secret Manager payload for this deployment is multi-line — both must be a single line"
             exit 1
           fi
 
@@ -183,9 +197,11 @@ jobs:
           # Secret prints its base64 `data:` block — a form no mask on the raw
           # string covers. Both forms are registered; a value transformed any
           # other way (split, re-encoded, URL-escaped) still is not, so this
-          # does not license printing it.
+          # does not license printing them.
           echo "::add-mask::$api_key"
+          echo "::add-mask::$console_password"
           echo "::add-mask::$(printf '%s' "$api_key" | base64 -w0)"
+          echo "::add-mask::$(printf '%s' "$console_password" | base64 -w0)"
 
           # Blank *or* whitespace-only. A payload of one space passes `[ -s ]`
           # while being no credential at all.
@@ -193,20 +209,25 @@ jobs:
             echo "::error::Secret Manager secret 'controlplane-api-key' is empty in $PROJECT_ID — the console cannot authenticate to the platform without it"
             exit 1
           fi
+          # No longer a gate — the console does not read it — but a rollback
+          # target still mounts it, and an empty value breaks that pod the same
+          # way a missing key would.
+          if [ -z "$(printf '%s' "$console_password" | tr -d '[:space:]')" ]; then
+            echo "::error::Secret Manager secret 'console-password' is empty in $PROJECT_ID — the console no longer reads it, but revisions this job can roll back to still mount it and would fail to start. Add a version: gcloud secrets versions add console-password --project=$PROJECT_ID --data-file=-"
+            exit 1
+          fi
 
           # Files, not `--from-literal`: a value passed as an argument to a real
           # process (kubectl) is visible in the runner's process listing for as
           # long as that process lives.
           printf '%s' "$api_key" > "$dir/platform-api-key"
+          printf '%s' "$console_password" > "$dir/console-password"
 
           # Idempotent: create the object we want, then apply it over whatever
           # is there. `kubectl create secret` alone fails on the second run.
-          # This *replaces* the Secret rather than patching it, so the
-          # `console-password` key the previous shape carried is removed by the
-          # first run of this version — the credential stops existing in the
-          # cluster, rather than lingering unreferenced.
           kubectl create secret generic console-secrets \
             --from-file=platform-api-key="$dir/platform-api-key" \
+            --from-file=console-password="$dir/console-password" \
             --dry-run=client -o yaml \
             | kubectl apply -n "$NAMESPACE" -f -
 
@@ -214,8 +235,10 @@ jobs:
           # Secret changes nothing the Deployment references by value, so the
           # pod template is byte-identical and Kubernetes rolls nothing; the
           # checksum rides in the template and makes the rotation a new
-          # revision. One payload now, so this is a plain hash of it.
-          checksum="$(printf '%s' "$api_key" | sha256sum | cut -d' ' -f1)"
+          # revision. Newline-separated because both payloads are single-line
+          # (asserted above), so the concatenation is unambiguous.
+          checksum="$(printf '%s\n%s' "$api_key" "$console_password" \
+            | sha256sum | cut -d' ' -f1)"
           echo "SECRETS_CHECKSUM=$checksum" >> "$GITHUB_ENV"
 
       - name: Apply the manifests
@@ -276,16 +299,62 @@ jobs:
           # the three values contains one today; being a repository variable is
           # exactly what stops that from being a property anyone can rely on.
           esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
-          for f in deploy/k8s/*.yaml; do
-            echo "---"
-            sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
-                -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
-                -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" \
-                -e "s|CONSOLE_HOST|$(esc "$CONSOLE_HOST")|g" "$f"
-          done | kubectl apply -n "$NAMESPACE" -f -
+          render() {
+            for f in "$@"; do
+              echo "---"
+              sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
+                  -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
+                  -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" \
+                  -e "s|CONSOLE_HOST|$(esc "$CONSOLE_HOST")|g" "$f"
+            done
+          }
 
-          # Arms the rollback below, and only here: every failure *before* this
-          # line left the cluster as it was, and rolling a healthy Deployment
+          # **The gate goes on before the pod that has none goes out.** The
+          # production container carries no CONSOLE_PASSWORD, so the only thing
+          # in front of a management-key-injecting proxy is IAP — and
+          # `iap.enabled` is a *request* to the ingress controller, which then
+          # configures the backend service. Measured at about two minutes on
+          # this deployment. Applying everything in one pass would roll the
+          # passwordless pod into a backend whose gate is still opening, and
+          # noticing the IAP header afterwards does not undo having served.
+          #
+          # So: everything except the Deployment first, then wait for the edge
+          # to actually refuse an anonymous request, then the Deployment. On
+          # every run where IAP is already on, the wait returns on its first
+          # probe and this costs one request.
+          render deploy/k8s/edge.yaml deploy/k8s/networkpolicy.yaml deploy/k8s/service.yaml \
+            | kubectl apply -n "$NAMESPACE" -f -
+
+          # `Accept: application/json` because IAP content-negotiates its
+          # refusal — a client that looks like a browser gets 302 to
+          # accounts.google.com instead of 401. The header is what the response
+          # is checked for either way: it is the only part nothing but IAP can
+          # produce.
+          echo "waiting for IAP to close the edge before rolling the Deployment"
+          deadline=$((SECONDS + 600))
+          closed=""
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if curl -sS -o /dev/null -D "$RUNNER_TEMP/gate.headers" \
+                 -H 'Accept: application/json' --max-time 10 \
+                 "https://$CONSOLE_HOST/" 2>/dev/null \
+               && grep -qi '^x-goog-iap-generated-response:' "$RUNNER_TEMP/gate.headers"; then
+              closed=yes
+              break
+            fi
+            sleep 10
+          done
+          if [ -z "$closed" ]; then
+            echo "::error::IAP has not closed $CONSOLE_HOST after ten minutes — refusing to roll out a container that has no gate of its own. On an established deployment, check BackendConfig 'console' and that the Ingress still has a backend service. On a first deployment this is expected: the address, the DNS record and the certificate are human-driven preconditions (docs/deploy-gcp.md), and there is no edge for IAP to close until they exist."
+            kubectl describe backendconfig console -n "$NAMESPACE" || true
+            exit 1
+          fi
+          echo "edge refuses anonymous requests; rolling the Deployment"
+
+          render deploy/k8s/deployment.yaml | kubectl apply -n "$NAMESPACE" -f -
+
+          # Arms the rollback below, and only here — after the *Deployment* is
+          # applied. Every failure above this line, the IAP wait included, left
+          # the running revision as it was, and rolling a healthy Deployment
           # back because the runner could not reach Secret Manager would be this
           # pipeline breaking staging by itself.
           echo "applied=true" >> "$GITHUB_OUTPUT"
