@@ -154,41 +154,37 @@ jobs:
           trap 'rm -rf "$dir"' EXIT
           mkdir -p "$dir"
 
-          # Still both payloads, even though the console no longer reads
-          # `console-password` — authentication is IAP's now, at the load
-          # balancer, and the production container has no gate of its own.
+          # One payload. `console-password` used to be written here too, long
+          # after the console stopped reading it — authentication is IAP's, at
+          # the load balancer, and the production container has no gate of its
+          # own. It was kept because this Secret is written with
+          # `create … | apply`, which *replaces* rather than patches, and every
+          # revision in the Deployment's history from before the password was
+          # removed still carried a `secretKeyRef` for the key: dropping it
+          # would have made `rollout undo` restore a pod template the kubelet
+          # cannot start (`CreateContainerConfigError`), turning the step whose
+          # whole purpose is to leave the last working console serving into an
+          # outage. That is over — `revisionHistoryLimit` bounds the reachable
+          # history to revisions that never mounted it, and the manifest says so
+          # rather than leaving it to arithmetic on the number of deploys since.
           #
-          # Deliberate, and the reason is `rollout undo` at the bottom of this
-          # job. Every revision in the Deployment's history from before the
-          # password was removed still carries a `secretKeyRef` for that key,
-          # and this Secret is written with `create … | apply`, which
-          # *replaces* rather than patches. Drop the key here and a rollback
-          # restores a pod template the kubelet cannot start
-          # (`CreateContainerConfigError`) — so the step whose whole purpose is
-          # to leave the last working console serving would instead produce an
-          # outage, in exactly the situation where something has already gone
-          # wrong. The key stops being *read* now; it stops *existing* in a
-          # follow-up, once no revision in history mounts it.
-          #
-          # Through shell variables rather than straight into files, for the
+          # Through a shell variable rather than straight into a file, for the
           # trailing newline: `gcloud` returns the payload byte for byte, and a
           # payload added with `--data-file=-` from a terminal — which is how
-          # the error messages below tell an operator to add one — carries the
+          # the error message below tells an operator to add one — carries the
           # newline they pressed. That byte would ride into the container as an
           # x-api-key Node refuses to send at all. Command substitution strips
           # it; nothing else here would notice.
           api_key="$(gcloud secrets versions access latest \
             --secret=controlplane-api-key --project "$PROJECT_ID")"
-          console_password="$(gcloud secrets versions access latest \
-            --secret=console-password --project "$PROJECT_ID")"
 
-          # Rejected before anything prints either value: `::add-mask::` is a
+          # Rejected before anything prints the value: `::add-mask::` is a
           # single-line workflow command, so masking a multi-line value echoes
           # every line after the first straight into this public log. A newline
           # surviving the substitution above means a genuinely multi-line
-          # payload, which neither of these credentials can be.
-          if [ "$(printf '%s%s' "$api_key" "$console_password" | wc -l)" -ne 0 ]; then
-            echo "::error::a Secret Manager payload for this deployment is multi-line — both must be a single line"
+          # payload, which this credential cannot be.
+          if [ "$(printf '%s' "$api_key" | wc -l)" -ne 0 ]; then
+            echo "::error::the Secret Manager payload for 'controlplane-api-key' is multi-line — it must be a single line"
             exit 1
           fi
 
@@ -197,11 +193,9 @@ jobs:
           # Secret prints its base64 `data:` block — a form no mask on the raw
           # string covers. Both forms are registered; a value transformed any
           # other way (split, re-encoded, URL-escaped) still is not, so this
-          # does not license printing them.
+          # does not license printing it.
           echo "::add-mask::$api_key"
-          echo "::add-mask::$console_password"
           echo "::add-mask::$(printf '%s' "$api_key" | base64 -w0)"
-          echo "::add-mask::$(printf '%s' "$console_password" | base64 -w0)"
 
           # Blank *or* whitespace-only. A payload of one space passes `[ -s ]`
           # while being no credential at all.
@@ -209,25 +203,23 @@ jobs:
             echo "::error::Secret Manager secret 'controlplane-api-key' is empty in $PROJECT_ID — the console cannot authenticate to the platform without it"
             exit 1
           fi
-          # No longer a gate — the console does not read it — but a rollback
-          # target still mounts it, and an empty value breaks that pod the same
-          # way a missing key would.
-          if [ -z "$(printf '%s' "$console_password" | tr -d '[:space:]')" ]; then
-            echo "::error::Secret Manager secret 'console-password' is empty in $PROJECT_ID — the console no longer reads it, but revisions this job can roll back to still mount it and would fail to start. Add a version: gcloud secrets versions add console-password --project=$PROJECT_ID --data-file=-"
-            exit 1
-          fi
 
           # Files, not `--from-literal`: a value passed as an argument to a real
           # process (kubectl) is visible in the runner's process listing for as
           # long as that process lives.
           printf '%s' "$api_key" > "$dir/platform-api-key"
-          printf '%s' "$console_password" > "$dir/console-password"
 
           # Idempotent: create the object we want, then apply it over whatever
           # is there. `kubectl create secret` alone fails on the second run.
+          #
+          # This is also what *removes* `console-password` from the live Secret
+          # rather than merely stopping its refresh: apply computes deletions
+          # from the last-applied annotation, which still lists both keys, so
+          # the key this command no longer names is deleted. Confirmed with a
+          # server-side dry run against the live object before the change
+          # landed, rather than assumed from how apply is documented.
           kubectl create secret generic console-secrets \
             --from-file=platform-api-key="$dir/platform-api-key" \
-            --from-file=console-password="$dir/console-password" \
             --dry-run=client -o yaml \
             | kubectl apply -n "$NAMESPACE" -f -
 
@@ -235,10 +227,10 @@ jobs:
           # Secret changes nothing the Deployment references by value, so the
           # pod template is byte-identical and Kubernetes rolls nothing; the
           # checksum rides in the template and makes the rotation a new
-          # revision. Newline-separated because both payloads are single-line
-          # (asserted above), so the concatenation is unambiguous.
-          checksum="$(printf '%s\n%s' "$api_key" "$console_password" \
-            | sha256sum | cut -d' ' -f1)"
+          # revision. One payload now, so it is a plain digest of that payload;
+          # dropping the second changes the digest once, which rolls the pod
+          # once, on the deploy that lands this.
+          checksum="$(printf '%s' "$api_key" | sha256sum | cut -d' ' -f1)"
           echo "SECRETS_CHECKSUM=$checksum" >> "$GITHUB_ENV"
 
       - name: Apply the manifests
@@ -397,6 +389,15 @@ jobs:
           # variable that is not there exits 0 and changes nothing, so on every
           # ordinary run this is a no-op — and on the run after a rollback it is
           # the only thing that works.
+          #
+          # The rollback that motivated this can no longer happen: no revision
+          # this Deployment can roll back to mounts the password any more, and
+          # the Secret no longer carries the key. The line stays anyway, and its
+          # job has changed from repair to assertion — *this deployment has no
+          # password*, re-established on every deploy rather than trusted. A
+          # `secretKeyRef` added by hand would now break the pod outright, which
+          # is loud; a literal added by hand would silently re-gate the console,
+          # which is not, and this is what removes it.
           kubectl set env deployment/console -n "$NAMESPACE" CONSOLE_PASSWORD-
 
           echo "previous_revision=$prev_rev" >> "$GITHUB_OUTPUT"
