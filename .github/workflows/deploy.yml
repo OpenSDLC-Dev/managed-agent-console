@@ -352,6 +352,32 @@ jobs:
 
           render deploy/k8s/deployment.yaml | kubectl apply -n "$NAMESPACE" -f -
 
+          # `apply` cannot be relied on to *remove* this one, and the reason is
+          # worth reading before deleting the line.
+          #
+          # `kubectl apply` computes deletions from (last-applied − new config).
+          # `env` merges by `name`, so an entry is dropped only if it was in the
+          # previously applied config and is not in this one. A `rollout undo`
+          # re-adds the whole old pod template — CONSOLE_PASSWORD included —
+          # without touching `last-applied-configuration`. After that the entry
+          # is live, absent from last-applied, and absent from the manifest, so
+          # apply sees nothing to delete and **preserves it indefinitely**. That
+          # is not hypothetical: it is how a rolled-back deploy left a password
+          # in a pod whose manifest had not mentioned one for two commits, and
+          # it presents as the deep check answering `401 console login required`
+          # from a revision that should have no gate at all.
+          #
+          # Server-side apply does not fix it either (measured, not assumed):
+          # `--force-conflicts` takes ownership of fields this manifest
+          # *specifies*, and says nothing about a field another manager added
+          # that this manifest simply omits.
+          #
+          # So the removal is stated rather than implied. Idempotent: removing a
+          # variable that is not there exits 0 and changes nothing, so on every
+          # ordinary run this is a no-op — and on the run after a rollback it is
+          # the only thing that works.
+          kubectl set env deployment/console -n "$NAMESPACE" CONSOLE_PASSWORD-
+
           # Arms the rollback below, and only here — after the *Deployment* is
           # applied. Every failure above this line, the IAP wait included, left
           # the running revision as it was, and rolling a healthy Deployment
