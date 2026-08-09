@@ -89,6 +89,12 @@ spec:
             # mounts it. It stays until no revision this Deployment can roll
             # back to references it — see README.md in this directory.
             #
+            # Absence here is not sufficient to remove it from a live
+            # Deployment that a `rollout undo` re-added it to: `apply` computes
+            # deletions from the last-applied config, which a rollback does not
+            # update. The workflow states the removal explicitly with
+            # `kubectl set env … CONSOLE_PASSWORD-` for exactly that case.
+            #
             # Two consequences that are not obvious and are handled elsewhere:
             # the deep health check stops gating itself at the same moment
             # (src/app/api/health/route.ts), and port 3000 is then open to the

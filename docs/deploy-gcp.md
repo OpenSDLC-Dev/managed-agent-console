@@ -224,10 +224,18 @@ after the first — the wait returns on its first probe.
 
 ## Rolling back
 
-**The pipeline rolls itself back.** A gate that only reports is not much of a
-gate: readiness is the shallow check, so a revision with a rejected key or an
-unreachable control plane passes `rollout status` while the RollingUpdate
-retires the pod that worked. If any step after the apply
+**The pipeline rolls itself back, to a revision it named before it started.** A
+gate that only reports is not much of a gate: readiness is the shallow check, so
+a revision with a rejected key or an unreachable control plane passes `rollout
+status` while the RollingUpdate retires the pod that worked.
+
+The target is captured, not defaulted. `kubectl rollout undo` with no argument
+means "the revision before the current one", which is not the same claim as "the
+last one that worked" — and one deploy here can add two revisions, since the
+apply is followed by the `kubectl set env` that removes `CONSOLE_PASSWORD`. The
+default would then restore the revision _between_ them: this run's unverified
+image, still carrying the password. The job reads the serving revision before it
+touches anything and rolls back to that number. If any step after the apply
 fails, the job runs `kubectl rollout undo` and waits for the previous revision,
 so a red run leaves the last working console serving rather than the broken one.
 (The platform gets the same behaviour from `helm upgrade --atomic`.) Two things

@@ -270,12 +270,33 @@ jobs:
           # nothing else. Deleting is safe to do here and only here — this
           # workflow owns the Deployment, and the apply immediately below
           # recreates it.
+          # The revision that is serving *now*, captured before anything below
+          # touches the Deployment, and used as the explicit rollback target.
+          #
+          # `kubectl rollout undo` defaults to `--to-revision=0`, which means
+          # "the one before the current one" — not "the last one that worked".
+          # This job can produce two revisions for a single deploy: the apply,
+          # and then the `kubectl set env` that removes CONSOLE_PASSWORD. On the
+          # run where that removal actually does something, the default undo
+          # lands on the revision *between* them — this run's unverified image
+          # still carrying the password — rather than on the deployment that was
+          # serving before the job started. Naming the target removes the whole
+          # question, including for any future change that needs two steps.
+          #
+          # Empty when there is no Deployment yet (first run) or when the guard
+          # below recreates it; the rollback step reports that case rather than
+          # guessing.
+          prev_rev="$(kubectl get deployment console -n "$NAMESPACE" \
+            -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}' 2>/dev/null || true)"
+
           want='{"app.kubernetes.io/name":"console"}'
           live="$(kubectl get deployment console -n "$NAMESPACE" \
             -o jsonpath='{.spec.selector.matchLabels}' 2>/dev/null || true)"
           if [ -n "$live" ] && [ "$live" != "$want" ]; then
             echo "::warning::live console Deployment selects $live, manifests select $want — recreating (spec.selector is immutable)"
             kubectl delete deployment console -n "$NAMESPACE" --wait
+            # Recreating discards the history that number referred to.
+            prev_rev=""
           fi
 
           # An explicit sed on the placeholders. envsubst would expand every
@@ -351,6 +372,35 @@ jobs:
           echo "edge refuses anonymous requests; rolling the Deployment"
 
           render deploy/k8s/deployment.yaml | kubectl apply -n "$NAMESPACE" -f -
+
+          # `apply` cannot be relied on to *remove* this one, and the reason is
+          # worth reading before deleting the line.
+          #
+          # `kubectl apply` computes deletions from (last-applied − new config).
+          # `env` merges by `name`, so an entry is dropped only if it was in the
+          # previously applied config and is not in this one. A `rollout undo`
+          # re-adds the whole old pod template — CONSOLE_PASSWORD included —
+          # without touching `last-applied-configuration`. After that the entry
+          # is live, absent from last-applied, and absent from the manifest, so
+          # apply sees nothing to delete and **preserves it indefinitely**. That
+          # is not hypothetical: it is how a rolled-back deploy left a password
+          # in a pod whose manifest had not mentioned one for two commits, and
+          # it presents as the deep check answering `401 console login required`
+          # from a revision that should have no gate at all.
+          #
+          # Server-side apply does not fix it either (measured, not assumed):
+          # `--force-conflicts` takes ownership of fields this manifest
+          # *specifies*, and says nothing about a field another manager added
+          # that this manifest simply omits.
+          #
+          # So the removal is stated rather than implied. Idempotent: removing a
+          # variable that is not there exits 0 and changes nothing, so on every
+          # ordinary run this is a no-op — and on the run after a rollback it is
+          # the only thing that works.
+          kubectl set env deployment/console -n "$NAMESPACE" CONSOLE_PASSWORD-
+
+          echo "previous_revision=$prev_rev" >> "$GITHUB_OUTPUT"
+          echo "rollback target: revision ${prev_rev:-none (first deployment or recreated)}"
 
           # Arms the rollback below, and only here — after the *Deployment* is
           # applied. Every failure above this line, the IAP wait included, left
@@ -580,14 +630,25 @@ jobs:
       - name: Roll back the revision that failed the gate
         if: failure() && steps.apply.outputs.applied == 'true'
         run: |
-          echo "::warning::a step after the apply failed — rolling back to the previous revision"
+          # The revision that was serving before this job touched anything,
+          # captured by the apply step. **Named rather than defaulted**, because
+          # `rollout undo` with no argument means "the revision before the
+          # current one", which is not the same claim: this job can add two
+          # revisions in one deploy (the apply, then the `kubectl set env` that
+          # removes CONSOLE_PASSWORD), and the default would then restore the
+          # one in between — this run's unverified image, still carrying the
+          # password it was supposed to lose.
+          rev="${{ steps.apply.outputs.previous_revision }}"
+          echo "::warning::a step after the apply failed — rolling back to revision ${rev:-<none>}"
+
           # A first deployment, and one the selector guard recreated, has no
-          # previous revision. `undo` says so and exits non-zero; there is
-          # nothing to roll back to and the operator has to be told that
-          # plainly rather than left reading a green rollback that did nothing.
-          if ! kubectl rollout undo deployment/console -n "$NAMESPACE"; then
+          # revision to name. Say so; there is nothing to roll back to and the
+          # operator has to be told that plainly rather than left reading a
+          # green rollback that did nothing.
+          if [ -z "$rev" ] || ! kubectl rollout undo deployment/console -n "$NAMESPACE" --to-revision="$rev"; then
             echo "::error::no previous revision to roll back to — the console is left on the revision that failed the gate. Take it out of service by hand: kubectl scale deployment/console -n $NAMESPACE --replicas=0"
             kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console -o wide
+            kubectl rollout history deployment/console -n "$NAMESPACE" || true
             exit 1
           fi
           kubectl rollout status deployment/console -n "$NAMESPACE" --timeout=5m
@@ -596,4 +657,4 @@ jobs:
           # checksum annotation. It does not restore `console-secrets`, which
           # still holds whatever this run wrote into it, so a revision rolled
           # back after a bad rotation reads the same bad credential.
-          echo "::warning::rolled back to the previous revision. This restores the image, not console-secrets — if a rotated credential caused the failure, disable that Secret Manager version and re-run the workflow."
+          echo "::warning::rolled back to revision $rev. This restores the image, not console-secrets — if a rotated credential caused the failure, disable that Secret Manager version and re-run the workflow."
