@@ -1,8 +1,8 @@
 # The console, next to the platform it manages.
 #
-# No namespace here on purpose: the pipeline passes `-n map`, and leaving it out
-# keeps these files applicable to a scratch namespace without an edit. See
-# README.md in this directory.
+# No namespace here on purpose: the pipeline passes `-n "$NAMESPACE"` from a
+# repository variable, and leaving it out keeps these files applicable to a
+# scratch namespace without an edit. See README.md in this directory.
 #
 # `CONSOLE_IMAGE` and `SECRETS_CHECKSUM` are placeholders the deploy workflow
 # substitutes. The image is tagged by commit sha and a tag is never reused, so
@@ -62,9 +62,17 @@ spec:
           env:
             # Cluster DNS, so the management key never crosses the cluster
             # boundary: the console reaches the control plane over the Service
-            # the platform chart creates for release "map" in namespace "map".
+            # the platform chart creates, in the namespace it shares with it.
+            #
+            # A placeholder rather than a literal, like CONSOLE_IMAGE above: the
+            # Service name is a function of the Helm release and namespace this
+            # deployment happens to use, and this repository is public. The
+            # workflow substitutes it from a repository variable. The token is
+            # deliberately *not* spelled PLATFORM_BASE_URL — that is the name of
+            # the variable being assigned two lines down, and a `sed` on that
+            # word would rewrite the key as well as the value.
             - name: PLATFORM_BASE_URL
-              value: http://map-managed-agent-platform-controlplane.map.svc.cluster.local:8080
+              value: CONTROLPLANE_URL
             - name: PLATFORM_API_KEY
               valueFrom:
                 secretKeyRef:

@@ -11,7 +11,7 @@ name: deploy
 #
 # **No GitHub secret is involved.** The job mints a short-lived OIDC token,
 # Workload Identity Federation exchanges it for an impersonation of
-# cd-deployer@…, and every credential the deployment needs — the platform's
+# the deploy service account, and every credential the deployment needs — the platform's
 # management key, the console password — is read from Secret Manager inside the
 # job. Nothing long-lived is stored in this repository, and rotating a value
 # means adding a Secret Manager version, not editing settings here.
@@ -35,12 +35,21 @@ concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
+# Which deployment this is. These name one GCP project, one cluster and one
+# registry, and this repository is public — so they live in repository
+# *variables* rather than in this file. They are not secrets (none of them
+# grants anything; the credentials are in Secret Manager and the trust policy is
+# what protects the deployment), they are simply this operator's, and a public
+# repository that names them couples an open-source project to one cluster.
+# Set them under Settings → Secrets and variables → Actions → Variables.
 env:
-  PROJECT_ID: hh-opensdlc-managed-agents
-  ZONE: us-central1-a
-  CLUSTER: map-staging
-  NAMESPACE: map
-  IMAGE: us-central1-docker.pkg.dev/hh-opensdlc-managed-agents/map-images/console
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  ZONE: ${{ vars.GCP_ZONE }}
+  CLUSTER: ${{ vars.GKE_CLUSTER }}
+  NAMESPACE: ${{ vars.K8S_NAMESPACE }}
+  IMAGE: ${{ vars.CONSOLE_IMAGE_REPO }}
+  REGISTRY_HOST: ${{ vars.ARTIFACT_REGISTRY_HOST }}
+  CONTROLPLANE_URL: ${{ vars.PLATFORM_BASE_URL }}
 
 jobs:
   deploy:
@@ -57,18 +66,45 @@ jobs:
       run:
         shell: bash
     steps:
+      # First, and before anything is authenticated or built: an unset variable
+      # renders as the empty string, silently. `gcloud --project ""` does not
+      # fail loudly, `kubectl -n ""` addresses the wrong namespace, and an
+      # `IMAGE` of `":$GITHUB_SHA"` is a tag with no repository — so a
+      # deployment configured by variables fails in exactly the shape this
+      # pipeline exists to prevent unless it is asserted up front. Cheap, and it
+      # is also the error message a new deployment of this repository gets
+      # instead of a confusing failure four steps later.
+      - name: Require the deployment variables
+        env:
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          missing=""
+          for v in PROJECT_ID ZONE CLUSTER NAMESPACE IMAGE REGISTRY_HOST \
+                   CONTROLPLANE_URL WIF_PROVIDER DEPLOY_SERVICE_ACCOUNT; do
+            # Whitespace-only counts as unset: a variable holding one space
+            # passes a `-z` test on the raw value while being no configuration.
+            if [ -z "$(printf '%s' "${!v}" | tr -d '[:space:]')" ]; then
+              missing="$missing $v"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::unset or empty repository variables:$missing — set them under Settings → Secrets and variables → Actions → Variables. See docs/deploy-gcp.md."
+            exit 1
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          workload_identity_provider: projects/754963270337/locations/global/workloadIdentityPools/github/providers/github-oidc
-          service_account: cd-deployer@hh-opensdlc-managed-agents.iam.gserviceaccount.com
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
 
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
         with:
-          project_id: hh-opensdlc-managed-agents
+          project_id: ${{ env.PROJECT_ID }}
           # `kubectl` refuses to authenticate to GKE without this component, and
           # the runner's preinstalled gcloud may be package-managed (its own
           # component manager disabled) — so it is installed through the action
@@ -79,7 +115,7 @@ jobs:
           install_components: gke-gcloud-auth-plugin
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker "$REGISTRY_HOST" --quiet
 
       # Built on the runner and pushed, not submitted to Cloud Build: the runner
       # already holds the deploy identity, and a Cloud Build submission in this
@@ -230,13 +266,32 @@ jobs:
             kubectl delete deployment console -n "$NAMESPACE" --wait
           fi
 
-          # An explicit sed on the two placeholders. envsubst would expand every
+          # An explicit sed on the placeholders. envsubst would expand every
           # other `$` in these files too, and the way that fails is a field
-          # quietly emptied rather than an error.
+          # quietly emptied rather than an error — which is also why the tokens
+          # are bare words rather than `${...}`: a manifest is applied by
+          # kubectl, which substitutes nothing at all, so a shell-shaped
+          # placeholder that escaped this step would reach the API server with
+          # its dollar and braces intact.
+          #
+          # CONTROLPLANE_URL, not PLATFORM_BASE_URL: the value is assigned to a
+          # container variable *of that name*, so a token spelled the same way
+          # would rewrite the `name:` key beside it and produce a variable
+          # called `http://…`.
+          # sed's *replacement* text is not literal, which is the trap in
+          # substituting a value somebody else configures: `&` expands to the
+          # whole matched token, `\` opens an escape, and `|` closes the
+          # expression. A base URL of `http://host/?a=1&b=2` renders as
+          # `http://host/?a=1CONTROLPLANE_URLb=2` — a plausible-looking string
+          # that deploys, and a console that cannot reach the platform. None of
+          # the three values contains one today; being a repository variable is
+          # exactly what stops that from being a property anyone can rely on.
+          esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
           for f in deploy/k8s/*.yaml; do
             echo "---"
-            sed -e "s|CONSOLE_IMAGE|$IMAGE:$GITHUB_SHA|g" \
-                -e "s|SECRETS_CHECKSUM|$SECRETS_CHECKSUM|g" "$f"
+            sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
+                -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
+                -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" "$f"
           done | kubectl apply -n "$NAMESPACE" -f -
 
           # Arms the rollback below, and only here: every failure *before* this
