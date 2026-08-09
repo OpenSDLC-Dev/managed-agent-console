@@ -105,6 +105,19 @@ spec:
   # the session runs, so the default cuts every trace at 30 seconds while the
   # browser silently reconnects with backoff and re-walks history — a console
   # that looks slow and drops events, reporting nothing anywhere.
+  #
+  # Verified end to end on 2026-08-09, because a value in this file is only a
+  # request to the ingress controller until something measures the load
+  # balancer it produced. A signed-in browser held a real session trace open
+  # through the hostname for **252 seconds** — eight times the default it
+  # replaces — taking all sixteen of the platform's 15-second `ping` frames,
+  # each arriving as its own chunk, which is also what rules out buffering
+  # anywhere in GFE → IAP → this proxy. The stream then ended on
+  # `event: session.deleted`, because the probe session was deleted: it stopped
+  # for the reason the protocol defines and not for a timeout, which is the
+  # part that makes it evidence rather than an anecdote. The reconciled backend
+  # service reports `timeoutSec: 3600` under `gcloud compute backend-services
+  # describe`, so the request in this file is what the load balancer runs.
   timeoutSec: 3600
   # Authentication, for the whole deployment, in three lines. Every request to
   # this backend is now resolved against Google before it reaches the pod, and
