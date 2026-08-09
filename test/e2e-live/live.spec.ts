@@ -131,6 +131,34 @@ async function platformPost(
   return body;
 }
 
+/**
+ * A toolset entry, read for the fields a test asserts rather than for the
+ * whole rendered object.
+ *
+ * The distinction matters here specifically. The platform resolves toolsets
+ * **at render** (its #343): `configs` and `default_config` come back with
+ * every `enabled` and `permission_policy` concrete, while the stored row keeps
+ * the client's own bytes. So an authored shape and its echo are not the same
+ * document, and a `toEqual` against the echo pins whichever defaults the
+ * platform happened to spell out that week — it broke once already, and would
+ * break again the next time an implicit default became explicit. Principle 4
+ * says the same thing from the other end: the console must not be stricter
+ * than the wire.
+ */
+type ToolsetEntry = {
+  type?: string;
+  configs?: {
+    name?: string;
+    enabled?: boolean;
+    permission_policy?: { type?: string };
+  }[];
+  default_config?: { enabled?: boolean };
+};
+
+function toolsetsOf(agent: Record<string, unknown>): ToolsetEntry[] {
+  return (agent.tools ?? []) as ToolsetEntry[];
+}
+
 async function signIn(page: Page) {
   await page.goto("/login");
   await page.locator("form[data-hydrated]").waitFor();
@@ -232,9 +260,23 @@ test("an externally-authored compact default_config survives a console save", as
 
   const after = await platformGet(`v1/agents/${id}`);
   expect(after.version).toBe(2);
-  expect(after.tools).toEqual([
-    { type: AGENT_TOOLSET, default_config: { enabled: false } },
-  ]);
+  // The invariant, not the render. The platform resolves toolsets on the way
+  // out (its #343) — `configs` and `default_config` come back with every
+  // `enabled` and `permission_policy` spelled out, while the stored row keeps
+  // the client's own bytes. Asserting the whole object with `toEqual` pinned
+  // that render and broke the next time an implicit default became explicit;
+  // it would break again, and the console must not be stricter than the wire.
+  //
+  // What this test is actually about: the compact shape survived a console
+  // save. One entry rather than the eight per-tool ones this regressed into
+  // before plan 03 slice 4, and the authored `enabled: false` still authored.
+  const tools = toolsetsOf(after);
+  expect(tools).toHaveLength(1);
+  expect(tools[0].type).toBe(AGENT_TOOLSET);
+  expect(tools[0].default_config?.enabled).toBe(false);
+  // Empty because nothing named a tool — a populated `configs` here is the
+  // explosion itself, so this stays asserted rather than relaxed away.
+  expect(tools[0].configs ?? []).toHaveLength(0);
 });
 
 test("sessions filter by agent server-side; created presets bound real lists", async ({
@@ -361,14 +403,25 @@ test("a starter template creates a real gated agent", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("always_ask")).toBeVisible();
 
-  // The wire shape is the compact one — bash's ask policy, nothing else.
+  // What the template promises on the wire, and it is **both halves** of
+  // "Full workspace access; bash gated behind approval"
+  // (src/lib/agent-config/templates.ts). Asserting only bash's policy would
+  // pass an agent that gated bash and disabled everything else — a different
+  // template, silently — so the access half is asserted too.
+  //
+  // As `not.toBe(false)` rather than `toBe(true)`, deliberately: the template
+  // omits `default_config` entirely and lets every tool inherit, so what this
+  // must catch is something being turned *off*, not whether the platform
+  // spelled the default out. That keeps the check on the agent's behaviour
+  // instead of back on the render this test stopped pinning.
   const agent = await platformGet(`v1/agents/${runnerAgentId}`);
-  expect(agent.tools).toEqual([
-    {
-      type: AGENT_TOOLSET,
-      configs: [{ name: "bash", permission_policy: { type: "always_ask" } }],
-    },
-  ]);
+  const tools = toolsetsOf(agent);
+  expect(tools).toHaveLength(1);
+  expect(tools[0].type).toBe(AGENT_TOOLSET);
+  expect(tools[0].default_config?.enabled).not.toBe(false);
+  const bash = (tools[0].configs ?? []).find((entry) => entry.name === "bash");
+  expect(bash?.enabled).not.toBe(false);
+  expect(bash?.permission_policy?.type).toBe("always_ask");
 });
 
 test("HITL against the real model: approve, deny, and the trace reads", async ({
