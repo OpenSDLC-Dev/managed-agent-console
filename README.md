@@ -4,7 +4,7 @@ The web console for [managed-agent-platform](https://github.com/OpenSDLC-Dev/man
 
 This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents** (rendered form or raw JSON↔YAML editor), **environments**, and **sessions** — including live event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, and **files**. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
 
-**Status: v0.4.0 — the v1 feature set is complete.** Changes are recorded in [CHANGELOG.md](./CHANGELOG.md); active work is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
+**Status: v0.5.0 — the v1 feature set is complete.** Changes are recorded in [CHANGELOG.md](./CHANGELOG.md); active work is tracked in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
 ## How it holds your key
 
@@ -28,7 +28,7 @@ docker run --rm -p 3000:3000 \
   -e PLATFORM_BASE_URL=http://host.docker.internal:8080 \
   -e PLATFORM_API_KEY=your-controlplane-api-key \
   -e CONSOLE_PASSWORD=choose-a-password \
-  ghcr.io/opensdlc-dev/managed-agent-console:0.4.0
+  ghcr.io/opensdlc-dev/managed-agent-console:0.5.0
 ```
 
 Then open http://localhost:3000.
@@ -45,14 +45,14 @@ docker run --rm -p 3000:3000 \
   -e PLATFORM_BASE_URL=http://controlplane:8080 \
   -e PLATFORM_API_KEY=your-controlplane-api-key \
   -e CONSOLE_PASSWORD=choose-a-password \
-  ghcr.io/opensdlc-dev/managed-agent-console:0.4.0
+  ghcr.io/opensdlc-dev/managed-agent-console:0.5.0
 ```
 
 Or as a service inside the same `docker-compose.yml`:
 
 ```yaml
 console:
-  image: ghcr.io/opensdlc-dev/managed-agent-console:0.4.0
+  image: ghcr.io/opensdlc-dev/managed-agent-console:0.5.0
   ports:
     - "127.0.0.1:3000:3000"
   environment:
