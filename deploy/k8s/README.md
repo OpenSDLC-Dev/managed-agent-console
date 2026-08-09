@@ -1,13 +1,15 @@
 # deploy/k8s
 
-The two objects the console needs in a cluster that already runs
+What the console needs in a cluster that already runs
 [managed-agent-platform](https://github.com/OpenSDLC-Dev/managed-agent-platform):
-a Deployment and a Service. They are applied by
+a Deployment, a Service, and the edge that publishes it — an Ingress, a
+Google-managed certificate, and the two load-balancer settings this application
+does not survive the defaults of. They are applied by
 [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml) on every push
 to `main`; the pipeline as a whole is described in
 [docs/deploy-gcp.md](../../docs/deploy-gcp.md).
 
-Nothing here is a chart. Two files with no templating are the honest shape of a
+Nothing here is a chart. Three files with no templating are the honest shape of a
 single-tenant staging deployment, and a chart would be configurability nobody
 asked for.
 
@@ -18,11 +20,20 @@ asked for.
 | `CONSOLE_IMAGE`    | the `CONSOLE_IMAGE_REPO` variable, tagged with this run's commit sha |
 | `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read            |
 | `CONTROLPLANE_URL` | the `PLATFORM_BASE_URL` variable — the control plane's Service URL   |
+| `CONSOLE_HOST`     | the `CONSOLE_HOST` variable — the hostname the console answers on    |
 
 Literal `sed` expressions on bare-word placeholders, rather than `envsubst`,
 which would also expand every other `$` in the file — and rather than
 `${SHELL_STYLE}` tokens, which `kubectl apply` would submit to the API server
 verbatim if one ever escaped the substitution, since kubectl expands nothing.
+`CONSOLE_HOST` is where that convention stops being a habit and starts having
+teeth: a leftover `${…}` in an image tag is a pull failure anyone can read,
+while one in `ManagedCertificate.spec.domains` is a rejected DNS name.
+
+Each value is escaped before substitution. `sed`'s replacement text is not
+literal — `&` expands to the matched token, `\` opens an escape, `|` closes the
+expression — so a URL containing `&` would render as a plausible-looking string
+that deploys green and points nowhere.
 
 `CONTROLPLANE_URL` is deliberately not spelled `PLATFORM_BASE_URL`: that is the
 name of the container variable it is assigned to, and a `sed` on that word would
@@ -81,11 +92,12 @@ The workflow reads the latest enabled version of each and writes the Secret with
 it is idempotent. The values are never checked in and never echoed.
 
 **`console-password` may not be empty, and the pipeline fails if it is.** The
-console is published on a public IP; an unset gate there is an open page in
-front of a full-power management key, not a convenience. The pipeline does not
-stop at the Secret Manager payload either — after the rollout it asserts against
-the public address that the deployed console reports `login_gate: true` _and_
-that an anonymous `GET /` is bounced to `/login`.
+console answers on a public hostname; an unset gate there is an open page in
+front of a full-power management key, not a convenience. TLS changed how the
+password crosses the wire, not what stands in front of the key. The pipeline
+does not stop at the Secret Manager payload either — after the rollout it
+asserts against the public hostname that the deployed console reports
+`login_gate: true` _and_ that an anonymous `GET /` is bounced to `/login`.
 
 **Rotating a secret rolls the pod, without a commit.** Add the new version in
 Secret Manager and re-run the workflow (`workflow_dispatch`); the run reads the
@@ -129,8 +141,8 @@ carries no URL and no key.
 
 **The deep depth gates itself.** It is a lever rather than a report: repeating it
 makes the console spend the management key against the control plane, and this
-Service is a bare public IP. So on a gated console the route requires the same
-session every page does, and the deploy runs it **from inside the pod** —
+console answers on the public internet. So on a gated console the route requires
+the same session every page does, and the deploy runs it **from inside the pod** —
 
 ```bash
 kubectl exec -n "$NAMESPACE" "$pod" -- node -e '…fetch("http://127.0.0.1:3000/api/health?deep=1")…'
@@ -143,25 +155,56 @@ longest, which right after a rollout can still be the revision being replaced.
 (With `CONSOLE_PASSWORD` unset there is no gate to hold a session against and no
 console to protect, so the deep depth is open — as every other route is.)
 
-## Known limitation: plain HTTP on a bare IP
+## The edge
 
-`type: LoadBalancer` on port 80. There is no domain, no TLS, and no Ingress. The
-login gate is therefore the only thing between the internet and the console, and
-the password crosses the wire in the clear. This is a deliberate, temporary
-staging shape, not a pattern to copy.
+`edge.yaml` holds four objects: an `Ingress` (`gce` class, so a global external
+Application Load Balancer on the reserved `console-ip` address), a
+`ManagedCertificate`, a `BackendConfig`, and a `FrontendConfig` that redirects
+plain HTTP to HTTPS. The Service is `ClusterIP` and is the Ingress' backend,
+not the public edge.
 
-When a domain and a certificate arrive, the change is contained:
+**Two of these settings exist because the GCLB defaults break this application
+silently.** Both are in the `BackendConfig`, and both failure modes look like
+something other than what they are:
 
-1. Flip the Service to `type: ClusterIP` (delete the `type:` line) — it stops
-   being the public edge and becomes the Ingress' backend.
-2. Add an Ingress (or a Gateway) with the host, and cert-manager or a
-   Google-managed certificate for it.
-3. Point the public assertions in `deploy.yml` at the hostname instead of polling
-   `status.loadBalancer.ingress[0].ip`; keep them exactly as they are otherwise
-   (shallow health 200, `login_gate: true`, anonymous `GET /` → 307 `/login`).
-   The deep check is unaffected — it already runs inside the pod.
+- **`healthCheck.requestPath: /api/health`.** The default health check is
+  `GET /`, which this application answers with a 307 to `/login` whenever the
+  login gate is on. GCLB reads a 307 as unhealthy, so the default produces a
+  **permanently 502 hostname while the pod is Ready, `rollout status` is green
+  and the logs are clean.** Nothing in the cluster looks wrong.
+  `healthCheck.port` is `3000` — the Pod's port, not the Service's 80, because
+  the cluster is VPC-native and the load balancer is container-native. On a
+  cluster that is not VPC-native the Service becomes `NodePort` and this names
+  the node port instead.
+- **`timeoutSec: 3600`.** The GCLB backend timeout defaults to 30 seconds and
+  is a **request-and-response** timeout, not an idle one — it caps the whole
+  exchange regardless of traffic. A session trace is SSE held open for as long
+  as the session runs, so the default cuts every trace at 30 seconds while the
+  browser reconnects with backoff and re-walks history. The console looks slow
+  and drops events, and nothing reports an error.
 
-Nothing in the Deployment changes: the container already listens on 3000, is
-already reachable only through a Service, and its cluster-DNS `PLATFORM_BASE_URL`
-is unaffected by how the console itself is published. The session cookie gains
-`Secure` on its own, since the login route sets that from the request's scheme.
+The `kubernetes.io/ingress.class: gce` annotation draws a deprecation warning
+from the API server. **Do not act on it**: GKE's controller keys off the
+annotation, and this cluster has no `IngressClass` objects at all, so
+`spec.ingressClassName` would name nothing and leave an Ingress no controller
+claims — an Ingress that simply never gets an address.
+
+Certificate provisioning is the slow part: 15–60 minutes from first issuance,
+and up to 30 more before the load balancer serves it. `FAILED_NOT_VISIBLE` is a
+**waiting** state, not an error, and deleting the object only restarts the
+clock. If it persists, suspect DNS rather than these files — a CDN-proxied
+record (Cloudflare's orange cloud) resolves to the provider's anycast addresses,
+so Google never sees what it needs, and that reads as "still waiting" forever.
+The deploy asserts `certificateStatus == Active` before it tries the hostname,
+so a still-issuing certificate is one clear message rather than a TLS timeout
+followed by a rollback of a perfectly healthy revision.
+
+Nothing in the Deployment changed when this landed: the container already
+listened on 3000, was already reachable only through a Service, and its
+cluster-DNS `PLATFORM_BASE_URL` is unaffected by how the console is published.
+The session cookie gained `Secure` on its own, since the login route sets that
+from the request's scheme.
+
+**The gate is still a shared password.** TLS changed how it crosses the wire,
+not what it is; replacing it with Google sign-in is
+[plan 06](../../docs/plan/06_google-sign-in.md)'s second slice.

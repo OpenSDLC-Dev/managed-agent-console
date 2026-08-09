@@ -50,6 +50,7 @@ env:
   IMAGE: ${{ vars.CONSOLE_IMAGE_REPO }}
   REGISTRY_HOST: ${{ vars.ARTIFACT_REGISTRY_HOST }}
   CONTROLPLANE_URL: ${{ vars.PLATFORM_BASE_URL }}
+  CONSOLE_HOST: ${{ vars.CONSOLE_HOST }}
 
 jobs:
   deploy:
@@ -81,7 +82,7 @@ jobs:
         run: |
           missing=""
           for v in PROJECT_ID ZONE CLUSTER NAMESPACE IMAGE REGISTRY_HOST \
-                   CONTROLPLANE_URL WIF_PROVIDER DEPLOY_SERVICE_ACCOUNT; do
+                   CONTROLPLANE_URL CONSOLE_HOST WIF_PROVIDER DEPLOY_SERVICE_ACCOUNT; do
             # Whitespace-only counts as unset: a variable holding one space
             # passes a `-z` test on the raw value while being no configuration.
             if [ -z "$(printf '%s' "${!v}" | tr -d '[:space:]')" ]; then
@@ -196,12 +197,12 @@ jobs:
             echo "::error::Secret Manager secret 'controlplane-api-key' is empty in $PROJECT_ID — the console cannot authenticate to the platform without it"
             exit 1
           fi
-          # The hazard this pipeline exists inside: the console is published on
-          # a public load-balancer IP with no TLS and no other authentication.
-          # An empty gate there is an open page in front of a management key
-          # that can do anything to the platform.
+          # The hazard this pipeline exists inside: the console answers on a
+          # public hostname with no authentication of its own. TLS changed how
+          # the password crosses the wire, not what stands in front of the
+          # management key — an empty gate is still an open page.
           if [ -z "$(printf '%s' "$console_password" | tr -d '[:space:]')" ]; then
-            echo "::error::Secret Manager secret 'console-password' is empty in $PROJECT_ID — refusing to publish an ungated console on a public IP. Add a version: gcloud secrets versions add console-password --project=$PROJECT_ID --data-file=-"
+            echo "::error::Secret Manager secret 'console-password' is empty in $PROJECT_ID — refusing to publish an ungated console on a public hostname. Add a version: gcloud secrets versions add console-password --project=$PROJECT_ID --data-file=-"
             exit 1
           fi
 
@@ -291,7 +292,8 @@ jobs:
             echo "---"
             sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
                 -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
-                -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" "$f"
+                -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" \
+                -e "s|CONSOLE_HOST|$(esc "$CONSOLE_HOST")|g" "$f"
           done | kubectl apply -n "$NAMESPACE" -f -
 
           # Arms the rollback below, and only here: every failure *before* this
@@ -310,8 +312,8 @@ jobs:
       #
       # Run from inside the pod, over loopback, because the deep check answers
       # sessions only (src/app/api/health/route.ts): it is a lever that spends
-      # the management key, and this console is published on a bare public IP
-      # where anyone at all could pull it. The container already holds
+      # the management key, and this console answers on a public hostname where
+      # anyone at all could pull it. The container already holds
       # CONSOLE_PASSWORD, so it logs in to itself; the credential never leaves
       # the pod and nothing authenticated crosses the public address.
       #
@@ -372,50 +374,50 @@ jobs:
           '
 
       # The only step that touches the public address, and what it asserts is
-      # that the address is gated. Behind this IP is a console holding a
-      # full-power platform management key, on plain HTTP, with no domain and no
-      # TLS; "the deploy read a non-empty password out of Secret Manager" is a
-      # different claim from "the pod answering on the internet is gated", and
-      # only the second one is worth anything.
+      # that the address is gated. Behind this hostname is a console holding a
+      # full-power platform management key; "the deploy read a non-empty
+      # password out of Secret Manager" is a different claim from "the thing
+      # answering on the internet is gated", and only the second is worth
+      # anything.
       - name: Assert the public address is gated
         run: |
-          # The Service's IP is assigned before the load balancer's backends
-          # pass their own health checks, so both loops below poll. Both are
-          # bounded by a wall clock rather than an iteration count, so the
-          # comment and the code cannot drift apart: five minutes each, plus
-          # whichever request is in flight when the deadline passes.
-          deadline=$((SECONDS + 300))
-          ip=""
-          while [ "$SECONDS" -lt "$deadline" ]; do
-            ip="$(kubectl get service console -n "$NAMESPACE" \
-              -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-            if [ -n "$ip" ]; then break; fi
-            sleep 5
-          done
-          if [ -z "$ip" ]; then
-            echo "::error::the console Service has no external IP after five minutes — check the GKE load balancer"
-            kubectl describe service console -n "$NAMESPACE"
+          # First, and separately from the assertions: is there a certificate to
+          # answer with at all? First issuance takes 15-60 minutes and the load
+          # balancer may take 30 more to serve it, which is far longer than any
+          # poll below is willing to wait. Without this check that shows up as a
+          # five-minute timeout on a TLS handshake, followed by this job rolling
+          # back a revision that is in every way healthy — the pipeline breaking
+          # staging because infrastructure was still provisioning. Named as what
+          # it is instead, in one line.
+          cert="$(kubectl get managedcertificate console -n "$NAMESPACE" \
+            -o jsonpath='{.status.certificateStatus}' 2>/dev/null || true)"
+          if [ "$cert" != "Active" ]; then
+            echo "::error::the managed certificate for $CONSOLE_HOST is ${cert:-absent}, not Active — the hostname cannot serve HTTPS yet. FAILED_NOT_VISIBLE is a waiting state (15-60 min from first issuance); if it persists, check that the A record is DNS-only and points at the console-ip address."
+            kubectl describe managedcertificate console -n "$NAMESPACE" || true
             exit 1
           fi
-          echo "console: http://$ip"
 
           # Shallow, not deep: this caller is anonymous on purpose — it stands in
           # for anyone on the internet — and the deep depth refuses those now.
           # A 200 here proves the load balancer routes and the pod is serving.
+          # It still polls: a rollout replaces the NEG's endpoints, and the new
+          # backend has to pass GCLB's own health check before it is served.
+          base="https://$CONSOLE_HOST"
           body="$RUNNER_TEMP/health.json"
           code=""
           deadline=$((SECONDS + 300))
           while [ "$SECONDS" -lt "$deadline" ]; do
             code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 10 \
-              "http://$ip/api/health" || true)"
+              "$base/api/health" || true)"
             if [ "$code" = "200" ]; then break; fi
             sleep 5
           done
           if [ "$code" != "200" ]; then
-            echo "::error::the public address answered ${code:-no response} on /api/health after five minutes — this revision is not reachable through the load balancer"
+            echo "::error::$base answered ${code:-no response} on /api/health after five minutes — this revision is not reachable through the load balancer. A persistent 502 with a Ready pod means the backend health check is failing; it is pinned to /api/health on port 3000 in deploy/k8s/edge.yaml."
             cat "$body" || true
             echo
             kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console
+            kubectl describe ingress console -n "$NAMESPACE" || true
             exit 1
           fi
           cat "$body"
@@ -423,7 +425,7 @@ jobs:
 
           # The console's own report that a gate is configured…
           if ! jq -e '.login_gate == true' "$body" > /dev/null; then
-            echo "::error::the deployed console reports login_gate=false — a bare public IP with no TLS is fronting a full-power platform management key. Check CONSOLE_PASSWORD reached the pod."
+            echo "::error::the deployed console reports login_gate=false — the public hostname is fronting a full-power platform management key with nothing in front of it. Check CONSOLE_PASSWORD reached the pod."
             exit 1
           fi
 
@@ -431,22 +433,38 @@ jobs:
           # claim that matters. src/proxy.ts answers a page request without a
           # session with NextResponse.redirect, which is a 307, to /login.
           read -r code redirect <<< "$(curl -sS -o /dev/null \
-            -w '%{http_code} %{redirect_url}' --max-time 10 "http://$ip/" || echo '000 -')"
+            -w '%{http_code} %{redirect_url}' --max-time 10 "$base/" || echo '000 -')"
           if [ "$code" != "307" ] || [ "${redirect%/login}" = "$redirect" ]; then
-            echo "::error::anonymous GET / on the public address answered ${code:-no response} (redirect: ${redirect:-none}) instead of a 307 to /login — the console is open on the internet in front of a full-power platform management key"
+            echo "::error::anonymous GET / on $base answered ${code:-no response} (redirect: ${redirect:-none}) instead of a 307 to /login — the console is open on the internet in front of a full-power platform management key"
             exit 1
           fi
           echo "anonymous GET / -> $code $redirect"
+
+          # And that plain HTTP does not serve the console. FrontendConfig
+          # redirects rather than refusing the connection, so the assertion is a
+          # 3xx to the https:// form — `allow-http: "false"` would have made
+          # this a connection error instead, which is why edge.yaml does not set
+          # it. No -L anywhere here, so curl reports the redirect rather than
+          # following it.
+          read -r code redirect <<< "$(curl -sS -o /dev/null \
+            -w '%{http_code} %{redirect_url}' --max-time 10 "http://$CONSOLE_HOST/" || echo '000 -')"
+          case "$code:$redirect" in
+            3??:https://*) echo "plain HTTP -> $code $redirect" ;;
+            *)
+              echo "::error::plain HTTP on $CONSOLE_HOST answered ${code:-no response} (redirect: ${redirect:-none}) instead of redirecting to https — check the FrontendConfig in deploy/k8s/edge.yaml"
+              exit 1
+              ;;
+          esac
 
           {
             echo "### Deployed"
             echo
             echo '```'
             echo "image:   $IMAGE:$GITHUB_SHA"
-            echo "console: http://$ip"
+            echo "console: $base"
             echo '```'
             echo
-            echo "Gated: anonymous \`GET /\` answered \`$code\` to \`$redirect\`."
+            echo "Gated: anonymous \`GET /\` answered a 307 to \`/login\`; plain HTTP redirects to HTTPS."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Every gate above this point detects; without this step none of them

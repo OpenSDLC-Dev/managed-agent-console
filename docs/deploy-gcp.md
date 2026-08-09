@@ -135,21 +135,28 @@ key, and must answer **200**: both environment variables are set, and the
 platform accepts the key. A wrong key answers 401 and the gate reports it; an
 unreachable control plane reports `reachable: false`. That depth answers
 sessions only — it is a lever that spends the management key, and this console
-sits on a bare public IP — so the step runs it with `kubectl exec` against the
-pod carrying the image just pushed, over `127.0.0.1`, logging in with the
+answers on the public internet — so the step runs it with `kubectl exec` against
+the pod carrying the image just pushed, over `127.0.0.1`, logging in with the
 `CONSOLE_PASSWORD` the container already holds. The credential never leaves the
 pod. The response body names environment variables and a status code and carries
 no URL and no key, which is why the job prints it.
 
-**Is the public address gated? — from outside.** The last step polls the
-Service's external IP and requires three things of it: `GET /api/health` (the
+**Is the public address gated? — from outside.** The last step goes to
+`https://$CONSOLE_HOST` and requires four things of it: `GET /api/health` (the
 shallow depth, which stays anonymous for the kubelet's sake) answers **200**, so
 the load balancer routes and the pod is serving; that body reports `login_gate:
-true`; and an anonymous `GET /` answers **307 to `/login`** rather than a page.
-The third is the one that matters and the only one that is evidence — that a
+true`; an anonymous `GET /` answers **307 to `/login`** rather than a page; and
+plain HTTP redirects to the `https://` form rather than serving anything. The
+third is the one that matters and the only one that is evidence — that a
 non-empty `console-password` existed in Secret Manager at deploy time is a
-different claim from "the pod answering on the internet is gated", and what is
-behind this IP is a full-power platform management key on plain HTTP.
+different claim from "the thing answering on the internet is gated", and what is
+behind that hostname is a full-power platform management key.
+
+Before any of them, it asserts the `ManagedCertificate` reports `Active`. That
+check is not an assertion about this revision at all; it is there so a
+certificate still provisioning — which takes 15–60 minutes and cannot be hurried
+— reads as one clear line instead of a five-minute TLS timeout followed by this
+job rolling back a revision that is in every way healthy.
 
 Two things it deliberately does not prove:
 
@@ -178,8 +185,8 @@ it cannot do, both reported as warnings in the run:
 
 - **A first deployment has nothing to undo to** — and one the selector guard
   recreated has lost its history with the old object. The job says so and tells
-  you to scale the Deployment to zero by hand; an ungated console on a public IP
-  should not stay up because the pipeline had no previous revision.
+  you to scale the Deployment to zero by hand; an ungated console on a public
+  hostname should not stay up because the pipeline had no previous revision.
 - **It restores the image, not the credentials.** Everything below is likewise
   image-only: `rollout undo` and `set image` change the pod template, and
   `PLATFORM_API_KEY`/`CONSOLE_PASSWORD` are `secretKeyRef`s that keep reading
@@ -235,20 +242,25 @@ kubectl set image deployment/console \
 Either way the next push to `main` deploys over it — a rollback buys time to fix
 forward, it does not pin anything.
 
-## Known limitation: plain HTTP on a bare IP
+## The public address
 
-The console is published by a `type: LoadBalancer` Service on port 80. **There
-is no domain, no TLS, and no Ingress yet.** The login gate is the only thing
-between the internet and the console, and the password crosses the wire in the
-clear.
+The console answers on the hostname in the `CONSOLE_HOST` variable, over HTTPS,
+behind a global external Application Load Balancer with a Google-managed
+certificate. Plain HTTP redirects rather than being refused, so typing the bare
+hostname works. The objects are `deploy/k8s/edge.yaml` and the settings that are
+load-bearing — a pinned health-check path, and an SSE-sized backend timeout —
+are explained in [deploy/k8s/README.md](../deploy/k8s/README.md), along with why
+each one's absence fails silently.
 
-This is a deliberate, temporary staging shape: an Ingress needs a hostname to
-key its rules off and cert-manager needs a domain to prove control of, and there
-is neither. It is why `CONSOLE_PASSWORD` is mandatory here rather than optional
-as it is everywhere else in this repository.
+Three parts of this are human-driven and are not in CD, consistent with the rest
+of this file: the **global** static IP (`console-ip` — a global forwarding rule
+cannot take a regional address, which is why the console's public IP changed
+when this landed), the **DNS-only** A record pointing at it, and the first
+certificate issuance. CD asserts the certificate is `Active`; it never waits for
+one.
 
-What changes when a domain arrives is small and listed in
-[deploy/k8s/README.md](../deploy/k8s/README.md) — the Service becomes
-`ClusterIP`, an Ingress and a certificate go in front of it, and the smoke test
-targets the hostname instead of polling for an IP. Nothing in the Deployment
-changes.
+**The gate is still a shared password.** TLS fixed the wire, not the
+authentication: `CONSOLE_PASSWORD` remains mandatory here, and remains the only
+thing between the internet and a full-power management key. Replacing it with
+Google sign-in enforced at this same load balancer is
+[plan 06](./plan/06_google-sign-in.md)'s second slice.
