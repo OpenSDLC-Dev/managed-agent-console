@@ -153,7 +153,18 @@ which is why the job prints it.
 door is a 401 now, so a request can no longer distinguish "gated" from "broken".
 Reachability is therefore taken from the load balancer's own view — the GCLB
 backend must report `HEALTHY`, which is the same signal it routes on — and the
-gate is asserted separately, twice:
+gate is asserted separately, twice.
+
+That health state is read from the Ingress' `ingress.kubernetes.io/backends`
+annotation rather than from `gcloud compute backend-services get-health`, and
+the reason is the identity above: **CD holds no compute permissions**, so the
+gcloud form fails with `Required 'compute.backendServices.list' permission`.
+The ingress controller publishes the same state it reads from GCLB onto that
+annotation, which `kubectl` can already see. Widening the deploy identity to
+read all of Compute in order to run one assertion would have been the wrong
+trade.
+
+The two gate assertions are:
 
 - an anonymous `GET /` must be **401**, and
 - an anonymous `GET /api/platform/v1/agents` — the path that actually spends the

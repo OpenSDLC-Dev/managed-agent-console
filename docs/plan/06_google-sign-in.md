@@ -445,7 +445,12 @@ Each line replaces a specific line that exists today.
    rollback of a working revision.
 2. **Reachability** (replaces the anonymous `GET /api/health` → 200 poll). The GCLB health check is
    the thing that now proves routing, and it is visible: poll
-   `gcloud compute backend-services get-health` for `HEALTHY`. `/api/health` itself is behind IAP from
+   the Ingress' `ingress.kubernetes.io/backends` annotation for `HEALTHY`. **Not
+   `gcloud compute backend-services get-health`, which is what this line said until the first run of the
+   rewritten gate failed on it:** the deploy identity holds no compute permissions by design, so that
+   form dies with `Required 'compute.backendServices.list' permission`, and widening CD's IAM to run one
+   assertion is the wrong trade. The ingress controller publishes the same state it reads from GCLB onto
+   that annotation, which `kubectl` can already see. `/api/health` itself is behind IAP from
    the internet's point of view and should not answer anonymously.
 3. **The gate is closed, and closed _by IAP_** (replaces the `307 → /login` assertion). An anonymous
    request to `https://$CONSOLE_HOST/` sent with **`Accept: application/json`** must be **401**
