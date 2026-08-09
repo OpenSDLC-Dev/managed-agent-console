@@ -192,8 +192,18 @@ it cannot do, both reported as warnings in the run:
 The image tag is the commit sha and is never reused, so every revision the
 cluster has run is still addressable.
 
-Run these with the same values the workflow uses — `gh variable list` prints
-them:
+Run these with the same values the workflow uses. `gh variable list` on its own
+only prints a table — nothing is exported into your shell, and every command
+below would then run with empty arguments — so load them first:
+
+```bash
+eval "$(gh variable list --json name,value \
+  --jq '.[] | "export \(.name)=\(.value | @sh)"')"
+```
+
+That exports every repository variable under its own name, which is why the
+commands below spell them `GKE_CLUSTER` rather than the workflow's shorter
+`CLUSTER`. Then:
 
 ```bash
 gcloud container clusters get-credentials "$GKE_CLUSTER" \

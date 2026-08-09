@@ -1,8 +1,8 @@
 # The console, next to the platform it manages.
 #
-# No namespace here on purpose: the pipeline passes `-n map`, and leaving it out
-# keeps these files applicable to a scratch namespace without an edit. See
-# README.md in this directory.
+# No namespace here on purpose: the pipeline passes `-n "$NAMESPACE"` from a
+# repository variable, and leaving it out keeps these files applicable to a
+# scratch namespace without an edit. See README.md in this directory.
 #
 # `CONSOLE_IMAGE` and `SECRETS_CHECKSUM` are placeholders the deploy workflow
 # substitutes. The image is tagged by commit sha and a tag is never reused, so

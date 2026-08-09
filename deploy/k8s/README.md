@@ -33,9 +33,10 @@ The values come from repository **variables**, not from this file — see
 deployment, not a template**: it shows a shape that works, without naming the
 cluster it was proven against.
 
-The **namespace is not in these files** — the workflow passes `-n map` to every
-`kubectl` call. Keep it that way if you edit them: a namespace in one file and a
-flag on the command line is how an object lands somewhere nobody looks.
+The **namespace is not in these files** — the workflow passes `-n "$NAMESPACE"`,
+from the `K8S_NAMESPACE` variable, to every `kubectl` call. Keep it that way if
+you edit them: a namespace in one file and a flag on the command line is how an
+object lands somewhere nobody looks.
 
 `SECRETS_CHECKSUM` is substituted **inside quotes** in `deployment.yaml`, and the
 quotes are load-bearing: annotation values are strings, and a `sha256` that
@@ -132,7 +133,7 @@ Service is a bare public IP. So on a gated console the route requires the same
 session every page does, and the deploy runs it **from inside the pod** —
 
 ```bash
-kubectl exec -n map "$pod" -- node -e '…fetch("http://127.0.0.1:3000/api/health?deep=1")…'
+kubectl exec -n "$NAMESPACE" "$pod" -- node -e '…fetch("http://127.0.0.1:3000/api/health?deep=1")…'
 ```
 
 — logging in over loopback with the `CONSOLE_PASSWORD` the container already
