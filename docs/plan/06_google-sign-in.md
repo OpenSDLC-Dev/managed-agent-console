@@ -339,12 +339,28 @@ Export it by hand there.
    as any application wants a narrower audience than "everyone"; group membership is managed in
    Workspace and never reaches git.
 
-6. **Rotate `console-password`.** It has been crossing the public internet in the clear for as long as
-   staging has existed. Do this even though D2 removes it: the deploy job still writes the Secret
-   Manager payload into `console-secrets`, so a compromised value stays one `rollout undo` away from
-   being the live gate again. (It is _not_ the local-development or test credential — the suites carry
-   their own literals and `.env.example` leaves the variable commented out — so nobody needs to be told
-   the new value, and nobody was.)
+6. **Rotate `console-password`.** It crossed the public internet in the clear on every sign-in from the
+   day staging was first deployed until slice 1 put a certificate in front of it — a bounded window,
+   but one with no way to know who was watching it. Do this even though D2 removes it: the deploy job
+   still writes the Secret Manager payload into `console-secrets` so that a `rollout undo` target can
+   start, which leaves a compromised value one rollback away from being the live gate again. Dropping
+   the key outright is [#74](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/74), and it
+   waits until no reachable revision still mounts it.
+
+   **Done 2026-08-09.** Version 2 is 32 bytes of `crypto.randomBytes` rendered base64url, written into
+   Secret Manager straight from a `0600` file and **never displayed** — the generator printed only a
+   length and a SHA-256 digest, and the stored version was checked back against that digest rather than
+   by reading it. Version 1 is disabled, and `versions access 1` was confirmed to fail afterwards. The
+   rotation was then carried to the cluster and verified rather than assumed: a `workflow_dispatch`
+   deploy on unchanged `main` (the first real exercise of the `SECRETS_CHECKSUM` path — a deploy whose
+   only reason to roll the pods is that a credential changed) rolled the pod onto a new checksum, and
+   the decoded `console-secrets` payload digests identically to Secret Manager v2.
+
+   **Nobody was told the new value, because nobody needs it.** The pod no longer reads it — IAP is the
+   gate — and this secret is _not_ the local-development or test credential: the suites carry their own
+   literals (`test-password`, `live-test-password`) and `.env.example` leaves the variable commented
+   out. Its only consumer is the deploy job, copying it into `console-secrets` for the rollback targets
+   above.
 
 ## Slices
 
