@@ -4,7 +4,14 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**None.** Continuous delivery to GCP shipped in 0.4.0 ([#63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63), [#65](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/65)) — what it does, and the plain-HTTP limitation it carries on purpose, are in [docs/deploy-gcp.md](./docs/deploy-gcp.md).
+**Plan 06 — Google sign-in** ([docs/plan/06_google-sign-in.md](./docs/plan/06_google-sign-in.md), `approved` 2026-08-09). It retires the plain-HTTP limitation 0.4.0 shipped on purpose: staging is a shared password on a bare IP in front of a full-power management key. The decision is **GCP IAP with the IAM binding `domain:${WORKSPACE_DOMAIN}`**, after which the production console has no authentication code at all. The hostname is chosen and held in the `${CONSOLE_HOST}` Actions variable — a zone separate from `${WORKSPACE_DOMAIN}`, which the plan's D4 records as deliberate and reversible.
+
+- [ ] [#69](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/69) first — deployment identifiers become Actions variables, so slice 1 writes `${CONSOLE_HOST}` rather than a literal to be swept again
+- [ ] One-time human infra, not CD: global static IP, one **DNS-only** A record (a proxied/orange-cloud record stalls the managed certificate at `FAILED_NOT_VISIBLE` and reads as "still waiting"), edge objects applied by hand, certificate `Active`, `roles/iap.httpsResourceAccessor` bound **to the backend service, not the project**
+- [ ] Slice 1 — `${CONSOLE_HOST}` with managed TLS: `deploy/k8s/edge.yaml` (Ingress + ManagedCertificate + BackendConfig + FrontendConfig), Service to ClusterIP, deploy.yml targets the hostname. Gate untouched, `src/` untouched
+- [ ] Slice 2 — IAP on, `CONSOLE_PASSWORD` out of production, the pod's `0.0.0.0` bind closed in the same PR, smoke gate rewritten (anonymous → 401; the deep check loses its login and asserts `login_gate === false`)
+
+Neither slice is expected to change a test or re-shoot a fidelity surface. Continuous delivery to GCP shipped in 0.4.0 ([#63](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/63), [#65](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/65)); what it does is in [docs/deploy-gcp.md](./docs/deploy-gcp.md).
 
 Plans 01–05 are complete and archived; summaries in [docs/HISTORY.md](./docs/HISTORY.md). How a release is cut: [docs/releasing.md](./docs/releasing.md).
 
