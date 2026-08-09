@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: archived
 ---
 
 # Google sign-in — the staging console stops being a shared password on a bare IP
