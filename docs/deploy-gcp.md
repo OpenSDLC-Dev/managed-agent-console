@@ -140,11 +140,14 @@ makes the console call `/v1/agents?limit=1` on the platform with the management
 key, and must answer **200**: both environment variables are set, and the
 platform accepts the key. A wrong key answers 401 and the gate reports it; an
 unreachable control plane reports `reachable: false`. That depth answers
-sessions only, and from the internet it is IAP's to refuse — so the step runs it
-with `kubectl exec` against the pod carrying the image just pushed, over
-`127.0.0.1`. That is now the only way to run it: this job holds no Google
-identity IAP would accept. The response body names environment variables and a
-status code and carries no URL and no key, which is why the job prints it.
+sessions only, and this job holds no Google identity IAP would accept — so the
+step runs it with `kubectl exec` against the pod carrying the image just pushed,
+over `127.0.0.1`. That is the supported path, not the only reachable one: IAP
+refuses **anonymous** callers, so a signed-in member of the Workspace can fetch
+`?deep=1` from a browser. No escalation follows — the same person can drive
+every page of the console, and every page spends the same key. The response body
+names environment variables and a status code and carries no URL and no key,
+which is why the job prints it.
 
 **Is the public address gated? — from outside.** Every path through the front
 door is a 401 now, so a request can no longer distinguish "gated" from "broken".

@@ -32,10 +32,17 @@ import { consolePassword, platformApiKey, platformBaseUrl } from "@/lib/env";
  * That last clause is the production posture of the deployment in deploy/k8s/,
  * on purpose: authentication there is IAP at the load balancer, so nothing
  * reaches this process unauthenticated from the internet, and the pod's port is
- * closed to the rest of the cluster by a NetworkPolicy. The deploy gate runs the
- * deep check from inside the pod over loopback (`kubectl exec … -- node`) —
- * which is now the only way to run it, since from outside it is IAP's to refuse.
- * See deploy/k8s/README.md.
+ * closed to the rest of the cluster by a NetworkPolicy. Note what that does and
+ * does not say — IAP refuses *anonymous* callers, not authorized ones, so a
+ * signed-in member of the Workspace can still reach `?deep=1` from a browser.
+ * That is not an escalation: the same person can drive every page of the
+ * console, and every page spends the same key. What the deployment removes is
+ * the anonymous internet and the rest of the cluster, not the operator.
+ *
+ * The deploy gate runs the deep check from inside the pod over loopback
+ * (`kubectl exec … -- node`) because the CD job holds no Google identity IAP
+ * would accept — not because nothing else can reach the route. See
+ * deploy/k8s/README.md.
  *
  * The body names environment variables (already public, in `.env.example`) and
  * reports the platform's own status code. It carries no URL and no key, because

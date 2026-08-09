@@ -156,13 +156,19 @@ carries no URL and no key.
 
 **The deep depth is a lever rather than a report:** repeating it makes the
 console spend the management key against the control plane. It gates itself
-whenever `CONSOLE_PASSWORD` is set — and here it is not, so inside the pod that
-route is open, as every other route is. Nothing protects it at the application
-layer, and nothing needs to: IAP refuses the request from the internet, and
-`networkpolicy.yaml` refuses it from the rest of the cluster.
+whenever `CONSOLE_PASSWORD` is set — and here it is not, so the route is open at
+the application layer, as every other route is. Nothing needs to protect it
+there: IAP refuses anonymous requests from the internet, and
+`networkpolicy.yaml` refuses them from the rest of the cluster.
 
-The deploy runs it **from inside the pod**, which is now the only place it can be
-run from at all:
+Be precise about what that leaves. IAP refuses **anonymous** callers, not
+authorized ones, so a signed-in member of the Workspace can fetch `?deep=1` from
+a browser. That is not an escalation — the same person can drive every page of
+the console, and every page spends the same key. What this deployment removes is
+the anonymous internet and the rest of the cluster, not the operator.
+
+The deploy runs it **from inside the pod**, because the CD job holds no Google
+identity IAP would accept:
 
 ```bash
 kubectl exec -n "$NAMESPACE" "$pod" -- node -e '…fetch("http://127.0.0.1:3000/api/health?deep=1")…'

@@ -367,14 +367,17 @@ jobs:
       # key or a wrong base URL passes that. The deep check proves this revision
       # can actually reach the platform and be accepted.
       #
-      # Still run from inside the pod, and now that is the only way to run it at
-      # all: from the internet this route is behind IAP, and this job holds no
-      # Google identity IAP would accept. The login preamble is gone with the
-      # password — with CONSOLE_PASSWORD unset the deep check no longer gates
-      # itself (src/app/api/health/route.ts), so the script is one fetch over
-      # loopback. That the route is open *inside* the pod is not a regression:
-      # port 3000 is reachable only from the load balancer's ranges, which
-      # networkpolicy.yaml is what enforces.
+      # Still run from inside the pod, because this job holds no Google identity
+      # IAP would accept — not because nothing else could reach the route. IAP
+      # refuses *anonymous* callers; a signed-in member of the Workspace can
+      # still fetch ?deep=1, which is no escalation, since the same person can
+      # drive every page of the console and every page spends the same key.
+      #
+      # The login preamble is gone with the password — with CONSOLE_PASSWORD
+      # unset the deep check no longer gates itself
+      # (src/app/api/health/route.ts), so the script is one fetch over loopback.
+      # That the route is open *inside the cluster* is what networkpolicy.yaml
+      # closes: port 3000 admits only the load balancer's ranges.
       #
       # The health body carries no URL and no key by construction, which is why
       # it is safe to print into a public log.
