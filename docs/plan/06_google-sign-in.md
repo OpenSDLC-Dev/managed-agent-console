@@ -37,8 +37,8 @@ during it (all 2026-08-09):
   them by name. See
   [Deployment identifiers in a public repository](#deployment-identifiers-in-a-public-repository).
 
-Consequently this plan names five values it never spells out — `${PROJECT_ID}`, `${CLUSTER}`,
-`${ZONE}`, `${WORKSPACE_DOMAIN}` and `${CONSOLE_HOST}`. Commands are meant to be run with those set,
+Consequently this plan names five values it never spells out — `${GCP_PROJECT_ID}`, `${GKE_CLUSTER}`,
+`${GCP_ZONE}`, `${WORKSPACE_DOMAIN}` and `${CONSOLE_HOST}`. Commands are meant to be run with those set,
 and the reader who wants the concrete values reads them from the deployment rather than from git.
 
 ## Ground truth (verified 2026-08-09 against this checkout)
@@ -94,7 +94,7 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
   real password code path. **No test changes and no fidelity re-shoots are required by this plan.**
 - **The deployment project is parented to the Workspace organization**, so a `domain:` IAM binding and
   an Internal consent screen are both available — checked with
-  `gcloud projects describe ${PROJECT_ID} --format='value(parent.type,parent.id)'` against
+  `gcloud projects describe ${GCP_PROJECT_ID} --format='value(parent.type,parent.id)'` against
   `gcloud organizations list`, and re-checkable the same way. The organization and customer
   identifiers are deliberately not reproduced here; see
   [Deployment identifiers in a public repository](#deployment-identifiers-in-a-public-repository).
@@ -208,11 +208,26 @@ Identical for every option in the table, so none of it is wasted whatever is dec
 not do any of it** — [deploy.yml](../../.github/workflows/deploy.yml) owns build, push, deploy, smoke
 and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human and interactive.
 
+Every command below is written in the repository variables' own names, so load them into the shell
+first ([docs/deploy-gcp.md](../deploy-gcp.md) has the same snippet, and the reason the guard is not
+optional):
+
+```bash
+exports="$(gh variable list --json name,value \
+  --jq '.[] | "export \(.name)=\(.value | @sh)"')"
+[ -n "$exports" ] && eval "$exports"
+: "${GCP_PROJECT_ID:?}" "${GCP_ZONE:?}" "${GKE_CLUSTER:?}" "${K8S_NAMESPACE:?}" "${CONSOLE_HOST:?}"
+```
+
+`${WORKSPACE_DOMAIN}` is the exception: it is the Google Workspace domain the IAM binding resolves
+against, it is not a repository variable because CD never uses it, and it appears only in step 5.
+Export it by hand there.
+
 0. **Check what the cluster can do**, because two of these answers are prerequisites rather than
    curiosities and both are cheaper to learn now than halfway through a slice:
 
    ```bash
-   gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --project ${PROJECT_ID} \
+   gcloud container clusters describe ${GKE_CLUSTER} --zone ${GCP_ZONE} --project ${GCP_PROJECT_ID} \
      --format='value(ipAllocationPolicy.useIpAliases,
                      addonsConfig.httpLoadBalancing.disabled,
                      networkConfig.datapathProvider,
@@ -234,9 +249,9 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    authorization) costs an interactive cluster change to buy back an IP that was never published.
 
    ```bash
-   gcloud compute addresses create console-ip --global --project ${PROJECT_ID}
+   gcloud compute addresses create console-ip --global --project ${GCP_PROJECT_ID}
    gcloud compute addresses describe console-ip --global \
-     --project ${PROJECT_ID} --format='value(address)'
+     --project ${GCP_PROJECT_ID} --format='value(address)'
    ```
 
 2. **Add one A record**, by hand, in whichever provider holds the zone for `${CONSOLE_HOST}`: an `A`
@@ -257,15 +272,15 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    the slice for why):
 
    ```bash
-   gcloud container clusters get-credentials ${CLUSTER} \
-     --zone ${ZONE} --project ${PROJECT_ID}
+   gcloud container clusters get-credentials ${GKE_CLUSTER} \
+     --zone ${GCP_ZONE} --project ${GCP_PROJECT_ID}
 
    # edge.yaml carries the bare token CONSOLE_HOST, not a shell variable — see below.
-   sed "s|CONSOLE_HOST|${CONSOLE_HOST}|g" deploy/k8s/edge.yaml | kubectl apply -n map -f -
+   sed "s|CONSOLE_HOST|${CONSOLE_HOST}|g" deploy/k8s/edge.yaml | kubectl apply -n ${K8S_NAMESPACE} -f -
 
-   kubectl annotate svc console -n map \
+   kubectl annotate svc console -n ${K8S_NAMESPACE} \
      cloud.google.com/backend-config='{"default":"console"}'
-   kubectl patch svc console -n map -p '{"spec":{"type":"ClusterIP"}}'   # only if NEG-capable, step 0
+   kubectl patch svc console -n ${K8S_NAMESPACE} -p '{"spec":{"type":"ClusterIP"}}'   # only if NEG-capable, step 0
    ```
 
    **`kubectl apply` performs no substitution of any kind**, so a manifest containing a literal
@@ -280,9 +295,9 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    Then wait for the certificate, with a bound rather than an open-ended watch:
 
    ```bash
-   timeout 90m bash -c 'until [ "$(kubectl get managedcertificate console -n map \
+   timeout 90m bash -c 'until [ "$(kubectl get managedcertificate console -n ${K8S_NAMESPACE} \
      -o jsonpath="{.status.certificateStatus}")" = Active ]; do sleep 60; done'
-   kubectl describe managedcertificate console -n map     # on timeout, read domainStatus
+   kubectl describe managedcertificate console -n ${K8S_NAMESPACE}     # on timeout, read domainStatus
    ```
 
    First issuance is typically 15–60 minutes after DNS resolves, and the load balancer may take up to
@@ -294,11 +309,11 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    permanently 502 hostname with a green rollout:
 
    ```bash
-   gcloud compute backend-services list --global --project ${PROJECT_ID}
+   gcloud compute backend-services list --global --project ${GCP_PROJECT_ID}
    gcloud compute backend-services get-health NAME --global \
-     --project ${PROJECT_ID}                                          # HEALTHY
+     --project ${GCP_PROJECT_ID}                                          # HEALTHY
    gcloud compute health-checks describe NAME --global \
-     --project ${PROJECT_ID} \
+     --project ${GCP_PROJECT_ID} \
      --format='yaml(httpHealthCheck)'                                 # requestPath: /api/health
    ```
 
@@ -306,10 +321,10 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    too, if the smoke gate is to make an authenticated request:
 
    ```bash
-   gcloud iap web add-iam-policy-binding --project ${PROJECT_ID} \
+   gcloud iap web add-iam-policy-binding --project ${GCP_PROJECT_ID} \
      --resource-type=backend-services --service=<console-backend-service> \
      --member='domain:${WORKSPACE_DOMAIN}' --role='roles/iap.httpsResourceAccessor'
-   gcloud iap web add-iam-policy-binding --project ${PROJECT_ID} \
+   gcloud iap web add-iam-policy-binding --project ${GCP_PROJECT_ID} \
      --resource-type=backend-services --service=<console-backend-service> \
      --member='serviceAccount:<deploy-sa>' --role='roles/iap.httpsResourceAccessor'
    ```
@@ -495,7 +510,7 @@ Recorded here and, where they concern the deployment, in `docs/deploy-gcp.md`.
   merely opens. IAP authorizes per request, so an expiring session mid-stream is a second unknown with
   the same shape — the client retries with backoff and reports nothing.
 - **Break-glass needs no second door on the internet.** A second `@${WORKSPACE_DOMAIN}` account is the first
-  answer. If IAP or Google is unavailable, `kubectl -n map port-forward deploy/console 3000:3000`
+  answer. If IAP or Google is unavailable, `kubectl -n ${K8S_NAMESPACE} port-forward deploy/console 3000:3000`
   reaches an ungated console — appropriate, not a hole: anyone who can port-forward can also read
   `console-secrets` and drive the platform directly, so the console grants strictly less. Note that
   exporting `CONSOLE_PASSWORD` in a local shell does nothing; `src/proxy.ts`:5 reads the _running
@@ -569,13 +584,13 @@ surface, and it does not replace this seam — it replaces the issuer behind it.
 
 ## Open questions
 
-| Question                                                                                                                                                                                                                                                                                      | What settles it                                                                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D4 — the hostname.** Needed before precondition step 2, not before step 1: the static IP is reserved without it. It lands in `ManagedCertificate.spec.domains`, the Ingress host rule, and the `${CONSOLE_HOST}` variable — all three redeployable, none of them registered with an issuer. | The maintainer. Any zone whose DNS they control; it need not be the Workspace domain.                                                                                                                                       |
-| Does the zone's DNS provider proxy the record by default (Cloudflare's orange cloud, or equivalent)? A proxied record stalls the managed certificate at `FAILED_NOT_VISIBLE` indefinitely and reads as "still waiting".                                                                       | `dig +short ${CONSOLE_HOST} @8.8.8.8` must return the address printed by precondition step 1, not merely some address.                                                                                                      |
-| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                                   | After precondition step 3: `kubectl get svc console -n map -o jsonpath='{.metadata.annotations}'`                                                                                                                           |
-| Can the deploy service account create `Ingress`, `BackendConfig` and `ManagedCertificate` in `map`? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                                         | `kubectl auth can-i create ingress -n map --as=<SA>`, or the first CD run after slice 1 merges.                                                                                                                             |
-| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address.              | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                                                                                            |
-| **Not deferred — precondition step 0 settles it, and slice 2 is blocked until it does.** Can `${CLUSTER}` enforce a `NetworkPolicy`? With the loopback bind ruled out there is no second mechanism, so a cluster that cannot enforce one cannot take the password removal.                    | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --project ${PROJECT_ID} --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` — expect `ADVANCED_DATAPATH`, or the addon enabled |
-| Does `kubectl port-forward` still reach the pod once the `NetworkPolicy` is in place? Break-glass depends on it, and whether node-originated traffic is subject to policy varies by CNI.                                                                                                      | After slice 2: `kubectl port-forward -n map deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                                                                                            |
-| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                                        | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                                                                                                        |
+| Question                                                                                                                                                                                                                                                                                      | What settles it                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D4 — the hostname.** Needed before precondition step 2, not before step 1: the static IP is reserved without it. It lands in `ManagedCertificate.spec.domains`, the Ingress host rule, and the `${CONSOLE_HOST}` variable — all three redeployable, none of them registered with an issuer. | The maintainer. Any zone whose DNS they control; it need not be the Workspace domain.                                                                                                                                                   |
+| Does the zone's DNS provider proxy the record by default (Cloudflare's orange cloud, or equivalent)? A proxied record stalls the managed certificate at `FAILED_NOT_VISIBLE` indefinitely and reads as "still waiting".                                                                       | `dig +short ${CONSOLE_HOST} @8.8.8.8` must return the address printed by precondition step 1, not merely some address.                                                                                                                  |
+| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                                   | After precondition step 3: `kubectl get svc console -n ${K8S_NAMESPACE} -o jsonpath='{.metadata.annotations}'`                                                                                                                          |
+| Can the deploy service account create `Ingress`, `BackendConfig` and `ManagedCertificate` in the namespace? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                                 | `kubectl auth can-i create ingress -n ${K8S_NAMESPACE} --as=<SA>`, or the first CD run after slice 1 merges.                                                                                                                            |
+| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address.              | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                                                                                                        |
+| **Not deferred — precondition step 0 settles it, and slice 2 is blocked until it does.** Can `${GKE_CLUSTER}` enforce a `NetworkPolicy`? With the loopback bind ruled out there is no second mechanism, so a cluster that cannot enforce one cannot take the password removal.                | `gcloud container clusters describe ${GKE_CLUSTER} --zone ${GCP_ZONE} --project ${GCP_PROJECT_ID} --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` — expect `ADVANCED_DATAPATH`, or the addon enabled |
+| Does `kubectl port-forward` still reach the pod once the `NetworkPolicy` is in place? Break-glass depends on it, and whether node-originated traffic is subject to policy varies by CNI.                                                                                                      | After slice 2: `kubectl port-forward -n ${K8S_NAMESPACE} deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                                                                                           |
+| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                                        | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                                                                                                                    |
