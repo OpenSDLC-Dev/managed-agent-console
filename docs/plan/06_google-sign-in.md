@@ -340,8 +340,11 @@ Export it by hand there.
    Workspace and never reaches git.
 
 6. **Rotate `console-password`.** It has been crossing the public internet in the clear for as long as
-   staging has existed. Do this even though D2 removes it — it is still the local-development and test
-   credential, and it is compromised.
+   staging has existed. Do this even though D2 removes it: the deploy job still writes the Secret
+   Manager payload into `console-secrets`, so a compromised value stays one `rollout undo` away from
+   being the live gate again. (It is _not_ the local-development or test credential — the suites carry
+   their own literals and `.env.example` leaves the variable commented out — so nobody needs to be told
+   the new value, and nobody was.)
 
 ## Slices
 
