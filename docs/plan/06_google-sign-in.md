@@ -75,11 +75,13 @@ exec … node -e` step reads `process.env.CONSOLE_PASSWORD` and its first statem
   `CONSOLE_PASSWORD` for the server they start, so 44 e2e assertions across 9 specs, the 11 copies of
   the `signIn()` helper, the live tier, and 29 fidelity surfaces × 2 themes all keep exercising the
   real password code path. **No test changes and no fidelity re-shoots are required by this plan.**
-- **This project is under the maintainer's Workspace organization.** `gcloud projects describe
-hh-opensdlc-managed-agents --format='value(parent.type,parent.id)'` → `organization 578372022138`;
-  `gcloud organizations list` → `hhstudio.ai`, `578372022138`, customer `C01p525ih`. And
-  `hhstudio.ai` resolves `MX 1 smtp.google.com` with nameservers `dns1/dns2.registrar-servers.com`
-  (Namecheap) — Workspace mail, DNS edited by hand.
+- **The deployment project is parented to the Workspace organization**, so a `domain:` IAM binding and
+  an Internal consent screen are both available — checked with `gcloud projects describe <project>
+--format='value(parent.type,parent.id)'` against `gcloud organizations list`, and re-checkable the
+  same way. The organization and customer identifiers are deliberately not reproduced here; see
+  [Deployment identifiers in a public repository](#deployment-identifiers-in-a-public-repository).
+  The domain resolves `MX 1 smtp.google.com` on registrar nameservers — Workspace mail, DNS edited by
+  hand.
 
 ### Verified externally (2026-08-09)
 
@@ -367,6 +369,34 @@ Recorded here and, where they concern the deployment, in `docs/deploy-gcp.md`.
   port, which slice 2 closes at the bind address. Also the assertion's `aud` embeds the backend
   service ID, which changes whenever the Ingress is recreated — hard-coding it would lock everyone out
   on a rebuild. Revisit only if a second backend or a second reader appears.
+
+## Deployment identifiers in a public repository
+
+This repository is public, and `deploy/k8s/`, `.github/workflows/deploy.yml` and `docs/deploy-gcp.md`
+already name one specific deployment: a GCP project, a cluster, a zone, a namespace, a deploy service
+account, an Artifact Registry path, and — once this plan lands — a hostname. The sibling platform
+repository does the same in `deploy/gcp/`. **None of it is a credential**, and that is by design: there
+is no service-account key anywhere, Workload Identity Federation only trusts tokens from repositories
+in this organization, and every secret is read from Secret Manager at deploy time. Making these
+identifiers public does not grant anyone anything.
+
+It does two other things, and this plan takes a position on each.
+
+- **It hands a reader a target list** — the project, the cluster and the hostname of an operator
+  console that holds a full-power management key. The trust policy is what actually stops an attacker,
+  so this is depth rather than a hole, but it is free to reduce. **Organization IDs and the Workspace
+  customer ID are therefore not written down here**, and no new identifier is introduced by this plan
+  beyond the hostname, which is public by definition once DNS resolves.
+- **It couples an open-source project to one operator's deployment.** Someone who clones this to run
+  their own console inherits manifests they must edit and documentation describing a cluster they
+  cannot reach. That is a real cost to the project's premise, and it is **out of scope here** — this
+  plan changes an authentication seam and would only make the coupling worse by adding a hostname to
+  it. Parameterising the deployment (identifiers as workflow variables or a values file, generic
+  examples in the docs, the real values held outside the public repository) is its own piece of work
+  in both repositories and belongs in its own issue.
+
+Until that happens, the honest statement in the README is that `deploy/` is **a reference deployment,
+not a template** — it demonstrates a working shape and names the one cluster it was proven against.
 
 ## If a second service ever needs the same login
 
