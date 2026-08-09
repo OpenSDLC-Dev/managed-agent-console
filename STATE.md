@@ -4,9 +4,10 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 ## Active work
 
-**Plan 06 — Google sign-in** ([docs/plan/06_google-sign-in.md](./docs/plan/06_google-sign-in.md), `draft`, drafted 2026-08-09). It retires the plain-HTTP limitation 0.4.0 shipped on purpose: staging is a shared password on a bare IP in front of a full-power management key. The decision is **GCP IAP with the IAM binding `domain:${WORKSPACE_DOMAIN}`**, after which the production console has no authentication code at all. **Awaiting maintainer approval**, and the hostname — the one open input.
+**Plan 06 — Google sign-in** ([docs/plan/06_google-sign-in.md](./docs/plan/06_google-sign-in.md), `draft`, drafted 2026-08-09). It retires the plain-HTTP limitation 0.4.0 shipped on purpose: staging is a shared password on a bare IP in front of a full-power management key. The decision is **GCP IAP with the IAM binding `domain:${WORKSPACE_DOMAIN}`**, after which the production console has no authentication code at all. **Awaiting maintainer approval.** The hostname is chosen and held in the `${CONSOLE_HOST}` Actions variable — a zone separate from `${WORKSPACE_DOMAIN}`, which the plan's D4 records as deliberate and reversible.
 
-- [ ] One-time human infra, not CD: global static IP, one A record at Namecheap, edge objects applied by hand, certificate `Active`, `roles/iap.httpsResourceAccessor` for `domain:${WORKSPACE_DOMAIN}` and for `cd-deployer`
+- [ ] [#69](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/69) first — deployment identifiers become Actions variables, so slice 1 writes `${CONSOLE_HOST}` rather than a literal to be swept again
+- [ ] One-time human infra, not CD: global static IP, one **DNS-only** A record (a proxied/orange-cloud record stalls the managed certificate at `FAILED_NOT_VISIBLE` and reads as "still waiting"), edge objects applied by hand, certificate `Active`, `roles/iap.httpsResourceAccessor` bound **to the backend service, not the project**
 - [ ] Slice 1 — `${CONSOLE_HOST}` with managed TLS: `deploy/k8s/edge.yaml` (Ingress + ManagedCertificate + BackendConfig + FrontendConfig), Service to ClusterIP, deploy.yml targets the hostname. Gate untouched, `src/` untouched
 - [ ] Slice 2 — IAP on, `CONSOLE_PASSWORD` out of production, the pod's `0.0.0.0` bind closed in the same PR, smoke gate rewritten (anonymous → 401; the deep check loses its login and asserts `login_gate === false`)
 
