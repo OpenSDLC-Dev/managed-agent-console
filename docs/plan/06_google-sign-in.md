@@ -338,20 +338,27 @@ this stops the password and every session cookie crossing the wire in the clear.
 
 - **New `deploy/k8s/edge.yaml`** (~70 lines with comments; four objects in one file — the apply loop
   already handles multi-document files, and this directory is deliberately not a chart):
+  **Every hostname in this file is the bare token `CONSOLE_HOST`, never `${CONSOLE_HOST}`** — the
+  workflow's `sed` renders it exactly as it renders `CONSOLE_IMAGE` and `SECRETS_CHECKSUM`, and
+  `kubectl apply` would otherwise submit the dollar and braces to the API server as part of a DNS
+  name. Two objects carry it:
   - `Ingress`: `kubernetes.io/ingress.class: gce`,
     `kubernetes.io/ingress.global-static-ip-name: console-ip`,
     `networking.gke.io/managed-certificates: console`,
-    `networking.gke.io/v1beta1.FrontendConfig: console`, one host rule.
-  - `ManagedCertificate`: `spec.domains: [${CONSOLE_HOST}]`.
+    `networking.gke.io/v1beta1.FrontendConfig: console`, and one host rule on `CONSOLE_HOST`.
+  - `ManagedCertificate`: `spec.domains: [CONSOLE_HOST]`.
   - `BackendConfig`: `healthCheck.requestPath: /api/health` and `port: 3000` — **both traps live
     here**; and `timeoutSec: 3600` for SSE. Each gets a comment naming the failure it prevents,
-    because both failures are silent.
+    because both failures are silent. `port: 3000` is correct only because the cluster is VPC-native
+    (precondition step 0); on a non-VPC-native cluster this names the node port instead.
   - `FrontendConfig`: `redirectToHttps.enabled: true`. Do **not** set
     `kubernetes.io/ingress.allow-http: "false"` — the redirect needs HTTP listening.
-- **`deploy/k8s/service.yaml`**: drop `type: LoadBalancer` (ClusterIP is the default), add the
+- **`deploy/k8s/service.yaml`**: drop `type: LoadBalancer` (ClusterIP is the default, and is the right
+  default here only because step 0 confirmed VPC-native — otherwise this becomes `NodePort`), add the
   backend-config annotation, rewrite the header comment at :1-7 and the `port: 80` comment at :22 —
   both now assert things that are false. ~−6/+10.
-- **`.github/workflows/deploy.yml`**: add `CONSOLE_HOST: ${CONSOLE_HOST}` to the `env:` block;
+- **`.github/workflows/deploy.yml`**: add `CONSOLE_HOST: ${{ vars.CONSOLE_HOST }}` to the `env:` block
+  and extend the apply step's `sed` to render the token into the manifests;
   delete the external-IP polling loop (a ClusterIP Service has no `status.loadBalancer.ingress`) and
   target `https://$CONSOLE_HOST` directly; add a fail-fast check that `managedcertificate console`
   reports `Active`, so a still-issuing certificate reads as one clear message instead of a 300-second
