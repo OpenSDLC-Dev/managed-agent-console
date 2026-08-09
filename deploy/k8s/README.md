@@ -20,7 +20,7 @@ asked for.
 | Placeholder        | Becomes                                                              |
 | ------------------ | -------------------------------------------------------------------- |
 | `CONSOLE_IMAGE`    | the `CONSOLE_IMAGE_REPO` variable, tagged with this run's commit sha |
-| `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read            |
+| `SECRETS_CHECKSUM` | `sha256` of the Secret Manager payload this run read                 |
 | `CONTROLPLANE_URL` | the `PLATFORM_BASE_URL` variable — the control plane's Service URL   |
 | `CONSOLE_HOST`     | the `CONSOLE_HOST` variable — the hostname the console answers on    |
 
@@ -82,50 +82,53 @@ above _after_ building and pushing an image.
 
 ## The Secret
 
-A Secret named `console-secrets` with two keys, of which the console now reads
-one:
+A Secret named `console-secrets` with one key:
 
 | Key                | Value              | Source (Secret Manager, in the `GCP_PROJECT_ID` project)                                                                                         |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform-api-key` | `PLATFORM_API_KEY` | `controlplane-api-key` — the same value the platform chart installs as `controlplane.apiKey`, which is what makes the console's key valid at all |
 
-The second key is `console-password`, and **no current revision mounts it**. The
-Deployment stopped referencing it when authentication moved to IAP; the
-production container has no authentication code running in it at all.
+It had a second key, `console-password`, for longer than the console read it,
+and **why it lingered is the part worth keeping**. The Deployment stopped
+referencing it when authentication moved to IAP, but old ReplicaSets keep their
+whole pod template — `secretKeyRef`s included — so every revision from before
+that change was still asking for the key, and this Secret is written with
+`create … --dry-run=client | apply`, which **replaces rather than patches**.
+Dropping it while such a revision was reachable would have made
+`kubectl rollout undo` restore a pod template the kubelet cannot start
+(`CreateContainerConfigError`): the step whose entire purpose is to leave the
+last working console serving would instead have produced an outage, in exactly
+the situation where something has already gone wrong.
 
-**It is still written, deliberately.** Every revision in the Deployment's
-history from before that change still carries a `secretKeyRef` for it, and this
-Secret is written with `create … --dry-run=client | apply`, which **replaces
-rather than patches**. Stop writing the key and `kubectl rollout undo` restores
-a pod template the kubelet cannot start (`CreateContainerConfigError`) — so the
-step whose entire purpose is to leave the last working console serving would
-instead produce an outage, in exactly the situation where something has already
-gone wrong. The credential stops being _read_ now; it stops _existing_ in a
-follow-up, once no revision in history mounts it.
+What ended it is `revisionHistoryLimit` on the Deployment, which is why that
+field is a security boundary here rather than housekeeping. An unbounded history
+means no credential can ever be retired — there is always one more template
+holding it open. Bounding it turned the wait into a decision, and lowering the
+limit prunes immediately rather than at the next rollout.
 
-The workflow reads the latest enabled version of each and writes the Secret with
+The workflow reads the latest enabled version and writes the Secret with
 `kubectl create … --dry-run=client -o yaml | kubectl apply -f -`, so re-running
-it is idempotent. The values are never checked in and never echoed.
+it is idempotent. That same command is what **deleted** the old key rather than
+merely stopping its refresh: apply computes deletions from the last-applied
+annotation, which still listed both. The value is never checked in and never
+echoed.
 
-**Neither may be empty, and the pipeline fails if either is.** Without
-`platform-api-key` the console cannot authenticate to the platform at all;
-without `console-password` a rollback target cannot start. That second guard
-still exists but now prevents a different failure, which is why its message
-changed rather than the guard being deleted. The pipeline does not stop at the
-Secret Manager payloads either: after the rollout it asserts, against the public
-hostname, that an anonymous request is refused **and that IAP is what refused
-it**.
+**It may not be empty, and the pipeline fails if it is** — without
+`platform-api-key` the console cannot authenticate to the platform at all. The
+pipeline does not stop at the Secret Manager payload either: after the rollout it
+asserts, against the public hostname, that an anonymous request is refused **and
+that IAP is what refused it**.
 
 **Rotating a secret rolls the pod, without a commit.** Add the new version in
 Secret Manager and re-run the workflow (`workflow_dispatch`); the run reads the
 latest version, applies the Secret, and writes a `console-secrets/checksum`
-annotation — a `sha256` of the two payloads — into the pod template. Without that
+annotation — a `sha256` of the payload — into the pod template. Without that
 annotation the re-applied Deployment would be byte-identical, nothing would roll,
 `rollout status` would return instantly green, and the pod would keep serving
 with the old credential. The platform chart carries the same annotation on its
 control-plane Deployment, for the same reason.
 
-The annotation is a `sha256` of the payloads, not either value, and it is
+The annotation is a `sha256` of the payload, not the value itself, and it is
 one-way.
 
 ## The health endpoint, and which depth goes where

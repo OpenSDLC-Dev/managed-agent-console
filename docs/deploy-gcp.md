@@ -79,20 +79,22 @@ the job:
 | Secret Manager secret  | Becomes                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------- |
 | `controlplane-api-key` | the `platform-api-key` key of the `console-secrets` Secret → `PLATFORM_API_KEY` |
-| `console-password`     | the `console-password` key of the same Secret — mounted by no current revision  |
 
-`controlplane-api-key` is the same value the platform chart installs as
-`controlplane.apiKey` — one secret, two readers, which is what makes the
-console's key valid at all.
+One secret, and that is the whole list. `controlplane-api-key` is the same value
+the platform chart installs as `controlplane.apiKey` — one secret, two readers,
+which is what makes the console's key valid at all.
 
-`console-password` is the console's own gate, and **this deployment does not use
-it**: authentication is IAP's. It is still written because `rollout undo` below
-can restore a revision from before that change, which mounts the key — and the
-Secret is replaced rather than patched, so dropping the key would turn a
-rollback into an outage. It stops being read now and stops existing in a
-follow-up, once no revision in history mounts it.
+There was a second, `console-password`, the console's own gate, which **this
+deployment has not used since authentication became IAP's**. It went on being
+written long after it stopped being read, because `rollout undo` below could
+restore a revision that mounted the key and the Secret is replaced rather than
+patched — dropping it would have turned a rollback into an outage. What retired
+it was bounding `revisionHistoryLimit` so that no such revision remains
+reachable. This pipeline no longer reads the Secret Manager secret at all;
+whether its versions are left enabled is a deployment decision and not recorded
+here, like every other identifier in this file.
 
-Both must be a **single line**, and the job rejects the run if either is not. A
+It must be a **single line**, and the job rejects the run if it is not. A
 trailing newline is the easy way to get this wrong — `--data-file=-` stores the
 Enter you pressed — and that byte rides into the container as an `x-api-key`
 Node refuses to send at all, so the job strips one before writing the Kubernetes
@@ -118,7 +120,7 @@ bucket.
 Rotating a credential therefore means adding a Secret Manager version and
 re-running the workflow (`workflow_dispatch`) — never editing anything here, and
 never a `kubectl` command afterwards. The run writes a `console-secrets/checksum`
-annotation, a `sha256` of the two payloads, into the pod template, so a rotation
+annotation, a `sha256` of the payload, into the pod template, so a rotation
 on an unchanged `main` is a **new revision** and the pod actually rolls. Without
 that the re-applied Deployment would be byte-identical, `rollout status` would
 return instantly green, and the pod would keep running with the old credentials
@@ -253,9 +255,16 @@ it cannot do, both reported as warnings in the run:
   annotation then names a payload the Secret no longer holds. If a rotation is
   what broke the deploy, disable that Secret Manager version and re-run the
   workflow; do not expect a rollback to undo it.
+- **It reaches back three revisions, not ten.** `revisionHistoryLimit: 3` on the
+  Deployment is deliberate and is explained where it is set: an old ReplicaSet
+  keeps its whole pod template, `secretKeyRef`s included, so an unbounded
+  history is what makes a credential impossible to retire. `rollout undo
+--to-revision=` an older number fails cleanly with "unable to find specified
+  revision" rather than starting a pod that cannot pull its Secret.
 
-The image tag is the commit sha and is never reused, so every revision the
-cluster has run is still addressable.
+The image tag is the commit sha and is never reused, so every image the cluster
+has run is still addressable by tag even when its revision is not — `set image`
+below is the way back to one the Deployment's history no longer holds.
 
 Run these with the same values the workflow uses. `gh variable list` on its own
 only prints a table — nothing is exported into your shell, and every command
