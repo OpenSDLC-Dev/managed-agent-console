@@ -449,31 +449,40 @@ jobs:
           # by fetching a page. Every path through the front door is 401 now, so
           # a request cannot distinguish "gated" from "broken"; the GCLB health
           # check can, and it is the same signal the load balancer routes on.
+          #
+          # Read through the Ingress rather than through `gcloud compute
+          # backend-services`, and that is not a stylistic choice: the deploy
+          # identity holds what CD needs — push images, drive the cluster, read
+          # secrets — and *not* compute permissions, so the gcloud form fails
+          # with `Required 'compute.backendServices.list' permission`. The
+          # ingress controller publishes the same health state it reads from
+          # GCLB onto this annotation, which kubectl can already see. The
+          # alternative was widening the deploy identity to read all of Compute
+          # in order to run one assertion.
+          #
           # It polls because a rollout replaces the NEG's endpoints and the new
           # backend has to pass that check before it is served.
           base="https://$CONSOLE_HOST"
-          svc="$(gcloud compute backend-services list --global --project "$PROJECT_ID" \
-            --filter="name~console" --format='value(name)' | head -n1)"
-          if [ -z "$svc" ]; then
-            echo "::error::no global backend service matching 'console' in $PROJECT_ID — the Ingress has not produced one"
-            exit 1
-          fi
-          health=""
+          states=""
           deadline=$((SECONDS + 300))
           while [ "$SECONDS" -lt "$deadline" ]; do
-            health="$(gcloud compute backend-services get-health "$svc" --global \
-              --project "$PROJECT_ID" \
-              --format='value(status.healthStatus[0].healthState)' 2>/dev/null || true)"
-            if [ "$health" = "HEALTHY" ]; then break; fi
+            # Keyed on `-console-` so the cluster's default-http-backend, which
+            # shares this annotation, cannot answer for us.
+            states="$(kubectl get ingress console -n "$NAMESPACE" \
+              -o jsonpath='{.metadata.annotations.ingress\.kubernetes\.io/backends}' 2>/dev/null \
+              | jq -r 'to_entries[] | select(.key | test("-console-")) | .value' 2>/dev/null || true)"
+            if [ -n "$states" ] && ! printf '%s\n' "$states" | grep -qv '^HEALTHY$'; then
+              break
+            fi
             sleep 10
           done
-          if [ "$health" != "HEALTHY" ]; then
-            echo "::error::backend service $svc is ${health:-unknown}, not HEALTHY, after five minutes — this revision is not being served. The check is pinned to /api/health on port 3000 in deploy/k8s/edge.yaml; the default GET / would read 401 from IAP and never pass."
+          if [ -z "$states" ] || printf '%s\n' "$states" | grep -qv '^HEALTHY$'; then
+            echo "::error::the console backend is ${states:-not reported by the Ingress yet}, not HEALTHY, after five minutes — this revision is not being served. The check is pinned to /api/health on port 3000 in deploy/k8s/edge.yaml; the GCLB default of GET / would read 401 from IAP and never pass."
             kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console
             kubectl describe ingress console -n "$NAMESPACE" || true
             exit 1
           fi
-          echo "backend $svc: HEALTHY"
+          echo "console backend: HEALTHY"
 
           # The claim that matters, and it is now a claim about a different
           # system: an anonymous request is refused *by IAP*, before it reaches
