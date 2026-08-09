@@ -208,6 +208,25 @@ Identical for every option in the table, so none of it is wasted whatever is dec
 not do any of it** — [deploy.yml](../../.github/workflows/deploy.yml) owns build, push, deploy, smoke
 and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human and interactive.
 
+0. **Check what the cluster can do**, because two of these answers are prerequisites rather than
+   curiosities and both are cheaper to learn now than halfway through a slice:
+
+   ```bash
+   gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --project ${PROJECT_ID} \
+     --format='value(ipAllocationPolicy.useIpAliases,
+                     addonsConfig.httpLoadBalancing.disabled,
+                     networkConfig.datapathProvider,
+                     addonsConfig.networkPolicyConfig)'
+   ```
+
+   `useIpAliases` **true** means VPC-native, which is what lets the Service stay `ClusterIP` and be
+   reached through NEGs; **false** means slice 1's Service becomes `NodePort` instead and
+   `BackendConfig.healthCheck.port` must name the node port rather than 3000. `httpLoadBalancing`
+   must not be disabled, or the Ingress object sits there and never receives an address. And the
+   datapath or the network-policy addon must show a policy engine is available — slice 2 has no
+   alternative mechanism for closing the pod's lateral exposure, so a cluster that cannot enforce a
+   `NetworkPolicy` cannot take the password removal.
+
 1. **Reserve a global static IPv4.** A `gce`-class Ingress fronts a _global_ external Application Load
    Balancer, whose forwarding rule requires a global address; the current ephemeral _regional_ IP of
    the passthrough NLB cannot be promoted to one. **The public IP changes** — accepted deliberately,
@@ -240,35 +259,57 @@ and explicitly _"does not run Terraform"_; static IPs, DNS and IAM stay human an
    ```bash
    gcloud container clusters get-credentials ${CLUSTER} \
      --zone ${ZONE} --project ${PROJECT_ID}
-   kubectl apply -n map -f deploy/k8s/edge.yaml
+
+   # edge.yaml carries the bare token CONSOLE_HOST, not a shell variable — see below.
+   sed "s|CONSOLE_HOST|${CONSOLE_HOST}|g" deploy/k8s/edge.yaml | kubectl apply -n map -f -
+
    kubectl annotate svc console -n map \
      cloud.google.com/backend-config='{"default":"console"}'
-   kubectl patch svc console -n map -p '{"spec":{"type":"ClusterIP"}}'
-   kubectl get managedcertificate console -n map -w   # until certificateStatus: Active
+   kubectl patch svc console -n map -p '{"spec":{"type":"ClusterIP"}}'   # only if NEG-capable, step 0
+   ```
+
+   **`kubectl apply` performs no substitution of any kind**, so a manifest containing a literal
+   `${CONSOLE_HOST}` reaches the API server with the dollar sign and braces intact and is rejected as
+   an invalid DNS name — the Ingress host rule and the `ManagedCertificate` domain both. This is the
+   one place where the placeholder convention of D5 has teeth rather than being a documentation
+   habit, so `edge.yaml` follows the convention this repository already has: it carries the **bare
+   token** `CONSOLE_HOST`, exactly as `deployment.yaml` carries `CONSOLE_IMAGE` and
+   `SECRETS_CHECKSUM`, and the same `sed` that renders those renders this. Prose in this plan writes
+   `${CONSOLE_HOST}` to mean "the value"; manifests never do.
+
+   Then wait for the certificate, with a bound rather than an open-ended watch:
+
+   ```bash
+   timeout 90m bash -c 'until [ "$(kubectl get managedcertificate console -n map \
+     -o jsonpath="{.status.certificateStatus}")" = Active ]; do sleep 60; done'
+   kubectl describe managedcertificate console -n map     # on timeout, read domainStatus
    ```
 
    First issuance is typically 15–60 minutes after DNS resolves, and the load balancer may take up to
    30 more to serve it. `FAILED_NOT_VISIBLE` is a waiting state, not a failure — deleting and
-   recreating only restarts the clock.
+   recreating only restarts the clock. If it is still that after 90 minutes, suspect the DNS record:
+   step 2's `dig` comparison is what tells a proxied record from a slow one.
 
 4. **Prove the backend is healthy on the pinned path** — the trap that otherwise presents as a
    permanently 502 hostname with a green rollout:
 
    ```bash
-   gcloud compute backend-services list --global
-   gcloud compute backend-services get-health NAME --global          # HEALTHY
+   gcloud compute backend-services list --global --project ${PROJECT_ID}
+   gcloud compute backend-services get-health NAME --global \
+     --project ${PROJECT_ID}                                          # HEALTHY
    gcloud compute health-checks describe NAME --global \
-     --format='yaml(httpHealthCheck)'                                # requestPath: /api/health
+     --project ${PROJECT_ID} \
+     --format='yaml(httpHealthCheck)'                                 # requestPath: /api/health
    ```
 
-5. **Grant access — on the backend service, not on the project.** the deploy service account needs it too, if the
-   smoke gate is to make an authenticated request:
+5. **Grant access — on the backend service, not on the project.** The deploy service account needs it
+   too, if the smoke gate is to make an authenticated request:
 
    ```bash
-   gcloud iap web add-iam-policy-binding \
+   gcloud iap web add-iam-policy-binding --project ${PROJECT_ID} \
      --resource-type=backend-services --service=<console-backend-service> \
-     --member='domain:<workspace-domain>' --role='roles/iap.httpsResourceAccessor'
-   gcloud iap web add-iam-policy-binding \
+     --member='domain:${WORKSPACE_DOMAIN}' --role='roles/iap.httpsResourceAccessor'
+   gcloud iap web add-iam-policy-binding --project ${PROJECT_ID} \
      --resource-type=backend-services --service=<console-backend-service> \
      --member='serviceAccount:<deploy-sa>' --role='roles/iap.httpsResourceAccessor'
    ```
@@ -339,14 +380,21 @@ this stops the password and every session cookie crossing the wire in the clear.
 
 - **`deploy/k8s/deployment.yaml`**: delete the `CONSOLE_PASSWORD` `secretKeyRef` and its comment
   (:73-81, −9), whose text is now false in every clause.
-- **Close the pod's lateral exposure, in this same PR** — the container currently listens on
-  `0.0.0.0:3000` (`Dockerfile`:30) and after this PR nothing gates it, with a management-key-injecting
-  BFF behind it. Preferred fix: set `HOSTNAME: 127.0.0.1` in the pod's `env`, overriding the image
-  default, which means the two `httpGet` probes must become `exec` probes (probes run in the
-  container's network namespace, so loopback is reachable). Fallback if the base image lacks a usable
-  `wget`: a `NetworkPolicy` admitting only the GCLB health-check ranges and the NEG path. **One of the
-  two ships with this PR; removing the password without it is the one sequencing error this plan
-  cannot absorb.**
+- **Close the pod's lateral exposure, in this same PR — with a `NetworkPolicy`, and _not_ by binding
+  to loopback.** The container listens on `0.0.0.0:3000` (`Dockerfile`:30); after this PR nothing
+  gates it, and behind it is a BFF that injects the management key. The obvious-looking fix — set
+  `HOSTNAME: 127.0.0.1` in the pod's `env` — **is wrong for this topology and would break the
+  deployment**: with container-native load balancing the GCLB delivers traffic straight to the
+  **Pod IP**, and via a NodePort it arrives DNAT'd to the Pod IP too, so a process listening only on
+  loopback is unreachable by the load balancer in either path. Converting the probes to `exec` hides
+  it rather than fixing it: the kubelet runs probes inside the container's network namespace, so
+  readiness goes green, the rollout succeeds, and the public hostname serves 502 from a backend that
+  can never pass its health check. The correct mechanism is a `NetworkPolicy` on the console pod
+  admitting port 3000 only from the GCLB health-check and proxy ranges (`35.191.0.0/16`,
+  `130.211.0.0/22`), which is what NEG traffic and health checks both originate from.
+  **This ships with the password removal; doing it afterwards is the one sequencing error this plan
+  cannot absorb** — and because there is now no fallback mechanism, the cluster's ability to enforce
+  a `NetworkPolicy` is a **prerequisite of slice 2**, not an open question (see the checks below).
 - **`.github/workflows/deploy.yml`**: the credential pipeline drops from two payloads to one —
   `console-password` is no longer read, masked, guarded, written into `console-secrets`, or hashed.
   The empty-payload guard for it is deleted along with its message; `SECRETS_CHECKSUM` becomes a
@@ -377,13 +425,19 @@ Each line replaces a specific line that exists today.
    the thing that now proves routing, and it is visible: poll
    `gcloud compute backend-services get-health` for `HEALTHY`. `/api/health` itself is behind IAP from
    the internet's point of view and should not answer anonymously.
-3. **The gate is closed** (replaces the `307 → /login` assertion). An anonymous request to
-   `https://$CONSOLE_HOST/` must be **401** — IAP returns 302 only when the client advertises it can
-   handle HTML, so a default `curl` receives 401. This is a stronger claim than today's: the refusal
-   happens in a different system and the request never reaches the application.
+3. **The gate is closed, and closed _by IAP_** (replaces the `307 → /login` assertion). An anonymous
+   request to `https://$CONSOLE_HOST/` must be **401** — IAP returns 302 only when the client
+   advertises it can handle HTML, so a default `curl` receives 401 — **and the response must carry
+   IAP's own denial header** (`x-goog-iap-generated-response`). The status code alone is too weak an
+   assertion: a 401 can come from the application, from a misrouted backend, or from a load balancer
+   with no policy on it at all, and every one of those would pass a bare status check while the gate
+   was absent. The header is the only part of the response that only IAP can produce. This is a
+   stronger claim than today's: the refusal happens in a different system and the request never
+   reaches the application.
 4. **The management-key path is not anonymous** (new, one line). Anonymous
-   `GET https://$CONSOLE_HOST/api/platform/v1/agents` must not be 200 — asserting on the risk itself
-   rather than on a proxy for it.
+   `GET https://$CONSOLE_HOST/api/platform/v1/agents` must be refused with the same header — asserting
+   on the risk itself rather than on a proxy for it, and for the same reason as above, on the header
+   rather than only on the code.
 5. **The in-pod deep check, simplified** (rewrites the `kubectl exec` step). The login preamble is
    deleted: with no password, `/api/health?deep=1` no longer self-gates, and the script collapses to a
    single `fetch`. **Add `body.login_gate === false` as an assertion.** That is not decoration —
@@ -399,7 +453,7 @@ Each line replaces a specific line that exists today.
 Recorded here and, where they concern the deployment, in `docs/deploy-gcp.md`.
 
 - **The production container has no gate of its own.** That is the design, and its cost is paid by the
-  loopback bind (or NetworkPolicy) in slice 2. It also means the published GHCR image run anywhere
+  `NetworkPolicy` in slice 2. It also means the published GHCR image run anywhere
   without a proxy and without `CONSOLE_PASSWORD` is wide open — which is exactly today's documented
   behaviour for an unset password, unchanged, but it is now the shape the reference deployment uses.
   An explicit "I am behind a proxy" affirmation was considered and rejected: it would declare intent
@@ -508,16 +562,13 @@ surface, and it does not replace this seam — it replaces the issuer behind it.
 
 ## Open questions
 
-| Question                                                                                                                                                                                                                                                                                      | What settles it                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **D4 — the hostname.** Needed before precondition step 2, not before step 1: the static IP is reserved without it. It lands in `ManagedCertificate.spec.domains`, the Ingress host rule, and the `${CONSOLE_HOST}` variable — all three redeployable, none of them registered with an issuer. | The maintainer. Any zone whose DNS they control; it need not be the Workspace domain.                                                            |
-| Does the zone's DNS provider proxy the record by default (Cloudflare's orange cloud, or equivalent)? A proxied record stalls the managed certificate at `FAILED_NOT_VISIBLE` indefinitely and reads as "still waiting".                                                                       | `dig +short ${CONSOLE_HOST} @8.8.8.8` must return the address printed by precondition step 1, not merely some address.                           |
-| Is `${CLUSTER}` VPC-native? If not, the Service needs `NodePort` and `BackendConfig.healthCheck.port` must name the node port instead of 3000.                                                                                                                                                | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --format='value(ipAllocationPolicy.useIpAliases)'`                                 |
-| Is the `HttpLoadBalancing` addon enabled? If not the Ingress object sits there and never gets an address.                                                                                                                                                                                     | `… --format='value(addonsConfig.httpLoadBalancing.disabled)'`                                                                                    |
-| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                                   | After precondition step 3: `kubectl get svc console -n map -o jsonpath='{.metadata.annotations}'`                                                |
-| Can the deploy service account create `Ingress`, `BackendConfig` and `ManagedCertificate` in `map`? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                                         | `kubectl auth can-i create ingress -n map --as=<SA>`, or the first CD run after slice 1 merges.                                                  |
-| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address.              | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                 |
-| Does `node:24-alpine` ship a usable BusyBox `wget` for the `exec` probes the loopback bind requires?                                                                                                                                                                                          | `docker run --rm node:24-alpine wget --help`                                                                                                     |
-| Does `kubectl port-forward` still reach the container after the loopback bind? Break-glass depends on it.                                                                                                                                                                                     | After slice 2: `kubectl port-forward -n map deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                 |
-| Can `${CLUSTER}` enforce a `NetworkPolicy`, if the loopback bind proves unworkable?                                                                                                                                                                                                           | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` |
-| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                                        | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                             |
+| Question                                                                                                                                                                                                                                                                                      | What settles it                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D4 — the hostname.** Needed before precondition step 2, not before step 1: the static IP is reserved without it. It lands in `ManagedCertificate.spec.domains`, the Ingress host rule, and the `${CONSOLE_HOST}` variable — all three redeployable, none of them registered with an issuer. | The maintainer. Any zone whose DNS they control; it need not be the Workspace domain.                                                                                                                                       |
+| Does the zone's DNS provider proxy the record by default (Cloudflare's orange cloud, or equivalent)? A proxied record stalls the managed certificate at `FAILED_NOT_VISIBLE` indefinitely and reads as "still waiting".                                                                       | `dig +short ${CONSOLE_HOST} @8.8.8.8` must return the address printed by precondition step 1, not merely some address.                                                                                                      |
+| Does a ClusterIP Service need an explicit `cloud.google.com/neg` annotation here, or does GKE create the NEG automatically?                                                                                                                                                                   | After precondition step 3: `kubectl get svc console -n map -o jsonpath='{.metadata.annotations}'`                                                                                                                           |
+| Can the deploy service account create `Ingress`, `BackendConfig` and `ManagedCertificate` in `map`? `docs/deploy-gcp.md` says it holds cluster-driving but explicitly not infrastructure permissions.                                                                                         | `kubectl auth can-i create ingress -n map --as=<SA>`, or the first CD run after slice 1 merges.                                                                                                                             |
+| With the Google-managed OAuth client, what audience does CI use to mint an id_token for an authenticated smoke request? If there is no stable answer, smoke assertion 2 stays as the backend-health poll and only the negative assertions (3, 4) run against the public address.              | After IAP is enabled: `gcloud iap settings get --resource-type=backend-services --service=NAME`, or one CI request with a token.                                                                                            |
+| **Not deferred — precondition step 0 settles it, and slice 2 is blocked until it does.** Can `${CLUSTER}` enforce a `NetworkPolicy`? With the loopback bind ruled out there is no second mechanism, so a cluster that cannot enforce one cannot take the password removal.                    | `gcloud container clusters describe ${CLUSTER} --zone ${ZONE} --project ${PROJECT_ID} --format='value(networkConfig.datapathProvider,addonsConfig.networkPolicyConfig)'` — expect `ADVANCED_DATAPATH`, or the addon enabled |
+| Does `kubectl port-forward` still reach the pod once the `NetworkPolicy` is in place? Break-glass depends on it, and whether node-originated traffic is subject to policy varies by CNI.                                                                                                      | After slice 2: `kubectl port-forward -n map deploy/console 3000:3000` then `curl -I http://localhost:3000/login`                                                                                                            |
+| Does IAP buffer or time out SSE beyond `timeoutSec`? No documentation says either way.                                                                                                                                                                                                        | Slice 2's two-minute trace, observed once by hand before the surface is called done.                                                                                                                                        |
