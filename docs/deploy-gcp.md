@@ -197,13 +197,23 @@ only prints a table — nothing is exported into your shell, and every command
 below would then run with empty arguments — so load them first:
 
 ```bash
-eval "$(gh variable list --json name,value \
+exports="$(gh variable list --json name,value \
   --jq '.[] | "export \(.name)=\(.value | @sh)"')"
+[ -n "$exports" ] && eval "$exports"
+: "${GCP_PROJECT_ID:?}" "${GCP_ZONE:?}" "${GKE_CLUSTER:?}" "${K8S_NAMESPACE:?}"
 ```
 
 That exports every repository variable under its own name, which is why the
 commands below spell them `GKE_CLUSTER` rather than the workflow's shorter
-`CLUSTER`. Then:
+`CLUSTER`.
+
+The last line is the point of the first three. `gh` reports a failure — an
+expired token, no permission on the repository — on stderr and through its exit
+status, and an `eval` of nothing at all succeeds; without that guard a rollback
+under pressure would continue into `gcloud --project ""` and `kubectl -n ""`,
+which is the failure this whole change exists to make loud. `:?` names the first
+variable that did not load and stops there, without closing an interactive
+shell. Then:
 
 ```bash
 gcloud container clusters get-credentials "$GKE_CLUSTER" \

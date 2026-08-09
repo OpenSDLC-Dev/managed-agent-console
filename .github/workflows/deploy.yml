@@ -278,11 +278,20 @@ jobs:
           # container variable *of that name*, so a token spelled the same way
           # would rewrite the `name:` key beside it and produce a variable
           # called `http://…`.
+          # sed's *replacement* text is not literal, which is the trap in
+          # substituting a value somebody else configures: `&` expands to the
+          # whole matched token, `\` opens an escape, and `|` closes the
+          # expression. A base URL of `http://host/?a=1&b=2` renders as
+          # `http://host/?a=1CONTROLPLANE_URLb=2` — a plausible-looking string
+          # that deploys, and a console that cannot reach the platform. None of
+          # the three values contains one today; being a repository variable is
+          # exactly what stops that from being a property anyone can rely on.
+          esc() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
           for f in deploy/k8s/*.yaml; do
             echo "---"
-            sed -e "s|CONSOLE_IMAGE|$IMAGE:$GITHUB_SHA|g" \
-                -e "s|SECRETS_CHECKSUM|$SECRETS_CHECKSUM|g" \
-                -e "s|CONTROLPLANE_URL|$CONTROLPLANE_URL|g" "$f"
+            sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
+                -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
+                -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" "$f"
           done | kubectl apply -n "$NAMESPACE" -f -
 
           # Arms the rollback below, and only here: every failure *before* this
