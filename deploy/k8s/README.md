@@ -13,13 +13,25 @@ asked for.
 
 ## What the pipeline substitutes
 
-| Placeholder        | Becomes                                                                          |
-| ------------------ | -------------------------------------------------------------------------------- |
-| `CONSOLE_IMAGE`    | `us-central1-docker.pkg.dev/hh-opensdlc-managed-agents/map-images/console:<sha>` |
-| `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read                        |
+| Placeholder        | Becomes                                                              |
+| ------------------ | -------------------------------------------------------------------- |
+| `CONSOLE_IMAGE`    | the `CONSOLE_IMAGE_REPO` variable, tagged with this run's commit sha |
+| `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read            |
+| `CONTROLPLANE_URL` | the `PLATFORM_BASE_URL` variable — the control plane's Service URL   |
 
-Two literal `sed` expressions on two placeholders, rather than `envsubst`, which
-would also expand every other `$` in the file.
+Literal `sed` expressions on bare-word placeholders, rather than `envsubst`,
+which would also expand every other `$` in the file — and rather than
+`${SHELL_STYLE}` tokens, which `kubectl apply` would submit to the API server
+verbatim if one ever escaped the substitution, since kubectl expands nothing.
+
+`CONTROLPLANE_URL` is deliberately not spelled `PLATFORM_BASE_URL`: that is the
+name of the container variable it is assigned to, and a `sed` on that word would
+rewrite the `name:` key beside the value.
+
+The values come from repository **variables**, not from this file — see
+[docs/deploy-gcp.md](../../docs/deploy-gcp.md). This directory is a **reference
+deployment, not a template**: it shows a shape that works, without naming the
+cluster it was proven against.
 
 The **namespace is not in these files** — the workflow passes `-n map` to every
 `kubectl` call. Keep it that way if you edit them: a namespace in one file and a
@@ -58,7 +70,7 @@ above _after_ building and pushing an image.
 
 Both credentials come from a Secret named `console-secrets` with two keys:
 
-| Key                | Value              | Source (Secret Manager, project `hh-opensdlc-managed-agents`)                                                                                    |
+| Key                | Value              | Source (Secret Manager, in the `GCP_PROJECT_ID` project)                                                                                         |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform-api-key` | `PLATFORM_API_KEY` | `controlplane-api-key` — the same value the platform chart installs as `controlplane.apiKey`, which is what makes the console's key valid at all |
 | `console-password` | `CONSOLE_PASSWORD` | `console-password`                                                                                                                               |
