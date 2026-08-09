@@ -79,18 +79,24 @@ the job:
 | Secret Manager secret  | Becomes                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------- |
 | `controlplane-api-key` | the `platform-api-key` key of the `console-secrets` Secret → `PLATFORM_API_KEY` |
-| `console-password`     | the `console-password` key of the same Secret → `CONSOLE_PASSWORD`              |
+| `console-password`     | the `console-password` key of the same Secret — mounted by no current revision  |
 
 `controlplane-api-key` is the same value the platform chart installs as
 `controlplane.apiKey` — one secret, two readers, which is what makes the
 console's key valid at all.
 
-Both must be a **single line**, and the job rejects the run if either is not.
-A trailing newline is the easy way to get this wrong — `--data-file=-` stores
-the Enter you pressed — so the job strips one before writing the Kubernetes
-Secret. Without that, a password nobody can type would deploy green: the smoke
-gate logs in with the container's _own_ copy of the value, so it proves the gate
-closes, never that a human can open it.
+`console-password` is the console's own gate, and **this deployment does not use
+it**: authentication is IAP's. It is still written because `rollout undo` below
+can restore a revision from before that change, which mounts the key — and the
+Secret is replaced rather than patched, so dropping the key would turn a
+rollback into an outage. It stops being read now and stops existing in a
+follow-up, once no revision in history mounts it.
+
+Both must be a **single line**, and the job rejects the run if either is not. A
+trailing newline is the easy way to get this wrong — `--data-file=-` stores the
+Enter you pressed — and that byte rides into the container as an `x-api-key`
+Node refuses to send at all, so the job strips one before writing the Kubernetes
+Secret.
 
 The WIF provider only accepts tokens from repositories owned by `OpenSDLC-Dev`,
 and each repository is separately bound to impersonate the deploy identity. That
@@ -134,23 +140,46 @@ makes the console call `/v1/agents?limit=1` on the platform with the management
 key, and must answer **200**: both environment variables are set, and the
 platform accepts the key. A wrong key answers 401 and the gate reports it; an
 unreachable control plane reports `reachable: false`. That depth answers
-sessions only — it is a lever that spends the management key, and this console
-answers on the public internet — so the step runs it with `kubectl exec` against
-the pod carrying the image just pushed, over `127.0.0.1`, logging in with the
-`CONSOLE_PASSWORD` the container already holds. The credential never leaves the
-pod. The response body names environment variables and a status code and carries
-no URL and no key, which is why the job prints it.
+sessions only, and this job holds no Google identity IAP would accept — so the
+step runs it with `kubectl exec` against the pod carrying the image just pushed,
+over `127.0.0.1`. That is the supported path, not the only reachable one: IAP
+refuses **anonymous** callers, so a signed-in member of the Workspace can fetch
+`?deep=1` from a browser. No escalation follows — the same person can drive
+every page of the console, and every page spends the same key. The response body
+names environment variables and a status code and carries no URL and no key,
+which is why the job prints it.
 
-**Is the public address gated? — from outside.** The last step goes to
-`https://$CONSOLE_HOST` and requires four things of it: `GET /api/health` (the
-shallow depth, which stays anonymous for the kubelet's sake) answers **200**, so
-the load balancer routes and the pod is serving; that body reports `login_gate:
-true`; an anonymous `GET /` answers **307 to `/login`** rather than a page; and
-plain HTTP redirects to the `https://` form rather than serving anything. The
-third is the one that matters and the only one that is evidence — that a
-non-empty `console-password` existed in Secret Manager at deploy time is a
-different claim from "the thing answering on the internet is gated", and what is
-behind that hostname is a full-power platform management key.
+**Is the public address gated? — from outside.** Every path through the front
+door is a 401 now, so a request can no longer distinguish "gated" from "broken".
+Reachability is therefore taken from the load balancer's own view — the GCLB
+backend must report `HEALTHY`, which is the same signal it routes on — and the
+gate is asserted separately, twice:
+
+- an anonymous `GET /` must be **401**, and
+- an anonymous `GET /api/platform/v1/agents` — the path that actually spends the
+  management key — must be too.
+
+**Both must carry `x-goog-iap-generated-response`.** The status code alone is far
+too weak: a 401 can come from the application, from a misrouted backend, or from
+a load balancer with no policy on it whatsoever, and every one of those passes a
+bare code check while the gate is simply absent. That header is the only part of
+the response nothing but IAP can produce.
+
+Both requests send `Accept: application/json`, and that is not cosmetic: **IAP
+content-negotiates its refusal.** A default `curl` sends `Accept: */*`, which
+IAP reads as "can render HTML" and answers **302** to `accounts.google.com`;
+only a client asking for JSON gets 401. Pinning the header makes the expected
+code a fixed value rather than a property of whatever `curl` defaults to.
+
+Both are also **polled** rather than asked once. Applying `iap.enabled` is a
+request to the ingress controller, which then configures the backend service, so
+on a run that turns IAP on the gate is not closed the instant `kubectl apply`
+returns — measured at about two minutes on this deployment. Polling for a
+_closed_ gate is safe in the direction that matters: a console that is genuinely
+open never satisfies the condition, the deadline expires, and the run fails.
+
+This is a stronger claim than the one it replaces: the refusal now happens in a
+different system, and the request never reaches the application.
 
 Before any of them, it asserts the `ManagedCertificate` reports `Active`. That
 check is not an assertion about this revision at all; it is there so a
@@ -166,18 +195,28 @@ Two things it deliberately does not prove:
 - **That the UI renders.** This is a reachability gate, not an e2e run; the
   Playwright suites are CI's job, on the PR, before the merge that deploys.
 
-The job also fails, before it touches the cluster, if `console-password` is
-empty in Secret Manager — an unset gate on a public URL is treated as a broken
-deployment rather than a configuration choice. That check is the cheap one, and
-it is not the evidence: what proves the deployed console is gated is the
-anonymous request above, made against the address the internet uses.
+The job also fails, before it touches the cluster, if either Secret Manager
+payload is empty. Those checks are the cheap ones, and neither is evidence about
+the gate: what proves the deployed console is gated is the pair of anonymous
+requests above, made against the address the internet uses, and checked for the
+header only IAP can write.
+
+**The order of the apply is itself part of the gate.** The production container
+has no authentication of its own, and `iap.enabled` is a _request_ to the ingress
+controller rather than an immediate state — about two minutes on this deployment.
+Applying everything at once would roll a passwordless pod into a backend whose
+gate was still opening, and noticing the IAP header afterwards does not undo
+having served. So the edge, the `NetworkPolicy` and the Service are applied
+first, the job waits for the hostname to actually refuse an anonymous request,
+and only then is the Deployment applied. Where IAP is already on — every run
+after the first — the wait returns on its first probe.
 
 ## Rolling back
 
 **The pipeline rolls itself back.** A gate that only reports is not much of a
-gate: readiness is the shallow check, so a revision with a rejected key, an
-unreachable control plane, or an ungated public address passes `rollout status`
-while the RollingUpdate retires the pod that worked. If any step after the apply
+gate: readiness is the shallow check, so a revision with a rejected key or an
+unreachable control plane passes `rollout status` while the RollingUpdate
+retires the pod that worked. If any step after the apply
 fails, the job runs `kubectl rollout undo` and waits for the previous revision,
 so a red run leaves the last working console serving rather than the broken one.
 (The platform gets the same behaviour from `helm upgrade --atomic`.) Two things
@@ -185,13 +224,13 @@ it cannot do, both reported as warnings in the run:
 
 - **A first deployment has nothing to undo to** — and one the selector guard
   recreated has lost its history with the old object. The job says so and tells
-  you to scale the Deployment to zero by hand; an ungated console on a public
+  you to scale the Deployment to zero by hand; a broken console on a public
   hostname should not stay up because the pipeline had no previous revision.
-- **It restores the image, not the credentials.** Everything below is likewise
+- **It restores the image, not the credential.** Everything below is likewise
   image-only: `rollout undo` and `set image` change the pod template, and
-  `PLATFORM_API_KEY`/`CONSOLE_PASSWORD` are `secretKeyRef`s that keep reading
-  the _current_ `console-secrets`. After a rotation, an older image runs with
-  the newer credentials — and its restored `console-secrets/checksum`
+  `PLATFORM_API_KEY` is a `secretKeyRef` that keeps reading the _current_
+  `console-secrets`. After a rotation, an older image runs with
+  the newer credential — and its restored `console-secrets/checksum`
   annotation then names a payload the Secret no longer holds. If a rotation is
   what broke the deploy, disable that Secret Manager version and re-run the
   workflow; do not expect a rollback to undo it.
@@ -259,8 +298,30 @@ when this landed), the **DNS-only** A record pointing at it, and the first
 certificate issuance. CD asserts the certificate is `Active`; it never waits for
 one.
 
-**The gate is still a shared password.** TLS fixed the wire, not the
-authentication: `CONSOLE_PASSWORD` remains mandatory here, and remains the only
-thing between the internet and a full-power management key. Replacing it with
-Google sign-in enforced at this same load balancer is
-[plan 06](./plan/06_google-sign-in.md)'s second slice.
+## Who may reach it
+
+**Google sign-in, enforced at the load balancer by IAP, restricted to the
+Workspace domain.** The production console has no authentication code running in
+it: `CONSOLE_PASSWORD` is not set in the pod, so `src/proxy.ts` returns
+`next()` before any check. That is not a gap — a request that reaches the
+process has already been authorized by something the process cannot be talked
+out of, and the pod's port is closed to the rest of the cluster by a
+`NetworkPolicy` in the same directory.
+
+`CONSOLE_PASSWORD` still exists, for local development and the test suites. It
+is simply not part of this deployment.
+
+Three lines of `BackendConfig` switch IAP on, and **no OAuth client secret
+enters the cluster** — omitting `oauthclientCredentials` selects the
+Google-managed client (GKE 1.29.4+). Who is admitted is not in this repository
+and cannot be: it is `roles/iap.httpsResourceAccessor`, bound to the Workspace
+domain, on the **backend service**. Bound at the project instead, it would apply
+to every IAP-secured resource in the project including ones that do not exist
+yet — the next application to enable IAP would be open to the whole domain the
+moment it was switched on, with no separate grant for anyone to review.
+
+The domain binding resolves the principal against the Workspace directory, which
+is the reason to prefer it over an application-level rule. A hand-rolled `hd`
+check, a proxy's `--email-domain`, or an identity provider's e-mail regex all
+compare a **string**, and a consumer Google account carrying a verified address
+in the domain satisfies a string comparison without being a member of anything.

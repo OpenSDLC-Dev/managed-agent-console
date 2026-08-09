@@ -23,18 +23,26 @@ import { consolePassword, platformApiKey, platformBaseUrl } from "@/lib/env";
  *   probe's default: a readiness probe that failed whenever the platform is
  *   unhealthy would take the console down with it, and a console that can still
  *   render its own error is worth more than one Kubernetes has removed from
- *   service. And it is **gated whenever the console is** — it is a lever, not a
+ *   service. And it is **gated whenever this console is** — it is a lever, not a
  *   report: an anonymous caller who can repeat it makes this process spend the
- *   management key against the control plane on demand, and the deployment in
- *   deploy/k8s/ publishes the console on a bare public IP. With CONSOLE_PASSWORD
- *   unset there is no gate to hold a session against and no console to protect,
- *   so the deep check is open exactly as every other route is.
+ *   management key against the control plane on demand. With CONSOLE_PASSWORD
+ *   unset there is no gate to hold a session against, so the deep check is open
+ *   exactly as every other route is.
  *
- * Because the deep check needs a session, the deploy gate runs it from inside
- * the pod over loopback (`kubectl exec … -- node`), logging in with the
- * CONSOLE_PASSWORD the container already holds. What crosses the public address
- * is the shallow check and an anonymous `GET /`, which must bounce to /login —
- * see deploy/k8s/README.md.
+ * That last clause is the production posture of the deployment in deploy/k8s/,
+ * on purpose: authentication there is IAP at the load balancer, so nothing
+ * reaches this process unauthenticated from the internet, and the pod's port is
+ * closed to the rest of the cluster by a NetworkPolicy. Note what that does and
+ * does not say — IAP refuses *anonymous* callers, not authorized ones, so a
+ * signed-in member of the Workspace can still reach `?deep=1` from a browser.
+ * That is not an escalation: the same person can drive every page of the
+ * console, and every page spends the same key. What the deployment removes is
+ * the anonymous internet and the rest of the cluster, not the operator.
+ *
+ * The deploy gate runs the deep check from inside the pod over loopback
+ * (`kubectl exec … -- node`) because the CD job holds no Google identity IAP
+ * would accept — not because nothing else can reach the route. See
+ * deploy/k8s/README.md.
  *
  * The body names environment variables (already public, in `.env.example`) and
  * reports the platform's own status code. It carries no URL and no key, because

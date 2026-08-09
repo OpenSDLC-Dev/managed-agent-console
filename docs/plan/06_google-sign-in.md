@@ -1,5 +1,5 @@
 ---
-status: approved
+status: in-progress
 ---
 
 # Google sign-in — the staging console stops being a shared password on a bare IP
@@ -448,9 +448,13 @@ Each line replaces a specific line that exists today.
    `gcloud compute backend-services get-health` for `HEALTHY`. `/api/health` itself is behind IAP from
    the internet's point of view and should not answer anonymously.
 3. **The gate is closed, and closed _by IAP_** (replaces the `307 → /login` assertion). An anonymous
-   request to `https://$CONSOLE_HOST/` must be **401** — IAP returns 302 only when the client
-   advertises it can handle HTML, so a default `curl` receives 401 — **and the response must carry
-   IAP's own denial header** (`x-goog-iap-generated-response`). The status code alone is too weak an
+   request to `https://$CONSOLE_HOST/` sent with **`Accept: application/json`** must be **401**
+   **and the response must carry IAP's own denial header** (`x-goog-iap-generated-response`).
+   The `Accept` header is load-bearing, and this plan had it backwards until it was measured against
+   the live deployment: IAP content-negotiates its refusal, a default `curl` sends `Accept: */*`
+   which IAP reads as "can render HTML" and answers **302** to `accounts.google.com`, and only a
+   client asking for JSON receives 401. Pinning the header is what makes the assertion a fixed value
+   rather than a property of whatever `curl` defaults to. The status code alone is too weak an
    assertion: a 401 can come from the application, from a misrouted backend, or from a load balancer
    with no policy on it at all, and every one of those would pass a bare status check while the gate
    was absent. The header is the only part of the response that only IAP can produce. This is a
