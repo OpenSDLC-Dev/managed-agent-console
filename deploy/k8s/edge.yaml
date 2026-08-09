@@ -111,8 +111,11 @@ spec:
   # balancer it produced. A signed-in browser held a real session trace open
   # through the hostname for **252 seconds** — eight times the default it
   # replaces — taking all sixteen of the platform's 15-second `ping` frames,
-  # each arriving as its own chunk, which is also what rules out buffering
-  # anywhere in GFE → IAP → this proxy. The stream then ended on
+  # each arriving as its own chunk. That rules out the buffering that would
+  # matter here — nothing in GFE → IAP → this proxy withheld the body waiting
+  # for the response to finish — though sixteen chunks at a 15-second cadence
+  # are evidence about this run, not a proof that no buffer exists anywhere.
+  # The stream then ended on
   # `event: session.deleted`, because the probe session was deleted: it stopped
   # for the reason the protocol defines and not for a timeout, which is the
   # part that makes it evidence rather than an anecdote. The reconciled backend
