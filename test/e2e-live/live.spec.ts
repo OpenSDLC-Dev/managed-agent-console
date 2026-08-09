@@ -147,7 +147,11 @@ async function platformPost(
  */
 type ToolsetEntry = {
   type?: string;
-  configs?: { name?: string; permission_policy?: { type?: string } }[];
+  configs?: {
+    name?: string;
+    enabled?: boolean;
+    permission_policy?: { type?: string };
+  }[];
   default_config?: { enabled?: boolean };
 };
 
@@ -399,15 +403,24 @@ test("a starter template creates a real gated agent", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("always_ask")).toBeVisible();
 
-  // What the template promises on the wire: bash is gated. The rest of the
-  // rendered object is the platform's business — it resolves toolsets on the
-  // way out, so `enabled` and a `default_config` arrive filled in whether or
-  // not the template asked for them (see the round-trip test above).
+  // What the template promises on the wire, and it is **both halves** of
+  // "Full workspace access; bash gated behind approval"
+  // (src/lib/agent-config/templates.ts). Asserting only bash's policy would
+  // pass an agent that gated bash and disabled everything else — a different
+  // template, silently — so the access half is asserted too.
+  //
+  // As `not.toBe(false)` rather than `toBe(true)`, deliberately: the template
+  // omits `default_config` entirely and lets every tool inherit, so what this
+  // must catch is something being turned *off*, not whether the platform
+  // spelled the default out. That keeps the check on the agent's behaviour
+  // instead of back on the render this test stopped pinning.
   const agent = await platformGet(`v1/agents/${runnerAgentId}`);
   const tools = toolsetsOf(agent);
   expect(tools).toHaveLength(1);
   expect(tools[0].type).toBe(AGENT_TOOLSET);
+  expect(tools[0].default_config?.enabled).not.toBe(false);
   const bash = (tools[0].configs ?? []).find((entry) => entry.name === "bash");
+  expect(bash?.enabled).not.toBe(false);
   expect(bash?.permission_policy?.type).toBe("always_ask");
 });
 
