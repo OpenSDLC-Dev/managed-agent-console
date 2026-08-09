@@ -33,10 +33,10 @@ export const config = {
   //
   // /api/health is exempt because the caller that needs it cannot hold a
   // session: a Kubernetes readiness probe would read this gate's 401 as an
-  // unhealthy container and never mark the pod ready — so on the one deployment
-  // where the gate is mandatory (a public URL, deploy/k8s/), nothing could ever
-  // go green. The route is written for anonymous callers: it names environment
-  // variables and a status code, never a URL and never a key.
+  // unhealthy container and never mark the pod ready, so on a deployment that
+  // set a password nothing could ever go green. The route is written for
+  // anonymous callers: it names environment variables and a status code, never
+  // a URL and never a key.
   //
   // Its `?deep=1` depth spends the management key against the platform, so it
   // is not safe to leave open here. Rather than split the matcher on a query
@@ -47,8 +47,8 @@ export const config = {
   // are not, because that is what they are: `/_next/static/…` has a path under
   // it and these routes do not. Unanchored, each would exempt every path that
   // merely *starts* with its name — `/api/healthz`, `/api/logins` — so a route
-  // added later would be born outside the gate, silently, on the deployment
-  // where the gate is the only thing in front of a management key.
+  // added later would be born outside the gate, silently, on any deployment
+  // where this gate is the only thing in front of a management key.
   matcher: [
     "/((?!login$|api/login$|api/health$|_next/static|_next/image|favicon.ico).*)",
   ],

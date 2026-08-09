@@ -149,47 +149,43 @@ jobs:
           umask 077
           dir="$RUNNER_TEMP/console-secrets"
           # On EXIT, not as the last line: every `exit 1` and every `set -e`
-          # failure below is a path that would otherwise leave both credentials
+          # failure below is a path that would otherwise leave the credential
           # sitting in the runner's temp directory.
           trap 'rm -rf "$dir"' EXIT
           mkdir -p "$dir"
 
-          # Through shell variables rather than straight into files, for the
+          # One payload, not two. `console-password` used to be read here as
+          # well; authentication is IAP's now, at the load balancer, and the
+          # production container has no gate of its own by design.
+          #
+          # Through a shell variable rather than straight into a file, for the
           # trailing newline: `gcloud` returns the payload byte for byte, and a
           # payload added with `--data-file=-` from a terminal — which is how
-          # the error messages below tell an operator to add one — carries the
+          # the error message below tells an operator to add one — carries the
           # newline they pressed. That byte would ride into the container as an
-          # x-api-key Node refuses to send at all, and as a CONSOLE_PASSWORD
-          # nobody can type — and the smoke gate below would not catch it, since
-          # it logs in with the container's *own* copy of the value, proving the
-          # gate closes and never that a human can open it.
-          # Command substitution strips it; nothing else here would notice.
+          # x-api-key Node refuses to send at all. Command substitution strips
+          # it; nothing else here would notice.
           api_key="$(gcloud secrets versions access latest \
             --secret=controlplane-api-key --project "$PROJECT_ID")"
-          console_password="$(gcloud secrets versions access latest \
-            --secret=console-password --project "$PROJECT_ID")"
 
-          # Rejected before anything prints either value: `::add-mask::` is a
+          # Rejected before anything prints the value: `::add-mask::` is a
           # single-line workflow command, so masking a multi-line value echoes
           # every line after the first straight into this public log. A newline
           # surviving the substitution above means a genuinely multi-line
-          # payload, which neither of these credentials can be.
-          lines="$(printf '%s%s' "$api_key" "$console_password" | wc -l)"
-          if [ "$lines" -ne 0 ]; then
-            echo "::error::a Secret Manager payload for this deployment is multi-line — both credentials must be a single line"
+          # payload, which this credential cannot be.
+          if [ "$(printf '%s' "$api_key" | wc -l)" -ne 0 ]; then
+            echo "::error::the controlplane-api-key payload is multi-line — it must be a single line"
             exit 1
           fi
 
-          # Belt and braces: nothing below prints these, but a future `set -x`
+          # Belt and braces: nothing below prints this, but a future `set -x`
           # would print the literal value, and a kubectl error quoting the
           # Secret prints its base64 `data:` block — a form no mask on the raw
           # string covers. Both forms are registered; a value transformed any
           # other way (split, re-encoded, URL-escaped) still is not, so this
-          # does not license printing them.
+          # does not license printing it.
           echo "::add-mask::$api_key"
-          echo "::add-mask::$console_password"
           echo "::add-mask::$(printf '%s' "$api_key" | base64 -w0)"
-          echo "::add-mask::$(printf '%s' "$console_password" | base64 -w0)"
 
           # Blank *or* whitespace-only. A payload of one space passes `[ -s ]`
           # while being no credential at all.
@@ -197,26 +193,20 @@ jobs:
             echo "::error::Secret Manager secret 'controlplane-api-key' is empty in $PROJECT_ID — the console cannot authenticate to the platform without it"
             exit 1
           fi
-          # The hazard this pipeline exists inside: the console answers on a
-          # public hostname with no authentication of its own. TLS changed how
-          # the password crosses the wire, not what stands in front of the
-          # management key — an empty gate is still an open page.
-          if [ -z "$(printf '%s' "$console_password" | tr -d '[:space:]')" ]; then
-            echo "::error::Secret Manager secret 'console-password' is empty in $PROJECT_ID — refusing to publish an ungated console on a public hostname. Add a version: gcloud secrets versions add console-password --project=$PROJECT_ID --data-file=-"
-            exit 1
-          fi
 
           # Files, not `--from-literal`: a value passed as an argument to a real
           # process (kubectl) is visible in the runner's process listing for as
           # long as that process lives.
           printf '%s' "$api_key" > "$dir/platform-api-key"
-          printf '%s' "$console_password" > "$dir/console-password"
 
           # Idempotent: create the object we want, then apply it over whatever
           # is there. `kubectl create secret` alone fails on the second run.
+          # This *replaces* the Secret rather than patching it, so the
+          # `console-password` key the previous shape carried is removed by the
+          # first run of this version — the credential stops existing in the
+          # cluster, rather than lingering unreferenced.
           kubectl create secret generic console-secrets \
             --from-file=platform-api-key="$dir/platform-api-key" \
-            --from-file=console-password="$dir/console-password" \
             --dry-run=client -o yaml \
             | kubectl apply -n "$NAMESPACE" -f -
 
@@ -224,10 +214,8 @@ jobs:
           # Secret changes nothing the Deployment references by value, so the
           # pod template is byte-identical and Kubernetes rolls nothing; the
           # checksum rides in the template and makes the rotation a new
-          # revision. Newline-separated because both payloads are single-line
-          # (asserted above), so the concatenation is unambiguous.
-          checksum="$(printf '%s\n%s' "$api_key" "$console_password" \
-            | sha256sum | cut -d' ' -f1)"
+          # revision. One payload now, so this is a plain hash of it.
+          checksum="$(printf '%s' "$api_key" | sha256sum | cut -d' ' -f1)"
           echo "SECRETS_CHECKSUM=$checksum" >> "$GITHUB_ENV"
 
       - name: Apply the manifests
@@ -310,12 +298,14 @@ jobs:
       # key or a wrong base URL passes that. The deep check proves this revision
       # can actually reach the platform and be accepted.
       #
-      # Run from inside the pod, over loopback, because the deep check answers
-      # sessions only (src/app/api/health/route.ts): it is a lever that spends
-      # the management key, and this console answers on a public hostname where
-      # anyone at all could pull it. The container already holds
-      # CONSOLE_PASSWORD, so it logs in to itself; the credential never leaves
-      # the pod and nothing authenticated crosses the public address.
+      # Still run from inside the pod, and now that is the only way to run it at
+      # all: from the internet this route is behind IAP, and this job holds no
+      # Google identity IAP would accept. The login preamble is gone with the
+      # password — with CONSOLE_PASSWORD unset the deep check no longer gates
+      # itself (src/app/api/health/route.ts), so the script is one fetch over
+      # loopback. That the route is open *inside* the pod is not a regression:
+      # port 3000 is reachable only from the load balancer's ranges, which
+      # networkpolicy.yaml is what enforces.
       #
       # The health body carries no URL and no key by construction, which is why
       # it is safe to print into a public log.
@@ -347,21 +337,7 @@ jobs:
           kubectl exec -n "$NAMESPACE" "$pod" -- node -e '
             const base = "http://127.0.0.1:3000";
             (async () => {
-              const password = process.env.CONSOLE_PASSWORD;
-              if (!password) throw new Error("CONSOLE_PASSWORD is not set in the container");
-              const login = await fetch(base + "/api/login", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ password: password }),
-              });
-              if (!login.ok) throw new Error("console login failed with " + login.status);
-              const cookie = login.headers
-                .getSetCookie()
-                .map((c) => c.split(";")[0])
-                .join("; ");
-              const health = await fetch(base + "/api/health?deep=1", {
-                headers: { cookie: cookie },
-              });
+              const health = await fetch(base + "/api/health?deep=1");
               console.log(health.status, await health.text());
               if (health.status !== 200) {
                 console.error("deep health check failed");
@@ -397,48 +373,88 @@ jobs:
             exit 1
           fi
 
-          # Shallow, not deep: this caller is anonymous on purpose — it stands in
-          # for anyone on the internet — and the deep depth refuses those now.
-          # A 200 here proves the load balancer routes and the pod is serving.
-          # It still polls: a rollout replaces the NEG's endpoints, and the new
-          # backend has to pass GCLB's own health check before it is served.
+          # Reachability, from the load balancer's own point of view rather than
+          # by fetching a page. Every path through the front door is 401 now, so
+          # a request cannot distinguish "gated" from "broken"; the GCLB health
+          # check can, and it is the same signal the load balancer routes on.
+          # It polls because a rollout replaces the NEG's endpoints and the new
+          # backend has to pass that check before it is served.
           base="https://$CONSOLE_HOST"
-          body="$RUNNER_TEMP/health.json"
-          code=""
+          svc="$(gcloud compute backend-services list --global --project "$PROJECT_ID" \
+            --filter="name~console" --format='value(name)' | head -n1)"
+          if [ -z "$svc" ]; then
+            echo "::error::no global backend service matching 'console' in $PROJECT_ID — the Ingress has not produced one"
+            exit 1
+          fi
+          health=""
           deadline=$((SECONDS + 300))
           while [ "$SECONDS" -lt "$deadline" ]; do
-            code="$(curl -sS -o "$body" -w '%{http_code}' --max-time 10 \
-              "$base/api/health" || true)"
-            if [ "$code" = "200" ]; then break; fi
-            sleep 5
+            health="$(gcloud compute backend-services get-health "$svc" --global \
+              --project "$PROJECT_ID" \
+              --format='value(status.healthStatus[0].healthState)' 2>/dev/null || true)"
+            if [ "$health" = "HEALTHY" ]; then break; fi
+            sleep 10
           done
-          if [ "$code" != "200" ]; then
-            echo "::error::$base answered ${code:-no response} on /api/health after five minutes — this revision is not reachable through the load balancer. A persistent 502 with a Ready pod means the backend health check is failing; it is pinned to /api/health on port 3000 in deploy/k8s/edge.yaml."
-            cat "$body" || true
-            echo
+          if [ "$health" != "HEALTHY" ]; then
+            echo "::error::backend service $svc is ${health:-unknown}, not HEALTHY, after five minutes — this revision is not being served. The check is pinned to /api/health on port 3000 in deploy/k8s/edge.yaml; the default GET / would read 401 from IAP and never pass."
             kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=console
             kubectl describe ingress console -n "$NAMESPACE" || true
             exit 1
           fi
-          cat "$body"
-          echo
+          echo "backend $svc: HEALTHY"
 
-          # The console's own report that a gate is configured…
-          if ! jq -e '.login_gate == true' "$body" > /dev/null; then
-            echo "::error::the deployed console reports login_gate=false — the public hostname is fronting a full-power platform management key with nothing in front of it. Check CONSOLE_PASSWORD reached the pod."
-            exit 1
-          fi
-
-          # …and the gate actually closing on an anonymous caller, which is the
-          # claim that matters. src/proxy.ts answers a page request without a
-          # session with NextResponse.redirect, which is a 307, to /login.
-          read -r code redirect <<< "$(curl -sS -o /dev/null \
-            -w '%{http_code} %{redirect_url}' --max-time 10 "$base/" || echo '000 -')"
-          if [ "$code" != "307" ] || [ "${redirect%/login}" = "$redirect" ]; then
-            echo "::error::anonymous GET / on $base answered ${code:-no response} (redirect: ${redirect:-none}) instead of a 307 to /login — the console is open on the internet in front of a full-power platform management key"
-            exit 1
-          fi
-          echo "anonymous GET / -> $code $redirect"
+          # The claim that matters, and it is now a claim about a different
+          # system: an anonymous request is refused *by IAP*, before it reaches
+          # the application at all.
+          #
+          # Asserting on the status code alone would be far too weak. A 401 can
+          # come from the application, from a misrouted backend, or from a load
+          # balancer with no policy on it whatsoever — and every one of those
+          # would pass a bare code check while the gate was simply absent. The
+          # `x-goog-iap-generated-response` header is the only part of the
+          # response that nothing but IAP can produce, so that is what is
+          # asserted.
+          #
+          # `Accept: application/json` is sent deliberately and is not
+          # cosmetic: IAP content-negotiates its refusal. Verified against this
+          # deployment — a default curl sends `Accept: */*`, which IAP reads as
+          # "can render HTML" and answers **302** to accounts.google.com, while
+          # a client asking for JSON gets **401**. Pinning the header is what
+          # makes the code below a fixed value rather than a property of
+          # whatever curl happens to default to.
+          # Polled, not asked once. Applying `iap.enabled` is a request to the
+          # ingress controller, which then configures the backend service; on a
+          # run that turns IAP on, or one that recreated the Ingress, the gate
+          # is not closed the instant `kubectl apply` returns. A single shot
+          # there would fail a deployment that is fine, and this job's own
+          # rollback would then retire it.
+          #
+          # Polling for a *closed* gate is safe in the direction that matters: a
+          # console that is genuinely open never satisfies the condition, so the
+          # deadline expires and the run fails. It costs time on a real failure
+          # and correctness on none.
+          hdr="$RUNNER_TEMP/iap.headers"
+          assert_iap_refuses() {
+            local path="$1" what="$2" code deadline
+            deadline=$((SECONDS + 180))
+            while :; do
+              code="$(curl -sS -o /dev/null -D "$hdr" -w '%{http_code}' \
+                -H 'Accept: application/json' --max-time 10 "$base$path" || true)"
+              if [ "$code" = "401" ] && grep -qi '^x-goog-iap-generated-response:' "$hdr"; then
+                echo "anonymous $what -> $code, refused by IAP"
+                return 0
+              fi
+              if [ "$SECONDS" -ge "$deadline" ]; then break; fi
+              sleep 10
+            done
+            echo "::error::anonymous $what ($base$path) answered ${code:-no response} without IAP's own denial header, for three minutes — the request reached something other than a closed IAP gate, in front of a full-power platform management key"
+            cat "$hdr" || true
+            return 1
+          }
+          assert_iap_refuses "/" "GET /"
+          # The risk itself rather than a proxy for it: this is the path that
+          # makes the console spend the management key against the platform.
+          assert_iap_refuses "/api/platform/v1/agents" "GET the platform proxy"
 
           # And that plain HTTP does not serve the console. FrontendConfig
           # redirects rather than refusing the connection, so the assertion is a
@@ -464,14 +480,13 @@ jobs:
             echo "console: $base"
             echo '```'
             echo
-            echo "Gated: anonymous \`GET /\` answered a 307 to \`/login\`; plain HTTP redirects to HTTPS."
+            echo "Gated by IAP: anonymous \`GET /\` and \`GET /api/platform/v1/agents\` both answered 401 carrying \`x-goog-iap-generated-response\`; plain HTTP redirects to HTTPS."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Every gate above this point detects; without this step none of them
       # remediates. Readiness is the *shallow* check, so a revision with a
-      # rejected key, an unreachable control plane, or — worse — an ungated
-      # public address passes `rollout status`, and the RollingUpdate has
-      # already retired the pod that worked. Reporting that in red and leaving
+      # rejected key or an unreachable control plane passes `rollout status`,
+      # and the RollingUpdate has already retired the pod that worked. Reporting that in red and leaving
       # it serving on the internet is the one outcome nobody wants. (The
       # platform gets this free from `helm upgrade --atomic`; with raw
       # manifests it is this step.)

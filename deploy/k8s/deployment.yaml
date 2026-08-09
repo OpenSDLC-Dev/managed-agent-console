@@ -78,15 +78,18 @@ spec:
                 secretKeyRef:
                   name: console-secrets
                   key: platform-api-key
-            # Mandatory here, not optional: this console is published on a public
-            # load-balancer IP, and an unset gate would leave a full-power
-            # management key behind an open page. The pipeline refuses to deploy
-            # an empty value.
-            - name: CONSOLE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: console-secrets
-                  key: console-password
+            # There is deliberately no CONSOLE_PASSWORD here. Authentication for
+            # this deployment is IAP, at the load balancer, and the container
+            # therefore has no gate of its own: src/proxy.ts returns next()
+            # before any check when the variable is unset, which is exactly what
+            # is wanted — a page this pod serves has already been authorized by
+            # something the pod cannot be talked out of.
+            #
+            # Two consequences that are not obvious and are handled elsewhere:
+            # the deep health check stops gating itself at the same moment
+            # (src/app/api/health/route.ts), and port 3000 is then open to the
+            # cluster — closed by networkpolicy.yaml, which ships with this and
+            # not after it.
           # The shallow check, deliberately — it reads configuration and touches
           # no network. The deep one (`?deep=1`) also calls the platform, so a
           # platform outage would fail the probe and take the console out of

@@ -2,14 +2,16 @@
 
 What the console needs in a cluster that already runs
 [managed-agent-platform](https://github.com/OpenSDLC-Dev/managed-agent-platform):
-a Deployment, a Service, and the edge that publishes it — an Ingress, a
+a Deployment, a Service, the edge that publishes it — an Ingress, a
 Google-managed certificate, and the two load-balancer settings this application
-does not survive the defaults of. They are applied by
+does not survive the defaults of — and a `NetworkPolicy`, which is what stands in
+front of port 3000 now that the production container has no gate of its own.
+They are applied by
 [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml) on every push
 to `main`; the pipeline as a whole is described in
 [docs/deploy-gcp.md](../../docs/deploy-gcp.md).
 
-Nothing here is a chart. Three files with no templating are the honest shape of a
+Nothing here is a chart. Four files with no templating are the honest shape of a
 single-tenant staging deployment, and a chart would be configurability nobody
 asked for.
 
@@ -18,7 +20,7 @@ asked for.
 | Placeholder        | Becomes                                                              |
 | ------------------ | -------------------------------------------------------------------- |
 | `CONSOLE_IMAGE`    | the `CONSOLE_IMAGE_REPO` variable, tagged with this run's commit sha |
-| `SECRETS_CHECKSUM` | `sha256` of the two Secret Manager payloads this run read            |
+| `SECRETS_CHECKSUM` | `sha256` of the Secret Manager payload this run read                 |
 | `CONTROLPLANE_URL` | the `PLATFORM_BASE_URL` variable — the control plane's Service URL   |
 | `CONSOLE_HOST`     | the `CONSOLE_HOST` variable — the hostname the console answers on    |
 
@@ -80,38 +82,39 @@ above _after_ building and pushing an image.
 
 ## The Secret
 
-Both credentials come from a Secret named `console-secrets` with two keys:
+One credential, in a Secret named `console-secrets`:
 
 | Key                | Value              | Source (Secret Manager, in the `GCP_PROJECT_ID` project)                                                                                         |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform-api-key` | `PLATFORM_API_KEY` | `controlplane-api-key` — the same value the platform chart installs as `controlplane.apiKey`, which is what makes the console's key valid at all |
-| `console-password` | `CONSOLE_PASSWORD` | `console-password`                                                                                                                               |
 
-The workflow reads the latest enabled version of each and writes the Secret with
+There used to be a second key, `console-password`. It is gone: authentication is
+IAP's, at the load balancer, and **the production container has no
+authentication code running in it at all**. The Secret is written with `create …
+--dry-run=client | apply`, which replaces rather than patches, so the first run
+of that shape removed the old key from the cluster rather than leaving it
+unreferenced.
+
+The workflow reads the latest enabled version and writes the Secret with
 `kubectl create … --dry-run=client -o yaml | kubectl apply -f -`, so re-running
-it is idempotent. The values are never checked in and never echoed.
+it is idempotent. The value is never checked in and never echoed.
 
-**`console-password` may not be empty, and the pipeline fails if it is.** The
-console answers on a public hostname; an unset gate there is an open page in
-front of a full-power management key, not a convenience. TLS changed how the
-password crosses the wire, not what stands in front of the key. The pipeline
-does not stop at the Secret Manager payload either — after the rollout it
-asserts against the public hostname that the deployed console reports
-`login_gate: true` _and_ that an anonymous `GET /` is bounced to `/login`.
+**It may not be empty, and the pipeline fails if it is** — without it the
+console cannot authenticate to the platform at all. The pipeline does not stop
+at the Secret Manager payload either: after the rollout it asserts, against the
+public hostname, that an anonymous request is refused **and that IAP is what
+refused it**.
 
-**Rotating a secret rolls the pod, without a commit.** Add the new version in
+**Rotating the secret rolls the pod, without a commit.** Add the new version in
 Secret Manager and re-run the workflow (`workflow_dispatch`); the run reads the
 latest version, applies the Secret, and writes a `console-secrets/checksum`
-annotation — a `sha256` of the two payloads — into the pod template. Without that
+annotation — a `sha256` of the payload — into the pod template. Without that
 annotation the re-applied Deployment would be byte-identical, nothing would roll,
 `rollout status` would return instantly green, and the pod would keep serving
-with the old credentials. The platform chart carries the same annotation on its
+with the old credential. The platform chart carries the same annotation on its
 control-plane Deployment, for the same reason.
 
-The annotation is a `sha256` of the two payloads, not either value, and it is
-one-way. It is not a strength control either: whoever can read the pod template
-and already knows one payload can test guesses at the other against it offline —
-one more reason for `console-password` to be generated rather than memorable.
+The annotation is a `sha256`, not the value, and it is one-way.
 
 ## The health endpoint, and which depth goes where
 
@@ -139,21 +142,47 @@ pod ready. So the shallow depth is anonymous, and written for anonymous callers
 — it names environment variables and reports the platform's status code, and
 carries no URL and no key.
 
-**The deep depth gates itself.** It is a lever rather than a report: repeating it
-makes the console spend the management key against the control plane, and this
-console answers on the public internet. So on a gated console the route requires
-the same session every page does, and the deploy runs it **from inside the pod** —
+**The deep depth is a lever rather than a report:** repeating it makes the
+console spend the management key against the control plane. It gates itself
+whenever `CONSOLE_PASSWORD` is set — and here it is not, so inside the pod that
+route is open, as every other route is. Nothing protects it at the application
+layer, and nothing needs to: IAP refuses the request from the internet, and
+`networkpolicy.yaml` refuses it from the rest of the cluster.
+
+The deploy runs it **from inside the pod**, which is now the only place it can be
+run from at all:
 
 ```bash
 kubectl exec -n "$NAMESPACE" "$pod" -- node -e '…fetch("http://127.0.0.1:3000/api/health?deep=1")…'
 ```
 
-— logging in over loopback with the `CONSOLE_PASSWORD` the container already
-holds. The pipeline picks the pod by image rather than passing `deploy/console`,
-because `kubectl exec` on a Deployment prefers the pod that has been ready
-longest, which right after a rollout can still be the revision being replaced.
-(With `CONSOLE_PASSWORD` unset there is no gate to hold a session against and no
-console to protect, so the deep depth is open — as every other route is.)
+The pipeline picks the pod by image rather than passing `deploy/console`, because
+`kubectl exec` on a Deployment prefers the pod that has been ready longest, which
+right after a rollout can still be the revision being replaced.
+
+## Who may enter, and where that is written
+
+**Not in this repository, and it cannot be.** IAP is switched on by three lines
+in `edge.yaml`; who it admits is an IAM policy on the **backend service** —
+`roles/iap.httpsResourceAccessor` bound to the Workspace domain — applied
+out-of-band alongside the static IP and the DNS record.
+
+Two consequences worth knowing before touching any of it:
+
+- **IAP with no binding denies everyone**, which is the right way for this to
+  fail. There is no window in which enabling it opens anything.
+- **The binding is on the backend service, not the project, deliberately.** IAM
+  inherits downward, so a project-level grant would apply to every IAP-secured
+  resource in the project including ones that do not exist yet: the next
+  application to switch IAP on would be open to the whole domain the moment it
+  was enabled, silently, with no separate grant for anyone to review. The
+  backend service's name is generated by GKE, so if the Ingress or the Service
+  is ever recreated the binding must be re-applied to the new name — until it
+  is, the console is closed to everyone rather than open to anyone.
+
+Use a Google Group rather than the whole domain as soon as any application wants
+a narrower audience; group membership is managed in Workspace and never reaches
+git.
 
 ## The edge
 
@@ -205,6 +234,7 @@ cluster-DNS `PLATFORM_BASE_URL` is unaffected by how the console is published.
 The session cookie gained `Secure` on its own, since the login route sets that
 from the request's scheme.
 
-**The gate is still a shared password.** TLS changed how it crosses the wire,
-not what it is; replacing it with Google sign-in is
-[plan 06](../../docs/plan/06_google-sign-in.md)'s second slice.
+**The gate is Google sign-in, enforced here rather than in the application.**
+The `BackendConfig` carries `iap.enabled: true` and no `oauthclientCredentials`,
+which on GKE 1.29.4+ selects the Google-managed OAuth client — so no client ID
+and no client secret enter the cluster or this repository.

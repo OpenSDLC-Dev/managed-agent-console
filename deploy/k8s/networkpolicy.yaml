@@ -1,0 +1,51 @@
+# What stands in front of port 3000 now that the pod has no gate of its own.
+#
+# The console's container listens on 0.0.0.0:3000 (Dockerfile), so before this
+# object every workload in the cluster could reach it — and behind it is a BFF
+# that injects the platform's management key into every call it proxies. While
+# CONSOLE_PASSWORD existed, that password stood there. It does not any more:
+# authentication moved to the load balancer (IAP), and the load balancer is not
+# in the path of a pod-to-pod request.
+#
+# **The obvious-looking fix is wrong here.** Binding the container to
+# 127.0.0.1 (HOSTNAME in the Dockerfile) would not narrow the exposure, it
+# would break the deployment: with container-native load balancing the GCLB
+# delivers straight to the **Pod IP**, so a process listening only on loopback
+# is unreachable by the load balancer. Worse, it fails quietly — the kubelet
+# runs probes inside the container's network namespace, so readiness goes
+# green, `rollout status` succeeds, and the hostname serves 502 from a backend
+# that can never pass its health check. A NetworkPolicy is the only mechanism
+# that closes this without lying about it.
+#
+# This works because the cluster runs Dataplane V2, which enforces
+# NetworkPolicy natively. A cluster that cannot enforce one cannot take the
+# password removal — there is no second mechanism.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: console
+  labels:
+    app.kubernetes.io/name: console
+    app.kubernetes.io/part-of: managed-agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: console
+  # Ingress only. The console must keep reaching the control plane's Service and
+  # cluster DNS, and an egress rule here would be a second thing to get wrong
+  # for no gain — nothing about the management key is protected by restricting
+  # where this pod may talk *to*.
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # The two ranges every Google Cloud load balancer health check and
+        # every container-native (NEG) data-plane request originates from.
+        # These are Google's fixed ranges, not this deployment's addresses.
+        - ipBlock:
+            cidr: 35.191.0.0/16
+        - ipBlock:
+            cidr: 130.211.0.0/22
+      ports:
+        - protocol: TCP
+          port: 3000

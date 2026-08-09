@@ -8,7 +8,7 @@ This console is the operator-facing frontend for a platform deployment you run y
 
 ## How it holds your key
 
-The console is a Next.js app with a thin server-side proxy: every platform call — SSE streams included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** A shared-password login gate (`CONSOLE_PASSWORD`) protects non-loopback deployments; unset, the console is open, which is fine for `localhost` and for nothing else — anyone who can reach an ungated console can drive the platform with a full-power management key. On any deployment reachable beyond loopback it is **mandatory**, and the GKE pipeline below refuses to deploy without it.
+The console is a Next.js app with a thin server-side proxy: every platform call — SSE streams included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** A shared-password login gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else — anyone who can reach an ungated console can drive the platform with a full-power management key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure. It is not the only one: the GKE deployment below authenticates at the load balancer instead (Google sign-in via IAP) and runs with no password and no authentication code at all.
 
 | Variable            | Required | Meaning                                                |
 | ------------------- | -------- | ------------------------------------------------------ |
@@ -16,8 +16,8 @@ The console is a Next.js app with a thin server-side proxy: every platform call 
 | `PLATFORM_API_KEY`  | yes      | The platform's management key (`CONTROLPLANE_API_KEY`) |
 | `CONSOLE_PASSWORD`  | no\*     | Enables the login gate when set; unset ⇒ no gate       |
 
-\* Optional only on `localhost`. Mandatory anywhere the console is reachable by
-anyone else.
+\* Optional only on `localhost`, or where something else authenticates in front
+of the console — as on the GKE deployment below. Otherwise mandatory.
 
 ## Quickstart (Docker)
 
@@ -73,11 +73,17 @@ them: build → push → deploy → smoke, on every push to `main`, with no long
 credential stored in this repository (Workload Identity Federation, and the
 runtime secrets read from Secret Manager inside the job).
 
-That deployment publishes the console **on the public internet**, so
-`CONSOLE_PASSWORD` is not optional there: it is the only thing between the
-internet and a management key that can do anything to the platform, and the
-pipeline both refuses to deploy without it and asserts after the rollout that an
-anonymous request is actually bounced to `/login`.
+That deployment publishes the console **on the public internet**, and what
+stands in front of it is **Google sign-in restricted to one Workspace domain,
+enforced at the load balancer by GCP IAP**. The pod therefore runs with no
+`CONSOLE_PASSWORD` and no authentication code at all — a request that reaches it
+has already been authorized by something it cannot be talked out of — and the
+pipeline asserts after every rollout that an anonymous request is refused _by
+IAP_, checking the one response header nothing else can produce.
+
+None of that is baked into the published image, which behaves identically
+wherever it runs. A self-hoster who wants the built-in gate simply sets
+`CONSOLE_PASSWORD`.
 
 ## Development
 

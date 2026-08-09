@@ -106,6 +106,25 @@ spec:
   # browser silently reconnects with backoff and re-walks history — a console
   # that looks slow and drops events, reporting nothing anywhere.
   timeoutSec: 3600
+  # Authentication, for the whole deployment, in three lines. Every request to
+  # this backend is now resolved against Google before it reaches the pod, and
+  # the console itself has no authentication code running in production at all.
+  #
+  # `oauthclientCredentials` is deliberately absent: on GKE 1.29.4+ that selects
+  # the **Google-managed** OAuth client, so no client ID and no client secret
+  # enter the cluster or this repository. It is the single largest reason this
+  # option is smaller than a self-hosted identity provider.
+  #
+  # **Who may enter is not in this file, and cannot be.** It is an IAM policy on
+  # the backend service — `roles/iap.httpsResourceAccessor` bound to the
+  # Workspace domain — applied out-of-band like the static IP and the DNS
+  # record. Two things follow. Enabling IAP with no binding denies *everyone*,
+  # which is the right way for this to fail. And the binding is deliberately on
+  # the backend service rather than the project: IAM inherits downward, so a
+  # project-level grant would silently open the next application to switch IAP
+  # on, the moment it was enabled, with no separate grant for anyone to review.
+  iap:
+    enabled: true
 ---
 # Plain HTTP redirects to HTTPS.
 #
