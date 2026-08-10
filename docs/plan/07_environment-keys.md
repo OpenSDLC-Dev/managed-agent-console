@@ -8,7 +8,8 @@ The platform is growing an operator surface for BYOC worker credentials
 ([platform issue #43](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/43),
 platform plan 30): named environment keys, issued per host, shown exactly once,
 individually revocable, expiring a year after issue — served on an off-wire
-`/console/v1` namespace built for this console. This plan is the console half:
+console API that mirrors the reference console's own private API path-for-path
+and field-for-field (observed live, 2026-08-10). This plan is the console half:
 an **Environment keys** section and a **self-hosted setup guide** on
 self-hosted environment detail pages, modeled interaction-for-interaction on
 the reference console's environments page (observed live on
@@ -19,19 +20,25 @@ ships ahead of it (principle 1).
 
 ### The platform contract (plan 30 — cite landed code before building)
 
-Three management-authenticated endpoints, reached through the existing BFF
-(which injects `x-api-key` server-side):
+Three management-authenticated endpoints mirroring the reference console's
+observed API, all under
+`/api/oauth/organizations/{organization_id}/environments/{environment_id}`
+with `organization_id = "default"` in v1 (the platform's reserved org id):
 
-- `POST /console/v1/environments/{id}/keys` — body `{"name": "…"}` (trimmed,
-  1–128 chars) → 200 `{"id":"envkey_…","type":"environment_key","name",
-  "created_at","expires_at","key":"sk-map-env01-…"}`. **`key` appears in this
-  response and never again** (hash-only storage). 400 on a `cloud` or archived
+- `POST …/tokens` — body `{"name": "…"}` (trimmed, 1–128 chars) → 200
+  `{"access_token":"sk-map-env01-…","expires_in":31536000}` — an RFC 6749
+  token response, exactly as the reference returns (minus its
+  `authorization_details`, deliberately not emitted in v1). **The plaintext
+  appears in this response and never again** (hash-only storage), and the
+  response carries no id/name/created_at — the console refreshes the list
+  afterwards, as the reference console does. 400 on a `cloud` or archived
   environment; 404 on an unknown one.
-- `GET /console/v1/environments/{id}/keys` → `{"data":[{id,type,name,
-  created_at,expires_at},…],"has_more":false}` — unrevoked keys, newest first;
-  expired-but-unrevoked keys are included.
-- `POST /console/v1/environments/{id}/keys/{key_id}/revoke` → 204, idempotent;
-  404 for an unknown or foreign `key_id`.
+- `GET …/tokens` → `{"data":[{"id":"envkey_…","name","created_at",
+  "expires_at"},…],"pagination":{"total","limit","offset","has_more"}}` —
+  unrevoked keys, newest first; expired-but-unrevoked keys are included;
+  `?limit=` (default 100) / `?offset=` honored.
+- `POST …/tokens/{token_id}/revoke` → 204, empty body, idempotent; 404 for an
+  unknown or foreign `token_id`.
 
 Wire truth for `schemas.ts` cites must come from the **landed platform code**
 (`internal/api/` in the platform checkout), not from this plan — transcribe at
@@ -59,6 +66,14 @@ implementation time, per principle 1.
   four steps: register a key → `export ANTHROPIC_ENVIRONMENT_KEY='…'` →
   install the `ant` CLI from GitHub releases → `ant beta:worker poll
   --environment-id "env_…" --workdir "/workspace"`.
+- The backing API, captured with full bodies from the page session
+  (2026-08-10): `GET/POST …/api/oauth/organizations/{org}/environments/{env}/tokens`
+  and `POST …/tokens/{uuid}/revoke` → 204. List returns
+  `{data:[{id,name,created_at,expires_at}], pagination:{total,limit,offset,has_more}}`;
+  create returns `{access_token:"sk-ant-oat01-…", expires_in:31536000,
+  authorization_details:[…]}` and the console re-GETs the list to render the
+  new row. These are the shapes the platform mirrors (divergences: `sk-map-env01-`
+  prefix, `envkey_` ids, no `authorization_details` — plan 30).
 - The **cloud** environment detail page shows none of this (no keys section,
   no setup panel, no queue stats) — it is self-hosted-only UI.
 
@@ -100,24 +115,33 @@ implementation time, per principle 1.
 
 ## Architecture
 
-- **BFF** — widen the path guard to also forward `console/v1/…` (route.ts:36);
-  nothing else changes. A test pins that an inbound `x-api-key` still never
-  forwards on the new prefix.
-- **Schemas/types** — `EnvironmentKey` and `EnvironmentKeyCreated` (adds
-  `key`) zod schemas in `src/lib/platform/schemas.ts` with platform
-  `file:line` cites; inferred types re-exported from `types.ts`; probe tests
-  (the ratchet covers `src/lib/platform/`); fixture-conformance rows in
-  `schemas.test.ts`.
+- **BFF** — a dedicated passthrough route `src/app/api/oauth/[...path]/route.ts`
+  reusing the platform-proxy internals (server-side `x-api-key` injection,
+  header whitelists, streaming), so the console's **own** URL is the reference
+  console's URL verbatim: `<console>/api/oauth/organizations/default/environments/{id}/tokens`.
+  The existing `/api/platform/[...path]` proxy and its `v1` guard stay
+  untouched. A test pins that an inbound `x-api-key` still never forwards.
+  (Console OIDC — plan 08 direction — must mount its own login routes under
+  `/api/auth/…`, never `/api/oauth/…`, which this passthrough owns.)
+- **Schemas/types** — `EnvironmentKey` (list item), `EnvironmentKeyPage` (the
+  dialect's `data` + `pagination` envelope — distinct from the `/v1` keyset
+  `Page<T>`), and `EnvironmentKeyCreated` (`access_token`, `expires_in`) zod
+  schemas in `src/lib/platform/schemas.ts` with platform `file:line` cites;
+  inferred types re-exported from `types.ts`; probe tests (the ratchet covers
+  `src/lib/platform/`); fixture-conformance rows in `schemas.test.ts`.
 - **Hooks** (`queries.ts`, mirroring vault credentials): `useEnvironmentKeys`,
   `useCreateEnvironmentKey`, `useRevokeEnvironmentKey` on query key
   `["environment-keys", envId]`; create and revoke invalidate the list. Create
   shows its error inline in the dialog (`meta: { errorToast: false }` +
   `RequestId`); revoke keeps the global toast with `errorTitle: "Revoke
   failed"`.
-- **Plaintext discipline**: the `key` from the create response is held in
-  component state for the reveal dialog and cleared on close, with
+- **Plaintext discipline**: the `access_token` from the create response is
+  held in component state for the reveal dialog and cleared on close, with
   `mutation.reset()` so it leaves the mutation cache too; it is never logged,
-  never written to a `data-*` attribute, never persisted anywhere.
+  never written to a `data-*` attribute, never persisted anywhere. The create
+  response carries no row metadata, so the create mutation's `onSuccess`
+  invalidates `["environment-keys", envId]` and the refreshed list renders the
+  new row — the reference console's exact sequence.
 - **UI** (`environments/[id]/page.tsx`, `kind === "self_hosted"` only):
   - An **Environment keys** `DetailSection` between Overview and Config:
     reference copy verbatim; `DataTable` with Name / ID (`IdCode`) / Created
@@ -144,9 +168,9 @@ implementation time, per principle 1.
 
 ## Slices
 
-1. `feat(platform-lib): console/v1 environment-key client` — BFF prefix,
-   schemas + cites, hooks, mock-platform routes and fixtures, probes, unit
-   tests.
+1. `feat(platform-lib): environment-key client over the console-API dialect` —
+   the `/api/oauth/[...path]` BFF passthrough, schemas + cites, hooks,
+   mock-platform routes and fixtures, probes, unit tests.
 2. `feat(environments): environment keys section` — the section, generate /
    reveal-once / revoke dialogs, page and component tests (`stubFetch`
    pattern), e2e in `write-paths.spec.ts` style (generate → key shown once →
