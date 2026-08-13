@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in-progress
 issue: "#56"
 ---
 
@@ -460,7 +460,7 @@ Query cache.
 
 ## Slices
 
-1. **The seams.** BFF console-path allowlist; `platformPostNoContent`; mock
+1. **The seams.** BFF console-path allowlist; `consolePostNoContent`; mock
    server learns `GET`/`POST …/tokens` and `POST …/tokens/{id}/revoke`; typed
    wire shapes in `types.ts` plus their zod transcription in `schemas.ts`
    (verification instrument only — `zod` is a devDependency, and

@@ -1,31 +1,15 @@
 import { NextRequest } from "next/server";
-import { platformApiKey, platformBaseUrl } from "@/lib/env";
+import { envelope, forward } from "@/lib/platform-proxy";
 
 /**
- * BFF proxy: the browser talks only to this route; the platform management
- * key is injected here and never reaches the client (CLAUDE.md principle 2).
- * Responses are streamed through untouched — SSE depends on this.
+ * BFF proxy for the platform's `/v1` wire surface: the browser talks only to
+ * this route; the management key is injected in `forward` and never reaches the
+ * client (CLAUDE.md principle 2). Responses are streamed through untouched —
+ * SSE depends on this.
+ *
+ * The console API's own namespace has its own route and its own gate, at
+ * `src/app/api/oauth/[...path]/route.ts`.
  */
-
-// Request headers forwarded to the platform (everything else is dropped,
-// notably any inbound x-api-key/authorization). anthropic-version/-beta pass
-// through for wire-neutrality; the platform accepts and ignores them.
-const FORWARD_REQUEST_HEADERS = [
-  "content-type",
-  "accept",
-  "last-event-id",
-  "anthropic-version",
-  "anthropic-beta",
-];
-
-// Response headers passed back to the browser.
-const FORWARD_RESPONSE_HEADERS = [
-  "content-type",
-  "content-length",
-  "content-disposition",
-  "request-id",
-  "cache-control",
-];
 
 async function proxy(
   request: NextRequest,
@@ -34,80 +18,13 @@ async function proxy(
   const { path } = await params;
   const joined = path.join("/");
   if (path[0] !== "v1") {
-    return Response.json(
-      {
-        type: "error",
-        error: {
-          type: "invalid_request_error",
-          message: `unsupported proxy path "/${joined}"`,
-        },
-      },
-      { status: 404 },
+    return envelope(
+      404,
+      "invalid_request_error",
+      `unsupported proxy path "/${joined}"`,
     );
   }
-
-  let baseUrl: string;
-  let apiKey: string;
-  try {
-    baseUrl = platformBaseUrl();
-    apiKey = platformApiKey();
-  } catch (cause) {
-    return Response.json(
-      {
-        type: "error",
-        error: {
-          type: "api_error",
-          message:
-            cause instanceof Error ? cause.message : "console misconfigured",
-        },
-      },
-      { status: 500 },
-    );
-  }
-
-  const url = `${baseUrl}/${joined}${request.nextUrl.search}`;
-  const headers = new Headers();
-  for (const name of FORWARD_REQUEST_HEADERS) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  headers.set("x-api-key", apiKey);
-
-  const hasBody = request.method !== "GET" && request.method !== "HEAD";
-  let upstream: Response;
-  try {
-    upstream = await fetch(url, {
-      method: request.method,
-      headers,
-      body: hasBody ? request.body : undefined,
-      // Node fetch requires half-duplex for streamed request bodies.
-      ...(hasBody ? { duplex: "half" as const } : {}),
-      redirect: "manual",
-      // SSE streams stay open indefinitely.
-      signal: request.signal,
-    });
-  } catch {
-    return Response.json(
-      {
-        type: "error",
-        error: {
-          type: "api_error",
-          message: "platform unreachable — check PLATFORM_BASE_URL",
-        },
-      },
-      { status: 502 },
-    );
-  }
-
-  const responseHeaders = new Headers();
-  for (const name of FORWARD_RESPONSE_HEADERS) {
-    const value = upstream.headers.get(name);
-    if (value) responseHeaders.set(name, value);
-  }
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: responseHeaders,
-  });
+  return forward(request, joined);
 }
 
 export {

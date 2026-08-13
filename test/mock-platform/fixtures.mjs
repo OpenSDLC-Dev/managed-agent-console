@@ -447,3 +447,33 @@ export const files = [
     created_at: T2,
   },
 ];
+
+/**
+ * Console API (plan 07): environment keys, keyed by environment id.
+ *
+ * Only the self-hosted environment has any — the platform refuses to issue a
+ * key for a cloud environment (internal/api/consoleapi.go:200-205), so a cloud
+ * entry here would describe a state the platform cannot reach.
+ *
+ * `prod-runner-01` is live; `retired-laptop` is expired but unrevoked, which
+ * the platform's listing deliberately still returns
+ * (internal/api/envkeys.go:105-106) so an operator can see the credential their
+ * worker is failing on. No plaintext appears here, by construction: the
+ * platform stores only a hash of it.
+ */
+export const environmentKeys = {
+  env_byoc0000000000000001: [
+    {
+      id: "envkey_prod00000000000001",
+      name: "prod-runner-01",
+      created_at: T0,
+      expires_at: "2027-08-01T09:00:00Z",
+    },
+    {
+      id: "envkey_stale0000000000001",
+      name: "retired-laptop",
+      created_at: "2025-01-01T09:00:00Z",
+      expires_at: "2026-01-01T09:00:00Z",
+    },
+  ],
+};
