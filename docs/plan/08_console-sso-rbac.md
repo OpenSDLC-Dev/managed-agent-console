@@ -99,10 +99,19 @@ assertion naming the human — the _token_ names the human, end to end.
 
 Two constraints Mode A inherits from the platform's verifier, neither optional:
 
-- **The ID token's `aud` must contain the platform's configured
-  `IDENTITY_OIDC_AUDIENCE`**, and `azp` is checked when `aud` carries multiple
-  values (`internal/identity/verifier.go:309–313`). The console must therefore
-  request the _platform's_ audience, not merely its own client id.
+- **`IDENTITY_OIDC_AUDIENCE` is configured to the console's own OAuth
+  `client_id`** — not to some separate platform audience. In a standard
+  authorization-code flow the ID token's `aud` **is** the relying party's
+  client id, and the console cannot generically ask an IdP for a different
+  audience on that token; setting the two to different values would produce
+  tokens the platform rejects on every proxied request. This is also what plan
+  31 intends: the accepted credential is "canonically the OIDC ID token of the
+  deployment's console application", with `IDENTITY_OIDC_AUDIENCE` naming that
+  client (31:290–301). `azp` is additionally checked when `aud` carries
+  multiple values (`internal/identity/verifier.go:309–313`). If a deployment
+  ever wants a resource-audience access token instead, that is a
+  provider-specific flow and its own decision — not something this plan
+  assumes.
 - **`IDENTITY_MODE` is single-valued**: a deployment runs `oidc` **or**
   `trusted_proxy`. Mode A and Mode B are mutually exclusive per platform, not
   layerable — which is a further reason to pick one here rather than build both.
@@ -142,6 +151,24 @@ D2 already decided it stays for local development and the suites; 10
 `signIn()` helpers across 8 of the 9 e2e specs, the live tier, and 29 fidelity
 surfaces × 2 themes all authenticate through it. `sessionTokenFor`/`isValidSession` get
 a sibling, not a rewrite.
+
+Keeping two gates means the **mode matrix must be stated, not left to
+emerge** — an unspecified overlap is exactly where a password session
+silently reacquires root:
+
+| `CONSOLE_PASSWORD` | identity configured | Console gate                                                                                                    | What the BFF sends                            |
+| ------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| set                | unset               | password cookie                                                                                                 | `x-api-key` (today's behaviour, unchanged)    |
+| unset              | set                 | SSO session                                                                                                     | `Authorization: Bearer`; **no session ⇒ 401** |
+| set                | set                 | SSO only; the password gate is bypassed for `/api/auth/…` and otherwise **refuses to authorise platform calls** | `Bearer` only                                 |
+| unset              | unset               | none                                                                                                            | `x-api-key` (local dev / today's production)  |
+
+The load-bearing row is the third. When identity is configured, **a
+password-authenticated session must never reach the platform**: it does not
+fall back to `x-api-key`, it does not borrow another user's session, it gets
+401 and a prompt to sign in. The password gate's job in that configuration is
+deployment protection in front of the login page, nothing more. A test pins
+each row, and the third row's negative is the one that matters.
 
 ### D4 — How does the UI learn the user's role?
 
@@ -248,8 +275,22 @@ Three traps the BFF must respect, verified in platform source:
   The health route's configuration contract must be sliced **before** the
   credential is touched. Its deep check also calls the platform with
   `x-api-key` and has **no user context** (it runs from CD via `kubectl exec`),
-  so it needs either its own service credential or a different assertion — this
-  is the one console→platform call that cannot borrow a user's token.
+  so it cannot borrow a user's token — the one console→platform call that
+  never can.
+
+  **The decision, so slice 1 is not left holding an unspecified "credential
+  story":** `PLATFORM_API_KEY` **stays in the pod as a dedicated service
+  credential for the deep health check only**, and becomes optional for the
+  shallow depth so an identity-mode deployment without it still reports Ready.
+  It keeps its existing secret source (`secretKeyRef console-secrets/platform-api-key`,
+  `deploy/k8s/deployment.yaml:91–95`) and rotation path; what changes is that
+  it is no longer reachable from any browser-initiated request, because the
+  proxy stops reading it in identity mode (above). Tests: shallow health with
+  the var unset returns 200 and `configured: true`; deep health without it
+  reports the degraded shape rather than 503-ing the pod; and a proxied request
+  in identity mode with no session gets 401 while the key is present in the
+  environment — the assertion that the two credentials no longer share a path.
+
 - **The session cookie would be minted without `Secure`.**
   `src/app/api/login/route.ts:31` sets `secure` from
   `request.nextUrl.protocol === "https:"`; behind a TLS-terminating load
@@ -284,10 +325,13 @@ is a stated divergence from principle 3 and belongs in
 ## Slices
 
 1. **Configuration and the health contract.** `IDENTITY_*`-shaped console
-   config (issuer, client id, redirect, scopes, mode); make
-   `PLATFORM_API_KEY` optional in the shallow health depth and give the deep
-   check its own credential story; move `secure` to `x-forwarded-proto`.
-   Nothing user-visible; unblocks everything after it.
+   config (issuer, client id, redirect, scopes, mode) — with the console's
+   client id doubling as the platform's expected audience, per D1; make
+   `PLATFORM_API_KEY` optional in the shallow health depth and pin it as the
+   deep check's dedicated service credential (above); move `secure` to
+   `x-forwarded-proto` and specify `SameSite` alongside it. Encodes the D3 mode
+   matrix as tests before any of it has a UI. Nothing user-visible; unblocks
+   everything after it.
 2. **The OIDC relying party.** Route handlers under **`/api/auth/…`** —
    `login`, `callback`, `logout`. The namespace is reserved by plan 07, whose
    console-API passthrough owns `/api/oauth/…`; these must never collide.

@@ -216,6 +216,22 @@ GET  /api/console/organizations/{org_uuid}/workspaces/{workspace_id}/api_keys/po
   "organization_max_api_keys": null }
 ```
 
+**Three gaps in this capture that slice 4 must close before it builds.** Named
+here so they are not mistaken for settled contract:
+
+- **The rendered table asks for fields the response does not carry.** The page
+  shows `Created by` as a display name over an email, plus `Last used` and
+  `Cost`; the response carries only `created_by: {id, type}`, and no
+  `last_used` or `cost` at all. So there is an enrichment step — a member
+  lookup and a usage/cost source — that was **not captured**. Either the
+  platform's surface supplies these, or a batch lookup is defined, or those
+  columns do not ship. Decide before building, not during.
+- **The wire value for `Never` is unobserved.** The capture selected "30 days".
+  Whether `Never` sends `expires_at: null`, omits the field, or uses another
+  sentinel is unknown; the response type permits `null`, which is suggestive
+  and not evidence.
+- **Workspace scope**, below.
+
 Facts that decide our shape:
 
 - **The client sends an absolute RFC 3339 `expires_at`**, computed in the
@@ -230,9 +246,16 @@ Facts that decide our shape:
 - **`can_manage` is per-row.** The reference tells the client, per key, whether
   it may act — it does not make the client infer authority from a role. See
   plan 08's role-aware-UI section; this is the same design answer at row scope.
-- **The list is not workspace-filtered by the path.** The request names
+- **Workspace scope is UNKNOWN and must not be guessed.** The request named
   `workspaces/default` and returned 12 keys whose `workspace_id` was all
-  `null`. Do not assume the segment scopes the response.
+  `null`. One request against one workspace cannot establish that the segment
+  does not scope the response — those rows may equally be legacy or
+  organization-level keys that are deliberately visible in the default
+  workspace. Getting this wrong in either direction is a **cross-workspace key
+  exposure**, so slice 4 does not start until the scope is settled by comparing
+  a second workspace or by reading the platform's own implementation. Whichever
+  it turns out to be, the plan must then state which rows and which destructive
+  actions the page shows.
 - **`status` is a tri-state including `archived`.** A directly-issued `GET`
   returned 12 rows while the page showed one live row; because that `GET` was
   issued by the recorder rather than captured from the page's own traffic (see
@@ -265,9 +288,14 @@ with a 403 and it never re-derives authority from a role name.**
 
 Two consequences this repo must carry:
 
-1. **There is no `environment_keys:*` permission.** Environment-key issuance
-   rides `environments:manage`, which is a _different_ permission from
-   `api:manage`. This is direct evidence bearing on platform plan 31's one
+1. **There is no `environment_keys:*` permission in the list** — the nearest
+   entries are `environments:manage` and `api:manage`, which are distinct from
+   each other. **Which permission actually guards the "Generate environment
+   key" button was not observed**, and cannot be read off an Admin's list of
+   available permissions: the control might be checked against
+   `environments:manage`, against something else, or only server-side. Treat
+   the association as INFERRED until the control is captured under a
+   non-Admin account. With that caveat, it bears on platform plan 31's one
    INFERRED divergence (31:657–660), which reads: _"which reference console
    roles gate 'Generate environment key' is undocumented; `admin`-only here is
    a local judgment (the reference's Developer role *can* manage API keys, so a
