@@ -27,9 +27,49 @@ lands — the platform already registers all three console routes at
 gets a 403 from the platform the moment identity is switched on, with no
 console change.
 
-## Decisions needed from the maintainer
+This plan **supersedes and absorbs** the earlier draft of plan 07
+(`docs/plan/07_environment-keys.md`, PR #84, drafted 2026-08-10). Everything
+that draft settled is carried below unchanged — including its decisions taken
+with the maintainer on 2026-08-10, its verbatim reference copy, and its
+architecture. What this file adds is the API-key half, the 2026-08-14
+recording, and four further seams. PR #84 closes as superseded, not rejected.
+
+## Decisions already settled with the maintainer (2026-08-10)
+
+Binding; carried from the superseded draft. Not reopened here.
+
+**Precedence, settled 2026-08-14:** where a 2026-08-10 decision conflicts with
+the live recording of the reference console, **the recording governs**. One
+decision below is qualified by that rule; the rest are unaffected, and the
+recording corroborates them.
+
+1. **Scope is the keys section and the setup panel**, both rendered only for
+   `self_hosted` environments, matching the reference. The reference page's
+   work-queue Overview stats were put out of scope here — and the 2026-08-14
+   recording shows **the reference does render them** on this page (Queued /
+   Processing / Idle workers / Oldest item, "Updates every few seconds"), so
+   under the precedence rule this is not a fidelity choice we get to make. It
+   stays out of scope for a different and verifiable reason: the stats route
+   `GET /v1/environments/{id}/work/stats` is registered on the **environment-key
+   lane** at `identity.RoleNone` (`internal/api/server.go:182`), which no human
+   credential can reach — not the management key, not an admin token. So the
+   console _cannot_ serve it, rather than choosing not to. Record it in
+   `docs/design-reference.md` as a divergence forced by the platform, and
+   revisit the moment the platform exposes stats on a management-reachable
+   route.
+2. **Reference UX is copied faithfully** — copy text, dialog flow, columns —
+   with our platform's realities substituted: key prefix `sk-map-env01-…`, and
+   worker commands pointing at our platform via
+   `--base-url`/`ANTHROPIC_BASE_URL` (which the `ant` worker subcommands
+   honour).
+3. **Sequencing**: the platform lands first and this repo never ships ahead of
+   it (principle 1); the mock platform implements the contract immediately so
+   console tests never wait on a live stack.
+
+## Decisions still needed from the maintainer
 
 Recorded here unanswered; the plan cannot leave `draft` until they are settled.
+All three concern the **API-key** half, which the 2026-08-10 draft predated.
 
 1. **D1 — Does the API-key surface ship in this plan or wait?** The
    environment-key half is buildable today. The API-key half needs platform
@@ -76,8 +116,28 @@ your infrastructure connect to this environment and pull jobs. Generate one per
 host so you can revoke access individually."_ Table columns **Name · ID ·
 Created · Expires** plus a per-row trash icon. One button, secondary with a key
 glyph: **"Generate environment key"**. Alongside it a dismissible
-"Set up your self-hosted environment" panel (register a key → export
-`ANTHROPIC_ENVIRONMENT_KEY` → install the `ant` CLI).
+"Set up your self-hosted environment" panel of four steps: register a key →
+export `ANTHROPIC_ENVIRONMENT_KEY='sk-ant-oat01-…'` → install the `ant` CLI from
+GitHub releases → `ant beta:worker poll --environment-id "env_…" --workdir
+"/workspace"`. (The 2026-08-14 pass saw the first three above the fold and the
+CLI download command; the fourth step is carried from the fuller 2026-08-10
+capture, which the precedence rule does not displace — a partial view does not
+overrule a complete one.)
+
+Full dialog copy, from the 2026-08-10 capture and re-confirmed 2026-08-14 —
+this is what "copied faithfully" (settled decision 2) means concretely:
+
+- Empty state: _"No environment keys yet."_
+- Generate dialog **"Create environment key"** — _"Give your environment key a
+  name to help identify it later."_, one text input (placeholder _"e.g.,
+  Production Server"_), Cancel / Create environment key.
+- Success dialog **"Save your environment key"** — _"Keep a record of the key
+  below. You won't be able to view it again."_, the full key in a mono block,
+  _"Copy environment key"_, Close.
+- Revoke confirm **"Revoke environment key"** — _"Are you sure you want to
+  revoke this environment key? Workers using this key will no longer be able to
+  connect. This action cannot be undone."_ (Cancel / destructive Revoke).
+  Revoked keys vanish from the list.
 
 ```
 GET  /api/oauth/organizations/{org_uuid}/environments/{env_id}/tokens   → 200
@@ -89,14 +149,24 @@ GET  /api/oauth/organizations/{org_uuid}/environments/{env_id}/tokens   → 200
 POST /api/oauth/organizations/{org_uuid}/environments/{env_id}/tokens   (captured, blocked)
 content-type: application/json
 { "name": "protocol-probe-do-not-keep" }
+→ 200 { "access_token": "sk-map-env01-…", "expires_in": 31536000 }
+
+POST /api/oauth/organizations/{org}/environments/{env}/tokens/{token_id}/revoke → 204
 ```
 
 Facts worth naming:
 
 - **The create body is `{name}` and nothing else** — no expiry, no scope. The
   listing showed `Created Aug 10, 2026 / Expires Aug 10, 2027`, so the server
-  assigns a one-year lifetime. Our platform already behaves this way; D3 above
+  assigns a one-year lifetime. Our platform already behaves this way; D3 below
   is settled for this surface by the recording.
+- **The create response is RFC 6749-shaped and carries no row metadata** —
+  `{access_token, expires_in}`, verified in our platform's landed code at
+  `internal/api/consoleapi.go:75–79` (the reference also returns
+  `authorization_details`, which plan 30 deliberately does not emit). The
+  plaintext appears here and never again. **Consequently the console cannot
+  render the new row from the create response: it must invalidate and re-GET
+  the list**, which is the reference's own sequence.
 - The `ID` column renders a **truncated tail** (`…1c7c3f1`), never the secret.
 - The reference's environment-key prefix is `sk-ant-oat01-`; ours is
   `sk-map-env01-`. Already a recorded wire divergence — not new here.
@@ -243,14 +313,19 @@ in `src/`).
 
 These are the whole reason this plan has a slice 1 that renders nothing.
 
-1. **The BFF path gate is `/v1`-only.**
-   `src/app/api/platform/[...path]/route.ts:34–47` 404s anything whose first
-   segment is not `v1`, without contacting the platform. The console routes
-   live under `/api/oauth/…`. The gate must learn a second prefix — as an
-   **explicit allowlist of the console patterns**, not a blanket pass-through:
-   the proxy is the only thing standing between a browser and a management
-   credential, and "forward whatever the browser asks for" is how that
-   guarantee is lost.
+1. **The BFF path gate is `/v1`-only, and the fix is a second route, not a
+   wider gate.** `src/app/api/platform/[...path]/route.ts:34–47` 404s anything
+   whose first segment is not `v1`, without contacting the platform. Rather
+   than teach that gate a second prefix, add a **dedicated passthrough**
+   `src/app/api/oauth/[...path]/route.ts` reusing the proxy internals
+   (server-side `x-api-key` injection, header allowlists, streaming), so the
+   console's own URL is the reference console's URL verbatim:
+   `<console>/api/oauth/organizations/default/environments/{id}/tokens`. The
+   existing `/api/platform/[...path]` proxy and its `v1` guard stay untouched —
+   each route keeps one narrow, auditable contract instead of one gate growing
+   exceptions. A test pins that an inbound `x-api-key` still never forwards.
+   **Console OIDC (plan 08) mounts its route handlers under `/api/auth/…`,
+   never `/api/oauth/…`, which this passthrough owns.**
 2. **`platformPost` and `platformDelete` throw on a 204.**
    `src/lib/platform/http.ts:65–78` and `:97–106` unconditionally
    `await response.json()` on success. The revoke route answers a bodiless
@@ -318,14 +393,42 @@ to see the credential it is failing on"_). That is a rendering derivation, not
 domain logic — principle 4 holds — but it owns a clock, so it gets exactly one
 formatter test and one injected-now unit test.
 
+### Hooks and existing patterns to mirror
+
+Carried from the superseded draft, which mapped this onto the repo's own
+precedents. Vault credentials are the closest sub-resource CRUD shape
+(`src/lib/platform/queries.ts:425–481`, query key `["vault-credentials", id]`);
+`credential-form.tsx` is the form-in-dialog precedent; `ConfirmIconButton`,
+`DataTable`, `EmptyState`, `IdCode`, `Time` and `copyText` all exist in
+`bits.tsx`. **A reveal-once secret dialog exists nowhere yet — it is net-new
+UI.** The mock platform already carries a `self_hosted` fixture environment
+(`env_byoc0000000000000001`).
+
+Hooks: `useEnvironmentKeys`, `useCreateEnvironmentKey`,
+`useRevokeEnvironmentKey` on query key `["environment-keys", envId]`; create
+and revoke invalidate the list. Create shows its error inline in the dialog
+(`meta: { errorToast: false }` + `RequestId`); revoke keeps the global toast
+with `errorTitle: "Revoke failed"`.
+
 ### The one-time secret
 
-The platform returns the full key exactly once, on create. The dialog that
-issues it must therefore be the only place it is ever shown, must offer copy,
-and must say plainly that it will not be shown again — and the value must never
-enter a query key, a toast, a log, or a `data-*` attribute. This gets an
-adversarial probe (`probe:` prefix, per `pnpm probes:check`) asserting the
-secret appears in the DOM exactly once and never in the React Query cache.
+The platform returns the full key exactly once, on create, and returns nothing
+else with it. The dialog that issues it must therefore be the only place it is
+ever shown, must offer copy, and must say plainly that it will not be shown
+again — and the value must never enter a query key, a toast, a log, or a
+`data-*` attribute.
+
+**Plaintext discipline**: the `access_token` is held in component state for the
+reveal dialog and cleared on close, with `mutation.reset()` so it leaves the
+mutation cache too; it is never logged, never written to a `data-*` attribute,
+never persisted. Because the create response carries no row metadata, the
+mutation's `onSuccess` invalidates `["environment-keys", envId]` and the
+refreshed list renders the new row. Review should treat **any second render
+path for the key as a defect**.
+
+This gets an adversarial probe (`probe:` prefix, per `pnpm probes:check`)
+asserting the secret appears in the DOM exactly once and never in the React
+Query cache.
 
 ## Slices
 
@@ -345,17 +448,30 @@ secret appears in the DOM exactly once and never in the React Query cache.
    cases, a client-side mirror of the wire that gets a recorded decision), and
    the seam-6 decision on detecting a pre-plan-30 platform. Fidelity manifest
    gains the surface in the same PR.
-3. **Environment keys, write.** Generate dialog (name only, per the
-   recording), the one-time secret panel and its probe, revoke with confirm,
-   optimistic-free invalidation. Fidelity re-shot.
+3. **Environment keys, write, and the setup guide.** Generate dialog (name
+   only) swapping on success to the reveal-once "Save your environment key"
+   dialog with `copyText` and its Check/Copy feedback swap — closing is final;
+   revoke via `ConfirmIconButton` carrying the reference's revoke copy;
+   invalidate-and-refetch rather than optimistic insert (the create response
+   has no row). Plus the dismissable **"Set up your self-hosted environment"**
+   panel: the four reference steps with our commands — export
+   `ANTHROPIC_ENVIRONMENT_KEY`, install the `ant` CLI, then
+   `ant beta:worker poll --environment-id "<id>" --workdir "/workspace"` with
+   `--base-url` pointing at the platform, a copy button per code block.
+   Dialog a11y coverage; e2e in `write-paths.spec.ts` style (generate → key
+   shown once → row appears → revoke → confirm → row gone). Fidelity re-shot,
+   and `docs/design-reference.md` gains the divergence notes (our key prefix,
+   our commands).
 4. **API keys** — _blocked on platform plan 31 slice 5_. The page, the create
    dialog with the six expiry options and the browser-computed `expires_at`,
    the delete confirm. Ships only once the platform serves the surface; the
    recording above is what unblocks the platform side.
-5. **Acceptance + archive.** Against a real local platform stack: issue an
-   environment key from the console, use it to run `ant beta:worker poll
---environment-key …`, revoke it, watch the poll fail. Recorded in
-   `docs/HISTORY.md`.
+5. **Acceptance + archive.** Against the platform's compose stack (the
+   `test/e2e-live` tier): generate a key in the UI for a self-hosted
+   environment, start a real `ant beta:worker poll` with it against the
+   platform, watch it authenticate; revoke the key in the UI and watch the next
+   poll 401. This is the console-side mirror of platform plan 30 slice 3's
+   acceptance. Recorded in `docs/HISTORY.md`.
 
 ## Verification
 

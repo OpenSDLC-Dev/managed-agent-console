@@ -193,12 +193,12 @@ which IdP to send the browser to, and what the platform told it.
 ## Architecture (Mode A)
 
 ```
-browser ──login──▶ console /auth/login ──302──▶ IdP (code + PKCE)
+browser ──login──▶ console /api/auth/login ─302─▶ IdP (code + PKCE)
                                                    │
 browser ◀──────────── 302 ?code=… ─────────────────┘
    │
    ▼
-console /auth/callback ── code+verifier ──▶ IdP token endpoint
+console /api/auth/callback ─ code+verifier ──▶ IdP token endpoint
    │                                            │
    │◀───────── id_token (+ refresh) ────────────┘
    │  store server-side; set opaque httpOnly session cookie
@@ -261,14 +261,15 @@ Three traps the BFF must respect, verified in platform source:
   (today's attributes are at `src/app/api/login/route.ts:28–34`), and a
   cookie-authenticated proxy that forwards `POST`/`DELETE` needs `SameSite=Lax`
   at minimum plus an origin check on mutations.
-- **The `/auth/…` routes would be born _inside_ the password gate.**
+- **The `/api/auth/…` routes would be born _inside_ the password gate.**
   `src/proxy.ts:52–54` exempts only `login$|api/login$|api/health$` plus static
   assets, so whenever `CONSOLE_PASSWORD` is set — local dev, the gated e2e
-  specs, the fidelity run — `/auth/login` and `/auth/callback` are redirected to
-  `/login` (`proxy.ts:24–27`) and the IdP callback can never complete. The
-  file's own comment (`proxy.ts:46–51`) warns about exactly this. The exemption
-  is a **prefix** (`auth/`), unlike the three anchored route tokens: everything
-  under `/auth/` must be reachable unauthenticated by construction.
+  specs, the fidelity run — `/api/auth/login` and `/api/auth/callback` are
+  redirected to `/login` (`proxy.ts:24–27`) and the IdP callback can never
+  complete. The file's own comment (`proxy.ts:46–51`) warns about exactly this.
+  The exemption is a **prefix** (`api/auth/`), unlike the three anchored route
+  tokens: everything under it must be reachable unauthenticated by
+  construction.
 
 ### Feature detection cannot see identity — and that is deliberate
 
@@ -287,12 +288,14 @@ is a stated divergence from principle 3 and belongs in
    `PLATFORM_API_KEY` optional in the shallow health depth and give the deep
    check its own credential story; move `secure` to `x-forwarded-proto`.
    Nothing user-visible; unblocks everything after it.
-2. **The OIDC relying party.** `/auth/login`, `/auth/callback`, `/auth/logout`;
-   authorization code + **PKCE (S256)**, `state` and `nonce` verified,
+2. **The OIDC relying party.** Route handlers under **`/api/auth/…`** —
+   `login`, `callback`, `logout`. The namespace is reserved by plan 07, whose
+   console-API passthrough owns `/api/oauth/…`; these must never collide.
+   Authorization code + **PKCE (S256)**, `state` and `nonce` verified,
    the session store and its opaque cookie, token refresh, and the first new
    runtime dependency since plan 01 (`jose` or equivalent — the repo has no
    JWT tooling at all today). Widens `src/proxy.ts`'s matcher to exempt
-   `/auth/…` (see the landmine above) and adds its module to `SEAMS` in
+   `/api/auth/…` (see the landmine above) and adds its module to `SEAMS` in
    `scripts/check-probes.mjs` so these probes are ratcheted rather than merely
    written. Adversarial probes: `state` mismatch rejected,
    `nonce` replay rejected, no token in any log or client bundle. Behind a
