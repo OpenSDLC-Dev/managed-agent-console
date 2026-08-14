@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  IDENTITY_COOKIE,
+  putSession,
+  resetIdentityStoreForTests,
+} from "@/lib/identity/session";
 import { DELETE, GET, PATCH, POST, PUT } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -21,6 +26,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   vi.stubEnv("PLATFORM_BASE_URL", "http://platform.local");
   vi.stubEnv("PLATFORM_API_KEY", "sk-mgmt-test");
+  vi.stubEnv("IDENTITY_MODE", undefined);
+  resetIdentityStoreForTests();
 });
 
 afterEach(() => {
@@ -121,6 +128,10 @@ describe("platform BFF proxy", () => {
         throw cause;
       },
       platformApiKey: () => "sk-mgmt-test",
+      // The identity check reads this before the configuration does; the mock
+      // has to answer it or the module fails for a reason this test is not
+      // about.
+      consolePassword: () => undefined,
     }));
     const { GET: get } = await import("./route");
     const response = await get(
@@ -318,5 +329,92 @@ describe("platform BFF proxy", () => {
         message: "platform unreachable — check PLATFORM_BASE_URL",
       },
     });
+  });
+});
+
+// Plan 08 D3's second and third rows. Once identity is configured this proxy
+// fails closed: it never falls back to the management key, which is still in
+// the pod for the deep health check, so a fallback would hand root to an
+// unauthenticated browser. The middleware cannot do this — it runs in the Edge
+// runtime and cannot see the session store's Node-side module state — so the
+// BFF is the gate, and it is enough because the pages show nothing that does
+// not come through here.
+describe("identity mode", () => {
+  const agents = () =>
+    GET(
+      new NextRequest("http://localhost:3000/api/platform/v1/agents", {
+        headers: { cookie: `${IDENTITY_COOKIE}=sid` },
+      }),
+      ctx("v1", "agents"),
+    );
+
+  const anonymous = () =>
+    GET(
+      new NextRequest("http://localhost:3000/api/platform/v1/agents"),
+      ctx("v1", "agents"),
+    );
+
+  const configureOidc = () => {
+    vi.stubEnv("IDENTITY_MODE", "oidc");
+    vi.stubEnv("IDENTITY_OIDC_ISSUER", "https://idp.example.com");
+    vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", "console-client");
+  };
+
+  const signIn = () =>
+    putSession("sid", {
+      idToken: "id-token",
+      expiresAt: Date.now() + 60_000,
+      subject: "user-1",
+    });
+
+  it("probe: refuses an anonymous request rather than spending the management key", async () => {
+    configureOidc();
+    const response = await anonymous();
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      type: "error",
+      error: {
+        type: "authentication_error",
+        message: "console sign-in required",
+      },
+    });
+    // The assertion that matters: the platform was never called at all.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("probe: refuses a handle naming no session, and one naming an expired one", async () => {
+    configureOidc();
+    expect((await agents()).status).toBe(401);
+    putSession("sid", {
+      idToken: "id-token",
+      expiresAt: Date.now() - 1,
+      subject: "user-1",
+    });
+    expect((await agents()).status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The password gate is deployment protection in this configuration and
+  // authorizes nothing on the platform — D3's load-bearing third row.
+  it("probe: a password session does not reach the platform once identity is on", async () => {
+    configureOidc();
+    vi.stubEnv("CONSOLE_PASSWORD", "hunter2");
+    expect((await anonymous()).status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("serves a signed-in operator", async () => {
+    configureOidc();
+    signIn();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    expect((await agents()).status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the x-api-key path untouched while identity is off", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    expect((await anonymous()).status).toBe(200);
+    const [, init] = upstreamCall();
+    expect(new Headers(init.headers).get("x-api-key")).toBe("sk-mgmt-test");
   });
 });

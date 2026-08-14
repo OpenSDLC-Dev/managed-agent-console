@@ -136,8 +136,13 @@ export async function exchangeCode(
     if (usePost) {
       body.set("client_secret", config.clientSecret);
     } else {
-      // RFC 6749 §2.3.1: both halves are form-urlencoded before base64.
-      const credentials = `${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`;
+      // RFC 6749 §2.3.1: both halves are **form-urlencoded** before base64,
+      // which is not what `encodeURIComponent` does — it renders a space as
+      // `%20` where form encoding wants `+`, and leaves `!'()*` alone. A secret
+      // containing any of those would be decoded by the provider as a different
+      // secret, and every exchange would fail with an opaque 401 (found in
+      // review, PR #94). `URLSearchParams` is the encoder the spec names.
+      const credentials = `${formUrlEncode(config.clientId)}:${formUrlEncode(config.clientSecret)}`;
       headers.set("authorization", `Basic ${btoa(credentials)}`);
     }
   }
@@ -200,6 +205,11 @@ export async function exchangeCode(
   };
 }
 
+/** `application/x-www-form-urlencoded`, borrowed from the encoder rather than hand-rolled. */
+function formUrlEncode(value: string): string {
+  return new URLSearchParams({ v: value }).toString().slice("v=".length);
+}
+
 const jwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 export function resetJwksCacheForTests(): void {
@@ -236,6 +246,11 @@ export async function verifyIdToken(
     ({ payload } = await jwtVerify(idToken, keys, {
       issuer: metadata.issuer,
       audience: config.clientId,
+      // `exp` is required by OIDC Core §2 but jose only enforces it when it is
+      // present. Without this a token carrying none would verify, `expiresAt`
+      // would be 0, and the operator would be "signed in" to a session already
+      // expired — a sign-in that silently does nothing (found in review, #94).
+      requiredClaims: ["exp"],
     }));
   } catch {
     // Deliberately not the library's message: it can quote header and claim

@@ -77,8 +77,10 @@ describe("discover", () => {
   });
 
   it("does not double the slash on an issuer with a trailing one", async () => {
-    answer(document());
-    await discover({ ...config, issuer: ISSUER });
+    // The document must echo the configured value exactly, trailing slash and
+    // all, or §4.3's equality check refuses it before the URL is asserted on.
+    answer(document({ issuer: `${ISSUER}/` }));
+    await discover({ ...config, issuer: `${ISSUER}/` });
     expect(String(fetchMock.mock.calls[0][0])).toBe(
       `${ISSUER}/.well-known/openid-configuration`,
     );

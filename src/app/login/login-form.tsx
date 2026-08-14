@@ -14,13 +14,23 @@ const noSubscription = () => () => {};
  * map is the whole vocabulary, and an unrecognized code gets the generic line
  * rather than being rendered.
  */
-const SSO_ERRORS: Record<string, string> = {
-  provider_unavailable:
+const GENERIC_SSO_ERROR = "Sign-in could not be completed.";
+
+// A Map rather than an object literal, because the key comes from the query
+// string: `SSO_ERRORS["constructor"]` on a plain object resolves to an
+// inherited *function*, which `??` does not replace and React refuses to
+// render — so `?sso_error=constructor` would have shown an empty alert instead
+// of the generic line (found in review, PR #94). A Map has no prototype chain
+// to walk into.
+const SSO_ERRORS = new Map<string, string>([
+  [
+    "provider_unavailable",
     "The identity provider could not be reached. Check the console's identity configuration.",
-  provider_refused: "The identity provider refused the sign-in.",
-  state_mismatch: "That sign-in attempt expired. Try again.",
-  session_failed: "Sign-in could not be completed.",
-};
+  ],
+  ["provider_refused", "The identity provider refused the sign-in."],
+  ["state_mismatch", "That sign-in attempt expired. Try again."],
+  ["session_failed", GENERIC_SSO_ERROR],
+]);
 
 export function LoginForm({
   sso,
@@ -64,7 +74,7 @@ export function LoginForm({
   }
 
   const ssoMessage = ssoError
-    ? (SSO_ERRORS[ssoError] ?? "Sign-in could not be completed.")
+    ? (SSO_ERRORS.get(ssoError) ?? GENERIC_SSO_ERROR)
     : null;
 
   return (

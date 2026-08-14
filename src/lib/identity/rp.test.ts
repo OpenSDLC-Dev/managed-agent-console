@@ -219,6 +219,30 @@ describe("exchangeCode", () => {
     expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain("s3cret");
   });
 
+  // RFC 6749 §2.3.1 says form-urlencoded, which is not `encodeURIComponent`:
+  // a space is `+`, not `%20`. A provider decoding the other spelling sees a
+  // different secret and refuses every exchange with an opaque 401 (found in
+  // review, PR #94).
+  it("probe: form-urlencodes each half of the Basic credential", async () => {
+    respond({ id_token: "t" });
+    await exchangeCode(
+      metadata,
+      { ...config, clientId: "client id", clientSecret: "a b+c/d=e" },
+      params,
+    );
+    const header = new Headers(fetchMock.mock.calls[0][1]?.headers).get(
+      "authorization",
+    );
+    const [id, secret] = atob(
+      String(header).slice("Basic ".length).trim(),
+    ).split(":");
+    expect(id).toBe("client+id");
+    expect(secret).toBe("a+b%2Bc%2Fd%3De");
+    // And the round trip a conforming provider performs recovers the originals.
+    expect(new URLSearchParams(`v=${id}`).get("v")).toBe("client id");
+    expect(new URLSearchParams(`v=${secret}`).get("v")).toBe("a b+c/d=e");
+  });
+
   it("uses the body when that is the only method the provider advertises", async () => {
     respond({ id_token: "t" });
     await exchangeCode(
@@ -390,6 +414,23 @@ describe("verifyIdToken", () => {
       .setExpirationTime("1h")
       .setSubject("user-1")
       .sign(other.privateKey);
+    await expect(
+      verifyIdToken(metadata, config, token, "the-nonce"),
+    ).rejects.toThrow(/failed verification/);
+  });
+
+  // jose enforces `exp` only when it is present. Without `requiredClaims` a
+  // token carrying none would verify, `expiresAt` would be 0, and the operator
+  // would land on a session that had already expired — a sign-in that silently
+  // does nothing (found in review, PR #94).
+  it("probe: refuses a token with no exp claim", async () => {
+    const token = await new SignJWT({ nonce: "the-nonce" })
+      .setProtectedHeader({ alg: "ES256", kid: "test-key" })
+      .setIssuer(ISSUER)
+      .setAudience(CLIENT_ID)
+      .setIssuedAt()
+      .setSubject("user-1")
+      .sign(privateKey);
     await expect(
       verifyIdToken(metadata, config, token, "the-nonce"),
     ).rejects.toThrow(/failed verification/);

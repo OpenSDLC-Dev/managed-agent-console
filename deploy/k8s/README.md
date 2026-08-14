@@ -167,8 +167,19 @@ before signing in, so a gated `/api/auth/login` would redirect the browser to
 `/login` and a gated `/api/auth/callback` would drop the identity provider's
 redirect on the password form. Those routes are written for the anonymous caller
 that creates: they mint no session without a state cookie they issued
-themselves, they reflect nothing from the query string, and on a deployment with
-no identity configured they answer 404 rather than starting anything.
+themselves, and on a deployment with no identity configured they answer 404
+rather than starting anything. Nothing untrusted is reflected back — a failure
+becomes one of four codes the console authored, never the provider's text or
+anything else from the query string. The one query value that survives is
+`return_to`, and only after it has been narrowed to a same-origin path, because
+it is what sends the operator back where they were.
+
+Opening this namespace is not what gates an identity-mode deployment. **The BFF
+is**: with `IDENTITY_MODE=oidc` a platform call without a valid session gets 401
+and the management key is not sent. That check cannot live in the middleware —
+it runs in the Edge runtime and cannot see the session store, which is Node-side
+module state — and it does not need to, because every byte a page shows comes
+through the BFF.
 
 The **liveness** probe calls neither: it takes `/login`. A configuration error
 makes the shallow check answer 503, and a restart cannot supply a missing

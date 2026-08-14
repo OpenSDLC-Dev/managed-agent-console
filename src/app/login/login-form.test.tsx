@@ -174,4 +174,19 @@ describe("LoginForm — single sign-on", () => {
     expect(alert.innerHTML).not.toContain("evil.example");
     expect(document.querySelector("img")).toBeNull();
   });
+
+  // The key comes from the query string, so it can name a prototype member. On
+  // a plain object `SSO_ERRORS["constructor"]` resolves to an inherited
+  // *function*, which `??` does not replace and React refuses to render — the
+  // alert would come out empty rather than saying anything (found in review,
+  // PR #94).
+  it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+    "probe: falls back to the generic line for the inherited key %s",
+    (code) => {
+      render(<LoginForm sso password={false} ssoError={code} />);
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Sign-in could not be completed.",
+      );
+    },
+  );
 });
