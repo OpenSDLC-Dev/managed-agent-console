@@ -15,6 +15,7 @@ async function renderProps(search: Record<string, string> = {}) {
     sso: boolean;
     password: boolean;
     ssoError?: string;
+    returnTo?: string;
   };
 }
 
@@ -60,6 +61,29 @@ describe("LoginPage — which gate this deployment runs", () => {
       searchParams: Promise.resolve({ sso_error: ["a", "b"] }),
     });
     expect((element.props as { ssoError?: string }).ssoError).toBeUndefined();
+  });
+
+  // The BFF sends a signed-out operator here with where they were, so the
+  // sign-in can put them back rather than on the landing page.
+  it("carries a return path through to the form", async () => {
+    configureOidc();
+    expect(
+      await renderProps({ return_to: "/sessions/sess_1?tab=trace" }),
+    ).toMatchObject({ returnTo: "/sessions/sess_1?tab=trace" });
+  });
+
+  // `safeReturnTo` refuses anything that could resolve off-origin; the default
+  // is what the flow does anyway, so it is not passed on as a prop at all.
+  it("probe: drops a return path that points off this origin", async () => {
+    configureOidc();
+    for (const raw of [
+      "//evil.example/x",
+      "https://evil.example",
+      "/\\evil.example",
+      "javascript:alert(1)",
+    ]) {
+      expect((await renderProps({ return_to: raw })).returnTo).toBeUndefined();
+    }
   });
 
   // A deployment in this state already answers 503 at /api/health and is

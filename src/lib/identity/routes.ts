@@ -1,8 +1,32 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { isHttpsRequest } from "@/lib/auth";
+import { IDENTITY_COOKIE } from "./session";
 
 /** Short-lived, binds a pending authorization to the browser that started it. */
 export const AUTH_STATE_COOKIE = "console_auth_state";
+
+/**
+ * Drops the session handle from the browser.
+ *
+ * Two routes end a session — the operator asking (`/api/auth/logout`) and the
+ * platform refusing their token (the BFF) — and a handle cleared with different
+ * attributes than it was set with is a handle the browser keeps. One place, so
+ * the attributes cannot drift apart.
+ */
+export function clearIdentityCookie<T extends NextResponse>(
+  response: T,
+  request: { headers: Headers; nextUrl: URL },
+): T {
+  response.cookies.set(IDENTITY_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isHttpsRequest(request),
+    path: "/",
+    maxAge: 0,
+  });
+  return response;
+}
 
 /**
  * Reasons a sign-in can fail before a session exists. Deliberately a **closed

@@ -181,6 +181,22 @@ it runs in the Edge runtime and cannot see the session store, which is Node-side
 module state — and it does not need to, because every byte a page shows comes
 through the BFF.
 
+A call that _does_ carry a session travels as the operator: `Authorization:
+Bearer <their id_token>`, and **no `x-api-key` alongside it**. That pairing is
+not tidiness. The platform hands a request carrying a non-empty `x-api-key` to
+the management lane outright and never reads the Bearer, so a console that sent
+both would quietly serve every operator as root — succeeding, logging nothing,
+and looking exactly like a console that worked. It is also why the deep health
+check keeps its own credential: it is the one console→platform call with no user
+behind it, and it is now the only thing in the pod that spends the key.
+
+When the platform refuses that token — expired, revoked, or a principal the
+provider stopped asserting — the console destroys the session, clears the handle,
+and marks the response so the browser returns to `/login` with the page it was
+on. Restarting a pod produces the same experience, since the session store is
+in-process: every operator is signed out by a rollout, and signing back in costs
+one redirect.
+
 The **liveness** probe calls neither: it takes `/login`. A configuration error
 makes the shallow check answer 503, and a restart cannot supply a missing
 environment variable — liveness pointed at it would turn the readiness failure

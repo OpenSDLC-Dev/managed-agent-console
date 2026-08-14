@@ -77,6 +77,18 @@ const SEAMS = [
     modules: ["config", "rp", "discovery", "session"],
   },
   {
+    dir: "src/app/api/platform/[...path]",
+    why: "credential dispatch — which credential a browser's request travels under",
+    // The BFF chooses between the management key and the signed-in operator's
+    // own token, and a request served with the wrong one succeeds: the platform
+    // gives a non-empty x-api-key the request outright and never reads the
+    // Bearer (internal/api/server.go), so an operator's role would evaporate
+    // with nothing failing. Every happy-path assertion here passes either way,
+    // and so does the one that matters most — that an anonymous browser is
+    // refused rather than served as root.
+    modules: ["route"],
+  },
+  {
     dir: "src/app/api/auth/callback",
     why: "the identity provider's redirect — every byte of it is attacker-authored",
     // The callback URL is reachable by anyone and survives in history, in

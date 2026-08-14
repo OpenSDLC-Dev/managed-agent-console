@@ -1,8 +1,15 @@
 import "server-only";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { platformApiKey, platformBaseUrl } from "@/lib/env";
 import { consoleAuthMode, sendsUserToken } from "@/lib/identity/mode";
-import { IDENTITY_COOKIE, getSession } from "@/lib/identity/session";
+import { clearIdentityCookie } from "@/lib/identity/routes";
+import {
+  IDENTITY_COOKIE,
+  type IdentitySession,
+  deleteSession,
+  getSession,
+} from "@/lib/identity/session";
+import { SIGNED_OUT_HEADER } from "@/lib/identity/signed-out";
 
 /**
  * The BFF's forwarding core, shared by the two proxy routes.
@@ -114,24 +121,23 @@ export async function forward(
   // So the gate for identity mode is the BFF, not the matcher — and that is
   // sufficient, because the pages are shells and every byte they show comes
   // through here.
-  //
-  // What this slice does NOT yet do is send the operator's token: a signed-in
-  // request is still served with `x-api-key` until slice 3 swaps it. The
-  // refusal is the half that cannot wait, because it is the half that is a
-  // hole.
-  const mode = consoleAuthMode();
-  if (sendsUserToken(mode)) {
-    const handle = request.cookies.get(IDENTITY_COOKIE)?.value;
-    if (getSession(handle, Date.now()) === undefined) {
-      return envelope(401, "authentication_error", "console sign-in required");
-    }
+  const actsAsUser = sendsUserToken(consoleAuthMode());
+  let handle: string | undefined;
+  let session: IdentitySession | undefined;
+  if (actsAsUser) {
+    handle = request.cookies.get(IDENTITY_COOKIE)?.value;
+    session = getSession(handle, Date.now());
+    if (session === undefined) return signedOut(request);
   }
 
   let baseUrl: string;
-  let apiKey: string;
+  let apiKey: string | undefined;
   try {
     baseUrl = platformBaseUrl();
-    apiKey = platformApiKey();
+    // The management key is not read at all in identity mode. It stays in the
+    // pod as the deep health check's own credential, and this is what keeps the
+    // two apart: a request the operator made never touches it.
+    if (!actsAsUser) apiKey = platformApiKey();
   } catch (cause) {
     return envelope(
       500,
@@ -146,7 +152,17 @@ export async function forward(
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  headers.set("x-api-key", apiKey);
+  // Exactly one credential, never both — and which one is decided above, not
+  // here. **Sending both would be silent root:** the platform's dispatcher gives
+  // a non-empty `x-api-key` the request outright and never reads the Bearer
+  // (`internal/api/server.go` dispatchManagementAuth / apiKeyOffered), so an
+  // operator's role would evaporate without any error to notice.
+  if (session !== undefined) {
+    headers.set("authorization", `Bearer ${session.idToken}`);
+  }
+  if (apiKey !== undefined) {
+    headers.set("x-api-key", apiKey);
+  }
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   let upstream: Response;
@@ -174,8 +190,51 @@ export async function forward(
     const value = upstream.headers.get(name);
     if (value) responseHeaders.set(name, value);
   }
+
+  // The platform refused the operator's own token: it expired between requests,
+  // the provider revoked it, or the principal lost the role. Whatever the cause,
+  // the session this console holds is dead — keeping it would answer every later
+  // request with the same refusal and no way for the operator to see why. So it
+  // is destroyed here and the browser is told, once, in a way it can act on.
+  //
+  // Only `session !== undefined` reaches this: a 401 while identity is off is a
+  // management key the platform rejects, which no sign-in can fix.
+  if (upstream.status === 401 && session !== undefined) {
+    deleteSession(handle);
+    responseHeaders.set(SIGNED_OUT_HEADER, "1");
+    return clearIdentityCookie(
+      new NextResponse(upstream.body, {
+        status: upstream.status,
+        headers: responseHeaders,
+      }),
+      request,
+    );
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     headers: responseHeaders,
   });
+}
+
+/**
+ * The refusal an unauthenticated browser gets in identity mode.
+ *
+ * It carries the same signal a platform 401 does, and clears the handle with it:
+ * the cookie that arrived named no live session, so leaving it in place would
+ * have the browser re-send a handle this process will never recognize again —
+ * every restart of the pod puts every operator in exactly that state.
+ */
+function signedOut(request: NextRequest): NextResponse {
+  const response = NextResponse.json(
+    {
+      type: "error",
+      error: {
+        type: "authentication_error",
+        message: "console sign-in required",
+      },
+    },
+    { status: 401, headers: { [SIGNED_OUT_HEADER]: "1" } },
+  );
+  return clearIdentityCookie(response, request);
 }

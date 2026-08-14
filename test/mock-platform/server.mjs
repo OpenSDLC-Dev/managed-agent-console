@@ -30,6 +30,14 @@ const UNIMPLEMENTED = (process.env.MOCK_PLATFORM_UNIMPLEMENTED ?? "")
   .filter(Boolean);
 /** Toggled per test via POST /__unimplemented; back to UNIMPLEMENTED on reset. */
 let unimplemented = [...UNIMPLEMENTED];
+/**
+ * Set by POST /__expire-identity so a spec can watch the console react to a
+ * token the platform stopped accepting — the case that cannot be produced by
+ * waiting, and the one the sign-out bounce exists for. Declared up here with the
+ * other mutable flags because `resetStore()` runs at module load and would find
+ * a `let` further down still in its temporal dead zone.
+ */
+let identityRejected = false;
 
 let requestCounter = 0;
 let eventCounter = 1000;
@@ -66,6 +74,7 @@ let envKeyCounter = 1;
 
 function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
+  identityRejected = false;
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
@@ -382,6 +391,68 @@ function envelope(type, message) {
   });
 }
 
+// ---- credential dispatch -------------------------------------------------
+//
+// Mirrors internal/api/server.go's dispatchManagementAuth, because the console's
+// BFF is written against its ordering and a mock that authenticated differently
+// would let a console bug pass: **the machine key first and outright**, then the
+// human lane, then today's 401 whose message never says whether SSO is on.
+//
+// The JWT here is decoded, never verified — signature checking belongs to the
+// platform, and the console's job (the thing these tests exercise) is to send
+// the right credential in the right header and to act on the refusal.
+
+/** internal/identity.LooksLikeJWT: three non-empty base64url segments. */
+const looksLikeJwt = (s) =>
+  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(s);
+
+/** internal/api.apiKeyOffered: every field, and a repeat is ambiguous, not absent. */
+function apiKeyOffered(req) {
+  const raw = req.headers["x-api-key"];
+  if (Array.isArray(raw)) return true;
+  return typeof raw === "string" && raw !== "";
+}
+
+function authenticate(req, res) {
+  const deny = (message) => {
+    res.setHeader("content-type", "application/json");
+    res.writeHead(401);
+    res.end(envelope("authentication_error", message));
+    return false;
+  };
+
+  if (apiKeyOffered(req)) {
+    const key = req.headers["x-api-key"];
+    if (Array.isArray(key) || key !== API_KEY) return deny("invalid x-api-key");
+    return true;
+  }
+
+  const authorization = req.headers["authorization"] ?? "";
+  const bearer = /^Bearer (.+)$/.exec(String(authorization))?.[1];
+  if (bearer !== undefined && looksLikeJwt(bearer)) {
+    // identitylane.go: one constant string for every rejection, so a caller
+    // learns nothing about which check failed.
+    if (identityRejected) return deny("authentication failed");
+    let payload;
+    try {
+      payload = JSON.parse(
+        Buffer.from(bearer.split(".")[1], "base64url").toString("utf8"),
+      );
+    } catch {
+      return deny("authentication failed");
+    }
+    if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
+      return deny("authentication failed");
+    }
+    return true;
+  }
+
+  // Neither credential — including a Bearer that is not JWT-shaped, which the
+  // platform leaves for the environment-key lane and which then falls through
+  // to exactly this message.
+  return deny("missing x-api-key header");
+}
+
 // Opaque index cursor standing in for the platform's keyset tokens.
 const cursor = (index) => Buffer.from(`m1|${index}`).toString("base64");
 const parseCursor = (token) => {
@@ -551,6 +622,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Test hook: refuse every identity token from here on, as a platform does
+  // once a provider revokes one. `/__reset` puts it back. No auth, on purpose —
+  // the whole point is to reach it while the console's own credential is dead.
+  if (req.method === "POST" && url.pathname === "/__expire-identity") {
+    identityRejected = true;
+    res.setHeader("content-type", "application/json");
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   // Test hook: pretend to be a deployment that does not serve these surfaces.
   // `/__reset` puts it back, so a spec that forgets cannot leak into the next.
   if (req.method === "POST" && url.pathname === "/__unimplemented") {
@@ -562,18 +644,7 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  const key = req.headers["x-api-key"];
-  if (!key || key !== API_KEY) {
-    res.setHeader("content-type", "application/json");
-    res.writeHead(401);
-    res.end(
-      envelope(
-        "authentication_error",
-        key ? "invalid x-api-key" : "missing x-api-key header",
-      ),
-    );
-    return;
-  }
+  if (!authenticate(req, res)) return;
 
   // A deployment that does not serve some surfaces. The platform has no 501:
   // an unregistered route falls through its router's catch-all to a plain

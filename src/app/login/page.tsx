@@ -1,4 +1,5 @@
 import { consoleAuthMode } from "@/lib/identity/mode";
+import { DEFAULT_RETURN_TO, safeReturnTo } from "@/lib/identity/rp";
 import { LoginForm } from "./login-form";
 
 /**
@@ -33,12 +34,19 @@ export default async function LoginPage({
     password = true;
   }
 
-  const reason = (await searchParams)["sso_error"];
+  const params = await searchParams;
+  const reason = params["sso_error"];
+  // The BFF sends a signed-out operator here with where they were. Sanitized on
+  // the way in as well as inside `/api/auth/login`, because this value also
+  // reaches the browser as an attribute of the page it arrived on.
+  const raw = params["return_to"];
+  const returnTo = safeReturnTo(typeof raw === "string" ? raw : undefined);
   return (
     <LoginForm
       sso={sso}
       password={password}
       ssoError={typeof reason === "string" ? reason : undefined}
+      {...(returnTo === DEFAULT_RETURN_TO ? {} : { returnTo })}
     />
   );
 }

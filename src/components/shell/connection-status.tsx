@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 import { cn } from "@/lib/utils";
 
 type ProbeResult =
@@ -13,6 +14,12 @@ async function probe(): Promise<ProbeResult> {
   } catch {
     return { ok: false, message: "console server unreachable" };
   }
+  // This poll is the **third** direct consumer of the BFF, and on an idle page
+  // it is the only one still running — so if it treated a sign-out as an outage,
+  // an operator whose token was revoked would sit in front of "Platform
+  // unreachable" indefinitely, with an SSE trace still streaming beside it,
+  // because nothing else was left to notice (found in review, PR #95).
+  if (isSignedOut(response)) bounceToLogin();
   if (response.ok) return { ok: true };
   const requestId = response.headers.get("request-id") ?? undefined;
   try {
