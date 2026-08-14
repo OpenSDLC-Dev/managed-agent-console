@@ -7,6 +7,9 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import {
+  consoleGet,
+  consolePost,
+  consolePostNoContent,
   platformDelete,
   platformGet,
   platformPost,
@@ -17,6 +20,8 @@ import {
 import type {
   Agent,
   Environment,
+  EnvironmentKeyIssued,
+  EnvironmentKeyPage,
   PlatformFile,
   Session,
   SessionEvent,
@@ -418,6 +423,71 @@ export function useDeleteVault(id: string) {
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ["vault", id] });
       void queryClient.invalidateQueries({ queryKey: ["vaults"] });
+    },
+  });
+}
+
+// ---- environment keys (the console API, plan 07)
+//
+// The organization segment is the platform's reserved `default`
+// (internal/api/consoleapi.go:52-53): the segment exists because the
+// reference's does, and v1 answers for no other value.
+
+const ORG = "default";
+
+/** consoleapi.go:62 — both the default and the maximum page size. */
+const ENVIRONMENT_KEY_LIMIT = 100;
+
+export function useEnvironmentKeys(environmentId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["environment-keys", environmentId],
+    queryFn: () =>
+      consoleGet<EnvironmentKeyPage>(
+        `organizations/${ORG}/environments/${environmentId}/tokens`,
+        { limit: ENVIRONMENT_KEY_LIMIT },
+      ),
+    enabled,
+  });
+}
+
+/**
+ * Issue a key. The response carries the plaintext and nothing else — no id, no
+ * name, no timestamps (consoleapi.go:74-79) — so the new row cannot be rendered
+ * from it and the list is invalidated instead, which is the reference console's
+ * own sequence.
+ *
+ * `errorToast: false`: the create dialog shows its own inline error, because a
+ * global toast would fire behind a modal the operator is still looking at.
+ */
+export function useCreateEnvironmentKey(environmentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: { name: string }) =>
+      consolePost<EnvironmentKeyIssued>(
+        `organizations/${ORG}/environments/${environmentId}/tokens`,
+        body,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["environment-keys", environmentId],
+      });
+    },
+  });
+}
+
+export function useRevokeEnvironmentKey(environmentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Revoke failed" },
+    mutationFn: (tokenId: string) =>
+      consolePostNoContent(
+        `organizations/${ORG}/environments/${environmentId}/tokens/${tokenId}/revoke`,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["environment-keys", environmentId],
+      });
     },
   });
 }

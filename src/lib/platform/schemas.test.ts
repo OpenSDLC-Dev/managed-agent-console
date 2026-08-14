@@ -27,6 +27,9 @@ import {
 } from "../../../test/mock-platform/server.mjs";
 import {
   AgentSchema,
+  EnvironmentKeyIssuedSchema,
+  EnvironmentKeyPageSchema,
+  EnvironmentKeySchema,
   EnvironmentSchema,
   PlatformFileSchema,
   SessionEventSchema,
@@ -103,11 +106,16 @@ describe("mock fixtures conform to the platform wire", () => {
     each(PlatformFileSchema, fixtures.files, "files");
   });
 
+  it("environment keys (the console API)", () => {
+    eachIn(EnvironmentKeySchema, fixtures.environmentKeys, "environmentKeys");
+  });
+
   it("covers every collection the mock exports", () => {
     // A new fixture collection must be validated here, not silently skipped.
     expect(Object.keys(fixtures).sort()).toEqual([
       "agentVersions",
       "agents",
+      "environmentKeys",
       "environments",
       "files",
       "sessionEvents",
@@ -233,6 +241,65 @@ describe("the mock's constructed write-path responses conform too", () => {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
+  });
+
+  it("environment keys: list, issue, then the refreshed list", async () => {
+    const envId = "env_byoc0000000000000001";
+    const path = `/api/oauth/organizations/default/environments/${envId}/tokens`;
+
+    const before = await call(path, { method: "GET" });
+    expectConforms(EnvironmentKeyPageSchema, before, `GET ${path}`);
+
+    const issued = await postJSON(path, { name: "conformance-runner" });
+    expectConforms(EnvironmentKeyIssuedSchema, issued, `POST ${path}`);
+    // The issuance response identifies no row — that is why the console has to
+    // re-read the list rather than render from it (consoleapi.go:74-79).
+    expect(Object.keys(issued as object).sort()).toEqual([
+      "access_token",
+      "expires_in",
+    ]);
+
+    const after = await call(path, { method: "GET" });
+    expectConforms(EnvironmentKeyPageSchema, after, `GET ${path} (after)`);
+    const rows = (after as { data: unknown[] }).data;
+    expect(rows.length).toBe((before as { data: unknown[] }).data.length + 1);
+    each(EnvironmentKeySchema, rows, "issued listing");
+
+    // Revoke answers a bodiless 204, which `call` cannot parse — assert it
+    // directly, because this is the shape consolePostNoContent exists for.
+    const newest = rows[0] as { id: string };
+    const revoking = (id: string) =>
+      fetch(`${base}${path}/${id}/revoke`, {
+        method: "POST",
+        headers: { "x-api-key": API_KEY },
+      });
+
+    const revoke = await revoking(newest.id);
+    expect(revoke.status).toBe(204);
+    expect(await revoke.text()).toBe("");
+
+    // The three revoke outcomes, all confirmed against a live platform on
+    // 2026-08-14. Revocation is idempotent because the UPDATE matches on id +
+    // environment and coalesces the timestamp (envkeys.go:161-168); the row
+    // leaves the listing because the SELECTs filter `revoked_at IS NULL`
+    // (envkeys.go:121,133). Only 404 distinguishes "never issued here".
+    const afterRevoke = await call(path, { method: "GET" });
+    const remaining = (afterRevoke as { data: { id: string }[] }).data;
+    expect(remaining.map((k) => k.id)).not.toContain(newest.id);
+    expect(
+      (afterRevoke as { pagination: { total: number } }).pagination.total,
+    ).toBe(rows.length - 1);
+
+    const again = await revoking(newest.id);
+    expect(again.status).toBe(204);
+    expect(await again.text()).toBe("");
+
+    const unknown = await revoking("envkey_0000000000000000000000000");
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({
+      type: "error",
+      error: { type: "not_found_error" },
+    });
   });
 
   it("agents: create, update, archive", async () => {

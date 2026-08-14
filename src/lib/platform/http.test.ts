@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PlatformError,
+  consoleGet,
+  consolePost,
+  consolePostNoContent,
   platformDelete,
   platformGet,
   platformPost,
@@ -196,5 +199,76 @@ describe("platformDelete", () => {
       errorType: "api_error",
       message: "HTTP 502",
     });
+  });
+});
+
+describe("console-API helpers", () => {
+  it("consoleGet targets /api/oauth and carries query params", async () => {
+    const fetchMock = vi.fn(async () => json({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await consoleGet("organizations/default/environments/env_1/tokens", {
+      limit: 100,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/oauth/organizations/default/environments/env_1/tokens?limit=100",
+    );
+  });
+
+  it("consolePost sends JSON and returns the parsed body", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({ access_token: "sk-map-env01-x", expires_in: 31536000 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const issued = await consolePost<{ access_token: string }>(
+      "organizations/default/environments/env_1/tokens",
+      { name: "prod" },
+    );
+    expect(issued.access_token).toBe("sk-map-env01-x");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/oauth/organizations/default/environments/env_1/tokens",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "prod" }),
+      },
+    );
+  });
+
+  // The reason consolePostNoContent exists: revoke succeeds as a bodiless 204,
+  // and the JSON-parsing helpers would turn that success into an error toast.
+  it("consolePostNoContent resolves on a bodiless 204", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
+    await expect(
+      consolePostNoContent(
+        "organizations/default/environments/env_1/tokens/envkey_1/revoke",
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("consolePostNoContent sends no body and no content-type", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await consolePostNoContent(
+      "organizations/default/environments/e/tokens/k/revoke",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/oauth/organizations/default/environments/e/tokens/k/revoke",
+      { method: "POST" },
+    );
+  });
+
+  it("consolePostNoContent still throws a PlatformError on a failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(envelope, 404)),
+    );
+    await expect(
+      consolePostNoContent(
+        "organizations/default/environments/env_1/tokens/gone/revoke",
+      ),
+    ).rejects.toBeInstanceOf(PlatformError);
   });
 });

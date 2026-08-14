@@ -331,6 +331,50 @@ export const PlatformFileSchema = z.object({
   created_at: z.string(),
 });
 
+// ---- environment keys, the console API (internal/api/consoleapi.go)
+//
+// This is the off-wire console namespace, not `/v1`: paths and field names are
+// mirrored segment-for-segment from the reference console's private API
+// (consoleapi.go:39-48). It is reached through the console's own
+// `/api/oauth/...` passthrough.
+
+/**
+ * consoleapi.go:83-89 — a key as the listing renders it. `expires_at` is
+ * nullable: a key minted before the platform's migration 0021 has none and
+ * never expires. The secret is never in this shape.
+ */
+export const EnvironmentKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  created_at: z.string(),
+  expires_at: z.string().nullable(),
+});
+
+/** consoleapi.go:99-104 — the offset block this dialect pages with. */
+export const PaginationSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  has_more: z.boolean(),
+});
+
+/** consoleapi.go:92-97 — `data` plus the offset block, not a keyset cursor. */
+export const EnvironmentKeyPageSchema = z.object({
+  data: z.array(EnvironmentKeySchema),
+  pagination: PaginationSchema,
+});
+
+/**
+ * consoleapi.go:74-79 — the issuance response: an RFC 6749 token response
+ * carrying **no id, name or timestamps**, so a caller that wants the new row
+ * re-reads the list. `access_token` is the only time the secret exists outside
+ * the platform's hash of it.
+ */
+export const EnvironmentKeyIssuedSchema = z.object({
+  access_token: z.string(),
+  expires_in: z.number(),
+});
+
 // ---- inferred types (re-exported by ./types, which is what consumers import)
 
 export type ModelRef = z.infer<typeof ModelRefSchema>;
@@ -355,3 +399,6 @@ export type VaultCredential = z.infer<typeof VaultCredentialSchema>;
 export type Skill = z.infer<typeof SkillSchema>;
 export type SkillVersion = z.infer<typeof SkillVersionSchema>;
 export type PlatformFile = z.infer<typeof PlatformFileSchema>;
+export type EnvironmentKey = z.infer<typeof EnvironmentKeySchema>;
+export type EnvironmentKeyPage = z.infer<typeof EnvironmentKeyPageSchema>;
+export type EnvironmentKeyIssued = z.infer<typeof EnvironmentKeyIssuedSchema>;

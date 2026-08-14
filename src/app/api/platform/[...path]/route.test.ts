@@ -52,6 +52,40 @@ describe("platform BFF proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // This gate only inspects the first segment, so a traversal after it used to
+  // satisfy the check and then be resolved away by the URL `fetch` builds —
+  // `v1/../../admin/keys` leaves the wire surface entirely while the gate
+  // believes it approved a `/v1` path. `forward` refuses it for both proxies
+  // (PR #86 review, P1).
+  it.each([
+    ["climbing out of /v1", ["v1", "..", "..", "admin", "keys"]],
+    ["a double-encoded climb", ["v1", "%2e%2e", "%2e%2e", "admin", "keys"]],
+    ["a single-dot segment", ["v1", ".", "agents"]],
+    ["an empty segment", ["v1", "", "agents"]],
+    ["a backslash segment", ["v1", "..\\..", "agents"]],
+  ])("refuses %s without contacting the platform", async (_label, path) => {
+    const response = await GET(
+      new NextRequest(`http://localhost:3000/api/platform/${path.join("/")}`),
+      ctx(...path),
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      type: "error",
+      error: { type: "invalid_request_error" },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still forwards an ordinary /v1 path unchanged", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    await GET(
+      new NextRequest("http://localhost:3000/api/platform/v1/agents/agt_1"),
+      ctx("v1", "agents", "agt_1"),
+    );
+    const [url] = upstreamCall();
+    expect(url).toBe("http://platform.local/v1/agents/agt_1");
+  });
+
   it("returns the api_error envelope when PLATFORM_BASE_URL is missing", async () => {
     vi.stubEnv("PLATFORM_BASE_URL", undefined);
     const response = await GET(

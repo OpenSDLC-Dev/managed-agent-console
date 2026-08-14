@@ -11,6 +11,7 @@ import {
   agents,
   agentVersions,
   environments,
+  environmentKeys,
   files,
   sessions as sessionFixtures,
   sessionEvents as eventFixtures,
@@ -58,6 +59,10 @@ let skillsStore = [];
 let skillVersionsStore = {};
 let skillCounter = 1;
 let skillVersionCounter = 1;
+// Console API (plan 07): environment id -> issued keys, newest first. The
+// plaintext is never stored — the platform keeps only a hash, and so does this.
+let envKeysStore = {};
+let envKeyCounter = 1;
 
 function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
@@ -91,6 +96,8 @@ function resetStore() {
   credCounter = 1;
   skillCounter = 1;
   skillVersionCounter = 1;
+  envKeysStore = structuredClone(environmentKeys);
+  envKeyCounter = 1;
 }
 resetStore();
 
@@ -576,6 +583,154 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
     res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    return;
+  }
+  // The same hook for the console API: `environment-keys` stands for a platform
+  // that predates plan 30 and never registered the namespace.
+  if (
+    unimplemented.includes("environment-keys") &&
+    url.pathname.startsWith("/api/oauth/")
+  ) {
+    res.setHeader("content-type", "application/json");
+    res.writeHead(404);
+    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    return;
+  }
+
+  // ---- console API (internal/api/consoleapi.go), reached through the
+  // console's own /api/oauth passthrough. `default` is the only organization
+  // v1 answers for (consoleapi.go:52-53).
+  const tokensMatch = url.pathname.match(
+    /^\/api\/oauth\/organizations\/([^/]+)\/environments\/([^/]+)\/tokens$/,
+  );
+  const revokeMatch = url.pathname.match(
+    /^\/api\/oauth\/organizations\/([^/]+)\/environments\/([^/]+)\/tokens\/([^/]+)\/revoke$/,
+  );
+  if (tokensMatch || revokeMatch) {
+    res.setHeader("content-type", "application/json");
+    const [, org, envId] = tokensMatch ?? revokeMatch;
+    if (org !== "default") {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", `organization ${org} not found`));
+      return;
+    }
+    const env = environmentsStore.find((e) => e.id === envId);
+    if (!env) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", `environment ${envId} not found`));
+      return;
+    }
+    envKeysStore[envId] ??= [];
+
+    if (tokensMatch && req.method === "GET") {
+      const limit = Number(url.searchParams.get("limit") ?? 100);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      // `WHERE ... revoked_at IS NULL` (envkeys.go:121,133) — a revoked row stays
+      // in the table and leaves the listing. `revoked_at` is the mock's own
+      // bookkeeping, so the projection is explicit rather than a spread.
+      const all = envKeysStore[envId].filter((k) => !k.revoked_at);
+      const data = all.slice(offset, offset + limit).map((k) => ({
+        id: k.id,
+        name: k.name,
+        created_at: k.created_at,
+        expires_at: k.expires_at,
+      }));
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          data,
+          pagination: {
+            total: all.length,
+            limit,
+            offset,
+            has_more: offset + data.length < all.length,
+          },
+        }),
+      );
+      return;
+    }
+
+    if (tokensMatch && req.method === "POST") {
+      let body;
+      try {
+        body = JSON.parse((await readBody(req)).toString() || "{}");
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name || [...name].length > 128) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "name must be 1-128 characters"),
+        );
+        return;
+      }
+      // Both refusals the platform makes, in its order (consoleapi.go:200-205).
+      if (env.config?.type !== "self_hosted") {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `environment ${envId} is a ${env.config?.type} environment; only a self_hosted environment runs a worker that authenticates with an environment key`,
+          ),
+        );
+        return;
+      }
+      if (env.archived_at) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", `environment ${envId} is archived`),
+        );
+        return;
+      }
+      const n = envKeyCounter++;
+      const id = `envkey_new${String(n).padStart(14, "0")}`;
+      const created = now();
+      envKeysStore[envId].unshift({
+        id,
+        name,
+        created_at: created,
+        expires_at: new Date(
+          Date.parse(created) + 365 * 24 * 3600 * 1000,
+        ).toISOString(),
+      });
+      // RFC 6749 token response: the plaintext, and nothing that identifies the
+      // row (consoleapi.go:74-79). `no-store` is the platform's own header on
+      // this one route (consoleapi.go noStore).
+      res.setHeader("cache-control", "no-store");
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          access_token: `sk-map-env01-mock${String(n).padStart(4, "0")}`,
+          expires_in: 31536000,
+        }),
+      );
+      return;
+    }
+
+    if (revokeMatch && req.method === "POST") {
+      const tokenId = revokeMatch[3];
+      const key = envKeysStore[envId].find((k) => k.id === tokenId);
+      // Idempotent: `SET revoked_at = coalesce(revoked_at, now())` matches on
+      // id + environment alone (envkeys.go:161-168), so revoking an already
+      // revoked key answers 204 again. Only an id this environment never
+      // issued reaches the 404 — verified against a live platform 2026-08-14.
+      if (!key) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "environment key not found"));
+        return;
+      }
+      key.revoked_at ??= now();
+      // Bodiless 204 — the shape `handleNoContent` answers with.
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    res.writeHead(405);
+    res.end(envelope("invalid_request_error", "method not allowed"));
     return;
   }
 

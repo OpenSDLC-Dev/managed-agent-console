@@ -1,7 +1,7 @@
 /**
  * Browser-side helpers for talking to the platform through the BFF proxy.
- * Everything goes to /api/platform/v1/... — never to the platform directly
- * (CLAUDE.md principle 2).
+ * Everything goes to /api/platform/v1/... — or, for the off-wire console API,
+ * /api/oauth/... — never to the platform directly (CLAUDE.md principle 2).
  */
 
 export interface ErrorEnvelope {
@@ -38,10 +38,33 @@ export interface ClassicPage<T> {
   last_id: string | null;
 }
 
-export async function platformGet<T>(
-  path: string,
+/**
+ * The console API's offset envelope (internal/api/consoleapi.go:92-104) — a
+ * third list shape, neither the wire surface's keyset `Page<T>` nor files'
+ * `ClassicPage<T>`. It is what the reference console's own listing returns.
+ */
+export interface OffsetPage<T> {
+  data: T[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+}
+
+/** Throws `PlatformError` unless the response is 2xx. */
+async function assertOk(response: Response): Promise<void> {
+  if (response.ok) return;
+  const envelope = (await response
+    .json()
+    .catch(() => null)) as ErrorEnvelope | null;
+  throw new PlatformError(response.status, envelope);
+}
+
+function queryString(
   params?: Record<string, string | number | boolean | string[] | undefined>,
-): Promise<T> {
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value === undefined) continue;
@@ -51,14 +74,15 @@ export async function platformGet<T>(
       search.set(key, String(value));
     }
   }
-  const query = search.size > 0 ? `?${search.toString()}` : "";
-  const response = await fetch(`/api/platform/${path}${query}`);
-  if (!response.ok) {
-    const envelope = (await response
-      .json()
-      .catch(() => null)) as ErrorEnvelope | null;
-    throw new PlatformError(response.status, envelope);
-  }
+  return search.size > 0 ? `?${search.toString()}` : "";
+}
+
+export async function platformGet<T>(
+  path: string,
+  params?: Record<string, string | number | boolean | string[] | undefined>,
+): Promise<T> {
+  const response = await fetch(`/api/platform/${path}${queryString(params)}`);
+  await assertOk(response);
   return (await response.json()) as T;
 }
 
@@ -68,12 +92,7 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) {
-    const envelope = (await response
-      .json()
-      .catch(() => null)) as ErrorEnvelope | null;
-    throw new PlatformError(response.status, envelope);
-  }
+  await assertOk(response);
   return (await response.json()) as T;
 }
 
@@ -85,22 +104,63 @@ export async function platformPostForm<T>(
     method: "POST",
     body: form,
   });
-  if (!response.ok) {
-    const envelope = (await response
-      .json()
-      .catch(() => null)) as ErrorEnvelope | null;
-    throw new PlatformError(response.status, envelope);
-  }
+  await assertOk(response);
   return (await response.json()) as T;
 }
 
 export async function platformDelete<T>(path: string): Promise<T> {
   const response = await fetch(`/api/platform/${path}`, { method: "DELETE" });
-  if (!response.ok) {
-    const envelope = (await response
-      .json()
-      .catch(() => null)) as ErrorEnvelope | null;
-    throw new PlatformError(response.status, envelope);
-  }
+  await assertOk(response);
   return (await response.json()) as T;
+}
+
+// ---- the console API (`/api/oauth/...`), plan 07
+//
+// Separate helpers rather than a base-path parameter on the four above: the two
+// namespaces are different contracts, not one contract with a variable prefix,
+// and a call site that can silently swap between them is a call site that can
+// send a console body to a wire route.
+
+export async function consoleGet<T>(
+  path: string,
+  params?: Record<string, string | number | boolean | string[] | undefined>,
+): Promise<T> {
+  const response = await fetch(`/api/oauth/${path}${queryString(params)}`);
+  await assertOk(response);
+  return (await response.json()) as T;
+}
+
+export async function consolePost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`/api/oauth/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await assertOk(response);
+  return (await response.json()) as T;
+}
+
+/**
+ * A POST whose success is a bodiless 204 — the shape the revoke route answers
+ * (`internal/api/server.go:132` registers it through `handleNoContent`).
+ *
+ * The `platform*` helpers all parse a JSON body on success, which is correct
+ * for every `/v1` route the console calls and wrong here: `response.json()` on
+ * an empty body throws, so a *successful* revoke would surface as an error
+ * toast. Nothing in the console hit a 204 before this.
+ */
+export async function consolePostNoContent(
+  path: string,
+  body?: unknown,
+): Promise<void> {
+  const response = await fetch(`/api/oauth/${path}`, {
+    method: "POST",
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+  });
+  await assertOk(response);
 }
