@@ -4,7 +4,7 @@ import { discover } from "@/lib/identity/discovery";
 import { consoleAuthMode } from "@/lib/identity/mode";
 import { randomToken, timingSafeEqual } from "@/lib/identity/pkce";
 import { AUTH_STATE_COOKIE, authErrorRedirect } from "@/lib/identity/routes";
-import { exchangeCode, verifyIdToken } from "@/lib/identity/rp";
+import { exchangeCode, requestOrigin, verifyIdToken } from "@/lib/identity/rp";
 import {
   IDENTITY_COOKIE,
   putSession,
@@ -107,8 +107,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   // refused everything that could resolve off-origin; the check below is the
   // belt to that brace, because this is the one place a mistake becomes an open
   // redirect on a page the operator has just been asked to trust.
-  const destination = new URL(pending.returnTo, request.nextUrl.origin);
-  if (destination.origin !== request.nextUrl.origin) {
+  const origin = requestOrigin(request);
+  const destination = new URL(pending.returnTo, origin);
+  if (destination.origin !== origin) {
     return clearState(authErrorRedirect(request, "state_mismatch"), request);
   }
   const response = NextResponse.redirect(destination, { status: 302 });

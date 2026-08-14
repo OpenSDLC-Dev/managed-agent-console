@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { isHttpsRequest } from "@/lib/auth";
+import { requestOrigin } from "./rp";
 import { IDENTITY_COOKIE } from "./session";
 
 /** Short-lived, binds a pending authorization to the browser that started it. */
@@ -42,12 +43,13 @@ export type AuthError =
 
 /** Sends the browser back to the login page with a code the page can explain. */
 export function authErrorRedirect(
-  request: { nextUrl: URL },
+  request: { headers: Headers; nextUrl: URL },
   reason: AuthError,
 ): NextResponse {
-  const url = new URL(request.nextUrl);
-  url.pathname = "/login";
+  // Built from the origin the browser used, not from `nextUrl` — see
+  // `requestOrigin`. A failed sign-in that lands on the wrong host looks to the
+  // operator exactly like a console that is down.
+  const url = new URL("/login", requestOrigin(request));
   url.search = `?sso_error=${reason}`;
-  url.hash = "";
   return NextResponse.redirect(url, { status: 302 });
 }

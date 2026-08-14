@@ -247,6 +247,20 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "role-denied",
+    route: "/skills",
+    fixture: "a platform that refuses this role — the mock's own 403",
+    description:
+      "ErrorState's denied variant (plan 08 slice 4): the platform's message quoted verbatim, naming the role the route requires rather than the one the operator holds, over a nav item that deliberately stays put. The third of the three refusal layouts — `detail-error` is a 404 on an item, `surface-unavailable` a surface the deployment lacks, this one a surface the operator may not read.",
+    setup: async (page) => {
+      await page.request.post("http://127.0.0.1:18081/__forbid", {
+        data: { paths: ["v1/skills"] },
+      });
+      await page.reload();
+      await page.getByTestId("error-state").waitFor();
+    },
+  },
+  {
     id: "surface-unavailable",
     route: "/skills",
     fixture: "a deployment that does not serve /v1/skills",

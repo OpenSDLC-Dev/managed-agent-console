@@ -64,6 +64,16 @@ const request = (query: string, cookie?: string) =>
     cookie ? { headers: { cookie } } : undefined,
   );
 
+/**
+ * The shape the standalone server actually hands a route handler: the URL is
+ * built from the address the process bound (`HOSTNAME=0.0.0.0`), while the host
+ * the browser used survives only in the header.
+ */
+const asStandalone = (query: string, cookie: string) =>
+  new NextRequest(`http://0.0.0.0:3300/api/auth/callback${query}`, {
+    headers: { cookie, host: "console.example.com" },
+  });
+
 const stateCookie = (value = STATE) => `console_auth_state=${value}`;
 
 const pending = () =>
@@ -137,6 +147,32 @@ describe("GET /api/auth/callback", () => {
       email: "operator@example.com",
       idToken,
     });
+  });
+
+  // The bug this pins was found by signing in, not by reading: under the
+  // standalone server this repo ships, a completed sign-in landed on
+  // `http://0.0.0.0:3300/agents` — an origin the session cookie, host-only for
+  // the real hostname, does not reach. The operator arrives signed out on a
+  // host that does not resolve, which reads as a broken console.
+  it("lands on the host the browser used, not the address the server bound", async () => {
+    pending();
+    const response = await GET(
+      asStandalone(`?code=the-code&state=${STATE}`, stateCookie()),
+    );
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin).toBe("http://console.example.com");
+    expect(location.pathname).toBe("/sessions");
+    expect(sessionIdFrom(response)).toBeTruthy();
+  });
+
+  it("sends a failed sign-in back to that same host", async () => {
+    const response = await GET(
+      asStandalone("?error=access_denied", stateCookie()),
+    );
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin).toBe("http://console.example.com");
+    expect(location.pathname).toBe("/login");
+    expect(errorFrom(response)).toBe("provider_refused");
   });
 
   it("mints an httpOnly handle, and never the token itself", async () => {

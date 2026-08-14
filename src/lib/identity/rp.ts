@@ -61,6 +61,41 @@ export function safeReturnTo(raw: string | null | undefined): string {
 }
 
 /**
+ * The origin the browser used to reach this console.
+ *
+ * **Not `request.nextUrl.origin`**, which in a route handler carries the
+ * server's *bind* address rather than the request's: the standalone server this
+ * repo ships as a Docker image binds `HOSTNAME=0.0.0.0`, so `nextUrl.origin`
+ * reads `http://0.0.0.0:3300` and a redirect built from it lands the operator
+ * on an origin their session cookie — host-only, set for the real hostname —
+ * was never scoped to. Observed at the end of a real sign-in against the
+ * bundled Casdoor, twice (plan 08 slice 5).
+ *
+ * So every redirect that returns a browser to this console resolves against the
+ * forwarded host, which is the same value the redirect URI is built from and
+ * the only one the browser can act on.
+ */
+export function requestOrigin(request: {
+  headers: Headers;
+  nextUrl: URL;
+}): string {
+  const host =
+    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  const scheme = isHttpsRequest(request) ? "https" : "http";
+  try {
+    // Parsed rather than concatenated, so callers can compare this against a
+    // `URL.origin` — which lowercases the host — without a case mismatch
+    // turning a legitimate return path into a refused one. A host header too
+    // malformed to parse falls back to the address we are certain of.
+    return new URL(`${scheme}://${host}`).origin;
+  } catch {
+    return request.nextUrl.origin;
+  }
+}
+
+/**
  * The redirect URI, which must be **byte-identical** between the authorization
  * request and the token exchange (RFC 6749 §4.1.3) — which is why the value is
  * stored with the pending authorization rather than recomputed on the way back.
@@ -76,12 +111,7 @@ export function resolveRedirectUri(
   config: OidcConfig,
 ): string {
   if (config.redirectUrl !== undefined) return config.redirectUrl;
-  const host =
-    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
-    request.headers.get("host") ||
-    request.nextUrl.host;
-  const scheme = isHttpsRequest(request) ? "https" : "http";
-  return `${scheme}://${host}/api/auth/callback`;
+  return `${requestOrigin(request)}/api/auth/callback`;
 }
 
 export function authorizationUrl(
