@@ -21,6 +21,7 @@ import {
   ArchiveButton,
   DeleteButton,
 } from "@/components/console/archive-button";
+import { EnvironmentKeysSection } from "@/components/console/environment-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -110,6 +111,7 @@ export default function EnvironmentDetailPage({
           </Field>
         </FieldList>
       </DetailSection>
+      <EnvironmentKeysSection environment={environment} />
       <DetailSection title="Config">
         <JsonBlock value={config} />
       </DetailSection>

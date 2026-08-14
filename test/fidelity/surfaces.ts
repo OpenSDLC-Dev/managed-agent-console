@@ -106,7 +106,10 @@ export const SURFACES: Surface[] = [
     id: "environment-detail",
     route: `/environments/${ENV}`,
     fixture: ENV,
-    description: "The environment config union rendered as sections.",
+    description:
+      "The environment config union rendered as sections, plus the " +
+      "environment-key table — this fixture is the self-hosted arm, the only " +
+      "one that shows keys at all.",
   },
   {
     id: "vault-detail",

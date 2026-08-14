@@ -116,6 +116,32 @@ failure. Each narrowing was therefore checked against the platform's own validat
   only shape where `z.looseObject` is used, because it is the only one whose inferred type should
   carry `[k: string]: unknown`.
 
+## Feature-detecting the console API (plan 07, seam 6)
+
+`isUnimplemented` (`src/lib/platform/surfaces.ts`) is documented as valid **only on collection
+routes**: the platform has no 501, an unregistered route falls through the router's catch-all
+(`internal/api/server.go:152`), and the 404 it answers is the same envelope a missing resource gets.
+A collection path carries no id that could be missing, so a 404 there can only mean the endpoint is.
+
+The console API's listing route breaks that precondition — it carries an environment id, and the
+platform 404s a missing environment on the same route (`internal/api/consoleapi.go:127-142`). The
+decision is to read the 404 as "unimplemented" anyway, but **only from inside the environment
+detail page**, where three things are already true:
+
+1. `useEnvironment(id)` has succeeded for the same id, so the environment exists;
+2. the org segment is the literal `default` the platform pins (`consoleapi.go:52-53`), so the
+   unrecognized-organization branch is unreachable;
+3. the id came from the platform's own listing, so the malformed-id branch is unreachable.
+
+With all three of `consoleEnvironment`'s 404 branches closed, what remains is the catch-all — a
+platform predating plan 30. The section hides itself; the rest of the page is untouched, and a 5xx
+still renders as an error rather than a missing feature. The alternative considered and rejected was
+a probe request against the collection with a known-good id: it buys nothing this page does not
+already know, and costs a round trip per visit.
+
+The precondition is a real one, not a formality: the same 404 read from a page that has _not_ loaded
+the environment would hide a live surface because an id was wrong.
+
 ## Reference surfaces the platform has deferred
 
 Documentation only — principle 1 keeps these out of the console until the platform serves them:
