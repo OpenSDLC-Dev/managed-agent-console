@@ -72,52 +72,67 @@ test.afterAll(async () => {
     }
   };
 
-  const keysPath = `${baseUrl}/api/console/organizations/default/workspaces/default/api_keys`;
-  try {
-    const listed = await api.get(keysPath, { headers: mgmt });
-    if (listed.ok()) {
-      const rows = (await listed.json()) as {
-        id: string;
-        name: string;
-        status: string;
-      }[];
-      for (const row of rows) {
-        if (!row.name.endsWith(RUN) || row.status === "archived") continue;
-        await call(`archiving key ${row.name}`, () =>
-          api.post(`${keysPath}/${row.id}`, {
-            headers: mgmt,
-            data: { status: "archived" },
-          }),
-        );
-      }
-    } else {
-      failures.push(`listing management keys: HTTP ${listed.status()}`);
+  /** Reads a listing; a failure is recorded and answered with nothing. */
+  const read = async (what: string, url: string): Promise<unknown> => {
+    try {
+      const res = await api.get(url, { headers: mgmt });
+      if (res.ok()) return await res.json();
+      failures.push(`${what}: HTTP ${res.status()}`);
+    } catch (error) {
+      failures.push(`${what}: ${String(error)}`);
     }
-  } catch (error) {
-    failures.push(`listing management keys: ${String(error)}`);
+    return undefined;
+  };
+
+  // Each listing is read and parsed **apart from** the loop that acts on it.
+  // Sharing one `try` would let a single surprising row — a null name, say —
+  // abort the sweep before it reached the credential this run is responsible
+  // for, which is the one outcome the sweep exists to prevent.
+  const keysPath = `${baseUrl}/api/console/organizations/default/workspaces/default/api_keys`;
+  const keys = ((await read("listing management keys", keysPath)) ?? []) as {
+    id: string;
+    name?: string | null;
+    status?: string;
+  }[];
+  for (const row of keys) {
+    if (!row?.name?.endsWith(RUN) || row.status === "archived") continue;
+    await call(`archiving key ${row.name}`, () =>
+      api.post(`${keysPath}/${row.id}`, {
+        headers: mgmt,
+        data: { status: "archived" },
+      }),
+    );
   }
 
-  if (createdEnvironmentId) {
+  // The environment id is captured *after* a navigation assertion, so a failure
+  // there leaves an environment nothing has recorded. Find it by the name this
+  // run gave it rather than trusting that the assertion was reached.
+  const environments = new Set(
+    createdEnvironmentId ? [createdEnvironmentId] : [],
+  );
+  const listed = (await read(
+    "listing environments",
+    `${baseUrl}/v1/environments?limit=100`,
+  )) as { data?: { id: string; name?: string | null }[] } | undefined;
+  for (const env of listed?.data ?? []) {
+    if (env?.name === `live-e2e-byoc-${RUN}`) environments.add(env.id);
+  }
+
+  for (const id of environments) {
     // Archiving an environment does not retire its keys — plan 07 slice 3 kept
     // them revocable on purpose — so the worker credentials go first.
-    const tokens = `${baseUrl}/api/oauth/organizations/default/environments/${createdEnvironmentId}/tokens`;
-    try {
-      const listed = await api.get(`${tokens}?limit=100`, { headers: mgmt });
-      if (listed.ok()) {
-        const { data } = (await listed.json()) as { data: { id: string }[] };
-        for (const row of data) {
-          await call(`revoking ${row.id}`, () =>
-            api.post(`${tokens}/${row.id}/revoke`, { headers: mgmt }),
-          );
-        }
-      } else {
-        failures.push(`listing environment keys: HTTP ${listed.status()}`);
-      }
-    } catch (error) {
-      failures.push(`listing environment keys: ${String(error)}`);
+    const tokens = `${baseUrl}/api/oauth/organizations/default/environments/${id}/tokens`;
+    const page = (await read(
+      `listing keys of ${id}`,
+      `${tokens}?limit=100`,
+    )) as { data?: { id: string }[] } | undefined;
+    for (const row of page?.data ?? []) {
+      await call(`revoking ${row.id}`, () =>
+        api.post(`${tokens}/${row.id}/revoke`, { headers: mgmt }),
+      );
     }
-    await call(`archiving ${createdEnvironmentId}`, () =>
-      api.post(`${baseUrl}/v1/environments/${createdEnvironmentId}/archive`, {
+    await call(`archiving ${id}`, () =>
+      api.post(`${baseUrl}/v1/environments/${id}/archive`, {
         headers: mgmt,
         data: {},
       }),
