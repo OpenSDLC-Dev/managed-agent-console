@@ -17,7 +17,9 @@ import { SignedInAs } from "./signed-in-as";
 
 function renderBlock() {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    // `retry` is the component's own call; only the backoff is the harness's,
+    // so a retry that recovers does not cost the suite a second of waiting.
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
   });
   return render(
     <QueryClientProvider client={client}>
@@ -86,6 +88,26 @@ describe("SignedInAs", () => {
     vi.stubGlobal("fetch", answers(body, status));
     const { container } = renderBlock();
     await waitFor(() => expect(container.firstChild).toBeNull());
+  });
+
+  // Only 404 means "no identity here". Read that way, a transient failure would
+  // be cached as absence for the life of the page — taking the account block,
+  // and the only Sign out control, away until a full reload.
+  it("probe: a transient failure is not read as a deployment without identity", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response("<html>bad gateway</html>", { status: 502 })
+          : new Response(JSON.stringify({ signed_in: true, name: "Operator" }));
+      }),
+    );
+    renderBlock();
+    // The retry gets there on its own: nothing was cached as "absent".
+    await waitFor(() => expect(screen.getByTestId("sign-out")).toBeDefined());
+    expect(screen.getByText("Operator")).toBeDefined();
   });
 
   it("signs out, then leaves without remembering the page", async () => {

@@ -25,8 +25,17 @@ const SIGN_OUT_TIMEOUT_MS = 5_000;
 
 async function readSession(): Promise<SessionInfo | null> {
   const response = await fetch("/api/auth/session");
-  // 404 is "this deployment has no identity", not a failure.
-  if (!response.ok) return null;
+  // 404 is "this deployment has no identity", not a failure — and only 404.
+  // Anything else that failed has to stay a failure: read as absence it would
+  // be cached as one, and a single 502 from a restarting pod or the proxy in
+  // front of it would take the account block — and with it the only Sign out
+  // control — away for the life of the page.
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(
+      `the console session could not be read: ${response.status}`,
+    );
+  }
   return (await response.json()) as SessionInfo;
 }
 
@@ -35,10 +44,13 @@ export function SignedInAs() {
   const { data } = useQuery({
     queryKey: ["console-session"],
     queryFn: readSession,
+    // A deployment's identity configuration cannot change without a restart
+    // that ends this page's session anyway, so a *successful* answer is good
+    // for the life of the page and never refetches on focus. A failed one is
+    // not: it retries, and stays stale so returning to the tab tries again.
     staleTime: Infinity,
     gcTime: Infinity,
-    retry: false,
-    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   if (!data?.signed_in) return null;
