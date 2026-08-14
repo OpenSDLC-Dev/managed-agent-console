@@ -210,6 +210,21 @@ function formUrlEncode(value: string): string {
   return new URLSearchParams({ v: value }).toString().slice("v=".length);
 }
 
+/**
+ * A display claim, or `undefined` if the provider left it blank.
+ *
+ * Blank is not the same as absent to a `??` chain, and this is the seam where
+ * that matters: every consumer of these claims picks the first one *present*,
+ * so an empty `name` beside a good email renders a blank line where the
+ * operator's identity belongs and hides the email behind it. Same idiom the
+ * `sub` and `refresh_token` checks in this file already use.
+ */
+function textClaim(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
 const jwks = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
 export function resetJwksCacheForTests(): void {
@@ -280,10 +295,12 @@ export async function verifyIdToken(
     }
   }
 
+  const email = textClaim(payload.email);
+  const name = textClaim(payload.name);
   return {
     subject: payload.sub,
-    ...(typeof payload.email === "string" ? { email: payload.email } : {}),
-    ...(typeof payload.name === "string" ? { name: payload.name } : {}),
+    ...(email === undefined ? {} : { email }),
+    ...(name === undefined ? {} : { name }),
     // `exp` is required by JWT and enforced by jose above; this is its ms form.
     expiresAt: (payload.exp ?? 0) * 1000,
   };

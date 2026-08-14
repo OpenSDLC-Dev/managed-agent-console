@@ -22,6 +22,7 @@ import {
   UnavailableSurface,
 } from "./bits";
 import { copyText } from "@/lib/copy-text";
+import { ROLE_NOTE } from "@/lib/platform/denied";
 import { PlatformError } from "@/lib/platform/http";
 
 vi.mock("@/lib/copy-text", () => ({ copyText: vi.fn() }));
@@ -173,6 +174,58 @@ describe("ErrorState", () => {
   it("falls back to a generic message for non-Error values", () => {
     render(<ErrorState error="nope" />);
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+  });
+
+  // A denial is not a fault. Rendered in `destructive` red it reads as
+  // something to retry or report, and neither will change the answer until an
+  // administrator changes the operator's role.
+  it("presents a denial calmly, and says whose role the message is about", () => {
+    const error = new PlatformError(403, {
+      type: "error",
+      request_id: "req_denied",
+      error: {
+        type: "permission_error",
+        message: "this route requires the admin role",
+      },
+    });
+    render(<ErrorState error={error} />);
+    const message = screen.getByText("this route requires the admin role");
+    expect(message.className).not.toContain("destructive");
+    expect(screen.getByText(ROLE_NOTE)).toBeInTheDocument();
+    // The request id stays: a denial is as worth reporting as a fault.
+    expect(screen.getByText(/request-id: req_denied/)).toBeInTheDocument();
+
+    const state = screen.getByTestId("error-state");
+    expect(state.getAttribute("data-denied")).toBe("true");
+    expect(state.getAttribute("data-error-status")).toBe("403");
+  });
+
+  // Our own GKE staging is IAP-fronted, and an identity proxy or WAF refusing a
+  // request answers 403 in HTML — which parses to no envelope and so to
+  // `api_error`. Blaming the operator's role for that sends them to an
+  // administrator who will find nothing wrong with their roles.
+  it("probe: a 403 that is not the platform's role check is still a fault", () => {
+    render(<ErrorState error={new PlatformError(403, null)} />);
+    expect(screen.getByText("HTTP 403").className).toContain("destructive");
+    expect(screen.queryByText(ROLE_NOTE)).toBeNull();
+    expect(
+      screen.getByTestId("error-state").getAttribute("data-denied"),
+    ).toBeNull();
+  });
+
+  it("probe: every other status keeps the fault treatment", () => {
+    const error = new PlatformError(500, {
+      type: "error",
+      error: { type: "api_error", message: "platform exploded" },
+    });
+    render(<ErrorState error={error} />);
+    expect(screen.getByText("platform exploded").className).toContain(
+      "destructive",
+    );
+    expect(screen.queryByText(ROLE_NOTE)).toBeNull();
+    expect(
+      screen.getByTestId("error-state").getAttribute("data-denied"),
+    ).toBeNull();
   });
 });
 

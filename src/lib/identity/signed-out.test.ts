@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SIGNED_OUT_HEADER,
+  beginSignOut,
   bounceToLogin,
   hasBouncedToLogin,
   isSignedOut,
+  leaveAfterSignOut,
   resetSignedOutBounceForTests,
 } from "./signed-out";
 
@@ -67,6 +69,48 @@ describe("bounceToLogin", () => {
   it("is inert on the server, where there is no browser to send anywhere", () => {
     vi.stubGlobal("window", undefined);
     expect(() => bounceToLogin()).not.toThrow();
+    expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("leaveAfterSignOut", () => {
+  it("leaves for the login page without remembering the page", () => {
+    at("/sessions/sess_1", "?tab=trace");
+    leaveAfterSignOut();
+    expect(assign).toHaveBeenCalledWith("/login");
+  });
+
+  // The sign-out request is what makes this race: it destroys the session, so
+  // every BFF call still in flight comes back marked signed-out. Without the
+  // recorded intent the first one home wins, and the operator who deliberately
+  // left is sent back to that page by the next sign-in.
+  it("probe: an automatic bounce cannot preempt a deliberate sign-out", () => {
+    at("/agents");
+    beginSignOut();
+    bounceToLogin();
+    expect(assign).not.toHaveBeenCalled();
+
+    leaveAfterSignOut();
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith("/login");
+  });
+
+  // The other order: the session expired first and the bounce is already under
+  // way when the operator hits Sign out. They still get the destination they
+  // asked for, since the bounce was an inference about a session now ended.
+  it("probe: leaves even when a bounce has already started", () => {
+    at("/agents");
+    bounceToLogin();
+    expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fagents");
+
+    beginSignOut();
+    leaveAfterSignOut();
+    expect(assign).toHaveBeenLastCalledWith("/login");
+  });
+
+  it("is inert on the server", () => {
+    vi.stubGlobal("window", undefined);
+    expect(() => leaveAfterSignOut()).not.toThrow();
     expect(assign).not.toHaveBeenCalled();
   });
 });

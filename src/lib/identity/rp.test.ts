@@ -367,6 +367,29 @@ describe("verifyIdToken", () => {
     expect(identity.expiresAt).toBeGreaterThan(Date.now());
   });
 
+  // A provider that releases a claim but leaves it blank is not releasing it.
+  // Kept as `""` it would beat the email in every `??` chain downstream, and
+  // the account block would render an empty line where the operator's name
+  // belongs — with the email it does have suppressed behind it.
+  it("probe: treats a blank display claim as absent, not as an empty name", async () => {
+    const token = await sign({
+      nonce: "the-nonce",
+      email: "operator@example.com",
+      name: "   ",
+    });
+    const identity = await verifyIdToken(metadata, config, token, "the-nonce");
+    expect(identity.name).toBeUndefined();
+    expect(identity.email).toBe("operator@example.com");
+  });
+
+  it("probe: keeps neither claim when the provider sends both blank", async () => {
+    const token = await sign({ nonce: "the-nonce", email: "", name: "" });
+    const identity = await verifyIdToken(metadata, config, token, "the-nonce");
+    expect(identity.email).toBeUndefined();
+    expect(identity.name).toBeUndefined();
+    expect(identity.subject).toBe("user-1");
+  });
+
   // The nonce is the only thing tying this token to the authorization request
   // this browser started. Without the check, a token captured from any other
   // flow for the same client would complete a sign-in here.
