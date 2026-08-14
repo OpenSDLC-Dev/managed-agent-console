@@ -67,7 +67,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Discovery is the only thing here that talks to the network. Its message
     // names the provider rather than quoting it, and is not reflected into the
     // browser at all — the login page says sign-in is unavailable.
-    return authErrorRedirect(request, "provider_unavailable");
+    return authErrorRedirect("provider_unavailable");
   }
 
   const response = NextResponse.redirect(authorization, { status: 302 });

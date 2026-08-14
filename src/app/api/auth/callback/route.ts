@@ -3,8 +3,12 @@ import { isHttpsRequest } from "@/lib/auth";
 import { discover } from "@/lib/identity/discovery";
 import { consoleAuthMode } from "@/lib/identity/mode";
 import { randomToken, timingSafeEqual } from "@/lib/identity/pkce";
-import { AUTH_STATE_COOKIE, authErrorRedirect } from "@/lib/identity/routes";
-import { exchangeCode, requestOrigin, verifyIdToken } from "@/lib/identity/rp";
+import {
+  AUTH_STATE_COOKIE,
+  authErrorRedirect,
+  sameOriginRedirect,
+} from "@/lib/identity/routes";
+import { exchangeCode, verifyIdToken } from "@/lib/identity/rp";
 import {
   IDENTITY_COOKIE,
   putSession,
@@ -49,7 +53,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   // pressed "cancel", a client the provider does not recognise. Its `error`
   // parameter is not reflected: the browser gets this console's own code.
   if (params.get("error") !== null) {
-    return clearState(authErrorRedirect(request, "provider_refused"), request);
+    return clearState(authErrorRedirect("provider_refused"), request);
   }
 
   if (
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     queryState === null ||
     !timingSafeEqual(cookieState, queryState)
   ) {
-    return clearState(authErrorRedirect(request, "state_mismatch"), request);
+    return clearState(authErrorRedirect("state_mismatch"), request);
   }
 
   // Removed on read, so a callback URL replayed from history cannot mint a
@@ -65,7 +69,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const pending = takePending(queryState, Date.now());
   const code = params.get("code");
   if (pending === undefined || code === null || code === "") {
-    return clearState(authErrorRedirect(request, "state_mismatch"), request);
+    return clearState(authErrorRedirect("state_mismatch"), request);
   }
 
   let sessionId: string;
@@ -99,20 +103,14 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Every failure past this point is one code: a browser at the end of a
     // redirect has no use for the difference, and the difference is exactly
     // what an attacker probing a callback would like to learn.
-    return clearState(authErrorRedirect(request, "session_failed"), request);
+    return clearState(authErrorRedirect("session_failed"), request);
   }
 
-  // Resolved against this origin rather than assigned to `pathname`, so a
-  // return path carrying a query survives intact. `safeReturnTo` already
-  // refused everything that could resolve off-origin; the check below is the
-  // belt to that brace, because this is the one place a mistake becomes an open
-  // redirect on a page the operator has just been asked to trust.
-  const origin = requestOrigin(request);
-  const destination = new URL(pending.returnTo, origin);
-  if (destination.origin !== origin) {
-    return clearState(authErrorRedirect(request, "state_mismatch"), request);
-  }
-  const response = NextResponse.redirect(destination, { status: 302 });
+  // A relative `Location`, so the browser lands on the host it actually used
+  // and this console never has to decide which of the several hosts it can see
+  // is the real one — see `sameOriginRedirect`. `safeReturnTo` narrowed this
+  // path on the way in and narrows it again on the way out.
+  const response = sameOriginRedirect(pending.returnTo);
   response.cookies.set(IDENTITY_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: "lax",

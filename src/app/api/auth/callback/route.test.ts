@@ -67,11 +67,17 @@ const request = (query: string, cookie?: string) =>
 /**
  * The shape the standalone server actually hands a route handler: the URL is
  * built from the address the process bound (`HOSTNAME=0.0.0.0`), while the host
- * the browser used survives only in the header.
+ * the browser used survives only in the header — and that header is
+ * client-supplied wherever an ingress does not overwrite it, so neither of the
+ * two hosts visible here may appear in a `Location`.
  */
-const asStandalone = (query: string, cookie: string) =>
+const asStandalone = (query: string, cookie: string, forwarded?: string) =>
   new NextRequest(`http://0.0.0.0:3300/api/auth/callback${query}`, {
-    headers: { cookie, host: "console.example.com" },
+    headers: {
+      cookie,
+      host: "console.example.com",
+      ...(forwarded === undefined ? {} : { "x-forwarded-host": forwarded }),
+    },
   });
 
 const stateCookie = (value = STATE) => `console_auth_state=${value}`;
@@ -90,8 +96,16 @@ const sessionIdFrom = (response: Response) =>
     response.headers.get("set-cookie") ?? "",
   )?.[1];
 
+/**
+ * Resolves the `Location` the way a browser does — against the URL it
+ * requested. These redirects are relative references on purpose, so an
+ * assertion that parses one as absolute is asserting the wrong thing.
+ */
+const locationFrom = (response: Response) =>
+  new URL(response.headers.get("location") ?? "", "http://console.example.com");
+
 const errorFrom = (response: Response) =>
-  new URL(response.headers.get("location") ?? "").searchParams.get("sso_error");
+  locationFrom(response).searchParams.get("sso_error");
 
 // Generated once: key generation is the most expensive thing in this file, and
 // ES256 is in the platform verifier's own algorithm allowlist
@@ -138,9 +152,7 @@ describe("GET /api/auth/callback", () => {
       request(`?code=the-code&state=${STATE}`, stateCookie()),
     );
     expect(response.status).toBe(302);
-    expect(new URL(response.headers.get("location") ?? "").pathname).toBe(
-      "/sessions",
-    );
+    expect(locationFrom(response).pathname).toBe("/sessions");
     const id = sessionIdFrom(response);
     expect(getSession(id, Date.now())).toMatchObject({
       subject: "user-1",
@@ -151,28 +163,45 @@ describe("GET /api/auth/callback", () => {
 
   // The bug this pins was found by signing in, not by reading: under the
   // standalone server this repo ships, a completed sign-in landed on
-  // `http://0.0.0.0:3300/agents` — an origin the session cookie, host-only for
-  // the real hostname, does not reach. The operator arrives signed out on a
-  // host that does not resolve, which reads as a broken console.
-  it("lands on the host the browser used, not the address the server bound", async () => {
+  // `http://0.0.0.0:3300/agents` — the address the process bound, and an origin
+  // the session cookie, host-only for the real hostname, does not reach. The
+  // operator arrives signed out on a host that does not resolve, which reads as
+  // a broken console. The fix names no host at all: the browser resolves a
+  // relative `Location` against the URL it really requested.
+  it("names no host, so the browser lands where it already is", async () => {
     pending();
     const response = await GET(
       asStandalone(`?code=the-code&state=${STATE}`, stateCookie()),
     );
-    const location = new URL(response.headers.get("location") ?? "");
-    expect(location.origin).toBe("http://console.example.com");
-    expect(location.pathname).toBe("/sessions");
+    expect(response.headers.get("location")).toBe("/sessions");
     expect(sessionIdFrom(response)).toBeTruthy();
   });
 
-  it("sends a failed sign-in back to that same host", async () => {
+  it("names no host on the way out of a failure either", async () => {
     const response = await GET(
       asStandalone("?error=access_denied", stateCookie()),
     );
-    const location = new URL(response.headers.get("location") ?? "");
-    expect(location.origin).toBe("http://console.example.com");
-    expect(location.pathname).toBe("/login");
-    expect(errorFrom(response)).toBe("provider_refused");
+    expect(response.headers.get("location")).toBe(
+      "/login?sso_error=provider_refused",
+    );
+  });
+
+  // `resolveRedirectUri` can survive a forged host because the provider refuses
+  // a redirect URI it never registered. A `Location` is registered nowhere, so
+  // the same trust here would be an open redirect wearing this deployment's
+  // hostname — and the error arm is reachable without any credential at all.
+  it.each([
+    ["a completed sign-in", `?code=the-code&state=${STATE}`],
+    ["the anonymous failure arm", "?error=access_denied"],
+  ])("probe: a forged forwarded host cannot move %s", async (_what, query) => {
+    pending();
+    const response = await GET(
+      asStandalone(query, stateCookie(), "evil.example"),
+    );
+    const location = response.headers.get("location") ?? "";
+    expect(location.startsWith("/")).toBe(true);
+    expect(location.startsWith("//")).toBe(false);
+    expect(location).not.toContain("evil.example");
   });
 
   it("mints an httpOnly handle, and never the token itself", async () => {

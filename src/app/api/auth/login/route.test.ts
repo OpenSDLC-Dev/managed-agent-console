@@ -134,7 +134,11 @@ describe("GET /api/auth/login", () => {
     fetchMock.mockRejectedValue(new TypeError("connect ECONNREFUSED"));
     const response = await GET(request());
     expect(response.status).toBe(302);
-    const location = new URL(response.headers.get("location") ?? "");
+    // Relative on purpose — the browser resolves it against the host it used,
+    // which is the only origin this console can be sure of.
+    const raw = response.headers.get("location") ?? "";
+    expect(raw.startsWith("/")).toBe(true);
+    const location = new URL(raw, "http://console.example.com");
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("sso_error")).toBe("provider_unavailable");
   });
