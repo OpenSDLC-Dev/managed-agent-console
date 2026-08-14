@@ -224,3 +224,55 @@ test("file upload and delete from the files page", async ({ page }) => {
     page.getByRole("cell", { name: "report.pdf", exact: true }),
   ).toBeHidden();
 });
+
+test("issue an environment key, see it once, then revoke it", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/environments/env_byoc0000000000000001");
+
+  await page
+    .getByRole("button", { name: "Generate environment key", exact: true })
+    .click();
+  await page.getByLabel("Name").fill("e2e-runner");
+  await page
+    .getByRole("button", { name: "Create environment key", exact: true })
+    .click();
+
+  // Shown exactly once, and only here. The mock mints `sk-map-env01-mock…`,
+  // the platform's own prefix — deliberately not an Anthropic look-alike.
+  const revealed = page.getByTestId("revealed-key");
+  await expect(revealed).toBeVisible();
+  const secret = ((await revealed.textContent()) ?? "").trim();
+  expect(secret).toMatch(/^sk-map-env01-/);
+
+  await page.getByTestId("close-revealed-key").click();
+  await expect(page.getByTestId("revealed-key")).toBeHidden();
+
+  // The issuance response carries no row, so a row appearing here is proof the
+  // list was re-read rather than rendered from that response.
+  const row = page.getByRole("row").filter({ hasText: "e2e-runner" });
+  await expect(row.locator("[data-key-state]")).toHaveAttribute(
+    "data-key-state",
+    "active",
+  );
+  // Closing is final: the plaintext is nowhere in the document any more.
+  expect(await page.content()).not.toContain(secret);
+
+  await row.getByRole("button", { name: /^Revoke environment key / }).click();
+  await page
+    .getByRole("button", { name: "Revoke environment key", exact: true })
+    .click();
+  await expect(page.getByText("e2e-runner")).toBeHidden();
+});
+
+test("a cloud environment offers no keys and no setup guide", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/environments/env_cloudlimited000000001");
+  await expect(
+    page.getByRole("heading", { name: "Environment keys" }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("environment-key-setup")).toHaveCount(0);
+});

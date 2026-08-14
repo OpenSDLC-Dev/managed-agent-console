@@ -459,11 +459,21 @@ export function useEnvironmentKeys(environmentId: string, enabled = true) {
  *
  * `errorToast: false`: the create dialog shows its own inline error, because a
  * global toast would fire behind a modal the operator is still looking at.
+ *
+ * `gcTime: 0`: this mutation's `data` **is** the plaintext key. A mutation's
+ * result otherwise sits in the MutationCache for the default five minutes
+ * after nothing is observing it, so the credential would outlive the dialog
+ * that showed it by minutes, reachable from any devtools or error reporter
+ * that walks the cache. Calling `reset()` on the observer is not enough — it
+ * detaches the observer without removing the cached mutation, which the
+ * adversarial probe in `environment-keys.test.tsx` demonstrates. With no
+ * retention window the entry is removed as soon as it is unobserved.
  */
 export function useCreateEnvironmentKey(environmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorToast: false },
+    gcTime: 0,
     mutationFn: (body: { name: string }) =>
       consolePost<EnvironmentKeyIssued>(
         `organizations/${ORG}/environments/${environmentId}/tokens`,
