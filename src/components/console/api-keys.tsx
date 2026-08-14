@@ -154,8 +154,14 @@ function RevealKeyDialog({
   );
 }
 
-/** Create, then reveal — one control, two dialogs, the reference's sequence. */
-function CreateKeyButton() {
+/**
+ * Create, then reveal — one control, two dialogs, the reference's sequence.
+ *
+ * Rendered by the page into `PageHeader`'s `actions`, top-right: that is where
+ * the reference puts `Create key` on this surface, and where every other list
+ * page in this console already puts its own primary action.
+ */
+export function CreateKeyButton() {
   const create = useCreateApiKey();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -497,9 +503,6 @@ export function ApiKeysTable({
         loading={loading}
         empty={<EmptyState title="No API keys yet." />}
       />
-      <div className="pt-3">
-        <CreateKeyButton />
-      </div>
     </>
   );
 }

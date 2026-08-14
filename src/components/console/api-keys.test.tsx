@@ -9,13 +9,13 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApiKeysTable, expiryInstant } from "./api-keys";
+import { ApiKeysTable, CreateKeyButton, expiryInstant } from "./api-keys";
 import type { ApiKey } from "@/lib/platform/types";
 
 const KEYS = "/api/console/organizations/default/workspaces/default/api_keys";
 
 /** The plaintext the platform hands back once — root on this platform. */
-const SECRET = "sk-map-adm01-thisisthemanagementsecret";
+const SECRET = "sk-map-api01-thisisthemanagementsecret";
 
 const apiKey = (over: Partial<ApiKey> & { id: string }): ApiKey => ({
   type: "api_key",
@@ -23,7 +23,7 @@ const apiKey = (over: Partial<ApiKey> & { id: string }): ApiKey => ({
   workspace_id: null,
   created_at: "2026-08-02T10:30:00Z",
   created_by: { id: "principal_op01", type: "principal" },
-  partial_key_hint: "sk-map-adm01--Cid…eploy",
+  partial_key_hint: "sk-map-api01-Cid...ploy",
   status: "active",
   expires_at: null,
   principal: null,
@@ -43,8 +43,11 @@ function renderTable(keys: ApiKey[], fetchMock?: ReturnType<typeof vi.fn>) {
   });
   return {
     client,
+    // Composed the way the page composes them: the create control lives in the
+    // page header, top-right, and the table below it.
     ...render(
       <QueryClientProvider client={client}>
+        <CreateKeyButton />
         <ApiKeysTable keys={keys} loading={false} error={null} />
       </QueryClientProvider>,
     ),
@@ -91,7 +94,7 @@ describe("ApiKeysTable", () => {
   it("renders the label over the hint, and says which keys never expire", () => {
     renderTable([apiKey({ id: "apikey_1" })]);
     expect(screen.getByText("ci-deploy")).toBeInTheDocument();
-    expect(screen.getByText("sk-map-adm01--Cid…eploy")).toBeInTheDocument();
+    expect(screen.getByText("sk-map-api01-Cid...ploy")).toBeInTheDocument();
     expect(screen.getByText("Never")).toBeInTheDocument();
     expect(screen.getByText("active")).toHaveAttribute(
       "data-key-status",

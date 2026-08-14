@@ -3,7 +3,6 @@ import {
   request as pwRequest,
   test,
   type APIRequestContext,
-  type Page,
 } from "@playwright/test";
 import type { z } from "zod";
 import {
@@ -12,7 +11,8 @@ import {
   SessionEventSchema,
   SessionSchema,
 } from "../../src/lib/platform/schemas";
-import { LIVE_CONSOLE_PASSWORD, resolveLiveEnv } from "./env";
+import { resolveLiveEnv } from "./env";
+import { signIn } from "./sign-in";
 
 /**
  * Live tier: the console against a REAL platform stack (deploy/compose in
@@ -157,14 +157,6 @@ type ToolsetEntry = {
 
 function toolsetsOf(agent: Record<string, unknown>): ToolsetEntry[] {
   return (agent.tools ?? []) as ToolsetEntry[];
-}
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill(LIVE_CONSOLE_PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
 }
 
 test.beforeAll(async () => {

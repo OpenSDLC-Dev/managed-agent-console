@@ -38,7 +38,7 @@ test("issue a key, see it once, then disable and archive it", async ({
   const revealed = page.getByTestId("revealed-api-key");
   await expect(revealed).toBeVisible();
   const secret = (await revealed.textContent()) ?? "";
-  expect(secret).toContain("sk-map-adm01-");
+  expect(secret).toContain("sk-map-api01-");
   await page.getByTestId("close-revealed-api-key").click();
   await expect(revealed).toHaveCount(0);
   expect(await page.content()).not.toContain(secret);

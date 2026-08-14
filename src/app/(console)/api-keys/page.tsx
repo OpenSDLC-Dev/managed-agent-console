@@ -2,7 +2,7 @@
 
 import { PageHeader } from "@/components/shell/page-header";
 import { UnavailableSurface } from "@/components/console/bits";
-import { ApiKeysTable } from "@/components/console/api-keys";
+import { ApiKeysTable, CreateKeyButton } from "@/components/console/api-keys";
 import { useApiKeys } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 
@@ -26,6 +26,7 @@ export default function ApiKeysPage() {
       <PageHeader
         title="API keys"
         subtitle="API keys carry full management authority and stay active after the person who created them is gone."
+        actions={<CreateKeyButton />}
       />
       <ApiKeysTable
         keys={keys.data ?? []}

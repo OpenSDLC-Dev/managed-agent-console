@@ -83,6 +83,37 @@ let envKeyCounter = 1;
 let apiKeysStore = [];
 let apiKeyCounter = 1;
 
+/** Marks a management key this platform minted (internal/api/auth.go). */
+const ISSUED_KEY_PREFIX = "sk-map-api01-";
+
+/**
+ * The platform's own masking rule, transcribed (internal/api/auth.go,
+ * `partialKeyHint`): an **issued** key publishes three characters of its body,
+ * `...`, then four more, because its prefix is public by construction. An
+ * **operator-chosen** `CONTROLPLANE_API_KEY` may hide anything, so nothing in
+ * it is assumed public and only its last four characters are shown. Both refuse
+ * to produce a hint at all below a length floor — a masked value that is mostly
+ * the value is worse than an empty column, since `key_hash` is an unsalted
+ * SHA-256 that a mostly-known plaintext makes searchable offline.
+ *
+ * Transcribed rather than approximated because the alternative is what this
+ * file already got wrong once: a fixture that agrees with the tests reading it
+ * and with nothing on the wire.
+ */
+function partialKeyHint(key) {
+  const lead = 3;
+  const tail = 4;
+  if (key.startsWith(ISSUED_KEY_PREFIX)) {
+    const body = [...key.slice(ISSUED_KEY_PREFIX.length)];
+    if (body.length < 2 * (lead + tail)) return "";
+    const head = body.slice(0, lead).join("");
+    return `${ISSUED_KEY_PREFIX}${head}...${body.slice(-tail).join("")}`;
+  }
+  const runes = [...key];
+  if (runes.length < 4 * tail) return "";
+  return `...${runes.slice(-tail).join("")}`;
+}
+
 /**
  * The seeded rows. The first has **no issuer**, which is the platform's mark of
  * a key managed by `CONTROLPLANE_API_KEY`: every mutation on it is refused,
@@ -97,7 +128,12 @@ const API_KEYS_SEED = [
     workspace_id: null,
     created_at: "2026-08-01T09:00:00Z",
     created_by: null,
-    partial_key_hint: "sk-map-adm01--Boo…strap",
+    // This row *is* the key this server authenticates, so its hint is derived
+    // from that value rather than written down: a fixed string would describe a
+    // credential the mock does not accept, and the default `test-key` is short
+    // enough that the platform's floor publishes **no hint at all** — a state
+    // the console has to render, and would otherwise never meet.
+    partial_key_hint: partialKeyHint(API_KEY),
     status: "active",
     expires_at: null,
     principal: null,
@@ -109,7 +145,7 @@ const API_KEYS_SEED = [
     workspace_id: null,
     created_at: "2026-08-02T10:30:00Z",
     created_by: { id: "principal_op01", type: "principal" },
-    partial_key_hint: "sk-map-adm01--Cid…eploy",
+    partial_key_hint: "sk-map-api01-Cid...ploy",
     status: "active",
     expires_at: "2026-12-01T00:00:00Z",
     principal: null,
@@ -811,6 +847,14 @@ const server = createServer(async (req, res) => {
       const expiresAt =
         body.expires_at == null ? null : String(body.expires_at);
       const id = `apikey_new${String(apiKeyCounter++).padStart(2, "0")}`;
+      // The platform's own prefix, measured on a real stack (its
+      // internal/api/auth.go: `IssuedKeyPrefix = "sk-map-api01-"`). The hint is
+      // derived from the value actually minted, by the same rule the platform
+      // uses, so a test can match a listing row against the secret it was shown
+      // — exactly as an operator does.
+      // Long enough to clear the hint's length floor, as every real minted key
+      // is: the platform's bodies are 43 base64url characters.
+      const rawKey = `${ISSUED_KEY_PREFIX}mock-${id}-secret`;
       const row = {
         id,
         type: "api_key",
@@ -818,7 +862,7 @@ const server = createServer(async (req, res) => {
         workspace_id: null,
         created_at: new Date().toISOString(),
         created_by: { id: "principal_op01", type: "principal" },
-        partial_key_hint: `sk-map-adm01--${id.slice(-3)}…keyx`,
+        partial_key_hint: partialKeyHint(rawKey),
         status: "active",
         expires_at: expiresAt,
         principal: null,
@@ -829,14 +873,17 @@ const server = createServer(async (req, res) => {
       // credential. The mock mirrors it so the console's header forwarding is
       // actually exercised rather than assumed.
       res.setHeader("cache-control", "no-store");
-      res.writeHead(201);
+      // 200, not 201: the platform answers this through its typed `handle`
+      // adapter, which writes StatusOK for every success that carries a body
+      // (server.go). Measured on a real stack, 2026-08-14.
+      res.writeHead(200);
       // The whole resource plus the plaintext, appended last — NOT the RFC 6749
       // shape the environment-key surface answers with. Two dialects, two
       // surfaces, mirrored where each was observed.
       res.end(
         JSON.stringify({
           ...render(row),
-          raw_key: `sk-map-adm01-${id}-secret`,
+          raw_key: rawKey,
         }),
       );
       return;
