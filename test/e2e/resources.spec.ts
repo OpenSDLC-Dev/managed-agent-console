@@ -85,6 +85,8 @@ test("a self-hosted environment lists its keys, live and expired", async ({
     "active",
   );
 
+  // The live key's expiry is computed a year out in the fixtures rather than
+  // pinned, so this asserts the derivation and not today's date.
   const stale = page.getByRole("row").filter({ hasText: "retired-laptop" });
   await expect(stale.locator("[data-key-state]")).toHaveAttribute(
     "data-key-state",

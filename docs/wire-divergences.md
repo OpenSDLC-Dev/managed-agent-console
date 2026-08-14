@@ -124,23 +124,31 @@ routes**: the platform has no 501, an unregistered route falls through the route
 A collection path carries no id that could be missing, so a 404 there can only mean the endpoint is.
 
 The console API's listing route breaks that precondition — it carries an environment id, and the
-platform 404s a missing environment on the same route (`internal/api/consoleapi.go:127-142`). The
-decision is to read the 404 as "unimplemented" anyway, but **only from inside the environment
-detail page**, where three things are already true:
+platform 404s a missing environment on the same route (`internal/api/consoleapi.go:127-142`). Two of
+`consoleEnvironment`'s three 404 branches are closed by construction from the environment detail
+page:
 
-1. `useEnvironment(id)` has succeeded for the same id, so the environment exists;
-2. the org segment is the literal `default` the platform pins (`consoleapi.go:52-53`), so the
+1. the org segment is the literal `default` the platform pins (`consoleapi.go:52-53`), so the
    unrecognized-organization branch is unreachable;
-3. the id came from the platform's own listing, so the malformed-id branch is unreachable.
+2. the id came from the platform's own listing, so the malformed-id branch is unreachable.
 
-With all three of `consoleEnvironment`'s 404 branches closed, what remains is the catch-all — a
-platform predating plan 30. The section hides itself; the rest of the page is untouched, and a 5xx
-still renders as an error rather than a missing feature. The alternative considered and rejected was
-a probe request against the collection with a known-good id: it buys nothing this page does not
-already know, and costs a round trip per visit.
+The third — **the environment does not exist** — is not closed by construction, and the first draft
+of this treated it as if it were. Having loaded the environment proves it existed _then_: an
+environment is mutable, and another operator can delete it while the page is open, at which point
+the same 404 arrives and would read as "this deployment does not implement environment keys" — a
+wrong and permanent-looking answer to a transient fact (found in review, PR #89).
 
-The precondition is a real one, not a formality: the same 404 read from a page that has _not_ loaded
-the environment would hide a live surface because an id was wrong.
+So: on a 404 from the tokens route, **re-read the environment before concluding anything**, and hide
+the section only when that re-read confirms it is still there. A deleted environment keeps the error
+visible; so does a re-read that cannot answer. The fail-safe direction is deliberate — a wrongly
+shown error is a nuisance, a wrongly hidden surface is a lie — and it matches the rule `useSurfaces`
+already follows, where only a confirmed 404 hides anything.
+
+The extra request runs **only on that 404**: a platform serving the surface never pays for it, and
+one that does not pays once. The alternative considered and rejected was telling the two 404s apart
+by message text (`no such endpoint: …` versus `environment … not found`) — both are
+`not_found_error`, so only the prose differs, and matching on platform prose is the guessing
+principle 1 forbids.
 
 ## Reference surfaces the platform has deferred
 

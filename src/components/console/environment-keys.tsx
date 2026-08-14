@@ -9,7 +9,10 @@ import {
   Time,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
-import { useEnvironmentKeys } from "@/lib/platform/queries";
+import {
+  useEnvironmentKeys,
+  useEnvironmentStillExists,
+} from "@/lib/platform/queries";
 import { useNow } from "@/lib/session-trace/use-now";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import type { Environment, EnvironmentKey } from "@/lib/platform/types";
@@ -79,22 +82,38 @@ export function EnvironmentKeysSection({
   // to Expired on its own instead of lying until a reload.
   const now = useNow();
 
-  if (!selfHosted) return null;
-
   // Seam 6 — feature detection on a route that carries an id.
   //
   // `isUnimplemented` is documented as valid only on collection routes, because
-  // elsewhere a 404 could be the id rather than the endpoint. This route does
-  // carry an environment id, so that caveat applies — except that this
-  // component only renders once `useEnvironment` has *succeeded* for the same
-  // id. The environment provably exists, the org segment is the literal
-  // `default` the platform pins, and the id came from the platform's own
-  // listing, so none of the three 404 branches in `consoleEnvironment`
-  // (`consoleapi.go:111-142`) is reachable. What remains is the router
-  // catch-all: a platform predating plan 30 answering "no such endpoint"
-  // (`internal/api/server.go:152`). Hiding the section on that 404 is
-  // principle 3's feature detection, and costs no extra probe request.
-  if (keys.error && isUnimplemented(keys.error)) return null;
+  // elsewhere a 404 could be the id rather than the endpoint, and this route
+  // carries an environment id. Two things can answer 404 here: the router
+  // catch-all on a platform predating plan 30 (`server.go:152`), and
+  // `consoleEnvironment` on an environment that is gone
+  // (`consoleapi.go:127-142`).
+  //
+  // Having loaded the environment is not enough to rule the second one out —
+  // an environment is mutable, and another operator can delete it while this
+  // page is open, which would then render as "this deployment lacks the
+  // feature". So the 404 is not read as feature-absence until a re-read of the
+  // environment confirms it is still there. The re-read runs only on that
+  // 404, so a platform that serves the surface never pays for it.
+  const maybeUnimplemented =
+    selfHosted && keys.error != null && isUnimplemented(keys.error);
+  const stillExists = useEnvironmentStillExists(
+    environment.id,
+    maybeUnimplemented,
+  );
+
+  if (!selfHosted) return null;
+
+  // Only a confirmed-live environment licenses hiding. A deleted one, or a
+  // re-read that failed, keeps the error visible — the fail-safe direction,
+  // since a wrongly shown error is a nuisance and a wrongly hidden surface is
+  // a lie.
+  if (maybeUnimplemented && stillExists.data === true) return null;
+  // While the re-read is in flight the answer is not known yet; showing the
+  // error and then hiding it would flash a failure that was never real.
+  const deciding = maybeUnimplemented && stillExists.isPending;
 
   const columns: Column<EnvironmentKey>[] = [
     { key: "name", header: "Name", className: "w-full", cell: (k) => k.name },
@@ -143,7 +162,7 @@ export function EnvironmentKeysSection({
         environment and pull jobs. Generate one per host so you can revoke
         access individually.
       </p>
-      {keys.error ? (
+      {keys.error && !deciding ? (
         <ErrorState error={keys.error} />
       ) : (
         <>
@@ -151,7 +170,7 @@ export function EnvironmentKeysSection({
             columns={columns}
             rows={page?.data ?? []}
             rowKey={(k) => k.id}
-            loading={keys.isPending}
+            loading={keys.isPending || deciding}
             empty={<EmptyState title="No environment keys yet." />}
           />
           {/* The platform caps a page at 100 and the console asks for exactly

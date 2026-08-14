@@ -204,23 +204,56 @@ describe("EnvironmentKeysSection", () => {
     await screen.findByText("prod-runner-01");
   });
 
-  // Seam 6: the section hides on a platform that predates plan 30, and only
-  // because the environment itself has already loaded — see the component.
-  it("hides itself when the platform does not serve the route", async () => {
-    stub(
-      json(
-        {
-          type: "error",
-          error: {
-            type: "not_found_error",
-            message: "no such endpoint: /api/oauth/organizations/default/...",
-          },
-        },
-        404,
-      ),
+  // Seam 6. Two things answer 404 on this route — the router catch-all on a
+  // platform predating plan 30, and a deleted environment — so the section
+  // re-reads the environment before concluding anything.
+  const notFound = (message: string) =>
+    json({ type: "error", error: { type: "not_found_error", message } }, 404);
+
+  /** Answers the tokens route 404, and the environment re-read as told. */
+  const stubSeam6 = (environmentExists: boolean | "unreachable") =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "http://console.test");
+        if (url.pathname === TOKENS)
+          return notFound("no such endpoint: /api/oauth/organizations/…");
+        if (url.pathname === "/api/platform/v1/environments/env_1") {
+          if (environmentExists === "unreachable")
+            return json(
+              { type: "error", error: { type: "api_error", message: "down" } },
+              503,
+            );
+          return environmentExists
+            ? json(environment())
+            : notFound("environment env_1 not found");
+        }
+        throw new Error(`unmatched fetch: ${url.pathname}`);
+      }),
     );
+
+  it("hides itself when the platform does not serve the route", async () => {
+    stubSeam6(true);
     const { container } = renderSection();
     await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  // The race the re-read exists for: another operator deletes the environment
+  // while this page is open. Hiding the section there would report a missing
+  // feature instead of a deleted resource (PR #89 review).
+  it("keeps the error when the environment has been deleted underneath it", async () => {
+    stubSeam6(false);
+    renderSection();
+    await screen.findByTestId("error-state");
+    expect(screen.getByText("Environment keys")).toBeInTheDocument();
+  });
+
+  it("keeps the error when the re-read cannot answer", async () => {
+    stubSeam6("unreachable");
+    renderSection();
+    // Unknown is not a licence to hide: a struggling platform degrades to
+    // "shown and erroring", never to "silently missing".
+    await screen.findByTestId("error-state");
   });
 
   it("surfaces a real failure instead of hiding it", async () => {
