@@ -12,7 +12,12 @@ Both halves of the platform's SSO/RBAC work (#56) landing in this repo. The main
   - [x] Slice 3 — environment keys, write + setup guide. Seam 7 added to the probe ratchet; its probe found the plaintext key had been surviving in the mutation cache after the dialog closed, fixed here with `gcTime: 0`. Two a11y findings: ours fixed, the shared destructive-button contrast filed as #90. Review also caught a dismissal mid-issuance orphaning a live key — now refused.
   - [ ] Slice 4 — API keys · _blocked on platform 31 slice 5_
   - [ ] Slice 5 — acceptance against the compose stack, archive
-- [Plan 08](./docs/plan/08_console-sso-rbac.md) — browser OIDC login and role-aware UI, the console half of [platform plan 31](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/31_console-sso-rbac.md) (its slices 1–3 have merged). Decisions open: D1–D4, of which **D1 is a documented conflict over request topology** — platform plan 31:320–330 assigns this repo a browser-calls-the-platform-directly shape that discards the mechanism CLAUDE.md principle 2 names (it keeps the principle's headline invariant; the management key still never reaches the browser).
+- [Plan 08](./docs/plan/08_console-sso-rbac.md) — **in progress.** Browser OIDC login and role-aware UI, the console half of [platform plan 31](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/31_console-sso-rbac.md) (its slices 1–3 have merged). D1–D4 settled 2026-08-14 on their recommendations; **D1 remains the one to revisit first** — it resolves a documented conflict over request topology by taking Mode A, where platform plan 31:320–330 assigns this repo the browser-calls-the-platform-directly shape.
+  - [x] Slice 1 — config and the health contract: `IDENTITY_*` console config (fail closed, never silently unauthenticated), the D3 matrix as tests, `PLATFORM_API_KEY` no longer blocking readiness _once identity is configured_ (review caught the first version dropping that condition, which would have admitted a pod whose every platform call 500s), cookie `Secure` from `x-forwarded-proto`. Every path checked against a running platform in Chrome.
+  - [ ] Slice 2 — the OIDC relying party under `/api/auth/…`
+  - [ ] Slice 3 — the BFF forwards the user's token
+  - [ ] Slice 4 — role-aware UI
+  - [ ] Slice 5 — acceptance, archive · _blocked on platform 31 slice 4_
 
 Plans 01–06 are complete and archived; summaries in [docs/HISTORY.md](./docs/HISTORY.md). How a release is cut: [docs/releasing.md](./docs/releasing.md).
 

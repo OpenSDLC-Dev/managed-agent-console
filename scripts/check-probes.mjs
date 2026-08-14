@@ -66,6 +66,16 @@ const SEAMS = [
     // attribute or the query cache — which is exactly what a probe is for.
     modules: ["environment-keys"],
   },
+  {
+    dir: "src/lib/identity",
+    why: "identity configuration — its defects are reported to an anonymous caller",
+    // `config` parses operator-supplied values and hands its complaints to the
+    // health route, which answers a kubelet, a CD log, and anyone who can reach
+    // the port. A message that quotes what it refused publishes an issuer, a
+    // client id, or a secret — and every happy-path assertion here passes
+    // whether or not it does, because a working console never takes this path.
+    modules: ["config"],
+  },
 ];
 
 const PROBE = /(^|> )probe:/;

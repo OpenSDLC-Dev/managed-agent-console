@@ -143,6 +143,24 @@ one-way.
 - **deep** (`/api/health?deep=1`) — additionally calls the platform with the
   management key. That is the deploy gate, run once per rollout.
 
+**`PLATFORM_API_KEY` is required for readiness unless identity is configured**,
+which is the same question as whether browser-initiated calls still spend it.
+With identity off they do — the BFF resolves the key on every proxied request
+and 500s without it — so reporting Ready would admit a pod that answers nothing
+but errors. In identity mode (plan 08) those calls carry the operator's own
+token, and the key is only the deep check's **dedicated service credential**: the
+one console→platform call that can never act as a user, since CD runs it with no
+user in sight. Requiring it there would make such a rollout permanently NotReady
+over a credential it does not use.
+
+Asked for the deep depth without it, the route answers `degraded` with
+`platform.checked: false` rather than reporting the platform unreachable —
+nothing was asked, and the two call for opposite fixes.
+
+The body also names which identity mode the process is in (`identity.mode`), the
+one thing about this console no probe of the platform can discover — see
+[docs/wire-divergences.md](../../docs/wire-divergences.md).
+
 The **liveness** probe calls neither: it takes `/login`. A configuration error
 makes the shallow check answer 503, and a restart cannot supply a missing
 environment variable — liveness pointed at it would turn the readiness failure

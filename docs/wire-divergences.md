@@ -150,6 +150,42 @@ by message text (`no such endpoint: …` versus `environment … not found`) —
 `not_found_error`, so only the prose differs, and matching on platform prose is the guessing
 principle 1 forbids.
 
+## Identity cannot be feature-detected, and the console does not try (plan 08, slice 1)
+
+CLAUDE.md principle 3 says the console handles platform-specific divergences "by feature detection
+(an unimplemented surface returning 404/501 hides its UI), not by hard-coding a vendor". Whether a
+deployment authenticates its operators is the one thing that rule cannot reach, for three separate
+reasons — any one of which would be enough:
+
+1. **The platform hides it on purpose.** An unauthenticated request gets the same answer whether
+   identity is on or off (`internal/api/server.go:324-327`). There is no probe whose result differs.
+2. **A 403 is not "surface absent".** `isUnimplemented` accepts 501, or 404 with the platform's own
+   `not_found_error` (`src/lib/platform/surfaces.ts`). A route that exists and refuses this caller
+   leaves the surface shown and erroring, which is the correct outcome for a permission error and
+   the wrong one for a mode question.
+3. **The console needs the answer before it makes any call at all.** Which credential the BFF
+   attaches, and which login page the browser is sent to, are decided while composing the first
+   request — there is no earlier response to read it from.
+
+So the console's **own configuration** carries its mode: `IDENTITY_MODE` in `src/lib/identity/config.ts`,
+reported at `GET /api/health` as `identity.mode`, and turned into the console's posture by
+`consoleAuthModeFrom` (`src/lib/identity/mode.ts`). Nothing probes for it, and nothing infers it
+from a status code.
+
+The variable names are the platform's own, and two values must agree across the two processes:
+`IDENTITY_OIDC_ISSUER`, and the console's `IDENTITY_OIDC_CLIENT_ID`, which is what the platform must
+be configured to expect as `IDENTITY_OIDC_AUDIENCE` — in an authorization-code flow the ID token's
+`aud` **is** the relying party's client id, so two different values yield tokens the platform
+rejects on every proxied request. The URL rules are transcribed from the platform's verifier rather
+than invented (`internal/identity/fetch.go`: https or http-to-loopback, no credentials in the URL,
+and no query or fragment on an issuer identifier), because a URL this console accepts and the
+platform refuses is a deployment that boots and then cannot serve.
+
+The platform's third mode, `trusted_proxy`, is **refused** here rather than ignored: it is the
+topology in which the browser calls the platform directly, which this console — a proxying BFF —
+does not implement (plan 08 D1). Silently reading it as "identity off" would leave a deployment that
+believes it is authenticating operators serving them unauthenticated.
+
 ## Reference surfaces the platform has deferred
 
 Documentation only — principle 1 keeps these out of the console until the platform serves them:
