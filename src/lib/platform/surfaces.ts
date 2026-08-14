@@ -1,7 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PlatformError, platformGet } from "./http";
+import { PlatformError, consoleKeysGet, platformGet } from "./http";
+
+/**
+ * The tenancy segments the platform reserves and answers for by name — the
+ * literal `default` on both (`internal/api/consoleapi.go`,
+ * `internal/api/consoleapikeys.go`). They exist because the reference's URLs
+ * carry them; any other value names something that does not exist.
+ */
+export const CONSOLE_ORG = "default";
+export const CONSOLE_WORKSPACE = "default";
 
 /**
  * Feature detection for surfaces a deployment does not serve (CLAUDE.md
@@ -28,6 +37,21 @@ export const SURFACES = {
   vaults: { path: "v1/vaults", label: "Credential vaults" },
   skills: { path: "v1/skills", label: "Skills" },
   files: { path: "v1/files", label: "Files" },
+  // The one surface that is not on the wire: management keys live in the
+  // platform's off-wire console namespace (plan 07), so its probe goes through
+  // the other BFF. The rule above still holds and for the same reason — this is
+  // a collection route whose only variable segments are constants this console
+  // sends, so a 404 cannot be about a missing id.
+  //
+  // It is also the only admin-gated surface. A viewer's probe answers 403, not
+  // 404, so the item stays in the nav and the page explains the refusal — which
+  // is plan 08 D4's rule, not an oversight: the console does not hide a control
+  // on authority it cannot verify.
+  "api-keys": {
+    path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
+    label: "API keys",
+    api: "console",
+  },
 } as const;
 
 export type Surface = keyof typeof SURFACES;
@@ -75,8 +99,13 @@ export function useSurfaces(): Record<Surface, boolean> | undefined {
     queryKey: ["surfaces"],
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(async (surface) => {
+        const entry = SURFACES[surface];
         try {
-          await platformGet<unknown>(SURFACES[surface].path, { limit: 1 });
+          // The console namespace serves a bare array and reads no query
+          // params, so it is asked for the whole (short) list rather than for
+          // a page of one.
+          if ("api" in entry) await consoleKeysGet<unknown>(entry.path);
+          else await platformGet<unknown>(entry.path, { limit: 1 });
           return [surface, true] as const;
         } catch (error) {
           return [surface, !isUnimplemented(error)] as const;

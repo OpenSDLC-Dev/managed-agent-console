@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useMutation,
@@ -9,6 +9,8 @@ import {
 import {
   PlatformError,
   consoleGet,
+  consoleKeysGet,
+  consoleKeysPost,
   consolePost,
   consolePostNoContent,
   platformDelete,
@@ -18,8 +20,11 @@ import {
   type ClassicPage,
   type Page,
 } from "./http";
+import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./surfaces";
 import type {
   Agent,
+  ApiKey,
+  ApiKeyIssued,
   Environment,
   EnvironmentKeyIssued,
   EnvironmentKeyPage,
@@ -434,8 +439,6 @@ export function useDeleteVault(id: string) {
 // (internal/api/consoleapi.go:52-53): the segment exists because the
 // reference's does, and v1 answers for no other value.
 
-const ORG = "default";
-
 /** consoleapi.go:62 — both the default and the maximum page size. */
 const ENVIRONMENT_KEY_LIMIT = 100;
 
@@ -444,7 +447,7 @@ export function useEnvironmentKeys(environmentId: string, enabled = true) {
     queryKey: ["environment-keys", environmentId],
     queryFn: () =>
       consoleGet<EnvironmentKeyPage>(
-        `organizations/${ORG}/environments/${environmentId}/tokens`,
+        `organizations/${CONSOLE_ORG}/environments/${environmentId}/tokens`,
         { limit: ENVIRONMENT_KEY_LIMIT },
       ),
     enabled,
@@ -476,7 +479,7 @@ export function useCreateEnvironmentKey(environmentId: string) {
     gcTime: 0,
     mutationFn: (body: { name: string }) =>
       consolePost<EnvironmentKeyIssued>(
-        `organizations/${ORG}/environments/${environmentId}/tokens`,
+        `organizations/${CONSOLE_ORG}/environments/${environmentId}/tokens`,
         body,
       ),
     onSuccess: () => {
@@ -534,12 +537,75 @@ export function useRevokeEnvironmentKey(environmentId: string) {
     meta: { errorTitle: "Revoke failed" },
     mutationFn: (tokenId: string) =>
       consolePostNoContent(
-        `organizations/${ORG}/environments/${environmentId}/tokens/${tokenId}/revoke`,
+        `organizations/${CONSOLE_ORG}/environments/${environmentId}/tokens/${tokenId}/revoke`,
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["environment-keys", environmentId],
       });
+    },
+  });
+}
+
+// ---- management keys (the other console namespace, plan 07 slice 4)
+
+const KEYS_PATH = `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`;
+
+/** The listing is a bare array: no envelope, no paging (consoleapikeys.go). */
+export function useApiKeys() {
+  return useQuery({
+    queryKey: ["api-keys"],
+    queryFn: () => consoleKeysGet<ApiKey[]>(KEYS_PATH),
+  });
+}
+
+/**
+ * Issue a management key.
+ *
+ * Unlike the environment-key issuance this response carries the **whole row**
+ * plus the plaintext, so the list could in principle be rendered from it. It is
+ * invalidated instead: the row the platform stored is the one worth showing,
+ * and a list assembled from a create response drifts the moment the platform
+ * derives a field the console did not send — `status`, here, which is computed
+ * from `expires_at`.
+ *
+ * `errorToast: false` and `gcTime: 0` for the reasons plan 07 slice 3 wrote
+ * down: the dialog shows its own error rather than a toast behind a modal, and
+ * this mutation's `data` **is** the credential, so it must not outlive the
+ * dialog in the mutation cache.
+ */
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    gcTime: 0,
+    mutationFn: (body: { name: string; expires_at?: string }) =>
+      consoleKeysPost<ApiKeyIssued>(KEYS_PATH, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+    },
+  });
+}
+
+/**
+ * Change a key's status, its name, or both — a POST to the item, because this
+ * dialect serves no PATCH and no DELETE. Retiring a key is `status: archived`,
+ * which the platform treats as terminal.
+ */
+export function useUpdateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Update failed" },
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      status?: string;
+      name?: string;
+    }) => consoleKeysPost<ApiKey>(`${KEYS_PATH}/${id}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     },
   });
 }

@@ -25,6 +25,9 @@ const EXPECTED = [
   { label: "Credential vaults", href: "/vaults", surface: "vaults" },
   { label: "Skills", href: "/skills", surface: "skills" },
   { label: "Files", href: "/files", surface: "files" },
+  // Last, and top-level rather than under a Settings area we do not have
+  // (plan 07 D2).
+  { label: "API keys", href: "/api-keys", surface: "api-keys" },
 ];
 
 /**
@@ -39,7 +42,12 @@ function renderNav(unimplemented?: string[]) {
     vi.fn((input: string) => {
       if (unimplemented === undefined) return new Promise<Response>(() => {});
       const absent = unimplemented.some((s) =>
-        String(input).includes(`/v1/${s}?`),
+        // Two namespaces: the wire surfaces are probed at `/v1/<name>?limit=1`,
+        // and the one console-namespace surface at its own path — which carries
+        // no query string and no name that matches the pattern above.
+        s === "api-keys"
+          ? String(input).includes("/api/console/")
+          : String(input).includes(`/v1/${s}?`),
       );
       return Promise.resolve(
         new Response(

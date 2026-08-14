@@ -286,6 +286,27 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "api-keys",
+    route: "/api-keys",
+    fixture: "2 keys, one control-plane managed",
+    description:
+      "The management-key listing: a two-line Key cell, and the one row whose controls are absent because the platform refuses to mutate it.",
+    setup: async (page) => {
+      await page.getByText("ci-deploy").waitFor();
+    },
+  },
+  {
+    id: "api-key-create",
+    route: "/api-keys",
+    fixture: "empty dialog form",
+    description:
+      "The create dialog with its expiry select — a read-only workspace row and the only Never option in the console.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create key" }).click();
+      await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
     id: "vault-create",
     route: "/vaults",
     fixture: "empty dialog form",

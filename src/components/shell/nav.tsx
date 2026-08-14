@@ -7,6 +7,9 @@ import {
   Boxes,
   FileText,
   KeyRound,
+  // Not `Lock`: that name collides with the DOM's own global `Lock`, and the
+  // import loses — a type error whose message names neither the icon nor lucide.
+  KeySquare,
   MessagesSquare,
   Sparkles,
   type LucideIcon,
@@ -28,6 +31,11 @@ const ITEMS: { surface: Surface; icon: LucideIcon }[] = [
   { surface: "vaults", icon: KeyRound },
   { surface: "skills", icon: Sparkles },
   { surface: "files", icon: FileText },
+  // Last, and still top-level (plan 07 D2). The reference files this under a
+  // Settings area we do not have; a self-hosted console's whole settings story
+  // is its environment file, so a section holding one item would be a menu
+  // built to hold a menu.
+  { surface: "api-keys", icon: KeySquare },
 ];
 
 export function Nav() {

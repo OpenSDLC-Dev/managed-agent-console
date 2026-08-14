@@ -159,6 +159,35 @@ export async function consolePost<T>(path: string, body: unknown): Promise<T> {
  * an empty body throws, so a *successful* revoke would surface as an error
  * toast. Nothing in the console hit a 204 before this.
  */
+// ---- the management-key surface (`/api/console/...`), plan 07 slice 4
+//
+// A third namespace, and a third pair of helpers for the reason the pair above
+// gives. The platform serves its key management under `/api/console/` rather
+// than plan 30's `/api/oauth/` — "the reference uses both, and each surface
+// keeps the one it was observed under" (`internal/api/consoleapikeys.go`) — so
+// the two prefixes are not a parameter of one contract. Named for the resource
+// rather than the prefix, because `consoleGet` and a hypothetical
+// `consoleApiGet` would be one typo apart and land a body on the wrong surface.
+
+export async function consoleKeysGet<T>(path: string): Promise<T> {
+  const response = await fetch(`/api/console/${path}`);
+  await assertOk(response);
+  return (await response.json()) as T;
+}
+
+export async function consoleKeysPost<T>(
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const response = await fetch(`/api/console/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await assertOk(response);
+  return (await response.json()) as T;
+}
+
 export async function consolePostNoContent(
   path: string,
   body?: unknown,

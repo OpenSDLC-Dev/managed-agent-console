@@ -64,7 +64,9 @@ const SEAMS = [
     // somewhere nobody meant it to. Happy-path assertions cannot see that —
     // the dialog looks identical whether or not the value also leaked into an
     // attribute or the query cache — which is exactly what a probe is for.
-    modules: ["environment-keys"],
+    // `api-keys` is the same seam and a sharper case: an environment key admits
+    // a worker to one environment, a management key is root on the platform.
+    modules: ["environment-keys", "api-keys"],
   },
   {
     dir: "src/lib/identity",

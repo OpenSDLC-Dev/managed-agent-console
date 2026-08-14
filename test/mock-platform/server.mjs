@@ -78,6 +78,43 @@ let skillVersionCounter = 1;
 // plaintext is never stored — the platform keeps only a hash, and so does this.
 let envKeysStore = {};
 let envKeyCounter = 1;
+// The other console namespace (plan 07 slice 4): management keys, newest first.
+// The plaintext is never stored here either — only the hint the listing shows.
+let apiKeysStore = [];
+let apiKeyCounter = 1;
+
+/**
+ * The seeded rows. The first has **no issuer**, which is the platform's mark of
+ * a key managed by `CONTROLPLANE_API_KEY`: every mutation on it is refused,
+ * because its lifecycle is rotation-by-restart. A fixture without one would let
+ * the console ship a row of controls that always 400.
+ */
+const API_KEYS_SEED = [
+  {
+    id: "apikey_bootstrap01",
+    type: "api_key",
+    name: "control-plane",
+    workspace_id: null,
+    created_at: "2026-08-01T09:00:00Z",
+    created_by: null,
+    partial_key_hint: "sk-map-adm01--Boo…strap",
+    status: "active",
+    expires_at: null,
+    principal: null,
+  },
+  {
+    id: "apikey_ci01",
+    type: "api_key",
+    name: "ci-deploy",
+    workspace_id: null,
+    created_at: "2026-08-02T10:30:00Z",
+    created_by: { id: "principal_op01", type: "principal" },
+    partial_key_hint: "sk-map-adm01--Cid…eploy",
+    status: "active",
+    expires_at: "2026-12-01T00:00:00Z",
+    principal: null,
+  },
+];
 
 function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
@@ -96,6 +133,8 @@ function resetStore() {
       timers: new Set(),
     });
   }
+  apiKeysStore = structuredClone(API_KEYS_SEED);
+  apiKeyCounter = 1;
   agentsStore = structuredClone(agents);
   agentVersionsStore = structuredClone(agentVersions);
   environmentsStore = structuredClone(environments);
@@ -695,6 +734,190 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
     res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    return;
+  }
+
+  // ---- management keys (internal/api/consoleapikeys.go), the OTHER console
+  // namespace, reached through the console's /api/console passthrough. A
+  // deployment predating the surface answers 404 through its router catch-all,
+  // which is what the console reads as "not implemented here".
+  if (
+    unimplemented.includes("api-keys") &&
+    url.pathname.startsWith("/api/console/")
+  ) {
+    res.setHeader("content-type", "application/json");
+    res.writeHead(404);
+    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    return;
+  }
+
+  const apiKeysMatch = url.pathname.match(
+    /^\/api\/console\/organizations\/([^/]+)\/workspaces\/([^/]+)\/api_keys$/,
+  );
+  const apiKeyMatch = url.pathname.match(
+    /^\/api\/console\/organizations\/([^/]+)\/workspaces\/([^/]+)\/api_keys\/([^/]+)$/,
+  );
+  if (apiKeysMatch || apiKeyMatch) {
+    res.setHeader("content-type", "application/json");
+    const [, org, workspace] = apiKeysMatch ?? apiKeyMatch;
+    // Both segments answer the same 404 shape, so the namespace is no better an
+    // enumeration oracle than /v1 is.
+    if (org !== "default") {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", `organization ${org} not found`));
+      return;
+    }
+    if (workspace !== "default") {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", `workspace ${workspace} not found`));
+      return;
+    }
+
+    // `expired` is DERIVED from expires_at and outranked by archived — the
+    // platform renders it, never stores it, and refuses it as an input.
+    const render = (k) => {
+      const lapsed =
+        k.expires_at != null && Date.parse(k.expires_at) <= Date.now();
+      const status = k.status === "archived" || !lapsed ? k.status : "expired";
+      return { ...k, status };
+    };
+
+    if (apiKeysMatch && req.method === "GET") {
+      res.writeHead(200);
+      // A bare array: no envelope, no paging, which is what the reference's
+      // own console listing returns.
+      res.end(JSON.stringify(apiKeysStore.map(render)));
+      return;
+    }
+
+    if (apiKeysMatch && req.method === "POST") {
+      let body;
+      try {
+        body = JSON.parse((await readBody(req)).toString() || "{}");
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name || [...name].length > 128) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "name must be 1-128 characters"),
+        );
+        return;
+      }
+      // Absent and explicit null both mean "never" (consoleapikeys.go).
+      const expiresAt =
+        body.expires_at == null ? null : String(body.expires_at);
+      const id = `apikey_new${String(apiKeyCounter++).padStart(2, "0")}`;
+      const row = {
+        id,
+        type: "api_key",
+        name,
+        workspace_id: null,
+        created_at: new Date().toISOString(),
+        created_by: { id: "principal_op01", type: "principal" },
+        partial_key_hint: `sk-map-adm01--${id.slice(-3)}…keyx`,
+        status: "active",
+        expires_at: expiresAt,
+        principal: null,
+      };
+      apiKeysStore.unshift(row);
+      // `noStore(...)` wraps this route and only this one on the platform
+      // (server.go), because it is the one response that carries a plaintext
+      // credential. The mock mirrors it so the console's header forwarding is
+      // actually exercised rather than assumed.
+      res.setHeader("cache-control", "no-store");
+      res.writeHead(201);
+      // The whole resource plus the plaintext, appended last — NOT the RFC 6749
+      // shape the environment-key surface answers with. Two dialects, two
+      // surfaces, mirrored where each was observed.
+      res.end(
+        JSON.stringify({
+          ...render(row),
+          raw_key: `sk-map-adm01-${id}-secret`,
+        }),
+      );
+      return;
+    }
+
+    if (apiKeyMatch && req.method === "POST") {
+      const keyId = apiKeyMatch[3];
+      let body;
+      try {
+        body = JSON.parse((await readBody(req)).toString() || "{}");
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      const row = apiKeysStore.find((k) => k.id === keyId);
+      if (!row) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", `api key ${keyId} not found`));
+        return;
+      }
+      // The platform's guards, in its order — the env-var one FIRST, because a
+      // rotated deployment holds archived rows with no issuer and telling that
+      // operator "archived is permanent" never mentions the thing they can act
+      // on.
+      if (!row.created_by) {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `api key ${keyId} is managed by CONTROLPLANE_API_KEY; rotate it by restarting the control plane with a new value`,
+          ),
+        );
+        return;
+      }
+      if (row.status === "archived") {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `api key ${keyId} is archived, and an archived key cannot be updated`,
+          ),
+        );
+        return;
+      }
+      const status = body.status == null ? null : String(body.status);
+      if (
+        status !== null &&
+        !["active", "inactive", "archived"].includes(status)
+      ) {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            "status must be one of active, inactive, archived",
+          ),
+        );
+        return;
+      }
+      const lapsed =
+        row.expires_at != null && Date.parse(row.expires_at) <= Date.now();
+      // A lapsed key admits exactly one operation: archiving it.
+      if (lapsed && !(body.name == null && status === "archived")) {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `api key ${keyId} has expired; an expired key can only be archived, not renamed or re-activated`,
+          ),
+        );
+        return;
+      }
+      if (status !== null) row.status = status;
+      if (typeof body.name === "string") row.name = body.name.trim();
+      res.writeHead(200);
+      res.end(JSON.stringify(render(row)));
+      return;
+    }
+
+    res.writeHead(405);
+    res.end(envelope("invalid_request_error", "method not allowed"));
     return;
   }
 

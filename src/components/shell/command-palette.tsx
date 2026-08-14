@@ -7,6 +7,7 @@ import {
   Boxes,
   FileText,
   KeyRound,
+  KeySquare,
   MessagesSquare,
   Search,
   Sparkles,
@@ -50,6 +51,7 @@ const SECTION_ICONS: [Surface, LucideIcon][] = [
   ["vaults", KeyRound],
   ["skills", Sparkles],
   ["files", FileText],
+  ["api-keys", KeySquare],
 ];
 
 const SECTIONS: (Item & { surface: Surface })[] = SECTION_ICONS.map(
