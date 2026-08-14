@@ -119,6 +119,50 @@ describe("console-API BFF passthrough", () => {
       "GET",
       ["organizations", "default", "environments", "..", "v1", "agents"],
     ],
+    // The shape-matching traversals. Next hands the catch-all decoded, so
+    // `%2e%2e` arrives as `..` in a slot the old `[^/]+` accepted — and the
+    // URL `fetch` then builds resolves it away, sending the credential to a
+    // path this gate never approved (PR #86 review, P1).
+    [
+      "a dot-dot organization, which the shape would otherwise admit",
+      "GET",
+      ["organizations", "..", "environments", "env_byoc1", "tokens"],
+    ],
+    [
+      "a dot-dot environment",
+      "GET",
+      ["organizations", "default", "environments", "..", "tokens"],
+    ],
+    [
+      "a dot-dot token id on revoke",
+      "POST",
+      [
+        "organizations",
+        "default",
+        "environments",
+        "env_byoc1",
+        "tokens",
+        "..",
+        "revoke",
+      ],
+    ],
+    [
+      "a single-dot segment",
+      "GET",
+      ["organizations", ".", "environments", "env_byoc1", "tokens"],
+    ],
+    // Double-encoded input survives Next's one decoding pass as a literal
+    // `%2e%2e`, which the URL standard still resolves as `..`.
+    [
+      "a double-encoded traversal",
+      "GET",
+      ["organizations", "%2e%2e", "environments", "env_byoc1", "tokens"],
+    ],
+    [
+      "an empty segment",
+      "GET",
+      ["organizations", "", "environments", "env_byoc1", "tokens"],
+    ],
   ])(
     "refuses %s without contacting the platform",
     async (_label, method, path) => {

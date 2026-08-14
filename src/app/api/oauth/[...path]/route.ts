@@ -23,11 +23,23 @@ import { envelope, forward } from "@/lib/platform-proxy";
  * that stays true without anyone having to notice.
  */
 
+/**
+ * What an id may be made of. Deliberately narrower than "not a slash": every
+ * value that lands in these slots is a platform id (`env_…`, `envkey_…`) or an
+ * organization handle — our platform pins that to the literal `default`, the
+ * reference uses a uuid, and neither needs a dot or a percent sign. Excluding
+ * both is what stops `..` and `%2e%2e` from satisfying the shapes below and
+ * then being resolved away when `fetch` reparses the URL. `forward` refuses
+ * them again for any route that forgets.
+ */
+const ID = "[A-Za-z0-9_-]+";
+
 /** `organizations/{org}/environments/{env}/tokens` */
-const TOKENS = /^organizations\/[^/]+\/environments\/[^/]+\/tokens$/;
+const TOKENS = new RegExp(`^organizations/${ID}/environments/${ID}/tokens$`);
 /** `organizations/{org}/environments/{env}/tokens/{token}/revoke` */
-const REVOKE =
-  /^organizations\/[^/]+\/environments\/[^/]+\/tokens\/[^/]+\/revoke$/;
+const REVOKE = new RegExp(
+  `^organizations/${ID}/environments/${ID}/tokens/${ID}/revoke$`,
+);
 
 /**
  * Method is part of the shape: the platform serves GET+POST on the collection
@@ -45,9 +57,10 @@ async function proxy(
   { params }: { params: Promise<{ path: string[] }> },
 ): Promise<Response> {
   const { path } = await params;
-  // A segment containing a slash or traversal cannot reach here as one element
-  // — Next decodes the catch-all per segment — but re-joining is where a
-  // crafted segment would take effect, so the shape is checked after joining.
+  // Checked after joining, because a segment carrying an encoded slash arrives
+  // decoded and only shows up as an extra `/` here — where the whole-shape
+  // match rejects it. A segment that is itself `..` does *not* show up that
+  // way, which is what the charset in ID is for.
   const joined = path.join("/");
   if (!allowed(request.method, joined)) {
     return envelope(

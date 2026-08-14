@@ -52,6 +52,39 @@ export function envelope(
 }
 
 /**
+ * Whether a segment would make the request we *send* differ from the path a
+ * route's gate approved.
+ *
+ * Each gate checks a string; `fetch` then reparses the URL we build from it,
+ * and WHATWG URL resolution collapses dot segments. So
+ * `organizations/../environments/e/tokens` satisfies a shape check and is sent
+ * as `environments/e/tokens` — the gate asserts one path and the management
+ * credential travels to another. The `/v1` gate is the sharper case: it only
+ * inspects the first segment, so `v1/../../x` leaves the wire surface entirely.
+ *
+ * `%` is refused with them. Next decodes the catch-all once per segment, so a
+ * surviving `%` is double-encoded input — and the URL standard resolves
+ * `%2e%2e` as `..` too, which means one decoding pass is not enough to see it.
+ * No path this console builds carries anything but platform ids, none of which
+ * contain a percent sign, so refusing the character costs nothing.
+ *
+ * Belt-and-braces by design: it lives in the shared core rather than in either
+ * gate, so a third route added later inherits it without having to know.
+ */
+function escapesItsPath(upstreamPath: string): boolean {
+  return upstreamPath
+    .split("/")
+    .some(
+      (segment) =>
+        segment === "" ||
+        segment === "." ||
+        segment === ".." ||
+        segment.includes("%") ||
+        segment.includes("\\"),
+    );
+}
+
+/**
  * Forward `request` to `<PLATFORM_BASE_URL>/<upstreamPath>` with the management
  * key attached. `upstreamPath` is built by the calling route from its own
  * validated path — never from raw user input.
@@ -60,6 +93,14 @@ export async function forward(
   request: NextRequest,
   upstreamPath: string,
 ): Promise<Response> {
+  if (escapesItsPath(upstreamPath)) {
+    return envelope(
+      404,
+      "invalid_request_error",
+      `unsupported proxy path "/${upstreamPath}"`,
+    );
+  }
+
   let baseUrl: string;
   let apiKey: string;
   try {
