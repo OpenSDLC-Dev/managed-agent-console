@@ -97,7 +97,10 @@ const API_KEYS_SEED = [
     workspace_id: null,
     created_at: "2026-08-01T09:00:00Z",
     created_by: null,
-    partial_key_hint: "sk-map-adm01--Boo…strap",
+    // An operator-chosen CONTROLPLANE_API_KEY: nothing in it may be assumed
+    // public, so the platform publishes its last four characters and no prefix
+    // (internal/api/auth.go, partialKeyHint).
+    partial_key_hint: "...853b",
     status: "active",
     expires_at: null,
     principal: null,
@@ -109,7 +112,7 @@ const API_KEYS_SEED = [
     workspace_id: null,
     created_at: "2026-08-02T10:30:00Z",
     created_by: { id: "principal_op01", type: "principal" },
-    partial_key_hint: "sk-map-adm01--Cid…eploy",
+    partial_key_hint: "sk-map-api01-Cid...ploy",
     status: "active",
     expires_at: "2026-12-01T00:00:00Z",
     principal: null,
@@ -811,6 +814,13 @@ const server = createServer(async (req, res) => {
       const expiresAt =
         body.expires_at == null ? null : String(body.expires_at);
       const id = `apikey_new${String(apiKeyCounter++).padStart(2, "0")}`;
+      // The platform's own prefix, measured on a real stack (its
+      // internal/api/auth.go: `IssuedKeyPrefix = "sk-map-api01-"`). The hint is
+      // derived from the value actually minted, and by the platform's rule —
+      // three characters of the body, `...`, four more — so a test can match a
+      // listing row against the secret it was shown, exactly as an operator does.
+      const rawKey = `sk-map-api01-mock${id.slice(-4)}secret`;
+      const keyBody = rawKey.slice("sk-map-api01-".length);
       const row = {
         id,
         type: "api_key",
@@ -818,7 +828,7 @@ const server = createServer(async (req, res) => {
         workspace_id: null,
         created_at: new Date().toISOString(),
         created_by: { id: "principal_op01", type: "principal" },
-        partial_key_hint: `sk-map-adm01--${id.slice(-3)}…keyx`,
+        partial_key_hint: `sk-map-api01-${keyBody.slice(0, 3)}...${keyBody.slice(-4)}`,
         status: "active",
         expires_at: expiresAt,
         principal: null,
@@ -829,14 +839,17 @@ const server = createServer(async (req, res) => {
       // credential. The mock mirrors it so the console's header forwarding is
       // actually exercised rather than assumed.
       res.setHeader("cache-control", "no-store");
-      res.writeHead(201);
+      // 200, not 201: the platform answers this through its typed `handle`
+      // adapter, which writes StatusOK for every success that carries a body
+      // (server.go). Measured on a real stack, 2026-08-14.
+      res.writeHead(200);
       // The whole resource plus the plaintext, appended last — NOT the RFC 6749
       // shape the environment-key surface answers with. Two dialects, two
       // surfaces, mirrored where each was observed.
       res.end(
         JSON.stringify({
           ...render(row),
-          raw_key: `sk-map-adm01-${id}-secret`,
+          raw_key: rawKey,
         }),
       );
       return;
