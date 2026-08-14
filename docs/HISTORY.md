@@ -2,9 +2,24 @@
 
 Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md) for the cycle in progress, and in [docs/changelog/](./changelog/) for every released one.
 
+## Plan 08 — console SSO and role-aware UI (approved 2026-08-14, archived 2026-08-14)
+
+[docs/plan/08_console-sso-rbac.md](./plan/08_console-sso-rbac.md), issue #56, five slices (PRs #92, #94, #95, #96, plus this acceptance PR). The console half of [platform plan 31](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/31_console-sso-rbac.md). The platform had grown OIDC verification, a principal per request and three roles; this repo still had one shared `CONSOLE_PASSWORD` in front of one management key, so **every operator was root and no action had an author**.
+
+1. **Config and the health contract** — `IDENTITY_*` config that fails closed, the D3 mode matrix written as tests before any of it had a UI, and `PLATFORM_API_KEY` released from readiness only once identity is configured.
+2. **The relying party** — `/api/auth/{login,callback,logout}`: authorization code + PKCE S256, `state` and `nonce`, and a session store the browser only ever holds an opaque handle to. Principle 5 was amended here, as the plan scheduled.
+3. **The BFF forwards the operator** — `x-api-key` becomes `Authorization: Bearer`, and **never both**: the platform's dispatcher takes the key and drops the role, so sending both would serve every operator as root without failing anything.
+4. **Role-aware UI** — a 403 presented as a denial rather than a fault, and the sidebar account block. Controls stay visible per D4; hiding one accurately needs a `me` route the platform does not serve.
+
+**Acceptance (2026-08-14).** Against the bundled Casdoor: a `map-viewer` session had its environment-create refused inline in the platform's own words, and a `map-admin` session issued an environment key through plan 07's dialog. The pair is the proof, not either half — a viewer refused and an admin allowed on the same route is what shows the operator's own token travelled rather than the management key.
+
+Two defects it found, both invisible to CI. A completed sign-in landed on `http://0.0.0.0:3300/agents`, the address the standalone server binds rather than the host the browser used; redirects to this console now name no host at all. And every query retried refusals, so a 403 was asked twice and the denial waited out a backoff — measured at four identical 403s on the admin-only page where two suffice.
+
+The fidelity manifest gained `role-denied`. The SSO login page and the account block cannot be walked while both automated tiers run in password mode; compared by hand in Chrome instead, and filed as #99.
+
 ## Plan 07 — console-issued credentials (approved 2026-08-14, archived 2026-08-14)
 
-[docs/plan/07_console-issued-keys.md](./plan/07_console-issued-keys.md), issue #56, five slices (PRs #93, #94, #97, plus this acceptance PR). The console could drive every resource the platform serves except the two that mint credentials: standing up a self-hosted worker meant hand-editing `CONTROLPLANE_API_KEY` or running SQL. Both surfaces now ship, on the **two different console namespaces the reference actually uses** — `/api/oauth/…` for environment keys (plan 30's), `/api/console/…` for management keys (the platform's #378) — each mirrored where it was observed rather than unified into an invented one.
+[docs/plan/07_console-issued-keys.md](./plan/07_console-issued-keys.md), issue #56, five slices (PRs #86, #89, #91, #97, #98). The console could drive every resource the platform serves except the two that mint credentials: standing up a self-hosted worker meant hand-editing `CONTROLPLANE_API_KEY` or running SQL. Both surfaces now ship, on the **two different console namespaces the reference actually uses** — `/api/oauth/…` for environment keys (plan 30's), `/api/console/…` for management keys (the platform's #378) — each mirrored where it was observed rather than unified into an invented one.
 
 1. **The seams** — a second allowlisted BFF, the shared forwarding core, the offset envelope, `consolePostNoContent`, and the wire types with their zod transcription. Rendered nothing.
 2. **Environment keys, read** — the section on the environment detail page, with the issuance precondition mirroring the platform's own refusals (non-`self_hosted` and archived environments both 400, so the control is hidden for both) and a 404 read as "this deployment predates the surface".

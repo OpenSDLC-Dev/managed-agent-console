@@ -70,6 +70,10 @@ export function safeReturnTo(raw: string | null | undefined): string {
  * proxy overwrites it; that is survivable rather than fine, because a redirect
  * URI has to be pre-registered at the provider, so a forged host produces a URI
  * the provider refuses instead of one it honours.
+ *
+ * That reasoning does **not** extend to the redirects this console sends a
+ * browser — nothing pre-registers where a `Location` may point — which is why
+ * those carry a relative reference and no host at all (`sameOriginRedirect`).
  */
 export function resolveRedirectUri(
   request: { headers: Headers; nextUrl: URL },

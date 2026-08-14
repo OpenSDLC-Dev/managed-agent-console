@@ -84,6 +84,12 @@ The Chrome pass found one thing of its own: the API-keys page put **Create key**
 
 One trap is recorded in `docs/HISTORY.md` for whoever repeats this walkthrough: the browser-automation extension's network panel reports the environment-key revoke as **503**. It is not. The console's own request log, Chrome's Resource Timing (`responseStatus: 204`) and the platform's behaviour all agree on **204**, and the worker's 401 proves the revoke landed. Half an hour went into that discrepancy before the observer turned out to be the thing that was wrong.
 
+**Plan 08 is finished.** Its acceptance ran against the bundled Casdoor: a `map-viewer` session had its environment-create refused inline in the platform's own words, and a `map-admin` session issued an environment key through plan 07's dialog. The 403/200 split on one route is what proves the operator's own token travelled and the management key did not — had the key gone, the platform would have dropped the role and served the viewer as root.
+
+Two defects that acceptance found. **A completed sign-in landed on `http://0.0.0.0:3300/agents`** — the address the standalone server binds, not the host the browser used, and an origin the host-only session cookie never reaches. Redirects to this console now carry a relative `Location` and name no host at all. **And every query retried refusals**: a 403 was asked twice, so the denial waited out a backoff first. Transport failures, 5xx, 408 and 429 still retry; a settled answer does not.
+
+The fidelity manifest gains `role-denied`. The SSO login page and the account block stay out of it — both automated tiers run the console in password mode, so the walker cannot reach them; compared by hand in Chrome instead, and filed as [#99](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/99).
+
 ## Released
 
 - [0.5.0](docs/changelog/0.5.0.md) — 2026-08-09 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.4.0...v0.5.0)
