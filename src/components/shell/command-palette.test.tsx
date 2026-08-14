@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandPalette } from "./command-palette";
+import { SURFACES } from "@/lib/platform/surfaces";
 
 const routerState = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -113,11 +114,18 @@ describe("CommandPalette", () => {
       "Credential vaults",
       "Skills",
       "Files",
+      "API keys",
     ]);
 
-    // Six list queries, plus the six surface probes the "Go to" entries are
-    // gated on — each fired exactly once.
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(12));
+    // The six searchable list queries, plus one surface probe per registered
+    // surface — each fired exactly once. Derived rather than hardcoded: a
+    // seventh surface is why this line was wrong once already.
+    const LIST_QUERIES = 6;
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledTimes(
+        LIST_QUERIES + Object.keys(SURFACES).length,
+      ),
+    );
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls).toEqual(
       expect.arrayContaining([
@@ -323,7 +331,10 @@ describe("CommandPalette", () => {
 
     const reopened = await openPalette();
     expect((reopened as HTMLInputElement).value).toBe("");
-    expect(screen.getAllByRole("option")).toHaveLength(6);
+    // Back to the destinations, one per surface — not the six search hits above.
+    expect(screen.getAllByRole("option")).toHaveLength(
+      Object.keys(SURFACES).length,
+    );
     expect(screen.getByText("Go to")).toBeDefined();
   });
 });

@@ -375,6 +375,67 @@ export const EnvironmentKeyIssuedSchema = z.object({
   expires_in: z.number(),
 });
 
+// ---- management keys, the other console namespace (consoleapikeys.go)
+//
+// A second dialect on a second prefix (`/api/console/`), mirrored from the
+// reference the same way — and deliberately *not* made to match the
+// environment-key shapes above. The reference runs two dialects on two
+// surfaces: environment keys answer issuance with an RFC 6749 token response,
+// management keys answer with the whole resource plus one extra field.
+
+/**
+ * consoleapikeys.go — the actor that issued a key: `{id, type}`. Our type
+ * vocabulary is `principal` (a human over SSO) or `api_key` (the machine
+ * credential that issued it); the reference's has only `user`, because it has
+ * a `user_` id to give and we do not. Null on a key seeded from the control
+ * plane's own environment variable, which nobody issued.
+ */
+export const KeyActorSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+});
+
+/**
+ * consoleapikeys.go — a management key as both the listing and an update
+ * render it. `workspace_id` and `principal` are always null on this platform
+ * and are kept in the shape because the reference sends them null too.
+ *
+ * `status` is a plain string rather than an enum on purpose: `expired` is
+ * *derived* from `expires_at` by the platform and is not settable, so the set a
+ * caller may send and the set it may receive are different sets. Narrowing the
+ * read shape to today's four would also turn a platform that grows a fifth into
+ * a parse failure across the whole page — the console renders what it is told.
+ */
+export const ApiKeySchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  name: z.string(),
+  workspace_id: z.string().nullable(),
+  created_at: z.string(),
+  created_by: KeyActorSchema.nullable(),
+  partial_key_hint: z.string(),
+  status: z.string(),
+  expires_at: z.string().nullable(),
+  principal: KeyActorSchema.nullable(),
+});
+
+/**
+ * consoleapikeys.go — the create response: the whole resource with `raw_key`
+ * appended. The only time the secret exists outside the platform's hash of it,
+ * which is why the surface that renders it renders it exactly once.
+ */
+export const ApiKeyIssuedSchema = ApiKeySchema.extend({
+  raw_key: z.string(),
+});
+
+/**
+ * The listing is a **bare array** — no envelope, no paging. That is the third
+ * list shape this console parses, and it is what the reference's own console
+ * list returns; the `/v1` keyset envelope and files' classic envelope both stay
+ * where they belong.
+ */
+export const ApiKeyListSchema = z.array(ApiKeySchema);
+
 // ---- inferred types (re-exported by ./types, which is what consumers import)
 
 export type ModelRef = z.infer<typeof ModelRefSchema>;
@@ -402,3 +463,6 @@ export type PlatformFile = z.infer<typeof PlatformFileSchema>;
 export type EnvironmentKey = z.infer<typeof EnvironmentKeySchema>;
 export type EnvironmentKeyPage = z.infer<typeof EnvironmentKeyPageSchema>;
 export type EnvironmentKeyIssued = z.infer<typeof EnvironmentKeyIssuedSchema>;
+export type KeyActor = z.infer<typeof KeyActorSchema>;
+export type ApiKey = z.infer<typeof ApiKeySchema>;
+export type ApiKeyIssued = z.infer<typeof ApiKeyIssuedSchema>;

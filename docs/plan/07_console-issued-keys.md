@@ -68,6 +68,12 @@ recording corroborates them.
 
 ## Decisions still needed from the maintainer
 
+**Settled 2026-08-14, each on the recommendation below**, under the maintainer's
+standing go-ahead to build to both plans — the same authorisation plan 08's
+D1–D4 were taken under, and recorded here plainly because it was one standing
+instruction rather than three separate answers. What slice 4 then found, and
+what each decision cost, is written under the recommendation it belongs to.
+
 Recorded here unanswered; the plan cannot leave `draft` until they are settled.
 All three concern the **API-key** half, which the 2026-08-10 draft predated.
 
@@ -91,6 +97,31 @@ All three concern the **API-key** half, which the 2026-08-10 draft predated.
    no expiry from the caller at all. Recommended: **mirror the reference per
    surface** — env keys get no expiry control (the platform assigns), API keys
    get the six options — rather than inventing symmetry the wire does not have.
+
+### What slice 4 found (2026-08-14)
+
+Two of the **three gaps** this plan named as "close before you build" were
+closed by the platform rather than by us, and the third was decided:
+
+- **The wire value for `Never` is no longer unobserved.** The platform's own
+  slice-5 work (its #389) posted both shapes to the reference: `Never` **omits
+  the field**, and an explicit `null` is accepted for the same meaning. The
+  console omits it, because that is what the reference sends.
+- **The enrichment gap is decided by absence: those columns do not ship.** The
+  reference's table is `Key · Created by · Created · Expires · Last used · Cost
+· Actions`, re-measured live on 2026-08-14. This platform serves no
+  `last_used` and no `cost`, and no member lookup to turn `created_by: {id,
+type}` into a display name over an email. The console renders what the wire
+  carries — the actor id — and drops the two columns it has no source for,
+  rather than inventing either. Registered in `docs/design-reference.md`.
+- **One column is added rather than dropped: `Status`.** Our platform has
+  `active`/`inactive`/`archived` plus a derived `expired`, and the console
+  offers Disable/Enable and Archive against them; the reference's row menu holds
+  a single destructive `Delete API key` and needs no status column. A surface
+  offering three outcomes has to say which one a row is in.
+- **Custom expiry ships**, as D3 says: the five fixed choices and a datetime
+  field, all resolved to an absolute instant client-side, because the wire has
+  no duration vocabulary at all.
 
 ## Ground truth — the reference dialect, recorded 2026-08-14
 

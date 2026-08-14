@@ -21,15 +21,22 @@ function wrapper() {
   };
 }
 
-/** Fetch stub answering each `/api/platform/v1/<surface>` probe by status. */
+/**
+ * Fetch stub answering each probe by status, keyed on the surface name.
+ *
+ * Two prefixes, because one surface is not on the wire: management keys live in
+ * the platform's off-wire console namespace and are probed through the other
+ * BFF (`/api/console/...`). Collapsing both to a name here keeps every test
+ * below written in surfaces rather than in URLs.
+ */
 function stubProbes(status: (surface: string) => number) {
   vi.stubGlobal(
     "fetch",
     vi.fn((input: string) => {
-      const surface = new URL(input, "http://console").pathname.replace(
-        "/api/platform/v1/",
-        "",
-      );
+      const { pathname } = new URL(input, "http://console");
+      const surface = pathname.startsWith("/api/console/")
+        ? "api-keys"
+        : pathname.replace("/api/platform/v1/", "");
       const code = status(surface);
       return Promise.resolve(
         new Response(
@@ -171,6 +178,7 @@ describe("useSurfaces", () => {
       vaults: true,
       skills: false,
       files: false,
+      "api-keys": true,
     });
   });
 
@@ -199,14 +207,20 @@ describe("useSurfaces", () => {
     expect(result.current?.files).toBe(true);
   });
 
-  it("probes each collection once, with limit=1", async () => {
+  it("probes each collection once, through the BFF its namespace belongs to", async () => {
     stubProbes(() => 200);
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
     expect(calls).toHaveLength(Object.keys(SURFACES).length);
-    for (const { path } of Object.values(SURFACES)) {
-      expect(calls).toContain(`/api/platform/${path}?limit=1`);
+    for (const entry of Object.values(SURFACES)) {
+      // The wire surfaces ask for a page of one; the console namespace serves a
+      // bare array and reads no query params, so it is asked plainly.
+      expect(calls).toContain(
+        "api" in entry
+          ? `/api/console/${entry.path}`
+          : `/api/platform/${entry.path}?limit=1`,
+      );
     }
   });
 });

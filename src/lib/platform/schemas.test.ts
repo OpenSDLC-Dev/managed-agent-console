@@ -27,6 +27,9 @@ import {
 } from "../../../test/mock-platform/server.mjs";
 import {
   AgentSchema,
+  ApiKeyIssuedSchema,
+  ApiKeyListSchema,
+  ApiKeySchema,
   EnvironmentKeyIssuedSchema,
   EnvironmentKeyPageSchema,
   EnvironmentKeySchema,
@@ -299,6 +302,66 @@ describe("the mock's constructed write-path responses conform too", () => {
     expect(await unknown.json()).toMatchObject({
       type: "error",
       error: { type: "not_found_error" },
+    });
+  });
+
+  // The other console dialect (plan 07 slice 4). It is asserted beside the
+  // environment-key one on purpose: the two surfaces answer issuance with
+  // *different* shapes, and a test that only ever saw one of them would let the
+  // console quietly grow a single "console key" abstraction over both.
+  it("management keys: list, issue, then disable and archive", async () => {
+    const path =
+      "/api/console/organizations/default/workspaces/default/api_keys";
+
+    const before = await call(path, { method: "GET" });
+    expectConforms(ApiKeyListSchema, before, `GET ${path}`);
+    // A bare array — neither the wire's keyset envelope nor files' classic one.
+    expect(Array.isArray(before)).toBe(true);
+
+    const issued = await postJSON(path, { name: "conformance-key" });
+    expectConforms(ApiKeyIssuedSchema, issued, `POST ${path}`);
+    // The whole resource plus the plaintext, unlike the environment-key
+    // surface's `{access_token, expires_in}`.
+    expect(issued).toMatchObject({ type: "api_key", status: "active" });
+    const id = (issued as { id: string }).id;
+    // "Never" is the absence of the field, and the response says so.
+    expect((issued as { expires_at: string | null }).expires_at).toBe(null);
+
+    const after = await call(path, { method: "GET" });
+    each(ApiKeySchema, after as unknown[], "issued listing");
+    expect((after as { id: string }[]).map((k) => k.id)).toContain(id);
+
+    const disabled = await postJSON(`${path}/${id}`, { status: "inactive" });
+    expectConforms(ApiKeySchema, disabled, `POST ${path}/${id}`);
+    expect((disabled as { status: string }).status).toBe("inactive");
+
+    const archived = await postJSON(`${path}/${id}`, { status: "archived" });
+    expect((archived as { status: string }).status).toBe("archived");
+
+    // Archived is terminal: nothing may be patched onto it, the repeated
+    // archive included.
+    const again = await fetch(`${base}${path}/${id}`, {
+      method: "POST",
+      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ status: "archived" }),
+    });
+    expect(again.status).toBe(400);
+
+    // A key nobody issued belongs to the control plane's own environment
+    // variable, and this surface does not get to touch it — but it is still
+    // listed, because hiding it would be the worse lie.
+    const bootstrap = (after as { id: string; created_by: unknown }[]).find(
+      (k) => k.created_by === null,
+    );
+    expect(bootstrap).toBeDefined();
+    const refused = await fetch(`${base}${path}/${bootstrap!.id}`, {
+      method: "POST",
+      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ status: "inactive" }),
+    });
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      error: { message: expect.stringContaining("CONTROLPLANE_API_KEY") },
     });
   });
 

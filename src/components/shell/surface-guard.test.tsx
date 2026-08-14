@@ -1,8 +1,9 @@
-import "@testing-library/jest-dom/vitest";
+﻿import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SurfaceGuard } from "./surface-guard";
+import { SURFACES } from "@/lib/platform/surfaces";
 
 const navState = vi.hoisted(() => ({ pathname: "/skills" }));
 
@@ -77,7 +78,11 @@ describe("SurfaceGuard", () => {
 
   it("renders the page when the deployment serves its surface", async () => {
     renderGuard("/skills", []);
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(6));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
+        Object.keys(SURFACES).length,
+      ),
+    );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
 
@@ -100,7 +105,11 @@ describe("SurfaceGuard", () => {
 
   it("leaves a route that belongs to no surface alone", async () => {
     renderGuard("/login", ["skills", "agents"]);
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(6));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
+        Object.keys(SURFACES).length,
+      ),
+    );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
 
@@ -120,7 +129,11 @@ describe("SurfaceGuard", () => {
         </SurfaceGuard>
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(6));
+    await waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
+        Object.keys(SURFACES).length,
+      ),
+    );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
 });
