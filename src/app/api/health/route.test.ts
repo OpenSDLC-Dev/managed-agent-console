@@ -29,7 +29,11 @@ beforeEach(() => {
   vi.stubEnv("PLATFORM_BASE_URL", BASE_URL);
   vi.stubEnv("PLATFORM_API_KEY", API_KEY);
   vi.stubEnv("CONSOLE_PASSWORD", undefined);
+  vi.stubEnv("IDENTITY_MODE", undefined);
 });
+
+/** What every body reports when identity is off — the default in these tests. */
+const NO_IDENTITY = { identity: { mode: "disabled" } };
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -52,20 +56,44 @@ describe("GET /api/health", () => {
     expect(await response.json()).toEqual({
       status: "error",
       configured: false,
-      missing: ["PLATFORM_BASE_URL", "PLATFORM_API_KEY"],
+      // PLATFORM_API_KEY is deliberately absent from this list: it is the deep
+      // check's service credential, not something this revision needs to serve.
+      missing: ["PLATFORM_BASE_URL"],
+      invalid: [],
       login_gate: false,
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("names only the variable that is missing", async () => {
+  // The whole point of making the key optional here: an identity-mode
+  // deployment that removed it from the pod would otherwise fail readiness
+  // forever, in a way that reads as an infrastructure fault rather than a
+  // console that is working exactly as designed.
+  it("is ready without PLATFORM_API_KEY", async () => {
     vi.stubEnv("PLATFORM_API_KEY", undefined);
     const response = await GET(healthRequest());
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      configured: false,
-      missing: ["PLATFORM_API_KEY"],
+      status: "ok",
+      configured: true,
     });
+  });
+
+  it("cannot run the deep check without PLATFORM_API_KEY, and says which", async () => {
+    vi.stubEnv("PLATFORM_API_KEY", undefined);
+    const response = await GET(healthRequest("?deep=1"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      status: "degraded",
+      configured: true,
+      missing: ["PLATFORM_API_KEY"],
+      login_gate: false,
+      ...NO_IDENTITY,
+      // Not "the platform is unreachable" — nothing was asked. The two call for
+      // opposite fixes, so a gate must be able to tell them apart.
+      platform: { checked: false, reachable: false },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("fails the misconfigured check even when asked for the deep one", async () => {
@@ -85,6 +113,7 @@ describe("GET /api/health", () => {
       status: "ok",
       configured: true,
       login_gate: false,
+      ...NO_IDENTITY,
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -123,6 +152,7 @@ describe("GET /api/health", () => {
         status: "ok",
         configured: true,
         login_gate: true,
+        ...NO_IDENTITY,
       });
     });
 
@@ -183,7 +213,8 @@ describe("GET /api/health", () => {
       status: "ok",
       configured: true,
       login_gate: false,
-      platform: { reachable: true, status: 200 },
+      ...NO_IDENTITY,
+      platform: { checked: true, reachable: true, status: 200 },
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -209,9 +240,10 @@ describe("GET /api/health", () => {
       status: "error",
       configured: true,
       login_gate: false,
+      ...NO_IDENTITY,
       // Reached, and still unusable — the distinction a rollout needs, since a
       // 401 means the key is wrong rather than the platform absent.
-      platform: { reachable: false, status: 401 },
+      platform: { checked: true, reachable: false, status: 401 },
     });
   });
 
@@ -243,6 +275,87 @@ describe("GET /api/health", () => {
     const response = await GET(healthRequest("?deep"));
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Identity is the one thing about this console that feature detection cannot
+  // discover — the platform makes SSO-on indistinguishable from SSO-off to an
+  // unauthenticated caller — so the console's own configuration has to say it.
+  describe("identity mode", () => {
+    const ISSUER = "https://idp.internal.example/realms/console";
+    const CLIENT_ID = "console-client-id-never-in-a-health-body";
+    const CLIENT_SECRET = "console-client-secret-never-in-a-health-body";
+
+    const configureOidc = () => {
+      vi.stubEnv("IDENTITY_MODE", "oidc");
+      vi.stubEnv("IDENTITY_OIDC_ISSUER", ISSUER);
+      vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", CLIENT_ID);
+      vi.stubEnv("IDENTITY_OIDC_CLIENT_SECRET", CLIENT_SECRET);
+    };
+
+    it("reports the mode a configured console is in", async () => {
+      configureOidc();
+      const response = await GET(healthRequest());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        status: "ok",
+        configured: true,
+        login_gate: false,
+        identity: { mode: "oidc" },
+      });
+    });
+
+    // Fail closed. A console whose identity configuration is broken cannot
+    // authorize anybody — there is no falling back to the management key — so
+    // reporting Ready would put a revision into service that can serve nobody.
+    it("is not ready when the identity configuration is broken", async () => {
+      vi.stubEnv("IDENTITY_MODE", "oidc");
+      const response = await GET(healthRequest());
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        status: "error",
+        configured: false,
+        missing: ["IDENTITY_OIDC_ISSUER", "IDENTITY_OIDC_CLIENT_ID"],
+        invalid: [],
+        login_gate: false,
+      });
+    });
+
+    it("separates a malformed value from an absent one", async () => {
+      vi.stubEnv("IDENTITY_MODE", "oidc");
+      vi.stubEnv("IDENTITY_OIDC_ISSUER", "http://idp.example.com");
+      vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", CLIENT_ID);
+      const response = await GET(healthRequest());
+      expect(await response.json()).toMatchObject({
+        missing: [],
+        invalid: ["IDENTITY_OIDC_ISSUER"],
+      });
+    });
+
+    it("probe: names the identity variables but never their values", async () => {
+      vi.stubEnv("IDENTITY_MODE", "oidc");
+      vi.stubEnv("IDENTITY_OIDC_ISSUER", `${ISSUER}?tenant=leak`);
+      vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", CLIENT_ID);
+      vi.stubEnv("IDENTITY_OIDC_CLIENT_SECRET", CLIENT_SECRET);
+      for (const query of ["", "?deep=1"]) {
+        const text = await GET(healthRequest(query)).then((r) => r.text());
+        expect(text).toContain("IDENTITY_OIDC_ISSUER");
+        expect(text).not.toContain(ISSUER);
+        expect(text).not.toContain(CLIENT_ID);
+        expect(text).not.toContain(CLIENT_SECRET);
+        expect(text).not.toContain("idp.internal");
+      }
+    });
+
+    it("probe: a well-configured console still leaks neither issuer nor client id", async () => {
+      configureOidc();
+      fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+      for (const query of ["", "?deep=1"]) {
+        const text = await GET(healthRequest(query)).then((r) => r.text());
+        expect(text).not.toContain(ISSUER);
+        expect(text).not.toContain(CLIENT_ID);
+        expect(text).not.toContain(CLIENT_SECRET);
+      }
+    });
   });
 
   // The route is unauthenticated by construction — the Kubernetes probe and the

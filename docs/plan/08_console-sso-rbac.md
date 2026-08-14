@@ -1,5 +1,5 @@
 ---
-status: draft
+status: in-progress
 issue: "#56"
 ---
 
@@ -26,6 +26,19 @@ needs none of this and gains its role gate for free when this lands.
 The plan cannot leave `draft` until D1–D4 are settled. D1 in particular is a
 conflict between two documents over the console's request topology, and must be
 decided rather than inherited.
+
+**Settled 2026-08-14, each on the recommendation stated below**, under the
+maintainer's go-ahead to build to both plans. What that authorised is written
+down plainly, because it was a standing instruction rather than four separate
+answers: the recommendations here were taken as written, and the reasoning under
+each is the record of why. D1 is the one to revisit first if any of it proves
+wrong — it is the only one that contradicts a standing commitment in this repo,
+and the plan below states the cost it accepts (**Mode A**: the platform must
+accept Bearer JWTs from the console over a path that is not IAP-gated, which our
+GKE staging already satisfies). D2 takes the server-side session store and its
+first-stateful-component cost; D3 keeps `CONSOLE_PASSWORD` as a distinct mode
+with the four-row matrix as tests; D4 ships optimistic UI with a 403 toast and
+files the `me`-route ask rather than blocking on it.
 
 ### D1 — Mode A or Mode B?
 

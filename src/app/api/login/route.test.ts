@@ -6,10 +6,14 @@ import { POST } from "./route";
 
 vi.mock("server-only", () => ({}));
 
-const loginRequest = (body: string, url = "http://localhost:3000/api/login") =>
+const loginRequest = (
+  body: string,
+  url = "http://localhost:3000/api/login",
+  headers: Record<string, string> = {},
+) =>
   new NextRequest(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...headers },
     body,
   });
 
@@ -81,6 +85,22 @@ describe("POST /api/login", () => {
       loginRequest(
         JSON.stringify({ password: "hunter2" }),
         "https://console.example/api/login",
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toMatch(/secure/i);
+  });
+
+  // Every deployment in deploy/ terminates TLS at a load balancer and forwards
+  // plain http to the pod, so the request's own protocol says http and the
+  // cookie would be minted without Secure — sendable over a downgrade.
+  it("marks the cookie Secure behind a TLS-terminating load balancer", async () => {
+    vi.stubEnv("CONSOLE_PASSWORD", "hunter2");
+    const response = await POST(
+      loginRequest(
+        JSON.stringify({ password: "hunter2" }),
+        "http://10.0.0.7:3000/api/login",
+        { "x-forwarded-proto": "https" },
       ),
     );
     expect(response.status).toBe(200);

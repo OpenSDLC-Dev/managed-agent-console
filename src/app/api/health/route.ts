@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { SESSION_COOKIE, isValidSession } from "@/lib/auth";
 import { consolePassword, platformApiKey, platformBaseUrl } from "@/lib/env";
+import {
+  type IdentityConfig,
+  IdentityConfigError,
+  identityConfig,
+} from "@/lib/identity/config";
 
 /**
  * Readiness probe, and the gate a deployment is allowed to pass.
@@ -44,8 +49,9 @@ import { consolePassword, platformApiKey, platformBaseUrl } from "@/lib/env";
  * would accept — not because nothing else can reach the route. See
  * deploy/k8s/README.md.
  *
- * The body names environment variables (already public, in `.env.example`) and
- * reports the platform's own status code. It carries no URL and no key, because
+ * The body names environment variables (already public, in `.env.example`),
+ * reports the platform's own status code, and names which identity mode this
+ * process is in. It carries no URL, no key, no issuer and no client id, because
  * the shallow depth answers anyone.
  */
 
@@ -84,30 +90,84 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const missing: string[] = [];
+  const invalid: string[] = [];
   let baseUrl = "";
-  let apiKey = "";
   try {
     baseUrl = platformBaseUrl();
   } catch {
     missing.push("PLATFORM_BASE_URL");
   }
+
+  // PLATFORM_API_KEY is **not** required for this revision to serve, and saying
+  // otherwise would make an identity-mode deployment permanently NotReady: the
+  // readiness probe takes the shallow depth, and a console that authenticates
+  // its users against an identity provider needs no management key to render a
+  // page. What the key remains is the deep check's dedicated service
+  // credential — the one console→platform call that can never borrow a user's
+  // token, because it runs from CD with no user in sight (plan 08 slice 1).
+  let apiKey: string | undefined;
   try {
     apiKey = platformApiKey();
   } catch {
-    missing.push("PLATFORM_API_KEY");
+    apiKey = undefined;
   }
 
-  if (missing.length > 0) {
+  // A broken identity configuration fails closed. There is no falling back to
+  // the management key, so a console that cannot parse its own identity config
+  // cannot authorize anybody, and a probe must say so rather than report Ready.
+  let identity: IdentityConfig | undefined;
+  try {
+    identity = identityConfig();
+  } catch (error) {
+    if (!(error instanceof IdentityConfigError)) throw error;
+    missing.push(...error.missing);
+    invalid.push(...error.invalid);
+  }
+
+  if (missing.length > 0 || invalid.length > 0) {
     return Response.json(
-      { status: "error", configured: false, missing, login_gate: loginGate },
+      {
+        status: "error",
+        configured: false,
+        missing,
+        invalid,
+        login_gate: loginGate,
+      },
       { status: 503 },
     );
   }
 
+  // Reported so an operator can tell which of plan 08 D3's four configurations
+  // this process is in. The mode alone: no issuer, no client id, no URL — the
+  // shallow depth answers anyone.
+  const identityMode = identity?.mode ?? "disabled";
+
   if (!deep) {
     return Response.json(
-      { status: "ok", configured: true, login_gate: loginGate },
+      {
+        status: "ok",
+        configured: true,
+        login_gate: loginGate,
+        identity: { mode: identityMode },
+      },
       { status: 200 },
+    );
+  }
+
+  // The deep depth is a deploy gate, and a gate that cannot run its check must
+  // not go green. Distinguished from "checked and failed" by `checked`, because
+  // "no service credential" and "the platform is down" call for opposite fixes.
+  if (apiKey === undefined) {
+    return Response.json(
+      {
+        status: "degraded",
+        configured: true,
+        missing: ["PLATFORM_API_KEY"],
+        login_gate: loginGate,
+        identity: { mode: identityMode },
+        platform: { checked: false, reachable: false },
+      },
+      { status: 503 },
     );
   }
 
@@ -137,7 +197,8 @@ export async function GET(request: NextRequest): Promise<Response> {
       status: reachable ? "ok" : "error",
       configured: true,
       login_gate: loginGate,
-      platform: { reachable, status: platformStatus },
+      identity: { mode: identityMode },
+      platform: { checked: true, reachable, status: platformStatus },
     },
     { status: reachable ? 200 : 503 },
   );
