@@ -15,10 +15,10 @@ import {
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
   ArchivedBadge,
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   DetailSkeleton,
 } from "@/components/console/bits";
 import {
@@ -39,7 +39,7 @@ const VERSION_COLUMNS: Column<Agent>[] = [
   {
     key: "created",
     header: "Created",
-    cell: (v) => <Time iso={v.updated_at} />,
+    cell: (v) => <Day iso={v.updated_at} />,
   },
 ];
 
@@ -100,10 +100,10 @@ export default function AgentDetailPage({
           </Field>
           <Field label="Current version">v{agent.version}</Field>
           <Field label="Created">
-            <Time iso={agent.created_at} />
+            <Day iso={agent.created_at} />
           </Field>
           <Field label="Last updated">
-            <Time iso={agent.updated_at} />
+            <Day iso={agent.updated_at} />
           </Field>
         </FieldList>
       </DetailSection>

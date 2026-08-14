@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Check, Copy, Plus, X } from "lucide-react";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
+  Day,
   EmptyState,
   ErrorState,
   RequestId,
-  Time,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -420,14 +420,14 @@ export function ApiKeysTable({
     {
       key: "created",
       header: "Created",
-      cell: (k) => <Time iso={k.created_at} />,
+      cell: (k) => <Day iso={k.created_at} />,
     },
     {
       key: "expires",
       header: "Expires",
       cell: (k) => (
         <span data-expires-at={k.expires_at ?? ""}>
-          {k.expires_at ? <Time iso={k.expires_at} /> : "Never"}
+          {k.expires_at ? <Day iso={k.expires_at} /> : "Never"}
         </span>
       ),
     },

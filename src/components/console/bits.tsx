@@ -20,19 +20,57 @@ export function IdCode({ id }: { id: string }) {
   );
 }
 
-/** Deterministic short UTC timestamp, e.g. "Aug 2, 2026, 09:12". */
-export function Time({ iso }: { iso: string | null | undefined }) {
+const DAY_PARTS: Intl.DateTimeFormatOptions = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+};
+
+const MINUTE_PARTS: Intl.DateTimeFormatOptions = {
+  ...DAY_PARTS,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+};
+
+/** Shared body of the two stamps: same fallback, same full value on hover. */
+function Stamp({
+  iso,
+  parts,
+}: {
+  iso: string | null | undefined;
+  parts: Intl.DateTimeFormatOptions;
+}) {
   if (!iso) return <span className="text-muted-foreground">—</span>;
-  const formatted = new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  }).format(new Date(iso));
+  const formatted = new Intl.DateTimeFormat("en-US", parts).format(
+    new Date(iso),
+  );
   return <span title={iso}>{formatted}</span>;
+}
+
+/**
+ * Deterministic short UTC date, e.g. "Aug 10, 2026" — for values that are
+ * day-scale, which is most of them: created, updated, expires.
+ *
+ * The reference renders these date-only (issue #87; measured 2026-08-14, see
+ * `docs/design-reference.md`), and it is the honest granularity — nobody acts
+ * on the minute an agent was created, and the minute is still one hover away.
+ * The year is always carried, unlike two of the reference's four forms: an
+ * expiry is routinely a year out, and a format that drops the year renders two
+ * dates twelve months apart identically.
+ */
+export function Day({ iso }: { iso: string | null | undefined }) {
+  return <Stamp iso={iso} parts={DAY_PARTS} />;
+}
+
+/**
+ * Deterministic short UTC timestamp, e.g. "Aug 2, 2026, 09:12". Only where
+ * time-of-day is the point — a trace event, a live session, a token expiring
+ * within the hour. Everywhere else, `Day`.
+ */
+export function Time({ iso }: { iso: string | null | undefined }) {
+  return <Stamp iso={iso} parts={MINUTE_PARTS} />;
 }
 
 /**

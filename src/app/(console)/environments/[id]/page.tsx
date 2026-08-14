@@ -12,9 +12,9 @@ import {
 } from "@/components/console/detail";
 import {
   ArchivedBadge,
+  Day,
   ErrorState,
   IdCode,
-  Time,
   DetailSkeleton,
 } from "@/components/console/bits";
 import {
@@ -104,10 +104,10 @@ export default function EnvironmentDetailPage({
             </Field>
           )}
           <Field label="Created">
-            <Time iso={environment.created_at} />
+            <Day iso={environment.created_at} />
           </Field>
           <Field label="Updated">
-            <Time iso={environment.updated_at} />
+            <Day iso={environment.updated_at} />
           </Field>
         </FieldList>
       </DetailSection>

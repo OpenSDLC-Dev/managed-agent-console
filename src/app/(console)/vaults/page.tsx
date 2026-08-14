@@ -7,10 +7,10 @@ import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
   ArchivedBadge,
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   UnavailableSurface,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
@@ -35,7 +35,7 @@ const COLUMNS: Column<Vault>[] = [
   {
     key: "created",
     header: "Created",
-    cell: (v) => <Time iso={v.created_at} />,
+    cell: (v) => <Day iso={v.created_at} />,
   },
 ];
 

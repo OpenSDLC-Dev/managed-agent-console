@@ -13,10 +13,10 @@ import {
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
   ArchivedBadge,
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   DetailSkeleton,
 } from "@/components/console/bits";
 import {
@@ -182,10 +182,10 @@ export default function VaultDetailPage({
             <IdCode id={vault.id} />
           </Field>
           <Field label="Created">
-            <Time iso={vault.created_at} />
+            <Day iso={vault.created_at} />
           </Field>
           <Field label="Updated">
-            <Time iso={vault.updated_at} />
+            <Day iso={vault.updated_at} />
           </Field>
         </FieldList>
       </DetailSection>

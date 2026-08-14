@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   UnavailableSurface,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +64,7 @@ const COLUMNS: Column<PlatformFile>[] = [
   {
     key: "created",
     header: "Created",
-    cell: (f) => <Time iso={f.created_at} />,
+    cell: (f) => <Day iso={f.created_at} />,
   },
 ];
 
