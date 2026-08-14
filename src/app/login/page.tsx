@@ -1,69 +1,44 @@
-"use client";
+import { consoleAuthMode } from "@/lib/identity/mode";
+import { LoginForm } from "./login-form";
 
-import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+/**
+ * The login page is a server component only so it can read which gate this
+ * deployment runs — plan 08 D3. That fact comes from configuration and cannot
+ * come from anywhere else: the platform makes SSO-on indistinguishable from
+ * SSO-off to an unauthenticated caller, and this page's caller is by definition
+ * unauthenticated (see docs/wire-divergences.md).
+ */
+export const dynamic = "force-dynamic";
 
-const noSubscription = () => () => {};
-
-export default function LoginPage() {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  // Interactivity marker: before hydration a submit would fall back to the
-  // browser's native handling; method="post" below keeps that fallback from
-  // ever putting the password in the URL.
-  const hydrated = useSyncExternalStore(
-    noSubscription,
-    () => true,
-    () => false,
-  );
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const password = String(
-      new FormData(event.currentTarget).get("password") ?? "",
-    );
-    setBusy(true);
-    setError(null);
-    const response = await fetch("/api/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
-    }).catch(() => null);
-    setBusy(false);
-    if (response?.ok) {
-      router.replace("/agents");
-      return;
-    }
-    setError("Wrong password.");
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  let sso = false;
+  let password = true;
+  try {
+    const mode = consoleAuthMode();
+    sso = mode.kind === "sso";
+    // With both configured, the password gate is deployment protection in
+    // front of this page and SSO is the thing that authorizes anything — so
+    // both controls are offered, rather than one silently doing nothing.
+    password = mode.kind !== "sso" || mode.passwordGate;
+  } catch {
+    // A broken identity configuration already makes `/api/health` answer 503,
+    // so a deployment in this state is NotReady rather than serving. Falling
+    // back to the password form keeps the page renderable for whoever is
+    // looking at it locally instead of turning a config error into a 500.
+    sso = false;
+    password = true;
   }
 
+  const reason = (await searchParams)["sso_error"];
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <form
-        method="post"
-        onSubmit={submit}
-        data-hydrated={hydrated || undefined}
-        className="w-80 space-y-4"
-      >
-        <div>
-          <h1 className="text-[22px] font-medium leading-7">Managed Agents</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter the console password to continue.
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" name="password" type="password" autoFocus />
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={busy}>
-          Sign in
-        </Button>
-      </form>
-    </div>
+    <LoginForm
+      sso={sso}
+      password={password}
+      ssoError={typeof reason === "string" ? reason : undefined}
+    />
   );
 }

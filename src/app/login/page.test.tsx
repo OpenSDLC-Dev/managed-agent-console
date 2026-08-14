@@ -1,119 +1,74 @@
-import { renderToString } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+// @vitest-environment node
+import { afterEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "./page";
 
-const { replaceSpy } = vi.hoisted(() => ({ replaceSpy: vi.fn() }));
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: replaceSpy }),
-  usePathname: () => "/login",
-  useSearchParams: () => new URLSearchParams(),
-}));
-
-beforeEach(() => {
-  replaceSpy.mockReset();
-});
+vi.mock("server-only", () => ({}));
 
 afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
-async function submitPassword(password: string) {
-  const user = userEvent.setup();
-  if (password) await user.type(screen.getByLabelText("Password"), password);
-  await user.click(screen.getByRole("button", { name: "Sign in" }));
+/** The server component returns the client element; its props are the decision. */
+async function renderProps(search: Record<string, string> = {}) {
+  const element = await LoginPage({ searchParams: Promise.resolve(search) });
+  return element.props as {
+    sso: boolean;
+    password: boolean;
+    ssoError?: string;
+  };
 }
 
-describe("LoginPage", () => {
-  it("renders a post form and marks it hydrated on the client", () => {
-    const { container } = render(<LoginPage />);
-    const form = container.querySelector("form");
-    expect(form?.getAttribute("method")).toBe("post");
-    expect(form?.getAttribute("data-hydrated")).toBe("true");
+const configureOidc = () => {
+  vi.stubEnv("IDENTITY_MODE", "oidc");
+  vi.stubEnv("IDENTITY_OIDC_ISSUER", "https://idp.example.com");
+  vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", "console-client");
+};
+
+describe("LoginPage — which gate this deployment runs", () => {
+  it("offers the password alone when identity is off", async () => {
+    vi.stubEnv("IDENTITY_MODE", undefined);
+    vi.stubEnv("CONSOLE_PASSWORD", "hunter2");
+    expect(await renderProps()).toMatchObject({ sso: false, password: true });
   });
 
-  it("omits the hydration marker from server-rendered HTML", () => {
-    const html = renderToString(<LoginPage />);
-    expect(html).toContain("<form");
-    expect(html).not.toContain("data-hydrated");
+  it("offers SSO alone when identity is on and no password is set", async () => {
+    configureOidc();
+    vi.stubEnv("CONSOLE_PASSWORD", undefined);
+    expect(await renderProps()).toMatchObject({ sso: true, password: false });
   });
 
-  it("posts the password and navigates to /agents on success", async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ ok: true, gate: true }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    render(<LoginPage />);
-    await submitPassword("hunter2");
-    expect(fetchMock).toHaveBeenCalledWith("/api/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password: "hunter2" }),
+  it("offers both when both are configured", async () => {
+    configureOidc();
+    vi.stubEnv("CONSOLE_PASSWORD", "hunter2");
+    expect(await renderProps()).toMatchObject({ sso: true, password: true });
+  });
+
+  it("passes a failure code through for the form to explain", async () => {
+    configureOidc();
+    vi.stubEnv("CONSOLE_PASSWORD", undefined);
+    expect(await renderProps({ sso_error: "state_mismatch" })).toMatchObject({
+      ssoError: "state_mismatch",
     });
-    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith("/agents"));
-    expect(screen.queryByText("Wrong password.")).toBeNull();
   });
 
-  it("shows an error for a wrong password and stays put", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "authentication_error",
-                message: "wrong password",
-              },
-            }),
-            { status: 401, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
-    render(<LoginPage />);
-    await submitPassword("nope");
-    expect(await screen.findByText("Wrong password.")).toBeDefined();
-    expect(replaceSpy).not.toHaveBeenCalled();
+  // A repeated query parameter arrives as an array. It is not a code, so it is
+  // not passed on — the form would fall back to the generic line anyway, but
+  // the type says `string | undefined` and this keeps that honest.
+  it("ignores a repeated sso_error parameter", async () => {
+    configureOidc();
+    const element = await LoginPage({
+      searchParams: Promise.resolve({ sso_error: ["a", "b"] }),
+    });
+    expect((element.props as { ssoError?: string }).ssoError).toBeUndefined();
   });
 
-  it("shows the error when the login request itself fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new TypeError("network down");
-      }),
-    );
-    render(<LoginPage />);
-    await submitPassword("hunter2");
-    expect(await screen.findByText("Wrong password.")).toBeDefined();
-    expect(replaceSpy).not.toHaveBeenCalled();
-  });
-
-  it("disables the submit button while the request is in flight", async () => {
-    let release!: (response: Response) => void;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise<Response>((resolve) => {
-            release = resolve;
-          }),
-      ),
-    );
-    render(<LoginPage />);
-    await submitPassword("hunter2");
-    const button = screen.getByRole("button", { name: "Sign in" });
-    expect(button).toHaveProperty("disabled", true);
-    release(new Response(JSON.stringify({ ok: true, gate: true })));
-    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith("/agents"));
-    expect(button).toHaveProperty("disabled", false);
+  // A deployment in this state already answers 503 at /api/health and is
+  // NotReady, so nothing production-facing reaches this page — but a 500 here
+  // would be a worse way to learn it than a page that still renders.
+  it("falls back to the password form when the identity config is broken", async () => {
+    vi.stubEnv("IDENTITY_MODE", "oidc");
+    vi.stubEnv("IDENTITY_OIDC_ISSUER", undefined);
+    vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", undefined);
+    expect(await renderProps()).toMatchObject({ sso: false, password: true });
   });
 });

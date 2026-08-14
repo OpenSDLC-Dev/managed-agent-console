@@ -49,7 +49,18 @@ export const config = {
   // merely *starts* with its name — `/api/healthz`, `/api/logins` — so a route
   // added later would be born outside the gate, silently, on any deployment
   // where this gate is the only thing in front of a management key.
+  //
+  // `api/auth/` is the deliberate exception to that rule: it is a **prefix**,
+  // and everything under it must be reachable unauthenticated by construction.
+  // Nobody can hold a session before signing in, so a gated `/api/auth/login`
+  // would redirect the browser to `/login`, and a gated `/api/auth/callback`
+  // would make the identity provider's redirect land on the password form —
+  // the sign-in could never complete on any deployment that also sets
+  // CONSOLE_PASSWORD, which is local development, the gated e2e specs and the
+  // fidelity run (plan 08 D3's third row). The trailing slash is what keeps
+  // this narrow: it exempts paths *under* `/api/auth/`, not a future
+  // `/api/authorize`.
   matcher: [
-    "/((?!login$|api/login$|api/health$|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login$|api/login$|api/health$|api/auth/|_next/static|_next/image|favicon.ico).*)",
   ],
 };

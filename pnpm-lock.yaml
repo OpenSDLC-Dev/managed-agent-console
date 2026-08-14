@@ -29,6 +29,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      jose:
+        specifier: ^6.2.8
+        version: 6.2.8
       lucide-react:
         specifier: ^1.28.0
         version: 1.29.0(react@19.2.8)

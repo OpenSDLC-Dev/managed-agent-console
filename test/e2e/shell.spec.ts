@@ -21,6 +21,39 @@ test("the BFF refuses unauthenticated API calls with the platform envelope shape
   expect(body.error.type).toBe("authentication_error");
 });
 
+// The `/api/auth/` exemption in src/proxy.ts is the one place the gate is
+// deliberately opened, and it has to be: nobody holds a session before signing
+// in, so a gated `/api/auth/login` would bounce the browser to `/login` and a
+// gated callback would drop the provider's redirect on the password form. This
+// deployment sets a password and no identity, which is exactly the
+// configuration where a mistake here would be invisible — the route is
+// reachable, and answers "this surface does not exist" rather than the gate's
+// 401 or, worse, starting a flow.
+test("the /api/auth namespace is outside the gate, and absent without identity", async ({
+  request,
+}) => {
+  for (const path of ["/api/auth/login", "/api/auth/callback"]) {
+    const response = await request.get(path, { maxRedirects: 0 });
+    expect(response.status(), path).toBe(404);
+    expect((await response.json()).error.type, path).toBe("not_found_error");
+  }
+});
+
+test("a route merely starting with api/auth stays inside the gate", async ({
+  request,
+}) => {
+  const response = await request.get("/api/authorize", { maxRedirects: 0 });
+  expect(response.status()).toBe(401);
+});
+
+test("the login page reports no SSO on a password-only deployment", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await expect(page.locator("[data-sso]")).toHaveAttribute("data-sso", "false");
+  await expect(page.getByTestId("sso-sign-in")).toHaveCount(0);
+});
+
 test("wrong password is rejected; the right one lands on Agents", async ({
   page,
 }) => {

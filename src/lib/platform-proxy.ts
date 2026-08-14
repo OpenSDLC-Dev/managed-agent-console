@@ -1,6 +1,8 @@
 import "server-only";
 import { NextRequest } from "next/server";
 import { platformApiKey, platformBaseUrl } from "@/lib/env";
+import { consoleAuthMode, sendsUserToken } from "@/lib/identity/mode";
+import { IDENTITY_COOKIE, getSession } from "@/lib/identity/session";
 
 /**
  * The BFF's forwarding core, shared by the two proxy routes.
@@ -99,6 +101,30 @@ export async function forward(
       "invalid_request_error",
       `unsupported proxy path "/${upstreamPath}"`,
     );
+  }
+
+  // **In identity mode this proxy fails closed** (plan 08 D3, second and third
+  // rows). Without a signed-in operator it refuses; it never falls back to the
+  // management key, which stays in the pod for the deep health check — a
+  // fallback would silently hand root to an unauthenticated browser.
+  //
+  // This has to live here rather than in `src/proxy.ts`, and the reason is
+  // structural: middleware runs in the Edge runtime and cannot see the session
+  // store's module state, which lives in the Node runtime with these handlers.
+  // So the gate for identity mode is the BFF, not the matcher — and that is
+  // sufficient, because the pages are shells and every byte they show comes
+  // through here.
+  //
+  // What this slice does NOT yet do is send the operator's token: a signed-in
+  // request is still served with `x-api-key` until slice 3 swaps it. The
+  // refusal is the half that cannot wait, because it is the half that is a
+  // hole.
+  const mode = consoleAuthMode();
+  if (sendsUserToken(mode)) {
+    const handle = request.cookies.get(IDENTITY_COOKIE)?.value;
+    if (getSession(handle, Date.now()) === undefined) {
+      return envelope(401, "authentication_error", "console sign-in required");
+    }
   }
 
   let baseUrl: string;
