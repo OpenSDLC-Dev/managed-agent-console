@@ -46,12 +46,19 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
+/**
+ * The fallback when storage is unavailable — private mode throws on access
+ * rather than returning null. Without it the dismiss button would appear
+ * broken there: the write throws, the listeners fire, and the read still says
+ * "not dismissed", so the panel never goes away (PR #91 review).
+ */
+let dismissedInMemory = false;
+
 function readDismissed(): boolean {
   try {
     return window.localStorage.getItem(DISMISSED_KEY) === "1";
   } catch {
-    // Private mode, or storage disabled — the panel simply stays shown.
-    return false;
+    return dismissedInMemory;
   }
 }
 
@@ -59,7 +66,12 @@ function dismiss(): void {
   try {
     window.localStorage.setItem(DISMISSED_KEY, "1");
   } catch {
-    // Then the dismissal lasts for this page view only. Acceptable.
+    // Storage is the source of truth wherever it works, so the in-memory flag
+    // is set only where it does not — which also keeps it from outliving the
+    // page in any deployment that has working storage. The dismissal then
+    // lasts for this page view only, a much smaller failure than a button
+    // that does nothing.
+    dismissedInMemory = true;
   }
   for (const listener of listeners) listener();
 }

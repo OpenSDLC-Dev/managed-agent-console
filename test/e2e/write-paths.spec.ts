@@ -271,8 +271,6 @@ test("a cloud environment offers no keys and no setup guide", async ({
 }) => {
   await signIn(page);
   await page.goto("/environments/env_cloudlimited000000001");
-  await expect(
-    page.getByRole("heading", { name: "Environment keys" }),
-  ).toHaveCount(0);
+  await expect(page.getByTestId("environment-keys")).toHaveCount(0);
   await expect(page.getByTestId("environment-key-setup")).toHaveCount(0);
 });

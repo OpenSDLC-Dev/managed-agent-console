@@ -402,6 +402,45 @@ describe("issuing a key", () => {
     expect(screen.queryByText("Save your environment key")).toBeNull();
   });
 
+  /**
+   * The platform mints the key the moment the POST lands, and the plaintext
+   * comes back exactly once. If the dialog could be dismissed mid-request the
+   * mutation observer would detach, the handler that captures the token would
+   * never fire, and the operator would be left with a live credential they
+   * have never seen and can only revoke blind (PR #91 review).
+   */
+  it("refuses to be dismissed while the key is being minted", async () => {
+    const user = userEvent.setup();
+    let release: (r: Response) => void = () => {};
+    const pending = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    stubRoutes({ issue: () => pending as unknown as Response });
+    renderSection();
+
+    await openDialog(user);
+    await user.type(screen.getByLabelText("Name"), "slow-runner");
+    await user.click(
+      screen.getByRole("button", { name: "Create environment key" }),
+    );
+
+    // Escape, the built-in close control, and Cancel all leave it open.
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+
+    release(
+      new Response(
+        JSON.stringify({ access_token: SECRET, expires_in: 31536000 }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    // And the key it minted is still revealed.
+    await screen.findByText("Save your environment key");
+    expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
+  });
+
   it("hides the control for an environment the platform would refuse", async () => {
     stubRoutes();
     const { rerender } = renderSection(

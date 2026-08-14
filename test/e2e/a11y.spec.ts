@@ -59,9 +59,7 @@ test("the environment-key surface and its dialogs pass axe", async ({
 }) => {
   await signIn(page);
   await page.goto("/environments/env_byoc0000000000000001");
-  await expect(
-    page.getByRole("heading", { name: "Environment keys" }),
-  ).toBeVisible();
+  await expect(page.getByTestId("environment-keys")).toBeVisible();
   // The table, the setup guide and its code blocks.
   await expectNoViolations(page);
 

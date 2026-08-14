@@ -203,9 +203,19 @@ function GenerateKeyButton({ environmentId }: { environmentId: string }) {
         <KeyRound className="size-4" /> Generate environment key
       </Button>
 
+      {/* Dismissal is refused while the POST is in flight — via the built-in
+          close control, Escape, or an outside click alike.
+          `create.reset()` detaches the mutation observer, and the handler that
+          captures `access_token` is scoped to this `mutate` call, so a
+          dismissal mid-request would let the platform mint a live key that is
+          never shown to anyone: an active credential the operator cannot see,
+          cannot copy, and can only revoke blind (PR #91 review). The request
+          is short and uninterruptible, so the honest thing is to not offer an
+          interruption that loses a credential. */}
       <Dialog
         open={open}
         onOpenChange={(next) => {
+          if (!next && create.isPending) return;
           setOpen(next);
           if (!next) {
             setName("");
@@ -251,6 +261,7 @@ function GenerateKeyButton({ environmentId }: { environmentId: string }) {
               <Button
                 type="button"
                 variant="ghost"
+                disabled={create.isPending}
                 onClick={() => setOpen(false)}
               >
                 Cancel
@@ -386,7 +397,7 @@ export function EnvironmentKeysSection({
   const page = keys.data;
   const canIssue = canIssueEnvironmentKey(environment);
   return (
-    <DetailSection title="Environment keys">
+    <DetailSection title="Environment keys" testId="environment-keys">
       {/* Two columns, matching the reference: the table and its control on the
           left, the setup guide beside them rather than below. Stacks on narrow
           viewports, where side-by-side would squeeze both. */}
