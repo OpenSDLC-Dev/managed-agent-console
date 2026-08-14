@@ -161,6 +161,15 @@ The body also names which identity mode the process is in (`identity.mode`), the
 one thing about this console no probe of the platform can discover — see
 [docs/wire-divergences.md](../../docs/wire-divergences.md).
 
+`/api/health` is not the only route outside the console's own password gate.
+**Everything under `/api/auth/` is too**, and has to be: nobody holds a session
+before signing in, so a gated `/api/auth/login` would redirect the browser to
+`/login` and a gated `/api/auth/callback` would drop the identity provider's
+redirect on the password form. Those routes are written for the anonymous caller
+that creates: they mint no session without a state cookie they issued
+themselves, they reflect nothing from the query string, and on a deployment with
+no identity configured they answer 404 rather than starting anything.
+
 The **liveness** probe calls neither: it takes `/login`. A configuration error
 makes the shallow check answer 503, and a restart cannot supply a missing
 environment variable — liveness pointed at it would turn the readiness failure

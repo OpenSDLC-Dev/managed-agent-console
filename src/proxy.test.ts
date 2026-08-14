@@ -103,6 +103,29 @@ describe("matcher exemptions", () => {
     expect(matches("/api/health")).toBe(false);
   });
 
+  // The one deliberate namespace exemption. Nobody can hold a session before
+  // signing in, so a gated `/api/auth/login` would redirect the browser to
+  // `/login` and a gated `/api/auth/callback` would drop the provider's
+  // redirect on the password form — the sign-in could never complete on any
+  // deployment that also sets CONSOLE_PASSWORD, which is local development,
+  // the gated e2e specs and the fidelity run (plan 08 D3's third row).
+  it("exempts the whole /api/auth/ namespace", () => {
+    expect(matches("/api/auth/login")).toBe(false);
+    expect(matches("/api/auth/callback")).toBe(false);
+    expect(matches("/api/auth/logout")).toBe(false);
+  });
+
+  it("probe: keeps that exemption to paths under /api/auth/", () => {
+    // The trailing slash is load-bearing. Without it this would exempt every
+    // path merely starting with `api/auth`, and a route added later — an
+    // `/api/authorize`, an `/api/auth-debug` — would be born outside the gate,
+    // silently, on the deployment where the gate is the only thing in front of
+    // a management key.
+    expect(matches("/api/authorize")).toBe(true);
+    expect(matches("/api/auth-debug")).toBe(true);
+    expect(matches("/api/auth")).toBe(true);
+  });
+
   it("exempts those three routes and not their prefixes", () => {
     // Each exemption is a route, not a namespace. Unanchored, `api/health`
     // would exempt anything merely starting with it, so a route added later

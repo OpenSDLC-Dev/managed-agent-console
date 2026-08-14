@@ -74,7 +74,17 @@ const SEAMS = [
     // the port. A message that quotes what it refused publishes an issuer, a
     // client id, or a secret — and every happy-path assertion here passes
     // whether or not it does, because a working console never takes this path.
-    modules: ["config"],
+    modules: ["config", "rp", "discovery", "session"],
+  },
+  {
+    dir: "src/app/api/auth/callback",
+    why: "the identity provider's redirect — every byte of it is attacker-authored",
+    // The callback URL is reachable by anyone and survives in history, in
+    // referrers and in the provider's logs. Its happy path looks identical
+    // whether or not the state cookie, the read-once pending record and the
+    // nonce are actually checked — which is the definition of a seam a probe
+    // has to hold rather than a happy-path assertion.
+    modules: ["route"],
   },
 ];
 
