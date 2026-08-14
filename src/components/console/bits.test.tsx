@@ -62,12 +62,15 @@ describe("Day", () => {
     expect(el).toHaveAttribute("title", "2026-08-02T09:12:00Z");
   });
 
-  it("probe: a time-of-day near midnight cannot roll the date into the viewer's zone", () => {
-    // Formatting in local time would render this as Aug 3 east of UTC and
-    // Aug 1 west of it, so the same key would appear to expire on different
-    // days for two operators reading one deployment.
-    render(<Day iso="2026-08-02T23:59:59Z" />);
-    expect(screen.getByText("Aug 2, 2026")).toBeInTheDocument();
+  it("probe: a time-of-day near midnight cannot roll the date into the reader's zone", () => {
+    // Drop `timeZone: "UTC"` and this instant renders as the 3rd east of UTC
+    // and the 1st west of it, so one key's expiry falls on different days for
+    // two operators reading one deployment. Asserted as two instants of the
+    // same UTC day agreeing rather than as a second copy of the rendered
+    // string: exactly one test per formatter may assert that (CLAUDE.md).
+    const lastSecond = render(<Day iso="2026-08-02T23:59:59Z" />).container;
+    const firstSecond = render(<Day iso="2026-08-02T00:00:01Z" />).container;
+    expect(lastSecond.textContent).toBe(firstSecond.textContent);
   });
 });
 
