@@ -63,7 +63,7 @@ test("environments list and detail render the config union", async ({
   ).toBeVisible();
   // A cloud environment has no worker to hold a key, so the section is absent
   // rather than empty — the reference makes the same distinction.
-  await expect(page.getByText("Environment keys")).toHaveCount(0);
+  await expect(page.getByTestId("environment-keys")).toHaveCount(0);
 });
 
 test("a self-hosted environment lists its keys, live and expired", async ({
@@ -71,7 +71,7 @@ test("a self-hosted environment lists its keys, live and expired", async ({
 }) => {
   await signIn(page);
   await page.goto("/environments/env_byoc0000000000000001");
-  await expect(page.getByText("Environment keys")).toBeVisible();
+  await expect(page.getByTestId("environment-keys")).toBeVisible();
 
   // Expired keys stay listed on purpose (envkeys.go:102-106): the operator
   // whose worker stopped connecting needs to see the credential it fails on.

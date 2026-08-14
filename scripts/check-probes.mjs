@@ -56,6 +56,16 @@ const SEAMS = [
     why: "the trace surface — renders whatever the two seams above produce",
     modules: ["page"],
   },
+  {
+    dir: "src/components/console",
+    why: "the one-time secret — a plaintext environment key is rendered once and can never be re-read",
+    // The platform returns the key on create and never again, so a second
+    // render path for it is not a cosmetic bug: it is the credential sitting
+    // somewhere nobody meant it to. Happy-path assertions cannot see that —
+    // the dialog looks identical whether or not the value also leaked into an
+    // attribute or the query cache — which is exactly what a probe is for.
+    modules: ["environment-keys"],
+  },
 ];
 
 const PROBE = /(^|> )probe:/;

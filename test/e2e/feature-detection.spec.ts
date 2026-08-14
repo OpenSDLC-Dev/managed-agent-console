@@ -130,6 +130,6 @@ test("the environment-keys section hides on a platform that predates it", async 
 
   // The rest of the page is untouched — this hides a section, not the page.
   await expect(page.getByText("Overview")).toBeVisible();
-  await expect(page.getByText("Environment keys")).toHaveCount(0);
+  await expect(page.getByTestId("environment-keys")).toHaveCount(0);
   await expect(page.getByTestId("error-state")).toHaveCount(0);
 });

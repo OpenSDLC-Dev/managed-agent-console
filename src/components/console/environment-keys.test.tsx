@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   EnvironmentKeysSection,
@@ -83,15 +84,55 @@ function stub(response: Response | (() => Response)) {
   );
 }
 
+/**
+ * A stub that answers the whole surface — list, issue, revoke — so the write
+ * tests exercise the same invalidate-and-refetch sequence the console really
+ * runs, rather than a single canned response.
+ */
+function stubRoutes(over?: {
+  rows?: EnvironmentKey[];
+  issue?: () => Response;
+  revoke?: () => Response;
+}) {
+  let rows = over?.rows ?? [];
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://console.test");
+      const method = init?.method ?? "GET";
+      if (url.pathname === TOKENS && method === "GET") return json(page(rows));
+      if (url.pathname === TOKENS && method === "POST") {
+        if (over?.issue) return over.issue();
+        const body = JSON.parse(String(init?.body ?? "{}")) as { name: string };
+        rows = [key({ id: `envkey_new_${rows.length}`, name: body.name })];
+        return json({ access_token: SECRET, expires_in: 31536000 });
+      }
+      if (url.pathname.endsWith("/revoke") && method === "POST") {
+        if (over?.revoke) return over.revoke();
+        rows = [];
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unmatched fetch: ${method} ${url.pathname}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/** The plaintext the platform hands back once, and never again. */
+const SECRET = "sk-map-env01-thisisthesecretvalue0000";
+
 function renderSection(env = environment()) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <EnvironmentKeysSection environment={env} />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <EnvironmentKeysSection environment={env} />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 afterEach(() => {
@@ -267,5 +308,268 @@ describe("EnvironmentKeysSection", () => {
     await screen.findByText(/boom/);
     // Hiding a 5xx would tell an operator their platform lacks a feature it has.
     expect(screen.getByText("Environment keys")).toBeInTheDocument();
+  });
+});
+
+describe("issuing a key", () => {
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(
+      await screen.findByRole("button", { name: "Generate environment key" }),
+    );
+    return screen.findByRole("dialog");
+  };
+
+  it("issues with the typed name and reveals the key once", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubRoutes();
+    renderSection();
+
+    await openDialog(user);
+    await user.type(screen.getByLabelText("Name"), "prod-runner-07");
+    await user.click(
+      screen.getByRole("button", { name: "Create environment key" }),
+    );
+
+    // The create body is `{name}` and nothing else (consoleapi.go:74-79).
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(post).toBeDefined();
+      expect(JSON.parse(String(post![1]!.body))).toEqual({
+        name: "prod-runner-07",
+      });
+    });
+
+    await screen.findByText("Save your environment key");
+    expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
+
+    // The response identifies no row, so the list must be re-read rather than
+    // rendered from the issuance response.
+    await screen.findByText("prod-runner-07");
+  });
+
+  it("trims the name and refuses to submit an empty one", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubRoutes();
+    renderSection();
+
+    await openDialog(user);
+    const submit = screen.getByRole("button", {
+      name: "Create environment key",
+    });
+    expect(submit).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Name"), "  spaced  ");
+    await user.click(submit);
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(JSON.parse(String(post![1]!.body))).toEqual({ name: "spaced" });
+    });
+  });
+
+  it("shows the platform's refusal inline, not as a toast behind the modal", async () => {
+    const user = userEvent.setup();
+    stubRoutes({
+      issue: () =>
+        json(
+          {
+            type: "error",
+            request_id: "req_xyz",
+            error: {
+              type: "invalid_request_error",
+              message: "environment env_1 is archived",
+            },
+          },
+          400,
+        ),
+    });
+    renderSection();
+
+    await openDialog(user);
+    await user.type(screen.getByLabelText("Name"), "doomed");
+    await user.click(
+      screen.getByRole("button", { name: "Create environment key" }),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("environment env_1 is archived");
+    expect(alert).toHaveTextContent("req_xyz");
+    // Still open, so the operator can correct and retry.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByText("Save your environment key")).toBeNull();
+  });
+
+  /**
+   * The platform mints the key the moment the POST lands, and the plaintext
+   * comes back exactly once. If the dialog could be dismissed mid-request the
+   * mutation observer would detach, the handler that captures the token would
+   * never fire, and the operator would be left with a live credential they
+   * have never seen and can only revoke blind (PR #91 review).
+   */
+  it("refuses to be dismissed while the key is being minted", async () => {
+    const user = userEvent.setup();
+    let release: (r: Response) => void = () => {};
+    const pending = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    stubRoutes({ issue: () => pending as unknown as Response });
+    renderSection();
+
+    await openDialog(user);
+    await user.type(screen.getByLabelText("Name"), "slow-runner");
+    await user.click(
+      screen.getByRole("button", { name: "Create environment key" }),
+    );
+
+    // Escape, the built-in close control, and Cancel all leave it open.
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+
+    release(
+      new Response(
+        JSON.stringify({ access_token: SECRET, expires_in: 31536000 }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    // And the key it minted is still revealed.
+    await screen.findByText("Save your environment key");
+    expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
+  });
+
+  it("hides the control for an environment the platform would refuse", async () => {
+    stubRoutes();
+    const { rerender } = renderSection(
+      environment({ archived_at: "2026-08-10T00:00:00Z" }),
+    );
+    // The table is still there — archived keys stay revocable.
+    await screen.findByText("No environment keys yet.");
+    expect(
+      screen.queryByRole("button", { name: "Generate environment key" }),
+    ).toBeNull();
+    expect(screen.queryByTestId("environment-key-setup")).toBeNull();
+    void rerender;
+  });
+});
+
+describe("revoking a key", () => {
+  it("revokes through the confirm dialog and drops the row", async () => {
+    const user = userEvent.setup();
+    const fetchMock = stubRoutes({ rows: [key({ id: "envkey_doomed" })] });
+    renderSection();
+
+    await screen.findByText("prod-runner-01");
+    await user.click(
+      screen.getByRole("button", {
+        name: "Revoke environment key prod-runner-01",
+      }),
+    );
+    // The reference's own copy, which is also the warning that matters: a
+    // running worker loses its connection.
+    await screen.findByText(/Workers using this key will no longer be able/);
+    // ConfirmIconButton labels its destructive action with the dialog title.
+    await user.click(
+      screen.getByRole("button", { name: "Revoke environment key" }),
+    );
+
+    await waitFor(() => {
+      const revoke = fetchMock.mock.calls.find(([url]) =>
+        String(url).endsWith("/envkey_doomed/revoke"),
+      );
+      expect(revoke).toBeDefined();
+      expect(revoke![1]?.method).toBe("POST");
+      // A bodiless POST — the revoke route takes no body.
+      expect(revoke![1]?.body).toBeUndefined();
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("prod-runner-01")).toBeNull(),
+    );
+  });
+});
+
+/**
+ * The adversarial probe this surface exists to justify (plan 07, seam 7).
+ *
+ * The platform hands back the plaintext once and can never be asked again, so
+ * "the key is visible in the dialog" is not the property worth asserting —
+ * every happy-path test already shows that. The property is that it is visible
+ * *there and nowhere else*, and that closing the dialog is final.
+ */
+describe("probe: the one-time secret has exactly one render path", () => {
+  const issueAndReveal = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(
+      await screen.findByRole("button", { name: "Generate environment key" }),
+    );
+    await user.type(screen.getByLabelText("Name"), "probe");
+    await user.click(
+      screen.getByRole("button", { name: "Create environment key" }),
+    );
+    await screen.findByText("Save your environment key");
+  };
+
+  it("appears in the DOM exactly once, and in no attribute", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderSection();
+    await issueAndReveal(user);
+
+    const html = document.body.innerHTML;
+    const occurrences = html.split(SECRET).length - 1;
+    expect(
+      occurrences,
+      `the plaintext key appears ${occurrences} times in the DOM`,
+    ).toBe(1);
+
+    // Every attribute of every element — a `data-*`, a title, a value, an
+    // aria-label carrying the secret would each be a second copy that
+    // outlives the dialog.
+    for (const element of document.querySelectorAll("*")) {
+      for (const attribute of element.attributes) {
+        expect(
+          attribute.value,
+          `<${element.tagName.toLowerCase()} ${attribute.name}> carries the key`,
+        ).not.toContain(SECRET);
+      }
+    }
+  });
+
+  it("is gone from the DOM and the query cache once the dialog closes", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    const { client } = renderSection();
+    await issueAndReveal(user);
+
+    await user.click(screen.getByTestId("close-revealed-key"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("revealed-key")).toBeNull(),
+    );
+
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    // `mutation.reset()` is what takes it out of here; without that call the
+    // value survives in the mutation cache with nothing rendering it.
+    expect(JSON.stringify(client.getMutationCache().getAll())).not.toContain(
+      SECRET,
+    );
+    expect(JSON.stringify(client.getQueryCache().getAll())).not.toContain(
+      SECRET,
+    );
+  });
+
+  it("never reaches localStorage or sessionStorage", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderSection();
+    await issueAndReveal(user);
+
+    for (const store of [window.localStorage, window.sessionStorage]) {
+      const dump = Object.keys(store)
+        .map((k) => `${k}=${store.getItem(k)}`)
+        .join("\n");
+      expect(dump).not.toContain(SECRET);
+    }
   });
 });
