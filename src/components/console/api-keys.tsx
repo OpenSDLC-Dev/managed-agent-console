@@ -168,6 +168,22 @@ function CreateKeyButton() {
     create.reset();
   };
 
+  /**
+   * Puts the form back to its defaults, and the only way the dialog closes.
+   *
+   * Cancel used to set `open` directly, which does not run Radix's
+   * `onOpenChange` — so the draft survived, and the next open of the dialog
+   * came back pre-filled with whatever was abandoned. On a form whose fields
+   * are a name and a lifetime that includes **Never**, a stale draft is a key
+   * minted with an expiry nobody chose this time.
+   */
+  const resetDraft = () => {
+    setName("");
+    setChoice("30d");
+    setCustom("");
+    create.reset();
+  };
+
   const submit = () => {
     const trimmed = name.trim();
     if (!trimmed || customIsIncomplete(choice, custom)) return;
@@ -184,6 +200,8 @@ function CreateKeyButton() {
           setChoice("30d");
           setCustom("");
         },
+        // `create.reset()` is deliberately NOT called here: it would clear the
+        // mutation before the reveal dialog has rendered from it.
       },
     );
   };
@@ -196,7 +214,7 @@ function CreateKeyButton() {
         size="sm"
         className="h-8"
         onClick={() => {
-          create.reset();
+          resetDraft();
           setOpen(true);
         }}
       >
@@ -212,10 +230,7 @@ function CreateKeyButton() {
         onOpenChange={(next) => {
           if (!next && create.isPending) return;
           setOpen(next);
-          if (!next) {
-            setName("");
-            create.reset();
-          }
+          if (!next) resetDraft();
         }}
       >
         <DialogContent>
@@ -308,7 +323,12 @@ function CreateKeyButton() {
                 type="button"
                 variant="ghost"
                 disabled={create.isPending}
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  // Through the same door as every other close: setting `open`
+                  // alone would skip `onOpenChange` and leave the draft behind.
+                  setOpen(false);
+                  resetDraft();
+                }}
               >
                 Cancel
               </Button>

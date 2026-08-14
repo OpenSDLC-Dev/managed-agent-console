@@ -318,6 +318,17 @@ describe("the mock's constructed write-path responses conform too", () => {
     // A bare array — neither the wire's keyset envelope nor files' classic one.
     expect(Array.isArray(before)).toBe(true);
 
+    // `noStore(...)` wraps this route and only this one: it is the single
+    // response in the console that carries a plaintext credential, and the
+    // proxy's response-header allowlist exists to carry that directive through.
+    const issuing = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ name: "no-store-check" }),
+    });
+    expect(issuing.headers.get("cache-control")).toBe("no-store");
+    await issuing.json();
+
     const issued = await postJSON(path, { name: "conformance-key" });
     expectConforms(ApiKeyIssuedSchema, issued, `POST ${path}`);
     // The whole resource plus the plaintext, unlike the environment-key

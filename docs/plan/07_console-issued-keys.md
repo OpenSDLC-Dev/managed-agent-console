@@ -66,16 +66,17 @@ recording corroborates them.
    it (principle 1); the mock platform implements the contract immediately so
    console tests never wait on a live stack.
 
-## Decisions still needed from the maintainer
+## Decisions for the maintainer — settled 2026-08-14
 
-**Settled 2026-08-14, each on the recommendation below**, under the maintainer's
+**All three settled on the recommendation below**, under the maintainer's
 standing go-ahead to build to both plans — the same authorisation plan 08's
 D1–D4 were taken under, and recorded here plainly because it was one standing
-instruction rather than three separate answers. What slice 4 then found, and
-what each decision cost, is written under the recommendation it belongs to.
+instruction rather than three separate answers. What slice 4 then found is in
+the section that follows.
 
-Recorded here unanswered; the plan cannot leave `draft` until they are settled.
-All three concern the **API-key** half, which the 2026-08-10 draft predated.
+The questions are kept as written rather than rewritten as answers: what was
+being decided, and on what evidence, is the part worth re-reading. All three
+concern the **API-key** half, which the 2026-08-10 draft predated.
 
 1. **D1 — Does the API-key surface ship in this plan or wait?** The
    environment-key half is buildable today. The API-key half needs platform
@@ -119,9 +120,10 @@ type}` into a display name over an email. The console renders what the wire
   offers Disable/Enable and Archive against them; the reference's row menu holds
   a single destructive `Delete API key` and needs no status column. A surface
   offering three outcomes has to say which one a row is in.
-- **Custom expiry ships**, as D3 says: the five fixed choices and a datetime
-  field, all resolved to an absolute instant client-side, because the wire has
-  no duration vocabulary at all.
+- **Custom expiry ships**, as D3 says. Five of the six choices produce an
+  absolute instant computed client-side — the four durations and Custom —
+  because the wire has no duration vocabulary at all. The sixth, `Never`, is the
+  one that sends no instant: it omits `expires_at` entirely.
 
 ## Ground truth — the reference dialect, recorded 2026-08-14
 

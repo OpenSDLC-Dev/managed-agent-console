@@ -54,7 +54,17 @@ async function proxy(
       `unsupported console path "/api/console/${joined}"`,
     );
   }
-  return forward(request, `api/console/${joined}`);
+  const response = await forward(request, `api/console/${joined}`);
+  // The one response in the console that carries a plaintext credential. The
+  // platform already marks it `no-store` and the proxy forwards that header, so
+  // this is a floor rather than a correction: a credential must not be cached
+  // by anything between here and the operator, and a deployment whose platform
+  // predates that wrapper should not quietly start caching one. Setting it is a
+  // transport concern, not the platform semantics principle 4 reserves.
+  if (KEYS.test(joined) && request.method === "POST" && response.ok) {
+    response.headers.set("cache-control", "no-store");
+  }
+  return response;
 }
 
 export { proxy as GET, proxy as POST };

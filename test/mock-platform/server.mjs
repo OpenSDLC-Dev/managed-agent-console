@@ -824,6 +824,11 @@ const server = createServer(async (req, res) => {
         principal: null,
       };
       apiKeysStore.unshift(row);
+      // `noStore(...)` wraps this route and only this one on the platform
+      // (server.go), because it is the one response that carries a plaintext
+      // credential. The mock mirrors it so the console's header forwarding is
+      // actually exercised rather than assumed.
+      res.setHeader("cache-control", "no-store");
       res.writeHead(201);
       // The whole resource plus the plaintext, appended last — NOT the RFC 6749
       // shape the environment-key surface answers with. Two dialects, two

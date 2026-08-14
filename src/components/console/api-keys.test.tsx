@@ -228,6 +228,30 @@ describe("creating a key", () => {
     expect(Object.keys(JSON.parse(String(init.body)))).toEqual(["name"]);
   });
 
+  // Cancel used to set `open` directly, which does not run Radix's
+  // `onOpenChange`, so the abandoned draft came back on the next open — and on
+  // this form the abandoned value can be an expiry of Never.
+  it("probe: an abandoned draft does not come back on the next open", async () => {
+    const fetchMock = stubCreate();
+    renderTable([], fetchMock);
+    await openDialog();
+    await userEvent.selectOptions(
+      screen.getByTestId("api-key-expires"),
+      "never",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.getByTestId("api-key-expires")).toHaveValue("30d");
+    expect(screen.queryByTestId("never-expires-warning")).toBeNull();
+    // Nothing was minted on the way through.
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      KEYS,
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("will not submit a custom expiry that is not a date", async () => {
     const fetchMock = stubCreate();
     renderTable([], fetchMock);
