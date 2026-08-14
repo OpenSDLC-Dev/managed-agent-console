@@ -13,7 +13,7 @@ Both halves of the platform's SSO/RBAC work (#56) landing in this repo. The main
   - [ ] Slice 4 — API keys · _blocked on platform 31 slice 5_
   - [ ] Slice 5 — acceptance against the compose stack, archive
 - [Plan 08](./docs/plan/08_console-sso-rbac.md) — **in progress.** Browser OIDC login and role-aware UI, the console half of [platform plan 31](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/31_console-sso-rbac.md) (its slices 1–3 have merged). D1–D4 settled 2026-08-14 on their recommendations; **D1 remains the one to revisit first** — it resolves a documented conflict over request topology by taking Mode A, where platform plan 31:320–330 assigns this repo the browser-calls-the-platform-directly shape.
-  - [x] Slice 1 — config and the health contract: `IDENTITY_*` console config (fail closed, never silently unauthenticated), the D3 matrix as tests, `PLATFORM_API_KEY` optional for readiness and pinned as the deep check's service credential, cookie `Secure` from `x-forwarded-proto`. Every path checked against a running platform in Chrome.
+  - [x] Slice 1 — config and the health contract: `IDENTITY_*` console config (fail closed, never silently unauthenticated), the D3 matrix as tests, `PLATFORM_API_KEY` no longer blocking readiness _once identity is configured_ (review caught the first version dropping that condition, which would have admitted a pod whose every platform call 500s), cookie `Secure` from `x-forwarded-proto`. Every path checked against a running platform in Chrome.
   - [ ] Slice 2 — the OIDC relying party under `/api/auth/…`
   - [ ] Slice 3 — the BFF forwards the user's token
   - [ ] Slice 4 — role-aware UI

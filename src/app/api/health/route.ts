@@ -6,6 +6,7 @@ import {
   IdentityConfigError,
   identityConfig,
 } from "@/lib/identity/config";
+import { consoleAuthModeFrom, sendsUserToken } from "@/lib/identity/mode";
 
 /**
  * Readiness probe, and the gate a deployment is allowed to pass.
@@ -98,20 +99,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     missing.push("PLATFORM_BASE_URL");
   }
 
-  // PLATFORM_API_KEY is **not** required for this revision to serve, and saying
-  // otherwise would make an identity-mode deployment permanently NotReady: the
-  // readiness probe takes the shallow depth, and a console that authenticates
-  // its users against an identity provider needs no management key to render a
-  // page. What the key remains is the deep check's dedicated service
-  // credential — the one console→platform call that can never borrow a user's
-  // token, because it runs from CD with no user in sight (plan 08 slice 1).
-  let apiKey: string | undefined;
-  try {
-    apiKey = platformApiKey();
-  } catch {
-    apiKey = undefined;
-  }
-
   // A broken identity configuration fails closed. There is no falling back to
   // the management key, so a console that cannot parse its own identity config
   // cannot authorize anybody, and a probe must say so rather than report Ready.
@@ -123,6 +110,28 @@ export async function GET(request: NextRequest): Promise<Response> {
     missing.push(...error.missing);
     invalid.push(...error.invalid);
   }
+
+  let apiKey: string | undefined;
+  try {
+    apiKey = platformApiKey();
+  } catch {
+    apiKey = undefined;
+  }
+
+  // Whether PLATFORM_API_KEY is required for this revision to serve is exactly
+  // the question of whether browser-initiated calls still carry it. In identity
+  // mode they carry the operator's own token, and the key is only the deep
+  // check's dedicated service credential — the one console→platform call that
+  // can never act as a user, since CD runs it with no user in sight — so
+  // requiring it would make such a rollout permanently NotReady over a
+  // credential it does not use. With identity off it is what *every* page
+  // spends: `forward()` resolves it unconditionally and 500s the request
+  // without it (src/lib/platform-proxy.ts), so reporting Ready would admit a
+  // pod that answers nothing but errors (found in review, PR #92).
+  const actsAsUser =
+    identity !== undefined &&
+    sendsUserToken(consoleAuthModeFrom(identity, password));
+  if (apiKey === undefined && !actsAsUser) missing.push("PLATFORM_API_KEY");
 
   if (missing.length > 0 || invalid.length > 0) {
     return Response.json(
@@ -154,9 +163,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     );
   }
 
-  // The deep depth is a deploy gate, and a gate that cannot run its check must
-  // not go green. Distinguished from "checked and failed" by `checked`, because
-  // "no service credential" and "the platform is down" call for opposite fixes.
+  // Reachable only in identity mode — with identity off, a missing key already
+  // answered 503 above. The deep depth is a deploy gate, and a gate that cannot
+  // run its check must not go green. Distinguished from "checked and failed" by
+  // `checked`, because "no service credential" and "the platform is down" call
+  // for opposite fixes.
   if (apiKey === undefined) {
     return Response.json(
       {

@@ -56,44 +56,25 @@ describe("GET /api/health", () => {
     expect(await response.json()).toEqual({
       status: "error",
       configured: false,
-      // PLATFORM_API_KEY is deliberately absent from this list: it is the deep
-      // check's service credential, not something this revision needs to serve.
-      missing: ["PLATFORM_BASE_URL"],
+      missing: ["PLATFORM_BASE_URL", "PLATFORM_API_KEY"],
       invalid: [],
       login_gate: false,
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  // The whole point of making the key optional here: an identity-mode
-  // deployment that removed it from the pod would otherwise fail readiness
-  // forever, in a way that reads as an infrastructure fault rather than a
-  // console that is working exactly as designed.
-  it("is ready without PLATFORM_API_KEY", async () => {
+  // With identity off, every browser-initiated call spends this key —
+  // `forward()` resolves it unconditionally and 500s without it — so a Ready
+  // pod would answer nothing but errors. The key is optional for readiness only
+  // where it is genuinely unused (found in review, PR #92).
+  it("still requires PLATFORM_API_KEY while identity is off", async () => {
     vi.stubEnv("PLATFORM_API_KEY", undefined);
     const response = await GET(healthRequest());
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      status: "ok",
-      configured: true,
-    });
-  });
-
-  it("cannot run the deep check without PLATFORM_API_KEY, and says which", async () => {
-    vi.stubEnv("PLATFORM_API_KEY", undefined);
-    const response = await GET(healthRequest("?deep=1"));
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({
-      status: "degraded",
-      configured: true,
+    expect(await response.json()).toMatchObject({
+      configured: false,
       missing: ["PLATFORM_API_KEY"],
-      login_gate: false,
-      ...NO_IDENTITY,
-      // Not "the platform is unreachable" — nothing was asked. The two call for
-      // opposite fixes, so a gate must be able to tell them apart.
-      platform: { checked: false, reachable: false },
     });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("fails the misconfigured check even when asked for the deep one", async () => {
@@ -318,6 +299,41 @@ describe("GET /api/health", () => {
         invalid: [],
         login_gate: false,
       });
+    });
+
+    // The whole point of making the key optional: an identity-mode deployment
+    // that removed it from the pod would otherwise fail readiness forever, in a
+    // way that reads as an infrastructure fault rather than a console working
+    // exactly as designed. In this mode browser calls carry the operator's own
+    // token, so the key really is unused by everything except the deep check.
+    it("is ready without PLATFORM_API_KEY once identity is configured", async () => {
+      configureOidc();
+      vi.stubEnv("PLATFORM_API_KEY", undefined);
+      const response = await GET(healthRequest());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        status: "ok",
+        configured: true,
+        identity: { mode: "oidc" },
+      });
+    });
+
+    it("cannot run the deep check without PLATFORM_API_KEY, and says which", async () => {
+      configureOidc();
+      vi.stubEnv("PLATFORM_API_KEY", undefined);
+      const response = await GET(healthRequest("?deep=1"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        status: "degraded",
+        configured: true,
+        missing: ["PLATFORM_API_KEY"],
+        login_gate: false,
+        identity: { mode: "oidc" },
+        // Not "the platform is unreachable" — nothing was asked. The two call
+        // for opposite fixes, so a gate must tell them apart.
+        platform: { checked: false, reachable: false },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("separates a malformed value from an absent one", async () => {
