@@ -224,7 +224,21 @@ function CreateKeyButton() {
       {/* Dismissal is refused while the POST is in flight, for the reason plan
           07 slice 3 recorded: the platform mints the key when the request
           lands, and a dismissal detaches the handler that captures the
-          plaintext — leaving a live credential nobody has ever seen. */}
+          plaintext — leaving a live credential nobody has ever seen.
+
+          What this does NOT cover, deliberately, is a route navigation in the
+          same window — Back, or a nav click, in the sub-second a POST is in
+          flight. The capture is observer-scoped, so unmounting loses it there
+          too. It is left uncovered because the outcome differs from the
+          environment-key case that motivated the guard: that issuance response
+          identified no row at all, so a lost plaintext meant a credential the
+          operator could not pick out of a list and could only revoke blind.
+          Here the minted key appears in the listing under the name they typed,
+          with its hint and creation time, and Archive is one click on that row.
+          Closing the gap properly would mean holding the plaintext in
+          module state across a navigation so it could be shown on return —
+          a second storage path for the one value this file exists to render
+          exactly once, which the probe below treats as a defect. */}
       <Dialog
         open={open}
         onOpenChange={(next) => {
