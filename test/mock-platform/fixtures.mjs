@@ -461,13 +461,24 @@ export const files = [
  * worker is failing on. No plaintext appears here, by construction: the
  * platform stores only a hash of it.
  */
+/**
+ * The live key's expiry is computed, not pinned — alone among these fixtures.
+ *
+ * Active-vs-expired is the one thing the console derives against the wall
+ * clock, so a fixed `2027-08-01` would make the e2e assertion that this key
+ * reads `active` a test that passes until that date and then fails forever
+ * (PR #89 review). The expired key stays pinned: a date in the past does not
+ * stop being in the past.
+ */
+const oneYearOut = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
+
 export const environmentKeys = {
   env_byoc0000000000000001: [
     {
       id: "envkey_prod00000000000001",
       name: "prod-runner-01",
       created_at: T0,
-      expires_at: "2027-08-01T09:00:00Z",
+      expires_at: oneYearOut,
     },
     {
       id: "envkey_stale0000000000001",

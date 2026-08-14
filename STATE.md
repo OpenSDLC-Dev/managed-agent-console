@@ -8,7 +8,7 @@ Both halves of the platform's SSO/RBAC work (#56) landing in this repo. The main
 
 - [Plan 07](./docs/plan/07_console-issued-keys.md) — **in progress.** Environment-key and API-key issuance UI. Trails [platform plan 30](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/30_environment-keys-console-issuance.md), which landed 2026-08-11. Absorbs the earlier environment-keys-only draft of plan 07 (its 2026-08-10 decisions carry forward unchanged) and adds the API-key half. Carries the **2026-08-14 reference recording** of both key dialects; that recording is also what platform plan 31 slice 5 declared itself gated on. Its open decisions D1–D3 all sit on the API-key half, which is blocked anyway — nothing they touch is reachable before slice 4.
   - [x] Slice 1 — the seams: `/api/oauth` allowlist BFF, shared forwarding core, offset envelope, env-key types/schemas/queries, `consolePostNoContent`, mock routes. Protocol verified against a live platform in Chrome.
-  - [ ] Slice 2 — environment keys, read (UI; fidelity surface added)
+  - [x] Slice 2 — environment keys, read. Seam 5 settled (no pager; a capped page says so) and seam 6 settled (404 read as unimplemented, valid only from a page that already loaded the environment — recorded in `docs/wire-divergences.md`).
   - [ ] Slice 3 — environment keys, write + setup guide (secret-handling probe becomes a merge gate, seam 7)
   - [ ] Slice 4 — API keys · _blocked on platform 31 slice 5_
   - [ ] Slice 5 — acceptance against the compose stack, archive

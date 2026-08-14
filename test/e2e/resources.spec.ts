@@ -61,6 +61,41 @@ test("environments list and detail render the config union", async ({
   await expect(
     page.getByText("limited — api.github.com, registry.npmjs.org"),
   ).toBeVisible();
+  // A cloud environment has no worker to hold a key, so the section is absent
+  // rather than empty — the reference makes the same distinction.
+  await expect(page.getByText("Environment keys")).toHaveCount(0);
+});
+
+test("a self-hosted environment lists its keys, live and expired", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/environments/env_byoc0000000000000001");
+  await expect(page.getByText("Environment keys")).toBeVisible();
+
+  // Expired keys stay listed on purpose (envkeys.go:102-106): the operator
+  // whose worker stopped connecting needs to see the credential it fails on.
+  const live = page.getByRole("row").filter({ hasText: "prod-runner-01" });
+  await expect(live.locator("[data-token-id]")).toHaveAttribute(
+    "data-token-id",
+    "envkey_prod00000000000001",
+  );
+  await expect(live.locator("[data-key-state]")).toHaveAttribute(
+    "data-key-state",
+    "active",
+  );
+
+  // The live key's expiry is computed a year out in the fixtures rather than
+  // pinned, so this asserts the derivation and not today's date.
+  const stale = page.getByRole("row").filter({ hasText: "retired-laptop" });
+  await expect(stale.locator("[data-key-state]")).toHaveAttribute(
+    "data-key-state",
+    "expired",
+  );
+  await expect(stale.locator("[data-expires-at]")).toHaveAttribute(
+    "data-expires-at",
+    "2026-01-01T09:00:00Z",
+  );
 });
 
 test("sessions list filters by status", async ({ page }) => {

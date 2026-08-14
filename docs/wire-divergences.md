@@ -116,6 +116,40 @@ failure. Each narrowing was therefore checked against the platform's own validat
   only shape where `z.looseObject` is used, because it is the only one whose inferred type should
   carry `[k: string]: unknown`.
 
+## Feature-detecting the console API (plan 07, seam 6)
+
+`isUnimplemented` (`src/lib/platform/surfaces.ts`) is documented as valid **only on collection
+routes**: the platform has no 501, an unregistered route falls through the router's catch-all
+(`internal/api/server.go:152`), and the 404 it answers is the same envelope a missing resource gets.
+A collection path carries no id that could be missing, so a 404 there can only mean the endpoint is.
+
+The console API's listing route breaks that precondition — it carries an environment id, and the
+platform 404s a missing environment on the same route (`internal/api/consoleapi.go:127-142`). Two of
+`consoleEnvironment`'s three 404 branches are closed by construction from the environment detail
+page:
+
+1. the org segment is the literal `default` the platform pins (`consoleapi.go:52-53`), so the
+   unrecognized-organization branch is unreachable;
+2. the id came from the platform's own listing, so the malformed-id branch is unreachable.
+
+The third — **the environment does not exist** — is not closed by construction, and the first draft
+of this treated it as if it were. Having loaded the environment proves it existed _then_: an
+environment is mutable, and another operator can delete it while the page is open, at which point
+the same 404 arrives and would read as "this deployment does not implement environment keys" — a
+wrong and permanent-looking answer to a transient fact (found in review, PR #89).
+
+So: on a 404 from the tokens route, **re-read the environment before concluding anything**, and hide
+the section only when that re-read confirms it is still there. A deleted environment keeps the error
+visible; so does a re-read that cannot answer. The fail-safe direction is deliberate — a wrongly
+shown error is a nuisance, a wrongly hidden surface is a lie — and it matches the rule `useSurfaces`
+already follows, where only a confirmed 404 hides anything.
+
+The extra request runs **only on that 404**: a platform serving the surface never pays for it, and
+one that does not pays once. The alternative considered and rejected was telling the two 404s apart
+by message text (`no such endpoint: …` versus `environment … not found`) — both are
+`not_found_error`, so only the prose differs, and matching on platform prose is the guessing
+principle 1 forbids.
+
 ## Reference surfaces the platform has deferred
 
 Documentation only — principle 1 keeps these out of the console until the platform serves them:

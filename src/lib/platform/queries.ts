@@ -7,6 +7,7 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import {
+  PlatformError,
   consoleGet,
   consolePost,
   consolePostNoContent,
@@ -472,6 +473,47 @@ export function useCreateEnvironmentKey(environmentId: string) {
       void queryClient.invalidateQueries({
         queryKey: ["environment-keys", environmentId],
       });
+    },
+  });
+}
+
+/**
+ * Re-reads the environment, to tell the router catch-all from a deleted
+ * environment when the console API answers 404.
+ *
+ * Both answer the same envelope, and `consoleEnvironment` 404s a missing
+ * environment on the very route the keys section reads
+ * (`consoleapi.go:127-142`). Having already loaded the environment does not
+ * close that branch for good: an environment is mutable, and another operator
+ * can delete it between the page's load and this request. Without the
+ * re-read, that deletion would render as "this platform does not implement
+ * environment keys" — a wrong and permanent-looking answer to a transient
+ * fact (PR #89 review).
+ *
+ * `false` means the environment is gone and the 404 was about the id.
+ * A network failure or a 5xx rejects, and the caller keeps showing the error
+ * rather than hiding anything: only a confirmed *live* environment licenses
+ * treating the first 404 as a missing endpoint. Runs only on that 404, so a
+ * platform that serves the surface never pays for it.
+ */
+export function useEnvironmentStillExists(
+  environmentId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["environment-exists", environmentId],
+    enabled,
+    retry: false,
+    gcTime: 0,
+    queryFn: async () => {
+      try {
+        await platformGet<unknown>(`v1/environments/${environmentId}`);
+        return true;
+      } catch (error) {
+        if (error instanceof PlatformError && error.status === 404)
+          return false;
+        throw error;
+      }
     },
   });
 }

@@ -109,3 +109,27 @@ test("a genuine not-found is still an error, not a hidden surface", async ({
   await expect(page.getByTestId("error-state")).toBeVisible();
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
 });
+
+/**
+ * Seam 6 (plan 07). The console API is not one of the six probed surfaces, and
+ * its route carries an environment id, so the collection-route rule that makes
+ * a 404 readable does not apply on its own. What makes it readable here is the
+ * page: the environment has already loaded, so a 404 from the tokens route can
+ * only mean the platform never registered the namespace — one predating
+ * platform plan 30.
+ */
+test("the environment-keys section hides on a platform that predates it", async ({
+  page,
+  request,
+}) => {
+  await request.post(`${MOCK}/__unimplemented`, {
+    data: { surfaces: ["environment-keys"] },
+  });
+  await signIn(page);
+  await page.goto("/environments/env_byoc0000000000000001");
+
+  // The rest of the page is untouched — this hides a section, not the page.
+  await expect(page.getByText("Overview")).toBeVisible();
+  await expect(page.getByText("Environment keys")).toHaveCount(0);
+  await expect(page.getByTestId("error-state")).toHaveCount(0);
+});

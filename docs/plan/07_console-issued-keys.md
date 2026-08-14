@@ -168,6 +168,15 @@ Facts worth naming:
   render the new row from the create response: it must invalidate and re-GET
   the list**, which is the reference's own sequence.
 - The `ID` column renders a **truncated tail** (`…1c7c3f1`), never the secret.
+- **Layout, re-observed 2026-08-14 on a live self-hosted environment:** the
+  section is **two columns** — the keys table and its "Generate environment
+  key" button occupy roughly the left half, and the dismissible setup panel
+  sits to their right, not below. `Created`/`Expires` render **date only**
+  (`Aug 10, 2026`), and each row ends in a trash icon. Slice 2 ships the table
+  full-width because it has no right-hand panel yet; **slice 3 is what makes
+  the two-column layout real**, and should re-shoot this surface against this
+  screenshot. The date-granularity difference is console-wide and tracked as
+  issue #87, not as a slice-3 task.
 - The reference's environment-key prefix is `sk-ant-oat01-`; ours is
   `sk-map-env01-`. Already a recorded wire divergence — not new here.
 - The path carries `organizations/{org_uuid}` even though nothing in the
