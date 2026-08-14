@@ -1,49 +1,48 @@
 # Design reference — Claude Console fidelity base
 
-The console's visual style tracks Anthropic's Claude Console (standing decision, 2026-08-02; see CLAUDE.md). This file records the design facts extracted from the live reference so UI work has a stable base, and so drift is detectable. Re-extract when the reference visibly changes; note the date.
+The console's visual style tracks Anthropic's Claude Console (standing decision, 2026-08-02). This
+file holds the facts extracted from the live reference, so UI work has a stable base and drift is
+detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
+date. What ships from these facts is `src/app/globals.css`.
 
-## Extracted 2026-08-02 from platform.claude.com (light theme, Managed Agents → Agents)
+## Extracted 2026-08-02 from platform.claude.com (light, Managed Agents → Agents)
 
 Method: `getComputedStyle` on live elements in Chrome.
 
-| Element                                       | Facts                                                                                                                  |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Page background                               | `#FCFCFB`                                                                                                              |
-| Sidebar                                       | width `256px`, background `#F9F9F7`, no visible border                                                                 |
-| Body text                                     | `anthropicSans` → fallback `system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`; `14px/21px`, color `#0B0B0B` |
-| Secondary text (page subtitle, table headers) | `#52514E`                                                                                                              |
-| Hairline borders                              | `rgba(11,11,11,0.1)`                                                                                                   |
-| Page title                                    | `22px`, weight `500`, line-height `28px`, `#0B0B0B`                                                                    |
-| Page subtitle                                 | `14px/20px`, `#52514E`                                                                                                 |
-| Primary button ("Create agent")               | height `32px`, radius `8px`, padding-x `12px`, `14px`/500, white text on near-black fill                               |
-| Filter/secondary buttons                      | height `32px`, radius `8px`                                                                                            |
-| Table header cell                             | `13px`, weight `500`, `#52514E`, row height `32px`, no text-transform                                                  |
-| Inputs (search)                               | height `32px`, `14px`                                                                                                  |
-| Nav items                                     | `14px`, active item gets a subtle darker pill on the sidebar background                                                |
+| Element                    | Facts                                                                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Page background            | `#FCFCFB`                                                                                                        |
+| Sidebar                    | width `256px`, background `#F9F9F7`, no visible border                                                           |
+| Body text                  | `anthropicSans` → fallback `system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`; `14px/21px`, `#0B0B0B` |
+| Secondary text             | `#52514E` (page subtitle, table headers)                                                                         |
+| Hairline borders           | `rgba(11,11,11,0.1)`                                                                                             |
+| Page title / subtitle      | `22px`/500/`28px`, `#0B0B0B` · `14px/20px`, `#52514E`                                                            |
+| Buttons (primary + filter) | height `32px`, radius `8px`, padding-x `12px`, `14px`/500; primary is white on near-black                        |
+| Table header cell          | `13px`/500, `#52514E`, row height `32px`, no text-transform                                                      |
+| Inputs · nav items         | height `32px`, `14px` · `14px`, active item gets a subtle darker pill                                            |
 
 ## Dark palette — extracted 2026-08-02 from the reference's stylesheet tokens
 
-Method: enumerated the CSS custom-property blocks in platform.claude.com's stylesheets. Two findings:
+The reference's own **console theme pins dark mode to the light palette** — it ships light-only
+today. Its sibling **claude theme carries real dark tokens**, and ours uses those, mapped onto the
+same roles as the light palette. Shipping a real dark mode is therefore a **deliberate divergence**,
+built entirely from the reference design system's own tokens.
 
-- The reference's own **console theme pins dark mode to the light palette** (`[data-theme="console"], [data-theme="console"][data-mode="dark"]` share one block) — the reference console ships light-only today.
-- Its sibling **claude theme carries real dark tokens** (`[data-theme="claude"][data-mode="dark"]`). Our dark mode uses those, mapped onto the same roles as the light palette:
-
-| Token (reference)   | Value                                   | Our role                     |
-| ------------------- | --------------------------------------- | ---------------------------- |
-| `bg-100`            | `hsl(60 2.7% 14.5%)` (#262624)          | page background              |
-| `bg-000`            | `hsl(60 2.1% 18.4%)` (#30302e)          | cards, popovers              |
-| `bg-200`            | `hsl(30 3.3% 11.8%)` (#1f1e1d)          | sidebar                      |
-| `text-100`          | `hsl(48 33.3% 97.1%)` (#faf9f5)         | foreground                   |
-| `text-300`          | `hsl(50 9% 73.7%)` (#c2c0b6)            | muted foreground             |
-| `pictogram-200`     | `hsl(60 2.5% 23.3%)` (#3c3c39)          | secondary/muted/accent fills |
-| `border-200`        | `hsl(51 16.5% 84.5%)` at 0.12–0.4 alpha | borders, inputs, rings       |
-| `danger-100` (dark) | `hsl(0 67% 59.6%)`                      | destructive                  |
-
-Shipping a real dark mode is therefore a **deliberate divergence** from the reference console, built entirely from the reference design system's own dark tokens.
+| Token (reference) | Value                                   | Our role                     |
+| ----------------- | --------------------------------------- | ---------------------------- |
+| `bg-100`          | `hsl(60 2.7% 14.5%)` (#262624)          | page background              |
+| `bg-000`          | `hsl(60 2.1% 18.4%)` (#30302e)          | cards, popovers              |
+| `bg-200`          | `hsl(30 3.3% 11.8%)` (#1f1e1d)          | sidebar                      |
+| `text-100`        | `hsl(48 33.3% 97.1%)` (#faf9f5)         | foreground                   |
+| `text-300`        | `hsl(50 9% 73.7%)` (#c2c0b6)            | muted foreground             |
+| `pictogram-200`   | `hsl(60 2.5% 23.3%)` (#3c3c39)          | secondary/muted/accent fills |
+| `border-200`      | `hsl(51 16.5% 84.5%)` at 0.12–0.4 alpha | borders, inputs, rings       |
+| `danger-100`      | `hsl(0 67% 59.6%)`                      | destructive                  |
 
 ## Date formats — extracted 2026-08-14 from platform.claude.com (live, Admin session)
 
-Method: read the rendered cells in Chrome. The reference uses **two** forms, and **time-of-day in neither**:
+Method: read the rendered cells in Chrome. The reference uses **two** forms, and time-of-day in
+neither:
 
 | Where                                        | Renders              |
 | -------------------------------------------- | -------------------- |
@@ -52,39 +51,74 @@ Method: read the rendered cells in Chrome. The reference uses **two** forms, and
 | Environments list — `Updated at`             | `Aug 9`              |
 | Environment detail subheader                 | `Last updated Aug 9` |
 
-Our `Day` renders the first form wherever the value is day-scale; `Time` keeps a date and a clock only where time-of-day is the point — trace events, the sessions list, a credential expiring within the hour (issue #87).
+Our `Day` renders the first form wherever the value is day-scale; `Time` keeps a clock only where
+time-of-day is the point — trace events, the sessions list, a credential expiring within the hour.
 
 ## Deliberate divergences
 
-- **Font:** `anthropicSans` is Anthropic's proprietary face and cannot be shipped. We use its own fallback stack (`system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`) as our primary stack.
-- **Branding:** the wordmark is our own ("Managed Agents" / project name), never "Claude Console" or Anthropic marks.
-- Navigation contains only the sections the platform serves (no Billing/Workbench), plus console-specific connection status. **API keys is the exception, added 2026-08-14**: the platform now serves management-key issuance, so the console shows it — as a **top-level item** rather than under the Settings area the reference files it in (`/settings/workspaces/{workspace}/keys`). A self-hosted console's whole settings story is its environment file, so a Settings section holding exactly one page would be a menu built to hold a menu.
-- **The API-keys table drops two of the reference's columns and adds one.** The reference's, re-measured live on 2026-08-14, is `Key · Created by · Created · Expires · Last used · Cost · Actions`. **`Last used` and `Cost` do not ship** because this platform serves neither — no usage or cost source exists behind them, and a column filled with an em dash is a promise the deployment cannot keep. **`Created by` renders the actor id the wire carries** (`principal_…`, or `api_key` for a machine issuer) rather than the reference's display name over an email: the response carries `{id, type}` and there is no member lookup to enrich it with, so a name would be the console asserting something nobody told it. **`Status` is added**, because our platform has `active`/`inactive`/`archived` and a derived `expired` and the console offers Disable/Enable and Archive against them, where the reference's row menu holds a single `Delete API key`. The Key cell keeps the reference's two-line shape — the operator's label over the `partial_key_hint` in mono — and the type scale matches it exactly (header 500 13px, cells 14px/20px, measured in both).
-- **Retiring a key is `Archive`, not `Delete`.** The reference's menu says "Delete API key"; this platform serves no DELETE on the surface at all, and retiring a key is `status: archived`, which it treats as terminal. Naming the control after the verb the wire does not have would misdescribe what the button does.
-- **Navigation is composed at runtime, not fixed** (issue #33). The reference's sidebar is a constant — a hosted product implements every surface it shows. A self-hosted console can be pointed at a deployment that serves only part of the wire, so the shell probes each collection route once per session and drops the items the deployment answers 404 for; the page for such a surface says "Not available on this deployment." rather than rendering the platform's error envelope. Only a confirmed 404 hides anything, so an unreachable or failing platform still shows every item and reports the failure.
-- **The environment detail page carries no work-queue Overview stats**, and this one is forced rather than chosen. The 2026-08-14 recording shows the reference _does_ render them on this page (Queued / Processing / Idle workers / Oldest item, "Updates every few seconds"), so fidelity would put them here. It cannot: the platform registers `GET /v1/environments/{id}/work/stats` on the **environment-key lane at `identity.RoleNone`** (`internal/api/server.go:182`), which no human credential reaches — not the management key, not an admin token. The console cannot serve the surface rather than declining to. Revisit the moment the platform exposes queue stats on a management-reachable route.
-- **Environment keys carry an "Expired" badge the reference's listing does not show.** Our platform lists expired keys on purpose — "an operator whose worker has stopped connecting needs to see the credential it is failing on" (`internal/api/envkeys.go:102-106`) — so a row that is present is not necessarily a row that works, and the console has to say which. Whether the reference badges expired keys is **unknown**: the recorded account had none expired, so the recording shows only that the columns are Name · ID · Created · Expires. This is an addition made necessary by a platform behaviour, not a disagreement with an observed reference choice.
-- **The environment-key `ID` column truncates the head, not the tail.** The reference renders `…1c7c3f1` — the last seven characters — because its key ids are bare uuids whose every character is random, so the tail is the only thing that distinguishes two rows. Ours are prefixed (`envkey_btfc2nnb…`), and the console has a single id style, `IdCode`, used on all six resource surfaces with the full value on hover. Matching the reference here would mean either a one-off truncation in one table or re-cutting every id in the console to hide the prefix that identifies what it is. Kept as-is; the full id is on `data-token-id` and in the hover title either way.
-- **The setup guide's commands are ours, and it has a step the reference does not need.** The panel copies the reference's four steps and their copy, with three substitutions forced by self-hosting. (1) The key prefix is `sk-map-env01-`, not `sk-ant-oat01-` — the platform mints its own deliberately, so a leaked key of ours can never be mistaken for an Anthropic credential. (2) The worker must be told **where this platform is**, which a hosted product never has to say, so step 2 also exports `ANTHROPIC_BASE_URL` (honoured by the `ant` worker subcommands, though not by its management ones — `managed-agent-platform` CLAUDE.md:124). (3) That value is written `$PLATFORM_BASE_URL` rather than filled in: it is server-side configuration, `/api/health` withholds it from callers on purpose, and the agent editor's curl block already uses the same placeholder. The install step still points at Anthropic's released `ant` binary, because the platform is wire-compatible with it and there is no client of ours to install.
-- **The login page has no reference counterpart, and offers up to two ways in.** The reference product's sign-in is Anthropic's own account flow; a self-hosted console's is whatever the operator configured, so there is nothing to compare this surface against and its layout follows the console's own type scale and controls rather than a recorded reference. What the page must express is the one thing the reference never has to: a deployment can run **both** gates at once (plan 08 D3's third row), and the two do different jobs. SSO is the primary control; the shared password sits below it under a line saying plainly that it admits you to the console and authorizes nothing on the platform. Without that line, two sign-in controls read as two ways to reach the same place, and an operator who used the password would find every platform call refused with no explanation on the page that let them in.
-- **The signed-in account block names no role and no organization.** The reference carries one at the foot of its sidebar and its shape was measured on 2026-08-14: a 14px/500 display name over a 12px/17px muted line reading `Admin · <organization>` — role, a middle dot, the org. Ours copies the placement, the frame it shares with the connection status, and that type scale exactly; what the second line _says_ is where it parts company, and for two independent reasons. The role is unavailable: the platform has no `me`-shaped route (plan 08 D4), and a role the console inferred from anything else would be the second copy of the authority rules CLAUDE.md principle 5 forbids — so the line carries the operator's email instead, which is the one thing the ID token does tell us. The organization has nothing to name: single-tenant v1. The block also carries an explicit **Sign out** control rather than hiding it behind an account menu, because it is the only item that menu would hold here. It renders at all only on a deployment that runs identity; the password-gated and open configurations keep the sidebar they had.
-- **A day-scale date always carries its year**, where two of the reference's four forms drop it (measured above). Ours matches the reference exactly on the two key tables and parts from it on the environments list and the detail subheader. A yearless date is unambiguous only if the formatter is year-conditional — output that depends on what today is, a row that changes shape on 1 January, and a test that has to be told the date. A self-hosted console shows its deployment's whole history, where a hosted product mostly shows this week's.
-- **The sidebar states the console's version** (`v0.1.0`, muted 13px, above the connection status). The reference shows none, and correctly so: nobody wonders which build of a hosted product they are looking at. A self-hosted deployment has no other way to tell — the operator debugging it is the operator who upgrades it — so the version sits where the connection state already is, in the same muted register, rather than as a badge competing with navigation.
+- **Font** — `anthropicSans` is proprietary and cannot be shipped; we use its own fallback stack.
+  **Branding** — our own wordmark, never Anthropic marks.
+- **Navigation is composed at runtime, not fixed** (issue #33). A hosted product implements every
+  surface it shows; a self-hosted console can be pointed at a deployment serving only part of the
+  wire, so the shell probes each collection route once per session and drops what answers 404. Only a
+  confirmed 404 hides anything, so an unreachable platform still shows every item.
+- **API keys is a top-level item**, not filed under a Settings area (added 2026-08-14). A self-hosted
+  console's whole settings story is its environment file, so a Settings section holding exactly one
+  page would be a menu built to hold a menu.
+- **The API-keys table drops `Last used` and `Cost` and adds `Status`.** Nothing serves the first two
+  here, and a column of em dashes is a promise the deployment cannot keep; `Created by` renders the
+  actor id the wire carries rather than a display name, because there is no member lookup to enrich
+  it with. `Status` is added because our rows are `active`/`inactive`/`archived` plus a derived
+  `expired` and the console acts on them.
+- **Retiring a key is `Archive`, not `Delete`** — the platform serves no DELETE on the surface at
+  all, and naming the control after a verb the wire lacks would misdescribe the button.
+- **No work-queue Overview on the environment detail page**, and this one is forced rather than
+  chosen: the reference does render it, but the platform registers `…/work/stats` on the
+  environment-key lane at `RoleNone`, which no human credential can reach. Revisit if it ever moves
+  to a management-reachable route.
+- **Environment keys carry an "Expired" badge** the reference's listing does not show. Ours lists
+  expired keys on purpose, so a row that is present is not necessarily a row that works. Whether the
+  reference badges them is unknown — the recorded account had none expired.
+- **The environment-key `ID` column truncates the head, not the tail.** The reference's ids are bare
+  uuids, so their tail is the only distinguishing part; ours are prefixed, and the console has one id
+  style used on all six resource surfaces. The full id is on `data-token-id` and in the hover title.
+- **The setup guide's commands are ours**, with three substitutions forced by self-hosting: the
+  `sk-map-env01-` prefix (so a leaked key of ours can never be mistaken for an Anthropic credential),
+  an exported `ANTHROPIC_BASE_URL` telling the worker where this platform is, and that value written
+  as `$PLATFORM_BASE_URL` rather than filled in, because it is server-side configuration.
+- **The login page has no reference counterpart** and offers up to two ways in. A deployment can run
+  both gates at once, and they do different jobs: SSO is primary, and the shared password sits below
+  it under a line saying plainly that it admits you to the console and authorizes nothing on the
+  platform. Without that line, two controls read as two ways to the same place.
+- **The signed-in account block names no role and no organization.** Ours copies the reference's
+  placement, frame and type scale (14px/500 name over a 12px/17px muted line) and parts company on
+  what the second line says: the role is unavailable (no `me` route, and inferring one would be the
+  second copy of the authority rules principle 5 forbids), and single-tenant v1 has no organization
+  to name — so it carries the email. **Sign out** is explicit rather than behind a menu, because it
+  is the only item that menu would hold.
+- **A day-scale date always carries its year**, where two of the reference's four forms drop it. Ours
+  matches the reference exactly on the two key tables and parts from it on the environments list and
+  the detail subheader: a yearless date is unambiguous only if the formatter is year-conditional —
+  output that depends on what today is, a row that changes shape on 1 January, and a test that has to
+  be told the date. A self-hosted console shows its deployment's whole history, where a hosted
+  product mostly shows this week's.
+- **The sidebar states the console's version.** The reference shows none, correctly — nobody wonders
+  which build of a hosted product they are looking at. A self-hosted operator has no other way to
+  tell, so it sits in the same muted register as the connection state.
 
 ## Fidelity verification
 
-Per CLAUDE.md: after building UI, load the local console in Chrome next to the reference, screenshot both, compare (layout, spacing, type scale, color), and note the outcome in the PR. The surfaces to walk are enumerated in [test/fidelity/surfaces.ts](../test/fidelity/surfaces.ts); `pnpm fidelity:shots` writes one shot per surface per theme. The reference screenshots from the 2026-08-02 survey live in the session notes; re-capture as needed.
+After building UI, load the console in Chrome next to the reference, screenshot both, compare, and
+note the outcome in the PR. The surfaces are enumerated in
+[test/fidelity/surfaces.ts](../test/fidelity/surfaces.ts); `pnpm fidelity:shots` writes one shot per
+surface per theme.
 
-### Checks against this table
+**Checks against the tables above** — a recorded fact nobody re-measures quietly stops being true:
 
-| Date       | Method                                                                                                                                                                                                                                                             | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-07 | `getComputedStyle` on the running console in Chrome, 1440×900, light, `/agents`                                                                                                                                                                                    | 9 of 10 facts matched. Primary button padding-x was `10px` against the recorded `12px` — upstream shadcn's `px-2.5`. Filed #37.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| 2026-08-07 | Same extraction after #37                                                                                                                                                                                                                                          | **10 of 10 matched.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 2026-08-14 | Side-by-side in Chrome, 1568×772, light: our `/environments/{id}` (self-hosted, real platform) against the reference's `/workspaces/default/environments/{id}`                                                                                                     | Section heading, body copy (verbatim), column set, column order and section placement all match. Three differences: the `ID` truncation direction and the missing work-queue Overview (both recorded above as divergences), and **date granularity** — the reference renders `Aug 10, 2026` where our console-wide `Time` renders `Aug 14, 2026, 00:09`. The last is not specific to this surface, so it is filed as [#87](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/87) rather than fixed as a one-off here.                                                                                                                            |
-| 2026-08-14 | Chrome, 1568×772, light: `/login` walked in all three configurations it can be in — password only, SSO only, and both — plus the failure state, against a **real Casdoor** on `localhost:8000`                                                                     | No reference to compare against (recorded above as a divergence), so this pass is a self-check: type scale, control sizes and the 320px column match the console's own tokens, and the SSO-only page is the production shape. The provider **accepted** the console's authorization request and rendered its own sign-in page, which is the part this slice owns; completing a round trip needs an operator's credentials and is plan 08 slice 5's acceptance. The failure state was exercised for real by pointing the console at an issuer that was not answering: the page shows the console's own line and no provider text. Surfaces re-shot: `login`. |
-| 2026-08-14 | Chrome, 1568×772, light: the console driven **signed in**, against an auto-approving OIDC provider and with no management key in its environment — `/login` → provider → `/environments`, then the same list on the reference's `/workspaces/default/environments` | Slice 3 adds no visible element, and the shots confirm it: `login` is unchanged in both themes, and the signed-in `/environments` matches the reference on title and description placement, the top-right **Create environment** control, the column order and the bottom-left pager. What the pass was really for is that the surface renders **at all** on the operator's own token — a console with no `PLATFORM_API_KEY` set has nothing else to send. Surfaces re-shot: `login`.                                                                                                                                                                       |
-
-| 2026-08-14 | Chrome against the **live reference** (Admin session): the rendered date cells on `/settings/workspaces/default/keys`, `/workspaces/default/environments` and an environment detail page, then `pnpm fidelity:shots` of our equivalents | Settles [#87](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/87), and the measurement is what settled it: the reference carries **no time-of-day on any of the four surfaces**, and uses two date forms — both recorded above, which the earlier pass had not seen because it read one table. Our day-scale surfaces now match its key tables exactly and part from the yearless form only, recorded above as a divergence. Surfaces re-shot: `agents-list`, `environments-list`, `vaults-list`, `skills-list`, `files-list`, `agent-detail`, `environment-detail`, `vault-detail`, `skill-detail`, `api-keys`, `list-archived`, and `sessions-list` — the last to confirm it deliberately keeps its clock. |
-
-This table is the point of the file: a recorded fact nobody re-measures is a fact that quietly stops being true.
+| Date       | Method                                                                                          | Result                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-07 | `getComputedStyle` on the running console, 1440×900, light                                      | 9 of 10 facts matched; primary button padding-x was upstream shadcn's `10px`. Filed #37, then **10 of 10**.                                                                                                                                                                                                                                                                                                            |
+| 2026-08-14 | Side-by-side, environment detail, against a real platform                                       | Heading, copy, columns, order and placement all match. Three differences: `ID` truncation direction and the missing work-queue Overview (both divergences above), and date granularity — console-wide, so filed as #87 rather than fixed here.                                                                                                                                                                         |
+| 2026-08-14 | The reference's rendered date cells on three surfaces, then `fidelity:shots` of our equivalents | Settles [#87](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/87), and the measurement is what settled it: the reference carries **no time-of-day on any of the four surfaces** and uses two date forms — recorded above, which the earlier pass had missed because it read one table. Re-shot: every day-scale list and detail surface, plus `sessions-list` to confirm it deliberately keeps its clock. |
+| 2026-08-14 | `/login` in all three configurations, against a real Casdoor                                    | A self-check — no reference exists. Type scale, control sizes and the 320px column match our own tokens; the provider accepted the console's authorization request, and an unanswering issuer produced the console's own line with no provider text.                                                                                                                                                                   |
+| 2026-08-14 | The console driven **signed in**, with no management key set                                    | Slice 3 adds no visible element and the shots confirm it. What the pass was for is that `/environments` renders **at all** on the operator's own token.                                                                                                                                                                                                                                                                |

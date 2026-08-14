@@ -1,112 +1,106 @@
 # History
 
-Archived plans, summarized. The full narrative of individual changes lives in [CHANGELOG.md](../CHANGELOG.md) for the cycle in progress, and in [docs/changelog/](./changelog/) for every released one.
+One entry per archived plan: what it delivered, and what **running** it proved or broke — the part
+no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
+a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
-## Plan 08 — console SSO and role-aware UI (approved 2026-08-14, archived 2026-08-14)
+## [Plan 08](./plan/08_console-sso-rbac.md) — console SSO and role-aware UI (archived 2026-08-14)
 
-[docs/plan/08_console-sso-rbac.md](./plan/08_console-sso-rbac.md), issue #56, five slices (PRs #92, #94, #95, #96, plus this acceptance PR). The console half of [platform plan 31](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/31_console-sso-rbac.md). The platform had grown OIDC verification, a principal per request and three roles; this repo still had one shared `CONSOLE_PASSWORD` in front of one management key, so **every operator was root and no action had an author**.
+Issue #56, PRs #92–#96, #100. Browser OIDC login, and the BFF forwarding the operator's own token in
+place of the management key.
 
-1. **Config and the health contract** — `IDENTITY_*` config that fails closed, the D3 mode matrix written as tests before any of it had a UI, and `PLATFORM_API_KEY` released from readiness only once identity is configured.
-2. **The relying party** — `/api/auth/{login,callback,logout}`: authorization code + PKCE S256, `state` and `nonce`, and a session store the browser only ever holds an opaque handle to. Principle 5 was amended here, as the plan scheduled.
-3. **The BFF forwards the operator** — `x-api-key` becomes `Authorization: Bearer`, and **never both**: the platform's dispatcher takes the key and drops the role, so sending both would serve every operator as root without failing anything.
-4. **Role-aware UI** — a 403 presented as a denial rather than a fault, and the sidebar account block. Controls stay visible per D4; hiding one accurately needs a `me` route the platform does not serve.
+**Acceptance, against the bundled Casdoor:** the platform refused a `map-viewer`'s environment-create
+in its own words, and a `map-admin` issued an environment key. The pair is the proof, not either
+half — a viewer refused and an admin allowed on the same route is what shows the operator's token
+travelled. Two defects it found, both invisible to CI: a completed sign-in landed on
+`http://0.0.0.0:3300/agents`, the address the standalone server binds rather than the host the
+browser used; and every query retried refusals, so a 403 was asked twice and the denial waited out a
+backoff. The SSO login page and the account block cannot be walked while both automated tiers run in
+password mode — compared by hand in Chrome, filed as #99.
 
-**Acceptance (2026-08-14).** Against the bundled Casdoor: a `map-viewer` session had its environment-create refused inline in the platform's own words, and a `map-admin` session issued an environment key through plan 07's dialog. The pair is the proof, not either half — a viewer refused and an admin allowed on the same route is what shows the operator's own token travelled rather than the management key.
+## [Plan 07](./plan/07_console-issued-keys.md) — console-issued credentials (archived 2026-08-14)
 
-Two defects it found, both invisible to CI. A completed sign-in landed on `http://0.0.0.0:3300/agents`, the address the standalone server binds rather than the host the browser used; redirects to this console now name no host at all. And every query retried refusals, so a 403 was asked twice and the denial waited out a backoff — measured at four identical 403s on the admin-only page where two suffice.
+Issue #56, PRs #86–#98. Environment-key and API-key issuance, on the two different console
+namespaces the reference actually uses — `/api/oauth/…` and `/api/console/…` — each mirrored where it
+was observed rather than unified into an invented one.
 
-The fidelity manifest gained `role-denied`. The SSO login page and the account block cannot be walked while both automated tiers run in password mode; compared by hand in Chrome instead, and filed as #99.
+**Acceptance, against a real compose stack:** the real `ant beta:worker poll`, invoked exactly as the
+console's setup guide prints it, authenticated on a console-issued key; the platform confirmed it
+positively rather than by silence (`workers_polling: 1`, which only the authenticated poll path
+produces), and revoking the key stopped the worker within one poll. Repeatable as
+`test/e2e-live/keys.spec.ts`, spending no model tokens. Three things it found that green CI never
+would: **the mock had invented the management-key prefix** (`sk-map-adm01-` against the platform's
+`sk-map-api01-`) and it survived every tier because the mock and its assertions agreed with each
+other; the same fixture answered `201` where the platform answers `200`; and the page put its primary
+action under the table where every other list page puts it in the header. One trap for whoever
+repeats the walkthrough: the browser extension's network panel labels the revoke **503** — it is not,
+the response is 204 by three independent measurements. The artifact is in the observer.
 
-## Plan 07 — console-issued credentials (approved 2026-08-14, archived 2026-08-14)
+## [Plan 06](./plan/06_google-sign-in.md) — Google sign-in (archived 2026-08-09)
 
-[docs/plan/07_console-issued-keys.md](./plan/07_console-issued-keys.md), issue #56, five slices (PRs #86, #89, #91, #97, #98). The console could drive every resource the platform serves except the two that mint credentials: standing up a self-hosted worker meant hand-editing `CONTROLPLANE_API_KEY` or running SQL. Both surfaces now ship, on the **two different console namespaces the reference actually uses** — `/api/oauth/…` for environment keys (plan 30's), `/api/console/…` for management keys (the platform's #378) — each mirrored where it was observed rather than unified into an invented one.
+Issues #69, #74; PRs #68–#80. A hostname with managed TLS, IAP in front of every request, and the
+password out of the production pod — which ends up running no authentication code at all.
 
-1. **The seams** — a second allowlisted BFF, the shared forwarding core, the offset envelope, `consolePostNoContent`, and the wire types with their zod transcription. Rendered nothing.
-2. **Environment keys, read** — the section on the environment detail page, with the issuance precondition mirroring the platform's own refusals (non-`self_hosted` and archived environments both 400, so the control is hidden for both) and a 404 read as "this deployment predates the surface".
-3. **Environment keys, write, and the setup guide** — reveal-once issuance, per-host revoke, and the four-step panel whose commands are the real `ant` CLI's. Its probe found the plaintext surviving in the mutation cache after the dialog closed; `gcTime: 0` fixed it, and review caught a dismissal mid-issuance orphaning a live key, now refused.
-4. **API keys** — the six expiry choices resolved client-side, Disable/Enable/Archive against the platform's own refusal rules, and the control-plane's own key listed but not mutable. `Last used` and `Cost` do not ship: this platform serves neither.
-5. **Acceptance** — below.
+**Verified against the live deployment, not inferred from a green pipeline:** a Workspace account
+reaches `/agents` with no password page; anonymous requests are refused by IAP; a Google account
+_outside_ the Workspace is refused (confirmed by the maintainer); and a real session trace held open
+for **252 seconds**, taking all sixteen 15-second `ping` frames as separate chunks and ending on
+`session.deleted` — the proof that `timeoutSec: 3600` reached the load balancer the ingress
+controller actually built. Four things it found by running: **IAP content-negotiates its refusal**
+(JSON gets 401, a default `curl` gets a 302 to accounts.google.com — the plan had this backwards
+until it was measured, so the smoke gate requires the `x-goog-iap-generated-response` header rather
+than a bare 401); binding the container to `127.0.0.1` would have broken the deployment rather than
+hardened it, quietly, because container-native load balancing delivers to the Pod IP;
+`kubectl apply` cannot remove an env var a `rollout undo` re-added, so the removal is stated with
+`kubectl set env`; and an unbounded revision history means no credential can ever be retired, since
+old ReplicaSets keep their whole pod template — `revisionHistoryLimit: 3` is a security boundary here,
+not housekeeping.
 
-**The acceptance criterion, driven rather than described (2026-08-14).** Against the platform's `deploy/compose` stack: a `self_hosted` environment authored **through the console's own form**, a key issued through its dialog, and then the **real `ant beta:worker poll`** — built from the read-only `anthropic-cli` checkout, invoked exactly as the console's setup guide prints it (`--environment-id`, with `ANTHROPIC_ENVIRONMENT_KEY` and `ANTHROPIC_BASE_URL` exported). It polled clean, and the platform confirmed it positively rather than by silence: `GET …/work/stats` reported **`workers_polling: 1`**, which only the _authenticated_ poll path can produce (`Queue.RecordPoll`). Revoking that key in the console then stopped the running worker within one poll, on the platform's own words — `poll hit permanent 4xx; stopping … 401 "invalid environment key"`. The management half was proven the same way: a key minted in the UI answered `200` with `Cache-Control: no-store`, drove `GET /v1/agents`, and 401'd on the same call the moment **Disable** was clicked, because the platform authenticates `active` rows only. Both halves are now a repeatable live-tier spec (`test/e2e-live/keys.spec.ts`) that spends no model tokens.
+## [Plan 05](./plan/05_release-management.md) — release management (archived 2026-08-08)
 
-Three things the run found that no amount of green CI would have. **The mock had invented the management-key prefix** — `sk-map-adm01-`, a guess made while the platform's constant (`sk-map-api01-`, `internal/api/auth.go`) sat outside the checkout — and it survived unit tests, e2e and conformance because the mock and its assertions agreed with each other. It failed the first time a console-minted key met the real wire, which is exactly the drift the live tier exists to catch. **The same fixture answered `201` where the platform answers `200`** and spelled `partial_key_hint` with an ellipsis where the platform emits three dots at a fixed lead/tail; the hint is now derived from the value the mock actually mints, so a listing row can be matched against the secret it was shown. And **the API-keys page put its primary action under the table** while the reference — and every other list page in this console — puts it in the page header, top-right; never recorded as a deliberate divergence, so it was corrected rather than documented.
+PRs #42–#54, release PR #46. Versions, tags, hand-written release notes, and a multi-arch image at
+`ghcr.io/opensdlc-dev/managed-agent-console`.
 
-One trap recorded for whoever repeats the walkthrough: the browser-automation extension's network panel labels this surface's revoke **503**. It is not. The console's own request log, Chrome's Resource Timing (`responseStatus: 204`), and the platform's behaviour all agree the response is **204** — and the worker's 401 proves the revoke landed. The artifact is in the observer.
+**Proven by cutting 0.2.0 through the finished machinery** rather than by describing it. Four things
+it found: the first release PR would have failed CI forever, because release-please writes its
+manifest compactly and `format:check` runs over a file no human edits; the GHCR package is **private
+on first publish** even for a public repository, so the README's `docker run` fails for outside
+readers until it is flipped by hand; the release-notes rewrite sat behind the image build, so a
+failed build would have left a published release wearing a placeholder body; and `release:prepare`
+bumped README's image pins but not its status line.
 
-## Plan 06 — Google sign-in (approved 2026-08-09, archived 2026-08-09)
+## [Plan 04](./plan/04_verification-hardening.md) — verification hardening (archived 2026-08-07)
 
-[docs/plan/06_google-sign-in.md](./plan/06_google-sign-in.md), two slices plus cleanup (issues #69, #74; PRs #68, #70, #71, #73, #75, #76, #77, #78, #79, #80, plus this archival PR). Staging was a shared password typed over plain HTTP into a bare public IPv4, and the thing behind it was a full-power platform management key. **The console did not gain a login; it lost the one it had.**
+Issue #31, PRs #32–#38. Zod schemas as the transcription of record, contract-violation probes with a
+`pnpm probes:check` ratchet, semantic `data-*` attributes in e2e, and an enumerated fidelity
+manifest.
 
-1. **Hostname with managed TLS** — a global static IP, a `ManagedCertificate`, and a `FrontendConfig` redirecting plain HTTP, valuable on its own: it stops the password and every session cookie crossing the wire in the clear even if nothing below had shipped.
-2. **IAP, and the password out of the pod** — three lines of `BackendConfig` put a Google account in the Workspace domain in front of every request, and `src/proxy.ts` returns `next()` before any check when `CONSOLE_PASSWORD` is unset, so the production container ends up running **no authentication code at all**. Because removing the gate opened a second door, the `NetworkPolicy` closing port 3000 to the rest of the cluster shipped in the same PR rather than after it.
-3. **Cleanup the plan itself listed** — deployment identifiers moved to Actions variables (#69), the exposed credential rotated, and `console-secrets` reduced to one key (#74).
+The one-shot audit against Anthropic's TypeScript SDK found **zero transcription bugs** and 22 benign
+divergences ([docs/wire-divergences.md](./wire-divergences.md)); the probes found and fixed a real
+page-killing unguarded `usage` read on two surfaces. Two findings about the work itself: the first
+fidelity run passed 46/46 while shooting six lists of **skeleton bars**, because `DataTable` carried
+no `aria-busy` marker; and slice 3's first implementation broke its own convention.
 
-Decisions of record: **Casdoor was read and rejected** — the maintainer keeps a checkout, and the finding was that it could serve this but should not, since IAP is an enforcement point rather than an identity provider and needs no service, database or client secret; `CONSOLE_PASSWORD` stays for local development and the suites and leaves production only; the platform's own control-plane API keeps its public load balancer and its `x-api-key`, ungated by this work; the hostname is deliberately **not** the Workspace domain, because the host the console answers on and the directory the access rule resolves against are independent; and **deployment identifiers are not written into this repository**, so the plan names five values it never spells out.
+## [Plan 03](./plan/03_ux-parity.md) — UX parity from already-served data (archived 2026-08-04)
 
-Two choices carry more weight than their size. **The IAM binding is on the backend service, not the project** — IAM inherits downward, so a project grant would silently open the _next_ application to enable IAP, with no separate grant for anyone to review; the cost is that GKE generates the backend service's name, so recreating the Ingress or Service loses the binding and the console fails **closed**. And **`domain:` resolves the principal against the Workspace directory**, where every application-level alternative — a hand-rolled `hd` check, a proxy's `--email-domain`, an identity provider's e-mail regex — compares a _string_ that a consumer account with a verified address in the domain can satisfy without being a member of anything.
+Issue #24, PRs #25–#29. Trace readability (offsets, span durations, idle bands, honest JSON
+fallback), the wire filters that had been served since v1 and never rendered, the Transcript | Debug
+split, and the agent-editor reshape.
 
-Six things the work found by running rather than reasoning. **IAP content-negotiates its refusal** — `Accept: application/json` gets 401, a default `curl` gets a 302 to `accounts.google.com`; the plan had this backwards until it was measured, and the smoke gate now requires the `x-goog-iap-generated-response` header rather than a bare 401, because a 401 can also come from the application, a misrouted backend, or no policy at all. **The default GKE health check is `GET /`**, which the login gate answered 307 — a permanently 502 hostname while the pod is Ready and the logs are clean. **Binding the container to `127.0.0.1` would have broken the deployment rather than hardened it**, because container-native load balancing delivers to the Pod IP, and it fails quietly since the kubelet probes inside the container's namespace. **`kubectl apply` cannot remove an env var a `rollout undo` re-added** — deletions come from the last-applied annotation, which a rollback does not update, and server-side apply's `--force-conflicts` does not fix it either (tested); the removal is now stated with `kubectl set env`. **An unbounded revision history means no credential can ever be retired**, since old ReplicaSets keep their whole pod template, `secretKeyRef`s included — `revisionHistoryLimit: 3` is documented here as a security boundary, not housekeeping. And **`sed`'s replacement text is not literal**, so a control-plane URL containing `&` rendered as a plausible string pointing nowhere.
+## [Plan 02](./plan/02_quality-guardrails.md) — quality guardrails (archived 2026-08-02)
 
-Verified against the live deployment rather than inferred from a green pipeline: a Workspace account reaches `/agents` with no password page; anonymous `GET /` and `GET /api/platform/v1/agents` are both refused by IAP; **a Google account outside the Workspace is refused** (confirmed by the maintainer, 2026-08-09); and a real session trace held open through the hostname for **252 seconds**, taking all sixteen of the platform's 15-second `ping` frames as separate chunks and ending on `session.deleted` rather than on a timeout — the proof that `timeoutSec: 3600` reached the load balancer the ingress controller actually built.
+Issue #11, PRs #12, #20. `.gitattributes`, a 3-OS matrix behind a stable `ci-ok` join check,
+SHA-pinned actions, Dependabot, CodeQL, a trivy gate, and coverage ≥90% enforced in config.
 
-## Plan 05 — release management (approved 2026-08-07, archived 2026-08-08)
+The trivy gate caught 6 real fixable CVEs on its first run and the axe smoke caught 5 unlabeled
+controls; the suite went 20 → 415 tests against an honest 10.3% baseline. Codex's first review landed
+on the archival PR itself, caught a real defect, and blocked the merge until it was resolved.
 
-[docs/plan/05_release-management.md](./plan/05_release-management.md), four slices (PRs #42, #43, #44, #45, #48, #53, #54, plus release PR #46). The console had been feature-complete since plan 03 and verification-hardened since plan 04, and had never been released: no tag, no GitHub Release, `package.json` still at the scaffold's 0.1.0, 41 KB of changelog under a single `Unreleased` heading, and a CI job that built the image only to scan it and throw it away — leaving clone-and-build as the only way to run the thing.
+## [Plan 01](./plan/01_v1-console.md) — v1 console (archived 2026-08-02)
 
-1. **v0.1.0 cut by hand**, into the Keep-a-Changelog frame the platform repo already uses, carrying the compatibility fact decision 9 requires.
-2. **The image is published** — `ghcr.io/opensdlc-dev/managed-agent-console`, multi-arch. Nothing reaches the registry the trivy gate has not cleared, which ruled out the standard `push-by-digest` recipe (it pushes first, scans after): each architecture builds on its own native runner, is scanned there, and only then pushes an arch tag, with a second job joining the two scanned images into a manifest list. No new third-party action — buildx ships on the runner.
-3. **The cut is automated without the narrative being automated.** release-please owns versions, tags and Releases; `skip-changelog` keeps it away from CHANGELOG.md entirely. `pnpm release:prepare X.Y.Z` files the section and bumps README; the release workflow replaces release-please's commit-derived body with that section. Conventional-Commit PR titles became the convention, enforced by a check, because squash merge makes the title the bump signal.
-4. **The console states its version** in the sidebar, server-rendered from `package.json`, a recorded divergence from the reference.
+PRs #1–#9. The whole operator console in five slices: shell and BFF, read-only pages, the live SSE
+trace with HITL approval, the write paths, then polish.
 
-**Proven by running it rather than by describing it:** 0.2.0 was cut through the finished machinery. release-please proposed the version, `release:prepare` filed the section, merging its PR tagged `v0.2.0` and published the Release, and `release.yml` fired on the release event — the body replaced from CHANGELOG with links absolutised against the tag, both architectures built and scanned natively, one manifest list published as `0.2.0` / `0.2` / `latest` at `sha256:f020009704057df391e1fdcdd83134829de4f7e44387aa9e237a06fcec97ad7b`.
-
-Decisions of record: a GitHub App rather than a fine-grained PAT, because a PR opened with `GITHUB_TOKEN` collects no checks and `enforce_admins` would leave it unmergeable, while the org's default policy caps fine-grained PATs at 366 days and would break the pipeline silently a year on; the console's own 0.x semver rather than lockstep with the platform, with compatibility **stated** per release rather than enforced, since a version handshake the platform does not serve would violate principle 1; no `/api/version` endpoint, on plan 04 decision 6's reasoning about credentialed images; rolling `latest`/`X.Y` aliases that move only when the published version really is the newest, so a backfill cannot downgrade whoever pulls `latest`.
-
-Four things the work found by running rather than reasoning: the **first release PR would have failed CI forever** — release-please writes its manifest compactly, prettier wants spaces, and `format:check` is a CI step, over a file no human edits; the **GHCR package is private on first publish** even for a public repository, so the README's `docker run` fails for outside readers until it is flipped by hand; the release-notes rewrite, sitting behind the image build, would have left a published release wearing a placeholder body whenever a build failed; and `release:prepare` bumped README's image pins but not its status line, which nothing downstream would ever have corrected.
-
-## Plan 04 — verification hardening (approved 2026-08-07, archived 2026-08-07)
-
-[docs/plan/04_verification-hardening.md](./plan/04_verification-hardening.md), issue #31, four slices (PRs #32, #34, #35, #36, #38). The prompt was a read of the `phase-3-verify` sample in anthropics-cwc-workshops/how-we-claude-code; the finding was that a 474-unit / 38-e2e / 5-live suite proved plenty about the console and nothing about its own trustworthiness. Three gaps, each closed by measurement rather than assertion:
-
-1. **Nothing proved the fixtures resembled the platform.** Wire shapes are now zod schemas carrying platform `file:line` cites, with `types.ts` reduced to `z.infer` re-exports — one transcription of record for all 42 consumers, and an eslint rule plus a bundle grep proving zod never reaches the browser. Two links, two tiers: every mock fixture **and** every constructed write-path response is parsed in CI; the live tier parses real platform responses. A one-shot audit against Anthropic's official TypeScript SDK (consulted, never depended on — principle 1 keeps the reference product from defining our shapes) found **zero transcription bugs** and 22 recorded divergences, all benign; the one place the reference is _tighter_ is `SessionEvent.processed_at`. Table in [docs/wire-divergences.md](./wire-divergences.md).
-2. **Nothing proved the suite could fail.** A schema canary plus contract-violation probes at the two seams where adversarial input actually arrives (SSE/trace reconciliation, wire parsing) — the rule applied where it pays, not across all 57 test files. The probes found and fixed a real page-killing unguarded `usage` read on two surfaces. A `probe:` naming convention and a `pnpm probes:check` ratchet over Vitest's **collected** tests keep the coverage from rotting; the ratchet is deliberately not source-regex-based, because a commented-out probe would still match the regex.
-3. **The Chrome fidelity pass was unenumerated.** e2e now reads semantic `data-*` attributes instead of formatted sentences (changing both number formatters reddens 1 e2e + 2 unit tests, each the formatter's designated owner, down from 1 + 9), and [test/fidelity/surfaces.ts](../test/fidelity/surfaces.ts) enumerates 28 surfaces — including the overlays and filter states that have no route of their own — walked by `pnpm fidelity:shots` in real Chrome, so a PR names which surfaces it re-shot instead of reporting effort.
-
-Decisions of record: `z.object` over the plan's `looseObject` (empirically probed — `looseObject`'s inferred index signature would have deleted typo protection across every consumer); the manifest is a plain array under `test/`, never a `/verify` route shipped into a credentialed image; the SDK audit is one-shot, not a standing CI check, because the recurring cost is a weekly-bumped 6.8 MB dependency on a _beta_ surface and link B already watches the truth that matters. Recorded as a known gap, not fixed: principle 3's feature detection is stated but unimplemented — every 404 renders as `ErrorState`, so "the platform lacks this capability" and "this resource does not exist" are indistinguishable (issue #33).
-
-Two findings the work produced about itself, both caught by looking rather than assuming: the first fidelity run passed 46/46 while shooting six lists of **skeleton bars**, because `DataTable` carried no `aria-busy` marker; and slice 3's first implementation broke its own convention, reporting transcript filter state on the Debug tab, which renders the log whole.
-
-## Plan 03 — UX parity from already-served data (approved 2026-08-03, archived 2026-08-04)
-
-[docs/plan/03_ux-parity.md](./plan/03_ux-parity.md) closed the UX gap to the reference console using only data the platform already serves (PRs #25–#29, issue #24; sourced from a frame-by-frame read of the reference launch video plus a live survey of platform.claude.com):
-
-1. **Trace readability** — session header chips, per-event offsets since `created_at`, model-call durations by `model_request_start_id` pairing, explicit idle bands, honest JSON fallback for unknown event types (the platform's outcome family), Copy all, empty-state CTAs.
-2. **Wire filters surfaced** — sessions filter by agent (options paged to exhaustion, archived included and badged) and created presets; agents likewise — all served since v1, never rendered.
-3. **Transcript | Debug split** — one-line transcript rows opening a master-detail panel (full content, tool input JSON, raw event, Copy JSON); paired span starts fold into their end row's duration while unpaired ones stay visible; Debug renders every event verbatim.
-4. **Agent editor reshape** — two-column explainer/controls sections; toolset-level default policy with per-tool overrides and plain-language descriptions; compact emission that round-trips externally-authored `default_config` shapes unchanged (pinned regression); an equivalent-curl block with `$PLATFORM_BASE_URL`/`$PLATFORM_API_KEY` placeholders; starter templates on create.
-
-Decisions of record: offsets measure from the session's `created_at`, not the first event; no search box (no server search on the wire — recorded divergence); no session-duration chip (platform serves `stats` empty); model-credential surfaces (describe→generate, "Ask Claude") rejected on the key posture; the timeline color strip deferred as a follow-up issue.
-
-## Plan 02 — quality guardrails (approved 2026-08-02, archived 2026-08-02)
-
-[docs/plan/02_quality-guardrails.md](./plan/02_quality-guardrails.md) hardened the repo in three slices (PRs #12, #20, and the archival PR; issue #11):
-
-1. **Cross-platform + CI hardening** — `.gitattributes` (LF everywhere, kills the Windows CRLF noise class), a 3-OS verify matrix (ubuntu/windows/macos) behind a stable `ci-ok` join check, zero-warning lint, SHA-pinned actions, Dependabot (npm + actions, grouped), CodeQL, a trivy HIGH/CRITICAL gate on the Docker image (which caught 6 real fixable CVEs on its first run), Playwright failure artifacts, and an axe-core a11y smoke (which caught 5 unlabeled controls). Branch protection on `main` and secret scanning codified via API.
-2. **Coverage ≥90% enforced** — Vitest v8 coverage gates CI over everything we wrote (`src/**` minus vendored `src/components/ui/**`); the suite grew 20 → 415 tests, landing at 99.6% lines / 96.8% branches against an honest 10.3% baseline.
-3. **Codex as second reviewer** — via the Codex GitHub App (installed org-side, no repo workflow), joined by an `AGENTS.md` mirroring the platform repo's pattern so automated reviewers see the repo's conventions. The merge gate — CI green plus zero unresolved review threads — was already author-agnostic, so Codex threads block merges with no gate change.
-
-Decisions of record: GitHub App over an API-key review workflow (operator choice, 2026-08-02); declined as ceremony without payoff today — bundle-size budgets, license scanning, commit-message lint, CODEOWNERS, preview deployments, and scheduled live-tier CI (live acceptance stays a manual, credentialed run).
-
-## Plan 01 — v1 console (approved 2026-08-02, archived 2026-08-02)
-
-[docs/plan/01_v1-console.md](./plan/01_v1-console.md) delivered the entire operator console in five slices (PRs #1–#9):
-
-1. **Scaffold + shell** — Next.js App Router (TS strict, Tailwind, shadcn/ui) themed to the extracted Claude Console palette; the BFF proxy that keeps the management key server-side (SSE passthrough included); optional shared-password login gate; CI, Dockerfile, mock-platform e2e harness.
-2. **Read-only resource pages** — agents, environments, sessions (full event trace), vaults (secret-free credential rendering), skills, files; wire types transcribed from the platform source with citations.
-3. **Live session trace + HITL** — SSE tail through the BFF with a pure reconcile store (no replay on the wire: seed + dedup + delta-append + preview-replace), approval banner (`user.tool_confirmation`), composer (`user.message`, interrupt, interrupt+redirect).
-4. **Write paths** — agent editor (rendered form + raw JSON↔YAML, optimistic-version 409 handling), environment CRUD, session create (vaults + file mounts), vault/credential/skill/file writes with write-only-secret handling.
-5. **Polish + deploy docs** — standardized envelope error toasts (copyable request-id), dark mode from the reference design system's dark tokens, Ctrl+K resource search, skeleton loading states, README quickstart, this archive.
-
-Scope decisions of record: platform-implemented surface only (no deployments/memory stores/outcomes/multiagent/MCP execution); single-tenant with a deployment-protection gate rather than a user system; visual fidelity to Anthropic's Claude Console verified in Chrome per slice; the raw editor's YAML view is client-side sugar — JSON is what saves.
-
-Live acceptance ran 2026-08-02 against a real compose stack (MiniMax-M3 endpoint) and passed — the full UI-driven loop: `always_ask` bash agent, file upload + mount, vault + sealed credential, live SSE trace, deny-then-approve HITL round trip to completion (record in CHANGELOG.md). Default suites continue to run against the in-repo mock platform.
+Live acceptance ran 2026-08-02 against a real compose stack (MiniMax-M3 endpoint) and passed the full
+UI-driven loop — `always_ask` bash agent, file upload and mount, vault and sealed credential, live
+trace, deny-then-approve round trip to completion.
