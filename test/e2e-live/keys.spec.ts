@@ -19,8 +19,8 @@ import { signIn } from "./sign-in";
  * key that never worked.
  *
  * This file spends no model tokens. It creates one environment and two
- * credentials; the environment is archived in cleanup and each credential is
- * retired by the test that mints it.
+ * credentials; each test retires the credential it mints as its final
+ * assertion, and teardown sweeps whatever a failure left behind.
  *
  * What it deliberately does not do is drive `ant beta:worker poll` — the real
  * CLI is not a dependency this repo can install, and its binary would have to
@@ -43,22 +43,91 @@ test.beforeAll(async () => {
   api = await pwRequest.newContext();
 });
 
+/**
+ * Retire everything this run minted, from the state the stack is actually in
+ * rather than from what the tests managed to reach.
+ *
+ * Teardown sweeps rather than remembering, because the failure that matters is
+ * the one *between* minting a credential and retiring it: an assertion that
+ * dies there skips the happy-path Archive at the end of the test, and this
+ * suite mutates a shared stack with keys that carry full management authority
+ * for a week. Observed, not theorised — the first run of this file failed on
+ * the key prefix and left exactly such a key live.
+ *
+ * The sweep is scoped to `RUN`, so it can never retire a credential some other
+ * run or a human authored. A cleanup failure is a real failure.
+ */
 test.afterAll(async () => {
-  // Archive what this run authored. A cleanup failure is a real failure:
-  // leftovers accumulate on a stack every later run shares.
-  if (createdEnvironmentId) {
-    const res = await api.post(
-      `${baseUrl}/v1/environments/${createdEnvironmentId}/archive`,
-      { headers: { "x-api-key": apiKey }, data: {} },
-    );
-    const ok = res.ok();
-    await api.dispose();
-    expect(ok, `archiving ${createdEnvironmentId} -> ${res.status()}`).toBe(
-      true,
-    );
-    return;
+  const mgmt = { "x-api-key": apiKey };
+  const failures: string[] = [];
+  const call = async (
+    what: string,
+    send: () => Promise<{ ok(): boolean; status(): number }>,
+  ) => {
+    try {
+      const res = await send();
+      if (!res.ok()) failures.push(`${what}: HTTP ${res.status()}`);
+    } catch (error) {
+      failures.push(`${what}: ${String(error)}`);
+    }
+  };
+
+  const keysPath = `${baseUrl}/api/console/organizations/default/workspaces/default/api_keys`;
+  try {
+    const listed = await api.get(keysPath, { headers: mgmt });
+    if (listed.ok()) {
+      const rows = (await listed.json()) as {
+        id: string;
+        name: string;
+        status: string;
+      }[];
+      for (const row of rows) {
+        if (!row.name.endsWith(RUN) || row.status === "archived") continue;
+        await call(`archiving key ${row.name}`, () =>
+          api.post(`${keysPath}/${row.id}`, {
+            headers: mgmt,
+            data: { status: "archived" },
+          }),
+        );
+      }
+    } else {
+      failures.push(`listing management keys: HTTP ${listed.status()}`);
+    }
+  } catch (error) {
+    failures.push(`listing management keys: ${String(error)}`);
   }
+
+  if (createdEnvironmentId) {
+    // Archiving an environment does not retire its keys — plan 07 slice 3 kept
+    // them revocable on purpose — so the worker credentials go first.
+    const tokens = `${baseUrl}/api/oauth/organizations/default/environments/${createdEnvironmentId}/tokens`;
+    try {
+      const listed = await api.get(`${tokens}?limit=100`, { headers: mgmt });
+      if (listed.ok()) {
+        const { data } = (await listed.json()) as { data: { id: string }[] };
+        for (const row of data) {
+          await call(`revoking ${row.id}`, () =>
+            api.post(`${tokens}/${row.id}/revoke`, { headers: mgmt }),
+          );
+        }
+      } else {
+        failures.push(`listing environment keys: HTTP ${listed.status()}`);
+      }
+    } catch (error) {
+      failures.push(`listing environment keys: ${String(error)}`);
+    }
+    await call(`archiving ${createdEnvironmentId}`, () =>
+      api.post(`${baseUrl}/v1/environments/${createdEnvironmentId}/archive`, {
+        headers: mgmt,
+        data: {},
+      }),
+    );
+  }
+
   await api.dispose();
+  if (failures.length > 0) {
+    throw new Error(`live cleanup failed: ${failures.join("; ")}`);
+  }
 });
 
 test("a console-issued environment key drives the real worker lane, and revoking it closes the lane", async ({
