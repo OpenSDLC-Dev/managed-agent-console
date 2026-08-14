@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -29,6 +36,10 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // Unconditional: a test that installs fake timers and then times out never
+  // reaches its own cleanup, and every test after it would inherit a clock that
+  // nobody is advancing.
+  vi.useRealTimers();
   resetSignedOutBounceForTests();
 });
 
@@ -91,7 +102,53 @@ describe("SignedInAs", () => {
     await waitFor(() => expect(hasBouncedToLogin()).toBe(true));
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", {
       method: "POST",
+      // Bounded, so a server that accepts and never answers cannot strand the
+      // operator here — see the probe below.
+      signal: expect.any(AbortSignal),
     });
+  });
+
+  // A refusal settles; a connection accepted and then answered by nobody does
+  // not. Without a bound on the request the operator waits on the console they
+  // asked to leave, with the button they used now disabled — the same failure
+  // as below, reached by waiting rather than by erroring.
+  it("probe: leaves when the sign-out request never answers", async () => {
+    // The clock is driven by hand rather than waited on: the point is that five
+    // seconds of silence ends in a departure, and a test that spent five real
+    // seconds proving it would be its own kind of hang.
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(input).includes("logout")) {
+          return new Response(
+            JSON.stringify({ signed_in: true, name: "Operator" }),
+          );
+        }
+        // Accepted, then answered by nobody: settles only if the caller gives up.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderBlock();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    fireEvent.click(screen.getByTestId("sign-out"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // Still here: the request is outstanding and the operator is waiting.
+    expect(hasBouncedToLogin()).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(hasBouncedToLogin()).toBe(true);
   });
 
   // Staying on a console the operator asked to leave — in front of whoever is

@@ -36,12 +36,16 @@ test("a surface the operator's role cannot read stays visible and says why", asy
   await expect(state).toBeVisible();
   await expect(state).toHaveAttribute("data-error-status", "403");
   await expect(state).toHaveAttribute("data-denied", "true");
-  // The platform's own message, quoted rather than paraphrased.
+  // The platform's own message, quoted rather than paraphrased. This is the
+  // platform's string travelling the whole path — mock, BFF, client, DOM — not
+  // one of the console's own formatters, so asserting it here is asserting
+  // *data*, the way these specs assert a resource's name. The console-authored
+  // line that accompanies it (`ROLE_NOTE`) is a formatter string and is pinned
+  // in exactly one place, `bits.test.tsx`; `data-denied` above is what says it
+  // renders here.
   await expect(
     page.getByText("this route requires the admin role"),
   ).toBeVisible();
-  // …and the line that says whose role it is talking about.
-  await expect(page.getByText(/not the one you hold/)).toBeVisible();
 
   // The crucial negative: a denial is NOT feature detection. The surface exists
   // on this deployment and must keep saying so, or an operator would report a
@@ -79,11 +83,14 @@ test("a denied write is titled as a denial, not as a fault", async ({
   // refused — better than a generic "Not permitted", which is only the fallback
   // for a read that has no action to name. What must be there either way is the
   // reason, and the fact that retrying will not change it.
+  // Both strings here are ones no unit test can place: the title is this call
+  // site's own, and the message is the platform's, arriving through the toast
+  // rather than the error state. `ROLE_NOTE` is the console's formatter string
+  // and stays pinned in `toast-error.test.ts` alone.
   await expect(page.getByText("Archive failed")).toBeVisible();
   await expect(
     page.getByText(/this route requires the admin role/),
   ).toBeVisible();
-  await expect(page.getByText(/not the one you hold/)).toBeVisible();
 
   // And the environment is still active: a refused write changed nothing.
   await expect(page.getByText("archived", { exact: true })).toHaveCount(0);

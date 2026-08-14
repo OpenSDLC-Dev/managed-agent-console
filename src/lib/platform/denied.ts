@@ -10,9 +10,23 @@ import { PlatformError } from "./http";
  * failed request, so this is the one place that says a 403 is a different kind
  * of answer from a 500: not a fault, not worth a retry, and not the platform's
  * problem to fix.
+ *
+ * The error **type** is required alongside the status, not decoration. A 403
+ * carrying no parseable envelope becomes `api_error` (`http.ts`), and the 403s
+ * an operator is most likely to meet in production come from something that is
+ * not the platform at all — our own GKE staging is IAP-fronted, and an identity
+ * proxy or WAF refusing a request answers 403 in HTML. Telling that operator
+ * their account lacks a role would send them to an administrator who can see
+ * nothing wrong with their roles. Nothing real is lost by the narrower test:
+ * `errForbidden` is the only producer of a 403 in the platform's API package
+ * and always sets `permission_error` (`internal/api/errors.go`).
  */
 export function isPermissionDenied(error: unknown): boolean {
-  return error instanceof PlatformError && error.status === 403;
+  return (
+    error instanceof PlatformError &&
+    error.status === 403 &&
+    error.errorType === "permission_error"
+  );
 }
 
 /**

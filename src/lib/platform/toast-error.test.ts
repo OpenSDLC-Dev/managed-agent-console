@@ -103,6 +103,17 @@ describe("toastPlatformError", () => {
       expect(lastToast().options.action?.label).toBe("Copy request-id");
     });
 
+    // A 403 from an intermediary — IAP, a WAF — carries no envelope, so it
+    // parses to `api_error`. It is a fault here precisely because the console
+    // must not tell that operator their role is the problem.
+    it("probe: a 403 without the platform's own error type is not a denial", () => {
+      toastPlatformError(new PlatformError(403, null));
+      const { title, options } = lastToast();
+      expect(title).toBe("Request failed");
+      expect(options.description).toBe("api_error: HTTP 403");
+      expect(options.description).not.toContain(ROLE_NOTE);
+    });
+
     it("probe: a 401 is not a denial — it is a sign-in, and reads as a failure", () => {
       toastPlatformError(
         new PlatformError(401, {

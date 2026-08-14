@@ -20,6 +20,9 @@ import { leaveAfterSignOut } from "@/lib/identity/signed-out";
  */
 type SessionInfo = { signed_in: boolean; email?: string; name?: string };
 
+/** Long enough that a slow logout still completes; short enough to be a wait. */
+const SIGN_OUT_TIMEOUT_MS = 5_000;
+
 async function readSession(): Promise<SessionInfo | null> {
   const response = await fetch("/api/auth/session");
   // 404 is "this deployment has no identity", not a failure.
@@ -49,8 +52,25 @@ export function SignedInAs() {
     // session may still be alive — but leaving the operator on a console they
     // asked to leave, in front of whoever is next at the keyboard, is the worse
     // of the two outcomes, and the login page is where they can try again.
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
-    leaveAfterSignOut();
+    //
+    // Which is why the request is bounded. A refusal settles; a connection that
+    // is accepted and then answered by nobody does not, and an unbounded await
+    // here would strand the operator on the console with the button they used
+    // now disabled — the exact failure the paragraph above refuses to accept,
+    // arrived at by waiting instead of by erroring.
+    const bound = new AbortController();
+    const timer = window.setTimeout(() => bound.abort(), SIGN_OUT_TIMEOUT_MS);
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        signal: bound.signal,
+      });
+    } catch {
+      // Offline, refused, or timed out: all three end the same way.
+    } finally {
+      window.clearTimeout(timer);
+      leaveAfterSignOut();
+    }
   }
 
   return (

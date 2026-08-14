@@ -200,6 +200,19 @@ describe("ErrorState", () => {
     expect(state.getAttribute("data-error-status")).toBe("403");
   });
 
+  // Our own GKE staging is IAP-fronted, and an identity proxy or WAF refusing a
+  // request answers 403 in HTML — which parses to no envelope and so to
+  // `api_error`. Blaming the operator's role for that sends them to an
+  // administrator who will find nothing wrong with their roles.
+  it("probe: a 403 that is not the platform's role check is still a fault", () => {
+    render(<ErrorState error={new PlatformError(403, null)} />);
+    expect(screen.getByText("HTTP 403").className).toContain("destructive");
+    expect(screen.queryByText(ROLE_NOTE)).toBeNull();
+    expect(
+      screen.getByTestId("error-state").getAttribute("data-denied"),
+    ).toBeNull();
+  });
+
   it("probe: every other status keeps the fault treatment", () => {
     const error = new PlatformError(500, {
       type: "error",
