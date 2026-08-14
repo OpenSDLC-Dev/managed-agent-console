@@ -146,12 +146,20 @@ exports="$(gh variable list --json name,value --jq '.[] | "export \(.name)=\(.va
 : "${GCP_PROJECT_ID:?}" "${GCP_ZONE:?}" "${GKE_CLUSTER:?}" "${K8S_NAMESPACE:?}"
 
 gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GCP_ZONE" --project "$GCP_PROJECT_ID"
+
 kubectl rollout undo deployment/console -n "$K8S_NAMESPACE"      # back one revision
-kubectl rollout history deployment/console -n "$K8S_NAMESPACE"   # what else is there
+kubectl rollout status deployment/console -n "$K8S_NAMESPACE"
+```
+
+**Or**, to land on a specific commit rather than one back — `kubectl rollout history` lists what the
+Deployment still holds, and any commit sha ever built is addressable whether or not it does:
+
+```bash
 kubectl set image deployment/console console="$CONSOLE_IMAGE_REPO:<sha>" -n "$K8S_NAMESPACE"
 ```
 
-The next push to `main` deploys over it — a rollback buys time to fix forward, it does not pin.
+Either way the next push to `main` deploys over it — a rollback buys time to fix forward, it does not
+pin anything.
 
 ## The public address, and who may reach it
 
