@@ -67,8 +67,27 @@ export function bounceToLogin(): void {
   if (typeof window === "undefined" || bouncing) return;
   const { pathname, search } = window.location;
   if (pathname === "/login") return;
+  leave(`/login?return_to=${encodeURIComponent(`${pathname}${search}`)}`);
+}
+
+/**
+ * Leaves for the login page after an operator signs **out**, which is the other
+ * way a console session ends.
+ *
+ * No `return_to`: someone who signed out deliberately is not asking to be put
+ * back, and remembering the page would make the next sign-in land on the thing
+ * they may have signed out to leave — in front of whoever is at the keyboard.
+ */
+export function leaveAfterSignOut(): void {
+  if (typeof window === "undefined" || bouncing) return;
+  leave("/login");
+}
+
+function leave(target: string): void {
   bouncing = true;
-  const returnTo = encodeURIComponent(`${pathname}${search}`);
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- see above: a reload is the point
-  window.location.assign(`/login?return_to=${returnTo}`);
+  // A full navigation, deliberately — see `bounceToLogin`. Next's
+  // no-location-assign rule does not fire here because the destination is a
+  // variable rather than a literal; that is an accident of the rule, not the
+  // reason, and the reason is written above.
+  window.location.assign(target);
 }

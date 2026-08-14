@@ -38,6 +38,13 @@ let unimplemented = [...UNIMPLEMENTED];
  * a `let` further down still in its temporal dead zone.
  */
 let identityRejected = false;
+/**
+ * Wire paths this run answers 403 on, as the platform does for a human whose
+ * role does not reach a route (`requireRole`). Set by POST /__forbid; cleared by
+ * /__reset. The message is the platform's own shape: it names **the role the
+ * route requires** and never the caller's.
+ */
+let forbidden = [];
 
 let requestCounter = 0;
 let eventCounter = 1000;
@@ -75,6 +82,7 @@ let envKeyCounter = 1;
 function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
   identityRejected = false;
+  forbidden = [];
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
@@ -622,6 +630,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Test hook: answer 403 on these paths, as the platform does for a human
+  // whose role does not reach the route. `/__reset` puts it back.
+  if (req.method === "POST" && url.pathname === "/__forbid") {
+    const body = JSON.parse((await readBody(req)).toString() || "{}");
+    forbidden = Array.isArray(body.paths) ? body.paths : [];
+    res.setHeader("content-type", "application/json");
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true, paths: forbidden }));
+    return;
+  }
+
   // Test hook: refuse every identity token from here on, as a platform does
   // once a provider revokes one. `/__reset` puts it back. No auth, on purpose —
   // the whole point is to reach it while the console's own credential is dead.
@@ -645,6 +664,17 @@ const server = createServer(async (req, res) => {
   }
 
   if (!authenticate(req, res)) return;
+
+  // Authenticated, and not allowed. The role check runs AFTER authentication on
+  // the platform too (requireIdentity then requireRole), and the message names
+  // the role the route requires rather than the caller's — which is what lets
+  // the console quote it verbatim.
+  if (forbidden.some((p) => url.pathname.startsWith(`/${p}`))) {
+    res.setHeader("content-type", "application/json");
+    res.writeHead(403);
+    res.end(envelope("permission_error", "this route requires the admin role"));
+    return;
+  }
 
   // A deployment that does not serve some surfaces. The platform has no 501:
   // an unregistered route falls through its router's catch-all to a plain

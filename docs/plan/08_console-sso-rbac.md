@@ -202,7 +202,10 @@ bootstrap and used to gate every control. It never probes with a 403.
 
 **Recommended: file a platform issue for a `me`-shaped route, as an explicit
 prerequisite for anything that _hides_ a control — and ship optimistic UI + a
-403 toast as the fallback so this plan is not blocked on it.** Whether that
+403 toast as the fallback so this plan is not blocked on it.** Filed 2026-08-14
+as [platform #403](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/403),
+with slice 4 shipped without it; the two candidate shapes and the reason the
+manifest is the more interesting one are stated there. Whether that
 route carries a role or, closer to the reference's dialect, a
 `{permission, status}` manifest, is itself part of the ask; plan 07 records
 that the reference deliberately does not make the client infer authority from a

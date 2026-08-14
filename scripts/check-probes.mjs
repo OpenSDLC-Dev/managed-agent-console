@@ -89,6 +89,17 @@ const SEAMS = [
     modules: ["route"],
   },
   {
+    dir: "src/app/api/auth/session",
+    why: "the only route that serializes anything about a session — where D2 could quietly stop being true",
+    // The ID token stays server-side and the browser holds an opaque handle
+    // (plan 08 D2). This route is the one place that turns a session into JSON,
+    // so a field added here for the shell's convenience is how the token, the
+    // refresh token or the subject would reach the browser — and every
+    // happy-path assertion passes whether or not it does, because the account
+    // block renders the same either way.
+    modules: ["route"],
+  },
+  {
     dir: "src/app/api/auth/callback",
     why: "the identity provider's redirect — every byte of it is attacker-authored",
     // The callback URL is reachable by anyone and survives in history, in

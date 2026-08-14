@@ -75,9 +75,25 @@ describe("isUnimplemented", () => {
   });
 
   it("probe: leaves every other platform status an error", () => {
-    for (const status of [400, 401, 409, 413, 500, 502, 503]) {
+    for (const status of [400, 401, 403, 409, 413, 500, 502, 503]) {
       expect(isUnimplemented(notFound(status))).toBe(false);
     }
+  });
+
+  // Named by plan 08 as a property this slice must hold rather than inherit.
+  // A viewer whose role cannot reach a surface must see it **shown and
+  // erroring**, never silently gone: the endpoint is there, and hiding it would
+  // tell them the deployment does not have the feature. Feature detection is
+  // about what a deployment serves; a role is about who is asking.
+  it("probe: a permission_error never hides a surface", () => {
+    const denied = new PlatformError(403, {
+      type: "error",
+      error: {
+        type: "permission_error",
+        message: "this route requires the admin role",
+      },
+    });
+    expect(isUnimplemented(denied)).toBe(false);
   });
 
   it("probe: is false for a 404 that is not the platform's not_found_error", () => {

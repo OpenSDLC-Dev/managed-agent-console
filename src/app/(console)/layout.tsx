@@ -5,6 +5,7 @@ import { ConnectionStatus } from "@/components/shell/connection-status";
 import { Providers } from "@/components/shell/providers";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { ConsoleVersion } from "@/components/shell/version";
+import { SignedInAs } from "@/components/shell/signed-in-as";
 import { SurfaceGuard } from "@/components/shell/surface-guard";
 
 export default function ConsoleLayout({
@@ -43,6 +44,10 @@ export default function ConsoleLayout({
               </a>
             </div>
             <ConsoleVersion />
+            {/* Below the version and above the platform's health, because it is
+                about this browser rather than about the deployment — and the
+                reference console puts the account in this corner too. */}
+            <SignedInAs />
             <ConnectionStatus />
           </div>
         </aside>

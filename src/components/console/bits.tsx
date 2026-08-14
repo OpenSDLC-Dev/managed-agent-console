@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { PageHeader } from "@/components/shell/page-header";
 import { PlatformError } from "@/lib/platform/http";
+import { ROLE_NOTE, isPermissionDenied } from "@/lib/platform/denied";
 import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
 /** Monospace resource id, truncated with the full value on hover. */
@@ -104,15 +105,26 @@ export function RequestId({ id }: { id: string }) {
 
 export function ErrorState({ error }: { error: unknown }) {
   const platformError = error instanceof PlatformError ? error : null;
+  // A 403 is not a fault, and dressing it in `destructive` red tells the
+  // operator to retry or report something that will never change until somebody
+  // alters their role. It gets the same calm treatment as an absent surface.
+  const denied = isPermissionDenied(error);
   return (
     <div
       data-testid="error-state"
+      data-error-status={platformError?.status}
+      data-denied={denied || undefined}
       className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-sm"
     >
-      <span className="text-destructive">
+      <span className={denied ? undefined : "text-destructive"}>
         {platformError?.message ??
           (error instanceof Error ? error.message : "Something went wrong")}
       </span>
+      {denied && (
+        <span className="max-w-md text-center text-[13px] text-muted-foreground">
+          {ROLE_NOTE}
+        </span>
+      )}
       {platformError?.requestId && <RequestId id={platformError.requestId} />}
     </div>
   );
