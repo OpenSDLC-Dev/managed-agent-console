@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   UnavailableSurface,
 } from "@/components/console/bits";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +56,7 @@ const COLUMNS: Column<Skill>[] = [
   {
     key: "updated",
     header: "Updated",
-    cell: (s) => <Time iso={s.updated_at} />,
+    cell: (s) => <Day iso={s.updated_at} />,
   },
 ];
 

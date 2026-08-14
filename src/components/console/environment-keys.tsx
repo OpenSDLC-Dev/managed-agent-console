@@ -5,11 +5,11 @@ import { Check, Copy, KeyRound, Trash2, X } from "lucide-react";
 import { DetailSection } from "@/components/console/detail";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
   RequestId,
-  Time,
 } from "@/components/console/bits";
 import { ConfirmIconButton } from "@/components/console/archive-button";
 import { EnvironmentKeySetup } from "@/components/console/environment-key-setup";
@@ -354,7 +354,7 @@ export function EnvironmentKeysSection({
     {
       key: "created",
       header: "Created",
-      cell: (k) => <Time iso={k.created_at} />,
+      cell: (k) => <Day iso={k.created_at} />,
     },
     {
       key: "expires",
@@ -367,7 +367,7 @@ export function EnvironmentKeysSection({
             data-expires-at={k.expires_at ?? ""}
             data-key-state={state}
           >
-            <Time iso={k.expires_at} />
+            <Day iso={k.expires_at} />
             {state === "expired" && (
               <Badge variant="outline" className="font-normal">
                 Expired

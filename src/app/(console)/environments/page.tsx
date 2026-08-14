@@ -9,10 +9,10 @@ import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
   ArchivedBadge,
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   UnavailableSurface,
 } from "@/components/console/bits";
 import { StatusFilter } from "@/components/console/status-filter";
@@ -37,7 +37,7 @@ const COLUMNS: Column<Environment>[] = [
   {
     key: "updated",
     header: "Updated at",
-    cell: (e) => <Time iso={e.updated_at} />,
+    cell: (e) => <Day iso={e.updated_at} />,
   },
 ];
 

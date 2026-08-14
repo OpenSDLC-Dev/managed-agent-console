@@ -7,10 +7,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { DetailSection, Field, FieldList } from "@/components/console/detail";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
+  Day,
   EmptyState,
   ErrorState,
   IdCode,
-  Time,
   DetailSkeleton,
 } from "@/components/console/bits";
 import {
@@ -66,7 +66,7 @@ export default function SkillDetailPage({
     {
       key: "created",
       header: "Created",
-      cell: (v) => <Time iso={v.created_at} />,
+      cell: (v) => <Day iso={v.created_at} />,
     },
     {
       key: "actions",
@@ -161,10 +161,10 @@ export default function SkillDetailPage({
             )}
           </Field>
           <Field label="Created">
-            <Time iso={skill.created_at} />
+            <Day iso={skill.created_at} />
           </Field>
           <Field label="Updated">
-            <Time iso={skill.updated_at} />
+            <Day iso={skill.updated_at} />
           </Field>
         </FieldList>
       </DetailSection>

@@ -11,4 +11,4 @@ What is being worked on right now, and how far along it is — nothing else. **S
 
 Both narratives, and what their acceptance runs found, are in [docs/HISTORY.md](./docs/HISTORY.md). Plans 01–06 are summarized there too. How a release is cut: [docs/releasing.md](./docs/releasing.md).
 
-The backlog is [GitHub issues](https://github.com/OpenSDLC-Dev/managed-agent-console/issues) — see them there, not here; #99 is the one this work left behind. Nothing lands in this file until a plan or issue is actually being worked on.
+The backlog is [GitHub issues](https://github.com/OpenSDLC-Dev/managed-agent-console/issues) — see them there, not here; #99 is the one this work left behind that is still open. #87, the date-granularity question the same fidelity pass filed, is answered: day-scale values render date-only. Nothing lands in this file until a plan or issue is actually being worked on.

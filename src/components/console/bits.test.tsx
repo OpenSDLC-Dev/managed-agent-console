@@ -11,6 +11,7 @@ import "@testing-library/jest-dom/vitest";
 afterEach(cleanup);
 import {
   ArchivedBadge,
+  Day,
   DetailSkeleton,
   EmptyState,
   ErrorState,
@@ -40,6 +41,36 @@ describe("IdCode", () => {
     render(<IdCode id={id} />);
     const el = screen.getByText("session_0123456…");
     expect(el).toHaveAttribute("title", id);
+  });
+});
+
+describe("Day", () => {
+  it("renders an em dash for a missing date", () => {
+    // A nullable `expires_at` — an environment key that never expires.
+    render(<Day iso={null} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("renders an em dash for undefined", () => {
+    render(<Day iso={undefined} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
+  it("formats an ISO timestamp as a short UTC date with the iso as title", () => {
+    render(<Day iso="2026-08-02T09:12:00Z" />);
+    const el = screen.getByText("Aug 2, 2026");
+    expect(el).toHaveAttribute("title", "2026-08-02T09:12:00Z");
+  });
+
+  it("probe: a time-of-day near midnight cannot roll the date into the reader's zone", () => {
+    // Drop `timeZone: "UTC"` and this instant renders as the 3rd east of UTC
+    // and the 1st west of it, so one key's expiry falls on different days for
+    // two operators reading one deployment. Asserted as two instants of the
+    // same UTC day agreeing rather than as a second copy of the rendered
+    // string: exactly one test per formatter may assert that (CLAUDE.md).
+    const lastSecond = render(<Day iso="2026-08-02T23:59:59Z" />).container;
+    const firstSecond = render(<Day iso="2026-08-02T00:00:01Z" />).container;
+    expect(lastSecond.textContent).toBe(firstSecond.textContent);
   });
 });
 

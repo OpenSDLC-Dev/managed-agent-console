@@ -90,6 +90,8 @@ Two defects that acceptance found. **A completed sign-in landed on `http://0.0.0
 
 The fidelity manifest gains `role-denied`. The SSO login page and the account block stay out of it — both automated tiers run the console in password mode, so the walker cannot reach them; compared by hand in Chrome instead, and filed as [#99](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/99).
 
+**Day-scale dates drop their time-of-day** ([#87](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/87)): created, updated and expires now render `Aug 10, 2026` rather than `Aug 14, 2026, 00:09` — the granularity the value actually has, with the exact minute still one hover away. Time-of-day stays where it is the point: the trace log, the sessions list, and an OAuth credential that can expire within the hour. Re-measured against the live reference in Chrome first, which settled the question the issue had left open and turned up something the earlier pass had not: the reference uses **two** date forms, `Aug 10, 2026` in both key tables and a yearless `Aug 9` in the environments list and detail subheader, and time-of-day in neither. The console takes the with-year form throughout, so it matches the reference exactly on the tables #87 was filed against; the yearless form is the deliberate divergence, because dropping the year is only unambiguous if the formatter knows what today is.
+
 ## Released
 
 - [0.5.0](docs/changelog/0.5.0.md) — 2026-08-09 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.4.0...v0.5.0)
