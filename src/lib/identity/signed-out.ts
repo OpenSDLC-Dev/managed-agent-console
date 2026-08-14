@@ -35,9 +35,26 @@ export function isSignedOut(response: {
  */
 let bouncing = false;
 
-/** Test seam — the flag above outlives a single test otherwise. */
+/**
+ * Whether the operator asked to leave, as opposed to being sent.
+ *
+ * Set *before* the request that signs them out, because that request is what
+ * makes the race possible: destroying the session turns every BFF call still in
+ * flight into a marked 401, and the first one back would otherwise bounce —
+ * carrying a `return_to` for the very page the operator chose to leave, so the
+ * next sign-in would land them back on it. Their intent outranks that inference.
+ */
+let leavingDeliberately = false;
+
+/** Test seam — the flags above outlive a single test otherwise. */
 export function resetSignedOutBounceForTests(): void {
   bouncing = false;
+  leavingDeliberately = false;
+}
+
+/** Records the operator's intent before the sign-out request goes out. */
+export function beginSignOut(): void {
+  leavingDeliberately = true;
 }
 
 /**
@@ -64,7 +81,7 @@ export function hasBouncedToLogin(): boolean {
  * threading one through every call site that can fail.
  */
 export function bounceToLogin(): void {
-  if (typeof window === "undefined" || bouncing) return;
+  if (typeof window === "undefined" || bouncing || leavingDeliberately) return;
   const { pathname, search } = window.location;
   if (pathname === "/login") return;
   leave(`/login?return_to=${encodeURIComponent(`${pathname}${search}`)}`);
@@ -77,9 +94,13 @@ export function bounceToLogin(): void {
  * No `return_to`: someone who signed out deliberately is not asking to be put
  * back, and remembering the page would make the next sign-in land on the thing
  * they may have signed out to leave — in front of whoever is at the keyboard.
+ *
+ * Unguarded by `bouncing`, unlike the automatic path: this *is* the departure
+ * the operator asked for, and if something already started one it was an
+ * inference about a session that this request had just ended on purpose.
  */
 export function leaveAfterSignOut(): void {
-  if (typeof window === "undefined" || bouncing) return;
+  if (typeof window === "undefined") return;
   leave("/login");
 }
 

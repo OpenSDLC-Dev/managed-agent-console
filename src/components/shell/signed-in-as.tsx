@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { leaveAfterSignOut } from "@/lib/identity/signed-out";
+import { beginSignOut, leaveAfterSignOut } from "@/lib/identity/signed-out";
 
 /**
  * Who the operator is signed in as, and the only way out.
@@ -60,6 +60,11 @@ export function SignedInAs() {
 
   async function signOut() {
     setSigningOut(true);
+    // Before the request, not after it: the POST destroys the session, so every
+    // BFF call still in flight comes back marked signed-out, and the first one
+    // to land would otherwise bounce to `/login?return_to=<this page>` — the
+    // page the operator just chose to leave.
+    beginSignOut();
     // The navigation happens whatever the POST says. If it failed, the server
     // session may still be alive — but leaving the operator on a console they
     // asked to leave, in front of whoever is next at the keyboard, is the worse
