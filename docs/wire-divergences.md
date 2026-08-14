@@ -1,45 +1,29 @@
 # Wire divergences — our transcription vs. the reference SDK
 
 The console's wire types are transcribed from the **platform's** implemented surface
-(`src/lib/platform/schemas.ts`), per CLAUDE.md principle 1. Anthropic also publishes generated
-TypeScript types for the reference product in
-[`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript). Those types can
-never define ours — the reference product and this platform are different implementations — but
-every place the two disagree is exactly one of two things: **a transcription bug** (shipped code
-reading a shape the platform doesn't serve) or **a real platform divergence** (worth recording).
-Nothing in this repo surfaced either before plan 04.
+(`src/lib/platform/schemas.ts`), per principle 1. Anthropic also publishes generated types for the
+reference product in [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript);
+those can never define ours, but every place the two disagree is exactly one of two things — a
+**transcription bug** (shipped code reading a shape the platform does not serve) or a **real
+divergence** worth recording. This file is that diff, plus the divergences later work added.
 
-This file is the result of that diff. It is documentation, **not a backlog**: the reference carries
-whole surfaces the platform has deferred (memory stores, deployments, session threads, tunnels,
-user profiles), and principle 1 keeps them out of the console until the platform serves them.
-
-**Run 2026-08-07** against `@anthropic-ai/sdk` 0.115.0 (local checkout at
-`../../anthropic-sdk-typescript`, `src/resources/beta/managed-agents/`) and the platform checkout at
-`../managed-agent-platform`. Per plan 04 decision 8 this is a one-shot audit, not a standing CI
-check — the SDK is a 6.8 MB dependency on a beta surface that moves weekly for reasons that say
-nothing about this console, and link B (`test/e2e-live/live.spec.ts`) already watches the truth that
-matters. Nothing was added to `package.json`. To repeat it, clone the SDK anywhere and diff
-`src/resources/beta/managed-agents/*.ts` against `src/lib/platform/schemas.ts`.
+**Run 2026-08-07** against `@anthropic-ai/sdk` 0.115.0 and the platform checkout. A one-shot audit,
+not a standing CI check (plan 04 decision 8); nothing was added to `package.json`. To repeat it,
+clone the SDK anywhere and diff `src/resources/beta/managed-agents/*.ts` against `schemas.ts`.
 
 ## Result
 
 **Zero transcription bugs.** Every difference is the reference being _looser_ than what the platform
-renders — with exactly one inversion, `processed_at` (#19), where the reference is _tighter_ and
-adopting it would have made the console wrong.
-
-Finding no bug is itself the result worth recording: it is the evidence that the hand transcription
-dated 2026-08-02 held, and the reason the schemas could become the source of truth in one step
-rather than a repair.
-
-The platform authors were reading the same artifact — three of its handlers cite the reference by
-type name: `internal/api/agents.go:15` ("agentJSON is the BetaManagedAgentsAgent wire shape"),
-`internal/api/sessions.go:40` (same for sessions), `internal/api/files.go:42` ("fileScopeJSON is
-BetaFileScope").
+renders — with one inversion, `processed_at` (#19), where the reference is _tighter_ and adopting it
+would have made the console wrong. Finding no bug is the result worth recording: it is the evidence
+that the hand transcription held, and the reason the schemas could become the source of truth in one
+step rather than a repair. The platform's authors were reading the same artifact — three of its
+handlers cite the reference by type name.
 
 ## Divergence table
 
-Ours = `src/lib/platform/schemas.ts`. Reference = the SDK's generated types. Platform =
-`../managed-agent-platform` source, cited at file:line.
+Ours = `schemas.ts`. Reference = the SDK's generated types. Platform = `../managed-agent-platform`,
+cited at file:line.
 
 | #   | Field                                  | Ours                        | Reference                         | Platform                                                                                                                                       | Resolution                                                              |
 | --- | -------------------------------------- | --------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -66,129 +50,82 @@ Ours = `src/lib/platform/schemas.ts`. Reference = the SDK's generated types. Pla
 | 21  | `PlatformFile.scope`                   | `{…} \| null` required      | `?: … \| null`                    | `*fileScopeJSON`, no omitempty — `:39`                                                                                                         | ours correct                                                            |
 | 22  | `ModelUsage`                           | 4 token counts + `speed`    | `BetaManagedAgentsSpanModelUsage` | exact match, incl. `Speed *string` — `internal/events/span_test.go:89-93`                                                                      | match                                                                   |
 
-Two rows were independently reached: the platform's own source records #17 in a comment at
-`internal/api/skills.go:23-24` — "the SDK types it as a required plain string, and what the reference
-echoes there is unrecorded" — and points at its `docs/DIVERGENCES.md`. Our transcription and the
-platform's registry agree without having consulted each other, which is the corroboration this audit
-was looking for.
+**#19 is the entire argument for principle 1.** The reference declares `processed_at: string`; the
+platform serves `null` on echoed inbound events and stamps the real time at settlement. Plan 03 made
+every trace time calculation null-safe because of it, and adopting the reference's type wholesale
+would have deleted that safety — a runtime bug the type system would have been actively hiding.
 
-### #19 is why the SDK cannot be the source of truth
-
-The reference declares `processed_at: string` on the event envelope. The platform serves `null` on
-echoed inbound events and stamps the real time at settlement. Plan 03 made every trace time
-calculation null-safe precisely because of this. Adopting the reference's type wholesale would have
-deleted that safety and left the console computing durations against `null` — a runtime bug the
-type system would have been actively hiding.
-
-It is one row in a table of twenty-two, and it is the entire argument for principle 1.
+Row #17 was reached independently by both sides: the platform's own source records it in a comment
+at `internal/api/skills.go:23-24`. Two registries agreeing without having consulted each other is
+the corroboration this audit was looking for.
 
 ## Enum narrowing — a second strictness axis
 
-Objects in `schemas.ts` are `z.object`, which strips unknown _keys_ rather than rejecting them, so a
-platform that adds a field still conforms (plan 04 decision 2). Unknown _enum values_ are a separate
-question: where the platform accepts a value our union omits, a valid response becomes a conformance
-failure. Each narrowing was therefore checked against the platform's own validation:
-
-| Union                             | Ours                                             | Platform validation                                                       | Verdict |
-| --------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------- | ------- |
-| `SessionStatus`                   | idle / running / rescheduling / terminated       | `internal/domain/session.go:10-13`                                        | exact   |
-| `StopReason.type`                 | end_turn / requires_action / retries_exhausted   | `internal/domain/event.go:109-111`                                        | exact   |
-| `evaluated_permission`            | allow / ask / deny                               | `internal/domain/agent.go:49-51`                                          | exact   |
-| `result` (user.tool_confirmation) | allow / deny                                     | `internal/events/inbound.go:190-192` — `result must be "allow" or "deny"` | exact   |
-| `CredentialAuth.type`             | mcp_oauth / static_bearer / environment_variable | `internal/api/vaultcredauth.go:66-68,109`                                 | exact   |
-| `token_endpoint_auth.type`        | none / client_secret_basic / client_secret_post  | `internal/api/vaultcredauth.go:216,232`                                   | exact   |
-| `Networking.type`                 | unrestricted / limited                           | `internal/api/environments.go:176`                                        | exact   |
-| `Environment.scope`               | organization                                     | `internal/api/environments.go:24,225`                                     | exact   |
-| `Skill.source`                    | custom / anthropic                               | `internal/api/skills.go:233-234`                                          | exact   |
-| `Agent.skills[].type`             | anthropic / custom                               | `internal/api/wire.go:523-524`                                            | exact   |
+`z.object` strips unknown _keys_, but an unknown _enum value_ turns a valid response into a
+conformance failure, so each narrowing was checked against the platform's own validation. All ten
+are exact: `SessionStatus` (`domain/session.go:10-13`), `StopReason.type` (`domain/event.go:109-111`),
+`evaluated_permission` (`domain/agent.go:49-51`), `user.tool_confirmation`'s `result`
+(`events/inbound.go:190-192`), `CredentialAuth.type` and `token_endpoint_auth.type`
+(`api/vaultcredauth.go:66-68,109,216,232`), `Networking.type` (`api/environments.go:176`),
+`Environment.scope` (`:24,225`), `Skill.source` (`api/skills.go:233-234`), and `Agent.skills[].type`
+(`api/wire.go:523-524`).
 
 ## Deliberately loose spots
 
 - **`SessionAgent.skills`** is `unknown[]` while `Agent.skills` is typed. The platform normalizes
-  both identically (#5), so typing it would be safe — but it would tighten a public type this slice
-  did not set out to change, and the console does not read it. Left as-is; noted so the looseness is
-  a decision rather than an oversight.
-- **`Agent.tools` / `Agent.mcp_servers`** are `unknown[]`. The platform stores them as
-  `[]json.RawMessage` (`internal/domain/agent.go:63-64`) and the agent editor owns their
-  interpretation. Typing the toolset union here would duplicate that logic in a second place.
-- **`SessionEvent`** keeps an index signature: it is one envelope over a per-type payload union, and
-  the console renders unknown types through an honest JSON fallback rather than failing. This is the
-  only shape where `z.looseObject` is used, because it is the only one whose inferred type should
-  carry `[k: string]: unknown`.
+  both identically (#5), so typing it would be safe — but the console does not read it, and it would
+  tighten a public type that slice did not set out to change. A decision, not an oversight.
+- **`Agent.tools` / `Agent.mcp_servers`** are `unknown[]`: the platform stores them as
+  `[]json.RawMessage` and the agent editor owns their interpretation. Typing the toolset union here
+  would duplicate that logic in a second place.
+- **`SessionEvent`** keeps an index signature — one envelope over a per-type payload union, rendered
+  through an honest JSON fallback for unknown types.
 
-## Feature-detecting the console API (plan 07, seam 6)
+## Feature-detecting the console API (plan 07)
 
-`isUnimplemented` (`src/lib/platform/surfaces.ts`) is documented as valid **only on collection
-routes**: the platform has no 501, an unregistered route falls through the router's catch-all
-(`internal/api/server.go:152`), and the 404 it answers is the same envelope a missing resource gets.
-A collection path carries no id that could be missing, so a 404 there can only mean the endpoint is.
+`isUnimplemented` (`src/lib/platform/surfaces.ts`) is valid **only on collection routes**: the
+platform has no 501, and an unregistered route falls through the router's catch-all to the same 404
+envelope a missing resource gets. A collection path carries no id that could be missing, so a 404
+there can only mean the endpoint is.
 
 The console API's listing route breaks that precondition — it carries an environment id, and the
-platform 404s a missing environment on the same route (`internal/api/consoleapi.go:127-142`). Two of
-`consoleEnvironment`'s three 404 branches are closed by construction from the environment detail
-page:
+platform 404s a missing environment on the same route. Two of the three 404 branches are closed by
+construction from the environment detail page (the org segment is the literal the platform pins; the
+id came from the platform's own listing). The third is not: an environment is mutable, and another
+operator can delete it while the page is open, at which point the same 404 would read as "this
+deployment does not implement environment keys" — a wrong and permanent-looking answer to a
+transient fact (found in review, PR #89).
 
-1. the org segment is the literal `default` the platform pins (`consoleapi.go:52-53`), so the
-   unrecognized-organization branch is unreachable;
-2. the id came from the platform's own listing, so the malformed-id branch is unreachable.
+So on a 404 from the tokens route the console **re-reads the environment** and hides the section only
+when that confirms it is still there. A wrongly shown error is a nuisance; a wrongly hidden surface
+is a lie. The extra request runs only on that 404. Telling the two apart by message prose was
+rejected — both are `not_found_error`, and matching on platform prose is the guessing principle 1
+forbids.
 
-The third — **the environment does not exist** — is not closed by construction, and the first draft
-of this treated it as if it were. Having loaded the environment proves it existed _then_: an
-environment is mutable, and another operator can delete it while the page is open, at which point
-the same 404 arrives and would read as "this deployment does not implement environment keys" — a
-wrong and permanent-looking answer to a transient fact (found in review, PR #89).
+## Identity cannot be feature-detected, and the console does not try (plan 08)
 
-So: on a 404 from the tokens route, **re-read the environment before concluding anything**, and hide
-the section only when that re-read confirms it is still there. A deleted environment keeps the error
-visible; so does a re-read that cannot answer. The fail-safe direction is deliberate — a wrongly
-shown error is a nuisance, a wrongly hidden surface is a lie — and it matches the rule `useSurfaces`
-already follows, where only a confirmed 404 hides anything.
+Principle 3 says divergences are handled by feature detection. Whether a deployment authenticates its
+operators is the one thing that rule cannot reach, for three separate reasons, any one sufficient:
 
-The extra request runs **only on that 404**: a platform serving the surface never pays for it, and
-one that does not pays once. The alternative considered and rejected was telling the two 404s apart
-by message text (`no such endpoint: …` versus `environment … not found`) — both are
-`not_found_error`, so only the prose differs, and matching on platform prose is the guessing
-principle 1 forbids.
+1. **The platform hides it on purpose** — an unauthenticated request gets the same answer either way
+   (`internal/api/server.go:324-327`). There is no probe whose result differs.
+2. **A 403 is not "surface absent"** — a route that exists and refuses this caller should stay shown
+   and erroring, which is right for a permission error and wrong for a mode question.
+3. **The console needs the answer before it makes any call** — which credential the BFF attaches, and
+   which login page the browser is sent to, are decided while composing the first request.
 
-## Identity cannot be feature-detected, and the console does not try (plan 08, slice 1)
-
-CLAUDE.md principle 3 says the console handles platform-specific divergences "by feature detection
-(an unimplemented surface returning 404/501 hides its UI), not by hard-coding a vendor". Whether a
-deployment authenticates its operators is the one thing that rule cannot reach, for three separate
-reasons — any one of which would be enough:
-
-1. **The platform hides it on purpose.** An unauthenticated request gets the same answer whether
-   identity is on or off (`internal/api/server.go:324-327`). There is no probe whose result differs.
-2. **A 403 is not "surface absent".** `isUnimplemented` accepts 501, or 404 with the platform's own
-   `not_found_error` (`src/lib/platform/surfaces.ts`). A route that exists and refuses this caller
-   leaves the surface shown and erroring, which is the correct outcome for a permission error and
-   the wrong one for a mode question.
-3. **The console needs the answer before it makes any call at all.** Which credential the BFF
-   attaches, and which login page the browser is sent to, are decided while composing the first
-   request — there is no earlier response to read it from.
-
-So the console's **own configuration** carries its mode: `IDENTITY_MODE` in `src/lib/identity/config.ts`,
-reported at `GET /api/health` as `identity.mode`, and turned into the console's posture by
-`consoleAuthModeFrom` (`src/lib/identity/mode.ts`). Nothing probes for it, and nothing infers it
-from a status code.
-
-The variable names are the platform's own, and two values must agree across the two processes:
-`IDENTITY_OIDC_ISSUER`, and the console's `IDENTITY_OIDC_CLIENT_ID`, which is what the platform must
-be configured to expect as `IDENTITY_OIDC_AUDIENCE` — in an authorization-code flow the ID token's
-`aud` **is** the relying party's client id, so two different values yield tokens the platform
-rejects on every proxied request. The URL rules are transcribed from the platform's verifier rather
-than invented (`internal/identity/fetch.go`: https or http-to-loopback, no credentials in the URL,
-and no query or fragment on an issuer identifier), because a URL this console accepts and the
-platform refuses is a deployment that boots and then cannot serve.
-
-The platform's third mode, `trusted_proxy`, is **refused** here rather than ignored: it is the
-topology in which the browser calls the platform directly, which this console — a proxying BFF —
-does not implement (plan 08 D1). Silently reading it as "identity off" would leave a deployment that
-believes it is authenticating operators serving them unauthenticated.
+So the console's **own configuration** carries its mode (`src/lib/identity/`), reported at
+`/api/health` as `identity.mode`. The variable names are the platform's own, and two values must
+agree across the two processes: the issuer, and the console's client id, which the platform must
+expect as `IDENTITY_OIDC_AUDIENCE`. The URL rules are transcribed from the platform's verifier rather
+than invented, because a URL this console accepts and the platform refuses is a deployment that boots
+and then cannot serve. The platform's third mode, `trusted_proxy`, is **refused** rather than
+ignored: reading it as "identity off" would leave a deployment that believes it authenticates
+operators serving them unauthenticated.
 
 ## Reference surfaces the platform has deferred
 
-Documentation only — principle 1 keeps these out of the console until the platform serves them:
-memory stores, scheduled deployments, session threads, tunnels, user profiles. The reference also
-has one interface per session-event type; our `SessionEvent` is deliberately one envelope. That list
-is useful as a checklist of fields the console _could_ surface, never as a shape to adopt.
+Documentation only — principle 1 keeps these out until the platform serves them: memory stores,
+scheduled deployments, session threads, tunnels, user profiles. The reference also has one interface
+per session-event type where ours is deliberately one envelope. A checklist of fields the console
+_could_ surface, never a shape to adopt.

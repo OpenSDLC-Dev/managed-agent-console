@@ -99,7 +99,7 @@ describe("matcher exemptions", () => {
     // waits on it never finishes. The matcher sees a pathname and no query
     // string, so the exemption covers `?deep=1` too — which is why the route
     // gates that depth itself, it being the one that spends the management
-    // key. See deploy/k8s/README.md.
+    // key. See docs/deploy-gcp.md.
     expect(matches("/api/health")).toBe(false);
   });
 

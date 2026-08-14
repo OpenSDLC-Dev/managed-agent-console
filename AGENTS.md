@@ -1,13 +1,19 @@
 # AGENTS.md
 
-Instructions for AI coding agents and reviewers (Codex, CodeRabbit, and similar) working in this repository.
+For AI coding agents and reviewers (Codex, CodeRabbit, and similar).
 
-**[CLAUDE.md](./CLAUDE.md) is the canonical contributor guide** — what this console is, the non-negotiable design principles, and the working conventions all live there. Read it before making or reviewing changes. The points below are the ones most often violated by tools that skip it:
+**[CLAUDE.md](./CLAUDE.md) is the canonical contributor guide** — read it before making or reviewing
+a change. These are the rules most often violated by tools that skip it:
 
-- **Never guess a wire shape.** The platform API ([managed-agent-platform](https://github.com/OpenSDLC-Dev/managed-agent-platform)) is the single source of truth; resolution order is the platform checkout's source (`internal/api/`, `internal/domain/` — sibling checkout at `../managed-agent-platform`) → its docs → observing a running stack. The console never ships a surface the platform doesn't serve. A wire shape without a source is a defect.
-- **The management API key never reaches the browser.** Every platform call — SSE included — goes through the console's own server routes (the BFF proxy). No `NEXT_PUBLIC_*` variable ever carries a credential; `.env*` files are gitignored — flag any real key in a diff.
-- **Never commit to `main`.** Every change goes branch → PR → CI green **and** zero unresolved review threads → squash merge.
-- **Checks that must pass:** `pnpm lint` (zero warnings), `pnpm format:check`, `pnpm typecheck`, `pnpm test:coverage` (thresholds in `vitest.config.ts`: lines/statements/functions ≥ 90, branches ≥ 85, over `src/**` with vendored `src/components/ui/**` excluded), `pnpm test:e2e` (Playwright against the in-repo mock platform, production build, single worker). CI runs the same suite on a 3-OS matrix (ubuntu/windows/macos) plus a trivy-gated Docker build; default suites spend no money and touch no live platform.
-- **Thin console.** The platform owns semantics; the console owns presentation and interaction state. No recomputing platform state client-side, no client-side validation stricter than the wire's, no speculative abstractions.
-- **Docs move with code, in the same PR:** a CHANGELOG.md entry under `## [Unreleased]` for every notable change — the one place a change's narrative is written (released cycles are filed under `docs/changelog/` by the release cut and are not edited afterwards); STATE.md (truthful, ~30-line budget) and the active plan's `docs/plan/` frontmatter whenever the change starts, advances, or archives tracked work (plan files carry no progress tracking; the backlog is GitHub issues).
-- **UI changes keep visual fidelity with Anthropic's Claude Console** (the reference for layout and interaction patterns), verified in Chrome against the reference before a UI slice is called done; deliberate divergences (e.g. dark mode) are recorded in [docs/design-reference.md](./docs/design-reference.md).
+- **Never guess a wire shape.** The platform's implemented surface is the single source of truth
+  (`../managed-agent-platform`'s `internal/api/`, `internal/domain/`). A wire shape without a source
+  is a defect.
+- **The management API key never reaches the browser.** No `NEXT_PUBLIC_*` carries a credential;
+  `.env*` is gitignored — flag any real key in a diff.
+- **Never commit to `main`.** Branch → PR → CI green **and** zero unresolved review threads → squash
+  merge, with a Conventional Commit PR title.
+- **Green means:** `pnpm lint` (zero warnings), `format:check`, `typecheck`, `test:coverage`,
+  `test:e2e`, on a 3-OS matrix plus a trivy-gated Docker build.
+- **Thin console.** The platform owns semantics; no client-side recomputation of platform state, no
+  validation stricter than the wire's, no speculative abstractions.
+- **Docs move with code, in the same PR**, and stay terse — see CLAUDE.md's "Writing it down".

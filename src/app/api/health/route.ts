@@ -48,7 +48,7 @@ import { consoleAuthModeFrom, sendsUserToken } from "@/lib/identity/mode";
  * The deploy gate runs the deep check from inside the pod over loopback
  * (`kubectl exec … -- node`) because the CD job holds no Google identity IAP
  * would accept — not because nothing else can reach the route. See
- * deploy/k8s/README.md.
+ * docs/deploy-gcp.md.
  *
  * The body names environment variables (already public, in `.env.example`),
  * reports the platform's own status code, and names which identity mode this
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   // Reported, not required: the gate is optional by design (an operator may
   // front the console with their own auth). The pipeline that publishes this
   // console on a public IP asserts on this field itself — see
-  // deploy/k8s/README.md — and refuses the deployment when it is false.
+  // docs/deploy-gcp.md — and refuses the deployment when it is false.
   const loginGate = password !== undefined;
   const deep = request.nextUrl.searchParams.has("deep");
 
