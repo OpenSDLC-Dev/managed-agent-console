@@ -78,8 +78,10 @@ are exact: `SessionStatus` (`domain/session.go:10-13`), `StopReason.type` (`doma
 - **`Agent.tools` / `Agent.mcp_servers`** are `unknown[]`: the platform stores them as
   `[]json.RawMessage` and the agent editor owns their interpretation. Typing the toolset union here
   would duplicate that logic in a second place.
-- **`SessionEvent`** keeps an index signature — one envelope over a per-type payload union, rendered
-  through an honest JSON fallback for unknown types.
+- **`SessionEvent` and `ContentBlock`** keep an index signature. `z.object` is the default and these
+  two are the deliberate exceptions — the only `z.looseObject`s in `schemas.ts` — because each is one
+  envelope over a per-type payload union, rendered through an honest JSON fallback for unknown types.
+  Narrowing either would strip forward-compatible payloads.
 
 ## Feature-detecting the console API (plan 07)
 

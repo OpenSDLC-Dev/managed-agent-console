@@ -129,11 +129,12 @@ worked". Three limits, all reported as warnings:
   hand; a broken console on a public hostname should not stay up because the pipeline had no history.
 - **It restores the image, not the credential.** `PLATFORM_API_KEY` is a `secretKeyRef` that keeps
   reading the _current_ Secret, so after a rotation an older image runs with the newer credential. If
-  a rotation is what broke the deploy, disable that Secret Manager version and re-run the workflow.
+  a rotation is what broke the deploy, **add a new enabled version carrying the known-good value and
+  re-run the workflow** — the job reads `latest`, so disabling the bad version is not a way back.
 - **It reaches back three revisions.** `revisionHistoryLimit: 3` is a security boundary rather than
   housekeeping: an old ReplicaSet keeps its whole pod template, `secretKeyRef`s included, so an
-  unbounded history means no credential can ever be retired — there is always one more template
-  holding it open.
+  unbounded history means a Secret key can never be retired — there is always one more template
+  asking for it.
 
 The image tag is the commit sha and is never reused, so every image the cluster has run stays
 addressable by tag even when its revision does not. To roll back by hand, load the variables first —

@@ -9,8 +9,8 @@ a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/]
 Issue #56, PRs #92–#96, #100. Browser OIDC login, and the BFF forwarding the operator's own token in
 place of the management key.
 
-**Acceptance, against the bundled Casdoor:** a `map-viewer` had its environment-create refused in the
-platform's own words, and a `map-admin` issued an environment key. The pair is the proof, not either
+**Acceptance, against the bundled Casdoor:** the platform refused a `map-viewer`'s environment-create
+in its own words, and a `map-admin` issued an environment key. The pair is the proof, not either
 half — a viewer refused and an admin allowed on the same route is what shows the operator's token
 travelled. Two defects it found, both invisible to CI: a completed sign-in landed on
 `http://0.0.0.0:3300/agents`, the address the standalone server binds rather than the host the

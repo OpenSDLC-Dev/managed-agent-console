@@ -4,8 +4,8 @@ status: archived
 
 # Google sign-in — staging stops being a shared password on a bare IP (plan 06)
 
-Requested 2026-08-09. Staging was a shared password typed over plain HTTP into a bare public IPv4,
-and the thing behind it was a full-power management key. Two slices plus cleanup (issues #69, #74;
+Requested 2026-08-09. The staging deployment as it stood then was a shared password typed over plain
+HTTP into a bare public IPv4, and the thing behind it was a full-power management key. Two slices plus cleanup (issues #69, #74;
 PRs #68–#80). **The console gained no authentication code — it lost the one it had.**
 
 Five maintainer decisions bound the plan (all 2026-08-09): Casdoor is not part of this (D1);

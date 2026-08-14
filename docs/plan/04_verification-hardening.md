@@ -24,7 +24,9 @@ What shipped: `src/lib/platform/schemas.ts` (which carries decisions 1–2 in it
    and principle 3 means an endpoint rendering one extra field must not be rejected.
    **Amended in slice 1, on evidence:** the plan said `z.looseObject`; probing zod 4.4.3 showed plain
    `z.object` already _strips_ unknown keys (only `z.strictObject` rejects), while `looseObject`'s
-   inferred `[k: string]: unknown` would have deleted typo protection across all 42 consumers.
+   inferred `[k: string]: unknown` would have deleted typo protection across all 42 consumers. It is
+   kept for `SessionEvent` and `ContentBlock`, the two shapes whose transcription genuinely carries
+   an index signature.
 3. **Two links, two tiers.** Link A (everything the mock serves ↔ schemas) runs in CI and catches
    mock drift; link B (schemas ↔ the real platform) runs in the live tier and catches transcription
    drift. Neither is sufficient alone: A stays green against a stale transcription its fixtures

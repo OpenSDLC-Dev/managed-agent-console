@@ -8,16 +8,20 @@ This console is the operator-facing frontend for a platform deployment you run y
 
 ## How it holds your key
 
-A thin server-side proxy: every platform call — SSE included — goes through the console's own server, which injects the management key. **The key never reaches the browser.** A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else — anyone who can reach an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure. Where the platform runs OIDC identity, the console signs the operator in instead and forwards their own token ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)).
+A thin server-side proxy: every platform call — SSE included — goes through the console's own server, and **no credential ever reaches the browser.** Which credential the server attaches depends on the deployment, and the two are never sent together:
+
+- **No identity configured** — the server attaches the management key (`PLATFORM_API_KEY`). A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else, since anyone who reaches an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure.
+- **Identity configured** — the console signs the operator in against the deployment's provider and forwards **their own token**, never the management key ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)). Without a session it fails closed. `PLATFORM_API_KEY` stays only as the deep health check's service credential, which no browser request can spend.
 
 | Variable            | Required | Meaning                                                |
 | ------------------- | -------- | ------------------------------------------------------ |
 | `PLATFORM_BASE_URL` | yes      | Control-plane base URL, e.g. `http://localhost:8080`   |
-| `PLATFORM_API_KEY`  | yes      | The platform's management key (`CONTROLPLANE_API_KEY`) |
+| `PLATFORM_API_KEY`  | yes\*\*  | The platform's management key (`CONTROLPLANE_API_KEY`) |
 | `CONSOLE_PASSWORD`  | no\*     | Enables the login gate when set; unset ⇒ no gate       |
 
 \* Optional only on `localhost`, or where something else authenticates in front of the console — as
-on the GKE deployment below. Otherwise mandatory.
+on the GKE deployment below. Otherwise mandatory. \*\* Required unless identity is configured, where
+browser calls carry the operator's token and the key serves only the deep health check.
 
 ## Quickstart (Docker)
 
