@@ -1,3 +1,5 @@
+import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
+
 /**
  * Browser-side helpers for talking to the platform through the BFF proxy.
  * Everything goes to /api/platform/v1/... — or, for the off-wire console API,
@@ -53,9 +55,17 @@ export interface OffsetPage<T> {
   };
 }
 
-/** Throws `PlatformError` unless the response is 2xx. */
+/**
+ * Throws `PlatformError` unless the response is 2xx.
+ *
+ * A response the BFF marked as signed-out also sends the browser to the login
+ * page. It still throws: the navigation is asynchronous, and a caller left
+ * waiting on a promise that never settles would render a spinner over the whole
+ * departure.
+ */
 async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
+  if (isSignedOut(response)) bounceToLogin();
   const envelope = (await response
     .json()
     .catch(() => null)) as ErrorEnvelope | null;

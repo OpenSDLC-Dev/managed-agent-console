@@ -6,6 +6,7 @@ import {
   putSession,
   resetIdentityStoreForTests,
 } from "@/lib/identity/session";
+import { SIGNED_OUT_HEADER } from "@/lib/identity/signed-out";
 import { DELETE, GET, PATCH, POST, PUT } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -403,18 +404,84 @@ describe("identity mode", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("serves a signed-in operator", async () => {
+  it("serves a signed-in operator with their own token", async () => {
     configureOidc();
     signIn();
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
     expect((await agents()).status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = upstreamCall();
+    expect(new Headers(init.headers).get("authorization")).toBe(
+      "Bearer id-token",
+    );
+  });
+
+  // The platform's dispatcher hands a request with a non-empty x-api-key to the
+  // management lane outright and never reads the Bearer (server.go
+  // dispatchManagementAuth). Sending both would silently restore root and
+  // erase the operator's role, with nothing to see in either log.
+  it("probe: never sends the management key alongside the operator's token", async () => {
+    configureOidc();
+    signIn();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    await agents();
+    const [, init] = upstreamCall();
+    expect(new Headers(init.headers).has("x-api-key")).toBe(false);
+  });
+
+  // PLATFORM_API_KEY stays in the pod as the deep health check's own
+  // credential; an identity-mode deployment that never set one still serves.
+  it("does not need a management key at all in identity mode", async () => {
+    configureOidc();
+    signIn();
+    vi.stubEnv("PLATFORM_API_KEY", undefined);
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    expect((await agents()).status).toBe(200);
+  });
+
+  it("probe: a platform 401 destroys the session rather than repeating itself", async () => {
+    configureOidc();
+    signIn();
+    fetchMock.mockResolvedValue(
+      new Response('{"type":"error"}', { status: 401 }),
+    );
+
+    const refused = await agents();
+    expect(refused.status).toBe(401);
+    expect(refused.headers.get(SIGNED_OUT_HEADER)).toBe("1");
+    expect(refused.headers.get("set-cookie")).toContain(`${IDENTITY_COOKIE}=;`);
+
+    // The session is gone, so the next request is refused here — the platform
+    // is not asked to say no twice.
+    fetchMock.mockClear();
+    expect((await agents()).status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("marks its own refusal so the browser can tell it from a bad management key", async () => {
+    configureOidc();
+    const response = await anonymous();
+    expect(response.headers.get(SIGNED_OUT_HEADER)).toBe("1");
   });
 
   it("leaves the x-api-key path untouched while identity is off", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
     expect((await anonymous()).status).toBe(200);
     const [, init] = upstreamCall();
-    expect(new Headers(init.headers).get("x-api-key")).toBe("sk-mgmt-test");
+    const headers = new Headers(init.headers);
+    expect(headers.get("x-api-key")).toBe("sk-mgmt-test");
+    expect(headers.has("authorization")).toBe(false);
+  });
+
+  // A 401 with identity off is a management key the platform refuses. No
+  // sign-in fixes that, so the marker must not appear and nothing bounces.
+  it("probe: a 401 with identity off is not a sign-out", async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"type":"error"}', { status: 401 }),
+    );
+    const response = await anonymous();
+    expect(response.status).toBe(401);
+    expect(response.headers.get(SIGNED_OUT_HEADER)).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
   });
 });

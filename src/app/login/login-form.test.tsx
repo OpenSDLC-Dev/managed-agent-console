@@ -61,6 +61,18 @@ describe("LoginForm", () => {
     expect(screen.queryByText("Wrong password.")).toBeNull();
   });
 
+  it("returns to where the operator was, when it knows", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ ok: true }))),
+    );
+    render(<LoginForm sso={false} password returnTo="/environments/env_1" />);
+    await submitPassword("hunter2");
+    await waitFor(() =>
+      expect(replaceSpy).toHaveBeenCalledWith("/environments/env_1"),
+    );
+  });
+
   it("shows an error for a wrong password and stays put", async () => {
     vi.stubGlobal(
       "fetch",
@@ -140,6 +152,21 @@ describe("LoginForm — single sign-on", () => {
     expect(
       screen.getByText(/does not authorize anything on the platform/),
     ).toBeDefined();
+  });
+
+  // Where the operator was when the BFF signed them out. `/api/auth/login`
+  // re-sanitizes it and stores it with the pending authorization, so the
+  // callback can put them back on the page they lost.
+  it("carries the return path into the authorization request", () => {
+    const { container } = render(
+      <LoginForm sso password={false} returnTo="/sessions/sess_1?tab=trace" />,
+    );
+    expect(screen.getByTestId("sso-sign-in").getAttribute("href")).toBe(
+      "/api/auth/login?return_to=%2Fsessions%2Fsess_1%3Ftab%3Dtrace",
+    );
+    expect(container.firstElementChild?.getAttribute("data-return-to")).toBe(
+      "/sessions/sess_1?tab=trace",
+    );
   });
 
   it("marks the absence of SSO machine-readably", () => {

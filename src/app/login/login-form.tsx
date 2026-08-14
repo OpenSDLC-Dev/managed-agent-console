@@ -36,10 +36,13 @@ export function LoginForm({
   sso,
   password,
   ssoError,
+  returnTo,
 }: {
   sso: boolean;
   password: boolean;
   ssoError?: string;
+  /** Where the operator was when their session ended. Already sanitized server-side. */
+  returnTo?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export function LoginForm({
     }).catch(() => null);
     setBusy(false);
     if (response?.ok) {
-      router.replace("/agents");
+      router.replace(returnTo ?? "/agents");
       return;
     }
     setError("Wrong password.");
@@ -82,6 +85,7 @@ export function LoginForm({
       className="flex min-h-screen items-center justify-center bg-background"
       data-sso={sso}
       data-sso-error={ssoError}
+      data-return-to={returnTo}
     >
       <div className="w-80 space-y-4">
         <div>
@@ -103,7 +107,11 @@ export function LoginForm({
           // A plain link, not a fetch: the flow's first step is a 302 to the
           // identity provider, and only a top-level navigation can follow one.
           <a
-            href="/api/auth/login"
+            href={
+              returnTo === undefined
+                ? "/api/auth/login"
+                : `/api/auth/login?return_to=${encodeURIComponent(returnTo)}`
+            }
             data-testid="sso-sign-in"
             className={buttonVariants()}
           >

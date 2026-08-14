@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import {
+  SIGNED_OUT_HEADER,
+  hasBouncedToLogin,
+  resetSignedOutBounceForTests,
+} from "@/lib/identity/signed-out";
 import type { SessionEvent } from "@/lib/platform/types";
 import { useSessionTrace } from "./use-session-trace";
 
@@ -45,6 +50,20 @@ let streamFails: boolean;
 let holdStream: boolean;
 let releaseStream: (() => void) | undefined;
 let fetchMock: ReturnType<typeof vi.fn>;
+/** Seed requests from this call onwards come back signed out. */
+let signedOutFrom: number;
+let streamSignedOut: boolean;
+let seedCount: number;
+
+/** What the BFF returns once the console session is gone. */
+const signedOut = () =>
+  new Response(JSON.stringify({ type: "error" }), {
+    status: 401,
+    headers: {
+      "content-type": "application/json",
+      [SIGNED_OUT_HEADER]: "1",
+    },
+  });
 
 beforeEach(() => {
   seedPages = [];
@@ -52,9 +71,13 @@ beforeEach(() => {
   streamFails = false;
   holdStream = false;
   releaseStream = undefined;
+  signedOutFrom = Number.POSITIVE_INFINITY;
+  streamSignedOut = false;
+  seedCount = 0;
   fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/events/stream")) {
+      if (streamSignedOut) return signedOut();
       if (streamFails) return new Response(null, { status: 502 });
       if (holdStream) {
         // Hold the stream fetch open until the test calls releaseStream.
@@ -69,6 +92,8 @@ beforeEach(() => {
         headers: { "content-type": "text/event-stream" },
       });
     }
+    seedCount += 1;
+    if (seedCount > signedOutFrom) return signedOut();
     const page = seedPages.shift() ?? { data: [] };
     return new Response(JSON.stringify(page), {
       status: 200,
@@ -81,6 +106,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  resetSignedOutBounceForTests();
 });
 
 /** Flush enough microtask turns for a fetch → decode → setState chain. */
@@ -272,5 +298,51 @@ describe("useSessionTrace", () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  // A dead console session is the one drop retrying cannot fix: every attempt
+  // re-sends the same handle. Without this the trace would sit on "reconnecting"
+  // at a 15s backoff while the real answer is that the operator is signed out.
+  it("probe: stops retrying once the console session is gone", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    signedOutFrom = 1; // seed once, then the session dies
+
+    const { result, unmount } = renderHook(() => useSessionTrace("sess_out"));
+    await flush();
+    streams[0].end();
+    await flush();
+
+    expect(result.current.connection).toBe("reconnecting");
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    await flush();
+    // One reseed, which is refused; then the loop leaves rather than backing off.
+    expect(fetchMock).toHaveBeenCalledTimes(calls + 1);
+    expect(result.current.connection).toBe("closed");
+    // The navigation itself is jsdom's to refuse (`location` is unforgeable, so
+    // it cannot be intercepted here); what this asserts is the state the loop
+    // actually reads. `signed-out.test.ts` covers the URL it goes to.
+    expect(hasBouncedToLogin()).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(calls + 1);
+    unmount();
+  });
+
+  // The narrow window the seed cannot cover: the session outlives the seed and
+  // dies before the stream attaches, so the refusal arrives on a response the
+  // `assertOk` path never sees.
+  it("probe: reads the marker on the stream response too", async () => {
+    streamSignedOut = true;
+
+    const { result, unmount } = renderHook(() => useSessionTrace("sess_out2"));
+    await flush();
+    expect(result.current.connection).toBe("closed");
+    expect(hasBouncedToLogin()).toBe(true);
+    unmount();
   });
 });

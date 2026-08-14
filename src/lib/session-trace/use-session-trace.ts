@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  bounceToLogin,
+  hasBouncedToLogin,
+  isSignedOut,
+} from "@/lib/identity/signed-out";
 import { platformGet, type Page } from "@/lib/platform/http";
 import type { SessionEvent } from "@/lib/platform/types";
 import { parseSseStream } from "./sse";
@@ -63,6 +68,15 @@ export function useSessionTrace(sessionId: string) {
               headers: { accept: "text/event-stream" },
             },
           );
+          // A dead console session is the one failure reconnecting cannot fix:
+          // every retry re-sends the same handle, so the backoff would climb to
+          // 15s and sit there saying "reconnecting" while the real answer is
+          // that the operator has been signed out. Leave the loop and say so.
+          if (isSignedOut(response)) {
+            bounceToLogin();
+            if (!cancelled) setConnection("closed");
+            return;
+          }
           if (!response.ok || !response.body) {
             throw new Error(`stream failed: HTTP ${response.status}`);
           }
@@ -85,6 +99,13 @@ export function useSessionTrace(sessionId: string) {
           throw new Error("stream ended");
         } catch {
           if (cancelled || controller.signal.aborted) return;
+          // The seed above goes through `assertOk`, which bounces on its own —
+          // so by the time a signed-out failure lands here the navigation has
+          // already started, and what is left to do is stop retrying.
+          if (hasBouncedToLogin()) {
+            setConnection("closed");
+            return;
+          }
           setConnection("reconnecting");
           await new Promise((resolve) => setTimeout(resolve, backoff));
           backoff = Math.min(backoff * 2, 15_000);

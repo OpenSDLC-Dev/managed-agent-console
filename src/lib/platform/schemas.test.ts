@@ -498,4 +498,81 @@ describe("the mock's constructed write-path responses conform too", () => {
       `POST /v1/skills/${id}/versions`,
     );
   });
+
+  // The mock's credential dispatch mirrors internal/api/server.go's, because
+  // the console's BFF is written against that ordering: a mock that
+  // authenticated more loosely would let a console bug through, and one that
+  // authenticated more strictly would fail a console that is right.
+  //
+  // These are the assertions that keep the two aligned. Nothing in the default
+  // e2e run reaches the human lane — that needs an identity provider, which is
+  // plan 08 slice 5's — so this is where it is exercised until then.
+  describe("credential dispatch", () => {
+    /** Header and payload are decoded, never verified: this is a mock, and shape is what routes. */
+    const jwt = (payload: object) => {
+      const part = (value: object) =>
+        Buffer.from(JSON.stringify(value)).toString("base64url");
+      return `${part({ alg: "RS256" })}.${part(payload)}.c2ln`;
+    };
+    const live = () =>
+      jwt({ sub: "u1", exp: Math.floor(Date.now() / 1000) + 60 });
+
+    const get = (headers: Record<string, string>) =>
+      fetch(`${base}/v1/agents`, { headers });
+
+    it("accepts the management key, as it always has", async () => {
+      expect((await get({ "x-api-key": API_KEY })).status).toBe(200);
+      const wrong = await get({ "x-api-key": "nope" });
+      expect(wrong.status).toBe(401);
+      expect((await wrong.json()).error.message).toBe("invalid x-api-key");
+    });
+
+    it("accepts a JWT-shaped Bearer on the human lane", async () => {
+      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
+        200,
+      );
+    });
+
+    // server.go dispatchManagementAuth: a non-empty x-api-key wins outright and
+    // the Bearer is never read. The console's BFF must therefore never send
+    // both — this is the mock half of that assertion.
+    it("gives a request carrying both to the management lane", async () => {
+      const both = await get({
+        "x-api-key": "nope",
+        authorization: `Bearer ${live()}`,
+      });
+      expect(both.status).toBe(401);
+      expect((await both.json()).error.message).toBe("invalid x-api-key");
+    });
+
+    // identitylane.go: a Bearer without the JWT silhouette is left for the
+    // environment-key lane, which on a management path falls through to
+    // requireAPIKey and its unchanged message. An unauthenticated caller learns
+    // nothing about whether SSO is configured.
+    it("does not read a non-JWT Bearer as a human credential", async () => {
+      const key = await get({ authorization: "Bearer sk-map-env01-abc" });
+      expect(key.status).toBe(401);
+      expect((await key.json()).error.message).toBe("missing x-api-key header");
+    });
+
+    it("refuses an expired token, and one this platform has stopped accepting", async () => {
+      const expired = await get({
+        authorization: `Bearer ${jwt({ sub: "u1", exp: 1 })}`,
+      });
+      expect(expired.status).toBe(401);
+      expect((await expired.json()).error.message).toBe(
+        "authentication failed",
+      );
+
+      await fetch(`${base}/__expire-identity`, { method: "POST" });
+      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
+        401,
+      );
+      // …and the hook is undone by the reset every spec already runs.
+      resetStore();
+      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
+        200,
+      );
+    });
+  });
 });

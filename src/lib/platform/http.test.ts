@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  SIGNED_OUT_HEADER,
+  resetSignedOutBounceForTests,
+} from "@/lib/identity/signed-out";
 import {
   PlatformError,
   consoleGet,
@@ -270,5 +274,63 @@ describe("console-API helpers", () => {
         "organizations/default/environments/env_1/tokens/gone/revoke",
       ),
     ).rejects.toBeInstanceOf(PlatformError);
+  });
+});
+
+// The BFF marks the responses it authored when a console session ends; the
+// browser reads that marker rather than the status, because a 401 also means
+// "the management key is wrong", which no sign-in can fix.
+describe("a session that ended", () => {
+  const assign = vi.fn<(url: string) => void>();
+
+  const signedOut = () =>
+    new Response(JSON.stringify(envelope), {
+      status: 401,
+      headers: {
+        "content-type": "application/json",
+        [SIGNED_OUT_HEADER]: "1",
+      },
+    });
+
+  beforeEach(() => {
+    assign.mockReset();
+    resetSignedOutBounceForTests();
+    vi.stubGlobal("window", {
+      location: { pathname: "/agents", search: "", assign },
+    });
+  });
+
+  it("sends the browser to the login page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => signedOut()),
+    );
+    await expect(platformGet("v1/agents")).rejects.toBeInstanceOf(
+      PlatformError,
+    );
+    expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fagents");
+  });
+
+  // The navigation is asynchronous. A caller left on a promise that never
+  // settles would hold a spinner over the whole departure.
+  it("still rejects, so no caller waits on a page that is leaving", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => signedOut()),
+    );
+    await expect(platformDelete("v1/agents/a")).rejects.toBeInstanceOf(
+      PlatformError,
+    );
+  });
+
+  it("probe: an unmarked 401 does not bounce", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(envelope, 401)),
+    );
+    await expect(platformGet("v1/agents")).rejects.toBeInstanceOf(
+      PlatformError,
+    );
+    expect(assign).not.toHaveBeenCalled();
   });
 });

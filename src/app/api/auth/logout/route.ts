@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isHttpsRequest } from "@/lib/auth";
+import { clearIdentityCookie } from "@/lib/identity/routes";
 import { IDENTITY_COOKIE, deleteSession } from "@/lib/identity/session";
 
 /**
@@ -20,13 +20,5 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest): Promise<Response> {
   deleteSession(request.cookies.get(IDENTITY_COOKIE)?.value);
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(IDENTITY_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: isHttpsRequest(request),
-    path: "/",
-    maxAge: 0,
-  });
-  return response;
+  return clearIdentityCookie(NextResponse.json({ ok: true }), request);
 }
