@@ -79,16 +79,72 @@ test("the environment-key surface and its dialogs pass axe", async ({
   await dialogSettled(page);
   await expectNoViolations(page);
 
-  // Deliberately stops here. The next step is the revoke confirm, which is
-  // the shared `ConfirmIconButton` — and its destructive button fails colour
-  // contrast today on every archive and delete in the console, not only here
-  // (issue #90). Asserting `[]` over it would fail for a pre-existing reason
-  // in a vendored primitive; asserting a non-empty allowlist would blunt the
-  // gate. So the axe pass covers what this slice introduces, and #90 owns the
-  // rest.
   await page.getByTestId("close-revealed-key").click();
   await expect(page.getByTestId("revealed-key")).toBeHidden();
+
+  // The revoke confirm, which used to be out of scope: its destructive button
+  // failed colour contrast on every archive and delete in the console
+  // (issue #90, fixed by splitting the danger token in two).
+  await page
+    .getByRole("button", { name: /Revoke/ })
+    .first()
+    .click();
+  await dialogSettled(page);
+  await expectNoViolations(page);
 });
+
+/**
+ * The destructive controls, in both themes — the gap #90 lived in.
+ *
+ * The palette maths is asserted without a browser in `src/app/globals.test.ts`;
+ * this is the other half, because only the browser knows what a control's
+ * background actually composited to. Dark is not an afterthought here: it
+ * failed harder than light, and on bare error text as well as on the tinted
+ * button, so every case is walked twice.
+ */
+for (const theme of ["light", "dark"] as const) {
+  test(`destructive controls pass axe in the ${theme} theme`, async ({
+    page,
+  }) => {
+    await signIn(page);
+    if (theme === "dark") {
+      await page.getByRole("button", { name: "Dark theme" }).click();
+      await expect(page.locator("html")).toHaveClass(/dark/);
+    }
+
+    // The confirm dialog every ConfirmButton and ConfirmIconButton ends in.
+    // Its footer is `bg-muted/50`, a lighter backdrop than the popover and so
+    // the console's hardest destructive contrast target.
+    await page.goto("/vaults/vlt_github00000000000001");
+    await page.getByRole("button", { name: "Archive", exact: true }).click();
+    await dialogSettled(page);
+    await expectNoViolations(page);
+    await page.keyboard.press("Escape");
+
+    // The delete trigger: an outline button carrying bare `text-destructive`.
+    await expect(
+      page.getByRole("button", { name: "Delete", exact: true }),
+    ).toBeVisible();
+    await expectNoViolations(page);
+
+    // Bare `text-destructive` error copy — 36 sites share this colour, and in
+    // dark mode it failed on the plain page background, nowhere near a tint.
+    await page.goto("/agents/new");
+    await page.getByRole("button", { name: /Create agent/ }).click();
+    await expect(page.getByText(/required/i).first()).toBeVisible();
+    await expectNoViolations(page);
+
+    // The one destructive wash that is not on a console-defined surface: the
+    // approval banner's amber. `globals.test.ts` cannot reach this one.
+    await page.goto("/sessions/sesn_gatedbash00000000001");
+    await expect(page.getByTestId("approval-banner")).toBeVisible();
+    await page.getByRole("button", { name: "Deny…" }).first().click();
+    await expect(
+      page.getByRole("button", { name: "Deny", exact: true }),
+    ).toBeVisible();
+    await expectNoViolations(page);
+  });
+}
 
 test("session detail with a pending approval passes axe", async ({ page }) => {
   await signIn(page);
