@@ -20,6 +20,7 @@ import {
   vaultCredentials,
   vaults,
 } from "./fixtures.mjs";
+import { PORT as OIDC_PORT, oidcServer, resetOidc } from "./oidc.mjs";
 
 const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
@@ -156,6 +157,10 @@ function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
   identityRejected = false;
   forbidden = [];
+  // Authorization codes in flight, never the stub provider's signing key:
+  // rotating that mid-run would leave the console verifying against a key set
+  // jose refuses to refetch for thirty seconds (see oidc.mjs).
+  resetOidc();
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
@@ -1928,8 +1933,20 @@ const server = createServer(async (req, res) => {
 // conformance suite imports it instead and drives it on an ephemeral port, so
 // the listen has to be conditional or the import would bind 18080.
 if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
+  // The stub identity provider binds first, and the platform only inside its
+  // callback. Playwright's webServer probes the platform's URL alone, so
+  // chaining them is what makes "the platform answered" mean "the provider is
+  // up too" — otherwise the console's first `/api/auth/login` could outrun a
+  // listen that had not landed yet, and lose a whole pass to one flaky shot.
+  //
+  // A second port rather than a path prefix on this one: a deployment's issuer
+  // is not its platform, and sharing an origin would let a console that
+  // confused the two keep passing (#99).
+  oidcServer.listen(OIDC_PORT, "127.0.0.1", () => {
+    console.log(`mock oidc listening on http://127.0.0.1:${OIDC_PORT}`);
+    server.listen(PORT, "127.0.0.1", () => {
+      console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
+    });
   });
 }
 

@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { type ConsoleMode, MOCK_URL } from "./consoles";
 
 /**
  * The enumerated surface list the Chrome fidelity pass walks (plan 04 slice 4).
@@ -21,6 +22,15 @@ import type { Page } from "@playwright/test";
 export type Surface = {
   /** Stable slug; becomes the screenshot filename. Never reuse across states. */
   id: string;
+  /**
+   * Which console configuration this is shot against — one `next start` per
+   * value (`./consoles.ts`). Absent means the password-gated deployment the
+   * design reference was compared to, which is all but two surfaces: identity
+   * changes nothing on a page except the sidebar's account block, so a surface
+   * names a mode only when that block, or the login page's own offer, is the
+   * point. A mode costs a process, so a new one needs a surface that earns it.
+   */
+  mode?: ConsoleMode;
   /** Where the shot starts. Some states need `setup` to finish arriving. */
   route: string;
   /**
@@ -253,7 +263,7 @@ export const SURFACES: Surface[] = [
     description:
       "ErrorState's denied variant (plan 08 slice 4): the platform's message quoted verbatim, naming the role the route requires rather than the one the operator holds, over a nav item that deliberately stays put. The third of the three refusal layouts — `detail-error` is a 404 on an item, `surface-unavailable` a surface the deployment lacks, this one a surface the operator may not read.",
     setup: async (page) => {
-      await page.request.post("http://127.0.0.1:18081/__forbid", {
+      await page.request.post(`${MOCK_URL}/__forbid`, {
         data: { paths: ["v1/skills"] },
       });
       await page.reload();
@@ -269,7 +279,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       // Same 404 the platform's router catch-all answers with; `__reset`
       // before the next shot puts the mock back (issue #33).
-      await page.request.post("http://127.0.0.1:18081/__unimplemented", {
+      await page.request.post(`${MOCK_URL}/__unimplemented`, {
         data: { surfaces: ["skills"] },
       });
       await page.reload();
@@ -388,5 +398,29 @@ export const SURFACES: Surface[] = [
     fixture: "n/a",
     description:
       "The deployment gate — the only surface with no sidebar or header.",
+  },
+
+  // ---- what only a deployment with identity renders (#99) ----------------
+  // Shot against a second console because the configuration *is* the surface:
+  // which gate the login page offers, and whether the sidebar has an account
+  // block, come from environment variables read at request time, so one process
+  // renders exactly one of them. Until this pair existed the pass walked past
+  // both and still reported complete coverage.
+  {
+    id: "login-sso",
+    mode: "sso",
+    route: "/login",
+    fixture: "n/a",
+    description:
+      "The gate on a deployment that runs SSO: one primary control, no password field, and the organization-account line in place of the password one. A page with no reference counterpart, so what it is compared against is docs/design-reference.md's own account of it.",
+  },
+  {
+    id: "account-block",
+    mode: "sso",
+    route: "/agents",
+    fixture:
+      "3 agents, one archived — the list is the backdrop, not the subject",
+    description:
+      "The sidebar's signed-in account block: a 14px/500 name over a 12px muted email over Sign out. Renders only where identity is configured, so no other surface shows it at all — and it lands above ConnectionStatus, which puts two rules in a footer the reference draws with none. It names no role and no organization, and that is the divergence.",
   },
 ];

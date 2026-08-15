@@ -38,6 +38,13 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
   upstream path.
 - `IDENTITY_*` configuration that fails **closed**: a console that cannot parse its own identity
   configuration reports 503 rather than quietly serving as though identity were off.
+- **The fidelity pass reaches the SSO-only surfaces** ([#99](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/99)):
+  a stub OpenID Provider beside the mock platform, a second console run with `IDENTITY_MODE=oidc`,
+  and `login-sso` and `account-block` in the manifest. Both were previously compared by hand once,
+  which was evidence for that pass and not coverage for the next one — the manifest is the pass's
+  denominator, and it was under-reporting by two. The first shot already earned its keep: the
+  account block sits above the connection line and **both** draw a top rule, so a signed-in sidebar
+  ends in two dividers where the reference console draws none.
 
 ### Changed
 
