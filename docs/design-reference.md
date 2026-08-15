@@ -91,11 +91,20 @@ time-of-day is the point — trace events, the sessions list, a credential expir
   it under a line saying plainly that it admits you to the console and authorizes nothing on the
   platform. Without that line, two controls read as two ways to the same place.
 - **The signed-in account block names no role and no organization.** Ours copies the reference's
-  placement, frame and type scale (14px/500 name over a 12px/17px muted line) and parts company on
-  what the second line says: the role is unavailable (no `me` route, and inferring one would be the
-  second copy of the authority rules principle 5 forbids), and single-tenant v1 has no organization
-  to name — so it carries the email. **Sign out** is explicit rather than behind a menu, because it
-  is the only item that menu would hold.
+  placement and type scale (14px/500 name over a 12px/17px muted line, re-measured 2026-08-15) and
+  parts company on what the second line says: the role is unavailable (no `me` route, and inferring
+  one would be the second copy of the authority rules principle 5 forbids), and single-tenant v1 has
+  no organization to name — so it carries the email. **Sign out** is explicit rather than behind a
+  menu, because it is the only item that menu would hold — where the reference's block is a menu
+  trigger holding seven items, and its email sits in that menu's header rather than in the block.
+- **The account block is a plain block, not the reference's inset button.** Theirs is a borderless
+  8px-radius button inset 12px in the sidebar, with a leading org avatar and a trailing chevron;
+  ours is full-bleed with a top rule and neither ornament. That follows from the bullet above rather
+  than being chosen separately: a block that opens nothing should not wear the frame of a control
+  that does, and an avatar would stand for an organization we do not have. What does **not** follow
+  is that the signed-in sidebar ends in two rules — `SignedInAs` and `ConnectionStatus` each carry
+  `border-t` — where the reference's footer draws none; that is unintended, and is
+  [#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107).
 - **A day-scale date always carries its year**, where two of the reference's four forms drop it. Ours
   matches the reference exactly on the two key tables and parts from it on the environments list and
   the detail subheader: a yearless date is unambiguous only if the formatter is year-conditional —

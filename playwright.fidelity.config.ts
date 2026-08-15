@@ -105,23 +105,40 @@ export default defineConfig({
       url: `${consoleUrl("sso")}/login`,
       reuseExistingServer: false,
       timeout: 60_000,
+      // Every variable this console's identity flow reads is named here, and
+      // the ones it must NOT have are named as empty rather than omitted.
+      // Omitting is not the same as clearing: `next start` fills anything this
+      // block leaves out from the invoking shell or a developer's `.env.local`,
+      // so an omitted variable is whatever that machine happens to hold. All
+      // four below read as absent when empty (`env.ts`, `identity/config.ts`).
       env: {
         PLATFORM_BASE_URL: MOCK_URL,
-        // No PLATFORM_API_KEY, on purpose. In identity mode the BFF never reads
-        // it, so a page that renders here can only have rendered on the
-        // operator's own token — which is what these shots are evidence of.
-        //
-        // No CONSOLE_PASSWORD either, and empty rather than absent for the
-        // `.env.local` reason above: with a password set, the gate would stand
-        // in front of the very page being shot.
+        // Cleared, not omitted. In identity mode the BFF never reads it, so a
+        // page that renders here can only have rendered on the operator's own
+        // token — which is what these shots are evidence of. Inheriting a real
+        // key would let a regression that fell back to the management
+        // credential keep this shot green, and quietly void that evidence.
+        PLATFORM_API_KEY: "",
+        // With a password set, the gate would stand in front of the very page
+        // being shot.
         CONSOLE_PASSWORD: "",
         IDENTITY_MODE: "oidc",
         IDENTITY_OIDC_ISSUER: IDP_ISSUER,
         IDENTITY_OIDC_CLIENT_ID: IDP_CLIENT_ID,
-        // IDENTITY_OIDC_REDIRECT_URL deliberately unset: leaving it out walks
-        // the derived path a deployment without it takes, and the derivation is
-        // deterministic here because Chrome sends no x-forwarded-host and
-        // Playwright always arrives on 127.0.0.1:<port>.
+        // A public client: with a secret the exchange would authenticate over
+        // Basic instead, which is a different code path than the one this tier
+        // means to walk (the stub accepts either, so it would fail silently).
+        IDENTITY_OIDC_CLIENT_SECRET: "",
+        // Empty so the *derived* redirect URI is exercised — the path a
+        // deployment without the variable takes, deterministic here because
+        // Chrome sends no x-forwarded-host and Playwright always arrives on
+        // 127.0.0.1:<port>. Inheriting a developer's own value (a callback on
+        // port 3000, say) would send Chrome to a different server mid-flow.
+        IDENTITY_OIDC_REDIRECT_URL: "",
+        // Empty means the default openid/profile/email, which is what the stub
+        // is written against; an inherited set without `openid` fails closed at
+        // config time and takes the whole pass with it.
+        IDENTITY_OIDC_SCOPES: "",
       },
     },
   ],
