@@ -63,6 +63,14 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Fixed
 
+- **Destructive controls are legible** ([#90](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/90)):
+  archive, delete and revoke — and every error message in the console — failed WCAG AA colour
+  contrast, worst at **2.5:1**. The label and the wash under it came from one token, and a colour
+  cannot differ enough from a tint of itself: in dark mode the ceiling is 4.29:1 at _every_ possible
+  value, so the obvious fix of retuning `--destructive` could not have worked. Danger is now two
+  tokens, the wash keeping the value it had, so only the glyphs move. The report covered the light
+  tinted button; measuring first found dark failing on bare error text too, on plain backgrounds
+  nowhere near a tint.
 - **Day-scale dates drop their time-of-day** ([#87](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/87)):
   created, updated and expires render `Aug 10, 2026` rather than `Aug 14, 2026, 00:09`, with the
   exact minute one hover away; the trace log, the sessions list and a credential that can expire

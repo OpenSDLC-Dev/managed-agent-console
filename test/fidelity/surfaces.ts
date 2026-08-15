@@ -348,10 +348,24 @@ export const SURFACES: Surface[] = [
     id: "archive-confirm",
     route: `/vaults/${VAULT}`,
     fixture: VAULT,
-    description: "Destructive-confirmation dialog: the only red-button layout.",
+    description:
+      "Destructive-confirmation dialog — the shared footer every ConfirmButton and ConfirmIconButton ends in, and the console's hardest contrast target: the footer is `bg-muted/50`, a lighter backdrop than the popover (issue #90). Behind it, the Delete trigger carries the same colour as bare text.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Archive", exact: true }).click();
       await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "approval-deny",
+    route: `/sessions/${GATED}`,
+    fixture: GATED,
+    description:
+      "The second destructive-button layout, and the only one outside a dialog: Deny sits on the amber warning box rather than a console surface, so its wash composites over a Tailwind colour the palette test cannot model (issue #90).",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByTestId("approval-banner").waitFor();
+      await page.getByRole("button", { name: "Deny…" }).first().click();
+      await page.getByRole("button", { name: "Deny", exact: true }).waitFor();
     },
   },
   {

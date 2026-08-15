@@ -1,5 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { SURFACES } from "./surfaces";
 
 /**
@@ -68,6 +68,21 @@ for (const surface of SURFACES) {
     await page.waitForFunction(
       () => !document.querySelector('[aria-busy="true"]'),
     );
+
+    // A dialog is painted before its entry animation ends, so a shot taken on
+    // `waitFor` alone catches it part-way through the fade — over a backdrop
+    // that is still lightening. Two runs of the same build then differ across
+    // essentially the whole frame (measured: 1,292,989 of 1,296,000 pixels on
+    // `archive-confirm`), which makes every dialog shot unreadable as
+    // evidence. The e2e axe pass hit this first and waits the same way.
+    const dialog = page.getByRole("dialog");
+    if (await dialog.count()) {
+      await expect
+        .poll(() =>
+          dialog.first().evaluate((el) => getComputedStyle(el).opacity),
+        )
+        .toBe("1");
+    }
 
     await mkdir(`${OUT}/${theme}`, { recursive: true });
     await page.screenshot({

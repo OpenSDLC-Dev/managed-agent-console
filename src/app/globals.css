@@ -27,6 +27,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-surface: var(--destructive-surface);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -67,7 +68,19 @@
   --muted-foreground: #52514e;
   --accent: #f0f0ee;
   --accent-foreground: #0b0b0b;
-  --destructive: oklch(0.577 0.245 27.325);
+  /*
+   * Two danger roles, because one cannot satisfy WCAG AA (issue #90). The
+   * destructive controls are a wash of the danger colour under label text of
+   * the same colour, so their contrast is capped by how far a colour can
+   * differ from a tint of itself: in dark mode that ceiling is 4.29:1 at every
+   * possible value, so no single token clears 4.5:1. `--destructive` is
+   * therefore the colour that gets *read* — text and icons — and
+   * `--destructive-surface` the wash, borders and rings behind it. The wash
+   * keeps the value both themes shipped, so the controls look unchanged; only
+   * the glyphs darken. Ratios are asserted in `globals.test.ts`.
+   */
+  --destructive: oklch(0.478 0.198 27.325);
+  --destructive-surface: oklch(0.577 0.245 27.325);
   --border: rgba(11, 11, 11, 0.1);
   --input: rgba(11, 11, 11, 0.1);
   --ring: rgba(11, 11, 11, 0.3);
@@ -92,7 +105,9 @@
  * (docs/design-reference.md, extracted 2026-08-02). The reference console
  * theme itself pins dark mode to the light palette; shipping a real dark
  * mode is a deliberate self-hosting divergence built from the same token
- * family (bg-000..300, text-100/300, border-200, danger-100).
+ * family (bg-000..300, text-100/300, border-200, danger-100) — with one
+ * value derived rather than borrowed: `--destructive`, which AA forced off
+ * danger-100 (issue #90, and the light block for the arithmetic).
  */
 .dark {
   --background: hsl(60 2.7% 14.5%); /* bg-100 #262624 */
@@ -109,7 +124,9 @@
   --muted-foreground: hsl(50 9% 73.7%); /* text-300 #c2c0b6 */
   --accent: hsl(60 2.5% 23.3%);
   --accent-foreground: hsl(48 33.3% 97.1%);
-  --destructive: hsl(0 67% 59.6%); /* danger-100 */
+  /* danger-100 lightened to clear AA as text; see the light block for why. */
+  --destructive: hsl(4 100% 82%);
+  --destructive-surface: hsl(0 67% 59.6%); /* danger-100 */
   --border: hsl(51 16.5% 84.5% / 0.15); /* border-200 at low alpha */
   --input: hsl(51 16.5% 84.5% / 0.2);
   --ring: hsl(51 16.5% 84.5% / 0.4);
