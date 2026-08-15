@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +15,8 @@ import {
 
 /**
  * The reference's row/detail ⋯ menu: Archive and/or Delete, each confirming
- * through the same dialog the old header buttons used.
+ * through the same dialog the old header buttons used. The menu is portaled
+ * so a last-row open is not clipped by the table's overflow-x-auto.
  */
 export function ResourceActions({
   resource,
@@ -35,22 +37,52 @@ export function ResourceActions({
   archivePending?: boolean;
   deletePending?: boolean;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
   const [confirm, setConfirm] = useState<"archive" | "delete" | null>(null);
   const canArchive = !!onArchive && !archived;
   const canDelete = !!onDelete;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
   if (!canArchive && !canDelete) return null;
 
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
+  const toggleMenu = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+    setMenuOpen((open) => !open);
+  };
+
   return (
-    <div
-      className="relative"
-      data-testid="resource-actions"
-      onClick={stop}
-      onKeyDown={stop}
-    >
+    <div data-testid="resource-actions" onClick={stop} onKeyDown={stop}>
       <Button
+        ref={triggerRef}
         type="button"
         variant="ghost"
         size="sm"
@@ -58,43 +90,47 @@ export function ResourceActions({
         aria-label="More actions"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((open) => !open)}
+        onClick={toggleMenu}
       >
         <MoreHorizontal className="size-4" />
       </Button>
-      {menuOpen && (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-36 rounded-lg border bg-popover p-1 shadow-md"
-        >
-          {canArchive && (
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirm("archive");
-              }}
-            >
-              Archive
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              role="menuitem"
-              className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive-surface/10"
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirm("delete");
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </div>
-      )}
+      {menuOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            className="fixed z-50 min-w-36 rounded-lg border bg-popover p-1 shadow-md"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            {canArchive && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirm("archive");
+                }}
+              >
+                Archive
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive-surface/10"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirm("delete");
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
       <Dialog
         open={confirm !== null}
         onOpenChange={(open) => {

@@ -121,7 +121,13 @@ export function CreateEnvironmentButton({
             </p>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
+            >
               Cancel
             </Button>
             <Button
