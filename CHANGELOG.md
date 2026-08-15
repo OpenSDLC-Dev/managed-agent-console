@@ -63,6 +63,19 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Fixed
 
+- **The two heaviest form tests stop racing the 5s timeout**
+  ([#93](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/93)): under full-suite load the
+  agent editor's and credential form's save tests ran **4978ms** and **4044ms** against Vitest's
+  5000ms default, so a PR touching neither file reddened at random. Measuring first is what chose
+  the fix over raising `testTimeout`, which hides slowness everywhere: `userEvent` costs **~35ms a
+  character** in jsdom — 44 keystrokes were 1719ms of one test — while `delay: null`, the cause both
+  filings suspected, changes nothing. Every field the two tests fill is a plain controlled input and
+  neither asserts on typing, so each field now takes one change event, with the rendered value
+  asserted where nothing else covered it. Filed once before as
+  [#39](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/39) and closed as an
+  environment issue rather than a defect. On the loaded run that produced those figures no test now
+  exceeds **2162ms**, and under CI's own `test:coverage` the slowest is **2060ms** — margin the
+  suite did not have, rather than a wall no load can reach.
 - **Destructive controls are legible** ([#90](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/90)):
   archive, delete and revoke — and every error message in the console — failed WCAG AA colour
   contrast, worst at **2.5:1**. The label and the wash under it came from one token, and a colour
