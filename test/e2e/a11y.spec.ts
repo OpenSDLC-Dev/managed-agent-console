@@ -119,7 +119,12 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Archive", exact: true }).click();
     await dialogSettled(page);
     await expectNoViolations(page);
+    // The dialog stays mounted through its own closing fade, and the trigger
+    // behind it becomes visible before that ends — so without waiting for the
+    // dialog to go, the next scan measures a half-transparent dialog and fails
+    // for a reason that is not the palette. The mirror of `dialogSettled`.
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
 
     // The delete trigger: an outline button carrying bare `text-destructive`.
     await expect(

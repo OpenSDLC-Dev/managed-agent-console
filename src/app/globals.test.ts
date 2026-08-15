@@ -79,10 +79,24 @@ function parse(value: string): Rgb {
     const [L, C, h] = m[1].trim().split(/\s+/).map(Number);
     return oklch(L, C, h);
   }
-  m = /^hsl\(([^)]+)\)$/i.exec(v);
+  m = /^hsla?\(([^)]+)\)$/i.exec(v);
   if (m) {
-    const [h, s, l] = m[1].trim().replace(/%/g, "").split(/\s+/).map(Number);
+    // Any alpha in the token is dropped: where a colour is painted at an
+    // alpha, the Tailwind utility (`/50`) sets it, and the caller composites.
+    const [h, s, l] = m[1]
+      .trim()
+      .replace(/%/g, "")
+      .split(/[\s,/]+/)
+      .map(Number);
     return hsl(h, s, l);
+  }
+  m = /^rgba?\(([^)]+)\)$/i.exec(v);
+  if (m) {
+    const [r, g, b] = m[1]
+      .trim()
+      .split(/[\s,/]+/)
+      .map(Number);
+    return [r, g, b];
   }
   throw new Error(`globals.test.ts cannot parse the colour ${value}`);
 }
@@ -184,11 +198,21 @@ describe.each(Object.entries(THEMES))(
       },
     );
 
+    // A focus ring is a non-text indicator, so it owes 3:1 — and it is drawn
+    // at an alpha, which is the whole point: asserting the opaque token would
+    // pass while the ring the browser paints sits at 1.4:1. Every variant
+    // including `destructive` inherits this one ring; the danger colour
+    // deliberately does not tint it (see button.tsx).
     it.each(["page background", "card"])(
-      "shows destructive borders and rings on the %s",
+      "shows the focus ring against the %s",
       (where) => {
+        const ring = over(
+          parse(vars["--ring"]),
+          on[where as keyof typeof on],
+          0.5, // focus-visible:ring-ring/50
+        );
         expect(
-          contrast(surface(), on[where as keyof typeof on]),
+          contrast(ring, on[where as keyof typeof on]),
         ).toBeGreaterThanOrEqual(AA_NON_TEXT);
       },
     );

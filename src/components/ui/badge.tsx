@@ -13,7 +13,8 @@ const badgeVariants = cva(
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
-          "bg-destructive-surface/10 text-destructive focus-visible:ring-destructive-surface/20 dark:bg-destructive-surface/20 dark:focus-visible:ring-destructive-surface/40 [a]:hover:bg-destructive-surface/20",
+          // No focus-ring override, for the reason button.tsx gives.
+          "bg-destructive-surface/10 text-destructive dark:bg-destructive-surface/20 [a]:hover:bg-destructive-surface/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

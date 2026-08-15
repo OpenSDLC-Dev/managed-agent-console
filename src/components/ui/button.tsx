@@ -17,8 +17,15 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         // The wash is `destructive-surface`, the label `destructive`: a colour
         // cannot reach AA against a tint of itself (globals.css, issue #90).
+        //
+        // No focus-ring override. Upstream tints the ring with the danger
+        // colour, but a tint of it composites to 1.43:1 against the page —
+        // under WCAG 1.4.11's 3:1 for a focus indicator, and a red ring only
+        // clears it at alpha 0.75 light / 1.0 dark, which is a solid halo
+        // nobody asked for. Inheriting the console's own ring is both uniform
+        // and passing (3.67:1 light, 3.88:1 dark).
         destructive:
-          "bg-destructive-surface/10 text-destructive hover:bg-destructive-surface/20 focus-visible:border-destructive-surface/40 focus-visible:ring-destructive-surface/20 dark:bg-destructive-surface/20 dark:hover:bg-destructive-surface/30 dark:focus-visible:ring-destructive-surface/40",
+          "bg-destructive-surface/10 text-destructive hover:bg-destructive-surface/20 dark:bg-destructive-surface/20 dark:hover:bg-destructive-surface/30",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
