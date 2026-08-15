@@ -6,12 +6,7 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 
 ## Active work
 
-**Nothing in flight.** #99 closed with [#106](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/106):
-the fidelity pass now walks 35 surfaces against two consoles, one of them running
-`IDENTITY_MODE=oidc` against a stub provider beside the mock platform, so `login-sso` and
-`account-block` are shot rather than compared by hand. It left one defect behind —
-[#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107), a doubled divider rule in
-the signed-in sidebar footer, which is what the first shot of that surface found.
+**Nothing in flight.** #107 is the open issue the last work left behind.
 
 Both halves of the platform's SSO/RBAC work (#56) are archived:
 [plan 07](./docs/plan/07_console-issued-keys.md) (credential issuance) and
