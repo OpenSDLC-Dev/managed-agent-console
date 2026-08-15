@@ -177,6 +177,10 @@ function renderEditor(props?: Partial<ComponentProps<typeof AgentEditor>>) {
   );
 }
 
+async function expandTools(user: UserEvent) {
+  await user.click(screen.getByRole("button", { name: /Tool permissions/ }));
+}
+
 async function choose(user: UserEvent, triggerLabel: string, option: string) {
   const trigger = screen.getByRole("button", { name: triggerLabel });
   const wrapper = trigger.closest('[data-slot="mock-select"]') as HTMLElement;
@@ -330,6 +334,7 @@ describe("AgentEditor", () => {
     stubFetch();
     const user = userEvent.setup();
     renderEditor();
+    await expandTools(user);
 
     await user.click(screen.getByRole("checkbox", { name: "bash enabled" }));
     expect(screen.getByRole("button", { name: "bash policy" })).toBeDisabled();
@@ -347,9 +352,11 @@ describe("AgentEditor", () => {
     ]);
   });
 
-  it("lays out the sections with tool descriptions", () => {
+  it("lays out the sections with tool descriptions", async () => {
     stubFetch();
+    const user = userEvent.setup();
     renderEditor();
+    await expandTools(user);
     for (const title of ["General", "Tools", "Skills"]) {
       expect(
         screen.getByRole("heading", { name: title, level: 3 }),
@@ -363,6 +370,7 @@ describe("AgentEditor", () => {
     stubFetch();
     const user = userEvent.setup();
     renderEditor();
+    await expandTools(user);
 
     await choose(user, "default policy", "always ask");
     // read deviates back to allow relative to the ask default.
@@ -384,6 +392,7 @@ describe("AgentEditor", () => {
     stubFetch();
     const user = userEvent.setup();
     renderEditor();
+    await expandTools(user);
 
     await user.click(screen.getByRole("checkbox", { name: "default enabled" }));
     expect(
@@ -403,6 +412,7 @@ describe("AgentEditor", () => {
     stubFetch();
     const user = userEvent.setup();
     renderEditor();
+    await expandTools(user);
 
     await choose(user, "bash policy", "always ask");
     await user.click(screen.getByRole("checkbox", { name: "default enabled" }));

@@ -222,7 +222,10 @@ describe("SessionsPage", () => {
     await userEvent.click(
       screen.getAllByRole("button", { name: /Create session/ })[1],
     );
-    expect(pushSpy).toHaveBeenCalledWith("/sessions/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create session" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("renders session rows (title, status, agent, tokens) and navigates", async () => {
@@ -262,13 +265,16 @@ describe("SessionsPage", () => {
     expect(pushSpy).toHaveBeenCalledWith("/sessions/sess_1");
   });
 
-  it("navigates to the create page from the header action", async () => {
+  it("opens the create dialog from the header action", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     await userEvent.click(
       screen.getByRole("button", { name: /Create session/ }),
     );
-    expect(pushSpy).toHaveBeenCalledWith("/sessions/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create session" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("filters by status and resets the page cursor", async () => {

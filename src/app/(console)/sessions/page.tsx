@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
+import { CreateSessionButton } from "@/components/console/create-session-dialog";
+import { IdCell } from "@/components/console/copy-id";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
   ArchivedBadge,
   EmptyState,
   ErrorState,
-  IdCode,
   StatusBadge,
   Time,
   UnavailableSurface,
@@ -34,7 +33,7 @@ import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
-  { key: "id", header: "ID", cell: (s) => <IdCode id={s.id} /> },
+  { key: "id", header: "ID", cell: (s) => <IdCell id={s.id} /> },
   {
     key: "title",
     header: "Name",
@@ -111,11 +110,7 @@ export default function SessionsPage() {
       <PageHeader
         title="Sessions"
         subtitle="Trace and debug agent sessions."
-        actions={
-          <Button className="h-8" onClick={() => router.push("/sessions/new")}>
-            <Plus className="size-4" /> Create session
-          </Button>
-        }
+        actions={<CreateSessionButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">
         <div className="flex items-center gap-1.5">
@@ -213,15 +208,7 @@ export default function SessionsPage() {
               <EmptyState
                 title="No sessions yet"
                 hint="Create a session to get started."
-                action={
-                  <Button
-                    variant="outline"
-                    className="h-8"
-                    onClick={() => router.push("/sessions/new")}
-                  >
-                    Create session
-                  </Button>
-                }
+                action={<CreateSessionButton variant="outline" />}
               />
             }
           />

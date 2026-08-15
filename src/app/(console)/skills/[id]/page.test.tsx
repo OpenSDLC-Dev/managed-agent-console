@@ -148,7 +148,9 @@ describe("SkillDetailPage", () => {
     routes();
     renderPage();
 
-    expect(await screen.findByText("PDF tools")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "PDF tools" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("custom")).toBeInTheDocument();
     expect(screen.getAllByText("1759178010641556")).toHaveLength(2);
     expect(screen.getByText("pdf-tools")).toBeInTheDocument();
@@ -176,7 +178,7 @@ describe("SkillDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("PDF tools");
+    await screen.findByRole("heading", { name: "PDF tools" });
 
     // The visible button forwards the click to the hidden file input.
     await userEvent.click(screen.getByRole("button", { name: /New version/ }));
@@ -210,7 +212,7 @@ describe("SkillDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("PDF tools");
+    await screen.findByRole("heading", { name: "PDF tools" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Delete version 1759178010641556" }),
@@ -238,9 +240,10 @@ describe("SkillDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("PDF tools");
+    await screen.findByRole("heading", { name: "PDF tools" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Delete skill" }),
@@ -263,7 +266,9 @@ describe("SkillDetailPage", () => {
     });
     renderPage();
 
-    expect(await screen.findByText("Excel")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Excel" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("anthropic")).toBeInTheDocument();
     expect(screen.getByText("none")).toBeInTheDocument();
     expect(screen.getByText("No versions")).toBeInTheDocument();
@@ -283,7 +288,9 @@ describe("SkillDetailPage", () => {
     });
     renderPage();
 
-    expect(await screen.findByText("PDF tools")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "PDF tools" }),
+    ).toBeInTheDocument();
     expect(await screen.findByText("versions down")).toBeInTheDocument();
   });
 });

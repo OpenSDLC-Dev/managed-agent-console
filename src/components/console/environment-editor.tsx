@@ -66,7 +66,7 @@ export function formFromEnvironment(environment: Environment): EnvForm {
   };
 }
 
-function bodyFromForm(
+export function bodyFromForm(
   form: EnvForm,
   mode: "create" | "edit",
 ): EnvironmentWriteBody {
@@ -146,7 +146,8 @@ export function EnvironmentEditor({
           <Label>Type</Label>
           {mode === "edit" ? (
             <p className="pt-1.5 text-sm text-muted-foreground">
-              {form.kind} (immutable)
+              {form.kind === "self_hosted" ? "Self-hosted" : "Cloud"}{" "}
+              (immutable)
             </p>
           ) : (
             <Select
@@ -161,8 +162,8 @@ export function EnvironmentEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="cloud">cloud</SelectItem>
-                <SelectItem value="self_hosted">self_hosted</SelectItem>
+                <SelectItem value="cloud">Cloud</SelectItem>
+                <SelectItem value="self_hosted">Self-hosted</SelectItem>
               </SelectContent>
             </Select>
           )}

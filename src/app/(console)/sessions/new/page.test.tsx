@@ -193,7 +193,7 @@ describe("NewSessionPage", () => {
     );
     expect(create).toBeDisabled();
     await userEvent.click(
-      screen.getByRole("button", { name: "Prod sandbox · self_hosted" }),
+      screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
     );
     expect(create).toBeEnabled();
   });
@@ -206,10 +206,13 @@ describe("NewSessionPage", () => {
       await screen.findByRole("button", { name: "Support bot · v2" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Prod sandbox · self_hosted" }),
+      screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
     );
     await userEvent.type(screen.getByLabelText("Title (optional)"), "Run 1");
     // Toggle the vault binding off and on again — the final body keeps it.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Credential vaults" }),
+    );
     const checkbox = await screen.findByRole("checkbox");
     await userEvent.click(checkbox);
     await userEvent.click(checkbox);
@@ -257,7 +260,7 @@ describe("NewSessionPage", () => {
       screen.getByRole("button", { name: "Support bot · v2" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Prod sandbox · self_hosted" }),
+      screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
     );
     await userEvent.click(
       screen.getByRole("button", { name: "Create session" }),
@@ -315,7 +318,7 @@ describe("NewSessionPage", () => {
       await screen.findByRole("button", { name: "Support bot · v2" }),
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Prod sandbox · self_hosted" }),
+      screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
     );
     await userEvent.click(
       screen.getByRole("button", { name: "Create session" }),

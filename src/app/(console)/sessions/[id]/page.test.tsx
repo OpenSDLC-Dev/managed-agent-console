@@ -232,7 +232,9 @@ describe("SessionDetailPage", () => {
     stubFetch();
     renderPage();
 
-    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
     // Subtitle and the agent chip both carry the agent · version.
     expect(screen.getAllByText("Support bot · v2")).toHaveLength(2);
     const chips = screen.getByTestId("session-chips");
@@ -295,7 +297,7 @@ describe("SessionDetailPage", () => {
     );
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
 
     expect(screen.getAllByTestId("event-row")).toHaveLength(3);
     expect(screen.getAllByTestId("preview-row")).toHaveLength(1);
@@ -344,7 +346,7 @@ describe("SessionDetailPage", () => {
     ]);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
 
     expect(screen.getByTestId("idle-band")).toBeInTheDocument();
     expect(screen.getByTitle("model request duration")).toHaveAttribute(
@@ -372,7 +374,7 @@ describe("SessionDetailPage", () => {
     ]);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
 
     const row = screen.getByTestId("event-row");
     expect(row).toHaveAttribute("data-event-type", "span.model_request_start");
@@ -391,7 +393,7 @@ describe("SessionDetailPage", () => {
     ]);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
     expect(screen.queryByTestId("event-detail")).toBeNull();
 
     const row = screen.getAllByTestId("event-row")[0];
@@ -431,7 +433,7 @@ describe("SessionDetailPage", () => {
     );
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
 
     // Transcript: the unpaired start stays visible, the preview shows.
     expect(screen.getAllByTestId("event-row")).toHaveLength(2);
@@ -467,7 +469,7 @@ describe("SessionDetailPage", () => {
     ]);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
     const toolbar = () => screen.getByTestId("events-toolbar");
 
     // Narrow the transcript: 1 of 3 events survives the Tools filter.
@@ -519,7 +521,7 @@ describe("SessionDetailPage", () => {
     setTrace("live", events);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
 
     await userEvent.click(screen.getByRole("button", { name: "Copy all" }));
     expect(writeText).toHaveBeenCalledWith(JSON.stringify(events, null, 2));
@@ -532,7 +534,7 @@ describe("SessionDetailPage", () => {
     setTrace("live", []);
     stubFetch();
     renderPage();
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
     expect(screen.getByRole("button", { name: "Copy all" })).toBeDisabled();
   });
 
@@ -591,7 +593,9 @@ describe("SessionDetailPage", () => {
     stubFetch();
     renderPage();
 
-    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("approval-banner")).toBeNull();
     expect(screen.getByTestId("stream-state")).toHaveTextContent(
       "reconnecting…",
@@ -649,7 +653,9 @@ describe("SessionDetailPage under a violated wire contract", () => {
     renderPage();
 
     // The page still loads and the rest of the header is intact…
-    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
     const chips = screen.getByTestId("session-chips");
     // …and the chip claims only the counters that arrived.
     const usage = within(chips).getByTestId("usage-chip");
@@ -670,7 +676,9 @@ describe("SessionDetailPage under a violated wire contract", () => {
     });
     renderPage();
 
-    expect(await screen.findByText("Debug run")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
     const usage = within(screen.getByTestId("session-chips")).getByTestId(
       "usage-chip",
     );
@@ -694,7 +702,7 @@ describe("SessionDetailPage under a violated wire contract", () => {
     });
     renderPage();
 
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
     const chip = within(screen.getByTestId("session-chips")).getByTestId(
       "usage-chip",
     );
@@ -724,7 +732,7 @@ describe("SessionDetailPage under a violated wire contract", () => {
     stubFetch();
     renderPage();
 
-    await screen.findByText("Debug run");
+    await screen.findByRole("heading", { name: "Debug run" });
     expect(screen.getAllByTestId("event-row")).toHaveLength(2);
     expect(document.body.textContent).not.toMatch(/NaN|Invalid Date|undefined/);
   });

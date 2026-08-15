@@ -191,7 +191,9 @@ describe("VaultDetailPage", () => {
     routes();
     renderPage();
 
-    expect(await screen.findByText("Team creds")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Team creds" }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/write-only on the platform/)).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("https://mcp.github.example")).toBeInTheDocument();
@@ -216,7 +218,7 @@ describe("VaultDetailPage", () => {
           : undefined,
     });
     renderPage();
-    await screen.findByText("Team creds");
+    await screen.findByRole("heading", { name: "Team creds" });
 
     await userEvent.click(screen.getByRole("button", { name: /Validate/ }));
     expect(await screen.findByTestId("credential-notice")).toHaveTextContent(
@@ -238,7 +240,7 @@ describe("VaultDetailPage", () => {
           : undefined,
     });
     renderPage();
-    await screen.findByText("Team creds");
+    await screen.findByRole("heading", { name: "Team creds" });
 
     await userEvent.click(screen.getByRole("button", { name: /Validate/ }));
     const notice = await screen.findByTestId("credential-notice");
@@ -258,7 +260,7 @@ describe("VaultDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("Team creds");
+    await screen.findByRole("heading", { name: "Team creds" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Delete credential crd_bearer" }),
@@ -286,9 +288,10 @@ describe("VaultDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("Team creds");
+    await screen.findByRole("heading", { name: "Team creds" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText(/purges every credential/),
@@ -313,9 +316,10 @@ describe("VaultDetailPage", () => {
       },
     });
     renderPage();
-    await screen.findByText("Team creds");
+    await screen.findByRole("heading", { name: "Team creds" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Delete vault" }),
@@ -333,7 +337,9 @@ describe("VaultDetailPage", () => {
     });
     renderPage();
 
-    expect(await screen.findByText("Team creds")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Team creds" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("archived")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add credential/ })).toBeNull();

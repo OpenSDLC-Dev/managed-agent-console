@@ -188,7 +188,10 @@ describe("AgentsPage", () => {
     await userEvent.click(
       screen.getAllByRole("button", { name: /Create agent/ })[1],
     );
-    expect(pushSpy).toHaveBeenCalledWith("/agents/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create agent" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("renders agent rows and navigates on row click", async () => {
@@ -208,7 +211,10 @@ describe("AgentsPage", () => {
 
     expect(await screen.findByText("Support bot")).toBeInTheDocument();
     expect(screen.getByText("Old bot")).toBeInTheDocument();
-    expect(screen.getByText("archived")).toBeInTheDocument();
+    expect(screen.getByText("Archived")).toHaveAttribute(
+      "data-status",
+      "archived",
+    );
     expect(screen.getAllByText("claude-sonnet-4-8")).toHaveLength(2);
     expect(screen.getAllByText("v3")).toHaveLength(2);
 
@@ -224,11 +230,14 @@ describe("AgentsPage", () => {
     expect(pushSpy).toHaveBeenCalledWith("/agents/agt_1");
   });
 
-  it("navigates to the create page from the header action", async () => {
+  it("opens the create dialog from the header action", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     await userEvent.click(screen.getByRole("button", { name: /Create agent/ }));
-    expect(pushSpy).toHaveBeenCalledWith("/agents/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create agent" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("refetches with include_archived when the filter flips to All", async () => {

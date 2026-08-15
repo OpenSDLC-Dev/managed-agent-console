@@ -67,6 +67,7 @@ test("a denied write is titled as a denial, not as a fault", async ({
   await page.getByRole("button", { name: "Create environment" }).click();
   await page.getByLabel("Name").fill("role-check");
   await page
+    .getByRole("dialog")
     .getByRole("button", { name: "Create environment", exact: true })
     .click();
   await expect(page).toHaveURL(/\/environments\/env_mock/);
@@ -76,7 +77,8 @@ test("a denied write is titled as a denial, not as a fault", async ({
     data: { paths: [`v1/environments/${id}/archive`] },
   });
 
-  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive environment" }).click();
 
   // The title stays the one the call site chose, because it names what was

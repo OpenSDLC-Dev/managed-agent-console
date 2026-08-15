@@ -337,7 +337,7 @@ describe("EnvironmentEditor", () => {
       screen.getByRole("button", { name: "Create environment" }),
     ).toBeDisabled();
 
-    await choose(user, "Environment type", "self_hosted");
+    await choose(user, "Environment type", "Self-hosted");
     expect(screen.queryByRole("button", { name: "Networking" })).toBeNull();
     expect(screen.queryByLabelText("npm")).toBeNull();
 
@@ -366,7 +366,7 @@ describe("EnvironmentEditor", () => {
       environmentId: "env_1",
     });
 
-    expect(screen.getByText("cloud (immutable)")).toBeInTheDocument();
+    expect(screen.getByText("Cloud (immutable)")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Environment type" }),
     ).toBeNull();
@@ -414,7 +414,7 @@ describe("EnvironmentEditor", () => {
       environmentId: "env_2",
     });
 
-    expect(screen.getByText("self_hosted (immutable)")).toBeInTheDocument();
+    expect(screen.getByText("Self-hosted (immutable)")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>

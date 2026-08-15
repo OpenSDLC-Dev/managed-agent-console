@@ -116,7 +116,11 @@ for (const theme of ["light", "dark"] as const) {
     // Its footer is `bg-muted/50`, a lighter backdrop than the popover and so
     // the console's hardest destructive contrast target.
     await page.goto("/vaults/vlt_github00000000000001");
-    await page.getByRole("button", { name: "Archive", exact: true }).click();
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: "More actions" })
+      .click();
+    await page.getByRole("menuitem", { name: "Archive" }).click();
     await dialogSettled(page);
     await expectNoViolations(page);
     // The dialog stays mounted through its own closing fade, and the trigger
@@ -127,9 +131,11 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("dialog")).toBeHidden();
 
     // The delete trigger: an outline button carrying bare `text-destructive`.
-    await expect(
-      page.getByRole("button", { name: "Delete", exact: true }),
-    ).toBeVisible();
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: "More actions" })
+      .click();
+    await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible();
     await expectNoViolations(page);
 
     // Bare `text-destructive` error copy — 36 sites share this colour, and in

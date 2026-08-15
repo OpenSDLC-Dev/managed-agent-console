@@ -9,9 +9,9 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   UnavailableSurface,
 } from "@/components/console/bits";
+import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
@@ -25,7 +25,7 @@ function formatBytes(bytes: number): string {
 }
 
 const COLUMNS: Column<PlatformFile>[] = [
-  { key: "id", header: "ID", cell: (f) => <IdCode id={f.id} /> },
+  { key: "id", header: "ID", cell: (f) => <IdCell id={f.id} /> },
   {
     key: "filename",
     header: "Filename",

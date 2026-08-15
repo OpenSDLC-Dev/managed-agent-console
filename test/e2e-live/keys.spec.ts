@@ -155,7 +155,7 @@ test("a console-issued environment key drives the real worker lane, and revoking
   await page.goto("/environments/new");
   await page.getByLabel("Name").fill(`live-e2e-byoc-${RUN}`);
   await page.getByLabel("Environment type").click();
-  await page.getByRole("option", { name: "self_hosted" }).click();
+  await page.getByRole("option", { name: "Self-hosted" }).click();
   await page
     .getByRole("button", { name: "Create environment", exact: true })
     .click();

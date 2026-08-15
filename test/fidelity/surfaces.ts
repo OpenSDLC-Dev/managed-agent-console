@@ -210,7 +210,7 @@ export const SURFACES: Surface[] = [
     description: "Agent/environment pickers plus the file-mount control.",
     setup: async (page) => {
       // The vault section renders only once its query resolves
-      // (`sessions/new/page.tsx`: `vaults.data?.data.length > 0 &&`), and the
+      // (`session-create-form.tsx`: `vaultList.length > 0 &&`), and the
       // form shows no skeleton meanwhile — so without this the shot is a form
       // with a section silently missing (review finding, PR #38).
       // Scoped to main: the sidebar carries a "Credential vaults" nav link too.
@@ -334,10 +334,50 @@ export const SURFACES: Surface[] = [
     id: "vault-create",
     route: "/vaults",
     fixture: "empty dialog form",
-    description: "The create-dialog shape shared by every resource list.",
+    description: "The short create-dialog shape (name + confirm).",
     setup: async (page) => {
       await page.getByRole("button", { name: "Create vault" }).click();
       await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "agent-create",
+    route: "/agents",
+    fixture: "empty dialog form",
+    description:
+      "Create agent as a list modal: templates plus the full editor.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create agent" }).first().click();
+      await page.getByRole("dialog", { name: "Create agent" }).waitFor();
+    },
+  },
+  {
+    id: "environment-create",
+    route: "/environments",
+    fixture: "empty stub dialog",
+    description:
+      "Create environment as a name + hosting stub; the full editor is the detail edit page.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create environment" })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "Create environment" }).waitFor();
+    },
+  },
+  {
+    id: "session-create",
+    route: "/sessions",
+    fixture: "empty dialog form over the agent, environment and vault lists",
+    description:
+      "Create session as a list modal: Manage … links and vault multi-select.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create session" })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "Create session" }).waitFor();
+      await page.getByRole("dialog").getByText("Manage agents").waitFor();
     },
   },
   {
@@ -361,7 +401,11 @@ export const SURFACES: Surface[] = [
     description:
       "Destructive-confirmation dialog — the shared footer every ConfirmButton and ConfirmIconButton ends in, and the console's hardest contrast target: the footer is `bg-muted/50`, a lighter backdrop than the popover (issue #90). Behind it, the Delete trigger carries the same colour as bare text.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Archive", exact: true }).click();
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "More actions" })
+        .click();
+      await page.getByRole("menuitem", { name: "Archive" }).click();
       await page.getByRole("dialog").waitFor();
     },
   },
@@ -387,7 +431,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page.getByLabel("Status filter").click();
       await page.getByRole("option", { name: "All" }).click();
-      await page.getByText("archived").first().waitFor();
+      await page.getByText("Archived").first().waitFor();
     },
   },
 

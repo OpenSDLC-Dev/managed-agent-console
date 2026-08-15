@@ -8,9 +8,9 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   RequestId,
 } from "@/components/console/bits";
+import { IdCell } from "@/components/console/copy-id";
 import { ConfirmIconButton } from "@/components/console/archive-button";
 import { EnvironmentKeySetup } from "@/components/console/environment-key-setup";
 import { Badge } from "@/components/ui/badge";
@@ -347,7 +347,7 @@ export function EnvironmentKeysSection({
       header: "ID",
       cell: (k) => (
         <span data-token-id={k.id}>
-          <IdCode id={k.id} />
+          <IdCell id={k.id} />
         </span>
       ),
     },
@@ -425,7 +425,7 @@ export function EnvironmentKeysSection({
                   the whole list. A pager for a surface whose realistic size is
                   "one per host" would be machinery nobody asked for; saying so
                   plainly is not. */}
-              {page?.pagination.has_more && (
+              {page?.pagination?.has_more && (
                 <p
                   className="pt-2 text-[13px] text-muted-foreground"
                   data-has-more="true"

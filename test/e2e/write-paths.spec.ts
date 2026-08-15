@@ -18,24 +18,21 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await page.getByRole("button", { name: "Create environment" }).click();
 
   await page.getByLabel("Name").fill("staging-sandbox");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Create environment", exact: true })
+    .click();
+
+  await expect(page).toHaveURL(/\/environments\/env_mock/);
+
+  await page.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByText("Cloud (immutable)")).toBeVisible();
   await page.getByLabel("Networking").click();
   await page.getByRole("option", { name: "limited" }).click();
   await page
     .getByLabel("Allowed hosts (one per line)")
     .fill("api.example.com\nregistry.npmjs.org");
   await page.getByLabel("npm", { exact: true }).fill("typescript, vitest");
-  await page
-    .getByRole("button", { name: "Create environment", exact: true })
-    .click();
-
-  await expect(page).toHaveURL(/\/environments\/env_mock/);
-  await expect(
-    page.getByText("limited — api.example.com, registry.npmjs.org"),
-  ).toBeVisible();
-
-  // Edit: rename and confirm the kind stays immutable.
-  await page.getByRole("button", { name: "Edit" }).click();
-  await expect(page.getByText("cloud (immutable)")).toBeVisible();
   await page.getByLabel("Name").fill("staging-sandbox-2");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(
@@ -43,10 +40,12 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   ).toBeVisible();
 
   // Archive, then delete (no sessions reference it).
-  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive environment" }).click();
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete environment" }).click();
   await expect(page).toHaveURL(/\/environments$/);
   await expect(page.getByText("staging-sandbox-2")).toBeHidden();
@@ -57,7 +56,8 @@ test("deleting an in-use environment surfaces the platform 400", async ({
 }) => {
   await signIn(page);
   await page.goto("/environments/env_cloudlimited000000001");
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete environment" }).click();
   await expect(page.getByText("environment still has sessions")).toBeVisible();
 });
@@ -68,6 +68,7 @@ test("create a session with an uploaded file mount and drive it", async ({
   await signIn(page);
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
   await page.getByRole("button", { name: "Create session" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.getByLabel("Agent", { exact: true }).click();
   await page.getByRole("option", { name: /General task agent/ }).click();
@@ -83,6 +84,7 @@ test("create a session with an uploaded file mount and drive it", async ({
   await expect(page.getByText("dataset.csv")).toBeVisible();
 
   await page
+    .getByRole("dialog")
     .getByRole("button", { name: "Create session", exact: true })
     .click();
   await expect(page).toHaveURL(/\/sessions\/sesn_mock/);
@@ -152,7 +154,11 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
   );
 
   // Archive warns about the secret purge.
-  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "More actions" })
+    .click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(
     page.getByText(/Archiving is terminal on the platform/),
   ).toBeVisible();
@@ -203,7 +209,8 @@ test("skill upload, new version, and deletes", async ({ page }) => {
       .click();
   }
   await expect(page.getByText("No versions")).toBeVisible();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete skill" }).click();
   await expect(page).toHaveURL(/\/skills$/);
 });

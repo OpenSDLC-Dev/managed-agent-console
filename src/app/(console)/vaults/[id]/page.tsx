@@ -16,14 +16,12 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   DetailSkeleton,
 } from "@/components/console/bits";
-import {
-  ArchiveButton,
-  ConfirmIconButton,
-  DeleteButton,
-} from "@/components/console/archive-button";
+import { ConfirmIconButton } from "@/components/console/archive-button";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { ResourceActions } from "@/components/console/resource-actions";
+import { IdCell } from "@/components/console/copy-id";
 import { AddCredentialButton } from "@/components/console/credential-form";
 import {
   AuthTypeBadge,
@@ -111,7 +109,7 @@ export default function VaultDetailPage({
   }
 
   const columns: Column<VaultCredential>[] = [
-    { key: "id", header: "ID", cell: (c) => <IdCode id={c.id} /> },
+    { key: "id", header: "ID", cell: (c) => <IdCell id={c.id} /> },
     {
       key: "name",
       header: "Name",
@@ -150,28 +148,28 @@ export default function VaultDetailPage({
 
   return (
     <div>
+      <Breadcrumb
+        parent={{ href: "/vaults", label: "Credential vaults" }}
+        current={vault.display_name}
+      />
       <PageHeader
         title={vault.display_name}
         actions={
           <span className="flex items-center gap-2">
             <ArchivedBadge archivedAt={vault.archived_at} />
-            {!vault.archived_at && (
-              <ArchiveButton
-                resource="vault"
-                warning="Archiving purges every credential's sealed secret."
-                onConfirm={() => archive.mutate()}
-                pending={archive.isPending}
-              />
-            )}
-            <DeleteButton
+            <ResourceActions
               resource="vault"
-              description="Deleting is permanent and cascades to every credential in the vault."
-              pending={removeVault.isPending}
-              onConfirm={() =>
+              archived={!!vault.archived_at}
+              archiveWarning="Archiving purges every credential's sealed secret."
+              deleteDescription="Deleting is permanent and cascades to every credential in the vault."
+              onArchive={vault.archived_at ? undefined : () => archive.mutate()}
+              onDelete={() =>
                 removeVault.mutate(undefined, {
                   onSuccess: () => router.push("/vaults"),
                 })
               }
+              archivePending={archive.isPending}
+              deletePending={removeVault.isPending}
             />
           </span>
         }
@@ -179,7 +177,7 @@ export default function VaultDetailPage({
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">
-            <IdCode id={vault.id} />
+            <IdCell id={vault.id} />
           </Field>
           <Field label="Created">
             <Day iso={vault.created_at} />
