@@ -1,5 +1,6 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_MODE } from "./consoles";
 import { SURFACES } from "./surfaces";
 
 /** Every route the App Router actually serves, read off disk. */
@@ -49,15 +50,21 @@ describe("the fidelity surface manifest", () => {
     }
   });
 
-  it("covers every route the app serves", () => {
+  it("covers every route the app serves, on the console the reference is compared to", () => {
     // The denominator that matters: a route nobody shot is a route whose
     // fidelity nobody checked. Derived from the App Router's own pages rather
     // than a hand-kept list — a hardcoded expectation would pass forever while
     // new pages went unshot, which is the exact failure this slice exists to
     // stop. Concrete ids collapse back to their dynamic segment.
+    //
+    // Filtered to the default console on purpose (#99). `/login` is shot once
+    // per configuration it can offer, and without this filter the password
+    // one could be deleted while the coverage claim still passed — on the
+    // strength of a surface that shoots a different deployment.
     const covered = new Set(
-      SURFACES.map((s) =>
-        s.route.replace(/\/[a-z]+_[A-Za-z0-9]+/g, "/[id]").replace(/\/$/, ""),
+      SURFACES.filter((s) => (s.mode ?? DEFAULT_MODE) === DEFAULT_MODE).map(
+        (s) =>
+          s.route.replace(/\/[a-z]+_[A-Za-z0-9]+/g, "/[id]").replace(/\/$/, ""),
       ),
     );
     const unshot = appRoutes()
