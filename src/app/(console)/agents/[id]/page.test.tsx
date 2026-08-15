@@ -135,7 +135,9 @@ describe("AgentDetailPage", () => {
     });
     renderPage();
 
-    expect(await screen.findByText("Support bot")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Support bot" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Answers tickets")).toBeInTheDocument();
     expect(screen.getByText("claude-sonnet-4-8 · fast")).toBeInTheDocument();
     // "v3" appears in the overview and again as a version-history row.
@@ -154,7 +156,7 @@ describe("AgentDetailPage", () => {
       url.pathname.endsWith("/versions") ? json({ data: [] }) : json(agent()),
     );
     renderPage();
-    await screen.findByText("Support bot");
+    await screen.findByRole("heading", { name: "Support bot" });
 
     await userEvent.click(screen.getByRole("button", { name: /Edit/ }));
     expect(pushSpy).toHaveBeenCalledWith("/agents/agt_1/edit");
@@ -168,9 +170,10 @@ describe("AgentDetailPage", () => {
       return json(agent());
     });
     renderPage();
-    await screen.findByText("Support bot");
+    await screen.findByRole("heading", { name: "Support bot" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Archive agent" }),
@@ -203,7 +206,9 @@ describe("AgentDetailPage", () => {
     );
     renderPage();
 
-    expect(await screen.findByText("Support bot")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Support bot" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("archived")).toBeInTheDocument();
     // No speed suffix when the model ref omits it.
     expect(screen.getByText("claude-sonnet-4-8")).toBeInTheDocument();
@@ -229,7 +234,9 @@ describe("AgentDetailPage", () => {
     );
     renderPage();
 
-    expect(await screen.findByText("Support bot")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Support bot" }),
+    ).toBeInTheDocument();
     expect(await screen.findByText("versions down")).toBeInTheDocument();
   });
 });

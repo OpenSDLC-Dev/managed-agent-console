@@ -6,36 +6,64 @@ import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
-  ArchivedBadge,
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
+  ResourceStatus,
   UnavailableSurface,
 } from "@/components/console/bits";
+import { IdCell } from "@/components/console/copy-id";
+import { ResourceActions } from "@/components/console/resource-actions";
 import { StatusFilter } from "@/components/console/status-filter";
 import { CreateVaultButton } from "@/components/console/create-vault-button";
-import { useVaults } from "@/lib/platform/queries";
+import {
+  useArchiveVault,
+  useDeleteVault,
+  useVaults,
+} from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Vault } from "@/lib/platform/types";
 
+function VaultRowActions({ vault }: { vault: Vault }) {
+  const archive = useArchiveVault(vault.id);
+  const remove = useDeleteVault(vault.id);
+  return (
+    <ResourceActions
+      resource="vault"
+      archived={!!vault.archived_at}
+      archiveWarning="Archiving purges every credential's sealed secret."
+      deleteDescription="Deleting is permanent and cascades to every credential in the vault."
+      onArchive={vault.archived_at ? undefined : () => archive.mutate()}
+      onDelete={() => remove.mutate()}
+      archivePending={archive.isPending}
+      deletePending={remove.isPending}
+    />
+  );
+}
+
 const COLUMNS: Column<Vault>[] = [
-  { key: "id", header: "ID", cell: (v) => <IdCode id={v.id} /> },
+  { key: "id", header: "ID", cell: (v) => <IdCell id={v.id} /> },
   {
     key: "name",
     header: "Name",
     className: "w-full",
-    cell: (v) => (
-      <span className="flex items-center gap-2">
-        {v.display_name} <ArchivedBadge archivedAt={v.archived_at} />
-      </span>
-    ),
+    cell: (v) => v.display_name,
+  },
+  {
+    key: "status",
+    header: "Status",
+    cell: (v) => <ResourceStatus archivedAt={v.archived_at} />,
   },
   {
     key: "created",
     header: "Created",
     cell: (v) => <Day iso={v.created_at} />,
+  },
+  {
+    key: "actions",
+    header: "Actions",
+    cell: (v) => <VaultRowActions vault={v} />,
   },
 ];
 

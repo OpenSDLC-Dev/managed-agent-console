@@ -2,41 +2,49 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
-  ArchivedBadge,
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
+  ResourceStatus,
   UnavailableSurface,
 } from "@/components/console/bits";
+import { IdCell } from "@/components/console/copy-id";
+import { ResourceActions } from "@/components/console/resource-actions";
+import { CreateAgentButton } from "@/components/console/create-agent-dialog";
 import { StatusFilter } from "@/components/console/status-filter";
 import {
   CreatedFilter,
   createdGte,
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
-import { useAgents } from "@/lib/platform/queries";
+import { useAgents, useArchiveAgent } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
 
+function AgentRowActions({ agent }: { agent: Agent }) {
+  const archive = useArchiveAgent(agent.id);
+  return (
+    <ResourceActions
+      resource="agent"
+      archived={!!agent.archived_at}
+      onArchive={agent.archived_at ? undefined : () => archive.mutate()}
+      archivePending={archive.isPending}
+    />
+  );
+}
+
 const COLUMNS: Column<Agent>[] = [
-  { key: "id", header: "ID", cell: (a) => <IdCode id={a.id} /> },
+  { key: "id", header: "ID", cell: (a) => <IdCell id={a.id} /> },
   {
     key: "name",
     header: "Name",
     className: "w-full",
-    cell: (a) => (
-      <span className="flex items-center gap-2">
-        {a.name} <ArchivedBadge archivedAt={a.archived_at} />
-      </span>
-    ),
+    cell: (a) => a.name,
   },
   {
     key: "model",
@@ -44,6 +52,11 @@ const COLUMNS: Column<Agent>[] = [
     cell: (a) => <span className="font-mono text-[13px]">{a.model.id}</span>,
   },
   { key: "version", header: "Version", cell: (a) => `v${a.version}` },
+  {
+    key: "status",
+    header: "Status",
+    cell: (a) => <ResourceStatus archivedAt={a.archived_at} />,
+  },
   {
     key: "created",
     header: "Created",
@@ -54,12 +67,16 @@ const COLUMNS: Column<Agent>[] = [
     header: "Last updated",
     cell: (a) => <Day iso={a.updated_at} />,
   },
+  {
+    key: "actions",
+    header: "Actions",
+    cell: (a) => <AgentRowActions agent={a} />,
+  },
 ];
 
 export default function AgentsPage() {
   const router = useRouter();
   const [includeArchived, setIncludeArchived] = useState(false);
-  // The gte freezes at selection time so the query key stays stable.
   const [created, setCreated] = useState<{
     key: CreatedPresetKey;
     gte?: string;
@@ -78,11 +95,7 @@ export default function AgentsPage() {
       <PageHeader
         title="Agents"
         subtitle="Create and manage autonomous agents."
-        actions={
-          <Button className="h-8" onClick={() => router.push("/agents/new")}>
-            <Plus className="size-4" /> Create agent
-          </Button>
-        }
+        actions={<CreateAgentButton />}
       />
       <div className="flex items-center gap-3 pb-4">
         <StatusFilter
@@ -108,15 +121,7 @@ export default function AgentsPage() {
               <EmptyState
                 title="No agents yet"
                 hint="Create your first agent to get started."
-                action={
-                  <Button
-                    variant="outline"
-                    className="h-8"
-                    onClick={() => router.push("/agents/new")}
-                  >
-                    Create agent
-                  </Button>
-                }
+                action={<CreateAgentButton variant="outline" />}
               />
             }
           />

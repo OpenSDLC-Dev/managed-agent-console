@@ -14,13 +14,12 @@ import {
   ArchivedBadge,
   Day,
   ErrorState,
-  IdCode,
+  HostingType,
   DetailSkeleton,
 } from "@/components/console/bits";
-import {
-  ArchiveButton,
-  DeleteButton,
-} from "@/components/console/archive-button";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { IdCell } from "@/components/console/copy-id";
+import { ResourceActions } from "@/components/console/resource-actions";
 import { EnvironmentKeysSection } from "@/components/console/environment-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,6 +48,10 @@ export default function EnvironmentDetailPage({
   const config = environment.config;
   return (
     <div>
+      <Breadcrumb
+        parent={{ href: "/environments", label: "Environments" }}
+        current={environment.name}
+      />
       <PageHeader
         title={environment.name}
         subtitle={environment.description || undefined}
@@ -56,32 +59,30 @@ export default function EnvironmentDetailPage({
           <span className="flex items-center gap-2">
             <ArchivedBadge archivedAt={environment.archived_at} />
             {!environment.archived_at && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => router.push(`/environments/${id}/edit`)}
-                >
-                  <Pencil className="size-4" /> Edit
-                </Button>
-                <ArchiveButton
-                  resource="environment"
-                  warning="Sessions can no longer be created in it."
-                  onConfirm={() => archive.mutate()}
-                  pending={archive.isPending}
-                />
-              </>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => router.push(`/environments/${id}/edit`)}
+              >
+                <Pencil className="size-4" /> Edit
+              </Button>
             )}
-            <DeleteButton
+            <ResourceActions
               resource="environment"
-              description="Deleting is permanent and cannot be undone. The platform refuses if any session still references this environment."
-              pending={remove.isPending}
-              onConfirm={() =>
+              archived={!!environment.archived_at}
+              archiveWarning="Sessions can no longer be created in it."
+              deleteDescription="Deleting is permanent and cannot be undone. The platform refuses if any session still references this environment."
+              onArchive={
+                environment.archived_at ? undefined : () => archive.mutate()
+              }
+              onDelete={() =>
                 remove.mutate(undefined, {
                   onSuccess: () => router.push("/environments"),
                 })
               }
+              archivePending={archive.isPending}
+              deletePending={remove.isPending}
             />
           </span>
         }
@@ -89,11 +90,11 @@ export default function EnvironmentDetailPage({
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">
-            <IdCode id={environment.id} />
+            <IdCell id={environment.id} />
           </Field>
           <Field label="Type">
             <Badge variant="outline" className="font-normal">
-              {config.type}
+              <HostingType type={config.type} />
             </Badge>
           </Field>
           {config.type === "cloud" && (

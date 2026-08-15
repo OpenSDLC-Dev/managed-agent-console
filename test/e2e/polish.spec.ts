@@ -84,7 +84,14 @@ test("a failed archive surfaces the standardized envelope toast", async ({
 
   await signIn(page);
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
-  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Deep researcher" }),
+  ).toBeVisible();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "More actions" })
+    .click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive agent" }).click();
 
   await expect(page.getByText("Archive failed")).toBeVisible();

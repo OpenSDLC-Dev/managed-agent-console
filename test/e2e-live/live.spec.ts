@@ -237,6 +237,7 @@ test("an externally-authored compact default_config survives a console save", as
 
   await signIn(page);
   await page.goto(`/agents/${id}/edit`);
+  await page.getByRole("button", { name: /Tool permissions/ }).click();
   // The editor resolves the compact shape: default row unchecked, tools follow.
   await expect(
     page.getByRole("checkbox", { name: "default enabled" }),

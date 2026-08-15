@@ -134,12 +134,14 @@ describe("NewAgentPage", () => {
 
     await user.click(screen.getByRole("button", { name: /Web researcher/ }));
     expect(screen.getByLabelText("Name")).toHaveValue("Web researcher");
+    await user.click(screen.getByRole("button", { name: /Tool permissions/ }));
     expect(
       screen.getByRole("checkbox", { name: "bash enabled" }),
     ).not.toBeChecked();
 
     await user.click(screen.getByRole("button", { name: /Blank/ }));
     expect(screen.getByLabelText("Name")).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: /Tool permissions/ }));
     expect(
       screen.getByRole("checkbox", { name: "bash enabled" }),
     ).toBeChecked();

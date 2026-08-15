@@ -11,13 +11,52 @@ import { PlatformError } from "@/lib/platform/http";
 import { ROLE_NOTE, isPermissionDenied } from "@/lib/platform/denied";
 import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
+/**
+ * The reference's list ids (`env_…fcHcqRP`): keep the type prefix and the
+ * distinguishing tail. A short id is shown whole. The full value is always
+ * on `title`.
+ */
+export function shortenId(id: string): string {
+  if (id.length <= 18) return id;
+  const us = id.indexOf("_");
+  if (us > 0 && us < 12) return `${id.slice(0, us + 1)}…${id.slice(-7)}`;
+  return `…${id.slice(-15)}`;
+}
+
 /** Monospace resource id, truncated with the full value on hover. */
 export function IdCode({ id }: { id: string }) {
   return (
     <span className="font-mono text-[13px] text-muted-foreground" title={id}>
-      {id.length > 18 ? `${id.slice(0, 15)}…` : id}
+      {shortenId(id)}
     </span>
   );
+}
+
+/** Active / Archived from `archived_at`. The human string is asserted once. */
+export function resourceStatus(
+  archivedAt: string | null | undefined,
+): "active" | "archived" {
+  return archivedAt ? "archived" : "active";
+}
+
+export function ResourceStatus({ archivedAt }: { archivedAt?: string | null }) {
+  const status = resourceStatus(archivedAt);
+  return (
+    <span data-status={status}>
+      {status === "archived" ? "Archived" : "Active"}
+    </span>
+  );
+}
+
+/** Wire `cloud` / `self_hosted` → the reference's title-case labels. */
+export function hostingTypeLabel(type: string): string {
+  if (type === "self_hosted") return "Self-hosted";
+  if (type === "cloud") return "Cloud";
+  return type;
+}
+
+export function HostingType({ type }: { type: string }) {
+  return <span data-type={type}>{hostingTypeLabel(type)}</span>;
 }
 
 const DAY_PARTS: Intl.DateTimeFormatOptions = {

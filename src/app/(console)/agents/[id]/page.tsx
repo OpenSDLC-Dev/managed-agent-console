@@ -4,8 +4,10 @@ import { use } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ArchiveButton } from "@/components/console/archive-button";
 import { PageHeader } from "@/components/shell/page-header";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { ResourceActions } from "@/components/console/resource-actions";
+import { IdCell } from "@/components/console/copy-id";
 import {
   DetailSection,
   Field,
@@ -18,7 +20,6 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   DetailSkeleton,
 } from "@/components/console/bits";
 import {
@@ -61,6 +62,10 @@ export default function AgentDetailPage({
 
   return (
     <div>
+      <Breadcrumb
+        parent={{ href: "/agents", label: "Agents" }}
+        current={agent.name}
+      />
       <PageHeader
         title={agent.name}
         subtitle={agent.description || undefined}
@@ -68,29 +73,28 @@ export default function AgentDetailPage({
           <span className="flex items-center gap-2">
             <ArchivedBadge archivedAt={agent.archived_at} />
             {!agent.archived_at && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => router.push(`/agents/${agent.id}/edit`)}
-                >
-                  <Pencil className="size-4" /> Edit
-                </Button>
-                <ArchiveButton
-                  resource="agent"
-                  onConfirm={() => archive.mutate()}
-                  pending={archive.isPending}
-                />
-              </>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => router.push(`/agents/${agent.id}/edit`)}
+              >
+                <Pencil className="size-4" /> Edit
+              </Button>
             )}
+            <ResourceActions
+              resource="agent"
+              archived={!!agent.archived_at}
+              onArchive={agent.archived_at ? undefined : () => archive.mutate()}
+              archivePending={archive.isPending}
+            />
           </span>
         }
       />
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">
-            <IdCode id={agent.id} />
+            <IdCell id={agent.id} />
           </Field>
           <Field label="Model">
             <span className="font-mono text-[13px]">

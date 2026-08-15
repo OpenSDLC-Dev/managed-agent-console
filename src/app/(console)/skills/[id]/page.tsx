@@ -10,13 +10,12 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   DetailSkeleton,
 } from "@/components/console/bits";
-import {
-  ConfirmIconButton,
-  DeleteButton,
-} from "@/components/console/archive-button";
+import { ConfirmIconButton } from "@/components/console/archive-button";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { ResourceActions } from "@/components/console/resource-actions";
+import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +99,10 @@ export default function SkillDetailPage({
 
   return (
     <div>
+      <Breadcrumb
+        parent={{ href: "/skills", label: "Skills" }}
+        current={skill.display_title}
+      />
       <PageHeader
         title={skill.display_title}
         actions={
@@ -131,15 +134,15 @@ export default function SkillDetailPage({
                   <Upload className="size-4" />
                   {uploadVersion.isPending ? "Uploading…" : "New version"}
                 </Button>
-                <DeleteButton
+                <ResourceActions
                   resource="skill"
-                  description="The platform only deletes a skill with zero remaining versions — delete the versions first."
-                  pending={deleteSkill.isPending}
-                  onConfirm={() =>
+                  deleteDescription="The platform only deletes a skill with zero remaining versions — delete the versions first."
+                  onDelete={() =>
                     deleteSkill.mutate(undefined, {
                       onSuccess: () => router.push("/skills"),
                     })
                   }
+                  deletePending={deleteSkill.isPending}
                 />
               </>
             )}
@@ -149,7 +152,7 @@ export default function SkillDetailPage({
       <DetailSection title="Overview">
         <FieldList>
           <Field label="ID">
-            <IdCode id={skill.id} />
+            <IdCell id={skill.id} />
           </Field>
           <Field label="Latest version">
             {skill.latest_version ? (

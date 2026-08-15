@@ -194,7 +194,10 @@ describe("VaultsPage", () => {
 
     expect(await screen.findByText("Team creds")).toBeInTheDocument();
     expect(screen.getByText("Old creds")).toBeInTheDocument();
-    expect(screen.getByText("archived")).toBeInTheDocument();
+    expect(screen.getByText("Archived")).toHaveAttribute(
+      "data-status",
+      "archived",
+    );
 
     await userEvent.click(screen.getByText("Team creds"));
     expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_1");

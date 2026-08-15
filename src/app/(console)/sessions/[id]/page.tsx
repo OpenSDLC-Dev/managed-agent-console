@@ -4,6 +4,7 @@ import { Fragment, use, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
+import { Breadcrumb } from "@/components/console/breadcrumb";
 import { DetailSection } from "@/components/console/detail";
 import {
   ArchivedBadge,
@@ -248,6 +249,10 @@ export default function SessionDetailPage({
 
   return (
     <div>
+      <Breadcrumb
+        parent={{ href: "/sessions", label: "Sessions" }}
+        current={data.title || data.id}
+      />
       <PageHeader
         title={data.title || data.id}
         subtitle={`${data.agent.name} · v${data.agent.version}`}

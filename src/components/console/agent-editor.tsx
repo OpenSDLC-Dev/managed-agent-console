@@ -257,14 +257,17 @@ export function AgentEditor({
   initial,
   agentId,
   version,
+  onCancel,
 }: {
   mode: "create" | "edit";
   initial: FormState;
   agentId?: string;
   version?: number;
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"rendered" | "raw">("rendered");
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [form, setForm] = useState<FormState>(initial);
   const [raw, setRaw] = useState<{ format: RawFormat; text: string }>({
     format: "json",
@@ -470,7 +473,10 @@ export function AgentEditor({
                     variant="outline"
                     size="sm"
                     className="h-7"
-                    onClick={() => set("toolset", defaultToolsetForm())}
+                    onClick={() => {
+                      set("toolset", defaultToolsetForm());
+                      setToolsOpen(true);
+                    }}
                   >
                     Add toolset
                   </Button>
@@ -486,77 +492,93 @@ export function AgentEditor({
                 )}
               </div>
               {form.toolset && (
-                <div className="divide-y rounded-lg border">
-                  <div className="flex items-center justify-between gap-3 bg-secondary/40 px-3 py-2">
-                    <label className="flex items-center gap-2.5 text-sm">
-                      <input
-                        type="checkbox"
-                        aria-label="default enabled"
-                        checked={form.toolset.default.enabled}
-                        onChange={(e) =>
-                          set(
-                            "toolset",
-                            withDefault(form.toolset!, {
-                              ...form.toolset!.default,
-                              enabled: e.target.checked,
-                            }),
-                          )
-                        }
-                      />
-                      <span className="text-[13px] font-medium">
-                        Default for all tools
-                      </span>
-                    </label>
-                    <PolicySelect
-                      value={form.toolset.default.policy}
-                      disabled={!form.toolset.default.enabled}
-                      ariaLabel="default policy"
-                      onChange={(policy) =>
-                        set(
-                          "toolset",
-                          withDefault(form.toolset!, {
-                            ...form.toolset!.default,
-                            policy,
-                          }),
-                        )
-                      }
-                    />
-                  </div>
-                  {TOOL_NAMES.map((name) => {
-                    const setting = form.toolset!.tools[name];
-                    return (
-                      <div
-                        key={name}
-                        className="flex items-center justify-between gap-3 px-3 py-2"
-                      >
-                        <label className="flex min-w-0 items-center gap-2.5 text-sm">
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    aria-expanded={toolsOpen}
+                    onClick={() => setToolsOpen((open) => !open)}
+                  >
+                    Tool permissions {TOOL_NAMES.length}
+                  </Button>
+                  {toolsOpen && (
+                    <div className="divide-y rounded-lg border">
+                      <div className="flex items-center justify-between gap-3 bg-secondary/40 px-3 py-2">
+                        <label className="flex items-center gap-2.5 text-sm">
                           <input
                             type="checkbox"
-                            aria-label={`${name} enabled`}
-                            checked={setting.enabled}
+                            aria-label="default enabled"
+                            checked={form.toolset.default.enabled}
                             onChange={(e) =>
-                              setTool(name, {
-                                ...setting,
-                                enabled: e.target.checked,
-                              })
+                              set(
+                                "toolset",
+                                withDefault(form.toolset!, {
+                                  ...form.toolset!.default,
+                                  enabled: e.target.checked,
+                                }),
+                              )
                             }
                           />
-                          <span className="font-mono text-[13px]">{name}</span>
-                          <span className="truncate text-[13px] text-muted-foreground">
-                            — {TOOL_DESCRIPTIONS[name]}
+                          <span className="text-[13px] font-medium">
+                            Default for all tools
                           </span>
                         </label>
                         <PolicySelect
-                          value={setting.policy}
-                          disabled={!setting.enabled}
-                          ariaLabel={`${name} policy`}
+                          value={form.toolset.default.policy}
+                          disabled={!form.toolset.default.enabled}
+                          ariaLabel="default policy"
                           onChange={(policy) =>
-                            setTool(name, { ...setting, policy })
+                            set(
+                              "toolset",
+                              withDefault(form.toolset!, {
+                                ...form.toolset!.default,
+                                policy,
+                              }),
+                            )
                           }
                         />
                       </div>
-                    );
-                  })}
+                      {TOOL_NAMES.map((name) => {
+                        const setting = form.toolset!.tools[name];
+                        return (
+                          <div
+                            key={name}
+                            className="flex items-center justify-between gap-3 px-3 py-2"
+                          >
+                            <label className="flex min-w-0 items-center gap-2.5 text-sm">
+                              <input
+                                type="checkbox"
+                                aria-label={`${name} enabled`}
+                                checked={setting.enabled}
+                                onChange={(e) =>
+                                  setTool(name, {
+                                    ...setting,
+                                    enabled: e.target.checked,
+                                  })
+                                }
+                              />
+                              <span className="font-mono text-[13px]">
+                                {name}
+                              </span>
+                              <span className="truncate text-[13px] text-muted-foreground">
+                                — {TOOL_DESCRIPTIONS[name]}
+                              </span>
+                            </label>
+                            <PolicySelect
+                              value={setting.policy}
+                              disabled={!setting.enabled}
+                              ariaLabel={`${name} policy`}
+                              onChange={(policy) =>
+                                setTool(name, { ...setting, policy })
+                              }
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {form.otherTools.length > 0 && (
@@ -654,7 +676,10 @@ export function AgentEditor({
         <Button onClick={save} disabled={mutation.isPending}>
           {mode === "create" ? "Create agent" : "Save changes"}
         </Button>
-        <Button variant="ghost" onClick={() => router.back()}>
+        <Button
+          variant="ghost"
+          onClick={() => (onCancel ? onCancel() : router.back())}
+        >
           Cancel
         </Button>
         {conflict ? (

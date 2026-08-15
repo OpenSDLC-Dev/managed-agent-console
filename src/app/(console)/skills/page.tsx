@@ -9,9 +9,9 @@ import {
   Day,
   EmptyState,
   ErrorState,
-  IdCode,
   UnavailableSurface,
 } from "@/components/console/bits";
+import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -27,7 +27,7 @@ import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Skill } from "@/lib/platform/types";
 
 const COLUMNS: Column<Skill>[] = [
-  { key: "id", header: "ID", cell: (s) => <IdCode id={s.id} /> },
+  { key: "id", header: "ID", cell: (s) => <IdCell id={s.id} /> },
   {
     key: "title",
     header: "Title",
@@ -113,7 +113,7 @@ export default function SkillsPage() {
             empty={
               <EmptyState
                 title="No skills yet"
-                hint="Skills are uploaded through the API until slice 4 lands."
+                hint="Upload a skill bundle to make it available to agents."
               />
             }
           />

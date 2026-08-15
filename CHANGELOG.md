@@ -48,6 +48,12 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Changed
 
+- **List density and create-as-dialog**, matching the reference's interaction rhythm: Create agent /
+  session / environment open on the list (environment is a name + hosting stub); rows carry a copy
+  control, a Status column, title-case type labels, and a ⋯ menu for Archive / Delete; detail pages
+  get a breadcrumb and move those actions into the same menu; agent tools start collapsed as
+  `Tool permissions N`; session create has Manage … links and a vault multi-select. Ids keep the
+  type prefix and the tail (`env_…fcHcqRP`).
 - **In identity mode the BFF sends `Authorization: Bearer <the operator's token>` and does not read
   `PLATFORM_API_KEY` at all.** The two are never sent together: the platform's dispatcher takes a
   non-empty `x-api-key` and never looks at the Bearer, so a console attaching both would serve every

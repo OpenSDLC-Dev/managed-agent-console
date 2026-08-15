@@ -139,9 +139,11 @@ describe("EnvironmentDetailPage", () => {
     stubFetch(() => json(environment()));
     renderPage();
 
-    expect(await screen.findByText("Prod sandbox")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Prod sandbox" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Where the work happens")).toBeInTheDocument();
-    expect(screen.getByText("cloud")).toBeInTheDocument();
+    expect(screen.getByText("Cloud")).toHaveAttribute("data-type", "cloud");
     expect(
       screen.getByText("limited — a.example.com, b.example.com"),
     ).toBeInTheDocument();
@@ -183,13 +185,15 @@ describe("EnvironmentDetailPage", () => {
     );
     renderPage();
 
-    expect(await screen.findByText("self_hosted")).toBeInTheDocument();
+    expect(await screen.findByText("Self-hosted")).toBeInTheDocument();
     expect(screen.getByText("archived")).toBeInTheDocument();
     expect(screen.queryByText("Networking")).toBeNull();
     expect(screen.queryByRole("button", { name: /Edit/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Archive" })).toBeNull();
-    // Delete stays available even on archived environments.
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
   });
 
   it("archives after dialog confirmation", async () => {
@@ -199,9 +203,10 @@ describe("EnvironmentDetailPage", () => {
       return json(environment());
     });
     renderPage();
-    await screen.findByText("Prod sandbox");
+    await screen.findByRole("heading", { name: "Prod sandbox" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Archive environment" }),
@@ -224,9 +229,10 @@ describe("EnvironmentDetailPage", () => {
       return json(environment());
     });
     renderPage();
-    await screen.findByText("Prod sandbox");
+    await screen.findByRole("heading", { name: "Prod sandbox" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Delete environment" }),

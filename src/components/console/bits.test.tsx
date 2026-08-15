@@ -15,8 +15,10 @@ import {
   DetailSkeleton,
   EmptyState,
   ErrorState,
+  HostingType,
   IdCode,
   ListSkeleton,
+  ResourceStatus,
   RequestId,
   StatusBadge,
   Time,
@@ -36,11 +38,43 @@ describe("IdCode", () => {
     expect(el).toHaveAttribute("title", "agent_0123456789");
   });
 
-  it("truncates ids longer than 18 characters to 15 plus ellipsis", () => {
+  it("keeps the type prefix and the tail on a long id", () => {
+    // The reference's environments list renders `env_…fcHcqRP`. The tail is
+    // the distinguishing part; the prefix says which surface the row is.
+    const id = "env_01PJanq5x55L1HHZjfcHcqRP";
+    render(<IdCode id={id} />);
+    const el = screen.getByText("env_…fcHcqRP");
+    expect(el).toHaveAttribute("title", id);
+  });
+
+  it("uses the same prefix-and-tail form for a session-shaped id", () => {
     const id = "session_0123456789abcdef";
     render(<IdCode id={id} />);
-    const el = screen.getByText("session_0123456…");
-    expect(el).toHaveAttribute("title", id);
+    expect(screen.getByText("session_…9abcdef")).toHaveAttribute("title", id);
+  });
+});
+
+describe("ResourceStatus", () => {
+  it("exposes active vs archived as a data attribute", () => {
+    const { rerender } = render(<ResourceStatus archivedAt={null} />);
+    expect(screen.getByText("Active")).toHaveAttribute("data-status", "active");
+    rerender(<ResourceStatus archivedAt="2026-08-01T00:00:00Z" />);
+    expect(screen.getByText("Archived")).toHaveAttribute(
+      "data-status",
+      "archived",
+    );
+  });
+});
+
+describe("HostingType", () => {
+  it("title-cases the two environment kinds", () => {
+    const { rerender } = render(<HostingType type="cloud" />);
+    expect(screen.getByText("Cloud")).toHaveAttribute("data-type", "cloud");
+    rerender(<HostingType type="self_hosted" />);
+    expect(screen.getByText("Self-hosted")).toHaveAttribute(
+      "data-type",
+      "self_hosted",
+    );
   });
 });
 

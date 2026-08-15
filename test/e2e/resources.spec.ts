@@ -55,7 +55,7 @@ test("environments list and detail render the config union", async ({
   await signIn(page);
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await expect(page.getByRole("cell", { name: "cloud-limited" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "self_hosted" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Self-hosted" })).toBeVisible();
 
   await page.getByRole("cell", { name: "cloud-limited" }).click();
   await expect(

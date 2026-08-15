@@ -15,15 +15,19 @@ test.beforeEach(async ({ request }) => {
 test("create an agent through the rendered form", async ({ page }) => {
   await signIn(page);
   await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page).toHaveURL(/\/agents\/new$/);
+  await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.getByLabel("Name").fill("Deploy helper");
   await page.getByLabel("Model", { exact: true }).fill("claude-opus-4-8");
+  await page.getByRole("button", { name: /Tool permissions/ }).click();
   await page.getByLabel("bash policy").click();
   await page.getByRole("option", { name: "always ask" }).click();
   await page.getByRole("checkbox", { name: /Excel spreadsheets/ }).check();
 
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Create agent", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/agents\/agent_mock/);
   await expect(
     page.getByRole("heading", { name: "Deploy helper" }),
@@ -40,6 +44,7 @@ test("create an agent from a starter template", async ({ page }) => {
   // The template seeds the whole form through the wire parse path.
   await page.getByRole("button", { name: /Code task runner/ }).click();
   await expect(page.getByLabel("Name")).toHaveValue("Code task runner");
+  await page.getByRole("button", { name: /Tool permissions/ }).click();
   // The trigger renders the wire value verbatim.
   await expect(page.getByLabel("bash policy")).toContainText("always_ask");
 
@@ -128,7 +133,14 @@ test("platform validation errors surface inline from the raw tab", async ({
 test("archive an agent from its detail page", async ({ page }) => {
   await signIn(page);
   await page.getByRole("cell", { name: /General task agent/ }).click();
-  await page.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "General task agent" }),
+  ).toBeVisible();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "More actions" })
+    .click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive agent" }).click();
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
 });

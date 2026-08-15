@@ -181,7 +181,10 @@ describe("EnvironmentsPage", () => {
     await userEvent.click(
       screen.getAllByRole("button", { name: /Create environment/ })[1],
     );
-    expect(pushSpy).toHaveBeenCalledWith("/environments/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create environment" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("renders environment rows with config type and navigates on click", async () => {
@@ -212,21 +215,30 @@ describe("EnvironmentsPage", () => {
     renderPage();
 
     expect(await screen.findByText("Prod sandbox")).toBeInTheDocument();
-    expect(screen.getByText("self_hosted")).toBeInTheDocument();
-    expect(screen.getByText("cloud")).toBeInTheDocument();
-    expect(screen.getByText("archived")).toBeInTheDocument();
+    expect(screen.getByText("Self-hosted")).toHaveAttribute(
+      "data-type",
+      "self_hosted",
+    );
+    expect(screen.getByText("Cloud")).toHaveAttribute("data-type", "cloud");
+    expect(screen.getByText("Archived")).toHaveAttribute(
+      "data-status",
+      "archived",
+    );
 
     await userEvent.click(screen.getByText("Prod sandbox"));
     expect(pushSpy).toHaveBeenCalledWith("/environments/env_1");
   });
 
-  it("navigates to the create page from the header action", async () => {
+  it("opens the create dialog from the header action", async () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     await userEvent.click(
       screen.getByRole("button", { name: /Create environment/ }),
     );
-    expect(pushSpy).toHaveBeenCalledWith("/environments/new");
+    expect(
+      await screen.findByRole("heading", { name: "Create environment" }),
+    ).toBeInTheDocument();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("refetches with include_archived when the filter flips to All", async () => {
