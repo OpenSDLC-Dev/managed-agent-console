@@ -6,13 +6,7 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 
 ## Active work
 
-**Closing #99** — the fidelity manifest could not reach the SSO-only surfaces, because every
-automated tier ran the console in password mode. A stub OpenID Provider now shares the mock
-platform's process on its own port, a second `next start` runs `IDENTITY_MODE=oidc`, and `Surface`
-carries a `mode`. `login-sso` and `account-block` are in the manifest and shot.
-
-- [x] stub provider, second console, `Surface.mode`, walker branch, narrowed coverage invariant
-- [ ] PR green and merged
+**Nothing in flight.** #107 is the open issue the last work left behind.
 
 Both halves of the platform's SSO/RBAC work (#56) are archived:
 [plan 07](./docs/plan/07_console-issued-keys.md) (credential issuance) and
