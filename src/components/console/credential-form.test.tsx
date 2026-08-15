@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -67,6 +68,13 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
 const submitButton = (dialog: HTMLElement) =>
   within(dialog).getByRole("button", { name: "Add credential" });
 
+// One change event rather than per-character typing, where the test asserts on
+// the wire body and not on typing: the cost is the reason, not the semantics
+// (#93). It cannot see state arriving back in the input, so a field no other
+// test here fills asserts its rendered value at the point of use.
+const fill = (label: string | RegExp, value: string) =>
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -80,12 +88,16 @@ describe("AddCredentialButton", () => {
     renderButton();
     const dialog = await openDialog(user);
 
-    await user.type(screen.getByLabelText("Name (optional)"), " GitHub ");
-    await user.type(screen.getByLabelText("Secret name"), " GITHUB_TOKEN ");
-    await user.type(screen.getByLabelText("Secret value"), "ghp_secret");
-    await user.type(
-      screen.getByLabelText(/Allowed hosts/),
-      "api.github.com{Enter} github.com {Enter}   ",
+    fill("Name (optional)", " GitHub ");
+    fill("Secret name", " GITHUB_TOKEN ");
+    fill("Secret value", "ghp_secret");
+    // Hosts is a textarea, one per line — the blank and padded lines are the
+    // point: they must not survive into allowed_hosts.
+    fill(/Allowed hosts/, "api.github.com\n github.com \n   ");
+    // The two fields no other test in this file fills.
+    expect(screen.getByLabelText("Name (optional)")).toHaveValue(" GitHub ");
+    expect(screen.getByLabelText(/Allowed hosts/)).toHaveValue(
+      "api.github.com\n github.com \n   ",
     );
     await user.click(submitButton(dialog));
 

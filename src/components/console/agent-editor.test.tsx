@@ -183,6 +183,14 @@ async function choose(user: UserEvent, triggerLabel: string, option: string) {
   await user.click(within(wrapper).getByRole("button", { name: option }));
 }
 
+// Plain controlled inputs, no per-keystroke behaviour: one change event says
+// what typing says without userEvent's per-character cost, which is what raced
+// the save test against the 5s timeout under load (#93). What it cannot see is
+// state arriving back in the input, so a field with no `toHaveValue` elsewhere
+// in the file asserts one where it is filled.
+const fill = (label: string, value: string) =>
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
 const rawTextarea = () =>
   screen.getByLabelText("Raw agent config") as HTMLTextAreaElement;
 const rawConfig = () =>
@@ -286,12 +294,14 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.type(screen.getByLabelText("Name"), "My Agent");
-    const model = screen.getByLabelText("Model");
-    await user.clear(model);
-    await user.type(model, "claude-opus-4-2");
-    await user.type(screen.getByLabelText("Description"), "Does things");
-    await user.type(screen.getByLabelText("System prompt"), "Be helpful");
+    fill("Name", "My Agent");
+    // Replaces the seeded default outright, so no clear step is needed.
+    fill("Model", "claude-opus-4-2");
+    fill("Description", "Does things");
+    fill("System prompt", "Be helpful");
+    // Name, Model and System prompt round-trip through the raw tab below;
+    // Description is the one field whose rendered value nothing else asserts.
+    expect(screen.getByLabelText("Description")).toHaveValue("Does things");
     // Both onValueChange branches: an explicit speed, back to default, fast.
     await choose(user, "Model speed", "standard");
     await choose(user, "Model speed", "default");
