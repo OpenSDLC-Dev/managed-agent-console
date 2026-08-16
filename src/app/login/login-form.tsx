@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +46,16 @@ export function LoginForm({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  // Whether the *value* was checked and rejected, as opposed to the request
+  // having failed. Only a 401 is a verdict (`api/login/route.ts`); an
+  // unreachable console is not one, and `aria-invalid` must not claim
+  // otherwise about a password nothing has looked at.
+  const [rejected, setRejected] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Bumped by every submit and every keystroke, so a verdict that arrives late
+  // cannot land on a value the operator has already replaced — the field stays
+  // editable while a sign-in is in flight.
+  const attempt = useRef(0);
   // Interactivity marker: before hydration a submit would fall back to the
   // browser's native handling; method="post" below keeps that fallback from
   // ever putting the password in the URL.
@@ -61,8 +70,10 @@ export function LoginForm({
     const value = String(
       new FormData(event.currentTarget).get("password") ?? "",
     );
+    const mine = (attempt.current += 1);
     setBusy(true);
     setError(null);
+    setRejected(false);
     const response = await fetch("/api/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -73,7 +84,10 @@ export function LoginForm({
       router.replace(returnTo ?? "/agents");
       return;
     }
+    // A newer attempt, or a keystroke, has superseded this one.
+    if (mine !== attempt.current) return;
     setError("Wrong password.");
+    setRejected(response?.status === 401);
   }
 
   const ssoMessage = ssoError
@@ -143,12 +157,18 @@ export function LoginForm({
                 // The rejection is a verdict on this one value, so it is the
                 // field that carries it — not just a sentence beside it.
                 // `aria-invalid` is already machine-readable, so this derived
-                // state needs no extra `data-*` for the e2e pass to read.
-                aria-invalid={error !== null}
+                // state needs no extra `data-*` for the e2e pass to read. It
+                // tracks `rejected`, not `error`: a console that could not be
+                // reached still shows the message, but has judged nothing.
+                aria-invalid={rejected}
                 aria-describedby={error ? "password-error" : undefined}
                 // Typing makes "Wrong password." stale; leaving it would keep
                 // the field announced invalid while the operator fixes it.
-                onChange={() => setError(null)}
+                onChange={() => {
+                  attempt.current += 1;
+                  setError(null);
+                  setRejected(false);
+                }}
               />
             </div>
             {error && (

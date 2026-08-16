@@ -72,10 +72,14 @@ exactly. Upstream shadcn instead tints the invalid state (`/20` ring, `/50` dark
 what put it under WCAG 1.4.11 ([#104](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/104));
 `input.tsx` and `select.tsx` now draw the single opaque border the reference does.
 
-Two divergences remain, both deliberate: we tint the danger border from `--destructive-surface`
-(`#e7000b` / `#dd5353`) rather than adopting `#d03b3b`, because that token already carries the #90
-wash contract; and our focus ring is neutral rather than blue, which is upstream shadcn's shape and
-is **not** currently at 3:1 ([#110](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/110)).
+**One divergence**, deliberate: the danger border is tinted from `--destructive-surface` (`#e7000b` /
+`#dd5353`) rather than adopting `#d03b3b`, because that token already carries the #90 wash contract.
+
+**One defect**, not a divergence: our focus ring is neutral rather than the reference's blue — which
+is upstream shadcn's shape and a fair choice — but it is drawn at a tint, and so composites to
+1.39:1 light and 1.70:1 dark, failing the rule this section is about. That is drift to correct, not a
+self-hosting decision to record, and it is tracked as
+[#110](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/110).
 
 ## Deliberate divergences
 

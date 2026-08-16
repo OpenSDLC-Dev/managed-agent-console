@@ -22,4 +22,4 @@ _multiplies_ `--ring`'s own alpha instead of replacing it, so Chrome paints 0.15
 `globals.test.ts` models 0.5 and reports a pass. Measured 1.39:1 light, 1.70:1 dark. Not fixed here:
 it changes focus on every control and re-shoots most of the manifest.
 
-#107 is also still open from the last work.
+Issue #107 is also still open from the last work.
