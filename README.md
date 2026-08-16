@@ -4,7 +4,7 @@ The web console for [managed-agent-platform](https://github.com/OpenSDLC-Dev/man
 
 This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents** (rendered form or raw JSON↔YAML editor), **environments**, and **sessions** — including live event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, **files**, and the credentials that let a self-hosted worker connect. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
 
-**Status: v0.5.0 — the v1 feature set is complete.** Changes are in [CHANGELOG.md](./CHANGELOG.md); active work is in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
+**Status: v0.6.0 — the v1 feature set is complete.** Changes are in [CHANGELOG.md](./CHANGELOG.md); active work is in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
 ## How it holds your key
 
@@ -30,7 +30,7 @@ docker run --rm -p 3000:3000 \
   -e PLATFORM_BASE_URL=http://host.docker.internal:8080 \
   -e PLATFORM_API_KEY=your-controlplane-api-key \
   -e CONSOLE_PASSWORD=choose-a-password \
-  ghcr.io/opensdlc-dev/managed-agent-console:0.5.0
+  ghcr.io/opensdlc-dev/managed-agent-console:0.6.0
 ```
 
 Then open http://localhost:3000. Images are multi-arch (`linux/amd64`, `linux/arm64`); pin a version as above, `latest` follows the newest release. Building from a checkout works too — `docker build -t managed-agent-console .` — and is what CI gates on every PR.
@@ -41,7 +41,7 @@ Join the platform's network and talk to the `controlplane` service directly:
 
 ```yaml
 console:
-  image: ghcr.io/opensdlc-dev/managed-agent-console:0.5.0
+  image: ghcr.io/opensdlc-dev/managed-agent-console:0.6.0
   ports:
     - "127.0.0.1:3000:3000"
   environment:
