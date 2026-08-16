@@ -29,12 +29,11 @@ const buttonVariants = cva(
         // under WCAG 1.4.11's 3:1 for a focus indicator, and a red ring only
         // clears it at alpha 0.75 light / 1.0 dark, which is a solid halo
         // nobody asked for. So the variant inherits the console's own ring,
-        // which at least makes focus uniform. It does not make it passing:
-        // the parenthetical here used to read "3.67:1 light, 3.88:1 dark",
-        // which was the *model's* number. `ring-ring/50` multiplies `--ring`'s
-        // own alpha rather than replacing it, so Chrome paints it at 0.15
-        // light / 0.20 dark — measured 1.39:1 and 1.70:1. That is the shared
-        // ring's problem, not the danger palette's: issue #110.
+        // which makes focus uniform and, since #110 made `--ring` opaque,
+        // passing: the halo measures 3.65:1 light and 3.88:1 dark in Chrome.
+        // The parenthetical here used to read "3.67:1 light, 3.88:1 dark" —
+        // near enough the same pair, off a model that had dropped the token's
+        // alpha and so described a ring that was really painting at 1.39:1.
         destructive:
           "bg-destructive-surface/10 text-destructive hover:bg-destructive-surface/20 dark:bg-destructive-surface/20 dark:hover:bg-destructive-surface/30",
         link: "text-primary underline-offset-4 hover:underline",
