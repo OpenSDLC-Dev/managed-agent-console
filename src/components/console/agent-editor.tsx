@@ -661,13 +661,29 @@ export function AgentEditor({
           <textarea
             aria-label="Raw agent config"
             value={raw.text}
-            onChange={(e) => setRaw((r) => ({ ...r, text: e.target.value }))}
+            onChange={(e) => {
+              setRaw((r) => ({ ...r, text: e.target.value }));
+              // The parse error describes the text that was there a keystroke
+              // ago; keeping it would leave the field announced invalid while
+              // it is being fixed.
+              setRawError(null);
+            }}
             rows={22}
             spellCheck={false}
-            className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring"
+            aria-invalid={rawError !== null}
+            aria-describedby={rawError ? "raw-config-error" : undefined}
+            // Hand-rolled rather than the <Input> primitive, so it carries its
+            // own copy of the one invalid rule (issue #104). Opaque, no halo.
+            className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
           />
           {rawError && (
-            <p className="pt-1 text-sm text-destructive">{rawError}</p>
+            <p
+              id="raw-config-error"
+              className="pt-1 text-sm text-destructive"
+              role="alert"
+            >
+              {rawError}
+            </p>
           )}
         </div>
       )}

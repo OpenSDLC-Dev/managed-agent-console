@@ -129,8 +129,16 @@ function tokens(selector: string): Record<string, string> {
 }
 
 const THEMES = {
-  light: { vars: tokens(":root"), washes: [0.1, 0.2] },
-  dark: { vars: tokens(".dark"), washes: [0.2, 0.3] },
+  light: { vars: tokens(":root"), washes: [0.1, 0.2], fieldFill: 0 },
+  /**
+   * `fieldFill` is what a field paints inside its own border: nothing in
+   * light (`bg-transparent`), and `dark:bg-input/30` in dark. That resolves to
+   * **0.06**, not 0.3, because a Tailwind modifier *multiplies* the token's
+   * own alpha rather than replacing it — `--input` is already `/ 0.2`, and
+   * `bg-input/30` is `color-mix(in oklab, var(--input) 30%, transparent)`.
+   * Measured in Chrome on the running console rather than reasoned about.
+   */
+  dark: { vars: tokens(".dark"), washes: [0.2, 0.3], fieldFill: 0.2 * 0.3 },
 };
 
 /**
@@ -176,7 +184,7 @@ const AA_NON_TEXT = 3; // WCAG 2.1 1.4.11, borders and focus rings
 
 describe.each(Object.entries(THEMES))(
   "the %s palette",
-  (_theme, { vars, washes }) => {
+  (_theme, { vars, washes, fieldFill }) => {
     const text = () => parse(vars["--destructive"]);
     const surface = () => parse(vars["--destructive-surface"]);
     const on = surfaces(vars);
@@ -216,6 +224,39 @@ describe.each(Object.entries(THEMES))(
         ).toBeGreaterThanOrEqual(AA_NON_TEXT);
       },
     );
+
+    /**
+     * The invalid-field border (issue #104) — the only place the console
+     * paints the danger colour as a non-text indicator.
+     *
+     * It is drawn at **full opacity**, because nothing weaker arrives: the
+     * floor for 3:1 is alpha 0.60 light and 0.81 dark, and against `--muted`
+     * in dark no alpha reaches it at all. Upstream's `/20` halo and `/50` dark
+     * border are therefore gone rather than re-tinted, which is also what the
+     * reference draws — one full-strength line, `inset 0 0 0 1px
+     * var(--cds-fill-danger)`, no alpha and no halo.
+     *
+     * A border has two adjacencies and both are asserted: the surface outside
+     * the field, and the fill inside it. Only placements that actually render
+     * invalid are listed — the login password field and the agent editor's raw
+     * tab, the console's two per-field invalid states. An `<Input>` inside a
+     * dialog is deliberately absent: it does not render invalid today, and it
+     * would not pass, its dark fill putting the inner edge at 2.94:1. Wiring
+     * one there means revisiting this.
+     */
+    it.each([
+      ["login page, outside the field", () => on["page background"]],
+      [
+        "login password field, inside it",
+        () => over(parse(vars["--input"]), on["page background"], fieldFill),
+      ],
+      // Raw tab: on the page when editing, in the create dialog when creating.
+      ["agent editor raw tab, outside", () => on["popover"]],
+      // That textarea paints its own opaque `bg-card`, not the field fill.
+      ["agent editor raw tab, inside", () => parse(vars["--card"])],
+    ])("shows the invalid-field border at the %s", (_where, bg) => {
+      expect(contrast(surface(), bg())).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    });
 
     it("keeps the wash distinct from the text colour", () => {
       // If these ever collapse to one value the #90 ceiling is back: a colour

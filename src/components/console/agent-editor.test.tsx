@@ -654,6 +654,27 @@ describe("AgentEditor", () => {
     ).toBeInTheDocument();
   });
 
+  // Issue #104: the parse failure is a verdict on this textarea's own text, so
+  // the control carries it rather than a paragraph sitting next to it.
+  it("marks the raw textarea invalid, describes it, and clears it on retype", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "raw" }));
+    expect(rawTextarea().getAttribute("aria-invalid")).toBe("false");
+
+    fireEvent.change(rawTextarea(), { target: { value: "not json" } });
+    await user.click(screen.getByRole("button", { name: "rendered" }));
+    const message = screen.getByText(/is not valid JSON|Unexpected token/);
+    expect(rawTextarea().getAttribute("aria-invalid")).toBe("true");
+    expect(rawTextarea().getAttribute("aria-describedby")).toBe(message.id);
+
+    fireEvent.change(rawTextarea(), { target: { value: "{}" } });
+    expect(rawTextarea().getAttribute("aria-invalid")).toBe("false");
+    expect(rawTextarea().getAttribute("aria-describedby")).toBeNull();
+  });
+
   it("does not save while the raw tab has a parse error", async () => {
     const mock = stubFetch();
     const user = userEvent.setup();

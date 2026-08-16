@@ -96,6 +96,41 @@ describe("LoginForm", () => {
     expect(replaceSpy).not.toHaveBeenCalled();
   });
 
+  // Issue #104: the rejection is a verdict on this one value, so the field has
+  // to carry it. Without these the danger border is styling nothing, which is
+  // the state that made #104 unfixable in the first place.
+  it("marks the password field invalid and points it at the message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    render(<LoginForm sso={false} password />);
+    const field = screen.getByLabelText("Password");
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+
+    await submitPassword("nope");
+    const message = await screen.findByText("Wrong password.");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    // The sentence is the field's description, not merely a sibling of it.
+    expect(field.getAttribute("aria-describedby")).toBe(message.id);
+  });
+
+  it("clears the invalid state as soon as the operator retypes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    render(<LoginForm sso={false} password />);
+    await submitPassword("nope");
+    const field = screen.getByLabelText("Password");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+
+    await userEvent.setup().type(field, "x");
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+    expect(screen.queryByText("Wrong password.")).toBeNull();
+  });
+
   it("shows the error when the login request itself fails", async () => {
     vi.stubGlobal(
       "fetch",

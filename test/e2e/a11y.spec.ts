@@ -157,6 +157,53 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+/**
+ * The two controls that render `aria-invalid` (issue #104).
+ *
+ * Axe does not measure a border's contrast — `globals.test.ts` owns that — but
+ * it does check that the state is *named*, and a description pointing at an id
+ * that never rendered is the mistake this wiring is most likely to make while
+ * looking perfectly correct on screen. The assertions below are the linkage
+ * itself; the axe pass is what catches breaking it from the other end.
+ */
+test("a rejected password marks and names its field", async ({ page }) => {
+  await page.goto("/login");
+  await page.locator("form[data-hydrated]").waitFor();
+  const field = page.getByLabel("Password");
+  await expect(field).toHaveAttribute("aria-invalid", "false");
+
+  await field.fill("not-the-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  // By id, not by role: Next mounts its own empty `role="alert"` route
+  // announcer on every page, so `getByRole("alert")` is always ambiguous here.
+  const message = page.locator("#password-error");
+  await expect(message).toHaveText("Wrong password.");
+  await expect(message).toHaveAttribute("role", "alert");
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toHaveAttribute("aria-describedby", "password-error");
+  await expectNoViolations(page);
+
+  // Typing retracts the verdict, so the field does not stay announced invalid
+  // while it is being corrected.
+  await field.fill("t");
+  await expect(field).toHaveAttribute("aria-invalid", "false");
+});
+
+test("an unparseable raw agent config marks and names its textarea", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/agents/new");
+  await page.getByRole("button", { name: "raw" }).click();
+  const field = page.getByLabel("Raw agent config");
+  await field.fill("not json");
+  await page.getByRole("button", { name: "rendered" }).click();
+
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+  await expect(field).toHaveAttribute("aria-describedby", "raw-config-error");
+  await expectNoViolations(page);
+});
+
 test("session detail with a pending approval passes axe", async ({ page }) => {
   await signIn(page);
   await page.goto("/sessions/sesn_gatedbash00000000001");

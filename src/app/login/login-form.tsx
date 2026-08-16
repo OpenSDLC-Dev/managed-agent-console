@@ -140,9 +140,29 @@ export function LoginForm({
                 name="password"
                 type="password"
                 autoFocus={!sso}
+                // The rejection is a verdict on this one value, so it is the
+                // field that carries it — not just a sentence beside it.
+                // `aria-invalid` is already machine-readable, so this derived
+                // state needs no extra `data-*` for the e2e pass to read.
+                aria-invalid={error !== null}
+                aria-describedby={error ? "password-error" : undefined}
+                // Typing makes "Wrong password." stale; leaving it would keep
+                // the field announced invalid while the operator fixes it.
+                onChange={() => setError(null)}
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              // `role="alert"` as well as the description, because the submit
+              // button holds focus when this appears: a description alone is
+              // announced only once the field is reached again.
+              <p
+                id="password-error"
+                className="text-sm text-destructive"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
             <Button
               type="submit"
               disabled={busy}

@@ -76,6 +76,28 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Fixed
 
+- **Invalid fields are marked, and the mark is legible**
+  ([#104](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/104)): the vendored
+  `aria-invalid` styling drew a danger halo at `/20` and a dark border at `/50`, compositing to
+  **1.4–1.9:1** against WCAG 1.4.11's 3:1. No alpha fixes it — 3:1 needs 0.60 light and 0.81 dark,
+  by which point the "ring" is a slab, and on dark `--muted` no alpha reaches it at all — so the
+  halo is gone and the border is drawn at full strength, which is also exactly what the reference
+  draws (`inset 0 0 0 1px var(--cds-fill-danger)`, no alpha, no halo). It now measures 4.64:1 light
+  and 3.93:1 dark on the surface it appears on. `button.tsx` and `badge.tsx` lose the rules
+  outright: neither is a field, so neither could ever render them.
+  The issue was unfixable as filed because **nothing in the console ever set `aria-invalid`**, so
+  the two controls that genuinely know one field is wrong now say so — the login password field and
+  the agent editor's raw-config textarea — each with `aria-describedby` to its message, and each
+  retracting the state as soon as the operator retypes. Nothing else was wired: the platform's error
+  envelope carries no `param`, so a 400 cannot be attributed to a control, and "not filled in yet"
+  is not "invalid".
+- **The fidelity walker stops shooting states it never reached, or reached only part-way**: it now
+  runs a surface's `setup` on `/login` routes too (it silently skipped them, so a gate state was
+  unshootable), waits for every finite animation before the shutter — the first `login-invalid` shot
+  caught the border 18% along its `transition-colors`, showing ~1.6:1 for a build that ships 4.64:1,
+  the same class of bug as the dialogs shot mid-fade in #90 — and matches the session-create vault
+  label in full, which has resolved to two elements, failing `session-new` in both themes, since
+  [#108](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/108).
 - **The two heaviest form tests stop racing the 5s timeout**
   ([#93](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/93)): under full-suite load the
   agent editor's and credential form's save tests ran 4978ms and 4044ms against Vitest's 5000ms

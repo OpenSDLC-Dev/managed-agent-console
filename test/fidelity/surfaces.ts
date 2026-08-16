@@ -213,8 +213,14 @@ export const SURFACES: Surface[] = [
       // (`session-create-form.tsx`: `vaultList.length > 0 &&`), and the
       // form shows no skeleton meanwhile — so without this the shot is a form
       // with a section silently missing (review finding, PR #38).
-      // Scoped to main: the sidebar carries a "Credential vaults" nav link too.
-      await page.getByRole("main").getByText("Credential vaults").waitFor();
+      // The label in full, not a prefix of it. Scoping to main already ruled
+      // out the sidebar's nav link, but #108 put a "Manage credential vaults"
+      // link inside the section itself, and a substring match has resolved to
+      // two elements — failing this shot in both themes — ever since.
+      await page
+        .getByRole("main")
+        .getByText("Credential vaults (optional)")
+        .waitFor();
     },
   },
 
@@ -442,6 +448,19 @@ export const SURFACES: Surface[] = [
     fixture: "n/a",
     description:
       "The deployment gate — the only surface with no sidebar or header.",
+  },
+  {
+    id: "login-invalid",
+    route: "/login",
+    fixture: "n/a",
+    description:
+      "The gate after a rejected password: the console's only invalid field that needs no fixture or signed-in state to reach, and so the surface that shows what `aria-invalid` draws — one opaque danger border and no halo (issue #104). Until this entry the manifest could not shoot an invalid control at all, which is why #104's alphas had no observable before or after.",
+    setup: async (page) => {
+      await page.getByLabel("Password").fill("not-the-password");
+      await page.getByRole("button", { name: "Sign in" }).click();
+      // The border and the sentence appear together; wait on the sentence.
+      await page.getByText("Wrong password.").waitFor();
+    },
   },
 
   // ---- what only a deployment with identity renders (#99) ----------------
