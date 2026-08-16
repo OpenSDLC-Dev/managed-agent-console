@@ -21,3 +21,10 @@ updates:
       interval: weekly
     commit-message:
       prefix: chore
+    groups:
+      # `init` and `analyze` are two dependencies to dependabot and one version
+      # to CodeQL, so ungrouped it opens a PR per step and each one alone fails
+      # the job on a version mismatch. Neither can land without the other.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
