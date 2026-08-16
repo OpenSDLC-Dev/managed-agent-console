@@ -4,7 +4,13 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive-surface aria-invalid:ring-3 aria-invalid:ring-destructive-surface/20 dark:aria-invalid:border-destructive-surface/50 dark:aria-invalid:ring-destructive-surface/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  // No `aria-invalid:` styling. Upstream ships a danger border and halo here,
+  // but a Button is not a field the platform can call invalid — the console's
+  // only invalid controls are `input.tsx` and `select.tsx` — so the rules
+  // never rendered, and issue #104's point is that a value chosen against
+  // nothing cannot be verified. Removed rather than re-tinted; a Button that
+  // ever needs one should copy input.tsx's single opaque border.
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -22,8 +28,13 @@ const buttonVariants = cva(
         // colour, but a tint of it composites to 1.43:1 against the page —
         // under WCAG 1.4.11's 3:1 for a focus indicator, and a red ring only
         // clears it at alpha 0.75 light / 1.0 dark, which is a solid halo
-        // nobody asked for. Inheriting the console's own ring is both uniform
-        // and passing (3.67:1 light, 3.88:1 dark).
+        // nobody asked for. So the variant inherits the console's own ring,
+        // which at least makes focus uniform. It does not make it passing:
+        // the parenthetical here used to read "3.67:1 light, 3.88:1 dark",
+        // which was the *model's* number. `ring-ring/50` multiplies `--ring`'s
+        // own alpha rather than replacing it, so Chrome paints it at 0.15
+        // light / 0.20 dark — measured 1.39:1 and 1.70:1. That is the shared
+        // ring's problem, not the danger palette's: issue #110.
         destructive:
           "bg-destructive-surface/10 text-destructive hover:bg-destructive-surface/20 dark:bg-destructive-surface/20 dark:hover:bg-destructive-surface/30",
         link: "text-primary underline-offset-4 hover:underline",

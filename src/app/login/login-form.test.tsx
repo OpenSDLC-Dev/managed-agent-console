@@ -96,6 +96,90 @@ describe("LoginForm", () => {
     expect(replaceSpy).not.toHaveBeenCalled();
   });
 
+  // Issue #104: the rejection is a verdict on this one value, so the field has
+  // to carry it. Without these the danger border is styling nothing, which is
+  // the state that made #104 unfixable in the first place.
+  it("marks the password field invalid and points it at the message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    render(<LoginForm sso={false} password />);
+    const field = screen.getByLabelText("Password");
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+
+    await submitPassword("nope");
+    const message = await screen.findByText("Wrong password.");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    // The sentence is the field's description, not merely a sibling of it.
+    expect(field.getAttribute("aria-describedby")).toBe(message.id);
+  });
+
+  it("clears the invalid state as soon as the operator retypes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 401 })),
+    );
+    render(<LoginForm sso={false} password />);
+    await submitPassword("nope");
+    const field = screen.getByLabelText("Password");
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+
+    await userEvent.setup().type(field, "x");
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+    expect(screen.queryByText("Wrong password.")).toBeNull();
+  });
+
+  // `aria-invalid` asserts the value was checked and found wrong. A console
+  // that could not be reached has checked nothing, so the message stands but
+  // the field is not marked (review finding, PR #111).
+  it("does not mark the field invalid when the request never got a verdict", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network down");
+      }),
+    );
+    render(<LoginForm sso={false} password />);
+    await submitPassword("hunter2");
+
+    expect(await screen.findByText("Wrong password.")).toBeDefined();
+    expect(screen.getByLabelText("Password").getAttribute("aria-invalid")).toBe(
+      "false",
+    );
+  });
+
+  it("ignores a verdict that lands after the operator has retyped", async () => {
+    let release!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            release = resolve;
+          }),
+      ),
+    );
+    render(<LoginForm sso={false} password />);
+    await submitPassword("nope");
+    const field = screen.getByLabelText("Password");
+
+    // The field stays editable while a sign-in is in flight, so the reply can
+    // arrive against a value nothing has tested.
+    await userEvent.setup().type(field, "x");
+    release(new Response("{}", { status: 401 }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Sign in" })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    expect(field.getAttribute("aria-invalid")).toBe("false");
+    expect(screen.queryByText("Wrong password.")).toBeNull();
+  });
+
   it("shows the error when the login request itself fails", async () => {
     vi.stubGlobal(
       "fetch",

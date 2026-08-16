@@ -88,8 +88,13 @@ for (const surface of SURFACES) {
       await page
         .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
         .waitFor();
-      await surface.setup?.(page);
     }
+
+    // Outside the branch, not inside the signed-in one: the gate has states a
+    // URL cannot address too — a rejected password is only reachable by being
+    // rejected — and a `setup` that silently never ran is a shot of the wrong
+    // surface that still passes.
+    await surface.setup?.(page);
 
     // Readiness, using the console's own loading convention: every skeleton
     // carries aria-busy, so their absence means the data arrived.
@@ -117,6 +122,23 @@ for (const surface of SURFACES) {
         )
         .toBe("1");
     }
+
+    // The same lesson as the dialog fade above, one property down: a control
+    // with `transition-colors` is painted before its transition ends, so a
+    // shot taken the moment a state appears catches the colour part-way to it.
+    // Measured on `login-invalid`: the border came out rgb(195,182,180), 18%
+    // of the way from the resting border to the danger colour it settles on —
+    // a shot that showed the indicator as roughly 1.6:1 when what ships is
+    // 4.64:1. Infinite animations are excluded or this would never resolve.
+    await page.evaluate(() =>
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+          // A transition on an element that is removed mid-flight rejects.
+          .map((a) => a.finished.catch(() => undefined)),
+      ),
+    );
 
     await mkdir(`${OUT}/${theme}`, { recursive: true });
     await page.screenshot({
