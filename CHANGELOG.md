@@ -76,6 +76,15 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Fixed
 
+- **Focused controls are visibly focused**
+  ([#110](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/110)): the console drew its
+  focus ring at **1.39:1** light and **1.70:1** dark against WCAG 1.4.11's 3:1 — on every control
+  that draws the shared ring, and on everything that falls back to the base outline, which is nearly
+  everything focusable. It measures **3.65:1** and **3.88:1** in Chrome now. `--ring` is opaque, the
+  ring's geometry is unchanged, and nothing at rest moves. The palette gate cleared the old ring
+  because it modelled a Tailwind alpha modifier as replacing a token's alpha rather than multiplying
+  it; why that is wrong, and what the ring measures on each surface, is in
+  [docs/design-reference.md](docs/design-reference.md) and asserted in `globals.test.ts`.
 - **The signed-in sidebar ends in one divider rule, not two**
   ([#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107)): `SignedInAs` and
   `ConnectionStatus` each carried their own `border-t`, so the number of rules the footer drew was

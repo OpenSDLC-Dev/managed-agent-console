@@ -83,7 +83,17 @@
   --destructive-surface: oklch(0.577 0.245 27.325);
   --border: rgba(11, 11, 11, 0.1);
   --input: rgba(11, 11, 11, 0.1);
-  --ring: rgba(11, 11, 11, 0.3);
+  /**
+   * Opaque, unlike the two hairlines above it: a focus ring is an indicator,
+   * and the reference draws no indicator at an alpha (docs/design-reference.md).
+   * It was `/ 0.3`, and `focus-visible:ring-ring/50` *multiplied* that rather
+   * than replacing it, so the ring Chrome painted sat at 0.15 — 1.39:1, under
+   * WCAG 1.4.11 (issue #110). At full strength `/50` paints the 0.5 the ratios
+   * in `globals.test.ts` always assumed — 3.67:1 — and the border half lands at
+   * 19.17:1 against the page, though on a `default` Button that border sits on
+   * a fill of this very colour and the halo is the whole indicator.
+   */
+  --ring: #0b0b0b;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -97,7 +107,9 @@
   --sidebar-accent: rgba(11, 11, 11, 0.06);
   --sidebar-accent-foreground: #0b0b0b;
   --sidebar-border: rgba(11, 11, 11, 0.1);
-  --sidebar-ring: rgba(11, 11, 11, 0.3);
+  /* Unused today, but it pairs with `--ring`: left tinted it would hand the
+     first `ring-sidebar-ring` back the bug above. */
+  --sidebar-ring: #0b0b0b;
 }
 
 /*
@@ -129,7 +141,10 @@
   --destructive-surface: hsl(0 67% 59.6%); /* danger-100 */
   --border: hsl(51 16.5% 84.5% / 0.15); /* border-200 at low alpha */
   --input: hsl(51 16.5% 84.5% / 0.2);
-  --ring: hsl(51 16.5% 84.5% / 0.4);
+  /* border-200 at full strength; see the light block. Was `/ 0.4`, which
+     `ring-ring/50` multiplied to 0.20 — 1.70:1. Opaque the border reads
+     11.02:1 in Chrome and the halo 3.88:1. */
+  --ring: hsl(51 16.5% 84.5%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -142,7 +157,7 @@
   --sidebar-accent: hsl(48 33.3% 97.1% / 0.08);
   --sidebar-accent-foreground: hsl(48 33.3% 97.1%);
   --sidebar-border: hsl(51 16.5% 84.5% / 0.12);
-  --sidebar-ring: hsl(51 16.5% 84.5% / 0.4);
+  --sidebar-ring: hsl(51 16.5% 84.5%);
 }
 
 @layer base {
