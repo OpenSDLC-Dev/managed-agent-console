@@ -484,6 +484,6 @@ export const SURFACES: Surface[] = [
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:
-      "The sidebar's signed-in account block: a 14px/500 name over a 12px muted email over Sign out. Renders only where identity is configured, so no other surface shows it at all — and it lands above ConnectionStatus, which puts two rules in a footer the reference draws with none. It names no role and no organization, and that is the divergence.",
+      "The sidebar's signed-in account block: a 14px/500 name over a 12px muted email over Sign out. Renders only where identity is configured, so no other surface shows it at all — and the only surface that shows the footer group with two blocks in it, under the one rule they share (#107). It names no role and no organization, and that is the divergence.",
   },
 ];

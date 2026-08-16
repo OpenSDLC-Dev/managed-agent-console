@@ -92,7 +92,7 @@ export function SignedInAs() {
 
   return (
     <div
-      className="border-t border-sidebar-border px-4 py-3 text-[13px]"
+      className="px-4 py-3 text-[13px]"
       data-testid="signed-in-as"
       data-account={data.email ?? data.name}
     >

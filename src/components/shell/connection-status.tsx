@@ -46,7 +46,7 @@ export function ConnectionStatus() {
 
   const state = data === undefined ? "checking" : data.ok ? "up" : "down";
   return (
-    <div className="border-t border-sidebar-border px-4 py-3 text-[13px]">
+    <div className="px-4 py-3 text-[13px]">
       <div className="flex items-center gap-2">
         <span
           data-testid="connection-dot"

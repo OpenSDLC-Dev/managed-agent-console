@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { Nav } from "@/components/shell/nav";
 import { CommandPalette } from "@/components/shell/command-palette";
-import { ConnectionStatus } from "@/components/shell/connection-status";
 import { Providers } from "@/components/shell/providers";
+import { SidebarFooter } from "@/components/shell/sidebar-footer";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { ConsoleVersion } from "@/components/shell/version";
-import { SignedInAs } from "@/components/shell/signed-in-as";
 import { SurfaceGuard } from "@/components/shell/surface-guard";
 
 export default function ConsoleLayout({
@@ -44,11 +43,12 @@ export default function ConsoleLayout({
               </a>
             </div>
             <ConsoleVersion />
-            {/* Below the version and above the platform's health, because it is
+            {/* The account sits above the platform's health, because it is
                 about this browser rather than about the deployment — and the
-                reference console puts the account in this corner too. */}
-            <SignedInAs />
-            <ConnectionStatus />
+                reference console puts the account in this corner too. Their
+                order and the rule that separates them from the sidebar above
+                are the group's, not each block's (#107). */}
+            <SidebarFooter />
           </div>
         </aside>
         <main className="min-w-0 flex-1 px-8 py-6">
