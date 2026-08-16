@@ -76,6 +76,14 @@ UI), both archived 2026-08-14. What their acceptance runs proved and broke is in
 
 ### Fixed
 
+- **The signed-in sidebar ends in one divider rule, not two**
+  ([#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107)): `SignedInAs` and
+  `ConnectionStatus` each carried their own `border-t`, so the number of rules the footer drew was
+  however many blocks happened to render — one on a password-gated deployment, two where identity is
+  configured, which read as a boxed-in footer in the one configuration nothing could shoot until
+  [#99](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/99). A `SidebarFooter` group now
+  owns the rule, so a third block joining cannot add a third line. Only the extra line goes: the
+  surviving rule keeps its width and colour, and on the password console it does not move at all.
 - **Invalid fields are marked, and the mark is legible**
   ([#104](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/104)): the vendored
   `aria-invalid` styling drew a danger halo at `/20` and a dark border at `/50`, compositing to
