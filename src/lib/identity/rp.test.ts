@@ -12,6 +12,7 @@ import {
 import { type OidcConfig } from "./config";
 import { type ProviderMetadata } from "./discovery";
 import {
+  DEFAULT_RETURN_TO,
   RelyingPartyError,
   authorizationUrl,
   exchangeCode,
@@ -60,7 +61,7 @@ describe("safeReturnTo", () => {
   });
 
   it.each([undefined, null, ""])("defaults for %s", (raw) => {
-    expect(safeReturnTo(raw)).toBe("/agents");
+    expect(safeReturnTo(raw)).toBe(DEFAULT_RETURN_TO);
   });
 
   // The value arrives in a query string on a route an attacker can hand
@@ -74,14 +75,18 @@ describe("safeReturnTo", () => {
     ["a scheme with no host", "javascript:alert(1)"],
     ["a bare path with no leading slash", "agents"],
   ])("probe: refuses %s", (_why, raw) => {
-    expect(safeReturnTo(raw)).toBe("/agents");
+    expect(safeReturnTo(raw)).toBe(DEFAULT_RETURN_TO);
   });
 
   it("probe: refuses a value that would split the Location header", () => {
-    expect(safeReturnTo("/agents\r\nSet-Cookie: console_session=stolen")).toBe(
-      "/agents",
+    expect(
+      safeReturnTo(
+        `${DEFAULT_RETURN_TO}\r\nSet-Cookie: console_session=stolen`,
+      ),
+    ).toBe(DEFAULT_RETURN_TO);
+    expect(safeReturnTo(`${DEFAULT_RETURN_TO}\nX-Injected: 1`)).toBe(
+      DEFAULT_RETURN_TO,
     );
-    expect(safeReturnTo("/agents\nX-Injected: 1")).toBe("/agents");
   });
 });
 

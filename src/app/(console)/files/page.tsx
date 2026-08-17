@@ -15,7 +15,7 @@ import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import type { PlatformFile } from "@/lib/platform/types";
 
 function formatBytes(bytes: number): string {
@@ -105,7 +105,7 @@ export default function FilesPage() {
     <div>
       <PageHeader
         title="Files"
-        subtitle="Uploads and session outputs available as session mounts."
+        subtitle={SURFACES.files.blurb}
         actions={
           <>
             <input

@@ -66,6 +66,16 @@ const VAULT = "vlt_github00000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  // ---- the landing page ------------------------------------------------
+  {
+    id: "dashboard",
+    route: "/dashboard",
+    // The cards are links, and the only platform answer behind them is the
+    // shared surface probe, so a fully-served deployment is the whole state.
+    fixture: "populated",
+    description:
+      "Landing page: a card per served surface under the nav's own group headings, and the regrouped sidebar beside it.",
+  },
   // ---- the six resource lists ------------------------------------------
   {
     id: "agents-list",

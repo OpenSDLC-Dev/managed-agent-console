@@ -1,19 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill("test-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-}
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
 test("create an agent through the rendered form", async ({ page }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await page.getByRole("button", { name: "Create agent" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
@@ -66,7 +59,7 @@ test("create an agent from a starter template", async ({ page }) => {
 });
 
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page.getByRole("button", { name: "Edit" }).click();
   await expect(page).toHaveURL(/\/edit$/);
@@ -131,7 +124,7 @@ test("platform validation errors surface inline from the raw tab", async ({
 });
 
 test("archive an agent from its detail page", async ({ page }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await page.getByRole("cell", { name: /General task agent/ }).click();
   await expect(
     page.getByRole("heading", { name: "General task agent" }),

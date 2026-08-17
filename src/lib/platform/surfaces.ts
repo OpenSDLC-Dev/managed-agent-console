@@ -30,13 +30,47 @@ export const CONSOLE_WORKSPACE = "default";
  * the collection routes below: on an item route a 404 is a genuine not-found
  * and stays an error.
  */
+/**
+ * `blurb` is the one line that says what a surface is. It is here rather than
+ * inline in each page because two places render it now — the page's own
+ * `PageHeader` subtitle and the dashboard's card for that surface — and a
+ * sentence kept in two files is a sentence that will disagree with itself.
+ *
+ * `api-keys` is the exception and says so at its entry: its page header carries
+ * a warning rather than a description, so the two are genuinely different
+ * sentences and neither is a copy of the other.
+ */
 export const SURFACES = {
-  agents: { path: "v1/agents", label: "Agents" },
-  sessions: { path: "v1/sessions", label: "Sessions" },
-  environments: { path: "v1/environments", label: "Environments" },
-  vaults: { path: "v1/vaults", label: "Credential vaults" },
-  skills: { path: "v1/skills", label: "Skills" },
-  files: { path: "v1/files", label: "Files" },
+  agents: {
+    path: "v1/agents",
+    label: "Agents",
+    blurb: "Create and manage autonomous agents.",
+  },
+  sessions: {
+    path: "v1/sessions",
+    label: "Sessions",
+    blurb: "Trace and debug agent sessions.",
+  },
+  environments: {
+    path: "v1/environments",
+    label: "Environments",
+    blurb: "Configuration templates for session sandboxes.",
+  },
+  vaults: {
+    path: "v1/vaults",
+    label: "Credential vaults",
+    blurb: "Credentials your agents use for MCP servers and other tools.",
+  },
+  skills: {
+    path: "v1/skills",
+    label: "Skills",
+    blurb: "Packaged instructions and scripts agents load on demand.",
+  },
+  files: {
+    path: "v1/files",
+    label: "Files",
+    blurb: "Uploads and session outputs available as session mounts.",
+  },
   // The one surface that is not on the wire: management keys live in the
   // platform's off-wire console namespace (plan 07), so its probe goes through
   // the other BFF. The rule above still holds and for the same reason — this is
@@ -51,6 +85,10 @@ export const SURFACES = {
     path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
     label: "API keys",
     api: "console",
+    // Shorter than this page's own subtitle, and deliberately: that one warns
+    // what a management key can do and outlives, which is the right thing to
+    // read standing on the page and the wrong thing to fit in a card.
+    blurb: "Management credentials for this deployment.",
   },
 } as const;
 

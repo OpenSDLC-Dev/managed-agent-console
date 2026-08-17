@@ -23,7 +23,7 @@ function appRoutes(dir = "src/app", prefix = ""): string[] {
  * from the manifest is a hole in the fidelity pass, not an exemption.
  */
 const NO_SURFACE: Record<string, string> = {
-  "/": "redirects to /agents; renders nothing",
+  "/": "redirects to /dashboard; renders nothing",
 };
 
 /**

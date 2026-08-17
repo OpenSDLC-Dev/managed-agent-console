@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSkills } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { UploadSkillButton } from "@/components/console/upload-skill-button";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Skill } from "@/lib/platform/types";
@@ -75,7 +75,7 @@ export default function SkillsPage() {
     <div>
       <PageHeader
         title="Skills"
-        subtitle="Packaged instructions and scripts agents load on demand."
+        subtitle={SURFACES.skills.blurb}
         actions={<UploadSkillButton />}
       />
       <div className="flex items-center gap-1.5 pb-4 text-sm">

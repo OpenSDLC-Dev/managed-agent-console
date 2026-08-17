@@ -6,7 +6,34 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A Dashboard, and it is where the console opens.** A static landing page: one card per surface the
+  deployment serves, under the sidebar's own group headings and in its order, so the two cannot
+  drift. It reads no platform data — only the surface probe the shell already runs, because a card is
+  a link and a link to an unserved surface goes nowhere useful. `/` redirects here rather than to
+  `/agents`, and **so does signing in** — both, and the nav's first row, from one constant
+  (`src/lib/routes.ts`), because a sign-in never passes through `/` and the two had drifted apart on
+  the first pass.
+
+### Changed
+
+- **The sidebar is grouped, following the reference console's structure.** `Dashboard` and `API keys`
+  at the top level, then a `Build` group (Files, Skills) and a `Managed Agents` group (Agents,
+  Sessions, Environments, Credential vaults) — the reference's order, and its order inside each
+  group. Group headers collapse.
+- **Icons moved to where the reference puts them**: on top-level rows and group headers, and off the
+  rows inside a group, which pad left instead so every label still lands in one column. Measured in
+  Chrome rather than read off a screenshot; the facts and the lucide approximations are in
+  [docs/design-reference.md](./docs/design-reference.md).
+- **The wordmark is `Agent Console`**, and the `self-hosted console` line under it is gone — the nav
+  below now says what kind of console this is by naming what the deployment serves.
+- **The nav lives in one place** (`src/lib/nav.ts`). The sidebar and the command palette's "Go to"
+  section each carried their own copy of the order and the icons, so the two could list the same
+  destinations differently and neither would be wrong.
+- **A surface's one-line description lives in the surface registry**, where its page header and its
+  dashboard card both read it. `api-keys` keeps its own longer page subtitle, which warns rather than
+  describes.
 
 ## Released
 

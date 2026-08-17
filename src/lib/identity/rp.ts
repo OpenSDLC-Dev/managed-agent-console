@@ -1,6 +1,7 @@
 import "server-only";
 import { type JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
 import { isHttpsRequest } from "@/lib/auth";
+import { LANDING_ROUTE } from "@/lib/routes";
 import { type OidcConfig } from "./config";
 import { type ProviderMetadata } from "./discovery";
 
@@ -36,7 +37,7 @@ export type VerifiedIdentity = {
 };
 
 /** The path this console sends the browser back to after a sign-in. */
-export const DEFAULT_RETURN_TO = "/agents";
+export const DEFAULT_RETURN_TO = LANDING_ROUTE;
 
 /** CR, LF and their neighbours: a `Location` header is built from this value. */
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;

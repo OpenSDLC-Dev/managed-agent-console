@@ -5,6 +5,7 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LANDING_ROUTE } from "@/lib/routes";
 
 const noSubscription = () => () => {};
 
@@ -81,7 +82,9 @@ export function LoginForm({
     }).catch(() => null);
     setBusy(false);
     if (response?.ok) {
-      router.replace(returnTo ?? "/agents");
+      // Undefined means the caller stripped the default (`login/page.tsx`), so
+      // the same constant `DEFAULT_RETURN_TO` is built from stands in here.
+      router.replace(returnTo ?? LANDING_ROUTE);
       return;
     }
     // A newer attempt, or a keystroke, has superseded this one.
