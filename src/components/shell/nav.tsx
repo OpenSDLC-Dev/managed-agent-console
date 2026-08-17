@@ -80,6 +80,11 @@ function Group({
         aria-expanded={open}
         aria-controls={id}
         data-nav-group={group.label}
+        // Whether the group is open is derived state, so it is readable as an
+        // attribute and not only as a rotated chevron — the same contract
+        // `ConnectionStatus` carries and e2e already reads there. `aria-expanded`
+        // says it too, but for the assistive tree rather than for a test.
+        data-state={open ? "open" : "closed"}
         className={cn(ROW, "text-muted-foreground hover:bg-sidebar-accent/60")}
       >
         <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />

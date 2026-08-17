@@ -216,10 +216,14 @@ describe("Nav", () => {
     renderNav();
     const build = groupHeader("Build")!;
     expect(build.getAttribute("aria-expanded")).toBe("true");
+    // The machine-readable half of the contract: a test reads the attribute,
+    // not the chevron it rotates.
+    expect(build.getAttribute("data-state")).toBe("open");
 
     await userEvent.click(build);
 
     expect(build.getAttribute("aria-expanded")).toBe("false");
+    expect(build.getAttribute("data-state")).toBe("closed");
     // Unmounted rather than hidden, so a collapsed group's links are not
     // tabbable and there is one less state to keep in step with aria-expanded.
     expect(link("Files")).toBeNull();
@@ -229,6 +233,7 @@ describe("Nav", () => {
 
     await userEvent.click(build);
     expect(build.getAttribute("aria-expanded")).toBe("true");
+    expect(build.getAttribute("data-state")).toBe("open");
     expect(link("Files")).not.toBeNull();
   });
 
