@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
+import { DEFAULT_RETURN_TO } from "@/lib/identity/rp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDiscoveryCacheForTests } from "@/lib/identity/discovery";
 import {
@@ -114,7 +115,9 @@ describe("GET /api/auth/login", () => {
     const state = new URL(
       response.headers.get("location") ?? "",
     ).searchParams.get("state");
-    expect(takePending(state ?? "", Date.now())?.returnTo).toBe("/agents");
+    expect(takePending(state ?? "", Date.now())?.returnTo).toBe(
+      DEFAULT_RETURN_TO,
+    );
   });
 
   // On a deployment without identity this surface does not exist, and that is

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LoginForm } from "./login-form";
+import { LANDING_ROUTE } from "@/lib/routes";
 
 const { replaceSpy } = vi.hoisted(() => ({ replaceSpy: vi.fn() }));
 
@@ -41,7 +42,7 @@ describe("LoginForm", () => {
     expect(html).not.toContain("data-hydrated");
   });
 
-  it("posts the password and navigates to /agents on success", async () => {
+  it("posts the password and navigates to the landing route on success", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ ok: true, gate: true }), {
@@ -57,7 +58,7 @@ describe("LoginForm", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ password: "hunter2" }),
     });
-    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith("/agents"));
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith(LANDING_ROUTE));
     expect(screen.queryByText("Wrong password.")).toBeNull();
   });
 
@@ -209,7 +210,7 @@ describe("LoginForm", () => {
     const button = screen.getByRole("button", { name: "Sign in" });
     expect(button).toHaveProperty("disabled", true);
     release(new Response(JSON.stringify({ ok: true, gate: true })));
-    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith("/agents"));
+    await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith(LANDING_ROUTE));
     expect(button).toHaveProperty("disabled", false);
   });
 });

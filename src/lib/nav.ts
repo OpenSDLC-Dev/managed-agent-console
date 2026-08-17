@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
+import { LANDING_ROUTE } from "./routes";
 
 /**
  * The console's navigation, in one place.
@@ -66,7 +67,7 @@ const surfaceEntry = (surface: Surface, icon: LucideIcon): SurfaceEntry => ({
 });
 
 export const NAV: NavEntry[] = [
-  { kind: "local", label: "Dashboard", href: "/dashboard", icon: House },
+  { kind: "local", label: "Dashboard", href: LANDING_ROUTE, icon: House },
   // Top-level, as it is today and as the reference has it — but second now
   // rather than last, which is the position the reference gives it. Still not
   // filed under a Settings area: a self-hosted console's whole settings story

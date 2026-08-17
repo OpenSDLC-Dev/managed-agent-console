@@ -11,8 +11,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - **A Dashboard, and it is where the console opens.** A static landing page: one card per surface the
   deployment serves, under the sidebar's own group headings and in its order, so the two cannot
   drift. It reads no platform data — only the surface probe the shell already runs, because a card is
-  a link and a link to an unserved surface goes nowhere useful. `/` now redirects here rather than to
-  `/agents`.
+  a link and a link to an unserved surface goes nowhere useful. `/` redirects here rather than to
+  `/agents`, and **so does signing in** — both, and the nav's first row, from one constant
+  (`src/lib/routes.ts`), because a sign-in never passes through `/` and the two had drifted apart on
+  the first pass.
 
 ### Changed
 
