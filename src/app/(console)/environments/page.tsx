@@ -22,7 +22,7 @@ import {
   useDeleteEnvironment,
   useEnvironments,
 } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Environment } from "@/lib/platform/types";
 
@@ -89,7 +89,7 @@ export default function EnvironmentsPage() {
     <div>
       <PageHeader
         title="Environments"
-        subtitle="Configuration templates for session sandboxes."
+        subtitle={SURFACES.environments.blurb}
         actions={<CreateEnvironmentButton />}
       />
       <div className="flex items-center gap-2 pb-4">

@@ -15,13 +15,14 @@ export default function ConsoleLayout({
       <div className="flex min-h-screen">
         <aside className="flex w-64 shrink-0 flex-col justify-between bg-sidebar">
           <div>
+            {/* The wordmark stands alone: the second line used to say what kind
+                of console this is, which the nav below now says better by
+                naming what the deployment serves. It points at the landing
+                page rather than at a surface. */}
             <div className="px-4 pb-1 pt-5">
-              <Link href="/agents" className="text-[15px] font-semibold">
-                Managed Agents
+              <Link href="/dashboard" className="text-[15px] font-semibold">
+                Agent Console
               </Link>
-              <div className="text-[12px] text-muted-foreground">
-                self-hosted console
-              </div>
             </div>
             <div className="flex flex-col pt-3">
               <CommandPalette />

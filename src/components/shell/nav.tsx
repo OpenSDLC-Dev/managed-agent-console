@@ -1,78 +1,157 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bot,
-  Boxes,
-  FileText,
-  KeyRound,
-  // Not `Lock`: that name collides with the DOM's own global `Lock`, and the
-  // import loses — a type error whose message names neither the icon nor lucide.
-  KeySquare,
-  MessagesSquare,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  SURFACES,
-  surfaceRoute,
-  useSurfaces,
-  type Surface,
-} from "@/lib/platform/surfaces";
+import { NAV, type GroupEntry, type NavEntry } from "@/lib/nav";
+import { SURFACES, surfaceRoute, useSurfaces } from "@/lib/platform/surfaces";
+import type { Surface } from "@/lib/platform/surfaces";
 
-// Order and iconography live here; the label and the route come from the
-// surface registry, so the console names a surface in exactly one place.
-const ITEMS: { surface: Surface; icon: LucideIcon }[] = [
-  { surface: "agents", icon: Bot },
-  { surface: "sessions", icon: MessagesSquare },
-  { surface: "environments", icon: Boxes },
-  { surface: "vaults", icon: KeyRound },
-  { surface: "skills", icon: Sparkles },
-  { surface: "files", icon: FileText },
-  // Last, and still top-level (plan 07 D2). The reference files this under a
-  // Settings area we do not have; a self-hosted console's whole settings story
-  // is its environment file, so a section holding one item would be a menu
-  // built to hold a menu.
-  { surface: "api-keys", icon: KeySquare },
-];
+/** Shared by every row so the group header sits flush with its neighbours. */
+const ROW = "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm";
+
+/**
+ * Whether a surface should be drawn. Unknown means shown: an item disappears
+ * only once the platform has said it does not serve that surface (CLAUDE.md
+ * principle 3).
+ */
+type Available = (surface: Surface) => boolean;
+
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  surface,
+  nested,
+}: {
+  href: string;
+  label: string;
+  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  surface?: Surface;
+  nested?: boolean;
+}) {
+  const pathname = usePathname();
+  const active = pathname === href || pathname.startsWith(`${href}/`);
+  return (
+    <Link
+      href={href}
+      data-surface={surface}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        ROW,
+        // A nested row draws no icon, so it pads left by what an icon would
+        // have cost — 10px of row padding + 16px icon + 10px gap = 36px — and
+        // its label lands in the same column as an iconned row's. The
+        // reference's rule, measured 2026-08-17.
+        nested && "pl-9",
+        "text-sidebar-foreground",
+        active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
+      )}
+    >
+      {Icon ? (
+        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
+      ) : null}
+      {label}
+    </Link>
+  );
+}
+
+function Group({
+  group,
+  available,
+}: {
+  group: GroupEntry;
+  available: Available;
+}) {
+  const [open, setOpen] = useState(true);
+  const items = group.items.filter((item) => available(item.surface));
+  // A group is its items. With none of them served there is nothing to title,
+  // and a header alone would advertise a section this deployment does not have.
+  if (items.length === 0) return null;
+  const id = `nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`;
+  const { icon: Icon } = group;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={id}
+        data-nav-group={group.label}
+        className={cn(ROW, "text-muted-foreground hover:bg-sidebar-accent/60")}
+      >
+        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
+        {group.label}
+        <ChevronDown
+          className={cn(
+            "ml-auto size-3.5 transition-transform",
+            !open && "-rotate-90",
+          )}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      </button>
+      {/* Unmounted rather than hidden when closed: a collapsed group's links
+          should not be tabbable, and `hidden` on the container is one more
+          state to keep in step with aria-expanded. */}
+      {open ? (
+        <div id={id} className="flex flex-col gap-0.5">
+          {items.map((item) => (
+            <NavLink
+              key={item.surface}
+              nested
+              href={surfaceRoute(item.surface)}
+              label={SURFACES[item.surface].label}
+              surface={item.surface}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Entry({
+  entry,
+  available,
+}: {
+  entry: NavEntry;
+  available: Available;
+}) {
+  if (entry.kind === "local")
+    return <NavLink href={entry.href} label={entry.label} icon={entry.icon} />;
+  if (entry.kind === "surface")
+    return available(entry.surface) ? (
+      <NavLink
+        href={surfaceRoute(entry.surface)}
+        label={SURFACES[entry.surface].label}
+        icon={entry.icon}
+        surface={entry.surface}
+      />
+    ) : null;
+  return <Group group={entry} available={available} />;
+}
 
 export function Nav() {
-  const pathname = usePathname();
-  // Unknown means shown: an item disappears only once the platform has said
-  // it does not serve that surface (CLAUDE.md principle 3).
   const surfaces = useSurfaces();
+  const available: Available = (surface) => surfaces?.[surface] !== false;
   return (
-    <nav className="flex flex-col gap-0.5 px-2">
-      <div className="px-2.5 pb-1 pt-4 text-[13px] font-medium text-muted-foreground">
-        Managed Agents
-      </div>
-      {ITEMS.filter(({ surface }) => surfaces?.[surface] !== false).map(
-        ({ icon: Icon, surface }) => {
-          const href = surfaceRoute(surface);
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              data-surface={surface}
-              className={cn(
-                "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm text-sidebar-foreground",
-                active
-                  ? "bg-sidebar-accent font-medium"
-                  : "hover:bg-sidebar-accent/60",
-              )}
-            >
-              <Icon
-                className="size-4 text-muted-foreground"
-                strokeWidth={1.75}
-              />
-              {SURFACES[surface].label}
-            </Link>
-          );
-        },
-      )}
+    <nav className="flex flex-col gap-0.5 px-2 pt-4">
+      {NAV.map((entry) => (
+        <Entry
+          key={
+            entry.kind === "group"
+              ? entry.label
+              : entry.kind === "local"
+                ? entry.href
+                : entry.surface
+          }
+          entry={entry}
+          available={available}
+        />
+      ))}
     </nav>
   );
 }

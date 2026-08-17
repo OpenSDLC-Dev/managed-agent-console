@@ -28,7 +28,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgentOptions, useSessions } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
@@ -109,7 +109,7 @@ export default function SessionsPage() {
     <div>
       <PageHeader
         title="Sessions"
-        subtitle="Trace and debug agent sessions."
+        subtitle={SURFACES.sessions.blurb}
         actions={<CreateSessionButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">

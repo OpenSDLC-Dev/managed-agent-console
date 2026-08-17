@@ -22,7 +22,7 @@ import {
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
 import { useAgents, useArchiveAgent } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
 
@@ -94,7 +94,7 @@ export default function AgentsPage() {
     <div>
       <PageHeader
         title="Agents"
-        subtitle="Create and manage autonomous agents."
+        subtitle={SURFACES.agents.blurb}
         actions={<CreateAgentButton />}
       />
       <div className="flex items-center gap-3 pb-4">

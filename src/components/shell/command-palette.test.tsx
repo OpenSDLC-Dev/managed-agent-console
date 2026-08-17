@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandPalette } from "./command-palette";
+import { NAV_DESTINATIONS } from "@/lib/nav";
 import { SURFACES } from "@/lib/platform/surfaces";
 
 const routerState = vi.hoisted(() => ({ push: vi.fn() }));
@@ -107,14 +108,18 @@ describe("CommandPalette", () => {
 
     expect(screen.getAllByText("Go to")).toHaveLength(1);
     const options = screen.getAllByRole("option");
+    // Nav order, flattened: the palette and the sidebar read the same list
+    // (`lib/nav.ts`), so this is the sidebar's order with its group headers
+    // dropped. Dashboard leads and is not a platform surface.
     expect(options.map((o) => o.textContent)).toEqual([
+      "Dashboard",
+      "API keys",
+      "Files",
+      "Skills",
       "Agents",
       "Sessions",
       "Environments",
       "Credential vaults",
-      "Skills",
-      "Files",
-      "API keys",
     ]);
 
     // The six searchable list queries, plus one surface probe per registered
@@ -331,10 +336,10 @@ describe("CommandPalette", () => {
 
     const reopened = await openPalette();
     expect((reopened as HTMLInputElement).value).toBe("");
-    // Back to the destinations, one per surface — not the six search hits above.
-    expect(screen.getAllByRole("option")).toHaveLength(
-      Object.keys(SURFACES).length,
-    );
+    // Back to the destinations — not the six search hits above. Derived from
+    // the nav itself: one per surface plus the console-local Dashboard, and a
+    // hardcoded count here has been wrong once already.
+    expect(screen.getAllByRole("option")).toHaveLength(NAV_DESTINATIONS.length);
     expect(screen.getByText("Go to")).toBeDefined();
   });
 });

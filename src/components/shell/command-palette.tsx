@@ -7,7 +7,6 @@ import {
   Boxes,
   FileText,
   KeyRound,
-  KeySquare,
   MessagesSquare,
   Search,
   Sparkles,
@@ -16,6 +15,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { NAV_DESTINATIONS } from "@/lib/nav";
 import {
   useAgents,
   useEnvironments,
@@ -24,12 +24,7 @@ import {
   useSkills,
   useVaults,
 } from "@/lib/platform/queries";
-import {
-  SURFACES,
-  surfaceRoute,
-  useSurfaces,
-  type Surface,
-} from "@/lib/platform/surfaces";
+import { useSurfaces, type Surface } from "@/lib/platform/surfaces";
 
 interface Item {
   key: string;
@@ -42,23 +37,18 @@ interface Item {
   surface?: Surface;
 }
 
-// Nav order and icons, as in `nav.tsx`; label and route come from the surface
-// registry so the console names a surface in exactly one place.
-const SECTION_ICONS: [Surface, LucideIcon][] = [
-  ["agents", Bot],
-  ["sessions", MessagesSquare],
-  ["environments", Boxes],
-  ["vaults", KeyRound],
-  ["skills", Sparkles],
-  ["files", FileText],
-  ["api-keys", KeySquare],
-];
-
-const SECTIONS: (Item & { surface: Surface })[] = SECTION_ICONS.map(
-  ([surface, icon]) => ({
-    key: `nav-${surface}`,
-    label: SURFACES[surface].label,
-    href: surfaceRoute(surface),
+// Order, labels and icons all come from `lib/nav.ts` — the sidebar's own
+// source. The palette used to keep its own copy of the list, which meant the
+// two could list the same destinations in different orders and neither was
+// wrong. A group contributes its children, so this is flat where the nav nests.
+//
+// `surface` is absent for a console-local destination like Dashboard, which no
+// probe can take away.
+const SECTIONS: (Item & { surface?: Surface })[] = NAV_DESTINATIONS.map(
+  ({ key, label, href, icon, surface }) => ({
+    key,
+    label,
+    href,
     group: "Go to",
     icon,
     surface,
@@ -89,7 +79,7 @@ function useSearchItems(query: string): Item[] {
     const q = query.trim().toLowerCase();
     const items: Item[] = SECTIONS.filter(
       (s) =>
-        surfaces?.[s.surface] !== false &&
+        (s.surface === undefined || surfaces?.[s.surface] !== false) &&
         (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;

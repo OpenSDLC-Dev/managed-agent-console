@@ -21,7 +21,7 @@ import {
   useDeleteVault,
   useVaults,
 } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Vault } from "@/lib/platform/types";
 
@@ -82,7 +82,7 @@ export default function VaultsPage() {
     <div>
       <PageHeader
         title="Credential vaults"
-        subtitle="Credentials your agents use for MCP servers and other tools."
+        subtitle={SURFACES.vaults.blurb}
         actions={<CreateVaultButton />}
       />
       <div className="flex items-center gap-2 pb-4">
