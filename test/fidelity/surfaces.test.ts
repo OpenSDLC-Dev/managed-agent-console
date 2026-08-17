@@ -24,6 +24,13 @@ function appRoutes(dir = "src/app", prefix = ""): string[] {
  */
 const NO_SURFACE: Record<string, string> = {
   "/": "redirects to /agents; renders nothing",
+  // Throwaway, and these two entries are how that stays true: the mockup is a
+  // review artifact for the sidebar regrouping, so it is deliberately not a
+  // fidelity surface. Both it and these lines go when the variant is chosen —
+  // if they are still here, the mockup was never cleaned up.
+  "/mockup": "throwaway sidebar-regrouping mockup; delete with src/app/mockup",
+  "/mockup/dashboard":
+    "throwaway sidebar-regrouping mockup; delete with src/app/mockup",
 };
 
 /**
