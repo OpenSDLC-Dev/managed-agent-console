@@ -1,14 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 const MOCK = "http://127.0.0.1:18080";
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill("test-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-}
 
 test.beforeEach(async ({ request }) => {
   await request.post(`${MOCK}/__reset`);
@@ -72,7 +65,7 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
 test("created presets bound sessions and agents lists serverside", async ({
   page,
 }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
 
   // Fixture agents were created before today: a 24h bound empties the list.
   const boundedAgents = page.waitForRequest((req) =>

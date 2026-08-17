@@ -1,12 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill("test-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-}
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");

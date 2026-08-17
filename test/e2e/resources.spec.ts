@@ -1,22 +1,15 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
   // Earlier spec files mutate the mock's stores — start from fixtures.
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill("test-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-}
-
 test("agents list renders fixtures and the archived filter", async ({
   page,
 }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await expect(
     page.getByRole("cell", { name: /Deep researcher/ }),
   ).toBeVisible();
@@ -33,7 +26,7 @@ test("agents list renders fixtures and the archived filter", async ({
 test("agent detail shows overview, system prompt, and versions", async ({
   page,
 }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
   await expect(

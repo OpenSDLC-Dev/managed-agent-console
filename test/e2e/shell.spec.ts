@@ -54,7 +54,7 @@ test("the login page reports no SSO on a password-only deployment", async ({
   await expect(page.getByTestId("sso-sign-in")).toHaveCount(0);
 });
 
-test("wrong password is rejected; the right one lands on Agents", async ({
+test("wrong password is rejected; the right one lands on the Dashboard", async ({
   page,
 }) => {
   await openLogin(page);
@@ -64,9 +64,9 @@ test("wrong password is rejected; the right one lands on Agents", async ({
 
   await page.getByLabel("Password").fill("test-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Dashboard", exact: true }),
   ).toBeVisible();
 });
 
@@ -76,7 +76,7 @@ test("the shell shows all six resources and a live platform connection", async (
   await openLogin(page);
   await page.getByLabel("Password").fill("test-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 
   for (const item of [
     "Agents",
@@ -86,8 +86,12 @@ test("the shell shows all six resources and a live platform connection", async (
     "Skills",
     "Files",
   ]) {
+    // Scoped to the sidebar: the Dashboard gives each of these a card as well,
+    // so an unscoped link by name matches twice on this page.
     await expect(
-      page.getByRole("link", { name: item, exact: true }),
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: item, exact: true }),
     ).toBeVisible();
   }
 
@@ -99,6 +103,9 @@ test("the shell shows all six resources and a live platform connection", async (
   );
 
   // Client-side navigation works.
-  await page.getByRole("link", { name: "Sessions" }).click();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Sessions" })
+    .click();
   await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
 });

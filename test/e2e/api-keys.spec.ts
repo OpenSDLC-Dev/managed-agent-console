@@ -1,14 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 const MOCK = "http://127.0.0.1:18080";
-
-async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.locator("form[data-hydrated]").waitFor();
-  await page.getByLabel("Password").fill("test-password");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
-}
 
 test.beforeEach(async ({ request }) => {
   await request.post(`${MOCK}/__reset`);
@@ -21,7 +14,7 @@ test.beforeEach(async ({ request }) => {
 test("issue a key, see it once, then disable and archive it", async ({
   page,
 }) => {
-  await signIn(page);
+  await signIn(page, "/agents");
   await page.getByRole("link", { name: "API keys" }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
