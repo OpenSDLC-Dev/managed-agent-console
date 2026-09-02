@@ -8,12 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Security
 
-- **The runtime image refreshes its Alpine packages at build time.** `node:24-alpine` is rebuilt on
-  Node's cadence, not Alpine's, so its `libcrypto3`/`libssl3` sat at 3.5.7-r0 days after Alpine had
-  shipped 3.5.8-r0 — long enough for the trivy HIGH/CRITICAL gate to red every PR and every release
-  build on CVE-2026-14456. One `apk upgrade --no-cache` in the runtime stage refreshes what is
-  already installed: no new packages, same Alpine minor, so only patch releases are ever pulled. The
-  gate keeps its teeth; it just stops failing on a fix that exists.
+- **The runtime image refreshes its Alpine packages at build time**, clearing CVE-2026-14456 in
+  `libcrypto3`/`libssl3`. `node:24-alpine` is rebuilt on Node's cadence, not Alpine's, so it carries
+  a superseded OpenSSL for days after Alpine has shipped the fix — long enough to red the trivy gate
+  on every PR and every release build.
 
 ### Added
 
