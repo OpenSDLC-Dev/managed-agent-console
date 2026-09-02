@@ -6,6 +6,13 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Security
+
+- **The runtime image refreshes its Alpine packages at build time**, clearing CVE-2026-14456 in
+  `libcrypto3`/`libssl3`. `node:24-alpine` is rebuilt on Node's cadence, not Alpine's, so it carries
+  a superseded OpenSSL for days after Alpine has shipped the fix — long enough to red the trivy gate
+  on every PR and every release build.
+
 ### Added
 
 - **A Dashboard, and it is where the console opens.** A static landing page: one card per surface the

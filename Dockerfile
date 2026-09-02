@@ -9,6 +9,11 @@ RUN pnpm build
 
 # Run — Next standalone output only
 FROM node:24-alpine
+# node:24-alpine is rebuilt on Node's cadence, not Alpine's, so its apk packages
+# trail Alpine's own security fixes — the trivy gate reds on a patched CVE days
+# before the base image picks the fix up. Refresh what is already installed: no
+# new packages, same Alpine minor, so this only ever pulls patch releases.
+RUN apk upgrade --no-cache
 # Defaults keep a plain `docker build` (CI's image gate, a local checkout)
 # working; the release workflow passes the real values.
 ARG VERSION=0.0.0-dev
