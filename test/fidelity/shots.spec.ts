@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { consoleUrl, DEFAULT_MODE, MOCK_URL } from "./consoles";
 import { SURFACES } from "./surfaces";
+import { LANDING_ROUTE } from "../../src/lib/routes";
 
 /**
  * Walks the surface manifest and writes one screenshot per surface per theme
@@ -25,7 +26,7 @@ async function signInWithPassword(page: Page, base: string) {
   await page.locator("form[data-hydrated]").waitFor();
   await page.getByLabel("Password").fill("test-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/agents$/);
+  await page.waitForURL(`${base}${LANDING_ROUTE}`);
 }
 
 async function signInWithSso(page: Page, base: string) {
@@ -38,11 +39,11 @@ async function signInWithSso(page: Page, base: string) {
   // The console's own failure channel, read before the wait rather than after
   // it: every way this flow can fail ends at `/login?sso_error=<code>`, and
   // without this the next line spends its full timeout and then reports
-  // "expected /agents" — which says nothing about whether discovery, the token
+  // "expected landing page" — which says nothing about whether discovery, the token
   // exchange or the id_token gave way.
   const failed = /\/login\?sso_error=([a-z_]+)/.exec(page.url());
   if (failed) throw new Error(`SSO sign-in failed: ${failed[1]}`);
-  await page.waitForURL(/\/agents$/);
+  await page.waitForURL(`${base}${LANDING_ROUTE}`);
 }
 
 test.beforeEach(async ({ request }) => {

@@ -165,7 +165,7 @@ test("skill upload, new version, and deletes", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await page.getByRole("button", { name: "Upload skill" }).click();
-  await page.getByLabel("Display title (optional)").fill("Release notes");
+  await page.getByLabel("Display name (optional)").fill("Release notes");
   await page.getByLabel("Skill files").setInputFiles({
     name: "SKILL.md",
     mimeType: "text/markdown",
@@ -191,17 +191,19 @@ test("skill upload, new version, and deletes", async ({ page }) => {
     page.getByRole("row").filter({ hasText: "Uploaded via console" }),
   ).toHaveCount(2);
 
-  // Delete both versions (confirm dialog each), then the skill.
-  for (let i = 0; i < 2; i++) {
+  // Delete one version, then cascade-delete the skill and its last version.
+  {
     await page
-      .getByRole("button", { name: /Delete version 17/ })
+      .getByRole("button", { name: /Delete version skver_/ })
       .first()
       .click();
     await page
       .getByRole("button", { name: "Delete version", exact: true })
       .click();
   }
-  await expect(page.getByText("No versions")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Delete version skver_/ }),
+  ).toHaveCount(1);
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete skill" }).click();

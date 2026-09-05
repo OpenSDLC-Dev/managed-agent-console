@@ -674,14 +674,15 @@ export function useUploadSkill() {
     meta: { errorToast: false },
     mutationFn: ({
       files: skillFiles,
-      displayTitle,
+      displayName,
     }: {
       files: File[];
-      displayTitle?: string;
+      displayName?: string;
     }) => {
       const form = new FormData();
-      for (const file of skillFiles) form.append("files[]", file);
-      if (displayTitle) form.append("display_title", displayTitle);
+      for (const file of skillFiles)
+        form.append("files[]", file, file.webkitRelativePath || file.name);
+      if (displayName) form.append("display_name", displayName);
       return platformPostForm<Skill>("v1/skills", form);
     },
     onSuccess: () => {
@@ -696,7 +697,8 @@ export function useUploadSkillVersion(skillId: string) {
     meta: { errorTitle: "Upload failed" },
     mutationFn: (skillFiles: File[]) => {
       const form = new FormData();
-      for (const file of skillFiles) form.append("files[]", file);
+      for (const file of skillFiles)
+        form.append("files[]", file, file.webkitRelativePath || file.name);
       return platformPostForm<SkillVersion>(
         `v1/skills/${skillId}/versions`,
         form,

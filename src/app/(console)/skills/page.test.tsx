@@ -83,11 +83,11 @@ vi.mock("@/components/ui/select", async () => {
 });
 
 const skill = (
-  over: Partial<Skill> & { id: string; display_title: string },
+  over: Partial<Skill> & { id: string; display_name: string },
 ): Skill => ({
   type: "skill",
-  latest_version: "1759178010641556",
-  source: "custom",
+  latest_version_id: "1759178010641556",
+  source: { type: "custom" },
   created_at: "2026-08-01T09:12:00Z",
   updated_at: "2026-08-01T10:00:00Z",
   ...over,
@@ -187,12 +187,12 @@ describe("SkillsPage", () => {
     stubFetch(() =>
       json({
         data: [
-          skill({ id: "skl_1", display_title: "PDF tools" }),
+          skill({ id: "skl_1", display_name: "PDF tools" }),
           skill({
             id: "xlsx",
-            display_title: "Excel",
-            source: "anthropic",
-            latest_version: "",
+            display_name: "Excel",
+            source: { type: "anthropic" },
+            latest_version_id: "",
           }),
         ],
       }),
@@ -213,7 +213,7 @@ describe("SkillsPage", () => {
 
   it("refetches with source=custom when the source filter changes", async () => {
     const fetchMock = stubFetch(() =>
-      json({ data: [skill({ id: "skl_1", display_title: "PDF tools" })] }),
+      json({ data: [skill({ id: "skl_1", display_name: "PDF tools" })] }),
     );
     renderPage();
     await screen.findByText("PDF tools");
@@ -232,9 +232,9 @@ describe("SkillsPage", () => {
   it("pages forward with the cursor", async () => {
     const fetchMock = stubFetch((url) =>
       url.searchParams.get("page") === "cur_2"
-        ? json({ data: [skill({ id: "skl_9", display_title: "Page two" })] })
+        ? json({ data: [skill({ id: "skl_9", display_name: "Page two" })] })
         : json({
-            data: [skill({ id: "skl_1", display_title: "PDF tools" })],
+            data: [skill({ id: "skl_1", display_name: "PDF tools" })],
             next_page: "cur_2",
           }),
     );

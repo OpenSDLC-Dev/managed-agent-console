@@ -18,6 +18,8 @@ import { ResourceActions } from "@/components/console/resource-actions";
 import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Pager } from "@/components/console/pager";
+import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import {
   useDeleteSkill,
   useDeleteSkillVersion,
@@ -35,25 +37,27 @@ export default function SkillDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { data: skill, error, isPending } = useSkill(id);
-  const versions = useSkillVersions(id);
+  const pagination = useCursorPage(id);
+  const versions = useSkillVersions(id, pagination.page);
   const uploadVersion = useUploadSkillVersion(id);
   const deleteVersion = useDeleteSkillVersion(id);
   const deleteSkill = useDeleteSkill(id);
   const input = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
 
   if (error) return <ErrorState error={error} />;
   if (isPending || !skill) {
     return <DetailSkeleton />;
   }
 
-  const custom = skill.source === "custom";
+  const custom = skill.source.type === "custom";
   const versionRows = versions.data?.data ?? [];
 
   const columns: Column<SkillVersion>[] = [
     {
       key: "version",
-      header: "Version",
-      cell: (v) => <span className="font-mono text-[13px]">{v.version}</span>,
+      header: "Version ID",
+      cell: (v) => <span className="font-mono text-[13px]">{v.id}</span>,
     },
     { key: "name", header: "Name", cell: (v) => v.name },
     {
@@ -74,20 +78,20 @@ export default function SkillDetailPage({
         <span className="flex items-center gap-1.5">
           {/* Zip download streams through the BFF; dual-auth on the wire. */}
           <a
-            href={`/api/platform/v1/skills/${id}/versions/${v.version}/content`}
+            href={`/api/platform/v1/skills/${id}/versions/${v.id}/content`}
             download
-            aria-label={`Download version ${v.version}`}
+            aria-label={`Download version ${v.id}`}
             className="text-muted-foreground hover:text-foreground"
           >
             <Download className="size-3.5" />
           </a>
           {custom && (
             <ConfirmIconButton
-              label={`Delete version ${v.version}`}
+              label={`Delete version ${v.id}`}
               title="Delete version"
-              description="Deleting a skill version is permanent."
+              description="Deleting a skill version is permanent. The last version can only be removed by deleting the skill."
               pending={deleteVersion.isPending}
-              onConfirm={() => deleteVersion.mutate(v.version)}
+              onConfirm={() => deleteVersion.mutate(v.id)}
             >
               <Trash2 className="size-3.5" />
             </ConfirmIconButton>
@@ -101,14 +105,14 @@ export default function SkillDetailPage({
     <div>
       <Breadcrumb
         parent={{ href: "/skills", label: "Skills" }}
-        current={skill.display_title}
+        current={skill.display_name}
       />
       <PageHeader
-        title={skill.display_title}
+        title={skill.display_name}
         actions={
           <span className="flex items-center gap-2">
             <Badge variant="outline" className="font-normal">
-              {skill.source}
+              {skill.source.type}
             </Badge>
             {custom && (
               <>
@@ -134,9 +138,29 @@ export default function SkillDetailPage({
                   <Upload className="size-4" />
                   {uploadVersion.isPending ? "Uploading…" : "New version"}
                 </Button>
+                <input
+                  ref={folderInput}
+                  type="file"
+                  multiple
+                  {...{ webkitdirectory: "" }}
+                  aria-label="New version folder"
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = [...(e.target.files ?? [])];
+                    if (picked.length > 0) uploadVersion.mutate(picked);
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  disabled={uploadVersion.isPending}
+                  onClick={() => folderInput.current?.click()}
+                >
+                  Upload folder
+                </Button>
                 <ResourceActions
                   resource="skill"
-                  deleteDescription="The platform only deletes a skill with zero remaining versions — delete the versions first."
+                  deleteDescription="Deleting this skill permanently deletes all its versions."
                   onDelete={() =>
                     deleteSkill.mutate(undefined, {
                       onSuccess: () => router.push("/skills"),
@@ -154,10 +178,10 @@ export default function SkillDetailPage({
           <Field label="ID">
             <IdCell id={skill.id} />
           </Field>
-          <Field label="Latest version">
-            {skill.latest_version ? (
+          <Field label="Latest version ID">
+            {skill.latest_version_id ? (
               <span className="font-mono text-[13px]">
-                {skill.latest_version}
+                {skill.latest_version_id}
               </span>
             ) : (
               "none"
@@ -184,6 +208,15 @@ export default function SkillDetailPage({
           />
         )}
       </DetailSection>
+      <Pager
+        hasPrev={pagination.hasPrev}
+        hasNext={Boolean(versions.data?.next_page)}
+        onPrev={pagination.goPrev}
+        onNext={() => {
+          if (versions.data?.next_page)
+            pagination.goNext(versions.data.next_page);
+        }}
+      />
     </div>
   );
 }

@@ -29,9 +29,9 @@ vi.mock("next/navigation", () => ({
 const skill = (over?: Partial<Skill>): Skill => ({
   id: "skl_1",
   type: "skill",
-  display_title: "PDF tools",
-  latest_version: "1759178010641556",
-  source: "custom",
+  display_name: "PDF tools",
+  latest_version_id: "sklv_1",
+  source: { type: "custom" },
   created_at: "2026-08-01T09:12:00Z",
   updated_at: "2026-08-01T10:00:00Z",
   ...over,
@@ -42,10 +42,8 @@ const version = (
 ): SkillVersion => ({
   type: "skill_version",
   skill_id: "skl_1",
-  version: "1759178010641556",
   name: "pdf-tools",
   description: "Split and merge PDFs",
-  directory: "pdf-tools",
   created_at: "2026-08-01T09:12:00Z",
   ...over,
 });
@@ -119,6 +117,27 @@ afterEach(() => {
 });
 
 describe("SkillDetailPage", () => {
+  it("pages version IDs forwards and backwards using platform cursors", async () => {
+    stubFetch((url) => {
+      if (url.pathname.endsWith("/versions"))
+        return json(
+          url.searchParams.get("page") === "older"
+            ? { data: [version({ id: "skver_older" })] }
+            : { data: [version({ id: "skver_newer" })], next_page: "older" },
+        );
+      return json(skill());
+    });
+    renderPage();
+    await screen.findByLabelText("Download version skver_newer");
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await screen.findByLabelText("Download version skver_older");
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Previous page" }),
+    );
+    await screen.findByLabelText("Download version skver_newer");
+  });
+
   it("shows the detail skeleton while the skill loads", async () => {
     vi.stubGlobal(
       "fetch",
@@ -152,14 +171,12 @@ describe("SkillDetailPage", () => {
       await screen.findByRole("heading", { name: "PDF tools" }),
     ).toBeInTheDocument();
     expect(screen.getByText("custom")).toBeInTheDocument();
-    expect(screen.getAllByText("1759178010641556")).toHaveLength(2);
+    expect(screen.getAllByText("sklv_1")).toHaveLength(2);
     expect(screen.getByText("pdf-tools")).toBeInTheDocument();
     expect(screen.getByText("Split and merge PDFs")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Download version 1759178010641556"),
-    ).toHaveAttribute(
+    expect(screen.getByLabelText("Download version sklv_1")).toHaveAttribute(
       "href",
-      "/api/platform/v1/skills/skl_1/versions/1759178010641556/content",
+      "/api/platform/v1/skills/skl_1/versions/sklv_1/content",
     );
     expect(
       screen.getByRole("button", { name: /New version/ }),
@@ -172,7 +189,7 @@ describe("SkillDetailPage", () => {
       onMutate: (url, init) => {
         if (init.method === "POST") {
           posts.push([url, init]);
-          return json(version({ id: "sklv_2", version: "1760000000000000" }));
+          return json(version({ id: "sklv_2" }));
         }
         return undefined;
       },
@@ -215,7 +232,7 @@ describe("SkillDetailPage", () => {
     await screen.findByRole("heading", { name: "PDF tools" });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete version 1759178010641556" }),
+      screen.getByRole("button", { name: "Delete version sklv_1" }),
     );
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
@@ -224,7 +241,7 @@ describe("SkillDetailPage", () => {
 
     await waitFor(() => expect(deletes).toHaveLength(1));
     expect(deletes[0].pathname).toBe(
-      "/api/platform/v1/skills/skl_1/versions/1759178010641556",
+      "/api/platform/v1/skills/skl_1/versions/sklv_1",
     );
   });
 
@@ -258,9 +275,9 @@ describe("SkillDetailPage", () => {
     routes({
       skill: skill({
         id: "skl_1",
-        display_title: "Excel",
-        source: "anthropic",
-        latest_version: "",
+        display_name: "Excel",
+        source: { type: "anthropic" },
+        latest_version_id: "",
       }),
       versions: json({ data: [] }),
     });

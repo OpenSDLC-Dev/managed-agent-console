@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -43,7 +44,36 @@ afterEach(() => {
 });
 
 describe("UploadSkillButton", () => {
-  it("posts multipart files[] plus display_title and navigates to the skill", async () => {
+  it("preserves folder-relative paths in multipart uploads", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ id: "skill_folder" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderButton();
+    await userEvent.click(screen.getByRole("button", { name: "Upload skill" }));
+    const file = skillMd();
+    Object.defineProperty(file, "webkitRelativePath", {
+      value: "deploy/SKILL.md",
+    });
+    fireEvent.change(screen.getByLabelText("Skill folder"), {
+      target: { files: [file] },
+    });
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Upload skill",
+      }),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(((init.body as FormData).get("files[]") as File).name).toBe(
+      "deploy/SKILL.md",
+    );
+  });
+  it("posts multipart files[] plus display_name and navigates to the skill", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ id: "skill_1", type: "skill" }), {
@@ -61,10 +91,7 @@ describe("UploadSkillButton", () => {
     const submit = within(dialog).getByRole("button", { name: "Upload skill" });
     expect(submit).toBeDisabled();
 
-    await user.type(
-      screen.getByLabelText("Display title (optional)"),
-      "Deploy",
-    );
+    await user.type(screen.getByLabelText("Display name (optional)"), "Deploy");
     await user.upload(screen.getByLabelText("Skill files"), [
       skillMd(),
       script(),
@@ -86,13 +113,13 @@ describe("UploadSkillButton", () => {
       "SKILL.md",
       "run.sh",
     ]);
-    expect(form.get("display_title")).toBe("Deploy");
+    expect(form.get("display_name")).toBe("Deploy");
     await waitFor(() =>
       expect(pushSpy).toHaveBeenCalledWith("/skills/skill_1"),
     );
   });
 
-  it("omits display_title when blank and pluralizes the file count", async () => {
+  it("omits display_name when blank and pluralizes the file count", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ id: "skill_2", type: "skill" }), {
@@ -117,7 +144,7 @@ describe("UploadSkillButton", () => {
       string,
       RequestInit,
     ];
-    expect((init.body as FormData).get("display_title")).toBeNull();
+    expect((init.body as FormData).get("display_name")).toBeNull();
   });
 
   it("shows Uploading… while the request is in flight", async () => {
@@ -191,14 +218,14 @@ describe("UploadSkillButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     await screen.findByRole("dialog");
-    await user.type(screen.getByLabelText("Display title (optional)"), "x");
+    await user.type(screen.getByLabelText("Display name (optional)"), "x");
     await user.upload(screen.getByLabelText("Skill files"), skillMd());
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     await screen.findByRole("dialog");
-    expect(screen.getByLabelText("Display title (optional)")).toHaveValue("");
+    expect(screen.getByLabelText("Display name (optional)")).toHaveValue("");
     expect(screen.queryByText(/selected/)).toBeNull();
   });
 

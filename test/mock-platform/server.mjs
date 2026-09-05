@@ -652,7 +652,7 @@ function route(req, url) {
   if (path === "/v1/skills") {
     let rows = skillsStore;
     const source = url.searchParams.get("source");
-    if (source) rows = rows.filter((s) => s.source === source);
+    if (source) rows = rows.filter((s) => s.source.type === source);
     return keysetPage(rows, url);
   }
   const skillVersionsMatch = path.match(/^\/v1\/skills\/([^/]+)\/versions$/);
@@ -1687,23 +1687,20 @@ const server = createServer(async (req, res) => {
       /^\/v1\/skills\/([^/]+)\/versions$/,
     );
     const versionItemMatch = url.pathname.match(
-      /^\/v1\/skills\/([^/]+)\/versions\/(\d+)$/,
+      /^\/v1\/skills\/([^/]+)\/versions\/([^/]+)$/,
     );
     const contentMatch = url.pathname.match(
-      /^\/v1\/skills\/([^/]+)\/versions\/(\d+)\/content$/,
+      /^\/v1\/skills\/([^/]+)\/versions\/([^/]+)\/content$/,
     );
     const skillItemMatch = url.pathname.match(/^\/v1\/skills\/([^/]+)$/);
 
     const mintVersion = (skillId, name) => {
-      const version = `17549000000${String(skillVersionCounter++).padStart(5, "0")}`;
       const entry = {
-        id: `skillver_mock${String(skillVersionCounter).padStart(4, "0")}`,
+        id: `skver_mock${String(skillVersionCounter++).padStart(4, "0")}`,
         type: "skill_version",
         skill_id: skillId,
-        version,
         name,
         description: "Uploaded via console",
-        directory: name,
         created_at: now(),
       };
       skillVersionsStore[skillId] = [
@@ -1718,20 +1715,20 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const head = body.toString("latin1");
       const title =
-        /name="display_title"\r?\n\r?\n([^\r\n]+)/.exec(head)?.[1] ??
+        /name="display_name"\r?\n\r?\n([^\r\n]+)/.exec(head)?.[1] ??
         `skill-${skillCounter}`;
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const skill = {
         id: `skill_mock${String(skillCounter++).padStart(6, "0")}`,
         type: "skill",
-        display_title: title,
-        latest_version: "",
-        source: "custom",
+        display_name: title,
+        latest_version_id: "",
+        source: { type: "custom" },
         created_at: now(),
         updated_at: now(),
       };
       const version = mintVersion(skill.id, slug);
-      skill.latest_version = version.version;
+      skill.latest_version_id = version.id;
       skillsStore.unshift(skill);
       res.writeHead(200);
       res.end(JSON.stringify(skill));
@@ -1745,7 +1742,7 @@ const server = createServer(async (req, res) => {
         res.end(envelope("not_found_error", "no such skill"));
         return;
       }
-      if (skill.source !== "custom") {
+      if (skill.source.type !== "custom") {
         res.writeHead(400);
         res.end(
           envelope("invalid_request_error", "anthropic skills are read-only"),
@@ -1753,14 +1750,22 @@ const server = createServer(async (req, res) => {
         return;
       }
       await readBody(req);
-      const version = mintVersion(skill.id, skill.display_title);
-      skill.latest_version = version.version;
+      const version = mintVersion(skill.id, skill.display_name);
+      skill.latest_version_id = version.id;
       skill.updated_at = now();
       res.writeHead(200);
       res.end(JSON.stringify(version));
       return;
     }
     if (req.method === "GET" && contentMatch) {
+      const exists = (skillVersionsStore[contentMatch[1]] ?? []).some(
+        (v) => v.id === contentMatch[2],
+      );
+      if (!exists) {
+        res.writeHead(404, { "content-type": "application/json" });
+        res.end(envelope("not_found_error", "no such version"));
+        return;
+      }
       const zip = Buffer.from("PK\x03\x04mock-zip");
       res.writeHead(200, {
         "content-type": "application/zip",
@@ -1773,24 +1778,32 @@ const server = createServer(async (req, res) => {
     if (req.method === "DELETE" && versionItemMatch) {
       res.setHeader("content-type", "application/json");
       const versions = skillVersionsStore[versionItemMatch[1]] ?? [];
-      const entry = versions.find((v) => v.version === versionItemMatch[2]);
+      const entry = versions.find((v) => v.id === versionItemMatch[2]);
       if (!entry) {
         res.writeHead(404);
         res.end(envelope("not_found_error", "no such version"));
         return;
       }
+      if (versions.length === 1) {
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            "cannot delete a Skill's only version. Delete the skill instead.",
+          ),
+        );
+        return;
+      }
       skillVersionsStore[versionItemMatch[1]] = versions.filter(
-        (v) => v.version !== entry.version,
+        (v) => v.id !== entry.id,
       );
       const skill = skillsStore.find((s) => s.id === versionItemMatch[1]);
       if (skill) {
-        skill.latest_version =
-          skillVersionsStore[versionItemMatch[1]][0]?.version ?? "";
+        skill.latest_version_id =
+          skillVersionsStore[versionItemMatch[1]][0]?.id ?? "";
       }
       res.writeHead(200);
-      res.end(
-        JSON.stringify({ id: entry.version, type: "skill_version_deleted" }),
-      );
+      res.end(JSON.stringify({ id: entry.id, type: "skill_version_deleted" }));
       return;
     }
     if (req.method === "DELETE" && skillItemMatch) {
@@ -1801,18 +1814,14 @@ const server = createServer(async (req, res) => {
         res.end(envelope("not_found_error", "no such skill"));
         return;
       }
-      if (skill.source !== "custom") {
+      if (skill.source.type !== "custom") {
         res.writeHead(400);
         res.end(
           envelope("invalid_request_error", "anthropic skills are read-only"),
         );
         return;
       }
-      if ((skillVersionsStore[skill.id] ?? []).length > 0) {
-        res.writeHead(400);
-        res.end(envelope("invalid_request_error", "skill still has versions"));
-        return;
-      }
+      delete skillVersionsStore[skill.id];
       skillsStore = skillsStore.filter((s) => s.id !== skill.id);
       res.writeHead(200);
       res.end(JSON.stringify({ id: skill.id, type: "skill_deleted" }));
