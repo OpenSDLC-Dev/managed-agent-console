@@ -13,6 +13,12 @@ clone the SDK anywhere and diff `src/resources/beta/managed-agents/*.ts` against
 
 ## Result
 
+Historical result for the 2026-08-07 snapshot below. Its Skills rows (16–18)
+are superseded by platform plan 39: the current source of truth is
+`internal/api/skills.go`'s GA renderers and the model-free contract suite in
+`test/contracts/skills.spec.ts`. The earlier conclusion does not establish
+compatibility with a newer platform.
+
 **Zero transcription bugs.** Every difference is the reference being _looser_ than what the platform
 renders — with one inversion, `processed_at` (#19), where the reference is _tighter_ and adopting it
 would have made the console wrong. Finding no bug is the result worth recording: it is the evidence

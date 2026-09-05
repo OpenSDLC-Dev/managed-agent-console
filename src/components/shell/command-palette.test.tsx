@@ -45,7 +45,7 @@ const LISTS: Record<string, unknown> = {
     next_page: null,
   },
   "/api/platform/v1/skills": {
-    data: [{ id: "skill_01", type: "skill", display_title: "PDF filler" }],
+    data: [{ id: "skill_01", type: "skill", display_name: "PDF filler" }],
     next_page: null,
   },
   "/api/platform/v1/files": {

@@ -556,7 +556,7 @@ describe("the mock's constructed write-path responses conform too", () => {
   it("skills: upload, then a new version", async () => {
     const skill = await postMultipart(
       "/v1/skills",
-      '----x\r\nContent-Disposition: form-data; name="display_title"\r\n\r\n' +
+      '----x\r\nContent-Disposition: form-data; name="display_name"\r\n\r\n' +
         "Conformance Skill\r\n----x--\r\n",
     );
     expectConforms(SkillSchema, skill, "POST /v1/skills");
@@ -571,6 +571,21 @@ describe("the mock's constructed write-path responses conform too", () => {
       version,
       `POST /v1/skills/${id}/versions`,
     );
+    const versionId = (version as { id: string }).id;
+    const remove = (path: string) =>
+      fetch(`${base}${path}`, {
+        method: "DELETE",
+        headers: { "x-api-key": API_KEY },
+      });
+    expect(
+      (await remove(`/v1/skills/${id}/versions/${versionId}`)).status,
+    ).toBe(200);
+    const originalId = (skill as { latest_version_id: string })
+      .latest_version_id;
+    expect(
+      (await remove(`/v1/skills/${id}/versions/${originalId}`)).status,
+    ).toBe(400);
+    expect((await remove(`/v1/skills/${id}`)).status).toBe(200);
   });
 
   // The mock's credential dispatch mirrors internal/api/server.go's, because

@@ -30,25 +30,25 @@ const COLUMNS: Column<Skill>[] = [
   { key: "id", header: "ID", cell: (s) => <IdCell id={s.id} /> },
   {
     key: "title",
-    header: "Title",
+    header: "Name",
     className: "w-full",
-    cell: (s) => s.display_title,
+    cell: (s) => s.display_name,
   },
   {
     key: "source",
     header: "Source",
     cell: (s) => (
       <Badge variant="outline" className="font-normal">
-        {s.source}
+        {s.source.type}
       </Badge>
     ),
   },
   {
     key: "latest",
-    header: "Latest version",
+    header: "Latest version ID",
     cell: (s) =>
-      s.latest_version ? (
-        <span className="font-mono text-[13px]">{s.latest_version}</span>
+      s.latest_version_id ? (
+        <span className="font-mono text-[13px]">{s.latest_version_id}</span>
       ) : (
         <span className="text-muted-foreground">none</span>
       ),

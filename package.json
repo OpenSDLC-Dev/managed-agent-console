@@ -3,6 +3,7 @@
   "version": "0.6.0",
   "private": true,
   "scripts": {
+    "test:contract:live": "playwright test --config playwright.contract.config.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

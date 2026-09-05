@@ -44,13 +44,13 @@ export function UploadSkillButton() {
           <DialogHeader>
             <DialogTitle>Upload skill</DialogTitle>
             <DialogDescription>
-              Loose files (SKILL.md plus scripts) or a single zip; 32 MiB budget
-              on the platform.
+              Upload a ZIP or select a skill folder containing SKILL.md. The
+              folder name must match the name in SKILL.md.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="skill-title">Display title (optional)</Label>
+              <Label htmlFor="skill-title">Display name (optional)</Label>
               <Input
                 id="skill-title"
                 value={title}
@@ -58,11 +58,23 @@ export function UploadSkillButton() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="skill-archive">ZIP archive</Label>
               <input
+                id="skill-archive"
                 ref={input}
                 type="file"
                 multiple
                 aria-label="Skill files"
+                onChange={(e) => setFiles([...(e.target.files ?? [])])}
+                className="text-sm"
+              />
+              <Label htmlFor="skill-folder">Or select a folder</Label>
+              <input
+                id="skill-folder"
+                type="file"
+                multiple
+                {...{ webkitdirectory: "" }}
+                aria-label="Skill folder"
                 onChange={(e) => setFiles([...(e.target.files ?? [])])}
                 className="text-sm"
               />
@@ -84,7 +96,7 @@ export function UploadSkillButton() {
               disabled={files.length === 0 || upload.isPending}
               onClick={() =>
                 upload.mutate(
-                  { files, displayTitle: title || undefined },
+                  { files, displayName: title || undefined },
                   {
                     onSuccess: (skill) => router.push(`/skills/${skill.id}`),
                   },

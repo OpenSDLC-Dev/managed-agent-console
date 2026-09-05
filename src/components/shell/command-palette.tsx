@@ -128,10 +128,10 @@ function useSearchItems(query: string): Item[] {
         });
     }
     for (const s of skills.data?.data ?? []) {
-      if (matches(q, s.display_title, s.id))
+      if (matches(q, s.display_name, s.id))
         items.push({
           key: s.id,
-          label: s.display_title,
+          label: s.display_name,
           detail: s.id,
           href: `/skills/${s.id}`,
           group: "Skills",
