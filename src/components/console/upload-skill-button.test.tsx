@@ -56,7 +56,7 @@ describe("UploadSkillButton", () => {
     Object.defineProperty(file, "webkitRelativePath", {
       value: "deploy/SKILL.md",
     });
-    fireEvent.change(screen.getByLabelText("Skill folder"), {
+    fireEvent.change(screen.getByLabelText("Or select a folder"), {
       target: { files: [file] },
     });
     await userEvent.click(
@@ -92,7 +92,7 @@ describe("UploadSkillButton", () => {
     expect(submit).toBeDisabled();
 
     await user.type(screen.getByLabelText("Display name (optional)"), "Deploy");
-    await user.upload(screen.getByLabelText("Skill files"), [
+    await user.upload(screen.getByLabelText("ZIP archive"), [
       skillMd(),
       script(),
     ]);
@@ -133,7 +133,7 @@ describe("UploadSkillButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("Skill files"), skillMd());
+    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
     expect(screen.getByText("1 file selected")).toBeDefined();
     await user.click(
       within(dialog).getByRole("button", { name: "Upload skill" }),
@@ -158,7 +158,7 @@ describe("UploadSkillButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("Skill files"), skillMd());
+    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
     await user.click(
       within(dialog).getByRole("button", { name: "Upload skill" }),
     );
@@ -201,7 +201,7 @@ describe("UploadSkillButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("Skill files"), skillMd());
+    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
     await user.click(
       within(dialog).getByRole("button", { name: "Upload skill" }),
     );
@@ -219,7 +219,7 @@ describe("UploadSkillButton", () => {
     await user.click(screen.getByRole("button", { name: /Upload skill/ }));
     await screen.findByRole("dialog");
     await user.type(screen.getByLabelText("Display name (optional)"), "x");
-    await user.upload(screen.getByLabelText("Skill files"), skillMd());
+    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 

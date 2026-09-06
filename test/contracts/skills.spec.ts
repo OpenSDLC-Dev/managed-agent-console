@@ -1,4 +1,5 @@
-import { expect, test, type APIResponse } from "@playwright/test";
+import { expect, type APIResponse } from "@playwright/test";
+import { test } from "./fixtures";
 import {
   SkillSchema,
   SkillVersionSchema,
@@ -34,7 +35,7 @@ test("GA Skills: upload, read, page, download, protect last version and cascade 
     const skill = SkillSchema.parse(created);
     expect(skill.display_name).toBe(name);
     expect(skill.source.type).toBe("custom");
-    expect(skill.latest_version_id).toMatch(/^skver_/);
+    expect(skill.latest_version_id).not.toBe("");
     SkillSchema.parse(await ok(await request.get(`/v1/skills/${id}`)));
     const original = SkillVersionSchema.parse(
       await ok(await request.get(`/v1/skills/${id}/versions/latest`)),

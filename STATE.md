@@ -16,6 +16,7 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 - [ ] Complete interaction parity and Chrome fidelity checks.
 - [ ] Pass the contributor gate and PR review.
 
-Skills checkpoint: 991 tests passed with coverage gates, then 95 targeted tests
-after directory-upload/paging additions; 62 e2e tests passed. Real GA contract
-passed against an isolated database/controlplane built from platform d7ffbab.
+Skills: PR #128 passed its initial 3-OS/Docker CI. Six review findings are fixed;
+45 targeted tests, 62 e2e tests and 2 local contract tests passed. Refreshed
+skills-list, skill-detail and skill-upload screenshots in both themes.
+Review-fix coverage and remote CI are pending.

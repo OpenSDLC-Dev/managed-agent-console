@@ -55,7 +55,10 @@ const json = (payload: unknown, status = 200) =>
   });
 
 function stubFetch(
-  handler: (url: URL, init?: RequestInit) => Response | undefined,
+  handler: (
+    url: URL,
+    init?: RequestInit,
+  ) => Response | Promise<Response> | undefined,
 ) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -117,6 +120,39 @@ afterEach(() => {
 });
 
 describe("SkillDetailPage", () => {
+  it("ignores repeated next clicks while the cursor page is loading", async () => {
+    let finish!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+    stubFetch((url) => {
+      if (url.pathname.endsWith("/versions")) {
+        return url.searchParams.get("page") === "older"
+          ? pending
+          : json({ data: [version({ id: "newer" })], next_page: "older" });
+      }
+      return json(skill());
+    });
+    renderPage();
+    await screen.findByLabelText("Download version newer");
+    const next = screen.getByRole("button", { name: "Next page" });
+    await userEvent.click(next);
+    await waitFor(() => expect(next).toBeDisabled());
+    expect(
+      screen.getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+    await userEvent.dblClick(next);
+    finish(json({ data: [version({ id: "older" })] }));
+    await screen.findByLabelText("Download version older");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Previous page" }),
+    );
+    await screen.findByLabelText("Download version newer");
+    expect(
+      screen.getByRole("button", { name: "Previous page" }),
+    ).toBeDisabled();
+  });
+
   it("pages version IDs forwards and backwards using platform cursors", async () => {
     stubFetch((url) => {
       if (url.pathname.endsWith("/versions"))

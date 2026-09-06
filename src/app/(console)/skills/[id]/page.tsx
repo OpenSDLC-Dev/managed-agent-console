@@ -209,8 +209,8 @@ export default function SkillDetailPage({
         )}
       </DetailSection>
       <Pager
-        hasPrev={pagination.hasPrev}
-        hasNext={Boolean(versions.data?.next_page)}
+        hasPrev={pagination.hasPrev && !versions.isFetching}
+        hasNext={Boolean(versions.data?.next_page) && !versions.isFetching}
         onPrev={pagination.goPrev}
         onNext={() => {
           if (versions.data?.next_page)

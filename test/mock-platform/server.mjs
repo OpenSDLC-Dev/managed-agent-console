@@ -1757,6 +1757,24 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(version));
       return;
     }
+    if (req.method === "GET" && versionItemMatch) {
+      const skill = skillsStore.find((s) => s.id === versionItemMatch[1]);
+      const versionId =
+        versionItemMatch[2] === "latest"
+          ? skill?.latest_version_id
+          : versionItemMatch[2];
+      const version = (skillVersionsStore[versionItemMatch[1]] ?? []).find(
+        (v) => v.id === versionId,
+      );
+      res.setHeader("content-type", "application/json");
+      res.writeHead(version ? 200 : 404);
+      res.end(
+        version
+          ? JSON.stringify(version)
+          : envelope("not_found_error", "no such version"),
+      );
+      return;
+    }
     if (req.method === "GET" && contentMatch) {
       const exists = (skillVersionsStore[contentMatch[1]] ?? []).some(
         (v) => v.id === contentMatch[2],

@@ -64,7 +64,6 @@ export function UploadSkillButton() {
                 ref={input}
                 type="file"
                 multiple
-                aria-label="Skill files"
                 onChange={(e) => setFiles([...(e.target.files ?? [])])}
                 className="text-sm"
               />
@@ -74,7 +73,6 @@ export function UploadSkillButton() {
                 type="file"
                 multiple
                 {...{ webkitdirectory: "" }}
-                aria-label="Skill folder"
                 onChange={(e) => setFiles([...(e.target.files ?? [])])}
                 className="text-sm"
               />

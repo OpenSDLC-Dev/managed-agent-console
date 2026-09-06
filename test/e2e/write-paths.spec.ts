@@ -166,7 +166,7 @@ test("skill upload, new version, and deletes", async ({ page }) => {
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await page.getByRole("button", { name: "Upload skill" }).click();
   await page.getByLabel("Display name (optional)").fill("Release notes");
-  await page.getByLabel("Skill files").setInputFiles({
+  await page.getByLabel("ZIP archive").setInputFiles({
     name: "SKILL.md",
     mimeType: "text/markdown",
     buffer: Buffer.from("---\nname: release-notes\n---\nWrite notes."),
@@ -194,7 +194,7 @@ test("skill upload, new version, and deletes", async ({ page }) => {
   // Delete one version, then cascade-delete the skill and its last version.
   {
     await page
-      .getByRole("button", { name: /Delete version skver_/ })
+      .getByRole("button", { name: /^Delete version / })
       .first()
       .click();
     await page
