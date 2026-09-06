@@ -579,6 +579,32 @@ describe("SessionDetailPage", () => {
     });
   });
 
+  it.each(["archived", "deleted"])(
+    "removes pending approval controls when the session is %s",
+    async (state) => {
+      setTrace(
+        "closed",
+        [
+          ev("tu_1", "agent.tool_use", { name: "bash", input: {} }),
+          ev("sevt_2", "session.status_idle", {
+            stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+          }),
+        ],
+        [],
+        state === "deleted",
+      );
+      stubFetch({
+        session: session({
+          archived_at: state === "archived" ? "2026-09-01T00:00:00Z" : null,
+        }),
+      });
+      renderPage();
+      await screen.findByRole("heading", { name: "Debug run" });
+      expect(screen.queryByTestId("approval-banner")).toBeNull();
+      expect(screen.getByLabelText("Message to the session")).toBeDisabled();
+    },
+  );
+
   it("clears the banner once a confirmation event answers the tool call", async () => {
     setTrace("reconnecting", [
       ev("tu_1", "agent.tool_use", { name: "bash", input: {} }),

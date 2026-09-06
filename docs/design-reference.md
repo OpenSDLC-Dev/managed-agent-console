@@ -233,3 +233,6 @@ The local detail page uses the existing action menu and confirmation dialogs.
 Metadata changes use an explicit JSON patch editor because the platform owns
 validation; `null` at the document level preserves metadata, while null-valued
 keys remove entries (`internal/api/wire.go:patchMetadata`).
+
+The later verification visit redirected to sign-in; the earlier captured
+reference facts remain the comparison baseline for this slice.

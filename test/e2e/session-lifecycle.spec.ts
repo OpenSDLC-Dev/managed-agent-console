@@ -31,6 +31,10 @@ test("edit metadata, archive and delete a session", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive session" }).click();
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Message to the session")).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Allow", exact: true }),
+  ).toBeHidden();
   await expect(page.getByRole("button", { name: "Edit session" })).toBeHidden();
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();

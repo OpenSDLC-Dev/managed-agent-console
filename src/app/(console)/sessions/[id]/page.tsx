@@ -267,7 +267,9 @@ export default function SessionDetailPage({
       />
       <SessionChips session={data} />
 
-      <ApprovalBanner pending={pending} sessionId={id} />
+      {!data.archived_at && !trace.deleted && (
+        <ApprovalBanner pending={pending} sessionId={id} />
+      )}
 
       <DetailSection title="Events">
         {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
