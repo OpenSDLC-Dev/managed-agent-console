@@ -68,10 +68,17 @@ test("repository tokens stay write-only and memory references can be removed", a
   await expect(page.getByText("Project notes", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Rotate token" }).click();
   await page.getByLabel("Authorization token").fill("test-only-rotated");
+  const rotatedResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes(`/sessions/${session.id}/resources/`),
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Rotate token" })
     .click();
+  const rotated = await rotatedResponse;
+  expect(await rotated.text()).not.toContain("test-only-rotated");
   await expect(page.getByRole("dialog")).toBeHidden();
   const refreshed = await (
     await page.request.get(`/api/platform/v1/sessions/${session.id}`)

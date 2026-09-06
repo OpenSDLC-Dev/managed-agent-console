@@ -1488,11 +1488,29 @@ const server = createServer(async (req, res) => {
     const resources = [];
     for (const resource of body.resources ?? []) {
       if (resource.type === "github_repository") {
+        const checkout = resource.checkout ?? null;
+        const checkoutValid =
+          checkout === null ||
+          (checkout &&
+            !Array.isArray(checkout) &&
+            ((checkout.type === "branch" &&
+              typeof checkout.name === "string" &&
+              checkout.name.length > 0 &&
+              Object.keys(checkout).every((key) =>
+                ["type", "name"].includes(key),
+              )) ||
+              (checkout.type === "commit" &&
+                typeof checkout.sha === "string" &&
+                /^[0-9a-fA-F]{40}$/.test(checkout.sha) &&
+                Object.keys(checkout).every((key) =>
+                  ["type", "sha"].includes(key),
+                ))));
         if (
           !resource.authorization_token ||
           !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
             resource.url ?? "",
-          )
+          ) ||
+          !checkoutValid
         ) {
           res.writeHead(400);
           res.end(
@@ -1513,17 +1531,25 @@ const server = createServer(async (req, res) => {
               .split("/")
               .at(-1)
               .replace(/\.git$/, "")}`,
-          checkout: resource.checkout ?? null,
+          checkout,
           created_at: now(),
           updated_at: now(),
         });
         continue;
       }
       if (resource.type === "memory_store") {
+        const access = resource.access ?? "read_write";
+        const instructions = resource.instructions ?? null;
         const memory = memoryResources.find(
           (item) => item.memory_store_id === resource.memory_store_id,
         );
-        if (!memory) {
+        if (
+          !memory ||
+          !["read_only", "read_write"].includes(access) ||
+          (instructions !== null &&
+            (typeof instructions !== "string" ||
+              [...instructions].length > 4096))
+        ) {
           res.writeHead(400);
           res.end(
             envelope(
@@ -1535,8 +1561,8 @@ const server = createServer(async (req, res) => {
         }
         resources.push({
           ...memory,
-          access: resource.access ?? "read_write",
-          instructions: resource.instructions ?? null,
+          access,
+          instructions,
         });
         continue;
       }

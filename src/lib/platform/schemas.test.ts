@@ -494,6 +494,39 @@ describe("the mock's constructed write-path responses conform too", () => {
     );
   });
 
+  it.each([
+    {
+      type: "github_repository",
+      url: "https://github.com/example/project",
+      authorization_token: "test-only-token",
+      checkout: { type: "commit", sha: "short" },
+    },
+    {
+      type: "memory_store",
+      memory_store_id: "memstore_projectnotes000001",
+      access: "admin",
+    },
+    {
+      type: "memory_store",
+      memory_store_id: "memstore_projectnotes000001",
+      instructions: 42,
+    },
+  ])("sessions: reject invalid resource variant %#", async (resource) => {
+    const response = await fetch(`${base}/v1/sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        agent: fixtures.agents[0].id,
+        environment_id: fixtures.environments[0].id,
+        resources: [resource],
+      }),
+    });
+    expect(response.status).toBe(400);
+  });
+
   it("events: the posted echoes and the events the mock then appends", async () => {
     const id = "sesn_gatedbash00000000001"; // parked on requires_action
     const posted = (await postJSON(`/v1/sessions/${id}/events`, {
