@@ -34,6 +34,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Session details now support title and metadata edits, archive and confirmed
   deletion, with platform errors shown when an operation is refused.
+  Metadata-only edits preserve concurrent title changes by other operators.
 
 - **A Dashboard, and it is where the console opens.** A static landing page: one card per surface the
   deployment serves, under the sidebar's own group headings and in its order, so the two cannot

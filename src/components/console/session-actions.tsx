@@ -28,6 +28,7 @@ export function SessionActions({ session }: { session: Session }) {
   const remove = useDeleteSession(session.id);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [initialTitle, setInitialTitle] = useState("");
   const [metadata, setMetadata] = useState("{}");
   const [parseError, setParseError] = useState<string>();
 
@@ -41,7 +42,7 @@ export function SessionActions({ session }: { session: Session }) {
     }
     setParseError(undefined);
     update.mutate(
-      { title, metadata: patch },
+      { ...(title !== initialTitle ? { title } : {}), metadata: patch },
       { onSuccess: () => setOpen(false) },
     );
   }
@@ -54,6 +55,7 @@ export function SessionActions({ session }: { session: Session }) {
           size="sm"
           onClick={() => {
             setTitle(session.title ?? "");
+            setInitialTitle(session.title ?? "");
             setMetadata("{}");
             setParseError(undefined);
             update.reset();

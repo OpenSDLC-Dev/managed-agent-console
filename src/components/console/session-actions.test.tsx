@@ -46,7 +46,7 @@ function setup(archived = false, status = 200) {
     defaultOptions: { mutations: { retry: false } },
   });
   client.setQueryData(["sessions"], { data: [session] });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <SessionActions
         session={{
@@ -56,8 +56,28 @@ function setup(archived = false, status = 200) {
       />
     </QueryClientProvider>,
   );
-  return { fetch, client, saved };
+  const refresh = (next: Session) =>
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <SessionActions session={next} />
+      </QueryClientProvider>,
+    );
+  return { fetch, client, saved, refresh };
 }
+
+it("omits an untouched title after another operator renames the session", async () => {
+  const { fetch, refresh } = setup();
+  await userEvent.click(screen.getByRole("button", { name: "Edit session" }));
+  refresh({ ...session, title: "Another operator's title" });
+  fireEvent.change(screen.getByLabelText("Metadata changes (JSON)"), {
+    target: { value: '{"owner":"ops"}' },
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toEqual({
+    metadata: { owner: "ops" },
+  });
+});
 
 it("sends title and a metadata patch and refreshes cached resources", async () => {
   const { fetch, client, saved } = setup();
