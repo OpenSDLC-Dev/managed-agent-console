@@ -474,6 +474,18 @@ describe("the mock's constructed write-path responses conform too", () => {
     // The constructed resource entry is the shape that would otherwise go
     // unvalidated — no fixture session mounts one on the create path.
     expect((session as { resources: unknown[] }).resources).toHaveLength(1);
+    const sessionId = (session as { id: string }).id;
+    const rejected = await fetch(`${base}/v1/sessions/${sessionId}/archive`, {
+      method: "DELETE",
+      headers: { "x-api-key": API_KEY },
+    });
+    expect(rejected.ok).toBe(false);
+    const retained = await call(`/v1/sessions/${sessionId}`, { method: "GET" });
+    expectConforms(
+      SessionSchema,
+      retained,
+      "session retained after invalid archive DELETE",
+    );
   });
 
   it("events: the posted echoes and the events the mock then appends", async () => {

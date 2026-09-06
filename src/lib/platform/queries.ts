@@ -378,6 +378,50 @@ export function useCreateSession() {
   });
 }
 
+// internal/api/sessions.go:updateSession; metadata is a patch, null is a no-op.
+export interface SessionUpdateBody {
+  title?: string | null;
+  metadata?: Record<string, string | null> | null;
+}
+
+export function useUpdateSession(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: SessionUpdateBody) =>
+      platformPost<Session>(`v1/sessions/${id}`, body),
+    onSuccess: (session) => {
+      client.setQueryData(["session", id], session);
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useArchiveSession(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Archive failed" },
+    mutationFn: () => platformPost<Session>(`v1/sessions/${id}/archive`, {}),
+    onSuccess: (session) => {
+      client.setQueryData(["session", id], session);
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useDeleteSession(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: () =>
+      platformDelete<{ id: string; type: string }>(`v1/sessions/${id}`),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: ["session", id] });
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
 export function useUploadFile() {
   const queryClient = useQueryClient();
   return useMutation({
