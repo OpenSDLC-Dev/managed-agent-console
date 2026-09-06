@@ -14,6 +14,17 @@ layout parity remains unfinished, rather than being claimed by the wire fix.
 Our upload offers a ZIP or directory: the platform requires loose filenames to
 retain their top-level directory, which a normal browser file picker loses.
 
+## Session resources — checked 2026-09-06
+
+The previous reference inspection established the compact session detail pattern,
+but the Managed Agents area is no longer reachable with the available account, so
+this slice does not claim a fresh reference comparison. The console uses that
+existing detail-section pattern for resource rows and dialogs. Its lifecycle is
+forced by the platform: files can be added after creation and removed; repository
+and memory-store attachments are creation-time inputs; repositories remain for a
+session's lifetime and expose only write-only token rotation. The `session-resources`
+fidelity surface records the mounted-file state until reference access is restored.
+
 ## Extracted 2026-08-02 from platform.claude.com (light, Managed Agents → Agents)
 
 Method: `getComputedStyle` on live elements in Chrome.

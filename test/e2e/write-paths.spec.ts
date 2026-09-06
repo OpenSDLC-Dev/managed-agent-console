@@ -85,7 +85,9 @@ test("create a session with an uploaded file mount and drive it", async ({
     page.getByRole("heading", { name: "Review the dataset" }),
   ).toBeVisible();
   // The file mount landed on the session — the chip carries the mount path.
-  const fileChip = page.getByTestId("session-chips").getByText("1 file");
+  const fileChip = page
+    .getByTestId("session-chips")
+    .locator('[data-resource-count="1"]');
   await expect(fileChip).toBeVisible();
   await expect(fileChip).toHaveAttribute(
     "title",

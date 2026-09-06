@@ -207,6 +207,31 @@ export const SURFACES: Surface[] = [
       await page.getByTestId("approval-banner").waitFor();
     },
   },
+  {
+    id: "session-resources",
+    route: `/sessions/${GATED}`,
+    fixture: `${GATED} with an attached file`,
+    description:
+      "Session resources: mounted-file row, its mount path, and the attach affordance.",
+    setup: async (page) => {
+      await traceLive(page);
+      const add = await page.request.post(
+        `${MOCK_URL}/v1/sessions/${GATED}/resources`,
+        {
+          headers: { "x-api-key": "test-key" },
+          data: { type: "file", file_id: "file_notes0000000000001" },
+        },
+      );
+      if (!add.ok()) {
+        throw new Error(`Could not attach fidelity resource: ${add.status()}`);
+      }
+      await page.reload();
+      await traceLive(page);
+      await page
+        .getByText("file_notes0000000000001", { exact: true })
+        .waitFor();
+    },
+  },
 
   // ---- create / edit forms ---------------------------------------------
   {

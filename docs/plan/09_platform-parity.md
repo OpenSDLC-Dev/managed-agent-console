@@ -34,3 +34,9 @@ filenames matching the frontmatter name. Directory selection now preserves
 `webkitRelativePath`; the corrected real contract passed. On this Windows host,
 Playwright's local webServer probes needed `NO_PROXY=localhost,127.0.0.1,::1`:
 without it the proxy returned 502 despite the mock listening normally.
+
+Session resources: `internal/api/sessionresources.go` permits only files to be
+added after creation. Repository and memory-store inputs therefore live on session
+creation; repository deletion is refused by the platform, while its token-rotation
+endpoint accepts a replacement without returning it. A local contract run added
+and removed a file resource without sending an agent turn.

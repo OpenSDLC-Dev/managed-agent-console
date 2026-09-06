@@ -6,6 +6,12 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Added
+
+- Sessions can attach and remove uploaded-file resources, and can be created
+  with GitHub repository or memory-store attachments. Repository tokens are
+  write-only and rotatable; the console never renders them.
+
 ### Fixed
 
 - Skills now use the platform's GA names, source objects and version IDs across

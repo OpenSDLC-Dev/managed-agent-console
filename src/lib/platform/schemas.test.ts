@@ -35,6 +35,7 @@ import {
   EnvironmentKeySchema,
   EnvironmentSchema,
   PlatformFileSchema,
+  SessionResourceSchema,
   SessionEventSchema,
   SessionSchema,
   SkillSchema,
@@ -109,6 +110,10 @@ describe("mock fixtures conform to the platform wire", () => {
     each(PlatformFileSchema, fixtures.files, "files");
   });
 
+  it("memory-store resource snapshots", () => {
+    each(SessionResourceSchema, fixtures.memoryResources, "memoryResources");
+  });
+
   it("environment keys (the console API)", () => {
     eachIn(EnvironmentKeySchema, fixtures.environmentKeys, "environmentKeys");
   });
@@ -121,6 +126,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "environmentKeys",
       "environments",
       "files",
+      "memoryResources",
       "sessionEvents",
       "sessions",
       "skillVersions",
