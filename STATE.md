@@ -19,4 +19,4 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 Skills: PR #128 passed its initial 3-OS/Docker CI. Six review findings are fixed;
 45 targeted tests, 62 e2e tests and 2 local contract tests passed. Refreshed
 skills-list, skill-detail and skill-upload screenshots in both themes.
-Review-fix coverage and remote CI are pending.
+Review-fix coverage passed (994 tests); remote CI and re-review are pending.
