@@ -21,6 +21,7 @@ import {
   type Page,
 } from "./http";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./surfaces";
+import type { ResourceInput } from "./session-resources";
 import type {
   Agent,
   ApiKey,
@@ -363,7 +364,7 @@ export interface SessionCreateBody {
   environment_id: string;
   title?: string;
   vault_ids?: string[];
-  resources?: { type: "file"; file_id: string; mount_path?: string }[];
+  resources?: ResourceInput[];
 }
 
 export function useCreateSession() {
