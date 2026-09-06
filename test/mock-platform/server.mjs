@@ -1334,7 +1334,11 @@ const server = createServer(async (req, res) => {
   const sessionWriteMatch = url.pathname.match(
     /^\/v1\/sessions\/([^/]+)(\/archive)?$/,
   );
-  if (sessionWriteMatch && ["POST", "DELETE"].includes(req.method)) {
+  if (
+    sessionWriteMatch &&
+    (req.method === "POST" ||
+      (req.method === "DELETE" && !sessionWriteMatch[2]))
+  ) {
     const state = store.get(sessionWriteMatch[1]);
     res.setHeader("content-type", "application/json");
     const fail = (status, message) => {
