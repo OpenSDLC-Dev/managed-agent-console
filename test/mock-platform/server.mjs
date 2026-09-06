@@ -1929,6 +1929,10 @@ const server = createServer(async (req, res) => {
       fail(400, "invalid JSON");
       return;
     }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      fail(400, "expected object");
+      return;
+    }
     if (resource) {
       if (resource.type !== "github_repository") {
         fail(400, "only repository tokens can be updated");

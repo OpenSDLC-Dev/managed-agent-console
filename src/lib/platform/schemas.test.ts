@@ -527,6 +527,24 @@ describe("the mock's constructed write-path responses conform too", () => {
     expect(response.status).toBe(400);
   });
 
+  it.each(["null", "[]"])(
+    "sessions: reject non-object resource mutation body %s",
+    async (body) => {
+      const response = await fetch(
+        `${base}/v1/sessions/${fixtures.sessions[0].id}/resources`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": API_KEY,
+          },
+          body,
+        },
+      );
+      expect(response.status).toBe(400);
+    },
+  );
+
   it("events: the posted echoes and the events the mock then appends", async () => {
     const id = "sesn_gatedbash00000000001"; // parked on requires_action
     const posted = (await postJSON(`/v1/sessions/${id}/events`, {
