@@ -622,7 +622,7 @@ export function AgentEditor({
                                     ...form.skills,
                                     {
                                       type:
-                                        skill.source === "anthropic"
+                                        skill.source.type === "anthropic"
                                           ? "anthropic"
                                           : "custom",
                                       skill_id: skill.id,
@@ -635,7 +635,7 @@ export function AgentEditor({
                             )
                           }
                         />
-                        {skill.display_title}
+                        {skill.display_name}
                         <span className="font-mono text-[12px] text-muted-foreground">
                           {skill.id}
                         </span>

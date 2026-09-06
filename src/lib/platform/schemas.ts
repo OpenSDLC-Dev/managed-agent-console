@@ -294,14 +294,14 @@ export const VaultCredentialSchema = z.object({
   archived_at: z.string().nullable(),
 });
 
-// ---- skills (internal/api/skills.go:25-33)
+// ---- GA skills (internal/api/skills.go skillJSON / skillVersionJSON)
 
 export const SkillSchema = z.object({
   id: z.string(), // skill_… or a catalog short name like "xlsx"
   type: z.literal("skill"),
-  display_title: z.string(),
-  latest_version: z.string(), // "" once every version is deleted
-  source: z.enum(["custom", "anthropic"]), // skills.go:233-234
+  display_name: z.string(),
+  latest_version_id: z.string(), // GA version row ID; legacy zero-version rows may be empty
+  source: z.object({ type: z.string() }), // internal/api/skills.go skillSourceJSON
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -310,10 +310,8 @@ export const SkillVersionSchema = z.object({
   id: z.string(),
   type: z.literal("skill_version"),
   skill_id: z.string(),
-  version: z.string(), // epoch-microsecond digits, as a string
   name: z.string(),
   description: z.string(),
-  directory: z.string(),
   created_at: z.string(),
 });
 

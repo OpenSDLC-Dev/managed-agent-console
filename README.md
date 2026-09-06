@@ -76,6 +76,13 @@ pnpm test:e2e   # Playwright against the in-repo mock platform server
 pnpm lint       # eslint; pnpm typecheck and pnpm format:check also exist
 ```
 
+To verify the current GA Skills contract against a local platform without model
+calls, configure `.env.local` and run
+`RUN_LIVE_CONTRACT_TESTS=1 pnpm test:contract:live` (PowerShell:
+`$env:RUN_LIVE_CONTRACT_TESTS='1'; pnpm test:contract:live`). This creates and
+removes a dedicated test skill; it fails on missing configuration or an old wire
+shape. It does not replace the model-backed live session suite.
+
 The live tier drives a **real platform stack** (the platform repo's `deploy/compose`) and spends real
 model tokens:
 

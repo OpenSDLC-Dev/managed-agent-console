@@ -6,7 +6,24 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Fixed
+
+- Skills now use the platform's GA names, source objects and version IDs across
+  lists, details, agent selection, search and uploads. Version history is paged;
+  deleting a skill warns that all versions are removed, while the platform
+  protects a skill's last version from individual deletion.
+
+### Testing
+
+- Added a model-free local Skills contract suite covering upload, version reads,
+  cursor paging, archive download and deletion against an actual platform.
+- The screenshot walker follows the configured landing route after sign-in,
+  fixing its timeout after the Dashboard became the landing page.
+
 ### Security
+
+- Local contract requests refuse redirects so their management key cannot be
+  forwarded to a redirect destination.
 
 - **The runtime image refreshes its Alpine packages at build time**, clearing CVE-2026-14456 in
   `libcrypto3`/`libssl3`. `node:24-alpine` is rebuilt on Node's cadence, not Alpine's, so it carries

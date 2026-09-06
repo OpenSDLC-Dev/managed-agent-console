@@ -556,7 +556,7 @@ describe("the mock's constructed write-path responses conform too", () => {
   it("skills: upload, then a new version", async () => {
     const skill = await postMultipart(
       "/v1/skills",
-      '----x\r\nContent-Disposition: form-data; name="display_title"\r\n\r\n' +
+      '----x\r\nContent-Disposition: form-data; name="display_name"\r\n\r\n' +
         "Conformance Skill\r\n----x--\r\n",
     );
     expectConforms(SkillSchema, skill, "POST /v1/skills");
@@ -571,6 +571,45 @@ describe("the mock's constructed write-path responses conform too", () => {
       version,
       `POST /v1/skills/${id}/versions`,
     );
+    const versionId = (version as { id: string }).id;
+    const read = (path: string) =>
+      fetch(`${base}${path}`, { headers: { "x-api-key": API_KEY } });
+    expect(
+      await (await read(`/v1/skills/${id}/versions/latest`)).json(),
+    ).toEqual(version);
+    expect(
+      await (await read(`/v1/skills/${id}/versions/${versionId}`)).json(),
+    ).toEqual(version);
+    const remove = (path: string) =>
+      fetch(`${base}${path}`, {
+        method: "DELETE",
+        headers: { "x-api-key": API_KEY },
+      });
+    expect(
+      (await remove(`/v1/skills/${id}/versions/${versionId}`)).status,
+    ).toBe(200);
+    expect((await read(`/v1/skills/${id}/versions/${versionId}`)).status).toBe(
+      404,
+    );
+    const originalId = (skill as { latest_version_id: string })
+      .latest_version_id;
+    expect(
+      (await remove(`/v1/skills/${id}/versions/${originalId}`)).status,
+    ).toBe(400);
+    const remaining = await (
+      await read(`/v1/skills/${id}/versions/${originalId}`)
+    ).json();
+    expectConforms(SkillVersionSchema, remaining, "protected version");
+    expect(remaining.id).toBe(originalId);
+    expect(
+      await (await read(`/v1/skills/${id}/versions/latest`)).json(),
+    ).toEqual(remaining);
+    expect((await remove(`/v1/skills/${id}`)).status).toBe(200);
+    expect((await read(`/v1/skills/${id}/versions/${originalId}`)).status).toBe(
+      404,
+    );
+    expect((await read(`/v1/skills/${id}/versions/latest`)).status).toBe(404);
+    expect((await read(`/v1/skills/${id}/versions`)).status).toBe(404);
   });
 
   // The mock's credential dispatch mirrors internal/api/server.go's, because

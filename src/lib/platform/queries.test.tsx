@@ -483,14 +483,14 @@ const mutationCases: MutationCase[] = [
     useHook: () => useUploadSkill(),
     variables: {
       files: [skillMd(), new File(["print()"], "run.py")],
-      displayTitle: "My skill",
+      displayName: "My skill",
     },
     path: "/api/platform/v1/skills",
     method: "POST",
     formEntries: [
       ["files[]", "SKILL.md"],
       ["files[]", "run.py"],
-      ["display_title", "My skill"],
+      ["display_name", "My skill"],
     ],
     meta: { errorToast: false },
     invalidates: [["skills"]],

@@ -106,7 +106,8 @@ export const SURFACES: Surface[] = [
     id: "skills-list",
     route: "/skills",
     fixture: "1 skill",
-    description: "Resource list with a version column and an upload action.",
+    description:
+      "GA skill names, source labels, version IDs and upload action.",
   },
   {
     id: "files-list",
@@ -142,6 +143,15 @@ export const SURFACES: Surface[] = [
     route: `/skills/${SKILL}`,
     fixture: SKILL,
     description: "Version list with per-version actions.",
+  },
+  {
+    id: "skill-upload",
+    route: "/skills",
+    fixture: "skill upload dialog",
+    description: "Display name with ZIP and directory upload choices.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Upload skill" }).click();
+    },
   },
 
   // ---- the session trace, this console's densest surface ----------------
