@@ -13,6 +13,7 @@ import {
   environments,
   environmentKeys,
   files,
+  memoryResources,
   sessions as sessionFixtures,
   sessionEvents as eventFixtures,
   skills,
@@ -1486,6 +1487,85 @@ const server = createServer(async (req, res) => {
     }
     const resources = [];
     for (const resource of body.resources ?? []) {
+      if (resource.type === "github_repository") {
+        const checkout = resource.checkout ?? null;
+        const checkoutValid =
+          checkout === null ||
+          (checkout &&
+            !Array.isArray(checkout) &&
+            ((checkout.type === "branch" &&
+              typeof checkout.name === "string" &&
+              checkout.name.length > 0 &&
+              Object.keys(checkout).every((key) =>
+                ["type", "name"].includes(key),
+              )) ||
+              (checkout.type === "commit" &&
+                typeof checkout.sha === "string" &&
+                /^[0-9a-fA-F]{40}$/.test(checkout.sha) &&
+                Object.keys(checkout).every((key) =>
+                  ["type", "sha"].includes(key),
+                ))));
+        if (
+          !resource.authorization_token ||
+          !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
+            resource.url ?? "",
+          ) ||
+          !checkoutValid
+        ) {
+          res.writeHead(400);
+          res.end(
+            envelope(
+              "invalid_request_error",
+              "repository URL and authorization token are required",
+            ),
+          );
+          return;
+        }
+        resources.push({
+          id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
+          type: "github_repository",
+          url: resource.url,
+          mount_path:
+            resource.mount_path ||
+            `/workspace/${resource.url
+              .split("/")
+              .at(-1)
+              .replace(/\.git$/, "")}`,
+          checkout,
+          created_at: now(),
+          updated_at: now(),
+        });
+        continue;
+      }
+      if (resource.type === "memory_store") {
+        const access = resource.access ?? "read_write";
+        const instructions = resource.instructions ?? null;
+        const memory = memoryResources.find(
+          (item) => item.memory_store_id === resource.memory_store_id,
+        );
+        if (
+          !memory ||
+          !["read_only", "read_write"].includes(access) ||
+          (instructions !== null &&
+            (typeof instructions !== "string" ||
+              [...instructions].length > 4096))
+        ) {
+          res.writeHead(400);
+          res.end(
+            envelope(
+              "session_resource_not_found_error",
+              "memory store not found",
+            ),
+          );
+          return;
+        }
+        resources.push({
+          ...memory,
+          access,
+          instructions,
+        });
+        continue;
+      }
       if (resource.type !== "file") {
         res.writeHead(400);
         res.end(
@@ -1788,6 +1868,113 @@ const server = createServer(async (req, res) => {
       );
       return;
     }
+  }
+
+  // Resource mutations: sessionresources.go (add files, remove files/memory,
+  // rotate repository tokens). Tokens are deliberately never stored or echoed.
+  const resourceMatch = url.pathname.match(
+    /^\/v1\/sessions\/([^/]+)\/resources(?:\/([^/]+))?$/,
+  );
+  if (resourceMatch && ["POST", "DELETE"].includes(req.method)) {
+    res.setHeader("content-type", "application/json");
+    const state = store.get(resourceMatch[1]);
+    const fail = (status, message) => {
+      res.writeHead(status);
+      res.end(
+        envelope(
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
+        ),
+      );
+    };
+    if (!state) {
+      fail(404, "no such session");
+      return;
+    }
+    if (state.session.archived_at) {
+      fail(400, "session is archived");
+      return;
+    }
+    const resources = state.session.resources;
+    const resourceId = resourceMatch[2];
+    const resource = resources.find(
+      (item) =>
+        (item.type === "memory_store" ? item.memory_store_id : item.id) ===
+        resourceId,
+    );
+    if (resourceId && !resource) {
+      fail(404, "no such resource");
+      return;
+    }
+    if (req.method === "DELETE") {
+      if (!resource) {
+        fail(404, "no such resource");
+        return;
+      }
+      if (resource.type === "github_repository") {
+        fail(400, "repositories are attached for the lifetime of the session");
+        return;
+      }
+      state.session.resources = resources.filter((item) => item !== resource);
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({ id: resourceId, type: "session_resource_deleted" }),
+      );
+      return;
+    }
+    let body;
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      fail(400, "invalid JSON");
+      return;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      fail(400, "expected object");
+      return;
+    }
+    if (resource) {
+      if (resource.type !== "github_repository") {
+        fail(400, "only repository tokens can be updated");
+        return;
+      }
+      if (
+        typeof body.authorization_token !== "string" ||
+        !body.authorization_token
+      ) {
+        fail(400, "authorization_token is required");
+        return;
+      }
+      resource.updated_at = now();
+      res.writeHead(200);
+      res.end(JSON.stringify(resource));
+      return;
+    }
+    if (body.type !== "file") {
+      fail(400, "only file resources can be added to an existing session");
+      return;
+    }
+    if (!filesStore.some((file) => file.id === body.file_id)) {
+      fail(404, "no such file");
+      return;
+    }
+    const mount = body.mount_path || `/mnt/session/uploads/${body.file_id}`;
+    if (resources.some((item) => item.mount_path === mount)) {
+      fail(400, "mount_path is already in use");
+      return;
+    }
+    const added = {
+      id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
+      type: "file",
+      file_id: body.file_id,
+      mount_path: mount,
+      created_at: now(),
+      updated_at: now(),
+    };
+    resources.push(added);
+    res.writeHead(200);
+    res.end(JSON.stringify(added));
+    return;
   }
 
   // Skill writes: multipart upload, versions, deletes, zip download.

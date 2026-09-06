@@ -142,8 +142,8 @@ export const SessionAgentSchema = z.object({
   multiagent: z.null(),
 });
 
-/** internal/api/sessionresources.go:44-51 (`fileResourceJSON`). */
-export const SessionResourceSchema = z.object({
+/** internal/api/sessionresources.go:fileResourceJSON. */
+export const FileResourceSchema = z.object({
   id: z.string(),
   type: z.literal("file"),
   file_id: z.string(),
@@ -151,6 +151,34 @@ export const SessionResourceSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
 });
+
+/** internal/api/sessionresources.go:repoResourceJSON and memoryResourceJSON. */
+export const SessionResourceSchema = z.discriminatedUnion("type", [
+  FileResourceSchema,
+  z.object({
+    id: z.string(),
+    type: z.literal("github_repository"),
+    url: z.string(),
+    mount_path: z.string(),
+    checkout: z
+      .discriminatedUnion("type", [
+        z.object({ type: z.literal("branch"), name: z.string() }),
+        z.object({ type: z.literal("commit"), sha: z.string() }),
+      ])
+      .nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }),
+  z.object({
+    type: z.literal("memory_store"),
+    memory_store_id: z.string(),
+    access: z.enum(["read_only", "read_write"]),
+    instructions: z.string().nullable(),
+    description: z.string(),
+    mount_path: z.string(),
+    name: z.string(),
+  }),
+]);
 
 export const SessionSchema = z.object({
   id: z.string(),

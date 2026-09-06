@@ -181,6 +181,71 @@ afterEach(() => {
 });
 
 describe("NewSessionPage", () => {
+  it("sends repository and memory creation bindings without inventing resource IDs", async () => {
+    const fetchMock = stubFetch();
+    renderPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Support bot · v2" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add repository" }),
+    );
+    fireEvent.change(screen.getByLabelText("Repository URL"), {
+      target: { value: "https://github.com/example/project" },
+    });
+    expect(screen.getByLabelText("Authorization token")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    fireEvent.change(screen.getByLabelText("Authorization token"), {
+      target: { value: "test-only-token" },
+    });
+    fireEvent.change(screen.getByLabelText("Checkout"), {
+      target: { value: "branch" },
+    });
+    fireEvent.change(screen.getByLabelText("Branch name"), {
+      target: { value: "main" },
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add memory store" }),
+    );
+    fireEvent.change(screen.getByLabelText("Memory store ID"), {
+      target: { value: "memstore_1" },
+    });
+    fireEvent.change(screen.getByLabelText("Access"), {
+      target: { value: "read_only" },
+    });
+    fireEvent.change(screen.getByLabelText("Memory instructions (optional)"), {
+      target: { value: "Read prior decisions" },
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create session" }),
+    );
+    await waitFor(() =>
+      expect(pushSpy).toHaveBeenCalledWith("/sessions/sess_9"),
+    );
+    const call = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(JSON.parse(call?.[1]?.body as string).resources).toEqual([
+      {
+        type: "github_repository",
+        url: "https://github.com/example/project",
+        authorization_token: "test-only-token",
+        checkout: { type: "branch", name: "main" },
+      },
+      {
+        type: "memory_store",
+        memory_store_id: "memstore_1",
+        access: "read_only",
+        instructions: "Read prior decisions",
+      },
+    ]);
+  });
+
   it("disables Create session until an agent and environment are picked", async () => {
     stubFetch();
     renderPage();

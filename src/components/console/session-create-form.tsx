@@ -16,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlatformError } from "@/lib/platform/http";
+import { InitialResources } from "./initial-resources";
+import type { ResourceInput } from "@/lib/platform/session-resources";
 import {
   useAgents,
   useCreateSession,
@@ -56,6 +58,9 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [attached, setAttached] = useState<AttachedFile[]>([]);
+  const [initialResources, setInitialResources] = useState<
+    Exclude<ResourceInput, { type: "file" }>[]
+  >([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const vaultList = vaults.data?.data ?? [];
@@ -67,16 +72,25 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
         environment_id: environmentId,
         ...(title ? { title } : {}),
         ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
-        ...(attached.length > 0
+        ...(attached.length > 0 || initialResources.length > 0
           ? {
-              resources: attached.map((f) => ({
-                type: "file" as const,
-                file_id: f.file_id,
-              })),
+              resources: [
+                ...attached.map((f) => ({
+                  type: "file" as const,
+                  file_id: f.file_id,
+                })),
+                ...initialResources,
+              ],
             }
           : {}),
       },
-      { onSuccess: (session) => router.push(`/sessions/${session.id}`) },
+      {
+        onSuccess: (session) => {
+          setInitialResources([]);
+          create.reset();
+          router.push(`/sessions/${session.id}`);
+        },
+      },
     );
 
   const error =
@@ -255,6 +269,11 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
           </Button>
         </div>
       </div>
+
+      <InitialResources
+        resources={initialResources}
+        onChange={setInitialResources}
+      />
 
       <div className="flex items-center gap-3">
         <Button

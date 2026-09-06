@@ -245,7 +245,7 @@ describe("SessionDetailPage", () => {
     expect(usage).toHaveAttribute("data-output-tokens", "567");
     expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
     expect(within(chips).getByText("vlt_1")).toBeInTheDocument();
-    expect(within(chips).getByText("1 file")).toHaveAttribute(
+    expect(within(chips).getByText("1 resource")).toHaveAttribute(
       "title",
       "/mnt/data.csv",
     );

@@ -11,12 +11,16 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 - [x] Restore GA Skills and model-free contract coverage; merged in #128.
 - [x] Add session title, metadata, archive and delete actions.
 - [x] Validate session lifecycle against the real platform and Chrome.
-- [ ] Add session resources and multiagent interfaces.
+- [x] Add session resource attachments and verify their live file contract.
+- [ ] Add multiagent interfaces.
 - [ ] Add deployments, memory stores and outcome interfaces.
 - [ ] Complete interaction parity and Chrome fidelity checks.
 - [ ] Pass the contributor gate and PR review for each slice.
 
-Session lifecycle: 1001 tests passed with coverage gates; 3 live contracts passed.
-The full e2e suite passed before the archived-approval guard, then both lifecycle
-tests passed on the final build. Re-shot session-edit, session-transcript and
-session-pending-approval in both themes. Remote CI and PR review remain.
+Skills PR #128 and session lifecycle PR #130 are merged.
+
+Session resources: file attachments can be added and removed after creation;
+repository and memory-store attachments are creation-only. Targeted unit,
+component and local contract runs pass, as does the two-theme resource
+fidelity surface. Coverage: 1004 tests passed; e2e: 63 passed plus the corrected
+remaining case passed on rerun. Remote contributor gates and review remain.

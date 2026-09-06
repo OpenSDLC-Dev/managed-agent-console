@@ -35,6 +35,7 @@ import {
   EnvironmentKeySchema,
   EnvironmentSchema,
   PlatformFileSchema,
+  SessionResourceSchema,
   SessionEventSchema,
   SessionSchema,
   SkillSchema,
@@ -109,6 +110,10 @@ describe("mock fixtures conform to the platform wire", () => {
     each(PlatformFileSchema, fixtures.files, "files");
   });
 
+  it("memory-store resource snapshots", () => {
+    each(SessionResourceSchema, fixtures.memoryResources, "memoryResources");
+  });
+
   it("environment keys (the console API)", () => {
     eachIn(EnvironmentKeySchema, fixtures.environmentKeys, "environmentKeys");
   });
@@ -121,6 +126,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "environmentKeys",
       "environments",
       "files",
+      "memoryResources",
       "sessionEvents",
       "sessions",
       "skillVersions",
@@ -487,6 +493,57 @@ describe("the mock's constructed write-path responses conform too", () => {
       "session retained after invalid archive DELETE",
     );
   });
+
+  it.each([
+    {
+      type: "github_repository",
+      url: "https://github.com/example/project",
+      authorization_token: "test-only-token",
+      checkout: { type: "commit", sha: "short" },
+    },
+    {
+      type: "memory_store",
+      memory_store_id: "memstore_projectnotes000001",
+      access: "admin",
+    },
+    {
+      type: "memory_store",
+      memory_store_id: "memstore_projectnotes000001",
+      instructions: 42,
+    },
+  ])("sessions: reject invalid resource variant %#", async (resource) => {
+    const response = await fetch(`${base}/v1/sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        agent: fixtures.agents[0].id,
+        environment_id: fixtures.environments[0].id,
+        resources: [resource],
+      }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it.each(["null", "[]"])(
+    "sessions: reject non-object resource mutation body %s",
+    async (body) => {
+      const response = await fetch(
+        `${base}/v1/sessions/${fixtures.sessions[0].id}/resources`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": API_KEY,
+          },
+          body,
+        },
+      );
+      expect(response.status).toBe(400);
+    },
+  );
 
   it("events: the posted echoes and the events the mock then appends", async () => {
     const id = "sesn_gatedbash00000000001"; // parked on requires_action

@@ -6,6 +6,19 @@ const T0 = "2026-08-01T09:00:00Z";
 const T1 = "2026-08-01T10:30:00Z";
 const T2 = "2026-08-02T08:15:00Z";
 
+// sessionresources.go:memoryResourceJSON; memory resources have no ordinary id.
+export const memoryResources = [
+  {
+    type: "memory_store",
+    memory_store_id: "memstore_projectnotes000001",
+    access: "read_write",
+    instructions: null,
+    description: "Shared project notes",
+    name: "Project notes",
+    mount_path: "/mnt/memory/project-notes",
+  },
+];
+
 export const agents = [
   {
     id: "agent_researcher00000000001",

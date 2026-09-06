@@ -24,6 +24,7 @@ import {
 import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { SessionActions } from "@/components/console/session-actions";
+import { SessionResources } from "@/components/console/session-resources";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, tokenAttr, tokenCount } from "@/lib/utils";
@@ -135,8 +136,9 @@ function SessionChips({ session }: { session: Session }) {
           variant="outline"
           className={chip}
           title={session.resources.map((r) => r.mount_path).join(", ")}
+          data-resource-count={session.resources.length}
         >
-          {session.resources.length} file
+          {session.resources.length} resource
           {session.resources.length === 1 ? "" : "s"}
         </Badge>
       )}
@@ -266,6 +268,7 @@ export default function SessionDetailPage({
         }
       />
       <SessionChips session={data} />
+      <SessionResources session={data} />
 
       {!data.archived_at && !trace.deleted && (
         <ApprovalBanner pending={pending} sessionId={id} />
