@@ -32,6 +32,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Session details now support title and metadata edits, archive and confirmed
+  deletion, with platform errors shown when an operation is refused.
+
 - **A Dashboard, and it is where the console opens.** A static landing page: one card per surface the
   deployment serves, under the sidebar's own group headings and in its order, so the two cannot
   drift. It reads no platform data — only the surface probe the shell already runs, because a card is

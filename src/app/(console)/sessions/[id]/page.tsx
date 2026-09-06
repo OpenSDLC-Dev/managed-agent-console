@@ -23,6 +23,7 @@ import {
 } from "@/components/console/event-row";
 import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
+import { SessionActions } from "@/components/console/session-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, tokenAttr, tokenCount } from "@/lib/utils";
@@ -260,6 +261,7 @@ export default function SessionDetailPage({
           <span className="flex items-center gap-2">
             {status && <StatusBadge status={status} />}
             <ArchivedBadge archivedAt={data.archived_at} />
+            <SessionActions session={data} />
           </span>
         }
       />

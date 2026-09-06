@@ -154,6 +154,16 @@ export const SURFACES: Surface[] = [
     },
   },
 
+  {
+    id: "session-edit",
+    route: `/sessions/${SESSION}`,
+    fixture: "existing session title and metadata",
+    description: "Session title and metadata patch dialog.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Edit session" }).click();
+      await page.getByRole("dialog", { name: "Edit session" }).waitFor();
+    },
+  },
   // ---- the session trace, this console's densest surface ----------------
   {
     id: "session-transcript",

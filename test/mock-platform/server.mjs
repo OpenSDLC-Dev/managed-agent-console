@@ -1330,6 +1330,111 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Session lifecycle: internal/api/sessions.go and wire.go:patchMetadata.
+  const sessionWriteMatch = url.pathname.match(
+    /^\/v1\/sessions\/([^/]+)(\/archive)?$/,
+  );
+  if (sessionWriteMatch && ["POST", "DELETE"].includes(req.method)) {
+    const state = store.get(sessionWriteMatch[1]);
+    res.setHeader("content-type", "application/json");
+    const fail = (status, message) => {
+      res.writeHead(status);
+      res.end(
+        envelope(
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
+        ),
+      );
+    };
+    if (!state) {
+      fail(404, "no such session");
+      return;
+    }
+    const session = state.session;
+    const archiving = !!sessionWriteMatch[2];
+    if (
+      (archiving || req.method === "DELETE") &&
+      session.status === "running"
+    ) {
+      fail(
+        400,
+        "session is running; send user.interrupt before archiving or deleting",
+      );
+      return;
+    }
+    if (req.method === "DELETE") {
+      for (const timer of state.timers ?? []) clearTimeout(timer);
+      broadcastRaw(state, "session.deleted", {
+        id: nextEventId(),
+        type: "session.deleted",
+        processed_at: now(),
+      });
+      for (const subscriber of state.subscribers) subscriber.end();
+      store.delete(session.id);
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: session.id, type: "session_deleted" }));
+      return;
+    }
+    if (archiving) {
+      if (!session.archived_at)
+        session.updated_at = session.archived_at = now();
+    } else {
+      if (session.archived_at) {
+        fail(400, "session is archived");
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        fail(400, "invalid JSON body");
+        return;
+      }
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        fail(400, "expected object");
+        return;
+      }
+      if (
+        Object.keys(body).some((key) => !["title", "metadata"].includes(key))
+      ) {
+        fail(400, "unsupported session field");
+        return;
+      }
+      if (body.title != null && typeof body.title !== "string") {
+        fail(400, "title must be a string");
+        return;
+      }
+      const metadata = { ...session.metadata };
+      if (body.metadata != null) {
+        if (typeof body.metadata !== "object" || Array.isArray(body.metadata)) {
+          fail(400, "metadata must be an object");
+          return;
+        }
+        for (const [key, value] of Object.entries(body.metadata)) {
+          if (value !== null && typeof value !== "string") {
+            fail(400, "metadata values must be strings or null");
+            return;
+          }
+          if (value === null) delete metadata[key];
+          else
+            Object.defineProperty(metadata, key, {
+              value,
+              enumerable: true,
+              configurable: true,
+              writable: true,
+            });
+        }
+      }
+      if ("title" in body) session.title = body.title ?? "";
+      session.metadata = metadata;
+      session.updated_at = now();
+      appendEvent(state, "session.updated", { title: session.title, metadata });
+    }
+    res.writeHead(200);
+    res.end(JSON.stringify(session));
+    return;
+  }
+
   // Session create — exact top-level keys; initial_events is NOT accepted.
   if (req.method === "POST" && url.pathname === "/v1/sessions") {
     res.setHeader("content-type", "application/json");
