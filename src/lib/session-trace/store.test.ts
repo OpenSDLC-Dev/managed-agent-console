@@ -131,5 +131,16 @@ describe("trace store", () => {
       "tool_a",
     ]);
     expect(pendingToolUses(events).map((event) => event.id)).toEqual([]);
+    expect(
+      pendingToolUses(
+        [
+          ...events,
+          ev("terminated_a", "session.thread_status_terminated", {
+            session_thread_id: "thread_a",
+          }),
+        ],
+        true,
+      ),
+    ).toEqual([]);
   });
 });

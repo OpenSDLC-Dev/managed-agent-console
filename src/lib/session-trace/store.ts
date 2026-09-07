@@ -152,22 +152,32 @@ export function pendingToolUses(
   events: SessionEvent[],
   aggregateThreads = false,
 ): SessionEvent[] {
-  const idle = (event: SessionEvent) =>
-    event.type === "session.status_idle" ||
-    event.type === "session.thread_status_idle";
+  const lifecycle = (event: SessionEvent) =>
+    [
+      "session.status_running",
+      "session.status_idle",
+      "session.status_rescheduled",
+      "session.status_terminated",
+      "session.thread_status_running",
+      "session.thread_status_idle",
+      "session.thread_status_rescheduled",
+      "session.thread_status_terminated",
+    ].includes(event.type);
   const boundaries = aggregateThreads
     ? [
         ...new Map(
           events
-            .filter(idle)
+            .filter(lifecycle)
             .map((event) => [event.session_thread_id ?? "session", event]),
         ).values(),
       ]
-    : [[...events].reverse().find(idle)].filter(
+    : [[...events].reverse().find(lifecycle)].filter(
         (event): event is SessionEvent => event !== undefined,
       );
   const pendingIds = new Set(
     boundaries.flatMap((event) =>
+      (event.type === "session.status_idle" ||
+        event.type === "session.thread_status_idle") &&
       event.stop_reason?.type === "requires_action"
         ? (event.stop_reason.event_ids ?? [])
         : [],

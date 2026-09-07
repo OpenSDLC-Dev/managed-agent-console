@@ -508,16 +508,34 @@ function setStatus(state, status, stopReason, threadId) {
 }
 
 /** Unanswered ask-gated tool_use events (mirrors requires_action bookkeeping). */
-function pendingAsks(state) {
+function pendingAsks(state, threadId) {
   const answered = new Set(
     state.events
-      .filter((e) => e.type === "user.tool_confirmation")
+      .filter(
+        (event) =>
+          event.type === "user.tool_confirmation" &&
+          (threadId
+            ? event.session_thread_id === threadId
+            : event.session_thread_id == null),
+      )
       .map((e) => e.tool_use_id),
   );
-  const lastIdle = [...state.events]
+  const lifecyclePrefix = threadId
+    ? "session.thread_status_"
+    : "session.status_";
+  const boundary = [...state.events]
     .reverse()
-    .find((e) => e.type === "session.status_idle");
-  const ids = lastIdle?.stop_reason?.event_ids ?? [];
+    .find(
+      (event) =>
+        event.type.startsWith(lifecyclePrefix) &&
+        (threadId ? event.session_thread_id === threadId : true),
+    );
+  const idleType = `${lifecyclePrefix}idle`;
+  const ids =
+    boundary?.type === idleType &&
+    boundary.stop_reason?.type === "requires_action"
+      ? (boundary.stop_reason.event_ids ?? [])
+      : [];
   return ids.filter((id) => !answered.has(id));
 }
 
@@ -584,15 +602,34 @@ function streamReply(state, text, threadId) {
 }
 
 function handleInbound(state, incoming) {
+  for (const raw of incoming) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw))
+      return { error: "event must be an object" };
+    if (
+      !["user.message", "user.interrupt", "user.tool_confirmation"].includes(
+        raw.type,
+      )
+    )
+      return { error: `unsupported inbound event type "${raw.type}"` };
+    if (
+      raw.type === "user.message" &&
+      Object.prototype.hasOwnProperty.call(raw, "session_thread_id")
+    )
+      return { error: "user.message does not accept session_thread_id" };
+    const threadId = raw.session_thread_id;
+    if (threadId !== undefined && threadId !== null) {
+      const thread = state.threads.find(
+        (candidate) => candidate.id === threadId,
+      );
+      if (!thread) return { error: `no such thread "${threadId}"` };
+      if (thread.archived_at || thread.status === "terminated")
+        return { error: `thread "${threadId}" is terminated` };
+    }
+  }
+
   const posted = [];
   for (const raw of incoming) {
     const threadId = raw.session_thread_id;
-    if (
-      threadId !== undefined &&
-      threadId !== null &&
-      !state.threads.some((thread) => thread.id === threadId)
-    )
-      return { error: `no such thread "${threadId}"` };
     const event = { id: nextEventId(), type: raw.type, processed_at: now() };
     switch (raw.type) {
       case "user.message":
@@ -626,13 +663,18 @@ function handleInbound(state, incoming) {
 
   if (interrupt) {
     cancelStreams(state);
-    for (const id of pendingAsks(state)) {
-      appendEvent(state, "agent.tool_result", {
-        tool_use_id: id,
-        content: [{ type: "text", text: "Interrupted by the user." }],
-        is_error: true,
-        session_thread_id: null,
-      });
+    const threadId = interrupt.session_thread_id;
+    for (const id of pendingAsks(state, threadId)) {
+      appendEvent(
+        state,
+        "agent.tool_result",
+        {
+          tool_use_id: id,
+          content: [{ type: "text", text: "Interrupted by the user." }],
+          is_error: true,
+        },
+        threadId,
+      );
     }
     setStatus(state, "idle", { type: "end_turn" }, interrupt.session_thread_id);
   }
@@ -658,7 +700,7 @@ function handleInbound(state, incoming) {
       },
       threadId,
     );
-    const remaining = pendingAsks(state);
+    const remaining = pendingAsks(state, threadId);
     if (remaining.length > 0) {
       setStatus(
         state,

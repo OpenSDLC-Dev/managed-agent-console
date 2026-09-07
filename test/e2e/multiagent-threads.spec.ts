@@ -59,6 +59,27 @@ test("switches to a child trace and archives the idle child", async ({
   ).toHaveCount(1);
   await page.getByRole("button", { name: "All", exact: true }).click();
 
+  const childMessageStatus = await page.evaluate(async () => {
+    const response = await fetch(
+      "/api/platform/v1/sessions/sesn_research0000000000001/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: [
+            {
+              type: "user.message",
+              content: [{ type: "text", text: "Route this to the child." }],
+              session_thread_id: "sthr_taskrunnerresearch0001",
+            },
+          ],
+        }),
+      },
+    );
+    return response.status;
+  });
+  expect(childMessageStatus).toBe(400);
+
   await page.evaluate(async () => {
     await fetch("/api/platform/v1/sessions/sesn_research0000000000001/events", {
       method: "POST",
@@ -86,6 +107,25 @@ test("switches to a child trace and archives the idle child", async ({
     "data-status",
     "terminated",
   );
+  const terminatedThreadStatus = await page.evaluate(async () => {
+    const response = await fetch(
+      "/api/platform/v1/sessions/sesn_research0000000000001/events",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: [
+            {
+              type: "user.interrupt",
+              session_thread_id: "sthr_taskrunnerresearch0001",
+            },
+          ],
+        }),
+      },
+    );
+    return response.status;
+  });
+  expect(terminatedThreadStatus).toBe(400);
 });
 
 test("rejects malformed roster members without crashing the mock", async ({
