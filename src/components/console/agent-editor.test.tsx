@@ -11,7 +11,12 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom/vitest";
 import type { ComponentProps, ReactNode } from "react";
-import { AgentEditor, formFromAgent, newAgentForm } from "./agent-editor";
+import {
+  AgentEditor,
+  formFromAgent,
+  formFromConfig,
+  newAgentForm,
+} from "./agent-editor";
 import type { Agent, Skill } from "@/lib/platform/types";
 
 const { pushSpy, backSpy, refreshSpy } = vi.hoisted(() => ({
@@ -232,6 +237,14 @@ describe("newAgentForm", () => {
 });
 
 describe("formFromAgent", () => {
+  it("does not reinterpret a malformed member as self without a self id", () => {
+    expect(
+      formFromConfig({
+        multiagent: { type: "coordinator", agents: [{}] },
+      }).multiagent,
+    ).toEqual([]);
+  });
+
   it("splits the toolset from other tools and keeps wire fields", () => {
     const form = formFromAgent(
       agentResponse({

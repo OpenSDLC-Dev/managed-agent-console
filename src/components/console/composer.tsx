@@ -46,7 +46,11 @@ export function Composer({
 
   if (threadId) {
     return (
-      <div className="flex items-center justify-between rounded-lg border bg-card p-3">
+      <div
+        className="flex items-center justify-between rounded-lg border bg-card p-3"
+        data-session-thread-id={threadId}
+        data-agent-name={threadName}
+      >
         <p className="text-[13px] text-muted-foreground">
           {threadName ?? "This child"} receives work from the coordinator.
         </p>

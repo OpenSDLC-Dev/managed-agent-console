@@ -19,7 +19,7 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 - [ ] Pass the contributor gate and PR review for each slice.
 
 Skills PR #128, session lifecycle PR #130 and session resources PR #131 are
-merged. The multiagent slice replaces the stale null-only wire assumptions and
-passes the local contributor gates, 68 end-to-end cases, 88 two-theme fidelity
-shots, a Docker build and the real platform's model-free write contract. PR and
-remote review remain.
+merged. Multiagent PR #132 replaces the stale null-only wire assumptions and
+passes the local contributor gates, 69 end-to-end cases, 88 two-theme fidelity
+shots, a Docker build and the real platform's model-free write contract. Remote
+CI and review remain.

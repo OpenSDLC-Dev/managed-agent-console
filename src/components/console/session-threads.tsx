@@ -36,7 +36,11 @@ export function SessionThreads({
 
   // Older wire-compatible deployments may serve sessions without the nested
   // threads route. The existing session remains usable in that case.
-  if (error instanceof PlatformError && error.status === 404) return null;
+  if (
+    error instanceof PlatformError &&
+    (error.status === 404 || error.status === 501)
+  )
+    return null;
 
   return (
     <DetailSection title="Threads" testId="session-threads">

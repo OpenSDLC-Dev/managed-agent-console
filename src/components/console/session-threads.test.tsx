@@ -4,6 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionThreads } from "./session-threads";
+import { PlatformError } from "@/lib/platform/http";
 import type { SessionThread } from "@/lib/platform/types";
 
 const usage = {
@@ -93,4 +94,27 @@ it("selects a child thread and archives an idle child", async () => {
     "/api/platform/v1/sessions/sess_1/threads/sthr_child/archive",
   );
   expect(init?.method).toBe("POST");
+});
+
+it.each([404, 501])("hides the optional surface on HTTP %s", (status) => {
+  vi.stubGlobal("fetch", vi.fn());
+  const client = new QueryClient();
+  const { container } = render(
+    <QueryClientProvider client={client}>
+      <SessionThreads
+        sessionId="sess_1"
+        threads={[]}
+        error={
+          new PlatformError(status, {
+            type: "error",
+            error: { type: "invalid_request_error", message: "unsupported" },
+          })
+        }
+        loading={false}
+        selectedId={null}
+        onSelect={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  expect(container).toBeEmptyDOMElement();
 });

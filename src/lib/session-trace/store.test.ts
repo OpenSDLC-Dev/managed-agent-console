@@ -5,6 +5,7 @@ import {
   emptyTrace,
   latestStatus,
   latestThreadStatus,
+  pendingToolUses,
 } from "./store";
 import type { SessionEvent } from "@/lib/platform/types";
 
@@ -106,5 +107,29 @@ describe("trace store", () => {
       ev("sevt_2", "session.thread_status_idle"),
     ]);
     expect(latestThreadStatus(state)).toBe("idle");
+  });
+
+  it("keeps pending approvals from each thread's latest idle boundary", () => {
+    const events = [
+      ev("tool_a", "agent.tool_use", { session_thread_id: "thread_a" }),
+      ev("idle_a", "session.thread_status_idle", {
+        session_thread_id: "thread_a",
+        stop_reason: { type: "requires_action", event_ids: ["tool_a"] },
+      }),
+      ev("tool_b", "agent.tool_use", { session_thread_id: "thread_b" }),
+      ev("idle_b", "session.thread_status_idle", {
+        session_thread_id: "thread_b",
+        stop_reason: { type: "requires_action", event_ids: ["tool_b"] },
+      }),
+      ev("answer_b", "user.tool_confirmation", {
+        tool_use_id: "tool_b",
+        session_thread_id: "thread_b",
+      }),
+    ];
+
+    expect(pendingToolUses(events, true).map((event) => event.id)).toEqual([
+      "tool_a",
+    ]);
+    expect(pendingToolUses(events).map((event) => event.id)).toEqual([]);
   });
 });

@@ -95,6 +95,12 @@ export const agentVersions = {
   agent_researcher00000000001: [3, 2, 1].map((version) => ({
     ...agents[0],
     version,
+    multiagent: {
+      ...agents[0].multiagent,
+      agents: agents[0].multiagent.agents.map((member) =>
+        member.id === agents[0].id ? { ...member, version } : { ...member },
+      ),
+    },
     updated_at: version === 3 ? T2 : version === 2 ? T1 : T0,
   })),
   agent_taskrunner0000000001: [{ ...agents[1] }],

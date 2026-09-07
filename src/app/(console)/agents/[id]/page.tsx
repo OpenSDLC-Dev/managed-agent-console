@@ -133,12 +133,15 @@ export default function AgentDetailPage({
         </DetailSection>
       )}
       {agent.multiagent && (
-        <DetailSection title="Multiagent roster">
+        <DetailSection title="Multiagent roster" testId="agent-multiagent">
           <ol className="divide-y rounded-lg border bg-card">
             {agent.multiagent.agents.map((member, index) => (
               <li
                 key={`${member.id}:${member.version}`}
                 className="flex items-center gap-3 px-3 py-2 text-sm"
+                data-roster-index={index}
+                data-agent-id={member.id}
+                data-agent-version={member.version}
               >
                 <span className="w-6 text-muted-foreground">{index + 1}</span>
                 {member.id === agent.id ? (

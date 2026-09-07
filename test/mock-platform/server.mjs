@@ -223,19 +223,84 @@ const AGENT_KEYS = new Set([
   "version",
 ]);
 
-function validateAgentBody(body, { requireCore }) {
+function validateAgentBody(body, { requireCore, self }) {
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return "agent body must be an object";
   for (const key of Object.keys(body)) {
     if (!AGENT_KEYS.has(key)) return `unknown field "${key}"`;
   }
   if (body.multiagent != null) {
     if (
       typeof body.multiagent !== "object" ||
+      Array.isArray(body.multiagent) ||
       body.multiagent.type !== "coordinator" ||
       !Array.isArray(body.multiagent.agents) ||
       body.multiagent.agents.length < 1 ||
       body.multiagent.agents.length > 20
-    )
+    ) {
       return "multiagent must be a coordinator with 1–20 agents";
+    }
+    const seen = new Set();
+    let selfSeen = false;
+    for (const [index, entry] of body.multiagent.agents.entries()) {
+      let id;
+      let version;
+      let isSelf = false;
+      if (typeof entry === "string") {
+        id = entry;
+      } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+        if (entry.type === "self") {
+          if (Object.keys(entry).some((key) => key !== "type"))
+            return `multiagent.agents[${index}] has unknown fields`;
+          isSelf = true;
+          id = self?.id ?? "__self";
+        } else if (
+          entry.type === "agent" &&
+          typeof entry.id === "string" &&
+          Object.keys(entry).every((key) =>
+            ["type", "id", "version"].includes(key),
+          )
+        ) {
+          id = entry.id;
+          version = entry.version;
+          isSelf = self?.id === id;
+        } else {
+          return `multiagent.agents[${index}] must be an agent id, agent reference, or self`;
+        }
+      } else {
+        return `multiagent.agents[${index}] must be an agent id, agent reference, or self`;
+      }
+      if (!id) return `multiagent.agents[${index}] id must not be empty`;
+      if (version !== undefined && (!Number.isInteger(version) || version < 1))
+        return `multiagent.agents[${index}] version must be a positive integer`;
+      if (isSelf) {
+        if (selfSeen)
+          return `multiagent.agents[${index}] references self more than once`;
+        selfSeen = true;
+        if (
+          version !== undefined &&
+          version !== self.version &&
+          version !== self.version + 1
+        )
+          return `multiagent.agents[${index}] does not reference the current self version`;
+      } else {
+        const target = agentsStore.find((agent) => agent.id === id);
+        if (!target) return `multiagent.agents[${index}] agent ${id} not found`;
+        if (target.archived_at)
+          return `multiagent.agents[${index}] agent ${id} is archived`;
+        const pinned = version ?? target.version;
+        const snapshot = agentVersionsStore[id]?.find(
+          (candidate) => candidate.version === pinned,
+        );
+        if (!snapshot)
+          return `multiagent.agents[${index}] agent ${id} version ${pinned} not found`;
+        if (snapshot.multiagent)
+          return `multiagent.agents[${index}] agent ${id} is a coordinator`;
+      }
+      if (seen.has(id))
+        return `multiagent.agents[${index}] agent ${id} is referenced more than once`;
+      seen.add(id);
+    }
   }
   if (requireCore) {
     if (typeof body.name !== "string" || body.name.length === 0)
@@ -375,22 +440,65 @@ function frame(res, name, payload) {
   res.write(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
-function broadcast(state, event) {
+const threadAddressableTypes = new Set([
+  "agent.tool_use",
+  "agent.mcp_tool_use",
+  "agent.custom_tool_use",
+  "user.tool_confirmation",
+  "user.custom_tool_result",
+  "user.tool_result",
+  "user.interrupt",
+]);
+
+function broadcast(state, event, routedThreadId) {
   state.events.push(event);
   for (const res of state.subscribers) frame(res, event.type, event);
+  const threadId =
+    routedThreadId ??
+    (typeof event.session_thread_id === "string"
+      ? event.session_thread_id
+      : undefined);
+  if (!threadId) return;
+  const own = threadAddressableTypes.has(event.type)
+    ? { ...event, session_thread_id: null }
+    : event;
+  (state.threadEvents[threadId] ??= []).push(own);
+  for (const res of state.threadSubscribers.get(threadId) ?? [])
+    frame(res, own.type, own);
 }
 
-function broadcastRaw(state, name, payload) {
+function broadcastRaw(state, name, payload, threadId) {
   for (const res of state.subscribers) frame(res, name, payload);
+  if (threadId)
+    for (const res of state.threadSubscribers.get(threadId) ?? [])
+      frame(res, name, payload);
 }
 
-function appendEvent(state, type, fields = {}) {
+function appendEvent(state, type, fields = {}, threadId) {
   const event = { id: nextEventId(), type, processed_at: now(), ...fields };
-  broadcast(state, event);
+  broadcast(state, event, threadId);
   return event;
 }
 
-function setStatus(state, status, stopReason) {
+function setStatus(state, status, stopReason, threadId) {
+  if (threadId) {
+    const thread = state.threads.find((candidate) => candidate.id === threadId);
+    if (thread) {
+      thread.status = status;
+      thread.updated_at = now();
+    }
+    appendEvent(
+      state,
+      `session.thread_status_${status}`,
+      {
+        session_thread_id: threadId,
+        agent_name: thread?.agent.name,
+        ...(status === "running" ? {} : { stop_reason: stopReason }),
+      },
+      threadId,
+    );
+    return;
+  }
   state.session.status = status;
   appendEvent(
     state,
@@ -428,12 +536,17 @@ function cancelStreams(state) {
 }
 
 /** Streamed agent reply: event_start + content_delta frames, then persist. */
-function streamReply(state, text) {
+function streamReply(state, text, threadId) {
   const id = nextEventId();
-  broadcastRaw(state, "event_start", {
-    type: "event_start",
-    event: { id, type: "agent.message" },
-  });
+  broadcastRaw(
+    state,
+    "event_start",
+    {
+      type: "event_start",
+      event: { id, type: "agent.message" },
+    },
+    threadId,
+  );
   const pieces = [text.slice(0, 8), text.slice(8, 16), text.slice(16)].filter(
     Boolean,
   );
@@ -441,15 +554,20 @@ function streamReply(state, text) {
   let delay = 250;
   for (const piece of pieces) {
     schedule(state, delay, () => {
-      broadcastRaw(state, "event_delta", {
-        type: "event_delta",
-        event_id: id,
-        delta: {
-          type: "content_delta",
-          index: 0,
-          content: { type: "text", text: piece },
+      broadcastRaw(
+        state,
+        "event_delta",
+        {
+          type: "event_delta",
+          event_id: id,
+          delta: {
+            type: "content_delta",
+            index: 0,
+            content: { type: "text", text: piece },
+          },
         },
-      });
+        threadId,
+      );
     });
     delay += 250;
   }
@@ -460,14 +578,21 @@ function streamReply(state, text) {
       processed_at: now(),
       content: [{ type: "text", text }],
     };
-    broadcast(state, event);
-    setStatus(state, "idle", { type: "end_turn" });
+    broadcast(state, event, threadId);
+    setStatus(state, "idle", { type: "end_turn" }, threadId);
   });
 }
 
 function handleInbound(state, incoming) {
   const posted = [];
   for (const raw of incoming) {
+    const threadId = raw.session_thread_id;
+    if (
+      threadId !== undefined &&
+      threadId !== null &&
+      !state.threads.some((thread) => thread.id === threadId)
+    )
+      return { error: `no such thread "${threadId}"` };
     const event = { id: nextEventId(), type: raw.type, processed_at: now() };
     switch (raw.type) {
       case "user.message":
@@ -475,15 +600,15 @@ function handleInbound(state, incoming) {
         broadcast(state, event);
         break;
       case "user.interrupt":
-        event.session_thread_id = null;
-        broadcast(state, event);
+        event.session_thread_id = threadId ?? null;
+        broadcast(state, event, threadId);
         break;
       case "user.tool_confirmation":
         event.tool_use_id = raw.tool_use_id;
         event.result = raw.result;
         event.deny_message = raw.deny_message ?? null;
-        event.session_thread_id = null;
-        broadcast(state, event);
+        event.session_thread_id = threadId ?? null;
+        broadcast(state, event, threadId);
         break;
       default:
         return { error: `unsupported inbound event type "${raw.type}"` };
@@ -493,13 +618,13 @@ function handleInbound(state, incoming) {
 
   // React to the batch after appending it, mirroring the platform's
   // interrupt → confirmation → message precedence.
-  const hasInterrupt = incoming.some((e) => e.type === "user.interrupt");
+  const interrupt = incoming.find((e) => e.type === "user.interrupt");
   const confirmations = incoming.filter(
     (e) => e.type === "user.tool_confirmation",
   );
   const messages = incoming.filter((e) => e.type === "user.message");
 
-  if (hasInterrupt) {
+  if (interrupt) {
     cancelStreams(state);
     for (const id of pendingAsks(state)) {
       appendEvent(state, "agent.tool_result", {
@@ -509,35 +634,44 @@ function handleInbound(state, incoming) {
         session_thread_id: null,
       });
     }
-    setStatus(state, "idle", { type: "end_turn" });
+    setStatus(state, "idle", { type: "end_turn" }, interrupt.session_thread_id);
   }
 
   for (const confirmation of confirmations) {
+    const threadId = confirmation.session_thread_id;
     const denied = confirmation.result === "deny";
-    appendEvent(state, "agent.tool_result", {
-      tool_use_id: confirmation.tool_use_id,
-      content: [
-        {
-          type: "text",
-          text: denied
-            ? (confirmation.deny_message ?? "The user declined this tool call.")
-            : "total 0\n-rw-r--r-- lockfile",
-        },
-      ],
-      is_error: denied,
-      session_thread_id: null,
-    });
+    appendEvent(
+      state,
+      "agent.tool_result",
+      {
+        tool_use_id: confirmation.tool_use_id,
+        content: [
+          {
+            type: "text",
+            text: denied
+              ? (confirmation.deny_message ??
+                "The user declined this tool call.")
+              : "total 0\n-rw-r--r-- lockfile",
+          },
+        ],
+        is_error: denied,
+      },
+      threadId,
+    );
     const remaining = pendingAsks(state);
     if (remaining.length > 0) {
-      setStatus(state, "idle", {
-        type: "requires_action",
-        event_ids: remaining,
-      });
+      setStatus(
+        state,
+        "idle",
+        { type: "requires_action", event_ids: remaining },
+        threadId,
+      );
     } else {
-      setStatus(state, "running", undefined);
+      setStatus(state, "running", undefined, threadId);
       streamReply(
         state,
         denied ? "Understood — skipping that step." : "Dependencies installed.",
+        threadId,
       );
     }
   }
@@ -1292,6 +1426,15 @@ const server = createServer(async (req, res) => {
     thread.status = "terminated";
     thread.archived_at ??= now();
     thread.updated_at = thread.archived_at;
+    appendEvent(
+      state,
+      "session.thread_status_terminated",
+      {
+        session_thread_id: thread.id,
+        agent_name: thread.agent.name,
+      },
+      thread.id,
+    );
     res.writeHead(200);
     res.end(JSON.stringify(thread));
     return;
@@ -1532,6 +1675,8 @@ const server = createServer(async (req, res) => {
         processed_at: now(),
       });
       for (const subscriber of state.subscribers) subscriber.end();
+      for (const subscribers of state.threadSubscribers.values())
+        for (const subscriber of subscribers) subscriber.end();
       store.delete(session.id);
       res.writeHead(200);
       res.end(JSON.stringify({ id: session.id, type: "session_deleted" }));
@@ -2332,8 +2477,17 @@ const server = createServer(async (req, res) => {
 
     const updateMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)$/);
     if (url.pathname === "/v1/agents" || updateMatch) {
+      const agent = updateMatch
+        ? agentsStore.find((candidate) => candidate.id === updateMatch[1])
+        : undefined;
+      if (updateMatch && !agent) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such agent"));
+        return;
+      }
       const problem = validateAgentBody(body, {
         requireCore: url.pathname === "/v1/agents",
+        self: agent,
       });
       if (problem) {
         res.writeHead(400);
@@ -2343,12 +2497,6 @@ const server = createServer(async (req, res) => {
       if (url.pathname === "/v1/agents") {
         res.writeHead(200);
         res.end(JSON.stringify(createAgent(body)));
-        return;
-      }
-      const agent = agentsStore.find((a) => a.id === updateMatch[1]);
-      if (!agent) {
-        res.writeHead(404);
-        res.end(envelope("not_found_error", "no such agent"));
         return;
       }
       if (agent.archived_at) {

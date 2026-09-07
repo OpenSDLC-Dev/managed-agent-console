@@ -88,7 +88,10 @@ export function formFromConfig(
             id?: unknown;
             version?: unknown;
           };
-          if (member.type === "self" || member.id === selfId)
+          if (
+            member.type === "self" ||
+            (selfId !== undefined && member.id === selfId)
+          )
             return [{ type: "self" }];
           if (member.type !== "agent" || typeof member.id !== "string")
             return [];
@@ -748,6 +751,11 @@ export function AgentEditor({
                           </option>
                         ))}
                     </select>
+                    {agentsQuery.data?.truncated && (
+                      <p className="text-[12px] text-muted-foreground">
+                        Only the first 1,000 agents are available here.
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="button"
