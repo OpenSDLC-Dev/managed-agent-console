@@ -133,6 +133,8 @@ function stubFetch(over?: {
       }
       if (url.pathname === "/api/platform/v1/sessions/sess_1")
         return json(over?.session ?? session());
+      if (url.pathname === "/api/platform/v1/sessions/sess_1/threads")
+        return json({ data: [], next_page: null });
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );

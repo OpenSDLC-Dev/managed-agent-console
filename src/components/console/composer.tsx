@@ -9,10 +9,14 @@ export function Composer({
   sessionId,
   running,
   disabled,
+  threadId,
+  threadName,
 }: {
   sessionId: string;
   running: boolean;
   disabled?: boolean;
+  threadId?: string;
+  threadName?: string;
 }) {
   const send = useSendEvents(sessionId);
   const [text, setText] = useState("");
@@ -32,7 +36,34 @@ export function Composer({
     });
   };
 
-  const interrupt = () => send.mutate([{ type: "user.interrupt" }]);
+  const interrupt = () =>
+    send.mutate([
+      {
+        type: "user.interrupt",
+        ...(threadId ? { session_thread_id: threadId } : {}),
+      },
+    ]);
+
+  if (threadId) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border bg-card p-3">
+        <p className="text-[13px] text-muted-foreground">
+          {threadName ?? "This child"} receives work from the coordinator.
+        </p>
+        {running && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            disabled={disabled || send.isPending}
+            onClick={interrupt}
+          >
+            <OctagonX className="size-4" /> Interrupt child
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border bg-card p-3">

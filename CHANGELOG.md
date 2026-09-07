@@ -8,6 +8,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Agents can be configured as coordinators with an ordered, version-pinned
+  roster. Session details list primary and child threads, switch to each
+  thread's live trace, route approvals and interrupts to the selected child,
+  and archive idle child threads.
+
 - Sessions can attach and remove uploaded-file resources, and can be created
   with GitHub repository or memory-store attachments. Repository tokens are
   write-only and rotatable; the console never renders them.

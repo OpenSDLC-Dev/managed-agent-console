@@ -134,3 +134,15 @@ export function latestStatus(state: TraceState): string | undefined {
   }
   return undefined;
 }
+
+/** The newest status on a thread-specific event view. */
+export function latestThreadStatus(state: TraceState): string | undefined {
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const type = state.events[i].type;
+    if (type === "session.thread_status_running") return "running";
+    if (type === "session.thread_status_idle") return "idle";
+    if (type === "session.thread_status_rescheduled") return "rescheduling";
+    if (type === "session.thread_status_terminated") return "terminated";
+  }
+  return undefined;
+}

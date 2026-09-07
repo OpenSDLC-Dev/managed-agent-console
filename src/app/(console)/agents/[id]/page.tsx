@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,33 @@ export default function AgentDetailPage({
       {agent.mcp_servers.length > 0 && (
         <DetailSection title="MCP servers">
           <JsonBlock value={agent.mcp_servers} />
+        </DetailSection>
+      )}
+      {agent.multiagent && (
+        <DetailSection title="Multiagent roster">
+          <ol className="divide-y rounded-lg border bg-card">
+            {agent.multiagent.agents.map((member, index) => (
+              <li
+                key={`${member.id}:${member.version}`}
+                className="flex items-center gap-3 px-3 py-2 text-sm"
+              >
+                <span className="w-6 text-muted-foreground">{index + 1}</span>
+                {member.id === agent.id ? (
+                  <span className="font-medium">This coordinator (self)</span>
+                ) : (
+                  <Link
+                    href={`/agents/${member.id}`}
+                    className="hover:underline"
+                  >
+                    {member.id}
+                  </Link>
+                )}
+                <span className="font-mono text-[12px] text-muted-foreground">
+                  v{member.version}
+                </span>
+              </li>
+            ))}
+          </ol>
         </DetailSection>
       )}
       <DetailSection title="Versions">

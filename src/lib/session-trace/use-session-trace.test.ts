@@ -76,7 +76,10 @@ beforeEach(() => {
   seedCount = 0;
   fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (url.includes("/events/stream")) {
+    if (
+      url.includes("/events/stream") ||
+      /\/threads\/[^/]+\/stream/.test(url)
+    ) {
       if (streamSignedOut) return signedOut();
       if (streamFails) return new Response(null, { status: 502 });
       if (holdStream) {
@@ -116,6 +119,19 @@ const flush = () =>
   });
 
 describe("useSessionTrace", () => {
+  it("uses the thread history and stream when a thread is selected", async () => {
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_1", "sthr_1"),
+    );
+    await flush();
+    expect(result.current.connection).toBe("live");
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000&order=asc",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message",
+    ]);
+    unmount();
+  });
+
   it("seeds every history page, goes live, and applies stream frames", async () => {
     seedPages = [
       { data: [ev("sevt_1", "user.message")], next_page: "tok_2" },

@@ -5,7 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Composer } from "./composer";
 
-function renderComposer(props?: { running?: boolean; disabled?: boolean }) {
+function renderComposer(props?: {
+  running?: boolean;
+  disabled?: boolean;
+  threadId?: string;
+  threadName?: string;
+}) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -18,6 +23,8 @@ function renderComposer(props?: { running?: boolean; disabled?: boolean }) {
         sessionId="ses_1"
         running={props?.running ?? false}
         disabled={props?.disabled}
+        threadId={props?.threadId}
+        threadName={props?.threadName}
       />
     </QueryClientProvider>,
   );
@@ -116,6 +123,28 @@ describe("Composer", () => {
     await user.click(screen.getByRole("button", { name: /Interrupt$/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(sentEvents(fetchMock)).toEqual([{ type: "user.interrupt" }]);
+  });
+
+  it("targets an interrupt at the selected child thread", async () => {
+    const fetchMock = vi.fn(async () => okEvents());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    renderComposer({
+      running: true,
+      threadId: "sthr_child",
+      threadName: "Research worker",
+    });
+
+    expect(
+      screen.getByText("Research worker receives work from the coordinator."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Message to the session")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Interrupt child" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentEvents(fetchMock)).toEqual([
+      { type: "user.interrupt", session_thread_id: "sthr_child" },
+    ]);
   });
 
   it("interrupt & send batches the interrupt with the new message and clears text", async () => {

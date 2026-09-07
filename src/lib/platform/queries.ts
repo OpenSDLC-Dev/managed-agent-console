@@ -33,6 +33,7 @@ import type {
   Session,
   SessionEvent,
   SessionStatus,
+  SessionThread,
   Skill,
   SkillVersion,
   Vault,
@@ -154,6 +155,18 @@ export function useSession(id: string, refetchInterval?: number) {
   });
 }
 
+/** A session has at most 1,000 threads; the platform serves them in one page. */
+export function useSessionThreads(id: string, refetchInterval?: number) {
+  return useQuery({
+    queryKey: ["session-threads", id],
+    queryFn: () =>
+      platformGet<Page<SessionThread>>(`v1/sessions/${id}/threads`, {
+        limit: 1000,
+      }),
+    refetchInterval,
+  });
+}
+
 /**
  * Send events into a session's log (user.message, user.tool_confirmation,
  * user.interrupt). The SSE trace picks up the results; only the session
@@ -259,6 +272,12 @@ export interface AgentWriteBody {
   tools?: unknown[];
   mcp_servers?: unknown[];
   skills?: unknown[];
+  multiagent?: {
+    type: "coordinator";
+    agents: (
+      { type: "self" } | { type: "agent"; id: string; version?: number }
+    )[];
+  } | null;
   metadata?: Record<string, string>;
   version?: number;
 }
@@ -419,6 +438,24 @@ export function useDeleteSession(id: string) {
     onSuccess: () => {
       client.removeQueries({ queryKey: ["session", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export function useArchiveSessionThread(sessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Archive thread failed" },
+    mutationFn: (threadId: string) =>
+      platformPost<SessionThread>(
+        `v1/sessions/${sessionId}/threads/${threadId}/archive`,
+        {},
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({
+        queryKey: ["session-threads", sessionId],
+      });
+      void client.invalidateQueries({ queryKey: ["session", sessionId] });
     },
   });
 }

@@ -122,6 +122,15 @@ export function TranscriptRow({
         >
           {summary}
         </span>
+        {event.session_thread_id && (
+          <Badge
+            variant="outline"
+            className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground"
+            title={event.session_thread_id}
+          >
+            {event.agent_name ?? event.session_thread_id}
+          </Badge>
+        )}
         {event.evaluated_permission === "ask" && (
           <Badge className={cn("shrink-0", WARNING_BOX)} variant="outline">
             needs approval

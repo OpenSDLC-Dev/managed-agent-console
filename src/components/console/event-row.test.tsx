@@ -82,6 +82,20 @@ describe("TranscriptRow", () => {
     expect(screen.getByText("error")).toBeInTheDocument();
   });
 
+  it("labels an event emitted by a child thread", () => {
+    renderRow(
+      ev("agent.tool_use", {
+        name: "bash",
+        input: {},
+        session_thread_id: "sthr_child",
+        agent_name: "Research worker",
+      }),
+    );
+    expect(screen.getByTitle("sthr_child")).toHaveTextContent(
+      "Research worker",
+    );
+  });
+
   it("marks an unknown type's summary as the JSON payload preview", () => {
     renderRow(
       ev("user.define_outcome", {

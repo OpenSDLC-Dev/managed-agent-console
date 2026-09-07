@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyFrame, applyPersisted, emptyTrace, latestStatus } from "./store";
+import {
+  applyFrame,
+  applyPersisted,
+  emptyTrace,
+  latestStatus,
+  latestThreadStatus,
+} from "./store";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const ev = (id: string, type: string, extra?: object): SessionEvent =>
@@ -92,5 +98,13 @@ describe("trace store", () => {
     expect(latestStatus(state)).toBe("idle");
     state = applyFrame(state, { type: "session.deleted" });
     expect(state.deleted).toBe(true);
+  });
+
+  it("derives status from a thread-specific trace", () => {
+    const state = applyPersisted(emptyTrace(), [
+      ev("sevt_1", "session.thread_status_running"),
+      ev("sevt_2", "session.thread_status_idle"),
+    ]);
+    expect(latestThreadStatus(state)).toBe("idle");
   });
 });

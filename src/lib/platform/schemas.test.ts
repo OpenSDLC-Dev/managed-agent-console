@@ -38,6 +38,7 @@ import {
   SessionResourceSchema,
   SessionEventSchema,
   SessionSchema,
+  SessionThreadSchema,
   SkillSchema,
   SkillVersionSchema,
   VaultCredentialSchema,
@@ -90,6 +91,12 @@ describe("mock fixtures conform to the platform wire", () => {
   it("sessions, and every session's event log", () => {
     each(SessionSchema, fixtures.sessions, "sessions");
     eachIn(SessionEventSchema, fixtures.sessionEvents, "sessionEvents");
+    eachIn(SessionThreadSchema, fixtures.sessionThreads, "sessionThreads");
+    for (const [sessionId, threads] of Object.entries(
+      fixtures.sessionThreadEvents,
+    )) {
+      eachIn(SessionEventSchema, threads, `sessionThreadEvents.${sessionId}`);
+    }
   });
 
   it("vaults and their credentials", () => {
@@ -128,6 +135,8 @@ describe("mock fixtures conform to the platform wire", () => {
       "files",
       "memoryResources",
       "sessionEvents",
+      "sessionThreadEvents",
+      "sessionThreads",
       "sessions",
       "skillVersions",
       "skills",

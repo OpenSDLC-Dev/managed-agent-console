@@ -78,6 +78,15 @@ export const agents = [
   },
 ];
 
+// roster.go:storedRoster — agent responses pin each member to one version.
+agents[0].multiagent = {
+  type: "coordinator",
+  agents: [
+    { id: agents[0].id, type: "agent", version: agents[0].version },
+    { id: agents[1].id, type: "agent", version: agents[1].version },
+  ],
+};
+
 // Version history for the researcher (agentJSON shape; updated_at is the
 // version row's created_at).
 // Every agent has a version history (the platform snapshots version 1 at
@@ -141,7 +150,7 @@ export const environments = [
 
 // Session agent snapshots mirror domain.ResolvedAgent: the agent's spec at
 // the pinned version, without metadata/created_at/archived_at.
-const snapshotOf = (agent) => ({
+const threadAgentOf = (agent) => ({
   type: "agent",
   id: agent.id,
   version: agent.version,
@@ -152,7 +161,18 @@ const snapshotOf = (agent) => ({
   tools: agent.tools,
   mcp_servers: agent.mcp_servers,
   skills: agent.skills,
-  multiagent: null,
+});
+
+const snapshotOf = (agent) => ({
+  ...threadAgentOf(agent),
+  multiagent: agent.multiagent
+    ? {
+        type: "coordinator",
+        agents: agent.multiagent.agents.map((member) =>
+          threadAgentOf(agents.find((candidate) => candidate.id === member.id)),
+        ),
+      }
+    : null,
 });
 
 const researcherSnapshot = snapshotOf(agents[0]);
@@ -220,6 +240,67 @@ export const sessions = [
     archived_at: null,
   },
 ];
+
+const emptyUsage = {
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_input_tokens: 0,
+  cache_creation: {
+    ephemeral_1h_input_tokens: 0,
+    ephemeral_5m_input_tokens: 0,
+  },
+};
+
+const primaryResearchThread = "sthr_primaryresearch000001";
+const childResearchThread = "sthr_taskrunnerresearch0001";
+
+// threads.go:threadJSON — every session has a primary; coordinator sessions
+// add child threads as agents are spawned.
+export const sessionThreads = {
+  sesn_gatedbash00000000001: [
+    {
+      id: "sthr_gatedbashprimary00001",
+      type: "session_thread",
+      session_id: "sesn_gatedbash00000000001",
+      parent_thread_id: null,
+      agent: threadAgentOf(agents[1]),
+      status: "idle",
+      usage: structuredClone(sessions[0].usage),
+      stats: { active_seconds: 0, duration_seconds: 0, startup_seconds: 0 },
+      created_at: T1,
+      updated_at: T2,
+      archived_at: null,
+    },
+  ],
+  sesn_research0000000000001: [
+    {
+      id: primaryResearchThread,
+      type: "session_thread",
+      session_id: "sesn_research0000000000001",
+      parent_thread_id: null,
+      agent: threadAgentOf(agents[0]),
+      status: "running",
+      usage: structuredClone(sessions[1].usage),
+      stats: { active_seconds: 8, duration_seconds: 12, startup_seconds: 1 },
+      created_at: T2,
+      updated_at: T2,
+      archived_at: null,
+    },
+    {
+      id: childResearchThread,
+      type: "session_thread",
+      session_id: "sesn_research0000000000001",
+      parent_thread_id: primaryResearchThread,
+      agent: threadAgentOf(agents[1]),
+      status: "idle",
+      usage: { ...structuredClone(emptyUsage), input_tokens: 240 },
+      stats: { active_seconds: 2, duration_seconds: 4, startup_seconds: 1 },
+      created_at: T2,
+      updated_at: T2,
+      archived_at: null,
+    },
+  ],
+};
 
 // Event log for sesn_gatedbash…: a turn that parked on an ask-gated bash
 // call (requires_action), matching the platform's exact per-type key sets.
@@ -309,7 +390,40 @@ export const sessionEvents = {
       type: "session.status_running",
       processed_at: T2,
     },
+    {
+      id: "sevt_000000000000000104",
+      type: "agent.tool_use",
+      processed_at: T2,
+      name: "bash",
+      input: { command: "collect framework notes" },
+      evaluated_permission: "allow",
+      session_thread_id: childResearchThread,
+      agent_name: "General task agent",
+    },
   ],
+};
+
+export const sessionThreadEvents = {
+  sesn_gatedbash00000000001: {
+    sthr_gatedbashprimary00001: sessionEvents.sesn_gatedbash00000000001,
+  },
+  sesn_research0000000000001: {
+    [primaryResearchThread]: sessionEvents.sesn_research0000000000001,
+    [childResearchThread]: [
+      {
+        ...sessionEvents.sesn_research0000000000001.at(-1),
+        session_thread_id: null,
+      },
+      {
+        id: "sevt_000000000000000105",
+        type: "session.thread_status_idle",
+        processed_at: T2,
+        stop_reason: { type: "end_turn" },
+        session_thread_id: childResearchThread,
+        agent_name: "General task agent",
+      },
+    ],
+  },
 };
 
 export const vaults = [

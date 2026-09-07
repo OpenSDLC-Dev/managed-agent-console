@@ -24,7 +24,7 @@ export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
  * agent.message deltas, reconcile through the trace store, and reconnect
  * with backoff, reseeding to cover the gap.
  */
-export function useSessionTrace(sessionId: string) {
+export function useSessionTrace(sessionId: string, threadId?: string) {
   const [trace, setTrace] = useState<TraceState>(emptyTrace);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   // The store is also read/written inside the stream loop between renders.
@@ -35,6 +35,7 @@ export function useSessionTrace(sessionId: string) {
     const controller = new AbortController();
     traceRef.current = emptyTrace();
     setTrace(traceRef.current);
+    setConnection("connecting");
 
     const update = (next: TraceState) => {
       if (next !== traceRef.current && !cancelled) {
@@ -46,10 +47,14 @@ export function useSessionTrace(sessionId: string) {
     async function seed() {
       let page: string | undefined;
       for (;;) {
-        const result = await platformGet<Page<SessionEvent>>(
-          `v1/sessions/${sessionId}/events`,
-          { limit: 1000, order: "asc", page },
-        );
+        const eventPath = threadId
+          ? `v1/sessions/${sessionId}/threads/${threadId}/events`
+          : `v1/sessions/${sessionId}/events`;
+        const result = await platformGet<Page<SessionEvent>>(eventPath, {
+          limit: 1000,
+          order: "asc",
+          page,
+        });
         update(applyPersisted(traceRef.current, result.data));
         if (!result.next_page) return;
         page = result.next_page;
@@ -61,8 +66,11 @@ export function useSessionTrace(sessionId: string) {
       while (!cancelled) {
         try {
           await seed();
+          const streamPath = threadId
+            ? `/api/platform/v1/sessions/${sessionId}/threads/${threadId}/stream`
+            : `/api/platform/v1/sessions/${sessionId}/events/stream`;
           const response = await fetch(
-            `/api/platform/v1/sessions/${sessionId}/events/stream?event_deltas[]=agent.message`,
+            `${streamPath}?event_deltas[]=agent.message`,
             {
               signal: controller.signal,
               headers: { accept: "text/event-stream" },
@@ -118,7 +126,7 @@ export function useSessionTrace(sessionId: string) {
       cancelled = true;
       controller.abort();
     };
-  }, [sessionId]);
+  }, [sessionId, threadId]);
 
   return { trace, connection };
 }

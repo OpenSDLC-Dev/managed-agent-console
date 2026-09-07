@@ -11,9 +11,11 @@ import type { SessionEvent } from "@/lib/platform/types";
 function PendingTool({
   event,
   sessionId,
+  threadId,
 }: {
   event: SessionEvent;
   sessionId: string;
+  threadId?: string;
 }) {
   const send = useSendEvents(sessionId);
   const [denying, setDenying] = useState(false);
@@ -25,6 +27,9 @@ function PendingTool({
         type: "user.tool_confirmation",
         tool_use_id: event.id,
         result,
+        ...((event.session_thread_id ?? threadId)
+          ? { session_thread_id: event.session_thread_id ?? threadId }
+          : {}),
         ...(result === "deny" && denyMessage
           ? { deny_message: denyMessage }
           : {}),
@@ -97,9 +102,11 @@ function PendingTool({
 export function ApprovalBanner({
   pending,
   sessionId,
+  threadId,
 }: {
   pending: SessionEvent[];
   sessionId: string;
+  threadId?: string;
 }) {
   if (pending.length === 0) return null;
   return (
@@ -113,7 +120,12 @@ export function ApprovalBanner({
       </p>
       <ul className="mt-2 space-y-2">
         {pending.map((event) => (
-          <PendingTool key={event.id} event={event} sessionId={sessionId} />
+          <PendingTool
+            key={event.id}
+            event={event}
+            sessionId={sessionId}
+            threadId={threadId}
+          />
         ))}
       </ul>
     </div>

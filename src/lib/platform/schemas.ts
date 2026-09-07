@@ -22,8 +22,7 @@
  *
  * Conventions (internal/api/wire.go, errors.go): timestamps are RFC 3339 UTC
  * strings; nullable timestamps are string|null; collections render [] and maps
- * render {} — never null; reserved seams (multiagent, deployment_id) render
- * literal null.
+ * render {} — never null.
  */
 import { z } from "zod";
 
@@ -42,6 +41,18 @@ export const SkillRefSchema = z.object({
   version: z.string(), // "" is normalized to "latest" on write
 });
 
+/** internal/api/roster.go:45-55 — the stored coordinator roster. */
+export const AgentRosterRefSchema = z.object({
+  id: z.string(),
+  type: z.literal("agent"),
+  version: z.number(),
+});
+
+export const AgentMultiagentSchema = z.object({
+  type: z.literal("coordinator"),
+  agents: z.array(AgentRosterRefSchema).min(1).max(20),
+});
+
 export const AgentSchema = z.object({
   id: z.string(),
   type: z.literal("agent"),
@@ -53,7 +64,7 @@ export const AgentSchema = z.object({
   tools: z.array(z.unknown()),
   mcp_servers: z.array(z.unknown()),
   skills: z.array(SkillRefSchema),
-  multiagent: z.null(),
+  multiagent: AgentMultiagentSchema.nullable(),
   metadata: z.record(z.string(), z.string()),
   created_at: z.string(),
   updated_at: z.string(), // on version entries: the version row's created_at
@@ -127,6 +138,25 @@ export const SessionUsageSchema = z.object({
   }),
 });
 
+/** internal/api/roster.go:58-81 — one resolved session roster member. */
+export const SessionThreadAgentSchema = z.object({
+  id: z.string(),
+  type: z.literal("agent"),
+  version: z.number(),
+  name: z.string(),
+  description: z.string(),
+  model: ModelRefSchema,
+  system: z.string(),
+  tools: z.array(z.unknown()),
+  mcp_servers: z.array(z.unknown()),
+  skills: z.array(z.unknown()),
+});
+
+export const SessionMultiagentSchema = z.object({
+  type: z.literal("coordinator"),
+  agents: z.array(SessionThreadAgentSchema).min(1).max(20),
+});
+
 /** Immutable agent snapshot on a session (domain.ResolvedAgent). */
 export const SessionAgentSchema = z.object({
   type: z.literal("agent"),
@@ -139,7 +169,7 @@ export const SessionAgentSchema = z.object({
   tools: z.array(z.unknown()),
   mcp_servers: z.array(z.unknown()),
   skills: z.array(z.unknown()),
-  multiagent: z.null(),
+  multiagent: SessionMultiagentSchema.nullable(),
 });
 
 /** internal/api/sessionresources.go:fileResourceJSON. */
@@ -197,7 +227,7 @@ export const SessionSchema = z.object({
   outcome_evaluations: z.array(z.unknown()), // always [] in v1
   resources: z.array(SessionResourceSchema),
   vault_ids: z.array(z.string()),
-  deployment_id: z.null(), // sessions.go:54 "deployments are post-v1: always null"
+  deployment_id: z.string().nullable(), // set only by a deployment fire
   created_at: z.string(),
   updated_at: z.string(),
   archived_at: z.string().nullable(),
@@ -259,7 +289,27 @@ export const SessionEventSchema = z.looseObject({
       retry_status: z.object({ type: z.string() }).optional(),
     })
     .optional(),
-  session_thread_id: z.null().optional(),
+  session_thread_id: z.string().nullable().optional(),
+  agent_name: z.string().optional(),
+});
+
+/** internal/api/threads.go:28-46 — a primary or child session thread. */
+export const SessionThreadSchema = z.object({
+  id: z.string(),
+  type: z.literal("session_thread"),
+  session_id: z.string(),
+  parent_thread_id: z.string().nullable(),
+  agent: SessionThreadAgentSchema,
+  status: SessionStatusSchema,
+  usage: SessionUsageSchema,
+  stats: z.object({
+    active_seconds: z.number(),
+    duration_seconds: z.number(),
+    startup_seconds: z.number(),
+  }),
+  created_at: z.string(),
+  updated_at: z.string(),
+  archived_at: z.string().nullable(),
 });
 
 // ---- vaults + credentials (internal/api/vaults.go, vaultcredentials.go,
@@ -466,6 +516,8 @@ export const ApiKeyListSchema = z.array(ApiKeySchema);
 
 export type ModelRef = z.infer<typeof ModelRefSchema>;
 export type SkillRef = z.infer<typeof SkillRefSchema>;
+export type AgentRosterRef = z.infer<typeof AgentRosterRefSchema>;
+export type AgentMultiagent = z.infer<typeof AgentMultiagentSchema>;
 export type Agent = z.infer<typeof AgentSchema>;
 export type Networking = z.infer<typeof NetworkingSchema>;
 export type Packages = z.infer<typeof PackagesSchema>;
@@ -474,8 +526,11 @@ export type Environment = z.infer<typeof EnvironmentSchema>;
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 export type SessionUsage = z.infer<typeof SessionUsageSchema>;
 export type SessionAgent = z.infer<typeof SessionAgentSchema>;
+export type SessionThreadAgent = z.infer<typeof SessionThreadAgentSchema>;
+export type SessionMultiagent = z.infer<typeof SessionMultiagentSchema>;
 export type SessionResource = z.infer<typeof SessionResourceSchema>;
 export type Session = z.infer<typeof SessionSchema>;
+export type SessionThread = z.infer<typeof SessionThreadSchema>;
 export type StopReason = z.infer<typeof StopReasonSchema>;
 export type ModelUsage = z.infer<typeof ModelUsageSchema>;
 export type ContentBlock = z.infer<typeof ContentBlockSchema>;

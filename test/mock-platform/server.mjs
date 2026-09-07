@@ -16,6 +16,8 @@ import {
   memoryResources,
   sessions as sessionFixtures,
   sessionEvents as eventFixtures,
+  sessionThreads as threadFixtures,
+  sessionThreadEvents as threadEventFixtures,
   skills,
   skillVersions,
   vaultCredentials,
@@ -55,7 +57,7 @@ const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
 // ---- mutable session store (reset via POST /__reset) ---------------------
 
-/** @type {Map<string, {session: any, events: any[], subscribers: Set<any>}>} */
+/** @type {Map<string, {session: any, events: any[], subscribers: Set<any>, threads: any[], threadEvents: Record<string, any[]>, threadSubscribers: Map<string, Set<any>>}>} */
 const store = new Map();
 
 // Agents mutate too (create/update/archive) — cloned from fixtures on reset.
@@ -67,6 +69,7 @@ let environmentCounter = 1;
 let filesStore = [];
 let fileCounter = 1;
 let sessionCounter = 1;
+let threadCounter = 1;
 let resourceCounter = 1;
 let vaultsStore = [];
 let vaultCredsStore = {};
@@ -165,6 +168,8 @@ function resetStore() {
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
+    for (const subscribers of state.threadSubscribers.values())
+      for (const res of subscribers) res.end();
   }
   store.clear();
   for (const fixture of sessionFixtures) {
@@ -172,6 +177,9 @@ function resetStore() {
       session: structuredClone(fixture),
       events: structuredClone(eventFixtures[fixture.id] ?? []),
       subscribers: new Set(),
+      threads: structuredClone(threadFixtures[fixture.id] ?? []),
+      threadEvents: structuredClone(threadEventFixtures[fixture.id] ?? {}),
+      threadSubscribers: new Map(),
       timers: new Set(),
     });
   }
@@ -189,6 +197,7 @@ function resetStore() {
   environmentCounter = 1;
   fileCounter = 1;
   sessionCounter = 1;
+  threadCounter = 1;
   resourceCounter = 1;
   vaultCounter = 1;
   credCounter = 1;
@@ -218,7 +227,16 @@ function validateAgentBody(body, { requireCore }) {
   for (const key of Object.keys(body)) {
     if (!AGENT_KEYS.has(key)) return `unknown field "${key}"`;
   }
-  if (body.multiagent != null) return "multiagent is not supported yet";
+  if (body.multiagent != null) {
+    if (
+      typeof body.multiagent !== "object" ||
+      body.multiagent.type !== "coordinator" ||
+      !Array.isArray(body.multiagent.agents) ||
+      body.multiagent.agents.length < 1 ||
+      body.multiagent.agents.length > 20
+    )
+      return "multiagent must be a coordinator with 1–20 agents";
+  }
   if (requireCore) {
     if (typeof body.name !== "string" || body.name.length === 0)
       return "name is required";
@@ -257,6 +275,7 @@ function createAgent(body) {
     updated_at: timestamp,
     archived_at: null,
   };
+  agent.multiagent = resolveMockRoster(body.multiagent, agent);
   agentsStore.unshift(agent);
   agentVersionsStore[agent.id] = [structuredClone(agent)];
   return agent;
@@ -280,12 +299,76 @@ function updateAgent(agent, body) {
     }
   }
   agent.version += 1;
+  if (body.multiagent !== undefined) {
+    agent.multiagent = resolveMockRoster(body.multiagent, agent);
+  } else if (agent.multiagent) {
+    agent.multiagent.agents = agent.multiagent.agents.map((member) =>
+      member.id === agent.id ? { ...member, version: agent.version } : member,
+    );
+  }
   agent.updated_at = now();
   agentVersionsStore[agent.id] = [
     { ...structuredClone(agent) },
     ...(agentVersionsStore[agent.id] ?? []),
   ];
   return { agent };
+}
+
+function resolveMockRoster(raw, self) {
+  if (raw == null) return null;
+  return {
+    type: "coordinator",
+    agents: raw.agents.map((entry) => {
+      const isSelf = entry?.type === "self" || entry?.id === self.id;
+      const id = isSelf
+        ? self.id
+        : typeof entry === "string"
+          ? entry
+          : entry.id;
+      const target = isSelf
+        ? self
+        : agentsStore.find((agent) => agent.id === id);
+      return {
+        id,
+        type: "agent",
+        version: isSelf
+          ? self.version
+          : (entry?.version ?? target?.version ?? 1),
+      };
+    }),
+  };
+}
+
+function mockThreadAgent(agent) {
+  return {
+    id: agent.id,
+    type: "agent",
+    version: agent.version,
+    name: agent.name,
+    description: agent.description,
+    model: agent.model,
+    system: agent.system,
+    tools: agent.tools,
+    mcp_servers: agent.mcp_servers,
+    skills: agent.skills,
+  };
+}
+
+function mockSessionAgent(agent) {
+  return {
+    ...mockThreadAgent(agent),
+    multiagent: agent.multiagent
+      ? {
+          type: "coordinator",
+          agents: agent.multiagent.agents.map((member) => {
+            const version = agentVersionsStore[member.id]?.find(
+              (candidate) => candidate.version === member.version,
+            );
+            return mockThreadAgent(version ?? agent);
+          }),
+        }
+      : null,
+  };
 }
 
 function frame(res, name, payload) {
@@ -621,6 +704,28 @@ function route(req, url) {
   }
   const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
   if (sessionMatch) return store.get(sessionMatch[1])?.session ?? null;
+
+  const threadsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads$/);
+  if (threadsMatch) {
+    const state = store.get(threadsMatch[1]);
+    return state ? keysetPage(state.threads, url) : null;
+  }
+  const threadEventsMatch = path.match(
+    /^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)\/events$/,
+  );
+  if (threadEventsMatch) {
+    const state = store.get(threadEventsMatch[1]);
+    const rows = state?.threadEvents[threadEventsMatch[2]];
+    return rows ? keysetPage(rows, url) : null;
+  }
+  const threadMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)$/);
+  if (threadMatch) {
+    return (
+      store
+        .get(threadMatch[1])
+        ?.threads.find((thread) => thread.id === threadMatch[2]) ?? null
+    );
+  }
 
   const eventsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/events$/);
   if (eventsMatch) {
@@ -1115,12 +1220,25 @@ const server = createServer(async (req, res) => {
   const streamMatch = url.pathname.match(
     /^\/v1\/sessions\/([^/]+)\/events\/stream$/,
   );
-  if (req.method === "GET" && streamMatch) {
-    const state = store.get(streamMatch[1]);
+  const threadStreamMatch = url.pathname.match(
+    /^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)\/stream$/,
+  );
+  if (req.method === "GET" && (streamMatch || threadStreamMatch)) {
+    const match = streamMatch ?? threadStreamMatch;
+    const state = store.get(match[1]);
     if (!state) {
       res.setHeader("content-type", "application/json");
       res.writeHead(404);
       res.end(envelope("not_found_error", "no such session"));
+      return;
+    }
+    if (
+      threadStreamMatch &&
+      !state.threads.some((thread) => thread.id === threadStreamMatch[2])
+    ) {
+      res.setHeader("content-type", "application/json");
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such thread"));
       return;
     }
     res.writeHead(200, {
@@ -1131,12 +1249,51 @@ const server = createServer(async (req, res) => {
     // console's BFF included) may hold the response until bytes flow.
     res.flushHeaders?.();
     res.write(": connected\n\n");
-    state.subscribers.add(res);
+    const subscribers = threadStreamMatch
+      ? (state.threadSubscribers.get(threadStreamMatch[2]) ?? new Set())
+      : state.subscribers;
+    if (threadStreamMatch)
+      state.threadSubscribers.set(threadStreamMatch[2], subscribers);
+    subscribers.add(res);
     const ping = setInterval(() => frame(res, "ping", { type: "ping" }), 15000);
     req.on("close", () => {
       clearInterval(ping);
-      state.subscribers.delete(res);
+      subscribers.delete(res);
     });
+    return;
+  }
+
+  const archiveThreadMatch = url.pathname.match(
+    /^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)\/archive$/,
+  );
+  if (req.method === "POST" && archiveThreadMatch) {
+    res.setHeader("content-type", "application/json");
+    const state = store.get(archiveThreadMatch[1]);
+    const thread = state?.threads.find(
+      (candidate) => candidate.id === archiveThreadMatch[2],
+    );
+    if (!thread) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such thread"));
+      return;
+    }
+    if (thread.parent_thread_id === null || thread.status !== "idle") {
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          thread.parent_thread_id === null
+            ? "the primary thread cannot be archived; archive the session"
+            : "only an idle thread can be archived",
+        ),
+      );
+      return;
+    }
+    thread.status = "terminated";
+    thread.archived_at ??= now();
+    thread.updated_at = thread.archived_at;
+    res.writeHead(200);
+    res.end(JSON.stringify(thread));
     return;
   }
 
@@ -1596,19 +1753,7 @@ const server = createServer(async (req, res) => {
     const session = {
       id: `sesn_mock${String(sessionCounter++).padStart(6, "0")}`,
       type: "session",
-      agent: {
-        type: "agent",
-        id: agent.id,
-        version: agent.version,
-        name: agent.name,
-        model: agent.model,
-        system: agent.system,
-        description: agent.description,
-        tools: agent.tools,
-        mcp_servers: agent.mcp_servers,
-        skills: agent.skills,
-        multiagent: null,
-      },
+      agent: mockSessionAgent(agent),
       environment_id: env.id,
       status: "idle",
       title: body.title ?? "",
@@ -1631,10 +1776,26 @@ const server = createServer(async (req, res) => {
       updated_at: timestamp,
       archived_at: null,
     };
+    const primaryThread = {
+      id: `sthr_mock${String(threadCounter++).padStart(6, "0")}`,
+      type: "session_thread",
+      session_id: session.id,
+      parent_thread_id: null,
+      agent: mockThreadAgent(agent),
+      status: session.status,
+      usage: structuredClone(session.usage),
+      stats: { active_seconds: 0, duration_seconds: 0, startup_seconds: 0 },
+      created_at: timestamp,
+      updated_at: timestamp,
+      archived_at: null,
+    };
     store.set(session.id, {
       session,
       events: [],
       subscribers: new Set(),
+      threads: [primaryThread],
+      threadEvents: { [primaryThread.id]: [] },
+      threadSubscribers: new Map(),
       timers: new Set(),
     });
     res.writeHead(200);
