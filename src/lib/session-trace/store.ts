@@ -134,3 +134,62 @@ export function latestStatus(state: TraceState): string | undefined {
   }
   return undefined;
 }
+
+/** The newest status on a thread-specific event view. */
+export function latestThreadStatus(state: TraceState): string | undefined {
+  for (let i = state.events.length - 1; i >= 0; i--) {
+    const type = state.events[i].type;
+    if (type === "session.thread_status_running") return "running";
+    if (type === "session.thread_status_idle") return "idle";
+    if (type === "session.thread_status_rescheduled") return "rescheduling";
+    if (type === "session.thread_status_terminated") return "terminated";
+  }
+  return undefined;
+}
+
+/** Tool calls still blocked by the newest idle boundary on each visible thread. */
+export function pendingToolUses(
+  events: SessionEvent[],
+  aggregateThreads = false,
+): SessionEvent[] {
+  const lifecycle = (event: SessionEvent) =>
+    [
+      "session.status_running",
+      "session.status_idle",
+      "session.status_rescheduled",
+      "session.status_terminated",
+      "session.thread_status_running",
+      "session.thread_status_idle",
+      "session.thread_status_rescheduled",
+      "session.thread_status_terminated",
+    ].includes(event.type);
+  const boundaries = aggregateThreads
+    ? [
+        ...new Map(
+          events
+            .filter(lifecycle)
+            .map((event) => [event.session_thread_id ?? "session", event]),
+        ).values(),
+      ]
+    : [[...events].reverse().find(lifecycle)].filter(
+        (event): event is SessionEvent => event !== undefined,
+      );
+  const pendingIds = new Set(
+    boundaries.flatMap((event) =>
+      (event.type === "session.status_idle" ||
+        event.type === "session.thread_status_idle") &&
+      event.stop_reason?.type === "requires_action"
+        ? (event.stop_reason.event_ids ?? [])
+        : [],
+    ),
+  );
+  if (pendingIds.size === 0) return [];
+  const answered = new Set(
+    events
+      .filter((event) => event.type === "user.tool_confirmation")
+      .map((event) => event.tool_use_id),
+  );
+  return events.filter(
+    (event) => pendingIds.has(event.id) && !answered.has(event.id),
+  );
+}

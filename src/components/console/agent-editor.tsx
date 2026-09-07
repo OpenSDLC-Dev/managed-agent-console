@@ -3,7 +3,7 @@
 import { RequestId } from "@/components/console/bits";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
 import {
   useCreateAgent,
+  useAgentOptions,
   useSkills,
   useUpdateAgent,
   type AgentWriteBody,
@@ -44,6 +45,9 @@ interface SkillRef {
   version: string;
 }
 
+type RosterMember =
+  { type: "self" } | { type: "agent"; id: string; version?: number };
+
 /** Editor model: the wire config split into form-editable pieces. */
 interface FormState {
   name: string;
@@ -56,10 +60,14 @@ interface FormState {
   otherTools: unknown[];
   mcpServers: unknown[];
   skills: SkillRef[];
+  multiagent: RosterMember[] | null;
   metadata: Record<string, string>;
 }
 
-export function formFromConfig(config: Record<string, unknown>): FormState {
+export function formFromConfig(
+  config: Record<string, unknown>,
+  selfId?: string,
+): FormState {
   const model = config.model;
   const modelObj =
     typeof model === "string"
@@ -68,6 +76,36 @@ export function formFromConfig(config: Record<string, unknown>): FormState {
   const { toolset, others } = parseTools(
     Array.isArray(config.tools) ? config.tools : [],
   );
+  const multiagent = config.multiagent as
+    { type?: unknown; agents?: unknown } | null | undefined;
+  const roster =
+    multiagent?.type === "coordinator" && Array.isArray(multiagent.agents)
+      ? multiagent.agents.flatMap((entry): RosterMember[] => {
+          if (typeof entry === "string") return [{ type: "agent", id: entry }];
+          if (!entry || typeof entry !== "object") return [];
+          const member = entry as {
+            type?: unknown;
+            id?: unknown;
+            version?: unknown;
+          };
+          if (
+            member.type === "self" ||
+            (selfId !== undefined && member.id === selfId)
+          )
+            return [{ type: "self" }];
+          if (member.type !== "agent" || typeof member.id !== "string")
+            return [];
+          return [
+            {
+              type: "agent",
+              id: member.id,
+              ...(typeof member.version === "number"
+                ? { version: member.version }
+                : {}),
+            },
+          ];
+        })
+      : null;
   return {
     name: typeof config.name === "string" ? config.name : "",
     modelId: modelObj.id ?? "",
@@ -82,6 +120,7 @@ export function formFromConfig(config: Record<string, unknown>): FormState {
     otherTools: others,
     mcpServers: Array.isArray(config.mcp_servers) ? config.mcp_servers : [],
     skills: Array.isArray(config.skills) ? (config.skills as SkillRef[]) : [],
+    multiagent: roster,
     metadata:
       typeof config.metadata === "object" && config.metadata !== null
         ? (config.metadata as Record<string, string>)
@@ -89,7 +128,10 @@ export function formFromConfig(config: Record<string, unknown>): FormState {
   };
 }
 
-function configFromForm(form: FormState): AgentWriteBody {
+function configFromForm(
+  form: FormState,
+  includeMultiagentClear = false,
+): AgentWriteBody {
   const tools = [
     ...(form.toolset ? [buildToolset(form.toolset)] : []),
     ...form.otherTools,
@@ -104,6 +146,13 @@ function configFromForm(form: FormState): AgentWriteBody {
     tools,
     mcp_servers: form.mcpServers,
     skills: form.skills,
+    ...(form.multiagent === null
+      ? includeMultiagentClear
+        ? { multiagent: null }
+        : {}
+      : {
+          multiagent: { type: "coordinator" as const, agents: form.multiagent },
+        }),
     ...(Object.keys(form.metadata).length > 0
       ? { metadata: form.metadata }
       : {}),
@@ -121,12 +170,13 @@ export function newAgentForm(): FormState {
     otherTools: [],
     mcpServers: [],
     skills: [],
+    multiagent: null,
     metadata: {},
   };
 }
 
 export function formFromAgent(agent: Agent): FormState {
-  return formFromConfig(agent as unknown as Record<string, unknown>);
+  return formFromConfig(agent as unknown as Record<string, unknown>, agent.id);
 }
 
 /** Two-column section: explainer left, controls right (reference layout). */
@@ -275,11 +325,13 @@ export function AgentEditor({
   });
   const [rawError, setRawError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [memberToAdd, setMemberToAdd] = useState("");
 
   const create = useCreateAgent();
   const update = useUpdateAgent(agentId ?? "");
   const mutation = mode === "create" ? create : update;
   const skillsQuery = useSkills({ limit: 100 });
+  const agentsQuery = useAgentOptions();
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -293,7 +345,10 @@ export function AgentEditor({
   const switchTab = (next: "rendered" | "raw") => {
     if (next === tab) return;
     if (next === "raw") {
-      setRaw((r) => ({ ...r, text: toRaw(configFromForm(form), r.format) }));
+      setRaw((r) => ({
+        ...r,
+        text: toRaw(configFromForm(form, mode === "edit"), r.format),
+      }));
       setRawError(null);
     } else {
       // Raw wins on divergence: re-parse before leaving the raw tab.
@@ -302,7 +357,7 @@ export function AgentEditor({
         setRawError(parsed.error);
         return;
       }
-      setForm(formFromConfig(parsed.config!));
+      setForm(formFromConfig(parsed.config!, agentId));
     }
     setTab(next);
   };
@@ -329,7 +384,7 @@ export function AgentEditor({
       }
       body = parsed.config as AgentWriteBody;
     } else {
-      body = configFromForm(form);
+      body = configFromForm(form, mode === "edit");
     }
     if (mode === "edit") body = { ...body, version };
     mutation.mutate(body, {
@@ -647,10 +702,184 @@ export function AgentEditor({
             </div>
           </Section>
 
+          <Section
+            title="Multiagent"
+            hint="Turn this agent into a coordinator and choose the pinned agents it may run as child threads."
+          >
+            {form.multiagent === null ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => set("multiagent", [{ type: "self" }])}
+              >
+                Enable coordinator
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-64 flex-1 space-y-1.5">
+                    <Label htmlFor="roster-member">Agent</Label>
+                    <select
+                      id="roster-member"
+                      value={memberToAdd}
+                      onChange={(event) => setMemberToAdd(event.target.value)}
+                      className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                    >
+                      <option value="">Choose an agent…</option>
+                      {!form.multiagent.some(
+                        (member) => member.type === "self",
+                      ) && (
+                        <option value="__self">This coordinator (self)</option>
+                      )}
+                      {(agentsQuery.data?.agents ?? [])
+                        .filter(
+                          (agent) =>
+                            !agent.archived_at &&
+                            !agent.multiagent &&
+                            agent.id !== agentId &&
+                            !form.multiagent!.some(
+                              (member) =>
+                                member.type === "agent" &&
+                                member.id === agent.id,
+                            ),
+                        )
+                        .map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.name} · v{agent.version}
+                          </option>
+                        ))}
+                    </select>
+                    {agentsQuery.data?.truncated && (
+                      <p className="text-[12px] text-muted-foreground">
+                        Only the first 1,000 agents are available here.
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    disabled={!memberToAdd || form.multiagent.length >= 20}
+                    onClick={() => {
+                      if (!memberToAdd) return;
+                      const member: RosterMember =
+                        memberToAdd === "__self"
+                          ? { type: "self" }
+                          : {
+                              type: "agent",
+                              id: memberToAdd,
+                              version: agentsQuery.data?.agents.find(
+                                (agent) => agent.id === memberToAdd,
+                              )?.version,
+                            };
+                      set("multiagent", [...form.multiagent!, member]);
+                      setMemberToAdd("");
+                    }}
+                  >
+                    <Plus className="size-4" /> Add member
+                  </Button>
+                </div>
+                <ol className="divide-y rounded-lg border">
+                  {form.multiagent.map((member, index) => {
+                    const agent =
+                      member.type === "agent"
+                        ? agentsQuery.data?.agents.find(
+                            (candidate) => candidate.id === member.id,
+                          )
+                        : undefined;
+                    return (
+                      <li
+                        key={member.type === "self" ? "self" : member.id}
+                        className="flex items-center gap-2 px-3 py-2"
+                      >
+                        <span className="w-6 text-[12px] text-muted-foreground">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 text-sm">
+                          {member.type === "self" ? (
+                            "This coordinator (self)"
+                          ) : (
+                            <>
+                              {agent?.name ?? member.id}
+                              <span className="pl-2 font-mono text-[12px] text-muted-foreground">
+                                {member.id} · v{member.version ?? "latest"}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Move member ${index + 1} up`}
+                          disabled={index === 0}
+                          onClick={() => {
+                            const next = [...form.multiagent!];
+                            [next[index - 1], next[index]] = [
+                              next[index],
+                              next[index - 1],
+                            ];
+                            set("multiagent", next);
+                          }}
+                        >
+                          <ArrowUp className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Move member ${index + 1} down`}
+                          disabled={index === form.multiagent!.length - 1}
+                          onClick={() => {
+                            const next = [...form.multiagent!];
+                            [next[index], next[index + 1]] = [
+                              next[index + 1],
+                              next[index],
+                            ];
+                            set("multiagent", next);
+                          }}
+                        >
+                          <ArrowDown className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remove member ${index + 1}`}
+                          disabled={form.multiagent!.length === 1}
+                          onClick={() =>
+                            set(
+                              "multiagent",
+                              form.multiagent!.filter((_, i) => i !== index),
+                            )
+                          }
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ol>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-muted-foreground"
+                  onClick={() => set("multiagent", null)}
+                >
+                  Disable coordinator
+                </Button>
+              </div>
+            )}
+          </Section>
+
           <CurlBlock
             getBody={() =>
               mode === "edit"
-                ? { ...configFromForm(form), version }
+                ? { ...configFromForm(form, true), version }
                 : configFromForm(form)
             }
             agentId={mode === "edit" ? agentId : undefined}

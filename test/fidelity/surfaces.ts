@@ -121,7 +121,8 @@ export const SURFACES: Surface[] = [
     id: "agent-detail",
     route: `/agents/${AGENT}`,
     fixture: AGENT,
-    description: "Detail sections, config rendering, version history table.",
+    description:
+      "Detail sections, coordinator roster, config rendering, version history table.",
   },
   {
     id: "environment-detail",
@@ -194,6 +195,20 @@ export const SURFACES: Surface[] = [
       await traceLive(page);
       await page.getByRole("button", { name: "Debug" }).click();
       await page.getByTestId("debug-row").first().waitFor();
+    },
+  },
+  {
+    id: "session-child-thread",
+    route: `/sessions/${SESSION}`,
+    fixture: `${SESSION}, General task agent child thread`,
+    description:
+      "Thread switcher with the child selected and its thread-scoped trace attached.",
+    setup: async (page) => {
+      await page
+        .locator('[data-thread-id="sthr_taskrunnerresearch0001"] button')
+        .first()
+        .click();
+      await traceLive(page);
     },
   },
   {

@@ -25,13 +25,18 @@ import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { SessionActions } from "@/components/console/session-actions";
 import { SessionResources } from "@/components/console/session-resources";
+import { SessionThreads } from "@/components/console/session-threads";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, tokenAttr, tokenCount } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
-import { useSession } from "@/lib/platform/queries";
+import { useSession, useSessionThreads } from "@/lib/platform/queries";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
-import { latestStatus } from "@/lib/session-trace/store";
+import {
+  latestStatus,
+  latestThreadStatus,
+  pendingToolUses,
+} from "@/lib/session-trace/store";
 import {
   ageLabel,
   idleGaps,
@@ -66,6 +71,12 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
     types: [
       "session.status_running",
       "session.status_idle",
+      "session.status_rescheduled",
+      "session.status_terminated",
+      "session.thread_status_running",
+      "session.thread_status_idle",
+      "session.thread_status_rescheduled",
+      "session.thread_status_terminated",
       "session.error",
       "session.updated",
     ],
@@ -76,21 +87,6 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
     types: ["span.model_request_start", "span.model_request_end"],
   },
 ];
-
-/** The tool calls still blocking the latest requires_action stop, if any. */
-function pendingToolUses(events: SessionEvent[]): SessionEvent[] {
-  const lastIdle = [...events]
-    .reverse()
-    .find((e) => e.type === "session.status_idle");
-  const ids = lastIdle?.stop_reason?.event_ids;
-  if (!ids || lastIdle?.stop_reason?.type !== "requires_action") return [];
-  const answered = new Set(
-    events
-      .filter((e) => e.type === "user.tool_confirmation")
-      .map((e) => e.tool_use_id),
-  );
-  return events.filter((e) => ids.includes(e.id) && !answered.has(e.id));
-}
 
 const CONNECTION_LABEL = {
   connecting: "connecting…",
@@ -208,13 +204,29 @@ export default function SessionDetailPage({
   const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const session = useSession(id, 15_000);
-  const { trace, connection } = useSessionTrace(id);
+  const threads = useSessionThreads(id, 15_000);
+  const { trace, connection } = useSessionTrace(
+    id,
+    selectedThreadId ?? undefined,
+  );
 
-  const status = latestStatus(trace) ?? session.data?.status;
+  const selectedThread = threads.data?.data.find(
+    (thread) => thread.id === selectedThreadId,
+  );
+
+  const status = selectedThread
+    ? selectedThread.archived_at || selectedThread.status === "terminated"
+      ? selectedThread.status
+      : (latestThreadStatus(trace) ?? selectedThread.status)
+    : (latestStatus(trace) ?? session.data?.status);
   const running = status === "running";
 
-  const pending = useMemo(() => pendingToolUses(trace.events), [trace.events]);
+  const pending = useMemo(
+    () => pendingToolUses(trace.events, selectedThreadId === null),
+    [selectedThreadId, trace.events],
+  );
   const durations = useMemo(
     () => modelSpanDurations(trace.events),
     [trace.events],
@@ -261,7 +273,11 @@ export default function SessionDetailPage({
         subtitle={`${data.agent.name} · v${data.agent.version}`}
         actions={
           <span className="flex items-center gap-2">
-            {status && <StatusBadge status={status} />}
+            {status && (
+              <span data-testid="session-effective-status" data-status={status}>
+                <StatusBadge status={status} />
+              </span>
+            )}
             <ArchivedBadge archivedAt={data.archived_at} />
             <SessionActions session={data} />
           </span>
@@ -269,9 +285,24 @@ export default function SessionDetailPage({
       />
       <SessionChips session={data} />
       <SessionResources session={data} />
+      <SessionThreads
+        sessionId={id}
+        threads={threads.data?.data ?? []}
+        error={threads.error}
+        loading={threads.isPending}
+        selectedId={selectedThreadId}
+        onSelect={(threadId) => {
+          setSelectedThreadId(threadId);
+          setSelectedId(null);
+        }}
+      />
 
       {!data.archived_at && !trace.deleted && (
-        <ApprovalBanner pending={pending} sessionId={id} />
+        <ApprovalBanner
+          pending={pending}
+          sessionId={id}
+          threadId={selectedThreadId ?? undefined}
+        />
       )}
 
       <DetailSection title="Events">
@@ -436,6 +467,10 @@ export default function SessionDetailPage({
         sessionId={id}
         running={running}
         disabled={!!data.archived_at || trace.deleted}
+        threadId={
+          selectedThread?.parent_thread_id ? selectedThread.id : undefined
+        }
+        threadName={selectedThread?.agent.name}
       />
     </div>
   );

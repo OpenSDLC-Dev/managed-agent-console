@@ -11,6 +11,7 @@ import {
   useArchiveAgent,
   useArchiveCredential,
   useArchiveEnvironment,
+  useArchiveSessionThread,
   useArchiveVault,
   useCreateAgent,
   useCreateEnvironment,
@@ -27,6 +28,7 @@ import {
   useFiles,
   useSendEvents,
   useSession,
+  useSessionThreads,
   useSessions,
   useSkill,
   useSkills,
@@ -177,6 +179,12 @@ const queryCases: QueryCase[] = [
     search: {},
   },
   {
+    name: "useSessionThreads",
+    useHook: () => useSessionThreads("sess_1"),
+    path: "/api/platform/v1/sessions/sess_1/threads",
+    search: { limit: "1000" },
+  },
+  {
     name: "useVaults",
     useHook: () => useVaults({}),
     path: "/api/platform/v1/vaults",
@@ -309,6 +317,19 @@ const skillMd = () =>
   new File(["# skill"], "SKILL.md", { type: "text/markdown" });
 
 const mutationCases: MutationCase[] = [
+  {
+    name: "useArchiveSessionThread",
+    useHook: () => useArchiveSessionThread("sess_1"),
+    variables: "sthr_1",
+    path: "/api/platform/v1/sessions/sess_1/threads/sthr_1/archive",
+    method: "POST",
+    jsonBody: {},
+    meta: { errorTitle: "Archive thread failed" },
+    invalidates: [
+      ["session-threads", "sess_1"],
+      ["session", "sess_1"],
+    ],
+  },
   {
     name: "useSendEvents",
     useHook: () => useSendEvents("sess_1"),

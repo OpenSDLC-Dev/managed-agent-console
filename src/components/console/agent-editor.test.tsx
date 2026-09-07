@@ -11,7 +11,12 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom/vitest";
 import type { ComponentProps, ReactNode } from "react";
-import { AgentEditor, formFromAgent, newAgentForm } from "./agent-editor";
+import {
+  AgentEditor,
+  formFromAgent,
+  formFromConfig,
+  newAgentForm,
+} from "./agent-editor";
 import type { Agent, Skill } from "@/lib/platform/types";
 
 const { pushSpy, backSpy, refreshSpy } = vi.hoisted(() => ({
@@ -154,12 +159,14 @@ const json = (body: unknown, status = 200) =>
 
 function stubFetch({
   skills = { data: [] as Skill[] },
+  agents = { data: [] as Agent[] },
   save = () => json(agentResponse()),
-}: { skills?: unknown; save?: () => Response } = {}) {
+}: { skills?: unknown; agents?: unknown; save?: () => Response } = {}) {
   const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST") return save();
     if (url.startsWith("/api/platform/v1/skills")) return json(skills);
+    if (url.startsWith("/api/platform/v1/agents")) return json(agents);
     throw new Error(`unexpected fetch: ${url}`);
   });
   vi.stubGlobal("fetch", mock);
@@ -230,6 +237,14 @@ describe("newAgentForm", () => {
 });
 
 describe("formFromAgent", () => {
+  it("does not reinterpret a malformed member as self without a self id", () => {
+    expect(
+      formFromConfig({
+        multiagent: { type: "coordinator", agents: [{}] },
+      }).multiagent,
+    ).toEqual([]);
+  });
+
   it("splits the toolset from other tools and keeps wire fields", () => {
     const form = formFromAgent(
       agentResponse({
@@ -282,6 +297,7 @@ describe("formFromAgent", () => {
       otherTools: [],
       mcpServers: [],
       skills: [],
+      multiagent: null,
       metadata: {},
     });
     expect(formFromAgent({} as unknown as Agent).modelId).toBe("");
@@ -293,6 +309,63 @@ describe("formFromAgent", () => {
 });
 
 describe("AgentEditor", () => {
+  it("builds an ordered coordinator roster from platform agents", async () => {
+    const worker = agentResponse({
+      id: "agent_worker",
+      name: "Worker",
+      version: 4,
+    });
+    const mock = stubFetch({ agents: { data: [worker] } });
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(
+      screen.getByRole("button", { name: "Enable coordinator" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("Agent")).toHaveTextContent("Worker · v4"),
+    );
+    fireEvent.change(screen.getByLabelText("Agent"), {
+      target: { value: worker.id },
+    });
+    await user.click(screen.getByRole("button", { name: "Add member" }));
+    expect(screen.getByText("Worker")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
+    const body = JSON.parse(postCalls(mock)[0][1]?.body as string);
+    expect(body.multiagent).toEqual({
+      type: "coordinator",
+      agents: [{ type: "self" }, { type: "agent", id: worker.id, version: 4 }],
+    });
+  });
+
+  it("clears an existing coordinator roster in edit mode", async () => {
+    const existing = agentResponse({
+      id: "agent_1",
+      version: 3,
+      multiagent: {
+        type: "coordinator",
+        agents: [{ type: "agent", id: "agent_1", version: 3 }],
+      },
+    });
+    const mock = stubFetch();
+    const user = userEvent.setup();
+    renderEditor({
+      mode: "edit",
+      initial: formFromAgent(existing),
+      agentId: existing.id,
+      version: existing.version,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Disable coordinator" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const body = JSON.parse(postCalls(mock)[0][1]?.body as string);
+    expect(body).toMatchObject({ version: 3, multiagent: null });
+  });
+
   it("saves rendered-tab edits as the wire body and navigates on success", async () => {
     const mock = stubFetch();
     const user = userEvent.setup();

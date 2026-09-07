@@ -17,7 +17,7 @@ const toolUse = (id: string, extra?: object): SessionEvent =>
     ...extra,
   }) as SessionEvent;
 
-function renderBanner(pending: SessionEvent[]) {
+function renderBanner(pending: SessionEvent[], threadId?: string) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -26,7 +26,7 @@ function renderBanner(pending: SessionEvent[]) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <ApprovalBanner pending={pending} sessionId="ses_1" />
+      <ApprovalBanner pending={pending} sessionId="ses_1" threadId={threadId} />
     </QueryClientProvider>,
   );
 }
@@ -89,6 +89,27 @@ describe("ApprovalBanner", () => {
         type: "user.tool_confirmation",
         tool_use_id: "sevt_t1",
         result: "allow",
+      },
+    ]);
+  });
+
+  it("routes confirmation to the tool event's child thread", async () => {
+    const fetchMock = vi.fn(async () => okEvents());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    renderBanner(
+      [toolUse("sevt_t1", { session_thread_id: "sthr_event" })],
+      "sthr_selected",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Allow" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentEvents(fetchMock)).toEqual([
+      {
+        type: "user.tool_confirmation",
+        tool_use_id: "sevt_t1",
+        result: "allow",
+        session_thread_id: "sthr_event",
       },
     ]);
   });

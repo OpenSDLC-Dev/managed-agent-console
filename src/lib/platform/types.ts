@@ -12,6 +12,8 @@
  */
 export type {
   Agent,
+  AgentMultiagent,
+  AgentRosterRef,
   ContentBlock,
   CredentialAuth,
   Environment,
@@ -29,9 +31,12 @@ export type {
   PlatformFile,
   Session,
   SessionAgent,
+  SessionMultiagent,
   SessionEvent,
   SessionResource,
   SessionStatus,
+  SessionThread,
+  SessionThreadAgent,
   SessionUsage,
   Skill,
   SkillRef,

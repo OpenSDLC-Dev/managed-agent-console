@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { applyFrame, applyPersisted, emptyTrace, latestStatus } from "./store";
+import {
+  applyFrame,
+  applyPersisted,
+  emptyTrace,
+  latestStatus,
+  latestThreadStatus,
+  pendingToolUses,
+} from "./store";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const ev = (id: string, type: string, extra?: object): SessionEvent =>
@@ -92,5 +99,48 @@ describe("trace store", () => {
     expect(latestStatus(state)).toBe("idle");
     state = applyFrame(state, { type: "session.deleted" });
     expect(state.deleted).toBe(true);
+  });
+
+  it("derives status from a thread-specific trace", () => {
+    const state = applyPersisted(emptyTrace(), [
+      ev("sevt_1", "session.thread_status_running"),
+      ev("sevt_2", "session.thread_status_idle"),
+    ]);
+    expect(latestThreadStatus(state)).toBe("idle");
+  });
+
+  it("keeps pending approvals from each thread's latest idle boundary", () => {
+    const events = [
+      ev("tool_a", "agent.tool_use", { session_thread_id: "thread_a" }),
+      ev("idle_a", "session.thread_status_idle", {
+        session_thread_id: "thread_a",
+        stop_reason: { type: "requires_action", event_ids: ["tool_a"] },
+      }),
+      ev("tool_b", "agent.tool_use", { session_thread_id: "thread_b" }),
+      ev("idle_b", "session.thread_status_idle", {
+        session_thread_id: "thread_b",
+        stop_reason: { type: "requires_action", event_ids: ["tool_b"] },
+      }),
+      ev("answer_b", "user.tool_confirmation", {
+        tool_use_id: "tool_b",
+        session_thread_id: "thread_b",
+      }),
+    ];
+
+    expect(pendingToolUses(events, true).map((event) => event.id)).toEqual([
+      "tool_a",
+    ]);
+    expect(pendingToolUses(events).map((event) => event.id)).toEqual([]);
+    expect(
+      pendingToolUses(
+        [
+          ...events,
+          ev("terminated_a", "session.thread_status_terminated", {
+            session_thread_id: "thread_a",
+          }),
+        ],
+        true,
+      ),
+    ).toEqual([]);
   });
 });
