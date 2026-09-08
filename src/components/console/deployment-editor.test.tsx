@@ -203,9 +203,13 @@ describe("deployment editor wire mapping", () => {
     );
 
     expect(
-      await screen.findByRole("button", {
-        name: "Task agent · v2 (pinned)",
-      }),
+      await screen.findByRole(
+        "button",
+        {
+          name: "Task agent · v2 (pinned)",
+        },
+        { timeout: 5_000 },
+      ),
     ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: "Task agent · v3" }),

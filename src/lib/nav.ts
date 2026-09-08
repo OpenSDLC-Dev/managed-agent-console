@@ -1,6 +1,7 @@
 import {
   Bot,
   Boxes,
+  Database,
   FileText,
   Hammer,
   House,
@@ -92,6 +93,7 @@ export const NAV: NavEntry[] = [
       surfaceEntry("agents", Bot),
       surfaceEntry("sessions", MessagesSquare),
       surfaceEntry("deployments", Rocket),
+      surfaceEntry("memory-stores", Database),
       surfaceEntry("environments", Boxes),
       surfaceEntry("vaults", KeyRound),
     ],

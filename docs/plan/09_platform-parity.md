@@ -45,3 +45,8 @@ Deployments: the local control-plane contract covered create/update,
 pause/manual-run/resume/archive, the pinned Agent snapshot, and run retention
 after its Session is deleted. The self-hosted contract environment has no
 worker, so this exercised no model turn.
+
+Memory stores: `internal/api/memorystores.go`, `memories.go` and
+`memoryversions.go` establish one-way archive, metadata tombstones, literal path
+prefix browsing, SHA-256 write preconditions, persistent delete versions and
+compliance redaction. The model-free contract covers those routes directly.

@@ -315,6 +315,64 @@ export const DeploymentRunSchema = z.object({
   created_at: z.string(),
 });
 
+// ---- memory stores (internal/api/memorystores.go, memories.go,
+//      memoryversions.go)
+
+export const MemoryStoreSchema = z.object({
+  id: z.string(),
+  type: z.literal("memory_store"),
+  name: z.string(),
+  description: z.string(),
+  metadata: z.record(z.string(), z.string()),
+  created_at: z.string(),
+  updated_at: z.string(),
+  archived_at: z.string().nullable(),
+});
+
+export const MemorySchema = z.object({
+  id: z.string(),
+  type: z.literal("memory"),
+  memory_store_id: z.string(),
+  path: z.string(),
+  content: z.string().nullable(),
+  content_size_bytes: z.number(),
+  content_sha256: z.string(),
+  memory_version_id: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const MemoryPrefixSchema = z.object({
+  type: z.literal("memory_prefix"),
+  path: z.string(),
+});
+
+export const MemoryActorSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("session_actor"), session_id: z.string() }),
+  z.object({ type: z.literal("api_actor"), api_key_id: z.string() }),
+  z.object({ type: z.literal("user_actor"), user_id: z.string() }),
+  z.object({
+    type: z.literal("service_account_actor"),
+    service_account_id: z.string(),
+  }),
+]);
+
+export const MemoryVersionSchema = z.object({
+  id: z.string(),
+  type: z.literal("memory_version"),
+  memory_store_id: z.string(),
+  memory_id: z.string(),
+  operation: z.enum(["created", "modified", "deleted"]),
+  path: z.string().nullable(),
+  content: z.string().nullable(),
+  content_size_bytes: z.number().nullable(),
+  content_sha256: z.string().nullable(),
+  created_by: MemoryActorSchema.nullable(),
+  created_at: z.string(),
+  redacted_at: z.string().nullable(),
+  redacted_by: MemoryActorSchema.nullable(),
+});
+
 // ---- session events (internal/api/events.go:754-773)
 
 /** internal/domain/event.go:109-111. */
@@ -620,6 +678,12 @@ export type DeploymentPausedReason = z.infer<
 >;
 export type Deployment = z.infer<typeof DeploymentSchema>;
 export type DeploymentRun = z.infer<typeof DeploymentRunSchema>;
+export type MemoryStore = z.infer<typeof MemoryStoreSchema>;
+export type Memory = z.infer<typeof MemorySchema>;
+export type MemoryPrefix = z.infer<typeof MemoryPrefixSchema>;
+export type MemoryListItem = Memory | MemoryPrefix;
+export type MemoryActor = z.infer<typeof MemoryActorSchema>;
+export type MemoryVersion = z.infer<typeof MemoryVersionSchema>;
 export type SessionThread = z.infer<typeof SessionThreadSchema>;
 export type StopReason = z.infer<typeof StopReasonSchema>;
 export type ModelUsage = z.infer<typeof ModelUsageSchema>;

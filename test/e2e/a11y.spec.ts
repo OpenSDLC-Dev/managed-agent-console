@@ -57,6 +57,29 @@ test("deployment list, detail, run error and create form pass axe", async ({
   await expectNoViolations(page);
 });
 
+test("memory store list, detail, memory, version and forms pass axe", async ({
+  page,
+}) => {
+  await signIn(page);
+  const store = "memstore_projectnotes000001";
+  const memory = "mem_projectbrief000000001";
+  const version = "memver_briefmodified000001";
+  for (const [route, ready] of [
+    ["/memory-stores", "Memory stores"],
+    [`/memory-stores/${store}`, "Project notes"],
+    [`/memory-stores/${store}/memories/${memory}`, "/brief.md"],
+    [`/memory-stores/${store}/versions/${version}`, "Memory version"],
+    ["/memory-stores/new", "Create memory store"],
+    [`/memory-stores/${store}/edit`, "Edit Project notes"],
+    [`/memory-stores/${store}/memories/new`, "Create memory"],
+    [`/memory-stores/${store}/memories/${memory}/edit`, "Edit /brief.md"],
+  ] as const) {
+    await page.goto(route);
+    await expect(page.getByRole("heading", { name: ready })).toBeVisible();
+    await expectNoViolations(page);
+  }
+});
+
 /**
  * Waits for a dialog's entry animation to finish before axe measures it.
  * `toBeVisible` resolves the moment the element is painted, which for a

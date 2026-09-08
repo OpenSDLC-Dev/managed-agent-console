@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Bot,
   Boxes,
+  Database,
   FileText,
   KeyRound,
   MessagesSquare,
@@ -22,6 +23,7 @@ import {
   useDeployments,
   useEnvironments,
   useFiles,
+  useMemoryStores,
   useSessions,
   useSkills,
   useVaults,
@@ -69,6 +71,7 @@ function useSearchItems(query: string): Item[] {
   const agents = useAgents({ limit });
   const deployments = useDeployments({ limit });
   const environments = useEnvironments({ limit });
+  const memoryStores = useMemoryStores({ limit });
   const sessions = useSessions({});
   const vaults = useVaults({ limit });
   const skills = useSkills({ limit });
@@ -130,6 +133,17 @@ function useSearchItems(query: string): Item[] {
           icon: Boxes,
         });
     }
+    for (const store of memoryStores.data?.data ?? []) {
+      if (matches(q, store.name, store.id))
+        items.push({
+          key: store.id,
+          label: store.name,
+          detail: store.id,
+          href: `/memory-stores/${store.id}`,
+          group: "Memory stores",
+          icon: Database,
+        });
+    }
     for (const v of vaults.data?.data ?? []) {
       if (matches(q, v.display_name, v.id))
         items.push({
@@ -171,6 +185,7 @@ function useSearchItems(query: string): Item[] {
     sessions.data,
     deployments.data,
     environments.data,
+    memoryStores.data,
     vaults.data,
     skills.data,
     files.data,

@@ -36,6 +36,14 @@ const LISTS: Record<string, unknown> = {
     ],
     next_page: null,
   },
+  "/api/platform/v1/deployments": {
+    data: [{ id: "depl_01", type: "deployment", name: "Daily digest" }],
+    next_page: null,
+  },
+  "/api/platform/v1/memory_stores": {
+    data: [{ id: "memstore_01", type: "memory_store", name: "Shared notes" }],
+    next_page: null,
+  },
   "/api/platform/v1/environments": {
     data: [{ id: "env_01", type: "environment", name: "Prod sandbox" }],
     next_page: null,
@@ -119,6 +127,7 @@ describe("CommandPalette", () => {
       "Agents",
       "Sessions",
       "Deployments",
+      "Memory stores",
       "Environments",
       "Credential vaults",
     ]);
@@ -126,7 +135,7 @@ describe("CommandPalette", () => {
     // The searchable list queries, plus one surface probe per registered
     // surface — each fired exactly once. Derived rather than hardcoded: a
     // seventh surface is why this line was wrong once already.
-    const LIST_QUERIES = 7;
+    const LIST_QUERIES = 8;
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledTimes(
         LIST_QUERIES + Object.keys(SURFACES).length,
@@ -138,6 +147,7 @@ describe("CommandPalette", () => {
         "/api/platform/v1/agents?limit=50",
         "/api/platform/v1/sessions?limit=20",
         "/api/platform/v1/deployments?limit=50",
+        "/api/platform/v1/memory_stores?limit=50",
         "/api/platform/v1/environments?limit=50",
         "/api/platform/v1/vaults?limit=50",
         "/api/platform/v1/skills?limit=50",
@@ -164,12 +174,14 @@ describe("CommandPalette", () => {
     const input = await openPalette();
     setQuery(input, "01");
 
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(8));
     // Sections no longer match, resource groups do.
     expect(screen.queryByText("Go to")).toBeNull();
     for (const header of [
       "Agents",
       "Sessions",
+      "Deployments",
+      "Memory stores",
       "Environments",
       "Vaults",
       "Skills",
@@ -180,6 +192,8 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Support triage")).toBeDefined();
     expect(screen.getByText("agent_01")).toBeDefined();
     expect(screen.getByText("Nightly run")).toBeDefined();
+    expect(screen.getByText("Daily digest")).toBeDefined();
+    expect(screen.getByText("Shared notes")).toBeDefined();
     expect(screen.getByText("Prod sandbox")).toBeDefined();
     expect(screen.getByText("GitHub tokens")).toBeDefined();
     expect(screen.getByText("PDF filler")).toBeDefined();
@@ -275,7 +289,7 @@ describe("CommandPalette", () => {
     renderPalette();
     const input = await openPalette();
     setQuery(input, "01");
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(8));
 
     const selectedLabel = () =>
       screen
@@ -284,6 +298,7 @@ describe("CommandPalette", () => {
 
     expect(selectedLabel()).toContain("Support triage");
 
+    fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(selectedLabel()).toContain("Prod sandbox");
@@ -299,7 +314,7 @@ describe("CommandPalette", () => {
     for (let i = 0; i < 10; i++) fireEvent.keyDown(input, { key: "ArrowDown" });
     await waitFor(() =>
       expect(input.getAttribute("aria-activedescendant")).toBe(
-        "command-palette-results-5",
+        "command-palette-results-7",
       ),
     );
     expect(selectedLabel()).toContain("report.pdf");
@@ -313,7 +328,7 @@ describe("CommandPalette", () => {
     renderPalette();
     const input = await openPalette();
     setQuery(input, "01");
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(8));
 
     const sessionOption = screen
       .getAllByRole("option")
@@ -331,14 +346,14 @@ describe("CommandPalette", () => {
     renderPalette();
     const input = await openPalette();
     setQuery(input, "01");
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(8));
 
     fireEvent.keyDown(input, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
 
     const reopened = await openPalette();
     expect((reopened as HTMLInputElement).value).toBe("");
-    // Back to the destinations — not the six search hits above. Derived from
+    // Back to the destinations — not the resource search hits above. Derived from
     // the nav itself: one per surface plus the console-local Dashboard, and a
     // hardcoded count here has been wrong once already.
     expect(screen.getAllByRole("option")).toHaveLength(NAV_DESTINATIONS.length);

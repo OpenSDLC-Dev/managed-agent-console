@@ -257,3 +257,12 @@ keys remove entries (`internal/api/wire.go:patchMetadata`).
 
 The later verification visit redirected to sign-in; the earlier captured
 reference facts remain the comparison baseline for this slice.
+
+## Memory stores — checked 2026-09-08
+
+The reference account now redirects this area to sign-in, so no new authenticated
+facts were inferred. The local surface follows the already recorded compact
+list/detail/form patterns. Self-hosting adds explicit digest, actor and redaction
+fields because the implemented platform exposes them and operators need to audit
+durable context. Re-shot: memory-store list/detail/create/edit, memory
+create/detail/edit and memory-version detail, both themes.

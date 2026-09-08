@@ -118,8 +118,13 @@ export async function platformPostForm<T>(
   return (await response.json()) as T;
 }
 
-export async function platformDelete<T>(path: string): Promise<T> {
-  const response = await fetch(`/api/platform/${path}`, { method: "DELETE" });
+export async function platformDelete<T>(
+  path: string,
+  params?: Record<string, string | number | boolean | string[] | undefined>,
+): Promise<T> {
+  const response = await fetch(`/api/platform/${path}${queryString(params)}`, {
+    method: "DELETE",
+  });
   await assertOk(response);
   return (await response.json()) as T;
 }

@@ -134,6 +134,7 @@ describe("surfaceOfPath", () => {
     expect(surfaceOfPath("/skills/skill_1")).toBe("skills");
     expect(surfaceOfPath("/agents/agt_1/edit")).toBe("agents");
     expect(surfaceOfPath("/vaults")).toBe("vaults");
+    expect(surfaceOfPath("/memory-stores/memstore_1")).toBe("memory-stores");
   });
 
   it("probe: is undefined for a path that belongs to no surface", () => {
@@ -175,6 +176,7 @@ describe("useSurfaces", () => {
       agents: true,
       sessions: true,
       deployments: true,
+      "memory-stores": true,
       environments: true,
       vaults: true,
       skills: false,

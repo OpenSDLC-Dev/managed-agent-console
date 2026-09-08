@@ -56,6 +56,11 @@ export const SURFACES = {
     label: "Deployments",
     blurb: "Run agents manually or on recurring schedules.",
   },
+  "memory-stores": {
+    path: "v1/memory_stores",
+    label: "Memory stores",
+    blurb: "Durable files shared across agent sessions.",
+  },
   environments: {
     path: "v1/environments",
     label: "Environments",

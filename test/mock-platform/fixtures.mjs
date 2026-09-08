@@ -19,6 +19,109 @@ export const memoryResources = [
   },
 ];
 
+export const memoryStores = [
+  {
+    id: "memstore_projectnotes000001",
+    type: "memory_store",
+    name: "Project notes",
+    description: "Durable research context shared across sessions.",
+    metadata: { owner: "research" },
+    created_at: T0,
+    updated_at: T2,
+    archived_at: null,
+  },
+  {
+    id: "memstore_archivednotes0001",
+    type: "memory_store",
+    name: "Archived notes",
+    description: "Read-only historical context.",
+    metadata: {},
+    created_at: T0,
+    updated_at: T1,
+    archived_at: T2,
+  },
+];
+
+export const memories = [
+  {
+    id: "mem_projectbrief000000001",
+    type: "memory",
+    memory_store_id: memoryStores[0].id,
+    path: "/brief.md",
+    content: "# Project brief\n\nShip the managed-agent console.",
+    content_size_bytes: 48,
+    content_sha256:
+      "174672c520e3883deb34f600e0dab64d46a71b41d00a06a498100dd0b52388a8",
+    memory_version_id: "memver_briefmodified000001",
+    created_at: T0,
+    updated_at: T2,
+  },
+  {
+    id: "mem_decision0000000000001",
+    type: "memory",
+    memory_store_id: memoryStores[0].id,
+    path: "/decisions/architecture.md",
+    content: "Use the platform wire as the source of truth.",
+    content_size_bytes: 45,
+    content_sha256:
+      "4d095793145837da606846eecdcbae980a9e8121863767ae77fbe2a20be51b50",
+    memory_version_id: "memver_decisioncreated0001",
+    created_at: T1,
+    updated_at: T1,
+  },
+];
+
+export const memoryVersions = [
+  {
+    id: "memver_briefmodified000001",
+    type: "memory_version",
+    memory_store_id: memoryStores[0].id,
+    memory_id: memories[0].id,
+    operation: "modified",
+    path: memories[0].path,
+    content: memories[0].content,
+    content_size_bytes: memories[0].content_size_bytes,
+    content_sha256: memories[0].content_sha256,
+    created_by: { type: "user_actor", user_id: "principal_research" },
+    created_at: T2,
+    redacted_at: null,
+    redacted_by: null,
+  },
+  {
+    id: "memver_decisioncreated0001",
+    type: "memory_version",
+    memory_store_id: memoryStores[0].id,
+    memory_id: memories[1].id,
+    operation: "created",
+    path: memories[1].path,
+    content: memories[1].content,
+    content_size_bytes: memories[1].content_size_bytes,
+    content_sha256: memories[1].content_sha256,
+    created_by: {
+      type: "session_actor",
+      session_id: "sesn_research0000000000001",
+    },
+    created_at: T1,
+    redacted_at: null,
+    redacted_by: null,
+  },
+  {
+    id: "memver_briefcreated0000001",
+    type: "memory_version",
+    memory_store_id: memoryStores[0].id,
+    memory_id: memories[0].id,
+    operation: "created",
+    path: "/brief.md",
+    content: null,
+    content_size_bytes: null,
+    content_sha256: null,
+    created_by: { type: "api_actor", api_key_id: "apikey_ci01" },
+    created_at: T0,
+    redacted_at: T1,
+    redacted_by: { type: "user_actor", user_id: "principal_admin" },
+  },
+];
+
 export const agents = [
   {
     id: "agent_researcher00000000001",
