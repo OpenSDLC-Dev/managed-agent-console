@@ -70,3 +70,43 @@ test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await expect(page.getByText("30 8 * * 1-5", { exact: true })).toBeVisible();
   await expect(page.getByText(/agent_taskrunner.*v1/)).toBeVisible();
 });
+
+test("mock deployment endpoints reject malformed collection and schedule inputs", async ({
+  request,
+}) => {
+  const base = {
+    name: "Contract validation",
+    agent: {
+      type: "agent",
+      id: "agent_taskrunner0000000001",
+      version: 1,
+    },
+    environment_id: "env_byoc0000000000000001",
+    initial_events: [{ type: "user.message", content: "Run" }],
+  };
+
+  const paused = await request.post(
+    `http://127.0.0.1:18080/v1/deployments/${DEPLOYMENT}/pause`,
+    { headers: { "x-api-key": "test-key" } },
+  );
+  expect(paused.status()).toBe(200);
+
+  for (const body of [
+    { ...base, vault_ids: "vlt_invalid" },
+    { ...base, resources: { type: "file" } },
+    {
+      ...base,
+      schedule: { type: "interval", expression: "0 9 * * *" },
+    },
+  ]) {
+    const response = await request.post(
+      "http://127.0.0.1:18080/v1/deployments",
+      { headers: { "x-api-key": "test-key" }, data: body },
+    );
+    expect(response.status()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      type: "error",
+      error: { type: "invalid_request_error" },
+    });
+  }
+});

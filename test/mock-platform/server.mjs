@@ -1837,17 +1837,18 @@ const server = createServer(async (req, res) => {
   // Deployments: persisted templates plus their pause/run lifecycle.
   if (req.method === "POST" && url.pathname.startsWith("/v1/deployments")) {
     res.setHeader("content-type", "application/json");
+    const actionMatch = url.pathname.match(
+      /^\/v1\/deployments\/([^/]+)\/(archive|pause|unpause|run)$/,
+    );
     let body;
     try {
-      body = JSON.parse(await readBody(req));
+      const rawBody = (await readBody(req)).toString("utf8");
+      body = actionMatch && rawBody.trim() === "" ? {} : JSON.parse(rawBody);
     } catch {
       res.writeHead(400);
       res.end(envelope("invalid_request_error", "invalid JSON body"));
       return;
     }
-    const actionMatch = url.pathname.match(
-      /^\/v1\/deployments\/([^/]+)\/(archive|pause|unpause|run)$/,
-    );
     if (actionMatch) {
       const deployment = deploymentsStore.find(
         (candidate) => candidate.id === actionMatch[1],
@@ -2080,6 +2081,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     const vaultIds = body.vault_ids ?? existing?.vault_ids ?? [];
+    if (!Array.isArray(vaultIds)) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "vault_ids must be an array"));
+      return;
+    }
     if (
       vaultIds.some(
         (id) =>
@@ -2091,6 +2097,13 @@ const server = createServer(async (req, res) => {
       return;
     }
     if ("resources" in body && body.resources !== null) {
+      if (!Array.isArray(body.resources)) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "resources must be an array"),
+        );
+        return;
+      }
       for (const resource of body.resources) {
         const valid =
           (resource.type === "file" &&
@@ -2115,6 +2128,21 @@ const server = createServer(async (req, res) => {
         }
       }
     }
+    if (
+      body.schedule != null &&
+      (body.schedule.type !== "cron" ||
+        typeof body.schedule.expression !== "string" ||
+        typeof body.schedule.timezone !== "string")
+    ) {
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          'schedule requires type "cron", expression, and timezone',
+        ),
+      );
+      return;
+    }
     const timestamp = now();
     const cleanResources = (body.resources ?? existing?.resources ?? []).map(
       (resource) => {
@@ -2129,7 +2157,7 @@ const server = createServer(async (req, res) => {
         : body.schedule === null
           ? null
           : {
-              type: "cron",
+              type: body.schedule.type,
               expression: body.schedule.expression,
               timezone: body.schedule.timezone,
               last_run_at: existing?.schedule?.last_run_at ?? null,

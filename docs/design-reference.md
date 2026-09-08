@@ -30,10 +30,10 @@ fidelity surface records the mounted-file state until reference access is restor
 The Managed Agents reference remains behind an unavailable sign-in, so this
 slice reuses the recorded compact list, detail-section, action-menu and form
 patterns without claiming a fresh reference comparison. Platform-specific run
-history stays inline on the deployment detail because it is the only served
-place that relates a scheduled fire to its session or stored error. The five
-new deployment surfaces in `test/fidelity/surfaces.ts` were reviewed in Chrome
-in both themes.
+history stays inline on the deployment detail so operators retain the schedule
+and deployment context while following its run records. A run detail page also
+shows the trigger, linked session and stored error. The five new deployment
+surfaces in `test/fidelity/surfaces.ts` were reviewed in Chrome in both themes.
 
 ## Extracted 2026-08-02 from platform.claude.com (light, Managed Agents → Agents)
 

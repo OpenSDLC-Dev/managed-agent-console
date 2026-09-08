@@ -8,7 +8,16 @@ import { Breadcrumb } from "@/components/console/breadcrumb";
 import { IdCell } from "@/components/console/copy-id";
 import { DetailSection, Field, FieldList } from "@/components/console/detail";
 import { DetailSkeleton, ErrorState, Time } from "@/components/console/bits";
+import { PlatformError } from "@/lib/platform/http";
 import { useDeploymentRun } from "@/lib/platform/queries";
+
+const PARENT_MISMATCH = new PlatformError(404, {
+  type: "error",
+  error: {
+    type: "not_found_error",
+    message: "deployment run not found",
+  },
+});
 
 export default function DeploymentRunPage({
   params,
@@ -20,6 +29,7 @@ export default function DeploymentRunPage({
   if (query.error) return <ErrorState error={query.error} />;
   if (query.isPending || !query.data) return <DetailSkeleton />;
   const run = query.data;
+  if (run.deployment_id !== id) return <ErrorState error={PARENT_MISMATCH} />;
   return (
     <div>
       <Breadcrumb
