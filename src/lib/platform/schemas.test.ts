@@ -30,6 +30,8 @@ import {
   ApiKeyIssuedSchema,
   ApiKeyListSchema,
   ApiKeySchema,
+  DeploymentRunSchema,
+  DeploymentSchema,
   EnvironmentKeyIssuedSchema,
   EnvironmentKeyPageSchema,
   EnvironmentKeySchema,
@@ -99,6 +101,11 @@ describe("mock fixtures conform to the platform wire", () => {
     }
   });
 
+  it("deployments and deployment runs", () => {
+    each(DeploymentSchema, fixtures.deployments, "deployments");
+    each(DeploymentRunSchema, fixtures.deploymentRuns, "deploymentRuns");
+  });
+
   it("vaults and their credentials", () => {
     each(VaultSchema, fixtures.vaults, "vaults");
     eachIn(
@@ -130,6 +137,8 @@ describe("mock fixtures conform to the platform wire", () => {
     expect(Object.keys(fixtures).sort()).toEqual([
       "agentVersions",
       "agents",
+      "deploymentRuns",
+      "deployments",
       "environmentKeys",
       "environments",
       "files",
@@ -452,6 +461,65 @@ describe("the mock's constructed write-path responses conform too", () => {
       EnvironmentSchema,
       archived,
       `POST /v1/environments/${id}/archive`,
+    );
+  });
+
+  it("deployments: create, update, pause, run, resume, archive", async () => {
+    const created = await postJSON("/v1/deployments", {
+      name: "conformance deployment",
+      agent: {
+        type: "agent",
+        id: fixtures.agents[0].id,
+        version: fixtures.agents[0].version,
+      },
+      environment_id: fixtures.environments[0].id,
+      initial_events: [{ type: "user.message", content: "Run it." }],
+      resources: [
+        {
+          type: "github_repository",
+          url: "https://github.com/example/project",
+          authorization_token: "write-only-test-token",
+        },
+      ],
+      schedule: { type: "cron", expression: "0 9 * * 1", timezone: "UTC" },
+    });
+    expectConforms(DeploymentSchema, created, "POST /v1/deployments");
+    expect(JSON.stringify(created)).not.toContain("write-only-test-token");
+    const id = (created as { id: string }).id;
+
+    const updated = await postJSON(`/v1/deployments/${id}`, {
+      description: "updated",
+      metadata: { owner: "console" },
+    });
+    expectConforms(DeploymentSchema, updated, `POST /v1/deployments/${id}`);
+
+    const paused = await postJSON(`/v1/deployments/${id}/pause`, {});
+    expectConforms(
+      DeploymentSchema,
+      paused,
+      `POST /v1/deployments/${id}/pause`,
+    );
+    expect(paused).toMatchObject({
+      status: "paused",
+      paused_reason: { type: "manual" },
+    });
+
+    const run = await postJSON(`/v1/deployments/${id}/run`, {});
+    expectConforms(DeploymentRunSchema, run, `POST /v1/deployments/${id}/run`);
+    const session = await call(
+      `/v1/sessions/${(run as { session_id: string }).session_id}`,
+      { method: "GET" },
+    );
+    expectConforms(SessionSchema, session, "deployment-created session");
+    expect(session).toMatchObject({ deployment_id: id });
+
+    const resumed = await postJSON(`/v1/deployments/${id}/unpause`, {});
+    expect(resumed).toMatchObject({ status: "active", paused_reason: null });
+    const archived = await postJSON(`/v1/deployments/${id}/archive`, {});
+    expectConforms(
+      DeploymentSchema,
+      archived,
+      `POST /v1/deployments/${id}/archive`,
     );
   });
 

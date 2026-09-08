@@ -1,0 +1,161 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { DataTable, type Column } from "@/components/console/data-table";
+import { Pager } from "@/components/console/pager";
+import { IdCell } from "@/components/console/copy-id";
+import {
+  Day,
+  EmptyState,
+  ErrorState,
+  StatusBadge,
+  UnavailableSurface,
+} from "@/components/console/bits";
+import { ResourceActions } from "@/components/console/resource-actions";
+import { useArchiveDeployment, useDeployments } from "@/lib/platform/queries";
+import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
+import { useCursorPage } from "@/lib/platform/use-cursor-page";
+import type { Deployment } from "@/lib/platform/types";
+
+function RowActions({ deployment }: { deployment: Deployment }) {
+  const archive = useArchiveDeployment(deployment.id);
+  return (
+    <ResourceActions
+      resource="deployment"
+      archived={!!deployment.archived_at}
+      onArchive={deployment.archived_at ? undefined : () => archive.mutate()}
+      archivePending={archive.isPending}
+    />
+  );
+}
+
+const COLUMNS: Column<Deployment>[] = [
+  { key: "id", header: "ID", cell: (row) => <IdCell id={row.id} /> },
+  { key: "name", header: "Name", className: "w-full", cell: (row) => row.name },
+  {
+    key: "status",
+    header: "Status",
+    cell: (row) =>
+      row.archived_at ? (
+        <span data-status="archived">Archived</span>
+      ) : (
+        <span data-status={row.status}>
+          <StatusBadge status={row.status} />
+        </span>
+      ),
+  },
+  {
+    key: "agent",
+    header: "Agent",
+    cell: (row) => (
+      <span className="font-mono text-[13px]">
+        {row.agent.id} · v{row.agent.version}
+      </span>
+    ),
+  },
+  {
+    key: "schedule",
+    header: "Schedule",
+    cell: (row) =>
+      row.schedule ? (
+        <span className="font-mono text-[13px]">{row.schedule.expression}</span>
+      ) : (
+        "Manual"
+      ),
+  },
+  {
+    key: "updated",
+    header: "Updated",
+    cell: (row) => <Day iso={row.updated_at} />,
+  },
+  {
+    key: "actions",
+    header: "Actions",
+    cell: (row) => <RowActions deployment={row} />,
+  },
+];
+
+type View = "live" | "active" | "paused" | "archived";
+
+export default function DeploymentsPage() {
+  const router = useRouter();
+  const [view, setView] = useState<View>("live");
+  const pager = useCursorPage(view);
+  const query = useDeployments({
+    page: pager.page,
+    ...(view === "archived" ? { include_archived: true } : {}),
+    ...(view === "active" || view === "paused" ? { status: view } : {}),
+  });
+
+  if (isUnimplemented(query.error))
+    return <UnavailableSurface surface="deployments" />;
+
+  return (
+    <div>
+      <PageHeader
+        title="Deployments"
+        subtitle={SURFACES.deployments.blurb}
+        actions={
+          <Button
+            size="sm"
+            className="h-8"
+            onClick={() => router.push("/deployments/new")}
+          >
+            <Plus className="size-4" /> Create deployment
+          </Button>
+        }
+      />
+      <div className="pb-4">
+        <Select value={view} onValueChange={(value) => setView(value as View)}>
+          <SelectTrigger aria-label="Deployment status" className="h-8 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="live">All live</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
+            <SelectItem value="archived">Include archived</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {query.error ? (
+        <ErrorState error={query.error} />
+      ) : (
+        <>
+          <DataTable
+            columns={COLUMNS}
+            rows={query.data?.data ?? []}
+            rowKey={(row) => row.id}
+            loading={query.isPending}
+            onRowClick={(row) => router.push(`/deployments/${row.id}`)}
+            empty={
+              <EmptyState
+                title="No deployments yet"
+                hint="Create a deployment to run an agent manually or on a schedule."
+              />
+            }
+          />
+          <Pager
+            hasPrev={pager.hasPrev}
+            hasNext={!!query.data?.next_page}
+            onPrev={pager.goPrev}
+            onNext={() =>
+              query.data?.next_page && pager.goNext(query.data.next_page)
+            }
+          />
+        </>
+      )}
+    </div>
+  );
+}

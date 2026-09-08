@@ -26,6 +26,8 @@ import type {
   Agent,
   ApiKey,
   ApiKeyIssued,
+  Deployment,
+  DeploymentRun,
   Environment,
   EnvironmentKeyIssued,
   EnvironmentKeyPage,
@@ -152,6 +154,58 @@ export function useSession(id: string, refetchInterval?: number) {
     queryKey: ["session", id],
     queryFn: () => platformGet<Session>(`v1/sessions/${id}`),
     refetchInterval,
+  });
+}
+
+export function useDeployments(params: {
+  page?: string;
+  include_archived?: boolean;
+  status?: "active" | "paused";
+  agent_id?: string;
+  limit?: number;
+  "created_at[gte]"?: string;
+  "created_at[lte]"?: string;
+}) {
+  return useQuery({
+    queryKey: ["deployments", params],
+    queryFn: () =>
+      platformGet<Page<Deployment>>("v1/deployments", {
+        limit: 20,
+        ...params,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useDeployment(id: string) {
+  return useQuery({
+    queryKey: ["deployment", id],
+    queryFn: () => platformGet<Deployment>(`v1/deployments/${id}`),
+  });
+}
+
+export function useDeploymentRuns(params: {
+  page?: string;
+  deployment_id?: string;
+  trigger_type?: "manual" | "schedule";
+  has_error?: boolean;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["deployment-runs", params],
+    queryFn: () =>
+      platformGet<Page<DeploymentRun>>("v1/deployment_runs", {
+        limit: 20,
+        ...params,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useDeploymentRun(id: string) {
+  return useQuery({
+    queryKey: ["deployment-run", id],
+    queryFn: () => platformGet<DeploymentRun>(`v1/deployment_runs/${id}`),
   });
 }
 
@@ -456,6 +510,94 @@ export function useArchiveSessionThread(sessionId: string) {
         queryKey: ["session-threads", sessionId],
       });
       void client.invalidateQueries({ queryKey: ["session", sessionId] });
+    },
+  });
+}
+
+export interface DeploymentWriteBody {
+  name?: string;
+  description?: string | null;
+  agent?: string | { type: "agent"; id: string; version?: number };
+  environment_id?: string;
+  vault_ids?: string[] | null;
+  initial_events?: object[];
+  resources?: ResourceInput[] | null;
+  metadata?: Record<string, string | null> | null;
+  schedule?: {
+    type: "cron";
+    expression: string;
+    timezone: string;
+  } | null;
+}
+
+function deploymentMutationSuccess(
+  client: ReturnType<typeof useQueryClient>,
+  deployment: Deployment,
+) {
+  client.setQueryData(["deployment", deployment.id], deployment);
+  void client.invalidateQueries({ queryKey: ["deployments"] });
+}
+
+export function useCreateDeployment() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: DeploymentWriteBody) =>
+      platformPost<Deployment>("v1/deployments", body),
+    onSuccess: (deployment) => deploymentMutationSuccess(client, deployment),
+  });
+}
+
+export function useUpdateDeployment(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: DeploymentWriteBody) =>
+      platformPost<Deployment>(`v1/deployments/${id}`, body),
+    onSuccess: (deployment) => deploymentMutationSuccess(client, deployment),
+  });
+}
+
+export function useArchiveDeployment(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Archive deployment failed" },
+    mutationFn: () =>
+      platformPost<Deployment>(`v1/deployments/${id}/archive`, {}),
+    onSuccess: (deployment) => deploymentMutationSuccess(client, deployment),
+  });
+}
+
+export function usePauseDeployment(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Pause deployment failed" },
+    mutationFn: () =>
+      platformPost<Deployment>(`v1/deployments/${id}/pause`, {}),
+    onSuccess: (deployment) => deploymentMutationSuccess(client, deployment),
+  });
+}
+
+export function useUnpauseDeployment(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Resume deployment failed" },
+    mutationFn: () =>
+      platformPost<Deployment>(`v1/deployments/${id}/unpause`, {}),
+    onSuccess: (deployment) => deploymentMutationSuccess(client, deployment),
+  });
+}
+
+export function useRunDeployment(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Run deployment failed" },
+    mutationFn: () =>
+      platformPost<DeploymentRun>(`v1/deployments/${id}/run`, {}),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["deployment-runs"] });
+      void client.invalidateQueries({ queryKey: ["deployment", id] });
+      void client.invalidateQueries({ queryKey: ["sessions"] });
     },
   });
 }

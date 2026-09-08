@@ -51,6 +51,11 @@ export const SURFACES = {
     label: "Sessions",
     blurb: "Trace and debug agent sessions.",
   },
+  deployments: {
+    path: "v1/deployments",
+    label: "Deployments",
+    blurb: "Run agents manually or on recurring schedules.",
+  },
   environments: {
     path: "v1/environments",
     label: "Environments",
@@ -130,7 +135,7 @@ export function isUnimplemented(error: unknown): boolean {
  * 5xx leaves it available, so a struggling platform degrades to "shown and
  * erroring" rather than to "silently missing". Undefined until the probe
  * answers, and callers show everything while unknown — a deployment that
- * serves all six never flickers.
+ * serves every surface never flickers.
  */
 export function useSurfaces(): Record<Surface, boolean> | undefined {
   return useQuery({

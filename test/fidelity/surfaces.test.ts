@@ -68,6 +68,7 @@ describe("the fidelity surface manifest", () => {
       ),
     );
     const unshot = appRoutes()
+      .map((route) => route.replace(/\[[^\]]+\]/g, "[id]"))
       .filter((route) => !(route in NO_SURFACE))
       .filter((route) => !covered.has(route));
     expect(unshot).toEqual([]);

@@ -25,6 +25,16 @@ and memory-store attachments are creation-time inputs; repositories remain for a
 session's lifetime and expose only write-only token rotation. The `session-resources`
 fidelity surface records the mounted-file state until reference access is restored.
 
+## Deployments — checked 2026-09-08
+
+The Managed Agents reference remains behind an unavailable sign-in, so this
+slice reuses the recorded compact list, detail-section, action-menu and form
+patterns without claiming a fresh reference comparison. Platform-specific run
+history stays inline on the deployment detail so operators retain the schedule
+and deployment context while following its run records. A run detail page also
+shows the trigger, linked session and stored error. The five new deployment
+surfaces in `test/fidelity/surfaces.ts` were reviewed in Chrome in both themes.
+
 ## Extracted 2026-08-02 from platform.claude.com (light, Managed Agents → Agents)
 
 Method: `getComputedStyle` on live elements in Chrome.

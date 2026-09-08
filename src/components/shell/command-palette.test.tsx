@@ -118,14 +118,15 @@ describe("CommandPalette", () => {
       "Skills",
       "Agents",
       "Sessions",
+      "Deployments",
       "Environments",
       "Credential vaults",
     ]);
 
-    // The six searchable list queries, plus one surface probe per registered
+    // The searchable list queries, plus one surface probe per registered
     // surface — each fired exactly once. Derived rather than hardcoded: a
     // seventh surface is why this line was wrong once already.
-    const LIST_QUERIES = 6;
+    const LIST_QUERIES = 7;
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledTimes(
         LIST_QUERIES + Object.keys(SURFACES).length,
@@ -136,6 +137,7 @@ describe("CommandPalette", () => {
       expect.arrayContaining([
         "/api/platform/v1/agents?limit=50",
         "/api/platform/v1/sessions?limit=20",
+        "/api/platform/v1/deployments?limit=50",
         "/api/platform/v1/environments?limit=50",
         "/api/platform/v1/vaults?limit=50",
         "/api/platform/v1/skills?limit=50",

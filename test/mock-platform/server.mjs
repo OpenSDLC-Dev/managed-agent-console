@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 import {
   agents,
   agentVersions,
+  deployments,
+  deploymentRuns,
   environments,
   environmentKeys,
   files,
@@ -69,6 +71,10 @@ let environmentCounter = 1;
 let filesStore = [];
 let fileCounter = 1;
 let sessionCounter = 1;
+let deploymentsStore = [];
+let deploymentRunsStore = [];
+let deploymentCounter = 1;
+let deploymentRunCounter = 1;
 let threadCounter = 1;
 let resourceCounter = 1;
 let vaultsStore = [];
@@ -188,6 +194,8 @@ function resetStore() {
   agentsStore = structuredClone(agents);
   agentVersionsStore = structuredClone(agentVersions);
   environmentsStore = structuredClone(environments);
+  deploymentsStore = structuredClone(deployments);
+  deploymentRunsStore = structuredClone(deploymentRuns);
   filesStore = structuredClone(files);
   vaultsStore = structuredClone(vaults);
   vaultCredsStore = structuredClone(vaultCredentials);
@@ -197,6 +205,8 @@ function resetStore() {
   environmentCounter = 1;
   fileCounter = 1;
   sessionCounter = 1;
+  deploymentCounter = 1;
+  deploymentRunCounter = 1;
   threadCounter = 1;
   resourceCounter = 1;
   vaultCounter = 1;
@@ -880,6 +890,46 @@ function route(req, url) {
   }
   const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
   if (sessionMatch) return store.get(sessionMatch[1])?.session ?? null;
+
+  if (path === "/v1/deployments") {
+    let rows = includeArchived
+      ? deploymentsStore
+      : deploymentsStore.filter(notArchived);
+    const status = url.searchParams.get("status");
+    if (status) rows = rows.filter((row) => row.status === status);
+    const agentId = url.searchParams.get("agent_id");
+    if (agentId) rows = rows.filter((row) => row.agent.id === agentId);
+    const createdGte = url.searchParams.get("created_at[gte]");
+    const createdLte = url.searchParams.get("created_at[lte]");
+    if (createdGte) rows = rows.filter((row) => row.created_at >= createdGte);
+    if (createdLte) rows = rows.filter((row) => row.created_at <= createdLte);
+    return keysetPage(rows, url);
+  }
+  const deploymentMatch = path.match(/^\/v1\/deployments\/([^/]+)$/);
+  if (deploymentMatch)
+    return (
+      deploymentsStore.find((row) => row.id === deploymentMatch[1]) ?? null
+    );
+
+  if (path === "/v1/deployment_runs") {
+    let rows = deploymentRunsStore;
+    const deploymentId = url.searchParams.get("deployment_id");
+    if (deploymentId)
+      rows = rows.filter((row) => row.deployment_id === deploymentId);
+    const triggerType = url.searchParams.get("trigger_type");
+    if (triggerType)
+      rows = rows.filter((row) => row.trigger_context.type === triggerType);
+    const hasError = url.searchParams.get("has_error");
+    if (hasError !== null)
+      rows = rows.filter((row) => !!row.error === (hasError === "true"));
+    return keysetPage(rows, url);
+  }
+  const deploymentRunMatch = path.match(/^\/v1\/deployment_runs\/([^/]+)$/);
+  if (deploymentRunMatch)
+    return (
+      deploymentRunsStore.find((row) => row.id === deploymentRunMatch[1]) ??
+      null
+    );
 
   const threadsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads$/);
   if (threadsMatch) {
@@ -1781,6 +1831,385 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(200);
     res.end(JSON.stringify(session));
+    return;
+  }
+
+  // Deployments: persisted templates plus their pause/run lifecycle.
+  if (req.method === "POST" && url.pathname.startsWith("/v1/deployments")) {
+    res.setHeader("content-type", "application/json");
+    const actionMatch = url.pathname.match(
+      /^\/v1\/deployments\/([^/]+)\/(archive|pause|unpause|run)$/,
+    );
+    let body;
+    try {
+      const rawBody = (await readBody(req)).toString("utf8");
+      body = actionMatch && rawBody.trim() === "" ? {} : JSON.parse(rawBody);
+    } catch {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "invalid JSON body"));
+      return;
+    }
+    if (actionMatch) {
+      const deployment = deploymentsStore.find(
+        (candidate) => candidate.id === actionMatch[1],
+      );
+      if (!deployment) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such deployment"));
+        return;
+      }
+      const action = actionMatch[2];
+      if (deployment.archived_at && action !== "archive") {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "deployment is archived"));
+        return;
+      }
+      if (action === "archive") {
+        deployment.archived_at ??= now();
+        deployment.updated_at = deployment.archived_at;
+        // The platform computes archived deployments as active regardless of
+        // the pause columns it retains internally.
+        deployment.status = "active";
+        deployment.paused_reason = null;
+        res.writeHead(200);
+        res.end(JSON.stringify(deployment));
+        return;
+      }
+      if (action === "pause" || action === "unpause") {
+        deployment.status = action === "pause" ? "paused" : "active";
+        deployment.paused_reason =
+          action === "pause" ? { type: "manual" } : null;
+        deployment.updated_at = now();
+        res.writeHead(200);
+        res.end(JSON.stringify(deployment));
+        return;
+      }
+
+      const sourceAgent =
+        agentVersionsStore[deployment.agent.id]?.find(
+          (candidate) => candidate.version === deployment.agent.version,
+        ) ??
+        agentsStore.find((candidate) => candidate.id === deployment.agent.id);
+      const timestamp = now();
+      const sessionResources = deployment.resources.map((resource) => {
+        if (resource.type === "memory_store") {
+          const memory = memoryResources.find(
+            (candidate) =>
+              candidate.memory_store_id === resource.memory_store_id,
+          );
+          return {
+            ...structuredClone(memory),
+            access: resource.access ?? "read_write",
+            instructions: resource.instructions ?? null,
+          };
+        }
+        if (resource.type === "github_repository") {
+          return {
+            id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
+            type: "github_repository",
+            url: resource.url,
+            mount_path:
+              resource.mount_path ??
+              `/workspace/${resource.url
+                .split("/")
+                .at(-1)
+                .replace(/\.git$/, "")}`,
+            checkout: resource.checkout ?? null,
+            created_at: timestamp,
+            updated_at: timestamp,
+          };
+        }
+        return {
+          id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
+          type: "file",
+          file_id: resource.file_id,
+          mount_path:
+            resource.mount_path ?? `/mnt/session/uploads/${resource.file_id}`,
+          created_at: timestamp,
+          updated_at: timestamp,
+        };
+      });
+      const session = {
+        id: `sesn_deploy${String(sessionCounter++).padStart(6, "0")}`,
+        type: "session",
+        agent: mockSessionAgent(sourceAgent),
+        environment_id: deployment.environment_id,
+        status: "idle",
+        title: "",
+        metadata: {},
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation: {
+            ephemeral_1h_input_tokens: 0,
+            ephemeral_5m_input_tokens: 0,
+          },
+        },
+        stats: { active_seconds: 0, duration_seconds: 0 },
+        outcome_evaluations: [],
+        resources: sessionResources,
+        vault_ids: structuredClone(deployment.vault_ids),
+        deployment_id: deployment.id,
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived_at: null,
+      };
+      const thread = {
+        id: `sthr_deploy${String(threadCounter++).padStart(6, "0")}`,
+        type: "session_thread",
+        session_id: session.id,
+        parent_thread_id: null,
+        agent: mockThreadAgent(sourceAgent),
+        status: "idle",
+        usage: structuredClone(session.usage),
+        stats: { active_seconds: 0, duration_seconds: 0, startup_seconds: 0 },
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived_at: null,
+      };
+      const events = deployment.initial_events.map((event) => ({
+        ...structuredClone(event),
+        id: nextEventId(),
+        processed_at: timestamp,
+      }));
+      store.set(session.id, {
+        session,
+        events,
+        subscribers: new Set(),
+        threads: [thread],
+        threadEvents: { [thread.id]: structuredClone(events) },
+        threadSubscribers: new Map(),
+        timers: new Set(),
+      });
+      const run = {
+        id: `drun_mock${String(deploymentRunCounter++).padStart(6, "0")}`,
+        type: "deployment_run",
+        deployment_id: deployment.id,
+        trigger_context: { type: "manual" },
+        session_id: session.id,
+        error: null,
+        agent: structuredClone(deployment.agent),
+        created_at: timestamp,
+      };
+      deploymentRunsStore.unshift(run);
+      res.writeHead(200);
+      res.end(JSON.stringify(run));
+      return;
+    }
+
+    const itemMatch = url.pathname.match(/^\/v1\/deployments\/([^/]+)$/);
+    const existing = itemMatch
+      ? deploymentsStore.find((candidate) => candidate.id === itemMatch[1])
+      : null;
+    if (itemMatch && !existing) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such deployment"));
+      return;
+    }
+    if (existing?.archived_at) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "deployment is archived"));
+      return;
+    }
+    const allowed = new Set([
+      "name",
+      "description",
+      "agent",
+      "environment_id",
+      "vault_ids",
+      "initial_events",
+      "resources",
+      "metadata",
+      "schedule",
+    ]);
+    for (const key of Object.keys(body)) {
+      if (!allowed.has(key)) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", `unknown field "${key}"`));
+        return;
+      }
+    }
+    const required = ["name", "agent", "environment_id", "initial_events"];
+    if (!existing && required.some((key) => !(key in body))) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "missing required field"));
+      return;
+    }
+    if (
+      "initial_events" in body &&
+      (!Array.isArray(body.initial_events) || body.initial_events.length === 0)
+    ) {
+      res.writeHead(400);
+      res.end(
+        envelope("invalid_request_error", "initial_events must be non-empty"),
+      );
+      return;
+    }
+    const currentAgent = body.agent ?? existing?.agent;
+    const agentId =
+      typeof currentAgent === "string" ? currentAgent : currentAgent?.id;
+    const requestedVersion =
+      typeof currentAgent === "object" ? currentAgent?.version : undefined;
+    const agent = requestedVersion
+      ? agentVersionsStore[agentId]?.find(
+          (candidate) => candidate.version === requestedVersion,
+        )
+      : agentsStore.find((candidate) => candidate.id === agentId);
+    if (!agent || agent.archived_at) {
+      res.writeHead(agent ? 400 : 404);
+      res.end(
+        envelope(
+          agent ? "invalid_request_error" : "not_found_error",
+          agent ? "agent is archived" : "no such agent",
+        ),
+      );
+      return;
+    }
+    const environmentId = body.environment_id ?? existing?.environment_id;
+    const environment = environmentsStore.find(
+      (candidate) => candidate.id === environmentId,
+    );
+    if (!environment || environment.archived_at) {
+      res.writeHead(environment ? 400 : 404);
+      res.end(
+        envelope(
+          environment ? "invalid_request_error" : "not_found_error",
+          environment ? "environment is archived" : "no such environment",
+        ),
+      );
+      return;
+    }
+    const vaultIds = body.vault_ids ?? existing?.vault_ids ?? [];
+    if (!Array.isArray(vaultIds)) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", "vault_ids must be an array"));
+      return;
+    }
+    if (
+      vaultIds.some(
+        (id) =>
+          !vaultsStore.some((vault) => vault.id === id && !vault.archived_at),
+      )
+    ) {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", "no such live vault"));
+      return;
+    }
+    if ("resources" in body && body.resources !== null) {
+      if (!Array.isArray(body.resources)) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "resources must be an array"),
+        );
+        return;
+      }
+      for (const resource of body.resources) {
+        const valid =
+          (resource.type === "file" &&
+            filesStore.some((file) => file.id === resource.file_id)) ||
+          (resource.type === "memory_store" &&
+            memoryResources.some(
+              (memory) => memory.memory_store_id === resource.memory_store_id,
+            ) &&
+            [undefined, "read_only", "read_write"].includes(resource.access)) ||
+          (resource.type === "github_repository" &&
+            typeof resource.authorization_token === "string" &&
+            resource.authorization_token.length > 0 &&
+            /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
+              resource.url ?? "",
+            ));
+        if (!valid) {
+          res.writeHead(400);
+          res.end(
+            envelope("invalid_request_error", "invalid deployment resource"),
+          );
+          return;
+        }
+      }
+    }
+    if (
+      body.schedule != null &&
+      (body.schedule.type !== "cron" ||
+        typeof body.schedule.expression !== "string" ||
+        typeof body.schedule.timezone !== "string")
+    ) {
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          'schedule requires type "cron", expression, and timezone',
+        ),
+      );
+      return;
+    }
+    const timestamp = now();
+    const cleanResources = (body.resources ?? existing?.resources ?? []).map(
+      (resource) => {
+        const clean = { ...resource };
+        delete clean.authorization_token;
+        return clean;
+      },
+    );
+    const renderedSchedule =
+      body.schedule === undefined
+        ? (existing?.schedule ?? null)
+        : body.schedule === null
+          ? null
+          : {
+              type: body.schedule.type,
+              expression: body.schedule.expression,
+              timezone: body.schedule.timezone,
+              last_run_at: existing?.schedule?.last_run_at ?? null,
+              upcoming_runs_at: Array.from({ length: 5 }, (_, index) =>
+                new Date(Date.now() + (index + 1) * 86_400_000)
+                  .toISOString()
+                  .replace(/\.\d{3}Z$/, "Z"),
+              ),
+            };
+    if (existing) {
+      if ("name" in body) existing.name = body.name;
+      if ("description" in body) existing.description = body.description;
+      existing.agent = { type: "agent", id: agent.id, version: agent.version };
+      existing.environment_id = environment.id;
+      if ("vault_ids" in body) existing.vault_ids = body.vault_ids ?? [];
+      if ("initial_events" in body)
+        existing.initial_events = body.initial_events;
+      if ("resources" in body) existing.resources = cleanResources;
+      if ("metadata" in body) {
+        const next = { ...existing.metadata };
+        for (const [key, value] of Object.entries(body.metadata ?? {}))
+          if (value === null) delete next[key];
+          else next[key] = value;
+        existing.metadata = next;
+      }
+      existing.schedule = renderedSchedule;
+      existing.updated_at = timestamp;
+      res.writeHead(200);
+      res.end(JSON.stringify(existing));
+      return;
+    }
+    const deployment = {
+      id: `depl_mock${String(deploymentCounter++).padStart(6, "0")}`,
+      type: "deployment",
+      name: body.name,
+      description: body.description ?? null,
+      agent: { type: "agent", id: agent.id, version: agent.version },
+      environment_id: environment.id,
+      vault_ids: body.vault_ids ?? [],
+      initial_events: body.initial_events,
+      resources: cleanResources,
+      metadata: body.metadata ?? {},
+      schedule: renderedSchedule,
+      status: "active",
+      paused_reason: null,
+      created_at: timestamp,
+      updated_at: timestamp,
+      archived_at: null,
+    };
+    deploymentsStore.unshift(deployment);
+    res.writeHead(200);
+    res.end(JSON.stringify(deployment));
     return;
   }
 

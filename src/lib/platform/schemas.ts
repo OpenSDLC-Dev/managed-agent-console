@@ -233,6 +233,88 @@ export const SessionSchema = z.object({
   archived_at: z.string().nullable(),
 });
 
+// ---- deployments (internal/domain/deployment.go, internal/api/deployments.go)
+
+export const AgentReferenceSchema = z.object({
+  type: z.literal("agent"),
+  id: z.string(),
+  version: z.number(),
+});
+
+export const DeploymentResourceSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("file"),
+    file_id: z.string(),
+    mount_path: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("github_repository"),
+    url: z.string(),
+    checkout: z
+      .discriminatedUnion("type", [
+        z.object({ type: z.literal("branch"), name: z.string() }),
+        z.object({ type: z.literal("commit"), sha: z.string() }),
+      ])
+      .optional(),
+    mount_path: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("memory_store"),
+    memory_store_id: z.string(),
+    access: z.enum(["read_only", "read_write"]).optional(),
+    instructions: z.string().nullable().optional(),
+  }),
+]);
+
+export const DeploymentScheduleSchema = z.object({
+  type: z.literal("cron"),
+  expression: z.string(),
+  timezone: z.string(),
+  last_run_at: z.string().nullable(),
+  upcoming_runs_at: z.array(z.string()),
+});
+
+export const DeploymentPausedReasonSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("manual") }),
+  z.object({
+    type: z.literal("error"),
+    error: z.object({ type: z.string() }),
+  }),
+]);
+
+export const DeploymentSchema = z.object({
+  id: z.string(),
+  type: z.literal("deployment"),
+  name: z.string(),
+  description: z.string().nullable(),
+  agent: AgentReferenceSchema,
+  environment_id: z.string(),
+  vault_ids: z.array(z.string()),
+  initial_events: z.array(z.unknown()),
+  resources: z.array(DeploymentResourceSchema),
+  metadata: z.record(z.string(), z.string()),
+  schedule: DeploymentScheduleSchema.nullable(),
+  status: z.enum(["active", "paused"]),
+  paused_reason: DeploymentPausedReasonSchema.nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  archived_at: z.string().nullable(),
+});
+
+export const DeploymentRunSchema = z.object({
+  id: z.string(),
+  type: z.literal("deployment_run"),
+  deployment_id: z.string(),
+  trigger_context: z.discriminatedUnion("type", [
+    z.object({ type: z.literal("manual") }),
+    z.object({ type: z.literal("schedule"), scheduled_at: z.string() }),
+  ]),
+  session_id: z.string().nullable(),
+  error: z.object({ type: z.string(), message: z.string() }).nullable(),
+  agent: AgentReferenceSchema,
+  created_at: z.string(),
+});
+
 // ---- session events (internal/api/events.go:754-773)
 
 /** internal/domain/event.go:109-111. */
@@ -530,6 +612,14 @@ export type SessionThreadAgent = z.infer<typeof SessionThreadAgentSchema>;
 export type SessionMultiagent = z.infer<typeof SessionMultiagentSchema>;
 export type SessionResource = z.infer<typeof SessionResourceSchema>;
 export type Session = z.infer<typeof SessionSchema>;
+export type AgentReference = z.infer<typeof AgentReferenceSchema>;
+export type DeploymentResource = z.infer<typeof DeploymentResourceSchema>;
+export type DeploymentSchedule = z.infer<typeof DeploymentScheduleSchema>;
+export type DeploymentPausedReason = z.infer<
+  typeof DeploymentPausedReasonSchema
+>;
+export type Deployment = z.infer<typeof DeploymentSchema>;
+export type DeploymentRun = z.infer<typeof DeploymentRunSchema>;
 export type SessionThread = z.infer<typeof SessionThreadSchema>;
 export type StopReason = z.infer<typeof StopReasonSchema>;
 export type ModelUsage = z.infer<typeof ModelUsageSchema>;

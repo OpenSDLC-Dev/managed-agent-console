@@ -10,9 +10,11 @@ type InitialResource = Exclude<ResourceInput, { type: "file" }>;
 export function InitialResources({
   resources,
   onChange,
+  owner = "session",
 }: {
   resources: InitialResource[];
   onChange: (resources: InitialResource[]) => void;
+  owner?: "session" | "deployment";
 }) {
   const update = (index: number, value: InitialResource) =>
     onChange(resources.map((resource, i) => (i === index ? value : resource)));
@@ -20,8 +22,8 @@ export function InitialResources({
     <div className="space-y-3">
       <p className="text-sm font-medium">Repositories and memory stores</p>
       <p className="text-xs text-muted-foreground">
-        Attach these when creating the session. Repositories remain attached for
-        its lifetime.
+        Attach these when creating the {owner}. Repositories remain attached to
+        every {owner === "session" ? "session" : "session it starts"}.
       </p>
       {resources.map((resource, index) => (
         <fieldset key={index} className="space-y-2 rounded-lg border p-3">

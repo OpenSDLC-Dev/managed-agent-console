@@ -40,3 +40,8 @@ added after creation. Repository and memory-store inputs therefore live on sessi
 creation; repository deletion is refused by the platform, while its token-rotation
 endpoint accepts a replacement without returning it. A local contract run added
 and removed a file resource without sending an agent turn.
+
+Deployments: the local control-plane contract covered create/update,
+pause/manual-run/resume/archive, the pinned Agent snapshot, and run retention
+after its Session is deleted. The self-hosted contract environment has no
+worker, so this exercised no model turn.

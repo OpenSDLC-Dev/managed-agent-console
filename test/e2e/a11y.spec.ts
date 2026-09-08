@@ -32,6 +32,31 @@ test("agents list passes axe in light and dark themes", async ({ page }) => {
   await expectNoViolations(page);
 });
 
+test("deployment list, detail, run error and create form pass axe", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/deployments");
+  await expect(
+    page.getByRole("heading", { name: "Deployments" }),
+  ).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto("/deployments/depl_weeklyresearch000001");
+  await expect(page.getByTestId("deployment-runs")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto(
+    "/deployments/depl_weeklyresearch000001/runs/drun_failed000000000001",
+  );
+  await expect(page.getByTestId("deployment-run-error")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto("/deployments/new");
+  await expect(page.getByLabel("Name")).toBeVisible();
+  await expectNoViolations(page);
+});
+
 /**
  * Waits for a dialog's entry animation to finish before axe measures it.
  * `toBeVisible` resolves the moment the element is painted, which for a
