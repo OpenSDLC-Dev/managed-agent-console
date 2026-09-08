@@ -18,18 +18,17 @@ test("memory store lifecycle, optimistic writes and retained versions", async ({
   const stamp = Date.now();
   let storeId: string | undefined;
   try {
-    const store = MemoryStoreSchema.parse(
-      await ok(
-        await request.post("/v1/memory_stores", {
-          data: {
-            name: `console-contract-${stamp}`,
-            description: "Model-free contract fixture",
-            metadata: { phase: "created", remove: "yes" },
-          },
-        }),
-      ),
+    const createdStore = await ok(
+      await request.post("/v1/memory_stores", {
+        data: {
+          name: `console-contract-${stamp}`,
+          description: "Model-free contract fixture",
+          metadata: { phase: "created", remove: "yes" },
+        },
+      }),
     );
-    storeId = store.id;
+    storeId = (createdStore as { id?: string }).id;
+    const store = MemoryStoreSchema.parse(createdStore);
 
     const patched = MemoryStoreSchema.parse(
       await ok(

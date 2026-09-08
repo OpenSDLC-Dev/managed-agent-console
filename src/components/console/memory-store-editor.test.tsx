@@ -62,6 +62,11 @@ describe("memory store editor", () => {
       description: "Updated",
       metadata: { owner: "api", remove: null },
     });
+    for (const metadata of ["null", "[]", '"value"', '{"owner":1}']) {
+      expect(() =>
+        memoryStoreBody({ name: "Notes", description: "", metadata }),
+      ).toThrow(/Metadata/);
+    }
   });
 
   it("keeps invalid JSON local and sends a valid edit to the wire", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FilePlus2, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
@@ -106,15 +106,23 @@ export default function MemoryStoreDetailPage({
   const router = useRouter();
   const store = useMemoryStore(id);
   const [pathPrefix, setPathPrefix] = useState("/");
+  const [queryPathPrefix, setQueryPathPrefix] = useState(pathPrefix);
   const [depth, setDepth] = useState<0 | 1>(1);
   const [operation, setOperation] = useState<
     "all" | "created" | "modified" | "deleted"
   >("all");
-  const memoryPager = useCursorPage(`${id}:${pathPrefix}:${depth}`);
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setQueryPathPrefix(pathPrefix),
+      250,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [pathPrefix]);
+  const memoryPager = useCursorPage(`${id}:${queryPathPrefix}:${depth}`);
   const versionPager = useCursorPage(`${id}:${operation}`);
   const memories = useMemories(id, {
     page: memoryPager.page,
-    path_prefix: pathPrefix,
+    path_prefix: queryPathPrefix,
     depth,
   });
   const versions = useMemoryVersions(id, {
@@ -169,7 +177,9 @@ export default function MemoryStoreDetailPage({
             <IdCell id={item.id} />
           </Field>
           <Field label="Status">
-            {archived ? "Archived · read only" : "Live"}
+            <span data-status={archived ? "archived" : "live"}>
+              {archived ? "Archived · read only" : "Live"}
+            </span>
           </Field>
           <Field label="Created">
             <Time iso={item.created_at} />

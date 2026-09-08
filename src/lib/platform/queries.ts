@@ -835,6 +835,10 @@ export function useRedactMemoryVersion(storeId: string, versionId: string) {
         queryKey: ["memory-versions", storeId],
       });
       void client.invalidateQueries({ queryKey: ["memories", storeId] });
+      void client.invalidateQueries({
+        queryKey: ["memory", storeId, version.memory_id],
+        exact: true,
+      });
     },
   });
 }

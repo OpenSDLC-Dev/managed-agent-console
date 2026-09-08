@@ -43,7 +43,11 @@ const COLUMNS: Column<MemoryStore>[] = [
   {
     key: "status",
     header: "Status",
-    cell: (store) => (store.archived_at ? "Archived" : "Live"),
+    cell: (store) => (
+      <span data-status={store.archived_at ? "archived" : "live"}>
+        {store.archived_at ? "Archived" : "Live"}
+      </span>
+    ),
   },
   {
     key: "updated",

@@ -36,7 +36,12 @@ export function memoryStoreBody(
   form: MemoryStoreForm,
   previousMetadata?: Record<string, string>,
 ): MemoryStoreWriteBody {
-  const metadata = JSON.parse(form.metadata) as Record<string, string>;
+  const parsed: unknown = JSON.parse(form.metadata);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    throw new Error("Metadata must be a JSON object.");
+  if (Object.values(parsed).some((value) => typeof value !== "string"))
+    throw new Error("Metadata values must be strings.");
+  const metadata = parsed as Record<string, string>;
   const patch: Record<string, string | null> = { ...metadata };
   for (const key of Object.keys(previousMetadata ?? {})) {
     if (!(key in metadata)) patch[key] = null;

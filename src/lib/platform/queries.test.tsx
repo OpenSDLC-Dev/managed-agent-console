@@ -439,6 +439,8 @@ interface MutationCase {
   /** Query key whose cache entry is set to the mutation response. */
   setsData?: string[];
   removes?: string[][];
+  /** Mutation response when cache effects depend on returned fields. */
+  response?: Record<string, unknown>;
 }
 
 const skillMd = () =>
@@ -535,6 +537,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useRedactMemoryVersion",
     useHook: () => useRedactMemoryVersion("memstore_1", "memver_1"),
+    response: { id: "memver_1", memory_id: "mem_1" },
     path: "/api/platform/v1/memory_stores/memstore_1/memory_versions/memver_1/redact",
     method: "POST",
     jsonBody: {},
@@ -542,6 +545,7 @@ const mutationCases: MutationCase[] = [
     invalidates: [
       ["memory-versions", "memstore_1"],
       ["memories", "memstore_1"],
+      ["memory", "memstore_1", "mem_1"],
     ],
     setsData: ["memory-version", "memstore_1", "memver_1"],
   },
@@ -864,7 +868,7 @@ describe("mutation hooks", () => {
   it.each(mutationCases)(
     "$name sends $method $path and settles the cache",
     async (mutation) => {
-      const response = { id: "obj_1" };
+      const response = mutation.response ?? { id: "obj_1" };
       const fetchMock = stubFetch(response);
       const { client, wrapper } = createClient();
       const invalidate = vi.spyOn(client, "invalidateQueries");

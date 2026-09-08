@@ -10,8 +10,12 @@ import { IdCell } from "@/components/console/copy-id";
 import { DetailSection, Field, FieldList } from "@/components/console/detail";
 import { DetailSkeleton, ErrorState, Time } from "@/components/console/bits";
 import { PlatformError } from "@/lib/platform/http";
-import { useMemoryVersion } from "@/lib/platform/queries";
-import type { MemoryActor } from "@/lib/platform/types";
+import {
+  useMemory,
+  useMemoryStore,
+  useMemoryVersion,
+} from "@/lib/platform/queries";
+import type { MemoryActor, MemoryVersion } from "@/lib/platform/types";
 
 function actorLabel(actor: MemoryActor | null) {
   if (!actor) return "—";
@@ -38,10 +42,25 @@ export default function MemoryVersionPage({
   const version = query.data;
   if (version.memory_store_id !== id)
     return <ErrorState error={mismatchError} />;
+  return <MemoryVersionDetail storeId={id} version={version} />;
+}
+
+function MemoryVersionDetail({
+  storeId,
+  version,
+}: {
+  storeId: string;
+  version: MemoryVersion;
+}) {
+  const store = useMemoryStore(storeId);
+  const memory = useMemory(storeId, version.memory_id);
+  const checkingHead = store.isPending || memory.isPending;
+  const isLiveHead =
+    !store.data?.archived_at && memory.data?.memory_version_id === version.id;
   return (
     <div>
       <Breadcrumb
-        parent={{ href: `/memory-stores/${id}`, label: "Memory store" }}
+        parent={{ href: `/memory-stores/${storeId}`, label: "Memory store" }}
         current={version.id}
       />
       <PageHeader
@@ -50,8 +69,10 @@ export default function MemoryVersionPage({
         actions={
           version.redacted_at ? (
             <Badge variant="outline">redacted</Badge>
+          ) : checkingHead ? null : isLiveHead ? (
+            <Badge variant="outline">current · cannot redact</Badge>
           ) : (
-            <RedactMemoryVersion storeId={id} versionId={version.id} />
+            <RedactMemoryVersion storeId={storeId} versionId={version.id} />
           )
         }
       />
@@ -63,7 +84,7 @@ export default function MemoryVersionPage({
           <Field label="Memory">
             <Link
               className="hover:underline"
-              href={`/memory-stores/${id}/memories/${version.memory_id}`}
+              href={`/memory-stores/${storeId}/memories/${version.memory_id}`}
             >
               {version.memory_id}
             </Link>
@@ -71,7 +92,9 @@ export default function MemoryVersionPage({
           <Field label="Operation">
             <Badge variant="outline">{version.operation}</Badge>
           </Field>
-          <Field label="Path">{version.path ?? "Redacted"}</Field>
+          <Field label="Path">
+            {version.path ?? (version.redacted_at ? "Redacted" : "—")}
+          </Field>
           <Field label="Size">
             {version.content_size_bytes === null
               ? "—"
