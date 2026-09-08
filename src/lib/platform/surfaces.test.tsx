@@ -174,6 +174,7 @@ describe("useSurfaces", () => {
     expect(result.current).toEqual({
       agents: true,
       sessions: true,
+      deployments: true,
       environments: true,
       vaults: true,
       skills: false,

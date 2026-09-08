@@ -70,7 +70,7 @@ test("wrong password is rejected; the right one lands on the Dashboard", async (
   ).toBeVisible();
 });
 
-test("the shell shows all six resources and a live platform connection", async ({
+test("the shell shows all seven resources and a live platform connection", async ({
   page,
 }) => {
   await openLogin(page);
@@ -81,6 +81,7 @@ test("the shell shows all six resources and a live platform connection", async (
   for (const item of [
     "Agents",
     "Sessions",
+    "Deployments",
     "Environments",
     "Credential vaults",
     "Skills",

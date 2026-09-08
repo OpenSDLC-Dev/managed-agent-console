@@ -41,6 +41,12 @@ const EXPECTED = [
     group: "Managed Agents",
   },
   {
+    label: "Deployments",
+    href: "/deployments",
+    surface: "deployments",
+    group: "Managed Agents",
+  },
+  {
     label: "Environments",
     href: "/environments",
     surface: "environments",
@@ -59,7 +65,7 @@ const GROUPS = [
   { label: "Build", surfaces: ["files", "skills"] },
   {
     label: "Managed Agents",
-    surfaces: ["agents", "sessions", "environments", "vaults"],
+    surfaces: ["agents", "sessions", "deployments", "environments", "vaults"],
   },
 ];
 
@@ -154,6 +160,7 @@ describe("Nav", () => {
       "Managed Agents",
       "Agents",
       "Sessions",
+      "Deployments",
       "Environments",
       "Credential vaults",
     ]);

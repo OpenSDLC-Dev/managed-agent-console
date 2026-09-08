@@ -83,6 +83,7 @@ test("a served deployment keeps every surface", async ({ page }) => {
   for (const surface of [
     "agents",
     "sessions",
+    "deployments",
     "environments",
     "vaults",
     "skills",

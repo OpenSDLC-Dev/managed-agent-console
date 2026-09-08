@@ -8,6 +8,7 @@ import {
   FileText,
   KeyRound,
   MessagesSquare,
+  Rocket,
   Search,
   Sparkles,
   type LucideIcon,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
 import {
   useAgents,
+  useDeployments,
   useEnvironments,
   useFiles,
   useSessions,
@@ -65,6 +67,7 @@ const matches = (query: string, ...fields: (string | null | undefined)[]) =>
 function useSearchItems(query: string): Item[] {
   const limit = 50;
   const agents = useAgents({ limit });
+  const deployments = useDeployments({ limit });
   const environments = useEnvironments({ limit });
   const sessions = useSessions({});
   const vaults = useVaults({ limit });
@@ -103,6 +106,17 @@ function useSearchItems(query: string): Item[] {
           href: `/sessions/${s.id}`,
           group: "Sessions",
           icon: MessagesSquare,
+        });
+    }
+    for (const deployment of deployments.data?.data ?? []) {
+      if (matches(q, deployment.name, deployment.id))
+        items.push({
+          key: deployment.id,
+          label: deployment.name,
+          detail: deployment.id,
+          href: `/deployments/${deployment.id}`,
+          group: "Deployments",
+          icon: Rocket,
         });
     }
     for (const e of environments.data?.data ?? []) {
@@ -155,6 +169,7 @@ function useSearchItems(query: string): Item[] {
     surfaces,
     agents.data,
     sessions.data,
+    deployments.data,
     environments.data,
     vaults.data,
     skills.data,

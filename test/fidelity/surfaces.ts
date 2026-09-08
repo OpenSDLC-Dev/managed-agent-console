@@ -62,6 +62,8 @@ const AGENT = "agent_researcher00000000001";
 const ENV = "env_byoc0000000000000001";
 const SESSION = "sesn_research0000000000001";
 const GATED = "sesn_gatedbash00000000001";
+const DEPLOYMENT = "depl_weeklyresearch000001";
+const DEPLOYMENT_RUN = "drun_failed000000000001";
 const VAULT = "vlt_github00000000000001";
 const SKILL = "skill_reportwriter0000001";
 
@@ -76,7 +78,7 @@ export const SURFACES: Surface[] = [
     description:
       "Landing page: a card per served surface under the nav's own group headings, and the regrouped sidebar beside it.",
   },
-  // ---- the six resource lists ------------------------------------------
+  // ---- resource lists --------------------------------------------------
   {
     id: "agents-list",
     route: "/agents",
@@ -95,6 +97,13 @@ export const SURFACES: Surface[] = [
     fixture: "2 sessions, idle + running",
     description:
       "The widest table — status badges, token counts, relative times.",
+  },
+  {
+    id: "deployments-list",
+    route: "/deployments",
+    fixture: "2 deployments, scheduled active + manual paused",
+    description:
+      "Deployment status, pinned agent version and schedule summary.",
   },
   {
     id: "vaults-list",
@@ -144,6 +153,19 @@ export const SURFACES: Surface[] = [
     route: `/skills/${SKILL}`,
     fixture: SKILL,
     description: "Version list with per-version actions.",
+  },
+  {
+    id: "deployment-detail",
+    route: `/deployments/${DEPLOYMENT}`,
+    fixture: DEPLOYMENT,
+    description:
+      "Scheduled deployment details, upcoming fires, actions and mixed run history.",
+  },
+  {
+    id: "deployment-run-error",
+    route: `/deployments/${DEPLOYMENT}/runs/${DEPLOYMENT_RUN}`,
+    fixture: DEPLOYMENT_RUN,
+    description: "A scheduled run whose session creation failed.",
   },
   {
     id: "skill-upload",
@@ -292,6 +314,23 @@ export const SURFACES: Surface[] = [
         .getByText("Credential vaults (optional)")
         .waitFor();
     },
+  },
+  {
+    id: "deployment-new",
+    route: "/deployments/new",
+    fixture: "empty form over agent, environment and vault lists",
+    description:
+      "Pinned agent, initial event JSON, schedule and reusable-resource controls.",
+    setup: async (page) => {
+      await page.getByText("Credential vaults (optional)").waitFor();
+    },
+  },
+  {
+    id: "deployment-edit",
+    route: `/deployments/${DEPLOYMENT}/edit`,
+    fixture: DEPLOYMENT,
+    description:
+      "Populated deployment form that preserves write-only resource credentials.",
   },
 
   // ---- the shared states every surface can fall into --------------------

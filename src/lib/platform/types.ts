@@ -12,10 +12,16 @@
  */
 export type {
   Agent,
+  AgentReference,
   AgentMultiagent,
   AgentRosterRef,
   ContentBlock,
   CredentialAuth,
+  Deployment,
+  DeploymentPausedReason,
+  DeploymentResource,
+  DeploymentRun,
+  DeploymentSchedule,
   Environment,
   EnvironmentConfig,
   EnvironmentKey,

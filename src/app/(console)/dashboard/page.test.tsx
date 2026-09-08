@@ -97,6 +97,7 @@ describe("DashboardPage", () => {
       ["skills", "/skills"],
       ["agents", "/agents"],
       ["sessions", "/sessions"],
+      ["deployments", "/deployments"],
       ["environments", "/environments"],
       ["vaults", "/vaults"],
     ];
@@ -127,6 +128,6 @@ describe("DashboardPage", () => {
 
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(7);
+    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(8);
   });
 });

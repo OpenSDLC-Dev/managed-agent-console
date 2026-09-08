@@ -8,6 +8,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Deployments can be created and edited with version-pinned agents, initial
+  events, resources and optional Cron schedules. Operators can pause, resume,
+  run and archive them, inspect upcoming runs and follow each persistent run to
+  its session or platform error.
+
 - Agents can be configured as coordinators with an ordered, version-pinned
   roster. Session details list primary and child threads, switch to each
   thread's live trace, route approvals and interrupts to the selected child,

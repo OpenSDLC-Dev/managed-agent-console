@@ -247,6 +247,100 @@ export const sessions = [
   },
 ];
 
+export const deployments = [
+  {
+    id: "depl_weeklyresearch000001",
+    type: "deployment",
+    name: "Weekly research digest",
+    description: "Collect and summarize the week's agent-platform changes.",
+    agent: {
+      type: "agent",
+      id: agents[0].id,
+      version: agents[0].version,
+    },
+    environment_id: environments[0].id,
+    vault_ids: ["vlt_github00000000000001"],
+    initial_events: [
+      { type: "user.message", content: "Prepare the weekly research digest." },
+    ],
+    resources: [
+      { type: "file", file_id: "file_notes0000000000001" },
+      {
+        type: "memory_store",
+        memory_store_id: memoryResources[0].memory_store_id,
+        access: "read_write",
+        instructions: null,
+      },
+    ],
+    metadata: { owner: "research" },
+    schedule: {
+      type: "cron",
+      expression: "0 9 * * 1",
+      timezone: "UTC",
+      last_run_at: T1,
+      upcoming_runs_at: [
+        "2026-08-10T09:00:00Z",
+        "2026-08-17T09:00:00Z",
+        "2026-08-24T09:00:00Z",
+        "2026-08-31T09:00:00Z",
+      ],
+    },
+    status: "active",
+    paused_reason: null,
+    created_at: T0,
+    updated_at: T2,
+    archived_at: null,
+  },
+  {
+    id: "depl_manualtask000000001",
+    type: "deployment",
+    name: "Manual task runner",
+    description: null,
+    agent: {
+      type: "agent",
+      id: agents[1].id,
+      version: agents[1].version,
+    },
+    environment_id: environments[1].id,
+    vault_ids: [],
+    initial_events: [{ type: "user.message", content: "Run the queued task." }],
+    resources: [],
+    metadata: {},
+    schedule: null,
+    status: "paused",
+    paused_reason: { type: "manual" },
+    created_at: T1,
+    updated_at: T2,
+    archived_at: null,
+  },
+];
+
+export const deploymentRuns = [
+  {
+    id: "drun_deleted00000000001",
+    type: "deployment_run",
+    deployment_id: deployments[0].id,
+    trigger_context: { type: "schedule", scheduled_at: T1 },
+    session_id: null,
+    error: null,
+    agent: deployments[0].agent,
+    created_at: T1,
+  },
+  {
+    id: "drun_failed000000000001",
+    type: "deployment_run",
+    deployment_id: deployments[0].id,
+    trigger_context: { type: "schedule", scheduled_at: T2 },
+    session_id: null,
+    error: {
+      type: "session_create_error",
+      message: "The configured environment was temporarily unavailable.",
+    },
+    agent: deployments[0].agent,
+    created_at: T2,
+  },
+];
+
 const emptyUsage = {
   input_tokens: 0,
   output_tokens: 0,
