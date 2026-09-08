@@ -90,7 +90,13 @@ export function formFromDeployment(deployment: Deployment): DeploymentForm {
 export function deploymentBodyFromForm(
   form: DeploymentForm,
   resources?: ResourceInput[],
+  previousMetadata?: Record<string, string>,
 ): DeploymentWriteBody {
+  const metadata = JSON.parse(form.metadata) as Record<string, string>;
+  const metadataPatch: Record<string, string | null> = { ...metadata };
+  for (const key of Object.keys(previousMetadata ?? {})) {
+    if (!(key in metadata)) metadataPatch[key] = null;
+  }
   return {
     name: form.name,
     description: form.description || null,
@@ -103,7 +109,7 @@ export function deploymentBodyFromForm(
     vault_ids: form.vaultIds,
     initial_events: JSON.parse(form.initialEvents) as object[],
     ...(resources ? { resources } : {}),
-    metadata: JSON.parse(form.metadata) as Record<string, string>,
+    metadata: metadataPatch,
     schedule: form.scheduleEnabled
       ? {
           type: "cron",
@@ -153,6 +159,34 @@ export function DeploymentEditor({
   const vaultList = (vaults.data?.data ?? []).filter(
     (vault) => !vault.archived_at,
   );
+  const initialAgent = initial.agentVersion
+    ? {
+        id: initial.agentId,
+        version: initial.agentVersion,
+        name:
+          agentList.find((agent) => agent.id === initial.agentId)?.name ??
+          initial.agentId,
+      }
+    : null;
+  const agentChoices = agentList.map((agent) => ({
+    id: agent.id,
+    version: agent.version,
+    name: agent.name,
+    pinned: false,
+  }));
+  if (
+    initialAgent &&
+    !agentChoices.some(
+      (agent) =>
+        agent.id === initialAgent.id && agent.version === initialAgent.version,
+    )
+  ) {
+    agentChoices.unshift({ ...initialAgent, pinned: true });
+  }
+  const agentValue =
+    form.agentId && form.agentVersion
+      ? `${form.agentId}:${form.agentVersion}`
+      : "";
 
   const save = () => {
     setParseError(null);
@@ -168,6 +202,9 @@ export function DeploymentEditor({
               })),
               ...resources,
             ]
+          : undefined,
+        mode === "edit"
+          ? (JSON.parse(initial.metadata) as Record<string, string>)
           : undefined,
       );
     } catch (error) {
@@ -214,13 +251,16 @@ export function DeploymentEditor({
       <div className="space-y-1.5">
         <Label>Agent</Label>
         <Select
-          value={form.agentId}
-          onValueChange={(id) => {
-            const agent = agentList.find((candidate) => candidate.id === id);
+          value={agentValue}
+          onValueChange={(value) => {
+            const agent = agentChoices.find(
+              (candidate) => `${candidate.id}:${candidate.version}` === value,
+            );
+            if (!agent) return;
             setForm((current) => ({
               ...current,
-              agentId: id ?? "",
-              agentVersion: agent?.version,
+              agentId: agent.id,
+              agentVersion: agent.version,
             }));
           }}
         >
@@ -228,9 +268,13 @@ export function DeploymentEditor({
             <SelectValue placeholder="Select an agent" />
           </SelectTrigger>
           <SelectContent>
-            {agentList.map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
+            {agentChoices.map((agent) => (
+              <SelectItem
+                key={`${agent.id}:${agent.version}`}
+                value={`${agent.id}:${agent.version}`}
+              >
                 {agent.name} · v{agent.version}
+                {agent.pinned ? " (pinned)" : ""}
               </SelectItem>
             ))}
           </SelectContent>

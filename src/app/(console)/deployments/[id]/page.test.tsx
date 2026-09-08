@@ -11,6 +11,7 @@ import {
 } from "../../../../../test/mock-platform/fixtures.mjs";
 
 const push = vi.fn();
+const LINKED_SESSION_ID = "sesn_linked000000000000001";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 function params(id: string): Promise<{ id: string }> {
@@ -63,7 +64,12 @@ function setup() {
         );
     }
     const payload = url.includes("deployment_runs")
-      ? { data: deploymentRuns }
+      ? {
+          data: [
+            { ...deploymentRuns[0], session_id: LINKED_SESSION_ID },
+            deploymentRuns[1],
+          ],
+        }
       : base;
     return new Response(JSON.stringify(payload), { status: 200 });
   });
@@ -96,6 +102,12 @@ describe("DeploymentDetailPage", () => {
     expect(screen.getByText("Show less")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(push).toHaveBeenCalledWith(`/deployments/${base.id}/edit`);
+
+    push.mockClear();
+    await userEvent.click(
+      screen.getByRole("link", { name: LINKED_SESSION_ID }),
+    );
+    expect(push).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     expect(

@@ -55,6 +55,7 @@ const RUN_COLUMNS: Column<DeploymentRun>[] = [
         <Link
           className="font-mono text-[13px] hover:underline"
           href={`/sessions/${run.session_id}`}
+          onClick={(event) => event.stopPropagation()}
         >
           {run.session_id}
         </Link>

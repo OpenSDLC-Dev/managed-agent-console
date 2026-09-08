@@ -16,6 +16,7 @@ import {
   newDeploymentForm,
 } from "./deployment-editor";
 import type { Deployment } from "@/lib/platform/types";
+import type { DeploymentWriteBody } from "@/lib/platform/queries";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -88,18 +89,25 @@ describe("deployment editor wire mapping", () => {
       metadata: '{"owner":"ops"}',
     };
     expect(
-      deploymentBodyFromForm(form, [
+      deploymentBodyFromForm(
+        form,
+        [
+          {
+            type: "github_repository",
+            url: "https://github.com/example/project",
+            authorization_token: "write-only",
+          },
+        ],
         {
-          type: "github_repository",
-          url: "https://github.com/example/project",
-          authorization_token: "write-only",
+          owner: "old",
+          removed: "delete me",
         },
-      ]),
+      ),
     ).toMatchObject({
       name: "Daily digest",
       agent: { type: "agent", id: "agent_1", version: 4 },
       environment_id: "env_1",
-      metadata: { owner: "ops" },
+      metadata: { owner: "ops", removed: null },
       schedule: {
         type: "cron",
         expression: "0 9 * * 1-5",
@@ -132,6 +140,86 @@ describe("deployment editor wire mapping", () => {
     expect(body.agent).toEqual({ type: "agent", id: "agent_1", version: 2 });
     expect(body.schedule).toBeNull();
     expect(body).not.toHaveProperty("resources");
+  });
+
+  it("shows the pinned version and can upgrade it while deleting metadata keys", async () => {
+    const posts: DeploymentWriteBody[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "POST") {
+          posts.push(JSON.parse(String(init.body)) as DeploymentWriteBody);
+          return new Response(
+            JSON.stringify({ id: "depl_1", type: "deployment" }),
+            { status: 200 },
+          );
+        }
+        const data = url.includes("/agents")
+          ? [
+              {
+                id: "agent_1",
+                name: "Task agent",
+                version: 3,
+                archived_at: null,
+              },
+            ]
+          : url.includes("/environments")
+            ? [
+                {
+                  id: "env_1",
+                  name: "Workers",
+                  config: { type: "self_hosted" },
+                  archived_at: null,
+                },
+              ]
+            : [];
+        return new Response(JSON.stringify({ data, next_page: null }), {
+          status: 200,
+        });
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DeploymentEditor
+          mode="edit"
+          deploymentId="depl_1"
+          initial={{
+            ...newDeploymentForm(),
+            name: "Run",
+            agentId: "agent_1",
+            agentVersion: 2,
+            environmentId: "env_1",
+            metadata: '{"remove":"yes"}',
+          }}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Task agent · v2 (pinned)",
+      }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Task agent · v3" }),
+    );
+    fireEvent.change(screen.getByLabelText("Metadata (JSON object)"), {
+      target: { value: "{}" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toMatchObject({
+      agent: { id: "agent_1", version: 3 },
+      metadata: { remove: null },
+    });
   });
 
   it("drives every create input and submits resources without echoing secrets", async () => {
