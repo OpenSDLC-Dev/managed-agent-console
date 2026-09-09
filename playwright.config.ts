@@ -1,4 +1,10 @@
 import { defineConfig } from "@playwright/test";
+import { ensureLoopbackProxyBypass } from "./test/playwright-env";
+
+// Web-server readiness probes are loopback traffic. Some developer shells set
+// a catch-all proxy without NO_PROXY, which turns healthy local servers into
+// 502s and leaves Playwright waiting until its timeout.
+ensureLoopbackProxyBypass();
 
 const CONSOLE_PORT = 3100;
 const MOCK_PORT = 18080;

@@ -8,6 +8,9 @@ import {
   MOCK_PORT,
   MOCK_URL,
 } from "./test/fidelity/consoles";
+import { ensureLoopbackProxyBypass } from "./test/playwright-env";
+
+ensureLoopbackProxyBypass();
 
 /**
  * The Chrome fidelity pass's shot walker (plan 04 slice 4) — not a test tier.

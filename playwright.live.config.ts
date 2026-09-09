@@ -1,5 +1,8 @@
 import { defineConfig } from "@playwright/test";
 import { LIVE_CONSOLE_PASSWORD, resolveLiveEnv } from "./test/e2e-live/env";
+import { ensureLoopbackProxyBypass } from "./test/playwright-env";
+
+ensureLoopbackProxyBypass();
 
 /**
  * Live tier: the console's production build against a REAL platform stack

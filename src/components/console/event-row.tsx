@@ -61,7 +61,7 @@ function MetaColumn({
  * the rows that have one.
  */
 function usageAttrs(event: SessionEvent) {
-  const usage = event.model_usage;
+  const usage = event.model_usage ?? event.usage;
   if (!usage) return undefined;
   return {
     "data-input-tokens": tokenAttr(usage.input_tokens),

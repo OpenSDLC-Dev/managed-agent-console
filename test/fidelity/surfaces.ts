@@ -227,6 +227,45 @@ export const SURFACES: Surface[] = [
     setup: traceLive,
   },
   {
+    id: "session-outcomes",
+    route: `/sessions/${SESSION}`,
+    fixture: `${SESSION} with one satisfied outcome`,
+    description:
+      "Outcome projection card and the dedicated outcome-event trace filter.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByTestId("outcome-evaluation").waitFor();
+      await page.getByRole("button", { name: "Outcomes", exact: true }).click();
+    },
+  },
+  {
+    id: "session-outcome-create",
+    route: `/sessions/${SESSION}`,
+    fixture: `${SESSION} with a terminal outcome`,
+    description:
+      "Define-outcome dialog with text/file rubric choice and iteration budget.",
+    setup: async (page) => {
+      await page.getByTestId("outcome-evaluation").waitFor();
+      await page.getByRole("button", { name: "Define outcome" }).click();
+      await page.getByRole("dialog", { name: "Define outcome" }).waitFor();
+    },
+  },
+  {
+    id: "session-outcome-file-rubric",
+    route: `/sessions/${SESSION}`,
+    fixture: `${SESSION} with uploaded rubric suggestions`,
+    description:
+      "Define-outcome dialog using a file rubric with catalog-backed ID suggestions.",
+    setup: async (page) => {
+      await page.getByTestId("outcome-evaluation").waitFor();
+      await page.getByRole("button", { name: "Define outcome" }).click();
+      const dialog = page.getByRole("dialog", { name: "Define outcome" });
+      await dialog.getByLabel("Rubric type").click();
+      await page.getByRole("option", { name: "File" }).click();
+      await dialog.locator('[data-file-options-state="ready"]').waitFor();
+    },
+  },
+  {
     id: "session-detail-panel",
     route: `/sessions/${SESSION}`,
     fixture: SESSION,

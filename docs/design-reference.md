@@ -272,3 +272,14 @@ list/detail/form patterns. Self-hosting adds explicit digest, actor and redactio
 fields because the implemented platform exposes them and operators need to audit
 durable context. Re-shot: memory-store list/detail/create/edit, memory
 create/detail/edit and memory-version detail, both themes.
+
+## Outcomes — checked 2026-09-09
+
+The authenticated Managed Agents reference remains unavailable, so this slice
+uses the previously recorded compact detail, card and dialog patterns without
+claiming new reference facts. Platform state remains visible in a compact
+session section; the write action opens a focused dialog, and the existing
+transcript gains one filter instead of a separate event viewer. File rubrics
+keep direct ID entry because the platform wire accepts IDs and the local catalog
+can be partial. Re-shot: `session-outcomes`, `session-outcome-create` and
+`session-outcome-file-rubric`, both themes.

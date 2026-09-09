@@ -26,6 +26,7 @@ import { Composer } from "@/components/console/composer";
 import { SessionActions } from "@/components/console/session-actions";
 import { SessionResources } from "@/components/console/session-resources";
 import { SessionThreads } from "@/components/console/session-threads";
+import { SessionOutcomes } from "@/components/console/session-outcomes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, tokenAttr, tokenCount } from "@/lib/utils";
@@ -85,6 +86,16 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
     key: "spans",
     label: "Model spans",
     types: ["span.model_request_start", "span.model_request_end"],
+  },
+  {
+    key: "outcomes",
+    label: "Outcomes",
+    types: [
+      "user.define_outcome",
+      "span.outcome_evaluation_start",
+      "span.outcome_evaluation_ongoing",
+      "span.outcome_evaluation_end",
+    ],
   },
 ];
 
@@ -261,6 +272,11 @@ export default function SessionDetailPage({
     return <DetailSkeleton />;
   }
   const data = session.data;
+  // Older wire-compatible deployments can serve sessions without Outcomes.
+  // Presence of the projection is the side-effect-free capability signal: the
+  // shared events endpoint has no narrower route that can be probed safely.
+  const outcomesSupported = Array.isArray(data.outcome_evaluations);
+  const outcomeEvaluations = outcomesSupported ? data.outcome_evaluations : [];
 
   return (
     <div>
@@ -285,6 +301,13 @@ export default function SessionDetailPage({
       />
       <SessionChips session={data} />
       <SessionResources session={data} />
+      {!selectedThreadId && outcomesSupported && (
+        <SessionOutcomes
+          sessionId={id}
+          outcomes={outcomeEvaluations}
+          disabled={!!data.archived_at || trace.deleted}
+        />
+      )}
       <SessionThreads
         sessionId={id}
         threads={threads.data?.data ?? []}

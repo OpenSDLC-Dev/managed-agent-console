@@ -142,17 +142,120 @@ test("token and duration formatting", async ({ page }) => {
   ).toHaveText("21:45:00");
 });
 
-test("an unknown event type renders its payload instead of a blank row", async ({
+test("outcome evaluations and their trace events have dedicated rendering", async ({
   page,
 }) => {
   await signIn(page);
   await page.goto("/sessions/sesn_research0000000000001");
-  const row = page
-    .getByTestId("event-row")
-    .filter({ hasText: "user.define_outcome" });
-  await expect(row.getByTestId("unknown-event-payload")).toContainText(
+  const outcomes = page.getByTestId("session-outcomes");
+  await expect(outcomes).toHaveAttribute("data-outcome-count", "1");
+  await expect(outcomes).toHaveAttribute("data-active-outcome", "false");
+  const evaluation = page.getByTestId("outcome-evaluation");
+  await expect(evaluation).toHaveAttribute("data-outcome-result", "satisfied");
+  await expect(evaluation).toHaveAttribute("data-outcome-iteration", "0");
+  await expect(evaluation).toContainText(
+    "The survey compares six frameworks and cites each primary source.",
+  );
+
+  await page.getByRole("button", { name: "Outcomes", exact: true }).click();
+  const rows = page.getByTestId("event-row");
+  await expect(page.getByTestId("events-toolbar")).toHaveAttribute(
+    "data-visible-events",
+    "4",
+  );
+  const definition = rows.filter({ hasText: "user.define_outcome" });
+  await expect(definition).toContainText(
     "Produce a comparative survey document.",
   );
+  await expect(definition.getByTestId("unknown-event-payload")).toHaveCount(0);
+  const end = rows.filter({ hasText: "span.outcome_evaluation_end" });
+  await expect(end).toHaveAttribute("data-input-tokens", "1200");
+  await expect(end).toContainText("Satisfied · Iteration 1");
+});
+
+test("defines an outcome on an idle session", async ({ page }) => {
+  await signIn(page);
+  await page.goto(GATED);
+  await expect(page.getByTestId("session-outcomes")).toHaveAttribute(
+    "data-active-outcome",
+    "false",
+  );
+
+  await page.getByRole("button", { name: "Define outcome" }).click();
+  const dialog = page.getByRole("dialog", { name: "Define outcome" });
+  await dialog.getByLabel("Description").fill("Ship a tested patch");
+  await dialog
+    .getByLabel("Rubric", { exact: true })
+    .fill("Lint and tests pass.");
+  await dialog.getByLabel("Maximum iterations").fill("4");
+  await dialog.getByRole("button", { name: "Define outcome" }).click();
+
+  await expect(page.getByTestId("session-outcomes")).toHaveAttribute(
+    "data-active-outcome",
+    "true",
+  );
+  const evaluation = page.getByTestId("outcome-evaluation");
+  await expect(evaluation).toHaveAttribute("data-outcome-result", "pending");
+  await expect(evaluation).toContainText("Ship a tested patch");
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "user.define_outcome" })
+      .filter({ hasText: "Ship a tested patch" }),
+  ).toHaveCount(1);
+});
+
+test("file rubric size limit counts content bytes", async ({ page }) => {
+  await signIn(page);
+  const upload = async (name: string, size: number) => {
+    const response = await page.request.post("/api/platform/v1/files", {
+      multipart: {
+        file: {
+          name,
+          mimeType: "text/plain",
+          buffer: Buffer.alloc(size, "x"),
+        },
+      },
+    });
+    expect(response.ok()).toBe(true);
+    return (await response.json()) as { id: string; size_bytes: number };
+  };
+
+  const acceptedFile = await upload("rubric-256k.txt", 256 * 1024);
+  expect(acceptedFile.size_bytes).toBe(256 * 1024);
+  const accepted = await page.request.post(
+    `/api/platform/v1/sessions/${GATED.slice("/sessions/".length)}/events`,
+    {
+      data: {
+        events: [
+          {
+            type: "user.define_outcome",
+            description: "Accept the boundary file",
+            rubric: { type: "file", file_id: acceptedFile.id },
+          },
+        ],
+      },
+    },
+  );
+  expect(accepted.status()).toBe(200);
+
+  const rejectedFile = await upload("rubric-over-256k.txt", 256 * 1024 + 1);
+  expect(rejectedFile.size_bytes).toBe(256 * 1024 + 1);
+  const rejected = await page.request.post(
+    `/api/platform/v1/sessions/${GATED.slice("/sessions/".length)}/events`,
+    {
+      data: {
+        events: [
+          {
+            type: "user.define_outcome",
+            description: "Reject the oversized file",
+            rubric: { type: "file", file_id: rejectedFile.id },
+          },
+        ],
+      },
+    },
+  );
+  expect(rejected.status()).toBe(400);
 });
 
 test("the trace goes live over SSE and approving a tool call completes the turn", async ({

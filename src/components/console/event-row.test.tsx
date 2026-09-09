@@ -98,7 +98,7 @@ describe("TranscriptRow", () => {
 
   it("marks an unknown type's summary as the JSON payload preview", () => {
     renderRow(
-      ev("user.define_outcome", {
+      ev("wire.future_event", {
         description: "Produce a survey.",
         max_iterations: 3,
       }),

@@ -35,6 +35,7 @@ import {
   useEnvironment,
   useEnvironments,
   useFiles,
+  useFileOptions,
   useMemories,
   useMemory,
   useMemoryStore,
@@ -464,6 +465,26 @@ describe("useMemoryStoreOptions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(result.current.data?.truncated).toBe(true);
     expect(result.current.data?.memoryStores).toHaveLength(10);
+  });
+});
+
+describe("useFileOptions", () => {
+  it("loads the platform's maximum first page and reports truncation", async () => {
+    const fetchMock = stubFetch({
+      data: [{ id: "file_1", filename: "rubric.md" }],
+      has_more: true,
+      first_id: "file_1",
+      last_id: "file_1",
+    });
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useFileOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      files: [{ id: "file_1", filename: "rubric.md" }],
+      truncated: true,
+    });
+    expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({ limit: "1000" });
   });
 });
 

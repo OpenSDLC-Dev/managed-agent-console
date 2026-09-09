@@ -1,4 +1,5 @@
 import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
+import { outcomeIterationLabel, outcomeResultLabel } from "@/lib/outcomes";
 
 /**
  * One-line transcript summaries (plan 03 slice 3): the compact row text for
@@ -30,7 +31,7 @@ function firstLine(text: string): string {
 }
 
 export function tokensLine(event: SessionEvent): string | null {
-  const usage = event.model_usage;
+  const usage = event.model_usage ?? event.usage;
   if (
     !usage ||
     [
@@ -59,6 +60,10 @@ const KNOWN_EVENT_TYPES = new Set([
   "span.model_request_start",
   "span.model_request_end",
   "session.error",
+  "user.define_outcome",
+  "span.outcome_evaluation_start",
+  "span.outcome_evaluation_ongoing",
+  "span.outcome_evaluation_end",
 ]);
 
 /** False for types with no dedicated rendering — they get the JSON fallback. */
@@ -115,6 +120,28 @@ export function summaryOf(event: SessionEvent): string {
       return `${event.error?.message ?? "error"}${
         event.error?.retry_status ? ` (${event.error.retry_status.type})` : ""
       }`;
+    case "user.define_outcome":
+      return firstLine(event.description ?? "");
+    case "span.outcome_evaluation_start":
+      return event.iteration === undefined
+        ? "evaluation started"
+        : `${outcomeIterationLabel(event.iteration)} evaluation started`;
+    case "span.outcome_evaluation_ongoing":
+      return event.iteration === undefined
+        ? "evaluation in progress"
+        : `${outcomeIterationLabel(event.iteration)} evaluation in progress`;
+    case "span.outcome_evaluation_end": {
+      const result = event.result
+        ? outcomeResultLabel(event.result)
+        : "Evaluated";
+      const iteration =
+        event.iteration === undefined
+          ? ""
+          : ` · ${outcomeIterationLabel(event.iteration)}`;
+      return firstLine(
+        `${result}${iteration}${event.explanation ? ` — ${event.explanation}` : ""}`,
+      );
+    }
     default: {
       const payload = payloadOf(event);
       return Object.keys(payload).length === 0
