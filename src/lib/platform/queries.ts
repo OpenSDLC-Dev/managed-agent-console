@@ -63,6 +63,8 @@ export function useAgents(params: {
 /** Options page size × page cap for the agent-filter dropdown (plan 03 slice 2). */
 const AGENT_OPTIONS_PAGE_LIMIT = 100;
 const AGENT_OPTIONS_PAGE_CAP = 10;
+const MEMORY_STORE_OPTIONS_PAGE_LIMIT = 100;
+const MEMORY_STORE_OPTIONS_PAGE_CAP = 10;
 
 /**
  * Every agent, for filter options: pages `v1/agents` to exhaustion
@@ -228,6 +230,30 @@ export function useMemoryStores(params: {
         ...params,
       }),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Active memory stores for creation-time resource pickers. The free-form ID
+ * input remains available when this defensive 1000-store cap is reached.
+ */
+export function useMemoryStoreOptions() {
+  return useQuery({
+    queryKey: ["memory-store-options"],
+    queryFn: async () => {
+      const memoryStores: MemoryStore[] = [];
+      let page: string | undefined;
+      for (let i = 0; i < MEMORY_STORE_OPTIONS_PAGE_CAP; i++) {
+        const res = await platformGet<Page<MemoryStore>>("v1/memory_stores", {
+          limit: MEMORY_STORE_OPTIONS_PAGE_LIMIT,
+          page,
+        });
+        memoryStores.push(...res.data);
+        if (!res.next_page) return { memoryStores, truncated: false };
+        page = res.next_page;
+      }
+      return { memoryStores, truncated: true };
+    },
   });
 }
 

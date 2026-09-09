@@ -258,6 +258,12 @@ keys remove entries (`internal/api/wire.go:patchMetadata`).
 The later verification visit redirected to sign-in; the earlier captured
 reference facts remain the comparison baseline for this slice.
 
+Creation forms now keep the platform's `memory_store_id` as the submitted value
+and use a browser-native suggestion list to label active stores by name. Direct
+ID entry remains available when the catalog cannot be loaded or exceeds the
+picker cap. Re-shot: session and deployment creation with the memory-store
+resource fields expanded, both themes.
+
 ## Memory stores — checked 2026-09-08
 
 The reference account now redirects this area to sign-in, so no new authenticated

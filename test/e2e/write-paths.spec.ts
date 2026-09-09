@@ -55,7 +55,7 @@ test("deleting an in-use environment surfaces the platform 400", async ({
   await expect(page.getByText("environment still has sessions")).toBeVisible();
 });
 
-test("create a session with an uploaded file mount and drive it", async ({
+test("create a session with file and memory mounts, then drive it", async ({
   page,
 }) => {
   await signIn(page);
@@ -75,6 +75,11 @@ test("create a session with an uploaded file mount and drive it", async ({
     buffer: Buffer.from("a,b\n1,2\n"),
   });
   await expect(page.getByText("dataset.csv")).toBeVisible();
+  await page.getByRole("button", { name: "Add memory store" }).click();
+  await expect(
+    page.getByText("Choose a suggestion by name or paste a memory store ID."),
+  ).toBeVisible();
+  await page.getByLabel("Memory store ID").fill("memstore_projectnotes000001");
 
   await page
     .getByRole("dialog")
@@ -87,7 +92,7 @@ test("create a session with an uploaded file mount and drive it", async ({
   // The file mount landed on the session — the chip carries the mount path.
   const fileChip = page
     .getByTestId("session-chips")
-    .locator('[data-resource-count="1"]');
+    .locator('[data-resource-count="2"]');
   await expect(fileChip).toBeVisible();
   await expect(fileChip).toHaveAttribute(
     "title",

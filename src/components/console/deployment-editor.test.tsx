@@ -272,13 +272,22 @@ describe("deployment editor wire mapping", () => {
                   archived_at: null,
                 },
               ]
-            : [
-                {
-                  id: "vlt_1",
-                  display_name: "GitHub",
-                  archived_at: null,
-                },
-              ];
+            : url.includes("/memory_stores")
+              ? [
+                  {
+                    id: "mem_1",
+                    type: "memory_store",
+                    name: "Project notes",
+                    archived_at: null,
+                  },
+                ]
+              : [
+                  {
+                    id: "vlt_1",
+                    display_name: "GitHub",
+                    archived_at: null,
+                  },
+                ];
         return new Response(JSON.stringify({ data, next_page: null }), {
           status: 200,
         });
@@ -338,6 +347,13 @@ describe("deployment editor wire mapping", () => {
     await userEvent.type(screen.getByLabelText("Branch name"), "main");
     await userEvent.click(
       screen.getByRole("button", { name: "Add memory store" }),
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelector(
+          'datalist#active-memory-stores option[value="mem_1"]',
+        ),
+      ).toHaveTextContent("Project notes"),
     );
     await userEvent.type(screen.getByLabelText("Memory store ID"), "mem_1");
     await userEvent.selectOptions(screen.getByLabelText("Access"), "read_only");

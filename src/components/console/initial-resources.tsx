@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useMemoryStoreOptions } from "@/lib/platform/queries";
 import type { ResourceInput } from "@/lib/platform/session-resources";
 
 type InitialResource = Exclude<ResourceInput, { type: "file" }>;
@@ -16,6 +17,8 @@ export function InitialResources({
   onChange: (resources: InitialResource[]) => void;
   owner?: "session" | "deployment";
 }) {
+  const memoryStores = useMemoryStoreOptions();
+  const memoryStoreOptions = memoryStores.data?.memoryStores ?? [];
   const update = (index: number, value: InitialResource) =>
     onChange(resources.map((resource, i) => (i === index ? value : resource)));
   return (
@@ -133,6 +136,7 @@ export function InitialResources({
                 <Label htmlFor={`memory-id-${index}`}>Memory store ID</Label>
                 <Input
                   id={`memory-id-${index}`}
+                  list="active-memory-stores"
                   value={resource.memory_store_id}
                   onChange={(e) =>
                     update(index, {
@@ -141,6 +145,17 @@ export function InitialResources({
                     })
                   }
                 />
+                <p className="text-xs text-muted-foreground">
+                  {memoryStores.isPending
+                    ? "Loading active memory stores…"
+                    : memoryStores.isError
+                      ? "Memory stores could not be loaded. Paste an ID to continue."
+                      : memoryStores.data?.truncated
+                        ? "Showing the first 1,000 active memory stores. Choose a suggestion or paste an ID."
+                        : memoryStoreOptions.length === 0
+                          ? "No active memory stores found. Create one or paste an ID."
+                          : "Choose a suggestion by name or paste a memory store ID."}
+                </p>
               </div>
               <div className="space-y-1">
                 <Label htmlFor={`memory-access-${index}`}>Access</Label>
@@ -185,6 +200,13 @@ export function InitialResources({
           </Button>
         </fieldset>
       ))}
+      <datalist id="active-memory-stores">
+        {memoryStoreOptions.map((store) => (
+          <option key={store.id} value={store.id}>
+            {store.name}
+          </option>
+        ))}
+      </datalist>
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
