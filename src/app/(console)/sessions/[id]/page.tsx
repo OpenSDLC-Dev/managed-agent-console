@@ -272,6 +272,11 @@ export default function SessionDetailPage({
     return <DetailSkeleton />;
   }
   const data = session.data;
+  // Older wire-compatible deployments can serve sessions without Outcomes.
+  // Presence of the projection is the side-effect-free capability signal: the
+  // shared events endpoint has no narrower route that can be probed safely.
+  const outcomesSupported = Array.isArray(data.outcome_evaluations);
+  const outcomeEvaluations = outcomesSupported ? data.outcome_evaluations : [];
 
   return (
     <div>
@@ -296,10 +301,10 @@ export default function SessionDetailPage({
       />
       <SessionChips session={data} />
       <SessionResources session={data} />
-      {!selectedThreadId && (
+      {!selectedThreadId && outcomesSupported && (
         <SessionOutcomes
           sessionId={id}
-          outcomes={data.outcome_evaluations}
+          outcomes={outcomeEvaluations}
           disabled={!!data.archived_at || trace.deleted}
         />
       )}

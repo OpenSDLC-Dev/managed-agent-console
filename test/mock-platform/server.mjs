@@ -1943,7 +1943,9 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // File upload (multipart) — minimal parse: filename + rough size.
+  // File upload (multipart) — enough parsing to retain the file part's exact
+  // content size. Outcome file rubrics enforce their limit on content bytes,
+  // excluding the multipart headers and boundary.
   if (req.method === "POST" && url.pathname === "/v1/files") {
     res.setHeader("content-type", "application/json");
     const body = await readBody(req);
@@ -1952,12 +1954,27 @@ const server = createServer(async (req, res) => {
     const mime =
       /Content-Type:\s*([^\r\n]+)/i.exec(body)?.[1] ??
       "application/octet-stream";
+    const boundary = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(
+      req.headers["content-type"] ?? "",
+    );
+    const separator = Buffer.from("\r\n\r\n");
+    const contentStart = body.indexOf(separator);
+    const contentEnd = boundary
+      ? body.indexOf(
+          Buffer.from(`\r\n--${boundary[1] ?? boundary[2]}`),
+          contentStart + separator.length,
+        )
+      : -1;
+    const contentSize =
+      contentStart >= 0 && contentEnd >= 0
+        ? contentEnd - contentStart - separator.length
+        : body.length;
     const file = {
       id: `file_mock${String(fileCounter++).padStart(6, "0")}`,
       type: "file",
       filename,
       mime_type: mime.trim(),
-      size_bytes: body.length,
+      size_bytes: contentSize,
       downloadable: false,
       scope: null,
       created_at: now(),

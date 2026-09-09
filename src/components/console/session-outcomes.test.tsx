@@ -79,6 +79,53 @@ describe("SessionOutcomes", () => {
     ).toBeDisabled();
   });
 
+  it("stops an open dialog from submitting after an outcome becomes active", async () => {
+    const fetchMock = vi.fn(async () => json({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <SessionOutcomes sessionId="sesn_1" outcomes={[]} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Define outcome" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "Ship a tested patch" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Rubric"), {
+      target: { value: "Lint and tests pass." },
+    });
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <SessionOutcomes
+          sessionId="sesn_1"
+          outcomes={[
+            outcome({
+              result: "running",
+              completed_at: null,
+              explanation: "",
+            }),
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    const submit = within(dialog).getByRole("button", {
+      name: "Define outcome",
+    });
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("posts the exact text-rubric event and resets after success", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
     vi.stubGlobal("fetch", fetchMock);

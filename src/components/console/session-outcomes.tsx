@@ -72,6 +72,7 @@ export function SessionOutcomes({
     /^\d+$/.test(maxIterations) &&
     Number(maxIterations) >= 1 &&
     Number(maxIterations) <= 20;
+  const canSubmit = valid && !active && !disabled && !send.isPending;
 
   const close = () => {
     setOpen(false);
@@ -79,7 +80,7 @@ export function SessionOutcomes({
   };
 
   const submit = () => {
-    if (!valid) return;
+    if (!canSubmit) return;
     send.mutate(
       [
         {
@@ -286,7 +287,7 @@ export function SessionOutcomes({
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
-            <Button disabled={!valid || send.isPending} onClick={submit}>
+            <Button disabled={!canSubmit} onClick={submit}>
               Define outcome
             </Button>
           </DialogFooter>

@@ -8,9 +8,9 @@ import {
   MOCK_PORT,
   MOCK_URL,
 } from "./test/fidelity/consoles";
+import { ensureLoopbackProxyBypass } from "./test/playwright-env";
 
-process.env.NO_PROXY ??= "localhost,127.0.0.1,::1";
-process.env.no_proxy ??= process.env.NO_PROXY;
+ensureLoopbackProxyBypass();
 
 /**
  * The Chrome fidelity pass's shot walker (plan 04 slice 4) — not a test tier.
