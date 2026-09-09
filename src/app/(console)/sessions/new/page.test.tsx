@@ -119,6 +119,17 @@ const vault = {
   archived_at: null,
 };
 
+const memoryStore = {
+  id: "memstore_1",
+  type: "memory_store",
+  name: "Project notes",
+  description: "",
+  metadata: {},
+  created_at: "2026-08-01T09:12:00Z",
+  updated_at: "2026-08-01T10:00:00Z",
+  archived_at: null,
+};
+
 const json = (payload: unknown, status = 200) =>
   new Response(JSON.stringify(payload), {
     status,
@@ -156,6 +167,8 @@ function stubFetch(over?: {
         return json({ data: [environment] });
       if (url.pathname === "/api/platform/v1/vaults")
         return json({ data: over?.vaults ?? [vault] });
+      if (url.pathname === "/api/platform/v1/memory_stores")
+        return json({ data: [memoryStore], next_page: null });
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );
@@ -212,6 +225,18 @@ describe("NewSessionPage", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Add memory store" }),
     );
+    await waitFor(() =>
+      expect(
+        document.querySelector(
+          'datalist#active-memory-stores option[value="memstore_1"]',
+        ),
+      ).toHaveTextContent("Project notes"),
+    );
+    expect(
+      screen.getByText(
+        "Choose a suggestion by name or paste a memory store ID.",
+      ),
+    ).toHaveAttribute("data-memory-store-options-state", "ready");
     fireEvent.change(screen.getByLabelText("Memory store ID"), {
       target: { value: "memstore_1" },
     });

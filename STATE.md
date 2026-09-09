@@ -21,5 +21,5 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 - [ ] Pass the contributor gate and PR review for each slice.
 
 Skills PR #128, session lifecycle PR #130, session resources PR #131,
-multiagent PR #132 and deployments PR #133 are merged. The memory-store slice
-is in progress.
+multiagent PR #132, deployments PR #133 and memory stores PR #134 are merged.
+Memory-store resource selection is ready; outcome interfaces are next.

@@ -38,6 +38,7 @@ import {
   useMemories,
   useMemory,
   useMemoryStore,
+  useMemoryStoreOptions,
   useMemoryStores,
   useMemoryVersion,
   useMemoryVersions,
@@ -421,6 +422,48 @@ describe("useAgentOptions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(result.current.data?.truncated).toBe(true);
     expect(result.current.data?.agents).toHaveLength(10);
+  });
+});
+
+describe("useMemoryStoreOptions", () => {
+  it("pages active memory stores to exhaustion", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      const url = new URL(String(input), "http://console.test");
+      return jsonResponse(
+        url.searchParams.get("page") === "cur_2"
+          ? { data: [{ id: "memstore_2" }], next_page: null }
+          : { data: [{ id: "memstore_1" }], next_page: "cur_2" },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useMemoryStoreOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      memoryStores: [{ id: "memstore_1" }, { id: "memstore_2" }],
+      truncated: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({ limit: "100" });
+    expect(searchOf(fetchMock.mock.calls[1][0])).toEqual({
+      limit: "100",
+      page: "cur_2",
+    });
+  });
+
+  it("reports when the option list reaches its page cap", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: [{ id: "memstore_x" }], next_page: "again" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useMemoryStoreOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(result.current.data?.truncated).toBe(true);
+    expect(result.current.data?.memoryStores).toHaveLength(10);
   });
 });
 

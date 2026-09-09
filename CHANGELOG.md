@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Session and deployment resource forms suggest active memory stores by name
+  while keeping direct ID entry available for large or temporarily unavailable
+  catalogs.
+
 - Memory stores can be created, edited, archived and deleted. Operators can
   browse paths, create and edit durable text memories with SHA-256 concurrency
   protection, inspect attributed version history, redact old versions and keep

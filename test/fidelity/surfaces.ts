@@ -346,6 +346,24 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "session-new-memory-resource",
+    route: "/sessions/new",
+    fixture: "active memory-store suggestions",
+    description: "Expanded creation-time memory-store resource fields.",
+    setup: async (page) => {
+      await page
+        .getByRole("main")
+        .getByText("Credential vaults (optional)")
+        .waitFor();
+      await page.getByRole("button", { name: "Add memory store" }).click();
+      await page
+        .locator(
+          'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
+        )
+        .waitFor({ state: "attached" });
+    },
+  },
+  {
     id: "deployment-new",
     route: "/deployments/new",
     fixture: "empty form over agent, environment and vault lists",
@@ -353,6 +371,21 @@ export const SURFACES: Surface[] = [
       "Pinned agent, initial event JSON, schedule and reusable-resource controls.",
     setup: async (page) => {
       await page.getByText("Credential vaults (optional)").waitFor();
+    },
+  },
+  {
+    id: "deployment-new-memory-resource",
+    route: "/deployments/new",
+    fixture: "active memory-store suggestions",
+    description: "Expanded reusable memory-store resource fields.",
+    setup: async (page) => {
+      await page.getByText("Credential vaults (optional)").waitFor();
+      await page.getByRole("button", { name: "Add memory store" }).click();
+      await page
+        .locator(
+          'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
+        )
+        .waitFor({ state: "attached" });
     },
   },
   {
