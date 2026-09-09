@@ -84,6 +84,7 @@ test("a served deployment keeps every surface", async ({ page }) => {
     "agents",
     "sessions",
     "deployments",
+    "memory-stores",
     "environments",
     "vaults",
     "skills",

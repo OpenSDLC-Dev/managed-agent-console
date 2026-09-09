@@ -64,6 +64,9 @@ const SESSION = "sesn_research0000000000001";
 const GATED = "sesn_gatedbash00000000001";
 const DEPLOYMENT = "depl_weeklyresearch000001";
 const DEPLOYMENT_RUN = "drun_failed000000000001";
+const MEMORY_STORE = "memstore_projectnotes000001";
+const MEMORY = "mem_projectbrief000000001";
+const MEMORY_VERSION = "memver_briefmodified000001";
 const VAULT = "vlt_github00000000000001";
 const SKILL = "skill_reportwriter0000001";
 
@@ -104,6 +107,12 @@ export const SURFACES: Surface[] = [
     fixture: "2 deployments, scheduled active + manual paused",
     description:
       "Deployment status, pinned agent version and schedule summary.",
+  },
+  {
+    id: "memory-stores-list",
+    route: "/memory-stores",
+    fixture: "2 memory stores, one archived",
+    description: "Durable context stores with live and archived filtering.",
   },
   {
     id: "vaults-list",
@@ -166,6 +175,27 @@ export const SURFACES: Surface[] = [
     route: `/deployments/${DEPLOYMENT}/runs/${DEPLOYMENT_RUN}`,
     fixture: DEPLOYMENT_RUN,
     description: "A scheduled run whose session creation failed.",
+  },
+  {
+    id: "memory-store-detail",
+    route: `/memory-stores/${MEMORY_STORE}`,
+    fixture: "2 live memories, a folder rollup and 3 attributed versions",
+    description:
+      "Store metadata, path browsing and append-only version history in one view.",
+  },
+  {
+    id: "memory-detail",
+    route: `/memory-stores/${MEMORY_STORE}/memories/${MEMORY}`,
+    fixture: MEMORY,
+    description:
+      "Full memory content, digest and optimistic-write head version.",
+  },
+  {
+    id: "memory-version-detail",
+    route: `/memory-stores/${MEMORY_STORE}/versions/${MEMORY_VERSION}`,
+    fixture: MEMORY_VERSION,
+    description:
+      "Attributed immutable version content with the redaction action.",
   },
   {
     id: "skill-upload",
@@ -324,6 +354,30 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page.getByText("Credential vaults (optional)").waitFor();
     },
+  },
+  {
+    id: "memory-store-new",
+    route: "/memory-stores/new",
+    fixture: "empty store form",
+    description: "Store identity, description and metadata JSON editor.",
+  },
+  {
+    id: "memory-store-edit",
+    route: `/memory-stores/${MEMORY_STORE}/edit`,
+    fixture: MEMORY_STORE,
+    description: "Existing store metadata with patch-delete semantics.",
+  },
+  {
+    id: "memory-new",
+    route: `/memory-stores/${MEMORY_STORE}/memories/new`,
+    fixture: "empty memory form",
+    description: "Absolute path and durable text content editor.",
+  },
+  {
+    id: "memory-edit",
+    route: `/memory-stores/${MEMORY_STORE}/memories/${MEMORY}/edit`,
+    fixture: MEMORY,
+    description: "Full memory edit backed by the current SHA-256 precondition.",
   },
   {
     id: "deployment-edit",

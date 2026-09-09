@@ -8,6 +8,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Memory stores can be created, edited, archived and deleted. Operators can
+  browse paths, create and edit durable text memories with SHA-256 concurrency
+  protection, inspect attributed version history, redact old versions and keep
+  tombstones visible after deleting live content.
+
 - Deployments can be created and edited with version-pinned agents, initial
   events, resources and optional Cron schedules. Operators can pause, resume,
   run and archive them, inspect upcoming runs and follow each persistent run to
@@ -30,6 +35,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   protects a skill's last version from individual deletion.
 
 ### Testing
+
+- Added mock and model-free local contracts for memory-store metadata patches,
+  path rollups, optimistic writes, retained delete history, redaction and
+  archive read-only behavior.
 
 - Added a model-free local Skills contract suite covering upload, version reads,
   cursor paging, archive download and deletion against an actual platform.

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { Nav } from "./nav";
-import { SURFACE_NAMES } from "@/lib/platform/surfaces";
+import { SURFACES, SURFACE_NAMES } from "@/lib/platform/surfaces";
 
 const navState = vi.hoisted(() => ({ pathname: "/" }));
 
@@ -47,6 +47,12 @@ const EXPECTED = [
     group: "Managed Agents",
   },
   {
+    label: "Memory stores",
+    href: "/memory-stores",
+    surface: "memory-stores",
+    group: "Managed Agents",
+  },
+  {
     label: "Environments",
     href: "/environments",
     surface: "environments",
@@ -65,7 +71,14 @@ const GROUPS = [
   { label: "Build", surfaces: ["files", "skills"] },
   {
     label: "Managed Agents",
-    surfaces: ["agents", "sessions", "deployments", "environments", "vaults"],
+    surfaces: [
+      "agents",
+      "sessions",
+      "deployments",
+      "memory-stores",
+      "environments",
+      "vaults",
+    ],
   },
 ];
 
@@ -88,7 +101,9 @@ function renderNav(unimplemented?: string[]) {
         // no query string and no name that matches the pattern above.
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : String(input).includes(`/v1/${s}?`),
+          : String(input).includes(
+              `/api/platform/${SURFACES[s as keyof typeof SURFACES].path}?`,
+            ),
       );
       return Promise.resolve(
         new Response(
@@ -161,6 +176,7 @@ describe("Nav", () => {
       "Agents",
       "Sessions",
       "Deployments",
+      "Memory stores",
       "Environments",
       "Credential vaults",
     ]);

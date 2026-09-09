@@ -31,6 +31,10 @@ import type {
   Environment,
   EnvironmentKeyIssued,
   EnvironmentKeyPage,
+  Memory,
+  MemoryListItem,
+  MemoryStore,
+  MemoryVersion,
   PlatformFile,
   Session,
   SessionEvent,
@@ -206,6 +210,99 @@ export function useDeploymentRun(id: string) {
   return useQuery({
     queryKey: ["deployment-run", id],
     queryFn: () => platformGet<DeploymentRun>(`v1/deployment_runs/${id}`),
+  });
+}
+
+export function useMemoryStores(params: {
+  page?: string;
+  include_archived?: boolean;
+  limit?: number;
+  "created_at[gte]"?: string;
+  "created_at[lte]"?: string;
+}) {
+  return useQuery({
+    queryKey: ["memory-stores", params],
+    queryFn: () =>
+      platformGet<Page<MemoryStore>>("v1/memory_stores", {
+        limit: 20,
+        ...params,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMemoryStore(id: string) {
+  return useQuery({
+    queryKey: ["memory-store", id],
+    queryFn: () => platformGet<MemoryStore>(`v1/memory_stores/${id}`),
+  });
+}
+
+export function useMemories(
+  storeId: string,
+  params: {
+    page?: string;
+    path_prefix?: string;
+    depth?: 0 | 1;
+    view?: "basic" | "full";
+    limit?: number;
+  },
+) {
+  return useQuery({
+    queryKey: ["memories", storeId, params],
+    queryFn: () =>
+      platformGet<Page<MemoryListItem>>(
+        `v1/memory_stores/${storeId}/memories`,
+        { limit: 20, ...params },
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMemory(storeId: string, memoryId: string) {
+  return useQuery({
+    queryKey: ["memory", storeId, memoryId],
+    queryFn: () =>
+      platformGet<Memory>(`v1/memory_stores/${storeId}/memories/${memoryId}`, {
+        view: "full",
+      }),
+  });
+}
+
+export function useMemoryVersions(
+  storeId: string,
+  params: {
+    page?: string;
+    memory_id?: string;
+    operation?: "created" | "modified" | "deleted";
+    session_id?: string;
+    api_key_id?: string;
+    service_account_id?: string;
+    "created_at[gte]"?: string;
+    "created_at[lte]"?: string;
+    view?: "basic" | "full";
+    limit?: number;
+  },
+) {
+  return useQuery({
+    queryKey: ["memory-versions", storeId, params],
+    queryFn: () =>
+      platformGet<Page<MemoryVersion>>(
+        `v1/memory_stores/${storeId}/memory_versions`,
+        { limit: 20, ...params },
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMemoryVersion(storeId: string, versionId: string) {
+  return useQuery({
+    queryKey: ["memory-version", storeId, versionId],
+    queryFn: () =>
+      platformGet<MemoryVersion>(
+        `v1/memory_stores/${storeId}/memory_versions/${versionId}`,
+        { view: "full" },
+      ),
   });
 }
 
@@ -598,6 +695,150 @@ export function useRunDeployment(id: string) {
       void client.invalidateQueries({ queryKey: ["deployment-runs"] });
       void client.invalidateQueries({ queryKey: ["deployment", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+}
+
+export interface MemoryStoreWriteBody {
+  name?: string;
+  description?: string | null;
+  metadata?: Record<string, string | null> | null;
+}
+
+function memoryStoreMutationSuccess(
+  client: ReturnType<typeof useQueryClient>,
+  store: MemoryStore,
+) {
+  client.setQueryData(["memory-store", store.id], store);
+  void client.invalidateQueries({ queryKey: ["memory-stores"] });
+}
+
+export function useCreateMemoryStore() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: MemoryStoreWriteBody) =>
+      platformPost<MemoryStore>("v1/memory_stores", body),
+    onSuccess: (store) => memoryStoreMutationSuccess(client, store),
+  });
+}
+
+export function useUpdateMemoryStore(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: MemoryStoreWriteBody) =>
+      platformPost<MemoryStore>(`v1/memory_stores/${id}`, body),
+    onSuccess: (store) => memoryStoreMutationSuccess(client, store),
+  });
+}
+
+export function useArchiveMemoryStore(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Archive memory store failed" },
+    mutationFn: () =>
+      platformPost<MemoryStore>(`v1/memory_stores/${id}/archive`, {}),
+    onSuccess: (store) => memoryStoreMutationSuccess(client, store),
+  });
+}
+
+export function useDeleteMemoryStore(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete memory store failed" },
+    mutationFn: () =>
+      platformDelete<{ id: string; type: "memory_store_deleted" }>(
+        `v1/memory_stores/${id}`,
+      ),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: ["memory-store", id] });
+      void client.invalidateQueries({ queryKey: ["memory-stores"] });
+    },
+  });
+}
+
+export interface MemoryWriteBody {
+  path?: string;
+  content?: string;
+  precondition?: { type: "content_sha256"; content_sha256: string };
+}
+
+export function useCreateMemory(storeId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: Required<Pick<MemoryWriteBody, "path" | "content">>) =>
+      platformPost<Memory>(
+        `v1/memory_stores/${storeId}/memories?view=full`,
+        body,
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["memories", storeId] });
+      void client.invalidateQueries({
+        queryKey: ["memory-versions", storeId],
+      });
+    },
+  });
+}
+
+export function useUpdateMemory(storeId: string, memoryId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: MemoryWriteBody) =>
+      platformPost<Memory>(
+        `v1/memory_stores/${storeId}/memories/${memoryId}?view=full`,
+        body,
+      ),
+    onSuccess: (memory) => {
+      client.setQueryData(["memory", storeId, memoryId], memory);
+      void client.invalidateQueries({ queryKey: ["memories", storeId] });
+      void client.invalidateQueries({
+        queryKey: ["memory-versions", storeId],
+      });
+    },
+  });
+}
+
+export function useDeleteMemory(storeId: string, memoryId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete memory failed" },
+    mutationFn: (expectedContentSha256?: string) =>
+      platformDelete<{ id: string; type: "memory_deleted" }>(
+        `v1/memory_stores/${storeId}/memories/${memoryId}`,
+        { expected_content_sha256: expectedContentSha256 },
+      ),
+    onSuccess: () => {
+      client.removeQueries({ queryKey: ["memory", storeId, memoryId] });
+      void client.invalidateQueries({ queryKey: ["memories", storeId] });
+      void client.invalidateQueries({
+        queryKey: ["memory-versions", storeId],
+      });
+    },
+  });
+}
+
+export function useRedactMemoryVersion(storeId: string, versionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Redact memory version failed" },
+    mutationFn: () =>
+      platformPost<MemoryVersion>(
+        `v1/memory_stores/${storeId}/memory_versions/${versionId}/redact`,
+        {},
+      ),
+    onSuccess: (version) => {
+      client.setQueryData(["memory-version", storeId, versionId], version);
+      void client.invalidateQueries({
+        queryKey: ["memory-versions", storeId],
+      });
+      void client.invalidateQueries({ queryKey: ["memories", storeId] });
+      void client.invalidateQueries({
+        queryKey: ["memory", storeId, version.memory_id],
+        exact: true,
+      });
     },
   });
 }

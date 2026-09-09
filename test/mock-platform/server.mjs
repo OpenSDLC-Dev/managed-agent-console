@@ -5,6 +5,7 @@
 // truth. Sessions carry a tiny state machine so e2e can exercise the HITL
 // approval round trip and streamed replies.
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import {
@@ -16,6 +17,9 @@ import {
   environmentKeys,
   files,
   memoryResources,
+  memories,
+  memoryStores,
+  memoryVersions,
   sessions as sessionFixtures,
   sessionEvents as eventFixtures,
   sessionThreads as threadFixtures,
@@ -75,6 +79,12 @@ let deploymentsStore = [];
 let deploymentRunsStore = [];
 let deploymentCounter = 1;
 let deploymentRunCounter = 1;
+let memoryStoresStore = [];
+let memoriesStore = [];
+let memoryVersionsStore = [];
+let memoryStoreCounter = 1;
+let memoryCounter = 1;
+let memoryVersionCounter = 1;
 let threadCounter = 1;
 let resourceCounter = 1;
 let vaultsStore = [];
@@ -196,6 +206,9 @@ function resetStore() {
   environmentsStore = structuredClone(environments);
   deploymentsStore = structuredClone(deployments);
   deploymentRunsStore = structuredClone(deploymentRuns);
+  memoryStoresStore = structuredClone(memoryStores);
+  memoriesStore = structuredClone(memories);
+  memoryVersionsStore = structuredClone(memoryVersions);
   filesStore = structuredClone(files);
   vaultsStore = structuredClone(vaults);
   vaultCredsStore = structuredClone(vaultCredentials);
@@ -203,6 +216,9 @@ function resetStore() {
   skillVersionsStore = structuredClone(skillVersions);
   agentCounter = 1;
   environmentCounter = 1;
+  memoryStoreCounter = 1;
+  memoryCounter = 1;
+  memoryVersionCounter = 1;
   fileCounter = 1;
   sessionCounter = 1;
   deploymentCounter = 1;
@@ -931,6 +947,116 @@ function route(req, url) {
       null
     );
 
+  if (path === "/v1/memory_stores") {
+    let rows = includeArchived
+      ? memoryStoresStore
+      : memoryStoresStore.filter(notArchived);
+    const createdGte = url.searchParams.get("created_at[gte]");
+    const createdLte = url.searchParams.get("created_at[lte]");
+    if (createdGte) rows = rows.filter((row) => row.created_at >= createdGte);
+    if (createdLte) rows = rows.filter((row) => row.created_at <= createdLte);
+    return keysetPage(rows, url);
+  }
+  const memoryStoreMatch = path.match(/^\/v1\/memory_stores\/([^/]+)$/);
+  if (memoryStoreMatch)
+    return (
+      memoryStoresStore.find((row) => row.id === memoryStoreMatch[1]) ?? null
+    );
+  const memoriesMatch = path.match(/^\/v1\/memory_stores\/([^/]+)\/memories$/);
+  if (memoriesMatch) {
+    if (!memoryStoresStore.some((row) => row.id === memoriesMatch[1]))
+      return null;
+    const prefix = url.searchParams.get("path_prefix") ?? "/";
+    const depth = Number(url.searchParams.get("depth") ?? 0);
+    const full = url.searchParams.get("view") === "full";
+    const byPath = memoriesStore
+      .filter(
+        (memory) =>
+          memory.memory_store_id === memoriesMatch[1] &&
+          memory.path.startsWith(prefix),
+      )
+      .sort((a, b) => a.path.localeCompare(b.path));
+    let rows = byPath;
+    if (depth === 1) {
+      const seen = new Set();
+      rows = [];
+      for (const memory of byPath) {
+        const remainder = memory.path.slice(prefix.length);
+        const slash = remainder.indexOf("/");
+        if (slash === -1) {
+          rows.push(memory);
+          continue;
+        }
+        const rolled = `${prefix}${remainder.slice(0, slash + 1)}`;
+        if (seen.has(rolled)) continue;
+        seen.add(rolled);
+        rows.push({ type: "memory_prefix", path: rolled });
+      }
+    }
+    rows = rows.map((row) =>
+      row.type === "memory" && !full ? { ...row, content: null } : row,
+    );
+    return keysetPage(rows, url);
+  }
+  const memoryMatch = path.match(
+    /^\/v1\/memory_stores\/([^/]+)\/memories\/([^/]+)$/,
+  );
+  if (memoryMatch) {
+    const memory = memoriesStore.find(
+      (row) =>
+        row.memory_store_id === memoryMatch[1] && row.id === memoryMatch[2],
+    );
+    if (!memory) return null;
+    return url.searchParams.get("view") === "basic"
+      ? { ...memory, content: null }
+      : memory;
+  }
+  const memoryVersionsMatch = path.match(
+    /^\/v1\/memory_stores\/([^/]+)\/memory_versions$/,
+  );
+  if (memoryVersionsMatch) {
+    if (!memoryStoresStore.some((row) => row.id === memoryVersionsMatch[1]))
+      return null;
+    let rows = memoryVersionsStore.filter(
+      (version) => version.memory_store_id === memoryVersionsMatch[1],
+    );
+    for (const [param, field] of [
+      ["memory_id", "memory_id"],
+      ["operation", "operation"],
+      ["session_id", "session_id"],
+      ["api_key_id", "api_key_id"],
+      ["service_account_id", "service_account_id"],
+    ]) {
+      const value = url.searchParams.get(param);
+      if (!value) continue;
+      rows = rows.filter((version) =>
+        field in version
+          ? version[field] === value
+          : version.created_by?.[field] === value,
+      );
+    }
+    const createdGte = url.searchParams.get("created_at[gte]");
+    const createdLte = url.searchParams.get("created_at[lte]");
+    if (createdGte) rows = rows.filter((row) => row.created_at >= createdGte);
+    if (createdLte) rows = rows.filter((row) => row.created_at <= createdLte);
+    if (url.searchParams.get("view") !== "full")
+      rows = rows.map((row) => ({ ...row, content: null }));
+    return keysetPage(rows, url);
+  }
+  const versionMatch = path.match(
+    /^\/v1\/memory_stores\/([^/]+)\/memory_versions\/([^/]+)$/,
+  );
+  if (versionMatch) {
+    const version = memoryVersionsStore.find(
+      (row) =>
+        row.memory_store_id === versionMatch[1] && row.id === versionMatch[2],
+    );
+    if (!version) return null;
+    return url.searchParams.get("view") === "basic"
+      ? { ...version, content: null }
+      : version;
+  }
+
   const threadsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads$/);
   if (threadsMatch) {
     const state = store.get(threadsMatch[1]);
@@ -1092,7 +1218,13 @@ const server = createServer(async (req, res) => {
   // an unregistered route falls through its router's catch-all to a plain
   // 404/not_found_error (internal/api/server.go), which is what this replays
   // so e2e can prove the console hides the surface instead of erroring.
-  if (unimplemented.some((s) => url.pathname.startsWith(`/v1/${s}`))) {
+  if (
+    unimplemented.some((surface) =>
+      url.pathname.startsWith(
+        `/v1/${surface === "memory-stores" ? "memory_stores" : surface}`,
+      ),
+    )
+  ) {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
     res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
@@ -2417,6 +2549,398 @@ const server = createServer(async (req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify(session));
     return;
+  }
+
+  // Memory stores, live memories, and their append-only version history.
+  if (url.pathname.startsWith("/v1/memory_stores")) {
+    res.setHeader("content-type", "application/json");
+    const storeItem = url.pathname.match(/^\/v1\/memory_stores\/([^/]+)$/);
+    const storeArchive = url.pathname.match(
+      /^\/v1\/memory_stores\/([^/]+)\/archive$/,
+    );
+    const memoryCollection = url.pathname.match(
+      /^\/v1\/memory_stores\/([^/]+)\/memories$/,
+    );
+    const memoryItem = url.pathname.match(
+      /^\/v1\/memory_stores\/([^/]+)\/memories\/([^/]+)$/,
+    );
+    const versionRedact = url.pathname.match(
+      /^\/v1\/memory_stores\/([^/]+)\/memory_versions\/([^/]+)\/redact$/,
+    );
+    const fail = (status, type, message) => {
+      res.writeHead(status);
+      res.end(envelope(type, message));
+    };
+    const storeFor = (id) =>
+      memoryStoresStore.find((candidate) => candidate.id === id);
+    const writeStore = (id) => {
+      const item = storeFor(id);
+      if (!item) {
+        fail(404, "not_found_error", `memory store ${id} not found`);
+        return null;
+      }
+      if (item.archived_at) {
+        fail(400, "invalid_request_error", `memory store ${id} is archived`);
+        return null;
+      }
+      return item;
+    };
+    const renderMemory = (memory) =>
+      url.searchParams.get("view") === "full"
+        ? memory
+        : { ...memory, content: null };
+    const validPath = (path) =>
+      typeof path === "string" &&
+      path.startsWith("/") &&
+      path !== "/" &&
+      path.length <= 1024 &&
+      !path
+        .slice(1)
+        .split("/")
+        .some(
+          (segment) => segment === "" || segment === "." || segment === "..",
+        );
+    const digest = (content) =>
+      createHash("sha256").update(content).digest("hex");
+    const actor = { type: "api_actor", api_key_id: "apikey_ci01" };
+    const readJSON = async () => {
+      try {
+        return JSON.parse(await readBody(req));
+      } catch {
+        fail(400, "invalid_request_error", "invalid JSON body");
+        return null;
+      }
+    };
+
+    if (req.method === "POST" && url.pathname === "/v1/memory_stores") {
+      const body = await readJSON();
+      if (!body) return;
+      if (typeof body.name !== "string" || body.name.length === 0) {
+        fail(400, "invalid_request_error", "name is required");
+        return;
+      }
+      if (
+        body.metadata != null &&
+        (typeof body.metadata !== "object" ||
+          Array.isArray(body.metadata) ||
+          Object.values(body.metadata).some(
+            (value) => typeof value !== "string",
+          ))
+      ) {
+        fail(400, "invalid_request_error", "metadata values must be strings");
+        return;
+      }
+      const timestamp = now();
+      const item = {
+        id: `memstore_mock${String(memoryStoreCounter++).padStart(6, "0")}`,
+        type: "memory_store",
+        name: body.name,
+        description: body.description ?? "",
+        metadata: body.metadata ?? {},
+        created_at: timestamp,
+        updated_at: timestamp,
+        archived_at: null,
+      };
+      memoryStoresStore.unshift(item);
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method === "POST" && storeArchive) {
+      const item = storeFor(storeArchive[1]);
+      if (!item) {
+        fail(404, "not_found_error", "memory store not found");
+        return;
+      }
+      item.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method === "POST" && storeItem) {
+      const item = writeStore(storeItem[1]);
+      if (!item) return;
+      const body = await readJSON();
+      if (!body) return;
+      if ("name" in body && (typeof body.name !== "string" || !body.name)) {
+        fail(400, "invalid_request_error", "name cannot be cleared");
+        return;
+      }
+      if (
+        body.metadata != null &&
+        (typeof body.metadata !== "object" ||
+          Array.isArray(body.metadata) ||
+          Object.values(body.metadata).some(
+            (value) => value !== null && typeof value !== "string",
+          ))
+      ) {
+        fail(
+          400,
+          "invalid_request_error",
+          "metadata values must be strings or null",
+        );
+        return;
+      }
+      const before = JSON.stringify([
+        item.name,
+        item.description,
+        item.metadata,
+      ]);
+      if ("name" in body) item.name = body.name;
+      if ("description" in body) item.description = body.description ?? "";
+      if (body.metadata != null) {
+        const metadata = { ...item.metadata };
+        for (const [key, value] of Object.entries(body.metadata)) {
+          if (value === null) delete metadata[key];
+          else metadata[key] = value;
+        }
+        item.metadata = metadata;
+      }
+      if (
+        before !== JSON.stringify([item.name, item.description, item.metadata])
+      )
+        item.updated_at = now();
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method === "DELETE" && storeItem) {
+      const index = memoryStoresStore.findIndex(
+        (item) => item.id === storeItem[1],
+      );
+      if (index < 0) {
+        fail(404, "not_found_error", "memory store not found");
+        return;
+      }
+      const [removed] = memoryStoresStore.splice(index, 1);
+      memoriesStore = memoriesStore.filter(
+        (memory) => memory.memory_store_id !== removed.id,
+      );
+      memoryVersionsStore = memoryVersionsStore.filter(
+        (version) => version.memory_store_id !== removed.id,
+      );
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: removed.id, type: "memory_store_deleted" }));
+      return;
+    }
+
+    if (req.method === "POST" && memoryCollection) {
+      if (!writeStore(memoryCollection[1])) return;
+      const body = await readJSON();
+      if (!body) return;
+      if (!validPath(body.path) || typeof body.content !== "string") {
+        fail(400, "invalid_request_error", "path and content are required");
+        return;
+      }
+      if (
+        memoriesStore.some(
+          (memory) =>
+            memory.memory_store_id === memoryCollection[1] &&
+            memory.path === body.path,
+        )
+      ) {
+        fail(409, "memory_path_conflict_error", "memory path is occupied");
+        return;
+      }
+      const timestamp = now();
+      const memoryId = `mem_mock${String(memoryCounter++).padStart(8, "0")}`;
+      const versionId = `memver_mock${String(memoryVersionCounter++).padStart(8, "0")}`;
+      const memory = {
+        id: memoryId,
+        type: "memory",
+        memory_store_id: memoryCollection[1],
+        path: body.path,
+        content: body.content,
+        content_size_bytes: Buffer.byteLength(body.content),
+        content_sha256: digest(body.content),
+        memory_version_id: versionId,
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+      memoryVersionsStore.unshift({
+        id: versionId,
+        type: "memory_version",
+        memory_store_id: memory.memory_store_id,
+        memory_id: memory.id,
+        operation: "created",
+        path: memory.path,
+        content: memory.content,
+        content_size_bytes: memory.content_size_bytes,
+        content_sha256: memory.content_sha256,
+        created_by: actor,
+        created_at: timestamp,
+        redacted_at: null,
+        redacted_by: null,
+      });
+      memoriesStore.push(memory);
+      res.writeHead(200);
+      res.end(JSON.stringify(renderMemory(memory)));
+      return;
+    }
+
+    if (req.method === "POST" && memoryItem) {
+      if (!writeStore(memoryItem[1])) return;
+      const memory = memoriesStore.find(
+        (item) =>
+          item.memory_store_id === memoryItem[1] && item.id === memoryItem[2],
+      );
+      if (!memory) {
+        fail(404, "not_found_error", "memory not found");
+        return;
+      }
+      const body = await readJSON();
+      if (!body) return;
+      const path = body.path ?? memory.path;
+      const content = body.content ?? memory.content;
+      if (!("path" in body) && !("content" in body)) {
+        fail(400, "invalid_request_error", "update requires content or path");
+        return;
+      }
+      if (!validPath(path) || typeof content !== "string") {
+        fail(400, "invalid_request_error", "invalid memory update");
+        return;
+      }
+      const unchanged = path === memory.path && content === memory.content;
+      if (
+        body.precondition?.content_sha256 &&
+        body.precondition.content_sha256 !== memory.content_sha256 &&
+        !unchanged
+      ) {
+        fail(409, "memory_precondition_failed_error", "memory content changed");
+        return;
+      }
+      if (
+        path !== memory.path &&
+        memoriesStore.some(
+          (item) =>
+            item.memory_store_id === memoryItem[1] &&
+            item.id !== memory.id &&
+            item.path === path,
+        )
+      ) {
+        fail(409, "memory_path_conflict_error", "memory path is occupied");
+        return;
+      }
+      if (!unchanged) {
+        const timestamp = now();
+        const versionId = `memver_mock${String(memoryVersionCounter++).padStart(8, "0")}`;
+        Object.assign(memory, {
+          path,
+          content,
+          content_size_bytes: Buffer.byteLength(content),
+          content_sha256: digest(content),
+          memory_version_id: versionId,
+          updated_at: timestamp,
+        });
+        memoryVersionsStore.unshift({
+          id: versionId,
+          type: "memory_version",
+          memory_store_id: memory.memory_store_id,
+          memory_id: memory.id,
+          operation: "modified",
+          path,
+          content,
+          content_size_bytes: memory.content_size_bytes,
+          content_sha256: memory.content_sha256,
+          created_by: actor,
+          created_at: timestamp,
+          redacted_at: null,
+          redacted_by: null,
+        });
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify(renderMemory(memory)));
+      return;
+    }
+
+    if (req.method === "DELETE" && memoryItem) {
+      if (!writeStore(memoryItem[1])) return;
+      const index = memoriesStore.findIndex(
+        (item) =>
+          item.memory_store_id === memoryItem[1] && item.id === memoryItem[2],
+      );
+      if (index < 0) {
+        fail(404, "not_found_error", "memory not found");
+        return;
+      }
+      const memory = memoriesStore[index];
+      const expected = url.searchParams.get("expected_content_sha256");
+      if (expected && expected !== memory.content_sha256) {
+        fail(409, "memory_precondition_failed_error", "memory content changed");
+        return;
+      }
+      const timestamp = now();
+      memoryVersionsStore.unshift({
+        id: `memver_mock${String(memoryVersionCounter++).padStart(8, "0")}`,
+        type: "memory_version",
+        memory_store_id: memory.memory_store_id,
+        memory_id: memory.id,
+        operation: "deleted",
+        path: memory.path,
+        content: null,
+        content_size_bytes: null,
+        content_sha256: null,
+        created_by: actor,
+        created_at: timestamp,
+        redacted_at: null,
+        redacted_by: null,
+      });
+      memoriesStore.splice(index, 1);
+      res.writeHead(200);
+      res.end(JSON.stringify({ id: memory.id, type: "memory_deleted" }));
+      return;
+    }
+
+    if (req.method === "POST" && versionRedact) {
+      const storeItem = storeFor(versionRedact[1]);
+      if (!storeItem) {
+        fail(404, "not_found_error", "memory store not found");
+        return;
+      }
+      const version = memoryVersionsStore.find(
+        (item) =>
+          item.memory_store_id === versionRedact[1] &&
+          item.id === versionRedact[2],
+      );
+      if (!version) {
+        fail(404, "not_found_error", "memory version not found");
+        return;
+      }
+      if (version.redacted_at) {
+        res.writeHead(200);
+        res.end(JSON.stringify(version));
+        return;
+      }
+      const head = memoriesStore.find(
+        (memory) => memory.memory_version_id === version.id,
+      );
+      if (head && !storeItem.archived_at) {
+        fail(
+          400,
+          "invalid_request_error",
+          "current memory head cannot be redacted",
+        );
+        return;
+      }
+      if (head) {
+        head.content = "";
+        head.content_size_bytes = 0;
+        head.content_sha256 = digest("");
+        head.updated_at = now();
+      }
+      version.path = null;
+      version.content = null;
+      version.content_size_bytes = null;
+      version.content_sha256 = null;
+      version.redacted_at = now();
+      version.redacted_by = actor;
+      res.writeHead(200);
+      res.end(JSON.stringify(version));
+      return;
+    }
   }
 
   // Vault + credential writes. Secrets are write-only: the stored render is

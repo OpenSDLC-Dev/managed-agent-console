@@ -36,6 +36,9 @@ import {
   EnvironmentKeyPageSchema,
   EnvironmentKeySchema,
   EnvironmentSchema,
+  MemorySchema,
+  MemoryStoreSchema,
+  MemoryVersionSchema,
   PlatformFileSchema,
   SessionResourceSchema,
   SessionEventSchema,
@@ -106,6 +109,12 @@ describe("mock fixtures conform to the platform wire", () => {
     each(DeploymentRunSchema, fixtures.deploymentRuns, "deploymentRuns");
   });
 
+  it("memory stores, memories and memory versions", () => {
+    each(MemoryStoreSchema, fixtures.memoryStores, "memoryStores");
+    each(MemorySchema, fixtures.memories, "memories");
+    each(MemoryVersionSchema, fixtures.memoryVersions, "memoryVersions");
+  });
+
   it("vaults and their credentials", () => {
     each(VaultSchema, fixtures.vaults, "vaults");
     eachIn(
@@ -142,7 +151,10 @@ describe("mock fixtures conform to the platform wire", () => {
       "environmentKeys",
       "environments",
       "files",
+      "memories",
       "memoryResources",
+      "memoryStores",
+      "memoryVersions",
       "sessionEvents",
       "sessionThreadEvents",
       "sessionThreads",
@@ -521,6 +533,77 @@ describe("the mock's constructed write-path responses conform too", () => {
       archived,
       `POST /v1/deployments/${id}/archive`,
     );
+  });
+
+  it("memory stores: create, patch, write, delete, redact and archive", async () => {
+    const store = await postJSON("/v1/memory_stores", {
+      name: "Conformance memory",
+      description: "Durable context",
+      metadata: { owner: "console", remove: "me" },
+    });
+    expectConforms(MemoryStoreSchema, store, "POST /v1/memory_stores");
+    const storeId = (store as { id: string }).id;
+
+    const patched = await postJSON(`/v1/memory_stores/${storeId}`, {
+      metadata: { owner: "platform", remove: null },
+    });
+    expectConforms(MemoryStoreSchema, patched, "PATCH-like store update");
+    expect((patched as { metadata: object }).metadata).toEqual({
+      owner: "platform",
+    });
+
+    const created = await postJSON(
+      `/v1/memory_stores/${storeId}/memories?view=full`,
+      { path: "/brief.md", content: "First" },
+    );
+    expectConforms(MemorySchema, created, "POST memory view=full");
+    expect((created as { content: string | null }).content).toBe("First");
+    const memoryId = (created as { id: string }).id;
+    const firstVersionId = (created as { memory_version_id: string })
+      .memory_version_id;
+
+    const updated = await postJSON(
+      `/v1/memory_stores/${storeId}/memories/${memoryId}?view=full`,
+      {
+        content: "Second",
+        precondition: {
+          type: "content_sha256",
+          content_sha256: (created as { content_sha256: string })
+            .content_sha256,
+        },
+      },
+    );
+    expectConforms(MemorySchema, updated, "POST memory update");
+    expect((updated as { content: string | null }).content).toBe("Second");
+
+    const redacted = await postJSON(
+      `/v1/memory_stores/${storeId}/memory_versions/${firstVersionId}/redact`,
+      {},
+    );
+    expectConforms(MemoryVersionSchema, redacted, "POST version redact");
+    expect(redacted).toMatchObject({
+      path: null,
+      content: null,
+      content_sha256: null,
+    });
+
+    const removeMemory = await fetch(
+      `${base}/v1/memory_stores/${storeId}/memories/${memoryId}?expected_content_sha256=${(updated as { content_sha256: string }).content_sha256}`,
+      { method: "DELETE", headers: { "x-api-key": API_KEY } },
+    );
+    expect(removeMemory.status).toBe(200);
+    const versions = (await call(
+      `/v1/memory_stores/${storeId}/memory_versions?view=full`,
+      { method: "GET" },
+    )) as { data: unknown[] };
+    each(MemoryVersionSchema, versions.data, "retained memory versions");
+    expect(versions.data).toHaveLength(3);
+
+    const archived = await postJSON(`/v1/memory_stores/${storeId}/archive`, {});
+    expectConforms(MemoryStoreSchema, archived, "POST store archive");
+    expect(
+      (archived as { archived_at: string | null }).archived_at,
+    ).not.toBeNull();
   });
 
   it("files: upload", async () => {

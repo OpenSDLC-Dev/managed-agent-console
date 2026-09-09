@@ -15,9 +15,11 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
 - [x] Add multiagent interfaces: ordered Agent rosters, Session thread traces,
       child approvals and interrupts, and idle-child archival.
 - [x] Add deployment schedules, lifecycle actions and run history.
-- [ ] Add memory stores and outcome interfaces.
+- [x] Add memory stores, memory files and append-only version history.
+- [ ] Add outcome interfaces.
 - [ ] Complete interaction parity and Chrome fidelity checks.
 - [ ] Pass the contributor gate and PR review for each slice.
 
-Skills PR #128, session lifecycle PR #130, session resources PR #131 and
-multiagent PR #132 are merged. The deployment slice is in progress.
+Skills PR #128, session lifecycle PR #130, session resources PR #131,
+multiagent PR #132 and deployments PR #133 are merged. The memory-store slice
+is in progress.
