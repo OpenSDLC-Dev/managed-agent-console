@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 import { LIVE_CONSOLE_PASSWORD, resolveLiveEnv } from "./test/e2e-live/env";
 
+process.env.NO_PROXY ??= "localhost,127.0.0.1,::1";
+process.env.no_proxy ??= process.env.NO_PROXY;
+
 /**
  * Live tier: the console's production build against a REAL platform stack
  * (the platform repo's deploy/compose), spending real model tokens.

@@ -50,3 +50,9 @@ Memory stores: `internal/api/memorystores.go`, `memories.go` and
 `memoryversions.go` establish one-way archive, metadata tombstones, literal path
 prefix browsing, SHA-256 write preconditions, persistent delete versions and
 compliance redaction. The model-free contract covers those routes directly.
+
+Outcomes: `user.define_outcome` is accepted through the session event endpoint;
+the session projects its current state in `outcome_evaluations`, and evaluation
+cycles remain in the event log. A self-hosted session with no worker proved the
+pending projection, single-active rejection and interrupt settlement without a
+model call.

@@ -65,6 +65,7 @@ const AGENT_OPTIONS_PAGE_LIMIT = 100;
 const AGENT_OPTIONS_PAGE_CAP = 10;
 const MEMORY_STORE_OPTIONS_PAGE_LIMIT = 100;
 const MEMORY_STORE_OPTIONS_PAGE_CAP = 10;
+const FILE_OPTIONS_PAGE_LIMIT = 1000;
 
 /**
  * Every agent, for filter options: pages `v1/agents` to exhaustion
@@ -438,6 +439,20 @@ export function useFiles(afterId?: string) {
         after_id: afterId,
       }),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** First 1,000 uploaded files for rubric suggestions; callers keep raw ID input. */
+export function useFileOptions(enabled = true) {
+  return useQuery({
+    queryKey: ["file-options"],
+    enabled,
+    queryFn: async () => {
+      const res = await platformGet<ClassicPage<PlatformFile>>("v1/files", {
+        limit: FILE_OPTIONS_PAGE_LIMIT,
+      });
+      return { files: res.data, truncated: res.has_more };
+    },
   });
 }
 

@@ -59,6 +59,9 @@ let forbidden = [];
 let requestCounter = 0;
 let eventCounter = 1000;
 const nextEventId = () => `sevt_mock${String(eventCounter++).padStart(6, "0")}`;
+let outcomeCounter = 1;
+const nextOutcomeId = () =>
+  `outc_mock${String(outcomeCounter++).padStart(20, "0")}`;
 const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
 // ---- mutable session store (reset via POST /__reset) ---------------------
@@ -225,6 +228,7 @@ function resetStore() {
   deploymentRunCounter = 1;
   threadCounter = 1;
   resourceCounter = 1;
+  outcomeCounter = 1;
   vaultCounter = 1;
   credCounter = 1;
   skillCounter = 1;
@@ -628,13 +632,24 @@ function streamReply(state, text, threadId) {
 }
 
 function handleInbound(state, incoming) {
+  const batchInterrupts = incoming.some(
+    (candidate) => candidate?.type === "user.interrupt",
+  );
+  if (
+    incoming.filter((candidate) => candidate?.type === "user.define_outcome")
+      .length > 1
+  )
+    return { error: "only one outcome is supported at a time" };
   for (const raw of incoming) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw))
       return { error: "event must be an object" };
     if (
-      !["user.message", "user.interrupt", "user.tool_confirmation"].includes(
-        raw.type,
-      )
+      ![
+        "user.message",
+        "user.interrupt",
+        "user.tool_confirmation",
+        "user.define_outcome",
+      ].includes(raw.type)
     )
       return { error: `unsupported inbound event type "${raw.type}"` };
     if (
@@ -642,6 +657,62 @@ function handleInbound(state, incoming) {
       Object.prototype.hasOwnProperty.call(raw, "session_thread_id")
     )
       return { error: "user.message does not accept session_thread_id" };
+    if (raw.type === "user.define_outcome") {
+      const allowed = new Set([
+        "type",
+        "description",
+        "rubric",
+        "max_iterations",
+      ]);
+      if (Object.keys(raw).some((key) => !allowed.has(key)))
+        return { error: "user.define_outcome has an unknown field" };
+      if (typeof raw.description !== "string" || raw.description.length === 0)
+        return { error: "description is required" };
+      const rubric = raw.rubric;
+      if (!rubric || typeof rubric !== "object" || Array.isArray(rubric))
+        return { error: "rubric is required" };
+      if (
+        rubric.type === "text"
+          ? typeof rubric.content !== "string" ||
+            rubric.content.length === 0 ||
+            [...rubric.content].length > 262_144 ||
+            Object.keys(rubric).some(
+              (key) => !["type", "content"].includes(key),
+            )
+          : rubric.type === "file"
+            ? typeof rubric.file_id !== "string" ||
+              rubric.file_id.length === 0 ||
+              Object.keys(rubric).some(
+                (key) => !["type", "file_id"].includes(key),
+              ) ||
+              !filesStore.some(
+                (file) =>
+                  file.id === rubric.file_id && file.size_bytes <= 256 * 1024,
+              )
+            : true
+      )
+        return {
+          error: "rubric must be valid text or a file of at most 256 KiB",
+        };
+      if (
+        raw.max_iterations !== undefined &&
+        (!Number.isInteger(raw.max_iterations) ||
+          raw.max_iterations < 1 ||
+          raw.max_iterations > 20)
+      )
+        return { error: "max_iterations must be between 1 and 20" };
+      const active = state.session.outcome_evaluations.some(
+        (entry) =>
+          ![
+            "satisfied",
+            "max_iterations_reached",
+            "failed",
+            "interrupted",
+          ].includes(entry.result),
+      );
+      if (active && !batchInterrupts)
+        return { error: "only one outcome is supported at a time" };
+    }
     const threadId = raw.session_thread_id;
     if (threadId !== undefined && threadId !== null) {
       const thread = state.threads.find(
@@ -654,6 +725,7 @@ function handleInbound(state, incoming) {
   }
 
   const posted = [];
+  const definitions = [];
   for (const raw of incoming) {
     const threadId = raw.session_thread_id;
     const event = { id: nextEventId(), type: raw.type, processed_at: now() };
@@ -672,6 +744,14 @@ function handleInbound(state, incoming) {
         event.deny_message = raw.deny_message ?? null;
         event.session_thread_id = threadId ?? null;
         broadcast(state, event, threadId);
+        break;
+      case "user.define_outcome":
+        event.description = raw.description;
+        event.rubric = structuredClone(raw.rubric);
+        event.max_iterations = raw.max_iterations ?? 3;
+        event.outcome_id = nextOutcomeId();
+        broadcast(state, event);
+        definitions.push(event);
         break;
       default:
         return { error: `unsupported inbound event type "${raw.type}"` };
@@ -703,6 +783,50 @@ function handleInbound(state, incoming) {
       );
     }
     setStatus(state, "idle", { type: "end_turn" }, interrupt.session_thread_id);
+  }
+
+  if (interrupt) {
+    for (const entry of state.session.outcome_evaluations) {
+      if (
+        [
+          "satisfied",
+          "max_iterations_reached",
+          "failed",
+          "interrupted",
+        ].includes(entry.result)
+      )
+        continue;
+      entry.result = "interrupted";
+      entry.explanation =
+        "The outcome was interrupted by a user.interrupt before evaluation completed.";
+      entry.completed_at = now();
+      appendEvent(state, "span.outcome_evaluation_end", {
+        outcome_id: entry.outcome_id,
+        outcome_evaluation_start_id: "",
+        iteration: entry.iteration,
+        result: entry.result,
+        explanation: entry.explanation,
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+          speed: null,
+        },
+      });
+    }
+  }
+
+  for (const definition of definitions) {
+    state.session.outcome_evaluations.push({
+      type: "outcome_evaluation",
+      outcome_id: definition.outcome_id,
+      description: definition.description,
+      explanation: "",
+      iteration: 0,
+      result: "pending",
+      completed_at: null,
+    });
   }
 
   for (const confirmation of confirmations) {
@@ -750,6 +874,9 @@ function handleInbound(state, incoming) {
   if (messages.length > 0 && confirmations.length === 0) {
     setStatus(state, "running", undefined);
     streamReply(state, "Working on it now.");
+  }
+  if (definitions.length > 0 && messages.length === 0) {
+    setStatus(state, "running", undefined);
   }
 
   return { posted };

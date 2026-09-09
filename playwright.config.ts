@@ -1,5 +1,11 @@
 import { defineConfig } from "@playwright/test";
 
+// Web-server readiness probes are loopback traffic. Some developer shells set
+// a catch-all proxy without NO_PROXY, which turns healthy local servers into
+// 502s and leaves Playwright waiting until its timeout.
+process.env.NO_PROXY ??= "localhost,127.0.0.1,::1";
+process.env.no_proxy ??= process.env.NO_PROXY;
+
 const CONSOLE_PORT = 3100;
 const MOCK_PORT = 18080;
 

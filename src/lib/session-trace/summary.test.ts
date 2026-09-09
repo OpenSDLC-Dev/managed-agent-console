@@ -85,7 +85,9 @@ describe("isKnownEventType", () => {
   it("knows the rendered types and rejects the rest", () => {
     expect(isKnownEventType("user.message")).toBe(true);
     expect(isKnownEventType("span.model_request_start")).toBe(true);
-    expect(isKnownEventType("user.define_outcome")).toBe(false);
+    expect(isKnownEventType("user.define_outcome")).toBe(true);
+    expect(isKnownEventType("span.outcome_evaluation_end")).toBe(true);
+    expect(isKnownEventType("wire.unknown")).toBe(false);
   });
 });
 
@@ -227,10 +229,49 @@ describe("summaryOf", () => {
     expect(summaryOf(ev("session.error"))).toBe("error");
   });
 
-  it("probe: summarizes an unknown type as its payload JSON, empty when bare", () => {
+  it("summarizes outcome definitions and evaluation spans", () => {
     expect(
-      summaryOf(ev("user.define_outcome", { description: "Survey." })),
-    ).toBe('{"description":"Survey."}');
+      summaryOf(
+        ev("user.define_outcome", { description: "Produce a survey." }),
+      ),
+    ).toBe("Produce a survey.");
+    expect(
+      summaryOf(ev("span.outcome_evaluation_start", { iteration: 0 })),
+    ).toBe("Iteration 1 evaluation started");
+    expect(
+      summaryOf(ev("span.outcome_evaluation_ongoing", { iteration: 0 })),
+    ).toBe("Iteration 1 evaluation in progress");
+    expect(
+      summaryOf(
+        ev("span.outcome_evaluation_end", {
+          iteration: 1,
+          result: "needs_revision",
+          explanation: "Add primary-source citations.",
+        }),
+      ),
+    ).toBe("Needs revision · Iteration 2 — Add primary-source citations.");
+  });
+
+  it("reads grader usage from an outcome evaluation end", () => {
+    expect(
+      tokensLine(
+        ev("span.outcome_evaluation_end", {
+          usage: {
+            input_tokens: 12,
+            output_tokens: 3,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 8,
+            speed: null,
+          },
+        }),
+      ),
+    ).toBe("12 in · 3 out · 8 cache read");
+  });
+
+  it("probe: summarizes an unknown type as its payload JSON, empty when bare", () => {
+    expect(summaryOf(ev("wire.unknown", { description: "Survey." }))).toBe(
+      '{"description":"Survey."}',
+    );
     expect(summaryOf(ev("wire.unknown"))).toBe("");
   });
 });

@@ -16,10 +16,11 @@ What is being worked on right now, and how far along. **~30 lines, nothing stati
       child approvals and interrupts, and idle-child archival.
 - [x] Add deployment schedules, lifecycle actions and run history.
 - [x] Add memory stores, memory files and append-only version history.
-- [ ] Add outcome interfaces.
+- [x] Add outcome interfaces.
 - [ ] Complete interaction parity and Chrome fidelity checks.
 - [ ] Pass the contributor gate and PR review for each slice.
 
 Skills PR #128, session lifecycle PR #130, session resources PR #131,
 multiagent PR #132, deployments PR #133 and memory stores PR #134 are merged.
-Memory-store resource selection is ready; outcome interfaces are next.
+Outcome interfaces are ready; final interaction and Chrome fidelity checks are
+next.

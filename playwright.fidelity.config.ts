@@ -9,6 +9,9 @@ import {
   MOCK_URL,
 } from "./test/fidelity/consoles";
 
+process.env.NO_PROXY ??= "localhost,127.0.0.1,::1";
+process.env.no_proxy ??= process.env.NO_PROXY;
+
 /**
  * The Chrome fidelity pass's shot walker (plan 04 slice 4) — not a test tier.
  *

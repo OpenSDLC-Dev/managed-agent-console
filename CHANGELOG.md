@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Session details display typed outcome evaluations and their dedicated trace
+  events. Operators can define text- or file-rubric outcomes with the
+  platform's iteration budget and see progress, verdicts and explanations.
+
 - Session and deployment resource forms suggest active memory stores by name
   while keeping direct ID entry available for large or temporarily unavailable
   catalogs.
@@ -39,6 +43,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   protects a skill's last version from individual deletion.
 
 ### Testing
+
+- Added mock and model-free local coverage for outcome acceptance, the
+  single-active rule and interrupt settlement.
 
 - Added mock and model-free local contracts for memory-store metadata patches,
   path rollups, optimistic writes, retained delete history, redaction and

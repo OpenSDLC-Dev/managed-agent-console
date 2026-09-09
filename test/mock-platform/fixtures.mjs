@@ -331,7 +331,18 @@ export const sessions = [
       },
     },
     stats: { active_seconds: 0, duration_seconds: 0 },
-    outcome_evaluations: [],
+    outcome_evaluations: [
+      {
+        type: "outcome_evaluation",
+        outcome_id: "outc_survey00000000000001",
+        description: "Produce a comparative survey document.",
+        explanation:
+          "The survey compares six frameworks and cites each primary source.",
+        iteration: 0,
+        result: "satisfied",
+        completed_at: T2,
+      },
+    ],
     resources: [
       {
         id: "sesrsc_upload000000000001",
@@ -577,8 +588,6 @@ export const sessionEvents = {
         { type: "text", text: "Survey the agent-framework landscape." },
       ],
     },
-    // An event type the console has no dedicated rendering for (the
-    // platform's outcome surface) — e2e asserts the honest JSON fallback.
     {
       id: "sevt_000000000000000102",
       type: "user.define_outcome",
@@ -592,6 +601,38 @@ export const sessionEvents = {
       id: "sevt_000000000000000103",
       type: "session.status_running",
       processed_at: T2,
+    },
+    {
+      id: "sevt_000000000000000105",
+      type: "span.outcome_evaluation_start",
+      processed_at: T2,
+      outcome_id: "outc_survey00000000000001",
+      iteration: 0,
+    },
+    {
+      id: "sevt_000000000000000106",
+      type: "span.outcome_evaluation_ongoing",
+      processed_at: T2,
+      outcome_id: "outc_survey00000000000001",
+      iteration: 0,
+    },
+    {
+      id: "sevt_000000000000000107",
+      type: "span.outcome_evaluation_end",
+      processed_at: T2,
+      outcome_id: "outc_survey00000000000001",
+      outcome_evaluation_start_id: "sevt_000000000000000105",
+      iteration: 0,
+      result: "satisfied",
+      explanation:
+        "The survey compares six frameworks and cites each primary source.",
+      usage: {
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 800,
+        input_tokens: 1200,
+        output_tokens: 92,
+        speed: null,
+      },
     },
     {
       id: "sevt_000000000000000104",

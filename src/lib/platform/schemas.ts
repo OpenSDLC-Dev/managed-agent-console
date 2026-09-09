@@ -210,6 +210,25 @@ export const SessionResourceSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+/** internal/domain/outcome.go:OutcomeEvaluation. */
+export const OutcomeEvaluationSchema = z.object({
+  type: z.literal("outcome_evaluation"),
+  outcome_id: z.string(),
+  description: z.string(),
+  explanation: z.string(),
+  iteration: z.number().int().nonnegative(),
+  result: z.enum([
+    "pending",
+    "running",
+    "evaluating",
+    "satisfied",
+    "max_iterations_reached",
+    "failed",
+    "interrupted",
+  ]),
+  completed_at: z.string().nullable(),
+});
+
 export const SessionSchema = z.object({
   id: z.string(),
   type: z.literal("session"),
@@ -224,7 +243,7 @@ export const SessionSchema = z.object({
     active_seconds: z.number(),
     duration_seconds: z.number(),
   }),
-  outcome_evaluations: z.array(z.unknown()), // always [] in v1
+  outcome_evaluations: z.array(OutcomeEvaluationSchema),
   resources: z.array(SessionResourceSchema),
   vault_ids: z.array(z.string()),
   deployment_id: z.string().nullable(), // set only by a deployment fire
@@ -417,8 +436,18 @@ export const SessionEventSchema = z.looseObject({
   evaluated_permission: z.enum(["allow", "ask", "deny"]).optional(),
   tool_use_id: z.string().optional(),
   is_error: z.boolean().nullable().optional(),
-  // internal/events/inbound.go:190-192 — `result must be "allow" or "deny"`.
-  result: z.enum(["allow", "deny"]).optional(),
+  // Tool confirmations and outcome evaluation ends share this flat key.
+  result: z
+    .enum([
+      "allow",
+      "deny",
+      "satisfied",
+      "needs_revision",
+      "failed",
+      "max_iterations_reached",
+      "interrupted",
+    ])
+    .optional(),
   deny_message: z.string().nullable().optional(),
   stop_reason: StopReasonSchema.optional(),
   model_usage: ModelUsageSchema.optional(), // span.model_request_end
@@ -431,6 +460,20 @@ export const SessionEventSchema = z.looseObject({
     .optional(),
   session_thread_id: z.string().nullable().optional(),
   agent_name: z.string().optional(),
+  // user.define_outcome and span.outcome_evaluation_*.
+  outcome_id: z.string().optional(),
+  description: z.string().optional(),
+  rubric: z
+    .discriminatedUnion("type", [
+      z.object({ type: z.literal("text"), content: z.string() }),
+      z.object({ type: z.literal("file"), file_id: z.string() }),
+    ])
+    .optional(),
+  max_iterations: z.number().int().optional(),
+  iteration: z.number().int().nonnegative().optional(),
+  explanation: z.string().optional(),
+  outcome_evaluation_start_id: z.string().optional(),
+  usage: ModelUsageSchema.optional(),
 });
 
 /** internal/api/threads.go:28-46 — a primary or child session thread. */
@@ -669,6 +712,7 @@ export type SessionAgent = z.infer<typeof SessionAgentSchema>;
 export type SessionThreadAgent = z.infer<typeof SessionThreadAgentSchema>;
 export type SessionMultiagent = z.infer<typeof SessionMultiagentSchema>;
 export type SessionResource = z.infer<typeof SessionResourceSchema>;
+export type OutcomeEvaluation = z.infer<typeof OutcomeEvaluationSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 export type AgentReference = z.infer<typeof AgentReferenceSchema>;
 export type DeploymentResource = z.infer<typeof DeploymentResourceSchema>;

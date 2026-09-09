@@ -5,10 +5,12 @@ export function DetailSection({
   children,
   className,
   testId,
+  action,
 }: {
   title: string;
   children: React.ReactNode;
   className?: string;
+  action?: React.ReactNode;
   /**
    * Marks a section whose *presence* is derived state — a surface the
    * deployment may or may not serve. E2E asserts on this rather than on the
@@ -19,7 +21,10 @@ export function DetailSection({
 }) {
   return (
     <section className={cn("pb-8", className)} data-testid={testId}>
-      <h2 className="pb-3 text-base font-medium">{title}</h2>
+      <div className="flex items-center justify-between gap-3 pb-3">
+        <h2 className="text-base font-medium">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );

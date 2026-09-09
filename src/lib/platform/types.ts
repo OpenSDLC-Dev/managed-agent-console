@@ -39,6 +39,7 @@ export type {
   ModelRef,
   ModelUsage,
   Networking,
+  OutcomeEvaluation,
   Packages,
   PlatformFile,
   Session,
