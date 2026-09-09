@@ -232,6 +232,11 @@ describe("NewSessionPage", () => {
         ),
       ).toHaveTextContent("Project notes"),
     );
+    expect(
+      screen.getByText(
+        "Choose a suggestion by name or paste a memory store ID.",
+      ),
+    ).toHaveAttribute("data-memory-store-options-state", "ready");
     fireEvent.change(screen.getByLabelText("Memory store ID"), {
       target: { value: "memstore_1" },
     });

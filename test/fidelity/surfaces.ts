@@ -357,8 +357,10 @@ export const SURFACES: Surface[] = [
         .waitFor();
       await page.getByRole("button", { name: "Add memory store" }).click();
       await page
-        .getByText("Choose a suggestion by name or paste a memory store ID.")
-        .waitFor();
+        .locator(
+          'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
+        )
+        .waitFor({ state: "attached" });
     },
   },
   {
@@ -380,8 +382,10 @@ export const SURFACES: Surface[] = [
       await page.getByText("Credential vaults (optional)").waitFor();
       await page.getByRole("button", { name: "Add memory store" }).click();
       await page
-        .getByText("Choose a suggestion by name or paste a memory store ID.")
-        .waitFor();
+        .locator(
+          'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
+        )
+        .waitFor({ state: "attached" });
     },
   },
   {

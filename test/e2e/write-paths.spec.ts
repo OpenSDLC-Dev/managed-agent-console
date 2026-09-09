@@ -77,7 +77,7 @@ test("create a session with file and memory mounts, then drive it", async ({
   await expect(page.getByText("dataset.csv")).toBeVisible();
   await page.getByRole("button", { name: "Add memory store" }).click();
   await expect(
-    page.getByText("Choose a suggestion by name or paste a memory store ID."),
+    page.locator('[data-memory-store-options-state="ready"]'),
   ).toBeVisible();
   await page.getByLabel("Memory store ID").fill("memstore_projectnotes000001");
 

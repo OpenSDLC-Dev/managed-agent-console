@@ -19,6 +19,15 @@ export function InitialResources({
 }) {
   const memoryStores = useMemoryStoreOptions();
   const memoryStoreOptions = memoryStores.data?.memoryStores ?? [];
+  const memoryStoreOptionsState = memoryStores.isPending
+    ? "loading"
+    : memoryStores.isError
+      ? "error"
+      : memoryStores.data?.truncated
+        ? "truncated"
+        : memoryStoreOptions.length === 0
+          ? "empty"
+          : "ready";
   const update = (index: number, value: InitialResource) =>
     onChange(resources.map((resource, i) => (i === index ? value : resource)));
   return (
@@ -145,7 +154,10 @@ export function InitialResources({
                     })
                   }
                 />
-                <p className="text-xs text-muted-foreground">
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-memory-store-options-state={memoryStoreOptionsState}
+                >
                   {memoryStores.isPending
                     ? "Loading active memory stores…"
                     : memoryStores.isError
