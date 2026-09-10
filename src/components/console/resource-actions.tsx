@@ -67,6 +67,11 @@ export function ResourceActions({
         triggerRef.current?.focus();
         return;
       }
+      if (event.key === "Tab") {
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const current = items.indexOf(
@@ -133,7 +138,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirm("archive");
@@ -146,7 +151,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-none hover:bg-destructive-surface/10 focus:bg-destructive-surface/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-hidden hover:bg-destructive-surface/10 focus:bg-destructive-surface/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirm("delete");

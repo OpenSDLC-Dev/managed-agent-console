@@ -63,4 +63,28 @@ describe("ResourceActions", () => {
     expect(screen.queryByRole("menu")).toBeNull();
     expect(trigger).toHaveFocus();
   });
+
+  it("closes the menu and continues the tab sequence", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ResourceActions
+          resource="environment"
+          onArchive={vi.fn()}
+          onDelete={vi.fn()}
+        />
+        <button type="button">Next control</button>
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+
+    await user.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "Archive" })).toHaveFocus(),
+    );
+    await user.keyboard("{Tab}");
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("button", { name: "Next control" })).toHaveFocus();
+  });
 });
