@@ -61,6 +61,11 @@ export const SURFACES = {
     label: "Memory stores",
     blurb: "Durable files shared across agent sessions.",
   },
+  dreams: {
+    path: "v1/dreams",
+    label: "Dreams",
+    blurb: "Consolidate session transcripts into durable memory.",
+  },
   environments: {
     path: "v1/environments",
     label: "Environments",

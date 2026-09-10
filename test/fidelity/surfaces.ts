@@ -67,6 +67,8 @@ const DEPLOYMENT_RUN = "drun_failed000000000001";
 const MEMORY_STORE = "memstore_projectnotes000001";
 const MEMORY = "mem_projectbrief000000001";
 const MEMORY_VERSION = "memver_briefmodified000001";
+const DREAM = "drm_completedresearch000001";
+const PENDING_DREAM = "drm_pendingresearch0000001";
 const VAULT = "vlt_github00000000000001";
 const SKILL = "skill_reportwriter0000001";
 
@@ -111,8 +113,15 @@ export const SURFACES: Surface[] = [
   {
     id: "memory-stores-list",
     route: "/memory-stores",
-    fixture: "2 memory stores, one archived",
+    fixture: "3 memory stores, one archived",
     description: "Durable context stores with live and archived filtering.",
+  },
+  {
+    id: "dreams-list",
+    route: "/dreams",
+    fixture: "2 live dreams, pending + completed",
+    description:
+      "Asynchronous consolidation jobs with status, inputs and output behavior.",
   },
   {
     id: "vaults-list",
@@ -182,6 +191,23 @@ export const SURFACES: Surface[] = [
     fixture: "2 live memories, a folder rollup and 3 attributed versions",
     description:
       "Store metadata, path browsing and append-only version history in one view.",
+  },
+  {
+    id: "dream-detail",
+    route: `/dreams/${DREAM}`,
+    fixture: DREAM,
+    description:
+      "Completed consolidation inputs, output store, pipeline session and token usage.",
+  },
+  {
+    id: "dream-cancel-confirm",
+    route: `/dreams/${PENDING_DREAM}`,
+    fixture: PENDING_DREAM,
+    description: "Confirmation before canceling a pending consolidation job.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Cancel dream" }).click();
+      await page.getByRole("dialog", { name: "Cancel this dream?" }).waitFor();
+    },
   },
   {
     id: "memory-detail",
@@ -410,6 +436,20 @@ export const SURFACES: Surface[] = [
       "Pinned agent, initial event JSON, schedule and reusable-resource controls.",
     setup: async (page) => {
       await page.getByText("Credential vaults (optional)").waitFor();
+    },
+  },
+  {
+    id: "dream-new",
+    route: "/dreams/new",
+    fixture: "active memory-store suggestions",
+    description:
+      "Memory and session inputs, model speed, instructions and output behavior.",
+    setup: async (page) => {
+      await page
+        .locator(
+          'datalist#dream-memory-stores option[value="memstore_projectnotes000001"]',
+        )
+        .waitFor({ state: "attached" });
     },
   },
   {

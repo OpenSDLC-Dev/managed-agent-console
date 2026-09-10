@@ -177,6 +177,7 @@ describe("useSurfaces", () => {
       sessions: true,
       deployments: true,
       "memory-stores": true,
+      dreams: true,
       environments: true,
       vaults: true,
       skills: false,

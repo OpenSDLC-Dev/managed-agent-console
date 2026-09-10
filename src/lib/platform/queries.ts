@@ -28,6 +28,8 @@ import type {
   ApiKeyIssued,
   Deployment,
   DeploymentRun,
+  Dream,
+  DreamStatus,
   Environment,
   EnvironmentKeyIssued,
   EnvironmentKeyPage,
@@ -213,6 +215,45 @@ export function useDeploymentRun(id: string) {
   return useQuery({
     queryKey: ["deployment-run", id],
     queryFn: () => platformGet<DeploymentRun>(`v1/deployment_runs/${id}`),
+  });
+}
+
+export function useDreams(params: {
+  page?: string;
+  statuses?: DreamStatus[];
+  include_archived?: boolean;
+  limit?: number;
+  "created_at[gt]"?: string;
+  "created_at[lt]"?: string;
+}) {
+  return useQuery({
+    queryKey: ["dreams", params],
+    queryFn: () => {
+      const { statuses, ...rest } = params;
+      return platformGet<Page<Dream>>("v1/dreams", {
+        limit: 20,
+        ...rest,
+        "statuses[]": statuses,
+      });
+    },
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.data.some(
+        (dream) => dream.status === "pending" || dream.status === "running",
+      )
+        ? 10_000
+        : false,
+  });
+}
+
+export function useDream(id: string) {
+  return useQuery({
+    queryKey: ["dream", id],
+    queryFn: () => platformGet<Dream>(`v1/dreams/${id}`),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "pending" || status === "running" ? 10_000 : false;
+    },
   });
 }
 
@@ -737,6 +778,54 @@ export function useRunDeployment(id: string) {
       void client.invalidateQueries({ queryKey: ["deployment", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
     },
+  });
+}
+
+export interface DreamWriteBody {
+  inputs: [
+    { type: "memory_store"; memory_store_id: string },
+    { type: "sessions"; session_ids: string[] },
+  ];
+  model: string | { id: string; speed: "standard" | "fast" };
+  instructions?: string;
+  output_behavior:
+    | { type: "create_new" }
+    | { type: "update_existing"; memory_store_id: string };
+}
+
+function dreamMutationSuccess(
+  client: ReturnType<typeof useQueryClient>,
+  dream: Dream,
+) {
+  client.setQueryData(["dream", dream.id], dream);
+  void client.invalidateQueries({ queryKey: ["dreams"] });
+}
+
+export function useCreateDream() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: DreamWriteBody) =>
+      platformPost<Dream>("v1/dreams", body),
+    onSuccess: (dream) => dreamMutationSuccess(client, dream),
+  });
+}
+
+export function useCancelDream(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Cancel dream failed" },
+    mutationFn: () => platformPost<Dream>(`v1/dreams/${id}/cancel`, {}),
+    onSuccess: (dream) => dreamMutationSuccess(client, dream),
+  });
+}
+
+export function useArchiveDream(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Archive dream failed" },
+    mutationFn: () => platformPost<Dream>(`v1/dreams/${id}/archive`, {}),
+    onSuccess: (dream) => dreamMutationSuccess(client, dream),
   });
 }
 

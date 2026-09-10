@@ -32,6 +32,7 @@ import {
   useDeploymentRun,
   useDeploymentRuns,
   useDeployments,
+  useDreams,
   useEnvironment,
   useEnvironments,
   useFiles,
@@ -107,6 +108,7 @@ function searchOf(url: string): Record<string, string | string[]> {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -252,6 +254,23 @@ const queryCases: QueryCase[] = [
     search: {},
   },
   {
+    name: "useDreams",
+    useHook: () =>
+      useDreams({
+        page: "cur_dream",
+        statuses: ["pending", "running"],
+        include_archived: true,
+        limit: 5,
+      }),
+    path: "/api/platform/v1/dreams",
+    search: {
+      limit: "5",
+      page: "cur_dream",
+      "statuses[]": ["pending", "running"],
+      include_archived: "true",
+    },
+  },
+  {
     name: "useMemoryStores",
     useHook: () =>
       useMemoryStores({ page: "cur_m", include_archived: true, limit: 5 }),
@@ -377,6 +396,27 @@ describe("query hooks", () => {
     expect(init).toBeUndefined(); // plain GET
     expect(new URL(url, "http://console.test").pathname).toBe(path);
     expect(searchOf(url)).toEqual(search);
+  });
+
+  it("polls a dream page only while it contains active work", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        data: [
+          { status: fetchMock.mock.calls.length > 1 ? "completed" : "running" },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useDreams({}), { wrapper });
+    await vi.waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

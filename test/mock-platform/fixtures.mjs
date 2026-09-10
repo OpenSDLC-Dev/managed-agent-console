@@ -40,6 +40,16 @@ export const memoryStores = [
     updated_at: T1,
     archived_at: T2,
   },
+  {
+    id: "memstore_dreamoutput000001",
+    type: "memory_store",
+    name: "Consolidated research",
+    description: "Durable memory consolidated from session transcripts.",
+    metadata: {},
+    created_at: T2,
+    updated_at: T2,
+    archived_at: null,
+  },
 ];
 
 export const memories = [
@@ -452,6 +462,93 @@ export const deploymentRuns = [
     },
     agent: deployments[0].agent,
     created_at: T2,
+  },
+];
+
+// dreams.go:dreamJSON — every one of the fourteen fields is always rendered.
+export const dreams = [
+  {
+    id: "drm_completedresearch000001",
+    type: "dream",
+    status: "completed",
+    inputs: [
+      { type: "memory_store", memory_store_id: memoryStores[0].id },
+      {
+        type: "sessions",
+        session_ids: [sessions[0].id, sessions[1].id],
+      },
+    ],
+    outputs: [
+      {
+        type: "memory_store",
+        memory_store_id: "memstore_dreamoutput000001",
+      },
+    ],
+    model: { id: "claude-sonnet-4-8", speed: "fast" },
+    instructions: "Keep decisions and cited research; remove transient notes.",
+    output_behavior: { type: "create_new" },
+    session_id: sessions[0].id,
+    created_at: T1,
+    ended_at: T2,
+    archived_at: null,
+    usage: {
+      input_tokens: 18400,
+      output_tokens: 2130,
+      cache_read_input_tokens: 9200,
+      cache_creation_input_tokens: 420,
+    },
+    error: null,
+  },
+  {
+    id: "drm_pendingresearch0000001",
+    type: "dream",
+    status: "pending",
+    inputs: [
+      { type: "memory_store", memory_store_id: memoryStores[0].id },
+      { type: "sessions", session_ids: [sessions[1].id] },
+    ],
+    outputs: [],
+    model: { id: "claude-opus-4-8" },
+    instructions: null,
+    output_behavior: {
+      type: "update_existing",
+      memory_store_id: memoryStores[0].id,
+    },
+    session_id: null,
+    created_at: T2,
+    ended_at: null,
+    archived_at: null,
+    usage: {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    },
+    error: null,
+  },
+  {
+    id: "drm_failedarchived0000001",
+    type: "dream",
+    status: "failed",
+    inputs: [
+      { type: "memory_store", memory_store_id: memoryStores[0].id },
+      { type: "sessions", session_ids: [sessions[0].id] },
+    ],
+    outputs: [],
+    model: { id: "claude-sonnet-4-8" },
+    instructions: null,
+    output_behavior: { type: "create_new" },
+    session_id: null,
+    created_at: T0,
+    ended_at: T1,
+    archived_at: T2,
+    usage: {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    },
+    error: { type: "session_create_error", message: "Worker unavailable." },
   },
 ];
 

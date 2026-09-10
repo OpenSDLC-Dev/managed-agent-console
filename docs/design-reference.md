@@ -283,3 +283,12 @@ transcript gains one filter instead of a separate event viewer. File rubrics
 keep direct ID entry because the platform wire accepts IDs and the local catalog
 can be partial. Re-shot: `session-outcomes`, `session-outcome-create` and
 `session-outcome-file-rubric`, both themes.
+
+## Dreams — checked 2026-09-10
+
+The authenticated reference remains unavailable, so no new reference facts
+were inferred. Dreams use the established compact resource list, detail,
+creation form and destructive confirmation patterns. The self-hosted surface
+shows the pipeline session and flat token usage because the platform publishes
+both. Re-shot: `dreams-list`, `dream-detail`, `dream-cancel-confirm` and
+`dream-new`, both themes.

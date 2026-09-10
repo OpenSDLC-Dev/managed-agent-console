@@ -334,6 +334,56 @@ export const DeploymentRunSchema = z.object({
   created_at: z.string(),
 });
 
+// ---- dreams (internal/api/dreams.go:dreamJSON)
+
+export const DreamInputSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("memory_store"), memory_store_id: z.string() }),
+  z.object({ type: z.literal("sessions"), session_ids: z.array(z.string()) }),
+]);
+
+export const DreamOutputSchema = z.object({
+  type: z.literal("memory_store"),
+  memory_store_id: z.string(),
+});
+
+export const DreamOutputBehaviorSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("create_new") }),
+  z.object({
+    type: z.literal("update_existing"),
+    memory_store_id: z.string(),
+  }),
+]);
+
+export const DreamStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "canceled",
+]);
+
+export const DreamSchema = z.object({
+  id: z.string(),
+  type: z.literal("dream"),
+  status: DreamStatusSchema,
+  inputs: z.array(DreamInputSchema),
+  outputs: z.array(DreamOutputSchema),
+  model: ModelRefSchema,
+  instructions: z.string().nullable(),
+  output_behavior: DreamOutputBehaviorSchema,
+  session_id: z.string().nullable(),
+  created_at: z.string(),
+  ended_at: z.string().nullable(),
+  archived_at: z.string().nullable(),
+  usage: z.object({
+    input_tokens: z.number(),
+    output_tokens: z.number(),
+    cache_read_input_tokens: z.number(),
+    cache_creation_input_tokens: z.number(),
+  }),
+  error: z.object({ type: z.string(), message: z.string() }).nullable(),
+});
+
 // ---- memory stores (internal/api/memorystores.go, memories.go,
 //      memoryversions.go)
 
@@ -722,6 +772,11 @@ export type DeploymentPausedReason = z.infer<
 >;
 export type Deployment = z.infer<typeof DeploymentSchema>;
 export type DeploymentRun = z.infer<typeof DeploymentRunSchema>;
+export type Dream = z.infer<typeof DreamSchema>;
+export type DreamInput = z.infer<typeof DreamInputSchema>;
+export type DreamOutput = z.infer<typeof DreamOutputSchema>;
+export type DreamOutputBehavior = z.infer<typeof DreamOutputBehaviorSchema>;
+export type DreamStatus = z.infer<typeof DreamStatusSchema>;
 export type MemoryStore = z.infer<typeof MemoryStoreSchema>;
 export type Memory = z.infer<typeof MemorySchema>;
 export type MemoryPrefix = z.infer<typeof MemoryPrefixSchema>;

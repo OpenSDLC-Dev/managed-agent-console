@@ -15,7 +15,7 @@ inventing a platform API.
   (`internal/api/skills.go`, platform plan 39). Do not mix pre-GA and GA responses.
 - Add a model-free live contract tier so Skills verification does not depend on
   a paid agent turn. Keep the existing mock/component and model-backed live tiers.
-- Follow with session lifecycle/resources/threads, deployments, memory and outcomes;
+- Follow with session lifecycle/resources/threads, deployments, memory, outcomes and Dreams;
   every write shape must be checked against its handler before implementation.
 - Use the reference's compact list/detail/dialog patterns; gate new resource
   navigation through the existing collection-route capability probes.
@@ -56,3 +56,10 @@ the session projects its current state in `outcome_evaluations`, and evaluation
 cycles remain in the event log. A self-hosted session with no worker proved the
 pending projection, single-active rejection and interrupt settlement without a
 model call.
+
+Dreams: `internal/api/dreams.go` serves asynchronous memory consolidation over
+one active memory store and 1–100 existing sessions. The console follows the
+five terminal/active states and the platform's one-way cancel/archive rules.
+The live contract probes only the collection route: creating a real Dream
+starts the configured model runner, so deterministic write coverage belongs to
+the mock tier rather than a model-free test.
