@@ -10,7 +10,7 @@ import { SURFACES, surfaceRoute, useSurfaces } from "@/lib/platform/surfaces";
 import type { Surface } from "@/lib/platform/surfaces";
 
 /** Shared by every row so the group header sits flush with its neighbours. */
-const ROW = "flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm";
+const ROW = "flex h-9 items-center gap-4 rounded-lg px-2 text-sm";
 
 /**
  * Whether a surface should be drawn. Unknown means shown: an item disappears
@@ -41,11 +41,8 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       className={cn(
         ROW,
-        // A nested row draws no icon, so it pads left by what an icon would
-        // have cost — 10px of row padding + 16px icon + 10px gap = 36px — and
-        // its label lands in the same column as an iconned row's. The
-        // reference's rule, measured 2026-08-17.
-        nested && "pl-9",
+        // Align nested labels with 8px padding + 16px icon + 16px gap.
+        nested && "pl-10",
         "text-sidebar-foreground",
         active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
       )}
@@ -139,11 +136,72 @@ function Entry({
   return <Group group={entry} available={available} />;
 }
 
-export function Nav() {
+export function Nav({
+  compact = false,
+  onExpand,
+}: {
+  compact?: boolean;
+  onExpand?: () => void;
+}) {
   const surfaces = useSurfaces();
+  const pathname = usePathname();
   const available: Available = (surface) => surfaces?.[surface] !== false;
+  if (compact) {
+    return (
+      <nav
+        aria-label="Main navigation"
+        className="flex flex-col gap-1 px-1.5 pt-4"
+      >
+        {NAV.map((entry) => {
+          if (entry.kind === "surface" && !available(entry.surface))
+            return null;
+          if (
+            entry.kind === "group" &&
+            !entry.items.some((item) => available(item.surface))
+          )
+            return null;
+          const { icon: Icon } = entry;
+          const label =
+            entry.kind === "surface"
+              ? SURFACES[entry.surface].label
+              : entry.label;
+          const className =
+            "flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60";
+          if (entry.kind === "group")
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-label={label}
+                title={label}
+                onClick={onExpand}
+                className={className}
+              >
+                <Icon className="size-4" strokeWidth={1.75} />
+              </button>
+            );
+          const href =
+            entry.kind === "local" ? entry.href : surfaceRoute(entry.surface);
+          const active = pathname === href || pathname.startsWith(`${href}/`);
+          return (
+            <Link
+              key={label}
+              href={href}
+              aria-label={label}
+              title={label}
+              data-active={active}
+              aria-current={active ? "page" : undefined}
+              className={cn(className, active && "bg-sidebar-accent")}
+            >
+              <Icon className="size-4" strokeWidth={1.75} />
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  }
   return (
-    <nav className="flex flex-col gap-0.5 px-2 pt-4">
+    <nav aria-label="Main navigation" className="flex flex-col gap-1 px-3 pt-4">
       {NAV.map((entry) => (
         <Entry
           key={

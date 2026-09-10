@@ -49,7 +49,7 @@ Method: `getComputedStyle` on live elements in Chrome.
 | Page title / subtitle      | `22px`/500/`28px`, `#0B0B0B` · `14px/20px`, `#52514E`                                                            |
 | Buttons (primary + filter) | height `32px`, radius `8px`, padding-x `12px`, `14px`/500; primary is white on near-black                        |
 | Table header cell          | `13px`/500, `#52514E`, row height `32px`, no text-transform                                                      |
-| Inputs · nav items         | height `32px`, `14px` · `14px`, active item gets a subtle darker pill                                            |
+| Inputs                     | height `32px`, `14px`; current navigation measurements are recorded below                                        |
 
 ## Dark palette — extracted 2026-08-02 from the reference's stylesheet tokens
 
@@ -130,7 +130,7 @@ screenshots of the icon column. **What the pass found is that the icon rule is t
 | Icons                        | a proprietary **pictogram font** — glyphs in a text node, not inline SVG                     |
 
 Every label lands in one column at `x=52`, which is what the 40px indent buys: it is exactly the icon
-width plus its gap. Ours reproduces the rule at our own 32px row (`pl-9` = 36px = 10 + 16 + 10).
+width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row and 40px indent.
 
 ## Deliberate divergences
 
@@ -144,9 +144,6 @@ width plus its gap. Ours reproduces the rule at our own 32px row (`pl-9` = 36px 
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
   `KeySquare` rather than the round-bowed key the reference draws, because `KeyRound` is already
   Credential vaults' and one icon may mean one thing.
-- **Group headers are 32px rows, not the reference's 36px.** Every row in this console is 32px and has
-  been since the first pass; matching one row height in isolation would leave the sidebar disagreeing
-  with itself. The reference's 36px is recorded above for whenever row height is looked at as a whole.
 - **A collapsed group re-opens on reload.** The reference persists the state; ours is component state,
   which survives client-side navigation and not a refresh. Deliberate for a first cut: two groups of
   six items make collapsing a convenience rather than a necessity, and the alternative is a stored
@@ -304,3 +301,23 @@ inside popup items. Row action menus also focus their first item, support arrow
 navigation and return focus to the trigger on Escape. Re-shot:
 `command-palette`, `session-composer-focus`, `deployment-filter-focus` and
 `deployment-actions-focus`, both themes.
+
+## Dashboard — checked 2026-09-10
+
+The existing Chrome login could reach `/dashboard` again; no sign-in was attempted.
+DOM measurements at 1920px found a centered 960px container with 16px inner padding
+and 48px top spacing, a 22px/28px serif title, 15px/20px semibold section headings,
+12px card gaps and a 220px minimum column. The sidebar folds from 256px to 48px.
+The local page previously aligned its 1024px grid to the left, clipped descriptions,
+used muted 13px section headings and offered neither shortcuts nor sidebar collapse.
+
+DevTools confirmed 32px-high shortcuts with 12px horizontal padding and an 8px radius.
+`Get API key` opens the creation dialog on the Dashboard itself; the console reuses
+its existing key dialog. The docs/agent shortcuts map to self-hosted destinations and
+all follow the same surface detection as the cards. Billing, model marketing and usage
+reports remain excluded for the API reasons above. The title stays `Dashboard`:
+password mode has no operator profile to greet. On narrow screens, expanded navigation
+occupies the screen until a destination or Escape returns to the page; this avoids a
+second, overlapping focus surface. Group and sidebar expansion are session-local.
+Re-shot: the full manifest, including `dashboard`, `dashboard-compact`,
+`dashboard-mobile` and `dashboard-api-key-create`, in both themes.

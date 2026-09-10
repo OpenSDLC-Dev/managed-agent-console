@@ -46,6 +46,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Dashboard now centers its responsive cards, exposes primary shortcuts and uses
+  the reference's heading hierarchy. The sidebar folds into a compact rail and
+  keeps navigation and its footer within the viewport.
+
 - Keyboard focus remains visible in resource action menus, select popups, the
   session composer and the command palette, with arrow-key navigation and
   Escape focus restoration for row actions.

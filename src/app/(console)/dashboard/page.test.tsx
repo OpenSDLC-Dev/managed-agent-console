@@ -71,14 +71,17 @@ afterEach(() => {
 describe("DashboardPage", () => {
   // The one test that asserts the human strings, so a copy edit reddens this
   // and not a suite (CLAUDE.md).
-  it("titles the page and describes what it is", () => {
+  it("titles the page and exposes the primary shortcuts", () => {
     renderDashboard();
     expect(
       screen.getByRole("heading", { level: 1, name: "Dashboard" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Everything this deployment serves."),
+      screen.getByRole("button", { name: "Get API key" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Build an agent" }),
+    ).toHaveAttribute("href", "/agents/new");
     // A card's line is the surface's own `blurb`, the same string its page
     // header uses — read from the registry rather than repeated here.
     expect(screen.getByText(SURFACES.agents.blurb)).toBeInTheDocument();
@@ -131,5 +134,15 @@ describe("DashboardPage", () => {
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
     expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(10);
+  });
+
+  it("hides shortcuts whose platform surfaces are unavailable", async () => {
+    renderDashboard(["api-keys", "agents"]);
+    await waitFor(() => expect(card("agents")).toBeNull());
+    expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Explore docs" }),
+    ).toBeInTheDocument();
   });
 });

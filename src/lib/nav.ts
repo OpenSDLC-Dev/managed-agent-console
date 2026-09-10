@@ -94,10 +94,10 @@ export const NAV: NavEntry[] = [
       surfaceEntry("agents", Bot),
       surfaceEntry("sessions", MessagesSquare),
       surfaceEntry("deployments", Rocket),
-      surfaceEntry("memory-stores", Database),
-      surfaceEntry("dreams", Moon),
       surfaceEntry("environments", Boxes),
       surfaceEntry("vaults", KeyRound),
+      surfaceEntry("memory-stores", Database),
+      surfaceEntry("dreams", Moon),
     ],
   },
 ];

@@ -282,7 +282,13 @@ function PaletteResults({
 }
 
 /** Ctrl+K resource search: sidebar trigger + global-shortcut dialog. */
-export function CommandPalette() {
+export function CommandPalette({
+  compact = false,
+  onNavigate,
+}: {
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -304,6 +310,7 @@ export function CommandPalette() {
 
   const navigate = (href: string) => {
     setOpen(false);
+    onNavigate?.();
     router.push(href);
   };
 
@@ -320,13 +327,22 @@ export function CommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mx-2 flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+        aria-label="Search Ctrl K"
+        title={compact ? "Search Ctrl K" : undefined}
+        className={cn(
+          "mx-2 flex h-8 shrink-0 items-center gap-2 rounded-lg border bg-background px-2 text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+          compact && "justify-center border-transparent px-0",
+        )}
       >
         <Search className="size-4" strokeWidth={1.75} />
-        Search
-        <kbd className="ml-auto rounded border px-1 font-mono text-[10px]">
-          Ctrl K
-        </kbd>
+        {!compact && (
+          <>
+            Search Console…
+            <kbd className="ml-auto rounded border px-1 font-mono text-[10px]">
+              Ctrl K
+            </kbd>
+          </>
+        )}
       </button>
       <Dialog open={open} onOpenChange={reset}>
         <DialogContent className="gap-0 p-0" aria-describedby={undefined}>
