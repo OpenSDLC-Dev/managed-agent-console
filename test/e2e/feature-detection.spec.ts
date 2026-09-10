@@ -124,7 +124,9 @@ test("the environment-keys section hides on a platform that predates it", async 
   await page.goto("/environments/env_byoc0000000000000001");
 
   // The rest of the page is untouched — this hides a section, not the page.
-  await expect(page.getByText("Overview")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "byoc-workers" }),
+  ).toBeVisible();
   await expect(page.getByTestId("environment-keys")).toHaveCount(0);
   await expect(page.getByTestId("error-state")).toHaveCount(0);
 });
