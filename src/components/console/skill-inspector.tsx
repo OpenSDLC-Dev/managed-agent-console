@@ -1,10 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IdCell } from "./copy-id";
 import { SkillDetail } from "./skill-detail";
+
+function subscribeViewport(callback: () => void) {
+  window.addEventListener("resize", callback);
+  return () => window.removeEventListener("resize", callback);
+}
 
 /** A non-modal inspector: the list remains available while details are open. */
 export function SkillInspector({
@@ -13,18 +24,27 @@ export function SkillInspector({
   next,
   onSelect,
   onClose,
+  fallbackFocus,
 }: {
   id: string;
   previous?: string;
   next?: string;
   onSelect: (id: string) => void;
   onClose: () => void;
+  fallbackFocus?: RefObject<HTMLElement | null>;
 }) {
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(560);
+  const maxWidth = useSyncExternalStore(
+    subscribeViewport,
+    () => Math.max(0, Math.min(1200, window.innerWidth - 64)),
+    () => 1200,
+  );
+  const minWidth = Math.min(320, maxWidth);
+  const visibleWidth = Math.min(width, maxWidth);
   const resize = (value: number) =>
-    setWidth(Math.max(320, Math.min(1200, window.innerWidth - 64, value)));
+    setWidth(Math.max(minWidth, Math.min(maxWidth, value)));
 
   useEffect(() => {
     const trigger = document.activeElement;
@@ -32,8 +52,9 @@ export function SkillInspector({
     return () => {
       if (trigger instanceof HTMLElement && trigger.isConnected)
         trigger.focus();
+      else fallbackFocus?.current?.focus();
     };
-  }, []);
+  }, [fallbackFocus]);
 
   return (
     <aside
@@ -43,7 +64,7 @@ export function SkillInspector({
       tabIndex={-1}
       data-skill-id={id}
       className="fixed inset-y-2 right-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
-      style={{ width }}
+      style={{ width: visibleWidth }}
       onKeyDown={(event) => {
         if (
           event.key === "Escape" &&
@@ -59,9 +80,9 @@ export function SkillInspector({
         role="separator"
         aria-label="Resize panel"
         aria-orientation="vertical"
-        aria-valuemin={320}
-        aria-valuemax={1200}
-        aria-valuenow={width}
+        aria-valuemin={minWidth}
+        aria-valuemax={maxWidth}
+        aria-valuenow={visibleWidth}
         tabIndex={0}
         title="Drag to resize, double-click to reset"
         className="absolute inset-y-0 -left-1.5 w-3 cursor-col-resize touch-none rounded focus-visible:bg-ring/20"
@@ -89,7 +110,7 @@ export function SkillInspector({
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
             event.preventDefault();
-            resize(width + (event.key === "ArrowLeft" ? 32 : -32));
+            resize(visibleWidth + (event.key === "ArrowLeft" ? 32 : -32));
           } else if (event.key === "Home") {
             event.preventDefault();
             setWidth(560);

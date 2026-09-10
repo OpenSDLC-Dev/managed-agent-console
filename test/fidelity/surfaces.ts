@@ -224,8 +224,8 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page
         .getByRole("region", { name: "Skill details" })
-        .getByRole("radio", { name: "API", exact: true })
-        .check();
+        .getByText("API", { exact: true })
+        .click();
     },
   },
   {

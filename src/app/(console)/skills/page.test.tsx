@@ -158,9 +158,7 @@ describe("SkillsPage", () => {
     const panel = within(screen.getByRole("region", { name: "Skill details" }));
     expect(await panel.findByText("Version description")).toBeVisible();
     expect(panel.getByText("Latest")).toHaveAttribute("data-latest", "true");
-    await userEvent.click(
-      panel.getByRole("radio", { name: "API", exact: true }),
-    );
+    await userEvent.click(panel.getByRole("radio", { name: "API" }));
     expect(panel.getByText(/"display_name": "PDF tools"/)).toBeVisible();
     await userEvent.click(panel.getByRole("button", { name: "Close details" }));
     expect(pushSpy).toHaveBeenCalledWith("/skills", { scroll: false });

@@ -16,7 +16,10 @@ test("skill inspector preserves the list, history and focus", async ({
   await expect(panel).toHaveAttribute("data-skill-id", SKILL);
   await expect(page).toHaveURL(`/skills?skill=${SKILL}`);
   await expect(row).toBeVisible();
-  await panel.getByRole("radio", { name: "API", exact: true }).check();
+  await panel.getByText("API", { exact: true }).click();
+  await expect(
+    panel.getByRole("radio", { name: "API", exact: true }),
+  ).toBeChecked();
   await expect(panel.locator("pre")).toContainText(
     '"display_name": "Weekly report writer"',
   );

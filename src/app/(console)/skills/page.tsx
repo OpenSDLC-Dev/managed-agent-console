@@ -180,6 +180,7 @@ function SkillsList() {
           previous={selectedIndex > 0 ? rows[selectedIndex - 1].id : undefined}
           next={selectedIndex >= 0 ? rows[selectedIndex + 1]?.id : undefined}
           onSelect={selectSkill}
+          fallbackFocus={lookup}
           onClose={() => selectSkill()}
         />
       )}
