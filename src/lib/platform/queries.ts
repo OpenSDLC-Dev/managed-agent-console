@@ -100,7 +100,7 @@ export function useAgentOptions() {
 export function useAgent(id: string) {
   return useQuery({
     queryKey: ["agent", id],
-    queryFn: () => platformGet<Agent>(`v1/agents/${id}`),
+    queryFn: () => platformGet<Agent>(`v1/agents/${encodeURIComponent(id)}`),
   });
 }
 
@@ -108,7 +108,7 @@ export function useAgentVersions(id: string, page?: string) {
   return useQuery({
     queryKey: ["agent-versions", id, page],
     queryFn: () =>
-      platformGet<Page<Agent>>(`v1/agents/${id}/versions`, {
+      platformGet<Page<Agent>>(`v1/agents/${encodeURIComponent(id)}/versions`, {
         limit: 20,
         page,
       }),
@@ -559,7 +559,7 @@ export function useUpdateAgent(id: string) {
   return useMutation({
     meta: { errorToast: false },
     mutationFn: (body: AgentWriteBody) =>
-      platformPost<Agent>(`v1/agents/${id}`, body),
+      platformPost<Agent>(`v1/agents/${encodeURIComponent(id)}`, body),
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
@@ -572,7 +572,8 @@ export function useArchiveAgent(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorTitle: "Archive failed" },
-    mutationFn: () => platformPost<Agent>(`v1/agents/${id}/archive`, {}),
+    mutationFn: () =>
+      platformPost<Agent>(`v1/agents/${encodeURIComponent(id)}/archive`, {}),
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
       void queryClient.invalidateQueries({ queryKey: ["agents"] });

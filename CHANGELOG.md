@@ -8,6 +8,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Agent lists can open an exact ID beyond the loaded page. Sidebar and group
+  preferences survive reloads, compact groups open flyouts, and phone navigation remains temporary.
+
 - Agent forms now edit custom tools and MCP servers with permissions directly,
   preserve Raw-only fields, and attach skills through a paginated picker.
 

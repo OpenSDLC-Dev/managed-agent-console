@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
+import { useNavPreference } from "./nav-preference";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,24 +27,30 @@ function NavLink({
   icon: Icon,
   surface,
   nested,
+  popup,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   surface?: Surface;
   nested?: boolean;
+  popup?: boolean;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       data-surface={surface}
       aria-current={active ? "page" : undefined}
       className={cn(
         ROW,
         // Align nested labels with 8px padding + 16px icon + 16px gap.
         nested && "pl-10",
+        popup && "h-8 px-2.5 py-1.5",
         "text-sidebar-foreground",
         active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
       )}
@@ -62,18 +70,19 @@ function Group({
   group: GroupEntry;
   available: Available;
 }) {
-  const [open, setOpen] = useState(true);
+  const id = `nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`;
+  const [preference, setOpen] = useNavPreference(id);
+  const open = preference ?? true;
   const items = group.items.filter((item) => available(item.surface));
   // A group is its items. With none of them served there is nothing to title,
   // and a header alone would advertise a section this deployment does not have.
   if (items.length === 0) return null;
-  const id = `nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`;
   const { icon: Icon } = group;
   return (
     <div className="flex flex-col gap-0.5">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={id}
         data-nav-group={group.label}
@@ -115,6 +124,54 @@ function Group({
   );
 }
 
+function CompactGroup({
+  group,
+  available,
+}: {
+  group: GroupEntry;
+  available: Available;
+}) {
+  const [open, setOpen] = useState(false);
+  const { icon: Icon } = group;
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        aria-label={group.label}
+        title={group.label}
+        className="flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60"
+      >
+        <Icon className="size-4" strokeWidth={1.75} />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner
+          side="right"
+          align="start"
+          sideOffset={12}
+          className="z-50"
+        >
+          <Popover.Popup className="w-48 max-w-[calc(100vw-64px)] rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+            <Popover.Title className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+              {group.label}
+            </Popover.Title>
+            {group.items
+              .filter((item) => available(item.surface))
+              .map((item) => (
+                <NavLink
+                  key={item.surface}
+                  popup
+                  href={surfaceRoute(item.surface)}
+                  label={SURFACES[item.surface].label}
+                  surface={item.surface}
+                  onNavigate={() => setOpen(false)}
+                />
+              ))}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 function Entry({
   entry,
   available,
@@ -136,13 +193,7 @@ function Entry({
   return <Group group={entry} available={available} />;
 }
 
-export function Nav({
-  compact = false,
-  onExpand,
-}: {
-  compact?: boolean;
-  onExpand?: () => void;
-}) {
+export function Nav({ compact = false }: { compact?: boolean }) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
   const available: Available = (surface) => surfaces?.[surface] !== false;
@@ -169,16 +220,7 @@ export function Nav({
             "flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60";
           if (entry.kind === "group")
             return (
-              <button
-                key={label}
-                type="button"
-                aria-label={label}
-                title={label}
-                onClick={onExpand}
-                className={className}
-              >
-                <Icon className="size-4" strokeWidth={1.75} />
-              </button>
+              <CompactGroup key={label} group={entry} available={available} />
             );
           const href =
             entry.kind === "local" ? entry.href : surfaceRoute(entry.surface);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookOpen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
+import { useNavPreference } from "./nav-preference";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +29,17 @@ export function ConsoleShell({
     () => window.matchMedia(NARROW).matches,
     () => false,
   );
-  const [expanded, setExpanded] = useState<boolean | null>(null);
-  const open = expanded ?? !narrow;
+  const [desktopExpanded, setDesktopExpanded] = useNavPreference("sidebar");
+  const [mobile, setMobile] = useState({ narrow, expanded: false });
+  // Opening navigation on a phone is temporary, independent of desktop preference.
+  if (mobile.narrow !== narrow) setMobile({ narrow, expanded: false });
+  const open = narrow
+    ? mobile.narrow === narrow && mobile.expanded
+    : (desktopExpanded ?? true);
+  const setExpanded = (expanded: boolean) => {
+    if (narrow) setMobile({ narrow, expanded });
+    else setDesktopExpanded(expanded);
+  };
   const toggleRef = useRef<HTMLButtonElement>(null);
   const close = () => {
     setExpanded(false);
@@ -97,13 +107,7 @@ export function ConsoleShell({
             if (narrow && (event.target as Element).closest("a")) close();
           }}
         >
-          <Nav
-            compact={!open}
-            onExpand={() => {
-              setExpanded(true);
-              toggleRef.current?.focus();
-            }}
-          />
+          <Nav compact={!open} />
         </div>
         <div hidden={!open} className="shrink-0">
           {footer}

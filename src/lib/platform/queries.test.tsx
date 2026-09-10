@@ -155,6 +155,12 @@ const queryCases: QueryCase[] = [
     search: {},
   },
   {
+    name: "useAgent with reserved ID characters",
+    useHook: () => useAgent("agent/id?x#y"),
+    path: "/api/platform/v1/agents/agent%2Fid%3Fx%23y",
+    search: {},
+  },
+  {
     name: "useAgentVersions (with page)",
     useHook: () => useAgentVersions("agt_1", "cur_2"),
     path: "/api/platform/v1/agents/agt_1/versions",

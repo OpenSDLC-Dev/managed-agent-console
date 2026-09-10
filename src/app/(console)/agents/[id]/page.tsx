@@ -56,7 +56,16 @@ export default function AgentDetailPage({
   const versions = useAgentVersions(id);
   const archive = useArchiveAgent(id);
 
-  if (error) return <ErrorState error={error} />;
+  if (error)
+    return (
+      <div>
+        <Breadcrumb
+          parent={{ href: "/agents", label: "Agents" }}
+          current={id}
+        />
+        <ErrorState error={error} />
+      </div>
+    );
   if (isPending || !agent) {
     return <DetailSkeleton />;
   }

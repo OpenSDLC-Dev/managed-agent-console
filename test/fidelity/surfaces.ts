@@ -92,6 +92,8 @@ export const SURFACES: Surface[] = [
     description: "Centered dashboard with the collapsed icon rail.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Collapse sidebar" }).click();
+      await page.reload();
+      await page.locator('[data-sidebar-state="collapsed"]').waitFor();
     },
   },
   {
@@ -101,6 +103,48 @@ export const SURFACES: Surface[] = [
     description: "Dashboard cards and shortcuts wrap within a narrow viewport.",
     setup: async (page) => {
       await page.setViewportSize({ width: 390, height: 844 });
+    },
+  },
+  {
+    id: "dashboard-group-collapsed",
+    route: "/dashboard",
+    fixture: "Build group persisted closed",
+    description: "Collapsed group survives a full reload.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Build", exact: true }).click();
+      await page.reload();
+      await page
+        .locator('[data-nav-group="Build"][aria-expanded="false"]')
+        .waitFor();
+    },
+  },
+  {
+    id: "agents-lookup-missing",
+    route: "/agents",
+    fixture: "unknown exact Agent ID",
+    description:
+      "Missing resource errors after exact lookup preserve browser history.",
+    setup: async (page) => {
+      await page
+        .getByRole("textbox", { name: "Find agent by ID" })
+        .fill("agent_missing");
+      await page.getByRole("button", { name: "Open", exact: true }).click();
+      await page.getByTestId("error-state").waitFor();
+    },
+  },
+  {
+    id: "dashboard-nav-flyout",
+    route: "/dashboard",
+    fixture: "compact Build navigation",
+    description:
+      "A group flyout opens beside the rail without changing sidebar preference.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Collapse sidebar" }).click();
+      await page
+        .getByRole("navigation")
+        .getByRole("button", { name: "Build", exact: true })
+        .click();
+      await page.getByRole("dialog", { name: "Build", exact: true }).waitFor();
     },
   },
   // ---- the landing page ------------------------------------------------

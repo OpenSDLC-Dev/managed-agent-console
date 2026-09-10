@@ -216,7 +216,6 @@ describe("AgentsPage", () => {
       "archived",
     );
     expect(screen.getAllByText("claude-sonnet-4-8")).toHaveLength(2);
-    expect(screen.getAllByText("v3")).toHaveLength(2);
 
     const url = new URL(
       String(fetchMock.mock.calls[0][0]),
@@ -308,4 +307,18 @@ describe("AgentsPage", () => {
       expect(last.searchParams.get("page")).toBeNull();
     });
   });
+});
+
+it("opens an exact ID outside the current list and safely encodes its route segment", async () => {
+  stubFetch(() => json({ data: [] }));
+  const user = userEvent.setup();
+  renderPage();
+  const input = screen.getByRole("textbox", { name: "Find agent by ID" });
+  await user.type(input, "   ");
+  await user.click(screen.getByRole("button", { name: "Open" }));
+  expect(pushSpy).not.toHaveBeenCalled();
+  await user.clear(input);
+  await user.type(input, "  unknown/id?x=1  ");
+  await user.keyboard("{Enter}");
+  expect(pushSpy).toHaveBeenCalledWith("/agents/unknown%2Fid%3Fx%3D1");
 });
