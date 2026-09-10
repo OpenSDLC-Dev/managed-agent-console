@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/environments",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 // Minimal harness for base-ui's portal Select (status-filter.test.tsx pattern).
@@ -123,6 +123,7 @@ function renderPage() {
 }
 
 afterEach(() => {
+  window.history.replaceState({}, "", "/");
   cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -366,4 +367,50 @@ it("does not archive rows which are already archived", async () => {
   expect(
     screen.getByRole("checkbox", { name: "Select all rows" }),
   ).not.toBeChecked();
+});
+it("opens the URL-selected environment and preserves unrelated query state", async () => {
+  window.history.replaceState(
+    {},
+    "",
+    "/environments?environment=env_1&source=kept",
+  );
+  const first = environment({ id: "env_1", name: "Panel environment" });
+  const next = environment({ id: "env_2", name: "Next environment" });
+  stubFetch((url) =>
+    json(url.pathname.endsWith("/env_1") ? first : { data: [first, next] }),
+  );
+  const user = userEvent.setup();
+  renderPage();
+  const panel = await screen.findByRole("region", {
+    name: "Environment details",
+  });
+  await screen.findByRole("heading", { name: "Panel environment" });
+  expect(panel).toHaveAttribute("data-environment-id", "env_1");
+  expect(screen.queryByTestId("environment-keys")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Next environment" }));
+  expect(pushSpy).toHaveBeenLastCalledWith(
+    "/environments?environment=env_2&source=kept",
+    { scroll: false },
+  );
+  await user.click(screen.getByRole("button", { name: "Close details" }));
+  expect(pushSpy).toHaveBeenLastCalledWith("/environments?source=kept", {
+    scroll: false,
+  });
+});
+
+it("looks up exact IDs without restricting lookup to the loaded page", async () => {
+  stubFetch(() => json({ data: [] }));
+  const user = userEvent.setup();
+  renderPage();
+  await user.click(screen.getByRole("button", { name: "Find" }));
+  expect(pushSpy).not.toHaveBeenCalled();
+  await user.type(
+    screen.getByRole("textbox", { name: "Find environment by ID" }),
+    " env_outside_page ",
+  );
+  await user.click(screen.getByRole("button", { name: "Find" }));
+  expect(pushSpy).toHaveBeenCalledWith(
+    "/environments?environment=env_outside_page",
+    { scroll: false },
+  );
 });

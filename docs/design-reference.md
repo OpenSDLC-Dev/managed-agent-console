@@ -378,7 +378,8 @@ measured a 16px/20px title, 14px/20px section headings, 12px/17px fields, a
 row exposes Clear selection, Archive and Delete; the console applies the existing
 single-resource routes and retains failed selections for retry.
 
-Full-page Edit enters a form without changing the URL. Description is multiline.
+Full-page Edit enters a form without changing the URL. The create dialog measures
+520px wide with 24px content insets, a 22px title and a 76px multiline description.
 Hosting type remains immutable: environments.go's update handler rejects changes
 at lines 600–608, despite normalizeEnvConfig accepting either union arm. Cloud
 creation keeps the platform's unrestricted networking default; the observed

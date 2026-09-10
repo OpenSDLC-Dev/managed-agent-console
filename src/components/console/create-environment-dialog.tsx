@@ -63,10 +63,12 @@ export function CreateEnvironmentButton({
           if (!next) reset();
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Create environment</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[22px] leading-7">
+              Create environment
+            </DialogTitle>
+            <DialogDescription className="sr-only">
               A configuration template for session sandboxes.
             </DialogDescription>
           </DialogHeader>
@@ -90,7 +92,9 @@ export function CreateEnvironmentButton({
                   className="h-8 w-full rounded-lg"
                   aria-label="Hosting type"
                 >
-                  <SelectValue />
+                  <SelectValue>
+                    {kind === "cloud" ? "Cloud" : "Self-hosted"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cloud">Cloud</SelectItem>
@@ -105,7 +109,7 @@ export function CreateEnvironmentButton({
               <Label htmlFor="env-stub-description">Description</Label>
               <textarea
                 className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
-                rows={2}
+                rows={3}
                 id="env-stub-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -122,7 +126,7 @@ export function CreateEnvironmentButton({
               )}
             </p>
           )}
-          <DialogFooter>
+          <DialogFooter className="m-0 flex-row justify-end border-0 bg-transparent p-0">
             <Button
               variant="ghost"
               onClick={() => {
