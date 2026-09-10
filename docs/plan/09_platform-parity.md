@@ -63,3 +63,9 @@ five terminal/active states and the platform's one-way cancel/archive rules.
 The live contract probes only the collection route: creating a real Dream
 starts the configured model runner, so deterministic write coverage belongs to
 the mock tier rather than a model-free test.
+
+Vaults: `internal/api/vaults.go`, `vaultcredentials.go` and `vaultcredauth.go`
+make archive one-way, purge sealed values on archive, and expose credential
+secrets only as writes. Metadata updates use null tombstones. Chrome verification
+used the local mock because the reference Managed Agents account was no longer
+available to sign in.

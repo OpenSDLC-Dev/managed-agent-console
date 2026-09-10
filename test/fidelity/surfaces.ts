@@ -70,6 +70,7 @@ const MEMORY_VERSION = "memver_briefmodified000001";
 const DREAM = "drm_completedresearch000001";
 const PENDING_DREAM = "drm_pendingresearch0000001";
 const VAULT = "vlt_github00000000000001";
+const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
@@ -165,6 +166,13 @@ export const SURFACES: Surface[] = [
     route: `/vaults/${VAULT}`,
     fixture: VAULT,
     description: "Credential rows — the surface that must never show a secret.",
+  },
+  {
+    id: "credential-detail",
+    route: `/vaults/${VAULT}/credentials/${CREDENTIAL}`,
+    fixture: CREDENTIAL,
+    description:
+      "Secret-free credential configuration, lifecycle actions and metadata.",
   },
   {
     id: "skill-detail",
@@ -480,6 +488,19 @@ export const SURFACES: Surface[] = [
     description: "Existing store metadata with patch-delete semantics.",
   },
   {
+    id: "vault-edit",
+    route: `/vaults/${VAULT}/edit`,
+    fixture: VAULT,
+    description: "Vault display-name and metadata editor.",
+  },
+  {
+    id: "credential-edit",
+    route: `/vaults/${VAULT}/credentials/${CREDENTIAL}/edit`,
+    fixture: CREDENTIAL,
+    description:
+      "Credential metadata, policy and write-only secret replacement form.",
+  },
+  {
     id: "memory-new",
     route: `/memory-stores/${MEMORY_STORE}/memories/new`,
     fixture: "empty memory form",
@@ -666,7 +687,7 @@ export const SURFACES: Surface[] = [
     route: `/vaults/${VAULT}`,
     fixture: VAULT,
     description:
-      "The write-only-secret form — the one dialog whose fields must never round-trip a value.",
+      "The write-only-secret form with type-specific policy fields; saved secrets must never round-trip a value.",
     setup: async (page) => {
       await page
         .getByRole("button", { name: "Add credential" })

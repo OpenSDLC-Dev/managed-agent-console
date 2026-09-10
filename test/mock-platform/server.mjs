@@ -1259,6 +1259,13 @@ function route(req, url) {
     if (!creds) return null; // missing vault → 404, not an empty page
     return keysetPage(includeArchived ? creds : creds.filter(notArchived), url);
   }
+  const credMatch = path.match(/^\/v1\/vaults\/([^/]+)\/credentials\/([^/]+)$/);
+  if (credMatch)
+    return (
+      (vaultCredsStore[credMatch[1]] ?? []).find(
+        (credential) => credential.id === credMatch[2],
+      ) ?? null
+    );
 
   if (path === "/v1/skills") {
     let rows = skillsStore;
@@ -3350,6 +3357,38 @@ const server = createServer(async (req, res) => {
       res.end(JSON.stringify(vault));
       return;
     }
+    if (req.method === "POST" && vaultIdMatch) {
+      res.setHeader("content-type", "application/json");
+      const vault = vaultsStore.find((v) => v.id === vaultIdMatch[1]);
+      if (!vault) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such vault"));
+        return;
+      }
+      if (vault.archived_at) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "vault is archived"));
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      if (body.display_name !== undefined)
+        vault.display_name = body.display_name;
+      for (const [key, value] of Object.entries(body.metadata ?? {})) {
+        if (value === null) delete vault.metadata[key];
+        else vault.metadata[key] = value;
+      }
+      vault.updated_at = now();
+      res.writeHead(200);
+      res.end(JSON.stringify(vault));
+      return;
+    }
     if (req.method === "POST" && vaultArchiveMatch) {
       res.setHeader("content-type", "application/json");
       const vault = vaultsStore.find((v) => v.id === vaultArchiveMatch[1]);
@@ -3505,6 +3544,66 @@ const server = createServer(async (req, res) => {
         return;
       }
       cred.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(cred));
+      return;
+    }
+    if (req.method === "POST" && credItemMatch) {
+      res.setHeader("content-type", "application/json");
+      const cred = (vaultCredsStore[credItemMatch[1]] ?? []).find(
+        (candidate) => candidate.id === credItemMatch[2],
+      );
+      if (!cred) {
+        res.writeHead(404);
+        res.end(envelope("not_found_error", "no such credential"));
+        return;
+      }
+      if (cred.archived_at) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "credential is archived"));
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+      if (body.auth && body.auth.type !== cred.auth.type) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "auth.type cannot change"));
+        return;
+      }
+      if (body.display_name !== undefined)
+        cred.display_name = body.display_name;
+      for (const [key, value] of Object.entries(body.metadata ?? {})) {
+        if (value === null) delete cred.metadata[key];
+        else cred.metadata[key] = value;
+      }
+      if (body.auth) {
+        if (cred.auth.type === "mcp_oauth") {
+          if (body.auth.expires_at !== undefined)
+            cred.auth.expires_at = body.auth.expires_at;
+          if (body.auth.refresh && cred.auth.refresh) {
+            if (body.auth.refresh.scope !== undefined)
+              cred.auth.refresh.scope = body.auth.refresh.scope;
+            if (body.auth.refresh.token_endpoint_auth)
+              cred.auth.refresh.token_endpoint_auth = {
+                type: body.auth.refresh.token_endpoint_auth.type,
+              };
+          }
+        } else if (cred.auth.type === "environment_variable") {
+          if (body.auth.networking) cred.auth.networking = body.auth.networking;
+          if (body.auth.injection_location)
+            cred.auth.injection_location = {
+              ...cred.auth.injection_location,
+              ...body.auth.injection_location,
+            };
+        }
+      }
+      cred.updated_at = now();
       res.writeHead(200);
       res.end(JSON.stringify(cred));
       return;

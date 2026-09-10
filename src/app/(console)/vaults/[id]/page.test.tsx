@@ -263,8 +263,9 @@ describe("VaultDetailPage", () => {
     await screen.findByRole("heading", { name: "Team creds" });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete credential crd_bearer" }),
+      screen.getByRole("button", { name: "Actions for crd_bearer" }),
     );
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: "Delete credential" }),

@@ -426,16 +426,28 @@ export function useVault(id: string) {
   });
 }
 
-export function useVaultCredentials(vaultId: string, page?: string) {
+export function useVaultCredentials(
+  vaultId: string,
+  params: { page?: string; include_archived?: boolean } = {},
+) {
   return useQuery({
-    queryKey: ["vault-credentials", vaultId, page],
+    queryKey: ["vault-credentials", vaultId, params],
     queryFn: () =>
       platformGet<Page<VaultCredential>>(`v1/vaults/${vaultId}/credentials`, {
         limit: 20,
-        page,
-        include_archived: true,
+        ...params,
       }),
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useVaultCredential(vaultId: string, credentialId: string) {
+  return useQuery({
+    queryKey: ["vault-credential", vaultId, credentialId],
+    queryFn: () =>
+      platformGet<VaultCredential>(
+        `v1/vaults/${vaultId}/credentials/${credentialId}`,
+      ),
   });
 }
 
@@ -988,15 +1000,36 @@ export function useUploadFile() {
   });
 }
 
+export interface VaultWriteBody {
+  display_name?: string;
+  metadata?: Record<string, string | null>;
+}
+
+function vaultMutationSuccess(
+  client: ReturnType<typeof useQueryClient>,
+  vault: Vault,
+) {
+  client.setQueryData(["vault", vault.id], vault);
+  void client.invalidateQueries({ queryKey: ["vaults"] });
+}
+
 export function useCreateVault() {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorToast: false },
-    mutationFn: (body: { display_name: string }) =>
+    mutationFn: (body: VaultWriteBody & { display_name: string }) =>
       platformPost<Vault>("v1/vaults", body),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["vaults"] });
-    },
+    onSuccess: (vault) => vaultMutationSuccess(queryClient, vault),
+  });
+}
+
+export function useUpdateVault(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: VaultWriteBody) =>
+      platformPost<Vault>(`v1/vaults/${id}`, body),
+    onSuccess: (vault) => vaultMutationSuccess(client, vault),
   });
 }
 
@@ -1209,10 +1242,43 @@ export function useAddCredential(vaultId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorToast: false },
-    mutationFn: (body: { display_name?: string; auth: unknown }) =>
+    gcTime: 0,
+    mutationFn: (body: {
+      display_name?: string;
+      auth: unknown;
+      metadata?: Record<string, string>;
+    }) =>
       platformPost<VaultCredential>(`v1/vaults/${vaultId}/credentials`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({
+        queryKey: ["vault-credentials", vaultId],
+      });
+    },
+  });
+}
+
+export interface VaultCredentialWriteBody {
+  display_name?: string | null;
+  auth?: unknown;
+  metadata?: Record<string, string | null>;
+}
+
+export function useUpdateCredential(vaultId: string, credentialId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    gcTime: 0,
+    mutationFn: (body: VaultCredentialWriteBody) =>
+      platformPost<VaultCredential>(
+        `v1/vaults/${vaultId}/credentials/${credentialId}`,
+        body,
+      ),
+    onSuccess: (credential) => {
+      client.setQueryData(
+        ["vault-credential", vaultId, credentialId],
+        credential,
+      );
+      void client.invalidateQueries({
         queryKey: ["vault-credentials", vaultId],
       });
     },
@@ -1228,7 +1294,11 @@ export function useArchiveCredential(vaultId: string) {
         `v1/vaults/${vaultId}/credentials/${credentialId}/archive`,
         {},
       ),
-    onSuccess: () => {
+    onSuccess: (credential) => {
+      queryClient.setQueryData(
+        ["vault-credential", vaultId, credential.id],
+        credential,
+      );
       void queryClient.invalidateQueries({
         queryKey: ["vault-credentials", vaultId],
       });
@@ -1244,7 +1314,10 @@ export function useDeleteCredential(vaultId: string) {
       platformDelete<{ id: string; type: string }>(
         `v1/vaults/${vaultId}/credentials/${credentialId}`,
       ),
-    onSuccess: () => {
+    onSuccess: (_, credentialId) => {
+      queryClient.removeQueries({
+        queryKey: ["vault-credential", vaultId, credentialId],
+      });
       void queryClient.invalidateQueries({
         queryKey: ["vault-credentials", vaultId],
       });

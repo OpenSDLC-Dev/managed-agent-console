@@ -5,6 +5,72 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+test("mock vault updates reject malformed or invalid requests atomically", async ({
+  request,
+}) => {
+  const base = "http://127.0.0.1:18080/v1";
+  const headers = { "x-api-key": "test-key" };
+  const vault = await (
+    await request.post(`${base}/vaults`, {
+      headers,
+      data: { display_name: "Atomic updates", metadata: { state: "original" } },
+    })
+  ).json();
+  const credential = await (
+    await request.post(`${base}/vaults/${vault.id}/credentials`, {
+      headers,
+      data: {
+        display_name: "Original credential",
+        metadata: { state: "original" },
+        auth: {
+          type: "environment_variable",
+          secret_name: "ATOMIC_TOKEN",
+          secret_value: "write-only",
+        },
+      },
+    })
+  ).json();
+
+  for (const path of [
+    `${base}/vaults/${vault.id}`,
+    `${base}/vaults/${vault.id}/credentials/${credential.id}`,
+  ]) {
+    const response = await request.post(path, {
+      headers: { ...headers, "content-type": "application/json" },
+      data: Buffer.from("{"),
+    });
+    expect(response.status()).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { type: "invalid_request_error" },
+    });
+  }
+
+  const invalid = await request.post(
+    `${base}/vaults/${vault.id}/credentials/${credential.id}`,
+    {
+      headers,
+      data: {
+        display_name: "Partially changed",
+        metadata: { state: "changed" },
+        auth: { type: "static_bearer" },
+      },
+    },
+  );
+  expect(invalid.status()).toBe(400);
+
+  const unchanged = await (
+    await request.get(
+      `${base}/vaults/${vault.id}/credentials/${credential.id}`,
+      { headers },
+    )
+  ).json();
+  expect(unchanged).toMatchObject({
+    display_name: "Original credential",
+    metadata: { state: "original" },
+    auth: { type: "environment_variable" },
+  });
+});
+
 test("create, edit, archive, and delete an environment", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Environments", exact: true }).click();
@@ -123,8 +189,18 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
   await page.getByLabel("Display name").fill("CI secrets");
+  await page.getByLabel("Metadata (JSON object)").fill('{"team":"ci"}');
   await page.getByRole("button", { name: "Create vault", exact: true }).click();
   await expect(page).toHaveURL(/\/vaults\/vlt_mock/);
+
+  // Vault updates preserve platform patch semantics.
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Display name").fill("CI credentials");
+  await page.getByLabel("Metadata (JSON object)").fill('{"owner":"e2e"}');
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("heading", { name: "CI credentials" }),
+  ).toBeVisible();
 
   // Env-var credential: the secret value leaves the form and never returns.
   await page.getByRole("button", { name: "Add credential" }).click();
@@ -136,6 +212,32 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
     .click();
   await expect(page.getByText("NPM_TOKEN")).toBeVisible();
   await expect(page.getByText("super-secret-value")).toBeHidden();
+
+  // The credential has its own secret-free detail and edit lifecycle.
+  await page.getByText("NPM_TOKEN").click();
+  await expect(page).toHaveURL(/\/credentials\/vcred_mock/);
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Display name (optional)").fill("npm publishing");
+  await page.getByLabel("Replacement secret value").fill("rotated-secret");
+  await page.getByLabel("Body").check();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("heading", { name: "npm publishing" }),
+  ).toBeVisible();
+  await expect(page.getByText("rotated-secret")).toBeHidden();
+  await page.getByRole("button", { name: /Actions for vcred_mock/ }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await page.getByRole("button", { name: "Archive credential" }).click();
+  await expect(page.getByText("archived", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "CI credentials" }).click();
+  await page.getByLabel("Show archived").check();
+  const archivedCredential = page
+    .getByRole("row")
+    .filter({ hasText: "npm publishing" });
+  await expect(archivedCredential).toBeVisible();
+  await expect(
+    archivedCredential.getByText("archived", { exact: true }),
+  ).toBeVisible();
 
   // OAuth credential + the validation probe.
   await page.getByRole("button", { name: "Add credential" }).first().click();
@@ -153,7 +255,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
     /OAuth validation: ok/,
   );
 
-  // Archive warns about the secret purge.
+  // Archive warns about the remaining secret purge.
   await page
     .getByRole("main")
     .getByRole("button", { name: "More actions" })
