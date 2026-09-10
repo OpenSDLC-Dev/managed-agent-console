@@ -25,13 +25,29 @@ vi.mock("@/components/ui/select", () => ({
     children?: unknown;
   }) => (
     <select
-      aria-label="Credential type"
+      aria-label={
+        ["environment_variable", "static_bearer", "mcp_oauth"].includes(value)
+          ? "Credential type"
+          : "Token endpoint authentication"
+      }
       value={value}
       onChange={(e) => onValueChange(e.target.value)}
     >
-      <option value="environment_variable">environment_variable</option>
-      <option value="static_bearer">static_bearer</option>
-      <option value="mcp_oauth">mcp_oauth</option>
+      {["environment_variable", "static_bearer", "mcp_oauth"].includes(
+        value,
+      ) ? (
+        <>
+          <option value="environment_variable">environment_variable</option>
+          <option value="static_bearer">static_bearer</option>
+          <option value="mcp_oauth">mcp_oauth</option>
+        </>
+      ) : (
+        <>
+          <option value="none">none</option>
+          <option value="client_secret_basic">client_secret_basic</option>
+          <option value="client_secret_post">client_secret_post</option>
+        </>
+      )}
     </select>
   ),
   SelectContent: () => null,
@@ -53,11 +69,14 @@ function renderButton() {
       mutations: { retry: false },
     },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <AddCredentialButton vaultId="vlt_1" />
-    </QueryClientProvider>,
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={client}>
+        <AddCredentialButton vaultId="vlt_1" />
+      </QueryClientProvider>,
+    ),
+    client,
+  };
 }
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
@@ -118,10 +137,35 @@ describe("AddCredentialButton", () => {
           type: "limited",
           allowed_hosts: ["api.github.com", "github.com"],
         },
+        injection_location: { header: true, body: true },
       },
+      metadata: {},
     });
     // Success closes the dialog.
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("probe: evicts the write-only value from every cache after save", async () => {
+    const secret = "cache-must-forget-this-secret";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => credentialResponse()),
+    );
+    const user = userEvent.setup();
+    const { client } = renderButton();
+    const dialog = await openDialog(user);
+
+    fill("Secret name", "TOKEN");
+    fill("Secret value", secret);
+    await user.click(submitButton(dialog));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    expect(JSON.stringify(client.getMutationCache().getAll())).not.toContain(
+      secret,
+    );
+    expect(JSON.stringify(client.getQueryCache().getAll())).not.toContain(
+      secret,
+    );
   });
 
   it("sends unrestricted networking and omits display_name when both are empty", async () => {
@@ -146,7 +190,9 @@ describe("AddCredentialButton", () => {
         secret_name: "API_KEY",
         secret_value: "sk-1",
         networking: { type: "unrestricted" },
+        injection_location: { header: true, body: true },
       },
+      metadata: {},
     });
   });
 
@@ -179,6 +225,7 @@ describe("AddCredentialButton", () => {
         mcp_server_url: "https://mcp.example.com",
         token: "tok_123",
       },
+      metadata: {},
     });
   });
 
@@ -211,7 +258,77 @@ describe("AddCredentialButton", () => {
         mcp_server_url: "https://mcp.example.com",
         access_token: "at_456",
       },
+      metadata: {},
     });
+  });
+
+  it("posts OAuth expiry, refresh configuration, and metadata", async () => {
+    const fetchMock = vi.fn(async () => credentialResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    renderButton();
+    const dialog = await openDialog(user);
+
+    await user.selectOptions(
+      screen.getByLabelText("Credential type"),
+      "mcp_oauth",
+    );
+    fill("MCP server URL", "https://mcp.example.com");
+    fill("Access token", "access");
+    fill("Expiry (RFC 3339, optional)", "2026-10-01T00:00:00Z");
+    await user.click(screen.getByLabelText("Configure automatic refresh"));
+    fill("Client ID", "client");
+    fill("Refresh token", "refresh");
+    fill("Token endpoint", "https://example.com/token");
+    await user.selectOptions(
+      screen.getByLabelText("Token endpoint authentication"),
+      "client_secret_post",
+    );
+    fill("Client secret", "client-secret");
+    fill("Resource (optional)", "resource");
+    fill("Scope (optional)", "repo");
+    fill("Metadata (JSON object)", '{"owner":"agents"}');
+    await user.click(submitButton(dialog));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(JSON.parse(init.body as string)).toEqual({
+      auth: {
+        type: "mcp_oauth",
+        mcp_server_url: "https://mcp.example.com",
+        access_token: "access",
+        expires_at: "2026-10-01T00:00:00Z",
+        refresh: {
+          client_id: "client",
+          refresh_token: "refresh",
+          token_endpoint: "https://example.com/token",
+          token_endpoint_auth: {
+            type: "client_secret_post",
+            client_secret: "client-secret",
+          },
+          resource: "resource",
+          scope: "repo",
+        },
+      },
+      metadata: { owner: "agents" },
+    });
+  });
+
+  it("rejects invalid metadata without posting", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    renderButton();
+    const dialog = await openDialog(user);
+    fill("Secret name", "KEY");
+    fill("Secret value", "value");
+    fill("Metadata (JSON object)", "[]");
+    await user.click(submitButton(dialog));
+    expect(screen.getByRole("alert")).toHaveTextContent("JSON object");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("gates submit on the required fields of each arm", async () => {
@@ -225,6 +342,11 @@ describe("AddCredentialButton", () => {
     await user.type(screen.getByLabelText("Secret name"), "A");
     expect(submitButton(dialog)).toBeDisabled();
     await user.type(screen.getByLabelText("Secret value"), "v");
+    expect(submitButton(dialog)).toBeEnabled();
+    await user.click(screen.getByLabelText("Header"));
+    await user.click(screen.getByLabelText("Body"));
+    expect(submitButton(dialog)).toBeDisabled();
+    await user.click(screen.getByLabelText("Header"));
     expect(submitButton(dialog)).toBeEnabled();
 
     // MCP arm: needs server URL + token.

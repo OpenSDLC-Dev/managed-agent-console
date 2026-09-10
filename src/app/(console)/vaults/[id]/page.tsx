@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Trash2 } from "lucide-react";
+import { Pencil, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   DetailSection,
@@ -18,10 +18,10 @@ import {
   ErrorState,
   DetailSkeleton,
 } from "@/components/console/bits";
-import { ConfirmIconButton } from "@/components/console/archive-button";
 import { Breadcrumb } from "@/components/console/breadcrumb";
 import { ResourceActions } from "@/components/console/resource-actions";
 import { IdCell } from "@/components/console/copy-id";
+import { Pager } from "@/components/console/pager";
 import { AddCredentialButton } from "@/components/console/credential-form";
 import {
   AuthTypeBadge,
@@ -29,6 +29,7 @@ import {
 } from "@/components/console/credential-auth";
 import { Button } from "@/components/ui/button";
 import {
+  useArchiveCredential,
   useArchiveVault,
   useDeleteCredential,
   useDeleteVault,
@@ -36,6 +37,7 @@ import {
   useVault,
   useVaultCredentials,
 } from "@/lib/platform/queries";
+import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { VaultCredential } from "@/lib/platform/types";
 
 function CredentialActions({
@@ -48,9 +50,14 @@ function CredentialActions({
   onValidated: (message: string, failed?: boolean) => void;
 }) {
   const validate = useValidateOAuthCredential(vaultId);
+  const archive = useArchiveCredential(vaultId);
   const remove = useDeleteCredential(vaultId);
   return (
-    <span className="flex items-center gap-1.5">
+    <div
+      className="flex items-center gap-1.5"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       {credential.auth.type === "mcp_oauth" && !credential.archived_at && (
         <Button
           variant="outline"
@@ -74,16 +81,22 @@ function CredentialActions({
           <ShieldCheck className="size-3.5" /> Validate
         </Button>
       )}
-      <ConfirmIconButton
-        label={`Delete credential ${credential.id}`}
-        title="Delete credential"
-        description="Deleting a credential is permanent; its sealed secret is destroyed."
-        pending={remove.isPending}
-        onConfirm={() => remove.mutate(credential.id)}
-      >
-        <Trash2 className="size-3.5" />
-      </ConfirmIconButton>
-    </span>
+      <ResourceActions
+        resource="credential"
+        menuLabel={`Actions for ${credential.id}`}
+        archived={!!credential.archived_at}
+        archiveWarning="Its sealed secret is destroyed."
+        deleteDescription="Deleting is permanent; the sealed secret is destroyed."
+        onArchive={
+          credential.archived_at
+            ? undefined
+            : () => archive.mutate(credential.id)
+        }
+        onDelete={() => remove.mutate(credential.id)}
+        archivePending={archive.isPending}
+        deletePending={remove.isPending}
+      />
+    </div>
   );
 }
 
@@ -95,7 +108,12 @@ export default function VaultDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const { data: vault, error, isPending } = useVault(id);
-  const credentials = useVaultCredentials(id);
+  const [showArchived, setShowArchived] = useState(false);
+  const pager = useCursorPage(String(showArchived));
+  const credentials = useVaultCredentials(id, {
+    page: pager.page,
+    include_archived: showArchived || undefined,
+  });
   const archive = useArchiveVault(id);
   const removeVault = useDeleteVault(id);
   const [notice, setNotice] = useState<{
@@ -155,8 +173,18 @@ export default function VaultDetailPage({
       <PageHeader
         title={vault.display_name}
         actions={
-          <span className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <ArchivedBadge archivedAt={vault.archived_at} />
+            {!vault.archived_at && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                onClick={() => router.push(`/vaults/${id}/edit`)}
+              >
+                <Pencil className="size-4" /> Edit
+              </Button>
+            )}
             <ResourceActions
               resource="vault"
               archived={!!vault.archived_at}
@@ -171,7 +199,7 @@ export default function VaultDetailPage({
               archivePending={archive.isPending}
               deletePending={removeVault.isPending}
             />
-          </span>
+          </div>
         }
       />
       <DetailSection title="Overview">
@@ -188,13 +216,23 @@ export default function VaultDetailPage({
         </FieldList>
       </DetailSection>
       <DetailSection title="Credentials">
-        <div className="flex items-center justify-between pb-3">
+        <div className="flex items-center justify-between gap-4 pb-3">
           <p className="text-[13px] text-muted-foreground">
             Secrets are write-only on the platform — this view can never show
             them. Archiving a vault purges every credential&apos;s sealed
             secret.
           </p>
-          {!vault.archived_at && <AddCredentialButton vaultId={id} />}
+          <div className="flex shrink-0 items-center gap-3">
+            <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(event) => setShowArchived(event.target.checked)}
+              />
+              Show archived
+            </label>
+            {!vault.archived_at && <AddCredentialButton vaultId={id} />}
+          </div>
         </div>
         {notice && (
           <p
@@ -217,8 +255,20 @@ export default function VaultDetailPage({
             rowKey={(c) => c.id}
             loading={credentials.isPending}
             empty={<EmptyState title="No credentials in this vault" />}
+            onRowClick={(credential) =>
+              router.push(`/vaults/${id}/credentials/${credential.id}`)
+            }
           />
         )}
+        <Pager
+          hasPrev={pager.hasPrev}
+          hasNext={!!credentials.data?.next_page}
+          onPrev={pager.goPrev}
+          onNext={() =>
+            credentials.data?.next_page &&
+            pager.goNext(credentials.data.next_page)
+          }
+        />
       </DetailSection>
       {Object.keys(vault.metadata).length > 0 && (
         <DetailSection title="Metadata">

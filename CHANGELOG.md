@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Credential vaults and their credentials now have complete operator workflows:
+  metadata-aware create/edit, credential detail and rotation, archive/delete,
+  archived filtering and exact environment-variable, bearer and OAuth settings.
+
 - Dreams can be created from one memory store and 1–100 session transcripts,
   then inspected, canceled while active and archived after reaching a terminal
   state. Lists expose status, inputs and output behavior without starting a
@@ -48,6 +52,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   protects a skill's last version from individual deletion.
 
 ### Testing
+
+- Added a model-free Vault/credential live contract plus mock, component,
+  end-to-end and Chrome fidelity coverage for write-only secret lifecycles.
 
 - Added wire-schema, mock lifecycle, end-to-end and Chrome fidelity coverage
   for Dreams. The live tier limits itself to the collection probe because a

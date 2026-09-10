@@ -70,7 +70,10 @@ describe("CreateVaultButton", () => {
     ];
     expect(url).toBe("/api/platform/v1/vaults");
     expect(init.method).toBe("POST");
-    expect(JSON.parse(init.body as string)).toEqual({ display_name: "Prod" });
+    expect(JSON.parse(init.body as string)).toEqual({
+      display_name: "Prod",
+      metadata: {},
+    });
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_1"));
   });
 

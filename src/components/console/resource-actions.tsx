@@ -27,6 +27,7 @@ export function ResourceActions({
   onDelete,
   archivePending,
   deletePending,
+  menuLabel = "More actions",
 }: {
   resource: string;
   archived?: boolean;
@@ -36,6 +37,7 @@ export function ResourceActions({
   onDelete?: () => void;
   archivePending?: boolean;
   deletePending?: boolean;
+  menuLabel?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -87,7 +89,7 @@ export function ResourceActions({
         variant="ghost"
         size="sm"
         className="h-7 w-7 p-0 text-muted-foreground"
-        aria-label="More actions"
+        aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={toggleMenu}
