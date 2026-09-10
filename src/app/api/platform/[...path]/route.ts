@@ -17,7 +17,9 @@ async function proxy(
 ): Promise<Response> {
   const { path } = await params;
   const joined = path.join("/");
-  if (path[0] !== "v1") {
+  // Next decodes each segment. A decoded delimiter must not select another
+  // upstream endpoint or become a query/fragment when joined below.
+  if (path[0] !== "v1" || path.some((segment) => /[/?#]/.test(segment))) {
     return envelope(
       404,
       "invalid_request_error",

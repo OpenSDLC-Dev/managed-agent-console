@@ -97,7 +97,10 @@ const SURFACE_ITEMS = EXPECTED.filter((i) => i.surface);
  * availability stays unknown — the state every routing assertion below runs
  * in, and the one a healthy deployment spends its first moments in.
  */
-function renderNav(unimplemented?: string[]) {
+function renderNav(
+  unimplemented?: string[],
+  props: ComponentProps<typeof Nav> = {},
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn((input: string) => {
@@ -135,7 +138,7 @@ function renderNav(unimplemented?: string[]) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <Nav />
+      <Nav {...props} />
     </QueryClientProvider>,
   );
 }
@@ -152,6 +155,8 @@ const rowOrder = () =>
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -341,4 +346,37 @@ describe("Nav", () => {
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
   });
+});
+
+it("restores a collapsed group after remount", async () => {
+  const user = userEvent.setup();
+  const first = renderNav();
+  await user.click(groupHeader("Build")!);
+  expect(link("Files")).toBeNull();
+  first.unmount();
+  renderNav();
+  expect(groupHeader("Build")?.getAttribute("aria-expanded")).toBe("false");
+  expect(link("Files")).toBeNull();
+  await user.click(groupHeader("Build")!);
+  expect(link("Files")).not.toBeNull();
+});
+
+it("compact groups open an accessible flyout without changing saved expansion", async () => {
+  localStorage.setItem("managed-agent-console:nav:nav-group-build", "false");
+  renderNav(["skills"], { compact: true });
+  const user = userEvent.setup();
+  const trigger = screen.getByRole("button", { name: "Build" });
+  await user.click(trigger);
+  await screen.findByRole("dialog", { name: "Build" });
+  await waitFor(() => expect(link("Skills")).toBeNull());
+  expect(link("Files")?.getAttribute("href")).toBe("/files");
+  expect(
+    localStorage.getItem("managed-agent-console:nav:nav-group-build"),
+  ).toBe("false");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(document.activeElement).toBe(trigger);
+  await user.click(trigger);
+  await user.click(screen.getByRole("link", { name: "Files" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 });

@@ -96,6 +96,12 @@ for (const surface of SURFACES) {
     // rejected — and a `setup` that silently never ran is a shot of the wrong
     // surface that still passes.
     await surface.setup?.(page);
+    // Setups may reload the page to verify persisted navigation preferences.
+    if (surface.route !== "/login") {
+      await page
+        .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
+        .waitFor();
+    }
 
     // Readiness, using the console's own loading convention: every skeleton
     // carries aria-busy, so their absence means the data arrived.

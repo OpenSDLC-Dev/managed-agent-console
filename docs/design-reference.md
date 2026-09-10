@@ -323,7 +323,8 @@ all follow the same surface detection as the cards. Billing, model marketing and
 reports remain excluded for the API reasons above. The title stays `Dashboard`:
 password mode has no operator profile to greet. On narrow screens, expanded navigation
 occupies the screen until a destination or Escape returns to the page; this avoids a
-second, overlapping focus surface. Group and sidebar expansion are session-local.
+second, overlapping focus surface. The initial implementation kept group and sidebar expansion session-local;
+the 2026-09-11 follow-up below supersedes that behavior.
 Re-shot: the full manifest, including `dashboard`, `dashboard-compact`,
 `dashboard-mobile` and `dashboard-api-key-create`, in both themes.
 
@@ -343,3 +344,26 @@ header, Definition disclosure and field body with dividers.
 
 Re-shot Agent create/edit and custom/MCP tools at desktop and 390px widths
 in both themes (agent-create, agent-edit, agent-tools, agent-tools-narrow).
+
+## Navigation and Agent lookup — checked 2026-09-11
+
+Chrome confirmed that both the Build group's collapsed state and the overall
+sidebar collapse survive full navigation between resource pages. The console
+stores these presentation preferences locally; phone navigation opens temporarily
+and does not change the desktop preference. Storage failures leave controls usable.
+
+The reference Agent filter accepts name or exact ID. The platform agent list serves
+pagination, include_archived and created_at bounds, with no name filter (agents.go).
+The console exposes exact-ID navigation using the implemented GET route and leaves
+name search as a platform extension in #141; it never filters only the current page.
+
+Compact group buttons open a flyout rather than expanding the sidebar. DevTools
+measured 192px width, 12px corners, 4px padding and 32px link rows; opening it
+does not alter the saved sidebar or group preference.
+
+Re-shot in both themes: `dashboard`, `dashboard-compact`, `dashboard-mobile`,
+`dashboard-group-collapsed`, `dashboard-nav-flyout`, `agents-list` and
+`agents-lookup-missing`.
+
+The BFF rejects decoded path delimiters in exact-ID input before forwarding, so
+reserved characters cannot turn a detail lookup into a different upstream route.

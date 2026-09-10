@@ -70,6 +70,9 @@ describe("platform BFF proxy", () => {
     ["a double-encoded climb", ["v1", "%2e%2e", "%2e%2e", "admin", "keys"]],
     ["a single-dot segment", ["v1", ".", "agents"]],
     ["an empty segment", ["v1", "", "agents"]],
+    ["an encoded slash in an ID", ["v1", "agents", "agent_id/versions"]],
+    ["a query delimiter in an ID", ["v1", "agents", "agent_id?limit=1"]],
+    ["a fragment delimiter in an ID", ["v1", "agents", "agent_id#versions"]],
     ["a backslash segment", ["v1", "..\\..", "agents"]],
   ])("refuses %s without contacting the platform", async (_label, path) => {
     const response = await GET(

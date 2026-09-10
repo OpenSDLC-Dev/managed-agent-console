@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
@@ -51,7 +53,6 @@ const COLUMNS: Column<Agent>[] = [
     header: "Model",
     cell: (a) => <span className="font-mono text-[13px]">{a.model.id}</span>,
   },
-  { key: "version", header: "Version", cell: (a) => `v${a.version}` },
   {
     key: "status",
     header: "Status",
@@ -76,6 +77,7 @@ const COLUMNS: Column<Agent>[] = [
 
 export default function AgentsPage() {
   const router = useRouter();
+  const lookup = useRef<HTMLInputElement>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [created, setCreated] = useState<{
     key: CreatedPresetKey;
@@ -97,14 +99,32 @@ export default function AgentsPage() {
         subtitle={SURFACES.agents.blurb}
         actions={<CreateAgentButton />}
       />
-      <div className="flex items-center gap-3 pb-4">
-        <StatusFilter
-          includeArchived={includeArchived}
-          onChange={setIncludeArchived}
-        />
+      <div className="flex flex-wrap items-center gap-3 pb-4">
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const id = lookup.current?.value.trim();
+            if (id) router.push("/agents/" + encodeURIComponent(id));
+          }}
+        >
+          <Input
+            ref={lookup}
+            aria-label="Find agent by ID"
+            placeholder="Find agent by ID"
+            className="h-8 w-56"
+          />
+          <Button type="submit" variant="outline" size="sm">
+            Open
+          </Button>
+        </form>
         <CreatedFilter
           value={created.key}
           onChange={(key) => setCreated({ key, gte: createdGte(key) })}
+        />
+        <StatusFilter
+          includeArchived={includeArchived}
+          onChange={setIncludeArchived}
         />
       </div>
       {error ? (

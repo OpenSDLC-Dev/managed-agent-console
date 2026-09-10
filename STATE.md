@@ -7,16 +7,13 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 **Reference interaction parity** — requested 2026-09-11.
 Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Recheck Skills and Agent creation in Chrome and DevTools.
-- [x] Implement Skills inspector, exact lookup and API view.
-- [x] Verify behavior and affected fidelity surfaces in both themes.
+- [x] Verify reference sidebar and group persistence across full navigation.
+- [x] Implement desktop/group preferences, mobile transitions and Agent ID lookup.
+- [x] Verify browser flows and affected fidelity surfaces in both themes.
+- [ ] Pass CI and resolve reviews before squash merge.
 
-- [x] Implement structured Agent tools, MCP permissions and skill selection.
-- [x] Verify Agent behavior and affected fidelity surfaces in both themes.
-- [ ] Merge Agent editor after CI and review gates.
-
-Skills delivery: [PR #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142)
-is squash-merged into main.
+Skills delivery: [PR #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142).
+Agent editor delivery: [PR #143](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/143).
 
 Platform capability parity is complete in [plan 09](./docs/plan/09_platform-parity.md).
 Reference measurements and deliberate self-hosting differences live in
