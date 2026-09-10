@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  AdditionalToolsEditor,
+  schemaDraftError,
+  toolsWithSchemaDrafts,
+  type SchemaDrafts,
+  type MCPBindings,
+} from "./additional-tools-editor";
 import { RequestId } from "@/components/console/bits";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -20,7 +27,7 @@ import { PlatformError } from "@/lib/platform/http";
 import {
   useCreateAgent,
   useAgentOptions,
-  useSkills,
+  useSkillOptions,
   useUpdateAgent,
   type AgentWriteBody,
 } from "@/lib/platform/queries";
@@ -56,8 +63,10 @@ interface FormState {
   system: string;
   description: string;
   toolset: ToolsetForm | null;
-  /** Custom tools / mcp_toolset entries — Raw-tab only, carried verbatim. */
+  /** Unedited fields survive structured and Raw edits verbatim. */
   otherTools: unknown[];
+  toolSchemas?: SchemaDrafts;
+  mcpBindings?: MCPBindings;
   mcpServers: unknown[];
   skills: SkillRef[];
   multiagent: RosterMember[] | null;
@@ -134,7 +143,7 @@ function configFromForm(
 ): AgentWriteBody {
   const tools = [
     ...(form.toolset ? [buildToolset(form.toolset)] : []),
-    ...form.otherTools,
+    ...toolsWithSchemaDrafts(form.otherTools, form.toolSchemas ?? {}),
   ];
   return {
     name: form.name,
@@ -192,7 +201,7 @@ function Section({
   return (
     <section className="grid gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
       <div>
-        <h3 className="text-sm font-medium">{title}</h3>
+        <h3 className="text-[15px] font-medium">{title}</h3>
         <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
       </div>
       <div className="space-y-6">{children}</div>
@@ -330,8 +339,11 @@ export function AgentEditor({
   const create = useCreateAgent();
   const update = useUpdateAgent(agentId ?? "");
   const mutation = mode === "create" ? create : update;
-  const skillsQuery = useSkills({ limit: 100 });
+  const skillsQuery = useSkillOptions();
+  const skillOptions =
+    skillsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const agentsQuery = useAgentOptions();
+  const schemaError = schemaDraftError(form.toolSchemas ?? {});
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -343,7 +355,8 @@ export function AgentEditor({
     });
 
   const switchTab = (next: "rendered" | "raw") => {
-    if (next === tab) return;
+    if (next === tab) return true;
+    if (next === "raw" && schemaError) return false;
     if (next === "raw") {
       setRaw((r) => ({
         ...r,
@@ -355,11 +368,12 @@ export function AgentEditor({
       const parsed = fromRaw(raw.text, raw.format);
       if (parsed.error) {
         setRawError(parsed.error);
-        return;
+        return false;
       }
       setForm(formFromConfig(parsed.config!, agentId));
     }
     setTab(next);
+    return true;
   };
 
   const switchFormat = (format: RawFormat) => {
@@ -374,6 +388,7 @@ export function AgentEditor({
   };
 
   const save = () => {
+    if (tab === "rendered" && schemaError) return;
     setConflict(false);
     let body: AgentWriteBody;
     if (tab === "raw") {
@@ -407,20 +422,51 @@ export function AgentEditor({
   return (
     <div className="max-w-4xl">
       <div className="flex items-center gap-1.5 pb-4">
-        {(["rendered", "raw"] as const).map((key) => (
-          <button
-            key={key}
-            onClick={() => switchTab(key)}
-            className={cn(
-              "h-7 rounded-full border px-3 text-[13px] capitalize",
-              tab === key
-                ? "border-transparent bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-secondary",
-            )}
-          >
-            {key}
-          </button>
-        ))}
+        <div
+          role="radiogroup"
+          aria-label="Agent config view"
+          className="flex gap-1.5"
+        >
+          {(["rendered", "raw"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={tab === key}
+              tabIndex={tab === key ? 0 : -1}
+              data-view={key}
+              disabled={key === "raw" && Boolean(schemaError)}
+              onClick={() => switchTab(key)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === "Home"
+                    ? "rendered"
+                    : event.key === "End"
+                      ? "raw"
+                      : event.key === "ArrowLeft" || event.key === "ArrowRight"
+                        ? key === "raw"
+                          ? "rendered"
+                          : "raw"
+                        : null;
+                if (next && !(next === "raw" && schemaError)) {
+                  event.preventDefault();
+                  if (!switchTab(next)) return;
+                  event.currentTarget.parentElement
+                    ?.querySelector<HTMLButtonElement>(`[data-view="${next}"]`)
+                    ?.focus();
+                }
+              }}
+              className={cn(
+                "h-[30px] rounded-md border px-3 text-sm capitalize",
+                tab === key
+                  ? "border-transparent bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary",
+              )}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
         {tab === "raw" && (
           <div className="ml-3 flex items-center gap-1 text-[12px]">
             {(["json", "yaml"] as const).map((format) => (
@@ -450,7 +496,7 @@ export function AgentEditor({
             title="General"
             hint="Name, model, and the instructions the agent runs with."
           >
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="agent-name">Name</Label>
                 <Input
@@ -498,7 +544,9 @@ export function AgentEditor({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="agent-description">Description</Label>
-              <Input
+              <textarea
+                rows={2}
+                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                 id="agent-description"
                 value={form.description}
                 onChange={(e) => set("description", e.target.value)}
@@ -510,8 +558,8 @@ export function AgentEditor({
                 id="agent-system"
                 value={form.system}
                 onChange={(e) => set("system", e.target.value)}
-                rows={5}
-                className="w-full rounded-lg border bg-transparent p-2.5 text-sm outline-none focus-visible:border-ring"
+                rows={3}
+                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
               />
             </div>
           </Section>
@@ -636,13 +684,21 @@ export function AgentEditor({
                   )}
                 </div>
               )}
-              {form.otherTools.length > 0 && (
-                <p className="pt-2 text-[13px] text-muted-foreground">
-                  {form.otherTools.length} custom/MCP tool entr
-                  {form.otherTools.length === 1 ? "y" : "ies"} — edit in the Raw
-                  tab.
-                </p>
-              )}
+              <AdditionalToolsEditor
+                tools={form.otherTools}
+                servers={form.mcpServers}
+                schemaDrafts={form.toolSchemas ?? {}}
+                bindings={form.mcpBindings}
+                onChange={(otherTools, mcpServers, toolSchemas, mcpBindings) =>
+                  setForm((form) => ({
+                    ...form,
+                    otherTools,
+                    mcpServers,
+                    toolSchemas,
+                    mcpBindings,
+                  }))
+                }
+              />
             </div>
           </Section>
 
@@ -650,54 +706,109 @@ export function AgentEditor({
             title="Skills"
             hint="Skill bundles uploaded to this platform, attached by reference."
           >
-            <div>
-              {(skillsQuery.data?.data ?? []).length === 0 ? (
+            <div className="space-y-3">
+              {form.skills.map((ref, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="break-all text-sm">
+                      {skillOptions.find((skill) => skill.id === ref.skill_id)
+                        ?.display_name ?? ref.skill_id}
+                    </p>
+                    <p className="break-all font-mono text-xs text-muted-foreground">
+                      {ref.skill_id} · {ref.version}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={"Remove skill " + ref.skill_id}
+                    onClick={() =>
+                      set(
+                        "skills",
+                        form.skills.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              <Select
+                value=""
+                onValueChange={(id) => {
+                  const skill = skillOptions.find((skill) => skill.id === id);
+                  if (!skill || form.skills.some((ref) => ref.skill_id === id))
+                    return;
+                  set("skills", [
+                    ...form.skills,
+                    {
+                      type:
+                        skill.source.type === "anthropic"
+                          ? "anthropic"
+                          : "custom",
+                      skill_id: skill.id,
+                      version: "latest",
+                    },
+                  ]);
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Add skill"
+                  className="w-full sm:w-80"
+                  disabled={skillsQuery.isPending}
+                >
+                  <SelectValue
+                    placeholder={
+                      skillsQuery.isPending ? "Loading skills…" : "Add skill"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {skillOptions
+                    .filter(
+                      (skill) =>
+                        !form.skills.some((ref) => ref.skill_id === skill.id),
+                    )
+                    .map((skill) => (
+                      <SelectItem key={skill.id} value={skill.id}>
+                        {skill.display_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {skillsQuery.isError && (
+                <p role="alert" className="text-sm text-destructive">
+                  Could not load skills.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => void skillsQuery.refetch()}
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
+              {skillsQuery.isSuccess && skillOptions.length === 0 && (
                 <p className="text-[13px] text-muted-foreground">
                   No skills on the platform yet.
                 </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {skillsQuery.data!.data.map((skill) => {
-                    const checked = form.skills.some(
-                      (s) => s.skill_id === skill.id,
-                    );
-                    return (
-                      <label
-                        key={skill.id}
-                        className="flex items-center gap-2.5 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) =>
-                            set(
-                              "skills",
-                              e.target.checked
-                                ? [
-                                    ...form.skills,
-                                    {
-                                      type:
-                                        skill.source.type === "anthropic"
-                                          ? "anthropic"
-                                          : "custom",
-                                      skill_id: skill.id,
-                                      version: "latest",
-                                    },
-                                  ]
-                                : form.skills.filter(
-                                    (s) => s.skill_id !== skill.id,
-                                  ),
-                            )
-                          }
-                        />
-                        {skill.display_name}
-                        <span className="font-mono text-[12px] text-muted-foreground">
-                          {skill.id}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+              )}
+              {skillsQuery.hasNextPage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={skillsQuery.isFetchingNextPage}
+                  onClick={() => void skillsQuery.fetchNextPage()}
+                >
+                  {skillsQuery.isFetchingNextPage
+                    ? "Loading more skills…"
+                    : "Load more skills"}
+                </Button>
               )}
             </div>
           </Section>
@@ -876,14 +987,16 @@ export function AgentEditor({
             )}
           </Section>
 
-          <CurlBlock
-            getBody={() =>
-              mode === "edit"
-                ? { ...configFromForm(form, true), version }
-                : configFromForm(form)
-            }
-            agentId={mode === "edit" ? agentId : undefined}
-          />
+          {!schemaError && (
+            <CurlBlock
+              getBody={() =>
+                mode === "edit"
+                  ? { ...configFromForm(form, true), version }
+                  : configFromForm(form)
+              }
+              agentId={mode === "edit" ? agentId : undefined}
+            />
+          )}
         </div>
       ) : (
         <div>
@@ -918,7 +1031,12 @@ export function AgentEditor({
       )}
 
       <div className="flex items-center gap-3 pt-6">
-        <Button onClick={save} disabled={mutation.isPending}>
+        <Button
+          onClick={save}
+          disabled={
+            mutation.isPending || (tab === "rendered" && Boolean(schemaError))
+          }
+        >
           {mode === "create" ? "Create agent" : "Save changes"}
         </Button>
         <Button

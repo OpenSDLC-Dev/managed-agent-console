@@ -326,3 +326,20 @@ occupies the screen until a destination or Escape returns to the page; this avoi
 second, overlapping focus surface. Group and sidebar expansion are session-local.
 Re-shot: the full manifest, including `dashboard`, `dashboard-compact`,
 `dashboard-mobile` and `dashboard-api-key-create`, in both themes.
+
+## Agent editor — checked 2026-09-11
+
+Authenticated Chrome showed a multiline General description, Rendered/Raw radio
+controls, custom tools with a collapsed Definition (name, description, JSON schema),
+and an Add skill picker. MCP selection exposes a searchable service catalog.
+The platform has no catalog endpoint: the console uses URL/name configuration
+paired with an MCP toolset, following internal/api/wire.go and toolset/materialize.go.
+Only the platform's always_allow/always_ask policies are offered; reference Auto,
+Deny, advisors and model generation remain outside its implemented surface.
+Skills load incrementally so existing pinned references survive incomplete catalogs.
+DevTools measured 15px section headings, 30px-high view controls with 6px corners,
+and 56px/76px description/system fields. Custom tool cards separate the icon/title
+header, Definition disclosure and field body with dividers.
+
+Re-shot Agent create/edit and custom/MCP tools at desktop and 390px widths
+in both themes (agent-create, agent-edit, agent-tools, agent-tools-narrow).

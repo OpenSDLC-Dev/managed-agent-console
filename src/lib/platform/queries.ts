@@ -2,6 +2,7 @@
 
 import {
   useMutation,
+  useInfiniteQuery,
   useQuery,
   useQueryClient,
   keepPreviousData,
@@ -461,6 +462,17 @@ export function useSkills(params: {
     queryFn: () =>
       platformGet<Page<Skill>>("v1/skills", { limit: 20, ...params }),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Incremental options retain pinned selections even when absent from loaded pages. */
+export function useSkillOptions() {
+  return useInfiniteQuery({
+    queryKey: ["skills", "picker"],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      platformGet<Page<Skill>>("v1/skills", { limit: 100, page: pageParam }),
+    getNextPageParam: (lastPage) => lastPage.next_page || undefined,
   });
 }
 

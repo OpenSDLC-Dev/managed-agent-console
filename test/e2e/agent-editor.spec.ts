@@ -15,7 +15,8 @@ test("create an agent through the rendered form", async ({ page }) => {
   await page.getByRole("button", { name: /Tool permissions/ }).click();
   await page.getByLabel("bash policy").click();
   await page.getByRole("option", { name: "always ask" }).click();
-  await page.getByRole("checkbox", { name: /Excel spreadsheets/ }).check();
+  await page.getByRole("combobox", { name: "Add skill" }).click();
+  await page.getByRole("option", { name: /Excel spreadsheets/ }).click();
 
   await page
     .getByRole("dialog")
@@ -64,7 +65,7 @@ test("edit through the raw tab with the YAML toggle", async ({ page }) => {
   await page.getByRole("button", { name: "Edit" }).click();
   await expect(page).toHaveURL(/\/edit$/);
 
-  await page.getByRole("button", { name: "raw" }).click();
+  await page.getByRole("radio", { name: "raw" }).click();
   await page.getByRole("button", { name: "YAML" }).click();
   const editor = page.getByLabel("Raw agent config");
   await expect(editor).toHaveValue(/name: Deep researcher/);
@@ -114,7 +115,7 @@ test("platform validation errors surface inline from the raw tab", async ({
 }) => {
   await signIn(page);
   await page.goto("/agents/new");
-  await page.getByRole("button", { name: "raw" }).click();
+  await page.getByRole("radio", { name: "raw" }).click();
   const editor = page.getByLabel("Raw agent config");
   await editor.fill(
     JSON.stringify({ name: "X", model: "claude-sonnet-4-8", bogus: 1 }),
@@ -136,4 +137,53 @@ test("archive an agent from its detail page", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive agent" }).click();
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
+});
+
+test("structured custom tools and MCP settings survive Raw and save", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new");
+  await page.getByLabel("Name", { exact: true }).fill("Support");
+  await page.getByRole("button", { name: "Add custom tool" }).click();
+  const tool = page.locator('[data-tool-type="custom"]');
+  await tool.getByText("Definition", { exact: true }).click();
+  await tool.getByLabel("Name", { exact: true }).fill("lookup_order");
+  await tool
+    .getByLabel("Description", { exact: true })
+    .fill("Look up an order.");
+  await tool.getByLabel("Input schema").fill("{");
+  await expect(page.getByRole("radio", { name: "raw" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Create agent", exact: true }),
+  ).toBeDisabled();
+  await tool
+    .getByLabel("Input schema")
+    .fill('{"type":"object","properties":{"id":{"type":"string"}}}');
+  await page.getByRole("button", { name: "Add MCP server" }).click();
+  await page.getByLabel("Server name").fill("orders");
+  await page.getByLabel("Server URL").fill("https://example.test/mcp");
+  await page
+    .locator('[data-tool-type="mcp"]')
+    .getByText("Tool permissions", { exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "orders default permission policy" })
+    .click();
+  await page.getByRole("option", { name: "Always ask" }).click();
+  await page.getByRole("radio", { name: "raw" }).click();
+  const config = JSON.parse(
+    await page.getByLabel("Raw agent config").inputValue(),
+  );
+  expect(config.tools).toContainEqual({
+    type: "mcp_toolset",
+    mcp_server_name: "orders",
+    default_config: { permission_policy: { type: "always_ask" } },
+  });
+  await page.getByRole("radio", { name: "rendered" }).click();
+  const submitted = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/api/platform/v1/agents"),
+  );
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  expect((await submitted).postDataJSON()).toEqual(config);
+  await expect(page).toHaveURL(new RegExp("agents/agent_mock"));
 });

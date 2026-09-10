@@ -10,7 +10,9 @@ test("creates a coordinator with an ordered roster", async ({ page }) => {
   await page.goto("/agents/new");
   await page.getByLabel("Name").fill("Coordinator");
   await page.getByRole("button", { name: "Enable coordinator" }).click();
-  await page.getByLabel("Agent").selectOption("agent_taskrunner0000000001");
+  await page
+    .getByLabel("Agent", { exact: true })
+    .selectOption("agent_taskrunner0000000001");
   await page.getByRole("button", { name: "Add member" }).click();
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
 

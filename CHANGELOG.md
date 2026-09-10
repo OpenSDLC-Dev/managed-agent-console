@@ -8,6 +8,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Agent forms now edit custom tools and MCP servers with permissions directly,
+  preserve Raw-only fields, and attach skills through a paginated picker.
+
 - Skills open in a resizable inspector with exact-ID lookup, shareable selection,
   previous/next navigation and an API view while preserving the list and version actions.
 
