@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
+import { ArrowRight, BookOpen, KeyRound, Waypoints } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { DASHBOARD_SECTIONS, type SurfaceEntry } from "@/lib/nav";
 import { SURFACES, surfaceRoute, useSurfaces } from "@/lib/platform/surfaces";
 
@@ -25,23 +26,18 @@ function SurfaceCard({ entry }: { entry: SurfaceEntry }) {
     <Link
       href={surfaceRoute(surface)}
       data-dashboard-card={surface}
-      className="group flex min-w-0 flex-col gap-1.5 rounded-xl border bg-card p-4 transition-colors hover:bg-accent/40"
+      className="group flex min-h-32 min-w-0 flex-col gap-2 rounded-xl border bg-background p-4 outline-hidden transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-center gap-2">
         <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        <span className="truncate text-sm font-medium">{label}</span>
+        <h3 className="text-sm font-semibold">{label}</h3>
         <ArrowRight
-          className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
           strokeWidth={1.75}
           aria-hidden
         />
       </div>
-      {/* Clamped so a row of cards is one height: these lines are written for
-          this width, but `api-keys` aside they are also each page's own
-          subtitle, and a subtitle is allowed to grow. */}
-      <p className="line-clamp-2 text-[13px] leading-5 text-muted-foreground">
-        {blurb}
-      </p>
+      <p className="text-[13px] leading-5 text-muted-foreground">{blurb}</p>
     </Link>
   );
 }
@@ -56,21 +52,52 @@ export default function DashboardPage() {
   })).filter(({ items }) => items.length > 0);
 
   return (
-    <>
-      <PageHeader
-        title="Dashboard"
-        subtitle="Everything this deployment serves."
-      />
-      {/* Constrained rather than full-bleed, as the reference's dashboard is:
-          left to stretch, four cards land as three-plus-an-orphan on a wide
-          screen. The list pages fill the width because a table should. */}
-      <div className="max-w-5xl">
+    <div
+      data-dashboard-layout
+      className="mx-auto w-full max-w-[960px] pt-6 sm:px-4"
+    >
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="font-serif text-[22px] font-medium leading-7">
+          Dashboard
+        </h1>
+        <div
+          className="flex flex-wrap items-center gap-2"
+          aria-label="Quick actions"
+        >
+          <a
+            href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Explore docs"
+            title="Explore docs"
+            className={cn(buttonVariants({ variant: "outline", size: "icon" }))}
+          >
+            <BookOpen />
+          </a>
+          {surfaces?.["api-keys"] !== false && (
+            <Link
+              href="/api-keys"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              <KeyRound />
+              Get API key
+            </Link>
+          )}
+          {surfaces?.agents !== false && (
+            <Link href="/agents/new" className={cn(buttonVariants())}>
+              <Waypoints />
+              Build an agent
+            </Link>
+          )}
+        </div>
+      </header>
+      <div>
         {sections.map(({ heading, items }) => (
-          <section key={heading} className="pt-3 first:pt-0">
-            <h2 className="text-[13px] font-medium text-muted-foreground">
+          <section key={heading} className="mb-6">
+            <h2 className="mb-3 text-[15px] font-semibold leading-5">
               {heading}
             </h2>
-            <div className="grid gap-3 pb-5 pt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
               {items.map((entry) => (
                 <SurfaceCard key={entry.surface} entry={entry} />
               ))}
@@ -78,6 +105,16 @@ export default function DashboardPage() {
           </section>
         ))}
       </div>
-    </>
+      <footer className="flex justify-center gap-4 py-4 text-xs text-muted-foreground">
+        <a
+          href="https://github.com/OpenSDLC-Dev/managed-agent-console/issues"
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          Help and feedback
+        </a>
+      </footer>
+    </div>
   );
 }

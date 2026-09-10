@@ -130,7 +130,7 @@ screenshots of the icon column. **What the pass found is that the icon rule is t
 | Icons                        | a proprietary **pictogram font** — glyphs in a text node, not inline SVG                     |
 
 Every label lands in one column at `x=52`, which is what the 40px indent buys: it is exactly the icon
-width plus its gap. Ours reproduces the rule at our own 32px row (`pl-9` = 36px = 10 + 16 + 10).
+width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row and 40px indent.
 
 ## Deliberate divergences
 
@@ -304,3 +304,21 @@ inside popup items. Row action menus also focus their first item, support arrow
 navigation and return focus to the trigger on Escape. Re-shot:
 `command-palette`, `session-composer-focus`, `deployment-filter-focus` and
 `deployment-actions-focus`, both themes.
+
+## Dashboard — checked 2026-09-10
+
+The existing Chrome login could reach `/dashboard` again; no sign-in was attempted.
+DOM measurements at 1920px found a centered 960px container with 16px inner padding
+and 48px top spacing, a 22px/28px serif title, 15px/20px semibold section headings,
+12px card gaps and a 220px minimum column. The sidebar folds from 256px to 48px.
+The local page previously aligned its 1024px grid to the left, clipped descriptions,
+used muted 13px section headings and offered neither shortcuts nor sidebar collapse.
+
+The header's docs/key/agent shortcuts map to existing self-hosted destinations and
+follow the same surface detection as the cards. Billing, model marketing and usage
+reports remain excluded for the API reasons above. The title stays `Dashboard`:
+password mode has no operator profile to greet. On narrow screens, expanded navigation
+occupies the screen until a destination or Escape returns to the page; this avoids a
+second, overlapping focus surface. Group and sidebar expansion are session-local.
+Re-shot: the full manifest, including `dashboard`, `dashboard-compact` and
+`dashboard-mobile`, in both themes.

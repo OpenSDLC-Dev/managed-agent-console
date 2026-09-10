@@ -47,18 +47,6 @@ const EXPECTED = [
     group: "Managed Agents",
   },
   {
-    label: "Memory stores",
-    href: "/memory-stores",
-    surface: "memory-stores",
-    group: "Managed Agents",
-  },
-  {
-    label: "Dreams",
-    href: "/dreams",
-    surface: "dreams",
-    group: "Managed Agents",
-  },
-  {
     label: "Environments",
     href: "/environments",
     surface: "environments",
@@ -68,6 +56,18 @@ const EXPECTED = [
     label: "Credential vaults",
     href: "/vaults",
     surface: "vaults",
+    group: "Managed Agents",
+  },
+  {
+    label: "Memory stores",
+    href: "/memory-stores",
+    surface: "memory-stores",
+    group: "Managed Agents",
+  },
+  {
+    label: "Dreams",
+    href: "/dreams",
+    surface: "dreams",
     group: "Managed Agents",
   },
 ];
@@ -81,10 +81,10 @@ const GROUPS = [
       "agents",
       "sessions",
       "deployments",
-      "memory-stores",
-      "dreams",
       "environments",
       "vaults",
+      "memory-stores",
+      "dreams",
     ],
   },
 ];
@@ -183,10 +183,10 @@ describe("Nav", () => {
       "Agents",
       "Sessions",
       "Deployments",
-      "Memory stores",
-      "Dreams",
       "Environments",
       "Credential vaults",
+      "Memory stores",
+      "Dreams",
     ]);
   });
 
@@ -199,7 +199,7 @@ describe("Nav", () => {
     for (const { label, group } of EXPECTED) {
       const row = screen.getByRole("link", { name: label });
       expect(row.querySelector("svg") !== null, label).toBe(!group);
-      expect(row.classList.contains("pl-9"), label).toBe(Boolean(group));
+      expect(row.classList.contains("pl-10"), label).toBe(Boolean(group));
     }
     for (const { label } of GROUPS) {
       expect(groupHeader(label)?.querySelector("svg"), label).not.toBeNull();
