@@ -113,7 +113,7 @@ export const SURFACES: Surface[] = [
   {
     id: "memory-stores-list",
     route: "/memory-stores",
-    fixture: "2 memory stores, one archived",
+    fixture: "3 memory stores, one archived",
     description: "Durable context stores with live and archived filtering.",
   },
   {

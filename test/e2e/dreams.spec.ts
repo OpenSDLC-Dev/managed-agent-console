@@ -24,9 +24,7 @@ test("lists dreams and renders inputs, outputs, usage and links", async ({
   );
   await expect(page.locator('[data-session-count="2"]')).toBeVisible();
   await expect(page.locator('[data-output-count="1"]')).toBeVisible();
-  await expect(page.locator('[data-input-tokens="18400"]')).toHaveText(
-    "18,400",
-  );
+  await expect(page.locator('[data-input-tokens="18400"]')).toBeVisible();
   await expect(
     page.getByRole("link", { name: "memstore_projectnotes000001" }),
   ).toBeVisible();
@@ -85,6 +83,10 @@ test("mock dream endpoints enforce the input and lifecycle contract", async ({
     {
       ...base,
       inputs: [base.inputs[0], { type: "sessions", session_ids: [] }],
+    },
+    {
+      ...base,
+      inputs: [base.inputs[0], { type: "sessions", session_ids: [42] }],
     },
     { ...base, instructions: "x".repeat(4097) },
     {

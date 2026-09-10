@@ -42,10 +42,10 @@ export default function DreamDetailPage({
         title={dream.id}
         subtitle="Asynchronous memory consolidation"
         actions={
-          <span className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <ArchivedBadge archivedAt={dream.archived_at} />
             <DreamActions dream={dream} />
-          </span>
+          </div>
         }
       />
       <DetailSection title="Overview">

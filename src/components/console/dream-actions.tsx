@@ -23,7 +23,7 @@ export function DreamActions({ dream }: { dream: Dream }) {
   const terminal = !active;
 
   return (
-    <span className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {active && (
         <Button
           variant="outline"
@@ -70,6 +70,6 @@ export function DreamActions({ dream }: { dream: Dream }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </span>
+    </div>
   );
 }

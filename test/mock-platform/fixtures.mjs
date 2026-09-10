@@ -40,6 +40,16 @@ export const memoryStores = [
     updated_at: T1,
     archived_at: T2,
   },
+  {
+    id: "memstore_dreamoutput000001",
+    type: "memory_store",
+    name: "Consolidated research",
+    description: "Durable memory consolidated from session transcripts.",
+    metadata: {},
+    created_at: T2,
+    updated_at: T2,
+    archived_at: null,
+  },
 ];
 
 export const memories = [

@@ -2618,7 +2618,8 @@ const server = createServer(async (req, res) => {
       if (
         !Array.isArray(sessionIds) ||
         sessionIds.length < 1 ||
-        sessionIds.length > 100
+        sessionIds.length > 100 ||
+        sessionIds.some((id) => typeof id !== "string" || !id)
       )
         return fail(400, "session_ids must carry 1 to 100 session ids");
       if (

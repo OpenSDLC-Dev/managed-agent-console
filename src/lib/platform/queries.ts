@@ -237,6 +237,12 @@ export function useDreams(params: {
       });
     },
     placeholderData: keepPreviousData,
+    refetchInterval: (query) =>
+      query.state.data?.data.some(
+        (dream) => dream.status === "pending" || dream.status === "running",
+      )
+        ? 10_000
+        : false,
   });
 }
 
