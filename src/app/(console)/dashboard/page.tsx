@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BookOpen, KeyRound, Waypoints } from "lucide-react";
+import { ArrowRight, BookOpen, Waypoints } from "lucide-react";
+import { CreateKeyButton } from "@/components/console/api-keys";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_SECTIONS, type SurfaceEntry } from "@/lib/nav";
@@ -74,15 +75,7 @@ export default function DashboardPage() {
           >
             <BookOpen />
           </a>
-          {surfaces?.["api-keys"] !== false && (
-            <Link
-              href="/api-keys"
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              <KeyRound />
-              Get API key
-            </Link>
-          )}
+          {surfaces?.["api-keys"] !== false && <CreateKeyButton shortcut />}
           {surfaces?.agents !== false && (
             <Link href="/agents/new" className={cn(buttonVariants())}>
               <Waypoints />

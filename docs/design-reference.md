@@ -311,11 +311,13 @@ and 48px top spacing, a 22px/28px serif title, 15px/20px semibold section headin
 The local page previously aligned its 1024px grid to the left, clipped descriptions,
 used muted 13px section headings and offered neither shortcuts nor sidebar collapse.
 
-The header's docs/key/agent shortcuts map to existing self-hosted destinations and
-follow the same surface detection as the cards. Billing, model marketing and usage
+DevTools confirmed 32px-high shortcuts with 12px horizontal padding and an 8px radius.
+`Get API key` opens the creation dialog on the Dashboard itself; the console reuses
+its existing key dialog. The docs/agent shortcuts map to self-hosted destinations and
+all follow the same surface detection as the cards. Billing, model marketing and usage
 reports remain excluded for the API reasons above. The title stays `Dashboard`:
 password mode has no operator profile to greet. On narrow screens, expanded navigation
 occupies the screen until a destination or Escape returns to the page; this avoids a
 second, overlapping focus surface. Group and sidebar expansion are session-local.
-Re-shot: the full manifest, including `dashboard`, `dashboard-compact` and
-`dashboard-mobile`, in both themes.
+Re-shot: the full manifest, including `dashboard`, `dashboard-compact`,
+`dashboard-mobile` and `dashboard-api-key-create`, in both themes.

@@ -9,8 +9,12 @@ test("dashboard stays centered and its compact navigation remains usable", async
   await signIn(page);
   const layout = page.locator("[data-dashboard-layout]");
   const main = page.getByRole("main");
-  for (const name of ["Explore docs", "Get API key"]) {
-    await expect(main.getByRole("link", { name, exact: true })).not.toHaveCSS(
+  const keyShortcut = main.getByRole("button", { name: "Get API key" });
+  for (const shortcut of [
+    main.getByRole("link", { name: "Explore docs" }),
+    keyShortcut,
+  ]) {
+    await expect(shortcut).not.toHaveCSS(
       "border-top-color",
       "rgba(0, 0, 0, 0)",
     );
@@ -23,11 +27,24 @@ test("dashboard stays centered and its compact navigation remains usable", async
       bounds!.x + bounds!.width / 2 - mainBounds!.x - mainBounds!.width / 2,
     ),
   ).toBeLessThan(1);
+  await keyShortcut.click();
+  await expect(
+    page.getByRole("dialog", { name: "Create API key" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("Escape");
+  await expect(keyShortcut).toBeFocused();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
     "collapsed",
   );
+  await expect(
+    page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
+  ).toHaveAttribute("data-active", "true");
+  await expect(
+    page.getByRole("navigation").getByRole("link", { name: "API keys" }),
+  ).toHaveAttribute("data-active", "false");
   await page.getByRole("button", { name: "Search Ctrl K" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");

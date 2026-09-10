@@ -75,6 +75,17 @@ const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
   {
+    id: "dashboard-api-key-create",
+    route: "/dashboard",
+    fixture: "empty key dialog over the dashboard",
+    description:
+      "The Dashboard shortcut opens key creation without a route change.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Get API key" }).click();
+      await page.getByRole("dialog", { name: "Create API key" }).waitFor();
+    },
+  },
+  {
     id: "dashboard-compact",
     route: "/dashboard",
     fixture: "all surfaces, compact navigation",

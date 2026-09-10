@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy, Plus, X } from "lucide-react";
+import { useRef, useState, type RefObject } from "react";
+import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
   Day,
@@ -100,9 +100,11 @@ const STATUS_STYLE: Record<string, string> = {
 function RevealKeyDialog({
   secret,
   onClose,
+  finalFocus,
 }: {
   secret: string;
   onClose: () => void;
+  finalFocus: RefObject<HTMLButtonElement | null>;
 }) {
   const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
   return (
@@ -112,7 +114,7 @@ function RevealKeyDialog({
         if (!next) onClose();
       }}
     >
-      <DialogContent>
+      <DialogContent finalFocus={finalFocus}>
         <DialogHeader>
           <DialogTitle>Save your API key</DialogTitle>
           <DialogDescription>
@@ -157,11 +159,10 @@ function RevealKeyDialog({
 /**
  * Create, then reveal — one control, two dialogs, the reference's sequence.
  *
- * Rendered by the page into `PageHeader`'s `actions`, top-right: that is where
- * the reference puts `Create key` on this surface, and where every other list
- * page in this console already puts its own primary action.
+ * The Dashboard shortcut uses the same sequence as the API keys list.
  */
-export function CreateKeyButton() {
+export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const create = useCreateApiKey();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -217,14 +218,21 @@ export function CreateKeyButton() {
   return (
     <>
       <Button
-        size="sm"
+        ref={triggerRef}
+        size={shortcut ? "default" : "sm"}
+        variant={shortcut ? "outline" : "default"}
         className="h-8"
         onClick={() => {
           resetDraft();
           setOpen(true);
         }}
       >
-        <Plus className="size-4" /> Create key
+        {shortcut ? (
+          <KeyRound className="size-4" />
+        ) : (
+          <Plus className="size-4" />
+        )}
+        {shortcut ? "Get API key" : "Create key"}
       </Button>
 
       {/* Dismissal is refused while the POST is in flight, for the reason plan
@@ -253,7 +261,7 @@ export function CreateKeyButton() {
           if (!next) resetDraft();
         }}
       >
-        <DialogContent>
+        <DialogContent finalFocus={secret ? false : triggerRef}>
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -361,7 +369,11 @@ export function CreateKeyButton() {
       </Dialog>
 
       {secret !== null && (
-        <RevealKeyDialog secret={secret} onClose={discardSecret} />
+        <RevealKeyDialog
+          secret={secret}
+          onClose={discardSecret}
+          finalFocus={triggerRef}
+        />
       )}
     </>
   );

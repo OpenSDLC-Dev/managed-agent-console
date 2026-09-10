@@ -34,6 +34,7 @@ test("issue a key, see it once, then disable and archive it", async ({
   expect(secret).toContain("sk-map-api01-");
   await page.getByTestId("close-revealed-api-key").click();
   await expect(revealed).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create key" })).toBeFocused();
   expect(await page.content()).not.toContain(secret);
 
   // The list is re-read rather than rendered from the create response.

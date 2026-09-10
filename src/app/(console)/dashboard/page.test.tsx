@@ -76,10 +76,9 @@ describe("DashboardPage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Dashboard" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Get API key" })).toHaveAttribute(
-      "href",
-      "/api-keys",
-    );
+    expect(
+      screen.getByRole("button", { name: "Get API key" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Build an agent" }),
     ).toHaveAttribute("href", "/agents/new");
@@ -141,7 +140,7 @@ describe("DashboardPage", () => {
     renderDashboard(["api-keys", "agents"]);
     await waitFor(() => expect(card("agents")).toBeNull());
     expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "Get API key" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
     expect(
       screen.getByRole("link", { name: "Explore docs" }),
     ).toBeInTheDocument();

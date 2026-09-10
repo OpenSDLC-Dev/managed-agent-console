@@ -174,7 +174,6 @@ export function Nav({
                 type="button"
                 aria-label={label}
                 title={label}
-                aria-expanded={false}
                 onClick={onExpand}
                 className={className}
               >
@@ -190,6 +189,7 @@ export function Nav({
               href={href}
               aria-label={label}
               title={label}
+              data-active={active}
               aria-current={active ? "page" : undefined}
               className={cn(className, active && "bg-sidebar-accent")}
             >
