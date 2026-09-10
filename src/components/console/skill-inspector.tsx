@@ -48,11 +48,12 @@ export function SkillInspector({
 
   useEffect(() => {
     const trigger = document.activeElement;
+    const fallback = fallbackFocus?.current;
     panel.current?.focus();
     return () => {
       if (trigger instanceof HTMLElement && trigger.isConnected)
         trigger.focus();
-      else fallbackFocus?.current?.focus();
+      else if (fallback?.isConnected) fallback.focus();
     };
   }, [fallbackFocus]);
 
