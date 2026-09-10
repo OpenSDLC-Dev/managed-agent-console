@@ -49,7 +49,7 @@ Method: `getComputedStyle` on live elements in Chrome.
 | Page title / subtitle      | `22px`/500/`28px`, `#0B0B0B` · `14px/20px`, `#52514E`                                                            |
 | Buttons (primary + filter) | height `32px`, radius `8px`, padding-x `12px`, `14px`/500; primary is white on near-black                        |
 | Table header cell          | `13px`/500, `#52514E`, row height `32px`, no text-transform                                                      |
-| Inputs · nav items         | height `32px`, `14px` · `14px`, active item gets a subtle darker pill                                            |
+| Inputs                     | height `32px`, `14px`; current navigation measurements are recorded below                                        |
 
 ## Dark palette — extracted 2026-08-02 from the reference's stylesheet tokens
 
@@ -144,9 +144,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
   `KeySquare` rather than the round-bowed key the reference draws, because `KeyRound` is already
   Credential vaults' and one icon may mean one thing.
-- **Group headers are 32px rows, not the reference's 36px.** Every row in this console is 32px and has
-  been since the first pass; matching one row height in isolation would leave the sidebar disagreeing
-  with itself. The reference's 36px is recorded above for whenever row height is looked at as a whole.
 - **A collapsed group re-opens on reload.** The reference persists the state; ours is component state,
   which survives client-side navigation and not a refresh. Deliberate for a first cut: two groups of
   six items make collapsing a convenience rather than a necessity, and the alternative is a stored
