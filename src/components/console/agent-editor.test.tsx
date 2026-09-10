@@ -656,6 +656,26 @@ describe("AgentEditor", () => {
     );
   });
 
+  it("rejects a null schema inline while accepting other JSON primitives", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole("button", { name: "Add custom tool" }));
+    await user.click(screen.getByText("Definition"));
+    fill("Input schema", "null");
+    expect(screen.getByRole("alert")).toHaveTextContent("must not be null");
+    expect(screen.getByRole("radio", { name: "raw" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
+    fill("Input schema", "42");
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toContainEqual({
+      type: "custom",
+      name: "new_tool",
+      description: "",
+      input_schema: 42,
+    });
+  });
+
   it("pairs MCP servers with toolsets through rename, permissions and removal", async () => {
     stubFetch();
     const user = userEvent.setup();

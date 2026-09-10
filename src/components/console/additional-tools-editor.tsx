@@ -22,11 +22,12 @@ const text = (value: unknown) => (typeof value === "string" ? value : "");
 export type MCPBindings = (number | null)[];
 export type SchemaDrafts = Record<number, string>;
 
-/** Syntax only: wire.go accepts any non-null JSON input_schema, not just objects. */
+/** Match wire.go: accept any non-null JSON input_schema, not just objects. */
 export function schemaDraftError(drafts: SchemaDrafts): string | null {
   for (const [index, value] of Object.entries(drafts)) {
     try {
-      JSON.parse(value);
+      if (JSON.parse(value) === null)
+        return `Tool ${Number(index) + 1}: input schema must not be null.`;
     } catch {
       return `Tool ${Number(index) + 1}: input schema must be valid JSON.`;
     }
