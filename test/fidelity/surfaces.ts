@@ -210,6 +210,41 @@ export const SURFACES: Surface[] = [
     description: "Version list with per-version actions.",
   },
   {
+    id: "skill-inspector",
+    route: `/skills?skill=${SKILL}`,
+    fixture: SKILL,
+    description:
+      "Resizable skill details over the retained list, with version actions.",
+  },
+  {
+    id: "skill-inspector-api",
+    route: `/skills?skill=${SKILL}`,
+    fixture: SKILL,
+    description: "The actual skill response in the API view.",
+    setup: async (page) => {
+      await page
+        .getByRole("region", { name: "Skill details" })
+        .getByText("API", { exact: true })
+        .click();
+    },
+  },
+  {
+    id: "skill-inspector-narrow",
+    route: `/skills?skill=${SKILL}`,
+    fixture: SKILL,
+    description: "Skill inspector and its actions at a 390px viewport.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+    },
+  },
+  {
+    id: "skill-inspector-missing",
+    route: "/skills?skill=missing-skill",
+    fixture: "none",
+    description:
+      "An exact ID lookup failure with the list and close action still available.",
+  },
+  {
     id: "deployment-detail",
     route: `/deployments/${DEPLOYMENT}`,
     fixture: DEPLOYMENT,

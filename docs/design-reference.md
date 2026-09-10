@@ -5,12 +5,17 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
-## Skills — checked 2026-09-05
+## Skills — checked 2026-09-11
 
-Chrome's live Skills list labels the columns Name, Source and Latest version ID.
-The reference opens versions in a right-hand inspector; our existing detail route
-remains a full page during the GA compatibility repair (plan 09). Inspector
-layout parity remains unfinished, rather than being claimed by the wire fix.
+Chrome and DevTools confirm an exact-ID lookup and a non-modal right inspector:
+560px wide, fixed 8px from the viewport edges, with a draggable separator,
+double-click reset, previous/next controls and `?skill=` selection. It offers
+Rendered/API views and per-version copy controls. Existing standalone console
+detail links remain supported; the list opens the inspector.
+The platform only supplies descriptions on versions (`internal/api/skills.go`),
+so the console keeps descriptions with their versions instead of inventing a
+skill-level description. API view shows the actual skill response. Documentation
+links target this deployment's upstream project; no browser credential is shown.
 Our upload offers a ZIP or directory: the platform requires loose filenames to
 retain their top-level directory, which a normal browser file picker loses.
 

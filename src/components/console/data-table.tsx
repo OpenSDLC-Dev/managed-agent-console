@@ -23,6 +23,7 @@ export function DataTable<T>({
   loading,
   empty,
   onRowClick,
+  activeRowKey,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -30,6 +31,7 @@ export function DataTable<T>({
   loading?: boolean;
   empty?: React.ReactNode;
   onRowClick?: (row: T) => void;
+  activeRowKey?: string;
 }) {
   return (
     <div>
@@ -69,11 +71,20 @@ export function DataTable<T>({
           {rows.map((row) => (
             <TableRow
               key={rowKey(row)}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              data-state={rowKey(row) === activeRowKey ? "selected" : undefined}
+              onClick={
+                onRowClick
+                  ? (event) => {
+                      event.currentTarget.focus();
+                      onRowClick(row);
+                    }
+                  : undefined
+              }
               tabIndex={onRowClick ? 0 : undefined}
               onKeyDown={
                 onRowClick
                   ? (event) => {
+                      if (event.target !== event.currentTarget) return;
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         onRowClick(row);

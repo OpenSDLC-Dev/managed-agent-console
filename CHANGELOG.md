@@ -8,6 +8,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Skills open in a resizable inspector with exact-ID lookup, shareable selection,
+  previous/next navigation and an API view while preserving the list and version actions.
+
 - Credential vaults and their credentials now have complete operator workflows:
   metadata-aware create/edit, credential detail and rotation, archive/delete,
   archived filtering and exact environment-variable, bearer and OAuth settings.

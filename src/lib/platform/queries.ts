@@ -467,7 +467,7 @@ export function useSkills(params: {
 export function useSkill(id: string) {
   return useQuery({
     queryKey: ["skill", id],
-    queryFn: () => platformGet<Skill>(`v1/skills/${id}`),
+    queryFn: () => platformGet<Skill>(`v1/skills/${encodeURIComponent(id)}`),
   });
 }
 
@@ -475,10 +475,13 @@ export function useSkillVersions(id: string, page?: string) {
   return useQuery({
     queryKey: ["skill-versions", id, page],
     queryFn: () =>
-      platformGet<Page<SkillVersion>>(`v1/skills/${id}/versions`, {
-        limit: 20,
-        page,
-      }),
+      platformGet<Page<SkillVersion>>(
+        `v1/skills/${encodeURIComponent(id)}/versions`,
+        {
+          limit: 20,
+          page,
+        },
+      ),
     placeholderData: keepPreviousData,
   });
 }
@@ -1368,7 +1371,7 @@ export function useUploadSkillVersion(skillId: string) {
       for (const file of skillFiles)
         form.append("files[]", file, file.webkitRelativePath || file.name);
       return platformPostForm<SkillVersion>(
-        `v1/skills/${skillId}/versions`,
+        `v1/skills/${encodeURIComponent(skillId)}/versions`,
         form,
       );
     },
@@ -1387,7 +1390,7 @@ export function useDeleteSkillVersion(skillId: string) {
     meta: { errorTitle: "Delete failed" },
     mutationFn: (version: string) =>
       platformDelete<{ id: string; type: string }>(
-        `v1/skills/${skillId}/versions/${version}`,
+        `v1/skills/${encodeURIComponent(skillId)}/versions/${encodeURIComponent(version)}`,
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["skill", skillId] });
@@ -1403,7 +1406,9 @@ export function useDeleteSkill(skillId: string) {
   return useMutation({
     meta: { errorTitle: "Delete failed" },
     mutationFn: () =>
-      platformDelete<{ id: string; type: string }>(`v1/skills/${skillId}`),
+      platformDelete<{ id: string; type: string }>(
+        `v1/skills/${encodeURIComponent(skillId)}`,
+      ),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ["skill", skillId] });
       void queryClient.invalidateQueries({ queryKey: ["skills"] });

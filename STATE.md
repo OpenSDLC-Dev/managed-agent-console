@@ -4,12 +4,15 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-**Dashboard reference parity** — requested 2026-09-10.
+**Reference interaction parity** — requested 2026-09-11.
+Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Inspect the authenticated Claude Dashboard in Chrome.
-- [x] Align content width, typography, cards, shortcuts and sidebar interaction.
-- [x] Verify desktop, compact and narrow layouts in Chrome and both themes.
-- [x] Pass local lint, formatting, type, coverage, probe and browser checks.
+- [x] Recheck Skills and Agent creation in Chrome and DevTools.
+- [x] Implement Skills inspector, exact lookup and API view.
+- [x] Verify behavior and affected fidelity surfaces in both themes.
+
+Skills delivery gate: [PR #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142)
+tracks CI, review resolution and squash merge.
 
 Platform capability parity is complete in [plan 09](./docs/plan/09_platform-parity.md).
 Reference measurements and deliberate self-hosting differences live in
