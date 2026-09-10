@@ -135,7 +135,8 @@ export function useEnvironments(params: {
 export function useEnvironment(id: string) {
   return useQuery({
     queryKey: ["environment", id],
-    queryFn: () => platformGet<Environment>(`v1/environments/${id}`),
+    queryFn: () =>
+      platformGet<Environment>(`v1/environments/${encodeURIComponent(id)}`),
   });
 }
 
@@ -605,7 +606,10 @@ export function useUpdateEnvironment(id: string) {
   return useMutation({
     meta: { errorToast: false },
     mutationFn: (body: EnvironmentWriteBody) =>
-      platformPost<Environment>(`v1/environments/${id}`, body),
+      platformPost<Environment>(
+        `v1/environments/${encodeURIComponent(id)}`,
+        body,
+      ),
     onSuccess: (environment) => {
       queryClient.setQueryData(["environment", id], environment);
       void queryClient.invalidateQueries({ queryKey: ["environments"] });
@@ -618,7 +622,10 @@ export function useArchiveEnvironment(id: string) {
   return useMutation({
     meta: { errorTitle: "Archive failed" },
     mutationFn: () =>
-      platformPost<Environment>(`v1/environments/${id}/archive`, {}),
+      platformPost<Environment>(
+        `v1/environments/${encodeURIComponent(id)}/archive`,
+        {},
+      ),
     onSuccess: (environment) => {
       queryClient.setQueryData(["environment", id], environment);
       void queryClient.invalidateQueries({ queryKey: ["environments"] });
@@ -631,7 +638,9 @@ export function useDeleteEnvironment(id: string) {
   return useMutation({
     meta: { errorTitle: "Delete failed" },
     mutationFn: () =>
-      platformDelete<{ id: string; type: string }>(`v1/environments/${id}`),
+      platformDelete<{ id: string; type: string }>(
+        `v1/environments/${encodeURIComponent(id)}`,
+      ),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ["environment", id] });
       void queryClient.invalidateQueries({ queryKey: ["environments"] });
@@ -1437,6 +1446,45 @@ export function useDeleteFile() {
       platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["files"] });
+    },
+  });
+}
+/** Apply the existing single-resource routes; retain each failure for retry. */
+export function useBatchEnvironments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: async ({
+      ids,
+      action,
+    }: {
+      ids: string[];
+      action: "archive" | "delete";
+    }) => {
+      const succeeded: string[] = [];
+      const failed: { id: string; error: unknown }[] = [];
+      for (const id of ids) {
+        try {
+          const path = "v1/environments/" + encodeURIComponent(id);
+          if (action === "archive") {
+            const environment = await platformPost<Environment>(
+              path + "/archive",
+              {},
+            );
+            queryClient.setQueryData(["environment", id], environment);
+          } else {
+            await platformDelete<{ id: string; type: string }>(path);
+            queryClient.removeQueries({ queryKey: ["environment", id] });
+          }
+          succeeded.push(id);
+        } catch (error) {
+          failed.push({ id, error });
+        }
+      }
+      return { succeeded, failed };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["environments"] });
     },
   });
 }

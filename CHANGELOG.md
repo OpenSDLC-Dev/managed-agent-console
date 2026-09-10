@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Environments open in a resizable inspector with exact-ID lookup and an API view.
+  Selected rows support confirmed archive/delete with partial-failure retry, and
+  detail editing saves or cancels in place with multiline descriptions.
+
 - Agent lists can open an exact ID beyond the loaded page. Sidebar and group
   preferences survive reloads, compact groups open flyouts, and phone navigation remains temporary.
 

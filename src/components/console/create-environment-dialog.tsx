@@ -103,7 +103,9 @@ export function CreateEnvironmentButton({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="env-stub-description">Description</Label>
-              <Input
+              <textarea
+                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+                rows={2}
                 id="env-stub-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
