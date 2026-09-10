@@ -24,9 +24,11 @@ export function CreateAgentButton({
         {variant === "default" && <Plus className="size-4" />} Create agent
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 sm:max-w-[880px]">
           <DialogHeader>
-            <DialogTitle>Create agent</DialogTitle>
+            <DialogTitle className="text-[22px] leading-7">
+              Create agent
+            </DialogTitle>
             <DialogDescription>Start from a template.</DialogDescription>
           </DialogHeader>
           <AgentCreateForm onCancel={() => setOpen(false)} />

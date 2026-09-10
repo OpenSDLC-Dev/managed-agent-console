@@ -754,6 +754,39 @@ export const SURFACES: Surface[] = [
       await page.getByRole("dialog", { name: "Create agent" }).waitFor();
     },
   },
+  ...[false, true].map((narrow): Surface => ({
+    id: narrow ? "agent-tools-narrow" : "agent-tools",
+    route: "/agents",
+    fixture: "unsaved custom tool, MCP permissions and selected skill",
+    description:
+      "Structured tool definitions and MCP configuration with progressive skill selection.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Create agent" }).first().click();
+      await page.getByRole("dialog", { name: "Create agent" }).waitFor();
+      await page.getByRole("button", { name: "Add custom tool" }).click();
+      const tool = page.locator('[data-tool-type="custom"]');
+      await tool.getByText("Definition", { exact: true }).click();
+      await tool.getByLabel("Name", { exact: true }).fill("lookup_order");
+      await tool
+        .getByLabel("Description", { exact: true })
+        .fill("Look up an order by its identifier.");
+      await page.getByRole("button", { name: "Add MCP server" }).click();
+      await page.getByLabel("Server name").fill("support");
+      await page
+        .getByLabel("Server URL")
+        .fill("https://tools.example.test/mcp");
+      await page
+        .locator('[data-tool-type="mcp"]')
+        .getByText("Tool permissions", { exact: true })
+        .click();
+      await page
+        .getByRole("combobox", { name: "Add skill", exact: true })
+        .click();
+      await page.getByRole("option", { name: /Excel spreadsheets/ }).click();
+      await tool.scrollIntoViewIfNeeded();
+    },
+  })),
   {
     id: "environment-create",
     route: "/environments",

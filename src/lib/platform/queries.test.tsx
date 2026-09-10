@@ -51,6 +51,7 @@ import {
   useSessions,
   useSkill,
   useSkills,
+  useSkillOptions,
   useSkillVersions,
   useUpdateAgent,
   useUpdateDeployment,
@@ -395,6 +396,41 @@ const queryCases: QueryCase[] = [
     search: { limit: "20" },
   },
 ];
+
+it("loads skill options incrementally using the platform cursor", async () => {
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL) =>
+      new Response(
+        JSON.stringify(
+          String(input).includes("page=cursor2")
+            ? { data: [{ id: "skill_2" }], next_page: null }
+            : { data: [{ id: "skill_1" }], next_page: "cursor2" },
+        ),
+        { headers: { "content-type": "application/json" } },
+      ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const { result } = renderHook(() => ({ ...useSkillOptions() }), { wrapper });
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await result.current.fetchNextPage();
+  });
+  await waitFor(() =>
+    expect(result.current.data?.pages.flatMap((p) => p.data)).toEqual([
+      { id: "skill_1" },
+      { id: "skill_2" },
+    ]),
+  );
+  expect(result.current.hasNextPage).toBe(false);
+  expect(String(fetchMock.mock.calls[1][0])).toContain("page=cursor2");
+});
 
 describe("query hooks", () => {
   it.each(queryCases)("$name GETs $path", async ({ useHook, path, search }) => {

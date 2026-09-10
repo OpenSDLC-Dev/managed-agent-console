@@ -413,7 +413,7 @@ describe("AgentEditor", () => {
     expect(screen.getByRole("button", { name: "bash policy" })).toBeDisabled();
     await choose(user, "read policy", "always ask");
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().tools).toEqual([
       {
         type: "agent_toolset_20260401",
@@ -449,7 +449,7 @@ describe("AgentEditor", () => {
     // read deviates back to allow relative to the ask default.
     await choose(user, "read policy", "always allow");
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().tools).toEqual([
       {
         type: "agent_toolset_20260401",
@@ -475,7 +475,7 @@ describe("AgentEditor", () => {
       screen.getByRole("button", { name: "default policy" }),
     ).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().tools).toEqual([
       { type: "agent_toolset_20260401", default_config: { enabled: false } },
     ]);
@@ -493,7 +493,7 @@ describe("AgentEditor", () => {
       screen.getByRole("checkbox", { name: "bash enabled" }),
     ).not.toBeChecked();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().tools).toEqual([
       {
         type: "agent_toolset_20260401",
@@ -570,10 +570,10 @@ describe("AgentEditor", () => {
     await user.click(screen.getByRole("button", { name: "Remove toolset" }));
     expect(screen.queryByRole("checkbox", { name: "bash enabled" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().tools).toEqual([]);
 
-    await user.click(screen.getByRole("button", { name: "rendered" }));
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
     await user.click(screen.getByRole("button", { name: "Add toolset" }));
     expect(
       screen.getByRole("checkbox", { name: "bash enabled" }),
@@ -588,49 +588,300 @@ describe("AgentEditor", () => {
     ).toBeInTheDocument();
   });
 
-  it("toggles platform skills into typed skill refs", async () => {
+  it("picks platform skills without changing existing pinned refs", async () => {
     stubFetch({ skills: skillsPage });
     const user = userEvent.setup();
-    renderEditor();
-
+    renderEditor({
+      initial: {
+        ...newAgentForm(),
+        skills: [{ type: "custom", skill_id: "unlisted", version: "42" }],
+      },
+    });
+    await screen.findByRole("button", { name: "PDF Filler" });
+    await choose(user, "Add skill", "PDF Filler");
+    await choose(user, "Add skill", "Excel");
     await user.click(
-      await screen.findByRole("checkbox", { name: /PDF Filler/ }),
+      screen.getByRole("button", { name: "Remove skill skill_1" }),
     );
-    await user.click(screen.getByRole("checkbox", { name: /Excel/ }));
-    // Unchecking removes the custom ref again; the anthropic one stays.
-    await user.click(screen.getByRole("checkbox", { name: /PDF Filler/ }));
-
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig().skills).toEqual([
+      { type: "custom", skill_id: "unlisted", version: "42" },
       { type: "anthropic", skill_id: "xlsx", version: "latest" },
     ]);
   });
 
-  it("counts custom/MCP tool entries with the raw-tab notice", () => {
-    stubFetch();
-    const one = renderEditor({
-      initial: formFromAgent(
-        agentResponse({ tools: [{ type: "custom", name: "a" }] }),
-      ),
-    });
-    expect(
-      screen.getByText(/1 custom\/MCP tool entry — edit in the Raw tab\./),
-    ).toBeInTheDocument();
-    one.unmount();
-
+  it("edits custom definitions, blocks invalid drafts and preserves extension fields", async () => {
+    const mock = stubFetch();
+    const user = userEvent.setup();
     renderEditor({
       initial: formFromAgent(
         agentResponse({
           tools: [
-            { type: "custom", name: "a" },
-            { type: "mcp_toolset", id: "b" },
+            {
+              type: "custom",
+              name: "a",
+              description: "old",
+              input_schema: { type: "object" },
+              extra: { keep: true },
+            },
+            { type: "future", data: 42 },
           ],
         }),
       ),
     });
     expect(
-      screen.getByText(/2 custom\/MCP tool entries — edit in the Raw tab\./),
+      screen.getByText(/Other tool entries are preserved/),
     ).toBeInTheDocument();
+    await user.click(screen.getByText("Definition"));
+    fill("Input schema", "{");
+    expect(screen.getByRole("radio", { name: "raw" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("valid JSON");
+    expect(postCalls(mock)).toHaveLength(0);
+    fill("Input schema", '{"type":"string"}');
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      {
+        type: "custom",
+        name: "a",
+        description: "old",
+        input_schema: { type: "string" },
+        extra: { keep: true },
+      },
+      { type: "future", data: 42 },
+    ]);
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
+    expect(screen.getByLabelText("Input schema")).toHaveValue(
+      JSON.stringify({ type: "string" }, null, 2),
+    );
+  });
+
+  it("rejects a null schema inline while accepting other JSON primitives", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole("button", { name: "Add custom tool" }));
+    await user.click(screen.getByText("Definition"));
+    fill("Input schema", "null");
+    expect(screen.getByRole("alert")).toHaveTextContent("must not be null");
+    expect(screen.getByRole("radio", { name: "raw" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
+    fill("Input schema", "42");
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toContainEqual({
+      type: "custom",
+      name: "new_tool",
+      description: "",
+      input_schema: 42,
+    });
+  });
+
+  it("pairs MCP servers with toolsets through rename, permissions and removal", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole("button", { name: "Add MCP server" }));
+    fill("Server name", "github");
+    fill("Server URL", "https://example.test/mcp");
+    await user.click(screen.getByText("Tool permissions", { exact: true }));
+    await choose(user, "github default enabled", "Disabled");
+    await choose(user, "github default permission policy", "Always ask");
+    await user.click(screen.getByRole("button", { name: "Add tool override" }));
+    fill("github override 1 name", "get_issue");
+    await choose(user, "github override 1 permission policy", "Always allow");
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().mcp_servers).toEqual([
+      { type: "url", name: "github", url: "https://example.test/mcp" },
+    ]);
+    expect(rawConfig().tools).toContainEqual({
+      type: "mcp_toolset",
+      mcp_server_name: "github",
+      default_config: {
+        enabled: false,
+        permission_policy: { type: "always_ask" },
+      },
+      configs: [
+        { name: "get_issue", permission_policy: { type: "always_allow" } },
+      ],
+    });
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
+    await user.click(
+      screen.getByRole("button", { name: "Remove MCP server github" }),
+    );
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().mcp_servers).toEqual([]);
+    expect(
+      (rawConfig().tools as { type: string }[]).some(
+        (t) => t.type === "mcp_toolset",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not steal another MCP server's toolsets while typing a shared name", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor({
+      initial: formFromAgent(
+        agentResponse({
+          tools: [
+            {
+              type: "mcp_toolset",
+              mcp_server_name: "a",
+              configs: [{ name: "one" }],
+            },
+            {
+              type: "mcp_toolset",
+              mcp_server_name: "ab",
+              configs: [{ name: "two" }],
+            },
+          ],
+          mcp_servers: [
+            { type: "url", name: "a", url: "first" },
+            { type: "url", name: "ab", url: "second" },
+          ],
+        }),
+      ),
+    });
+    const names = screen.getAllByLabelText("Server name");
+    fireEvent.change(names[1], { target: { value: "a" } });
+    fireEvent.change(names[1], { target: { value: "another" } });
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      { type: "mcp_toolset", mcp_server_name: "a", configs: [{ name: "one" }] },
+      {
+        type: "mcp_toolset",
+        mcp_server_name: "another",
+        configs: [{ name: "two" }],
+      },
+    ]);
+  });
+
+  it("keeps schema drafts attached to their tool after earlier entries are removed", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole("button", { name: "Add MCP server" }));
+    await user.click(screen.getByRole("button", { name: "Add custom tool" }));
+    await user.click(screen.getByText("Definition"));
+    fill("Input schema", "false");
+    await user.click(
+      screen.getByRole("button", { name: "Remove MCP server mcp_server" }),
+    );
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toContainEqual({
+      type: "custom",
+      name: "new_tool",
+      description: "",
+      input_schema: false,
+    });
+  });
+
+  it("clears explicit MCP defaults and edits/removes overrides without losing other fields", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor({
+      initial: formFromAgent(
+        agentResponse({
+          tools: [
+            {
+              type: "mcp_toolset",
+              mcp_server_name: "server",
+              default_config: {
+                enabled: false,
+                permission_policy: { type: "always_ask" },
+              },
+              configs: [
+                { name: "first" },
+                {
+                  name: "second",
+                  enabled: false,
+                  permission_policy: { type: "always_ask" },
+                },
+              ],
+            },
+          ],
+          mcp_servers: [
+            {
+              type: "url",
+              name: "server",
+              url: "https://example.test",
+              extension: "keep",
+            },
+          ],
+        }),
+      ),
+    });
+    await user.click(screen.getByText("Tool permissions", { exact: true }));
+    await choose(user, "server default enabled", "Enabled");
+    await choose(user, "server default enabled", "Default enabled");
+    await choose(user, "server default permission policy", "Default policy");
+    await user.click(
+      screen.getByRole("button", { name: "Remove server override 1" }),
+    );
+    await choose(user, "server override 1 enabled", "Default enabled");
+    await choose(user, "server override 1 permission policy", "Default policy");
+    fill("Server URL", "https://changed.test");
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toEqual([
+      {
+        type: "mcp_toolset",
+        mcp_server_name: "server",
+        default_config: {},
+        configs: [{ name: "second" }],
+      },
+    ]);
+    expect(rawConfig().mcp_servers).toEqual([
+      {
+        type: "url",
+        name: "server",
+        url: "https://changed.test",
+        extension: "keep",
+      },
+    ]);
+  });
+
+  it("removes an invalid custom draft and preserves a separately named custom tool", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    await user.click(screen.getByRole("button", { name: "Add custom tool" }));
+    await user.click(screen.getByText("Definition"));
+    fill("Input schema", "{");
+    await user.click(screen.getByRole("button", { name: "Add custom tool" }));
+    expect(
+      screen.getByRole("button", { name: "Remove tool new_tool_2" }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Remove tool new_tool" }),
+    );
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().tools).toContainEqual({
+      type: "custom",
+      name: "new_tool_2",
+      description: "",
+      input_schema: { type: "object", properties: {} },
+    });
+  });
+
+  it("keeps keyboard focus in Raw when invalid JSON prevents switching", async () => {
+    stubFetch();
+    const user = userEvent.setup();
+    renderEditor();
+    const rendered = screen.getByRole("radio", { name: "rendered" });
+    rendered.focus();
+    await user.keyboard("{ArrowRight}");
+    const raw = screen.getByRole("radio", { name: "raw" });
+    expect(raw).toHaveFocus();
+    fill("Raw agent config", "{");
+    raw.focus();
+    await user.keyboard("{ArrowLeft}");
+    expect(raw).toHaveFocus();
+    expect(raw).toBeChecked();
+    fill("Raw agent config", "{}");
+    raw.focus();
+    await user.keyboard("{Home}");
+    expect(rendered).toHaveFocus();
+    expect(rendered).toBeChecked();
   });
 
   it("converts between JSON and YAML in the raw tab", async () => {
@@ -638,9 +889,9 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     // Clicking the active tab again is a no-op.
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(
       screen.getByText("JSON is what saves — YAML converts on the fly."),
     ).toBeInTheDocument();
@@ -662,7 +913,7 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     fireEvent.change(rawTextarea(), { target: { value: "{ nope" } });
     await user.click(screen.getByRole("button", { name: "yaml" }));
 
@@ -677,7 +928,7 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     fireEvent.change(rawTextarea(), {
       target: {
         value: JSON.stringify({
@@ -688,7 +939,7 @@ describe("AgentEditor", () => {
         }),
       },
     });
-    await user.click(screen.getByRole("button", { name: "rendered" }));
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
 
     expect(screen.getByLabelText("Name")).toHaveValue("from-raw");
     expect(screen.getByLabelText("Model")).toHaveValue("claude-opus-4-2");
@@ -698,7 +949,7 @@ describe("AgentEditor", () => {
     ).toBeInTheDocument();
 
     // Round trip: the parsed form serializes back with metadata carried.
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawConfig()).toEqual({
       name: "from-raw",
       model: { id: "claude-opus-4-2" },
@@ -716,9 +967,9 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     fireEvent.change(rawTextarea(), { target: { value: "not json" } });
-    await user.click(screen.getByRole("button", { name: "rendered" }));
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
 
     expect(rawTextarea()).toBeInTheDocument();
     expect(screen.queryByLabelText("Name")).toBeNull();
@@ -734,11 +985,11 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     expect(rawTextarea().getAttribute("aria-invalid")).toBe("false");
 
     fireEvent.change(rawTextarea(), { target: { value: "not json" } });
-    await user.click(screen.getByRole("button", { name: "rendered" }));
+    await user.click(screen.getByRole("radio", { name: "rendered" }));
     const message = screen.getByText(/is not valid JSON|Unexpected token/);
     expect(rawTextarea().getAttribute("aria-invalid")).toBe("true");
     expect(rawTextarea().getAttribute("aria-describedby")).toBe(message.id);
@@ -753,7 +1004,7 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     fireEvent.change(rawTextarea(), { target: { value: "[1, 2" } });
     await user.click(screen.getByRole("button", { name: "Create agent" }));
 
@@ -768,7 +1019,7 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByRole("button", { name: "raw" }));
+    await user.click(screen.getByRole("radio", { name: "raw" }));
     const config = {
       name: "raw-agent",
       model: { id: "claude-opus-4-2" },
@@ -823,10 +1074,10 @@ describe("AgentEditor", () => {
       version: 3,
     });
 
-    // The agent's existing skill ref renders checked.
+    expect(await screen.findByText("PDF Filler")).toBeInTheDocument();
     expect(
-      await screen.findByRole("checkbox", { name: /PDF Filler/ }),
-    ).toBeChecked();
+      screen.getByRole("button", { name: "Remove skill skill_1" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     expect(
