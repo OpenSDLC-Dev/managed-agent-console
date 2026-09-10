@@ -364,3 +364,6 @@ does not alter the saved sidebar or group preference.
 Re-shot in both themes: `dashboard`, `dashboard-compact`, `dashboard-mobile`,
 `dashboard-group-collapsed`, `dashboard-nav-flyout`, `agents-list` and
 `agents-lookup-missing`.
+
+The BFF rejects decoded path delimiters in exact-ID input before forwarding, so
+reserved characters cannot turn a detail lookup into a different upstream route.

@@ -182,3 +182,24 @@ test("exact Agent lookup opens archived records, exposes missing IDs and support
     page.getByRole("heading", { name: "Agents", exact: true }),
   ).toBeVisible();
 });
+
+test("reserved characters in agent lookup cannot select a different upstream route", async ({
+  page,
+}) => {
+  await signIn(page);
+  for (const id of [
+    "agent_id/versions",
+    "agent_id?limit=1",
+    "agent_id#versions",
+  ]) {
+    await page.goto("/agents");
+    await page.getByRole("textbox", { name: "Find agent by ID" }).fill(id);
+    await page.getByRole("button", { name: "Open", exact: true }).click();
+    await expect(
+      page.getByText("unsupported proxy path", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Agents", exact: true }).last(),
+    ).toBeVisible();
+  }
+});
