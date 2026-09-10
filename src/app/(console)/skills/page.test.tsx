@@ -13,6 +13,7 @@ import SkillsPage from "./page";
 import type { Skill } from "@/lib/platform/types";
 
 const pushSpy = vi.fn();
+const route = vi.hoisted(() => ({ query: "" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushSpy,
@@ -21,7 +22,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/skills",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(route.query),
 }));
 
 // Minimal harness for base-ui's portal Select (status-filter.test.tsx pattern).
@@ -126,12 +127,56 @@ function renderPage() {
 }
 
 afterEach(() => {
+  route.query = "";
   cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
 describe("SkillsPage", () => {
+  it("opens a deep-linked skill with versions and the actual API response", async () => {
+    route.query = "skill=skl_1";
+    const item = skill({ id: "skl_1", display_name: "PDF tools" });
+    stubFetch((url) => {
+      if (url.pathname.endsWith("/versions"))
+        return json({
+          data: [
+            {
+              id: item.latest_version_id,
+              type: "skill_version",
+              skill_id: item.id,
+              name: "pdf-tools",
+              description: "Version description",
+              created_at: item.created_at,
+            },
+          ],
+        });
+      if (url.pathname.endsWith("/skl_1")) return json(item);
+      return json({ data: [item] });
+    });
+    renderPage();
+    const panel = within(screen.getByRole("region", { name: "Skill details" }));
+    expect(await panel.findByText("Version description")).toBeVisible();
+    expect(panel.getByText("Latest")).toHaveAttribute("data-latest", "true");
+    await userEvent.click(
+      panel.getByRole("radio", { name: "API", exact: true }),
+    );
+    expect(panel.getByText(/"display_name": "PDF tools"/)).toBeVisible();
+    await userEvent.click(panel.getByRole("button", { name: "Close details" }));
+    expect(pushSpy).toHaveBeenCalledWith("/skills", { scroll: false });
+  });
+
+  it("looks up an exact ID without adding a speculative list search parameter", async () => {
+    stubFetch(() => json({ data: [] }));
+    renderPage();
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Find skill by ID" }),
+      "xlsx{Enter}",
+    );
+    expect(pushSpy).toHaveBeenCalledWith("/skills?skill=xlsx", {
+      scroll: false,
+    });
+  });
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
@@ -208,7 +253,9 @@ describe("SkillsPage", () => {
     expect(table.getByText("none")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("PDF tools"));
-    expect(pushSpy).toHaveBeenCalledWith("/skills/skl_1");
+    expect(pushSpy).toHaveBeenCalledWith("/skills?skill=skl_1", {
+      scroll: false,
+    });
   });
 
   it("refetches with source=custom when the source filter changes", async () => {

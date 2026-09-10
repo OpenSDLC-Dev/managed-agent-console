@@ -133,4 +133,36 @@ describe("DataTable", () => {
     await userEvent.click(screen.getByText("Alpha"));
     fireEvent.keyDown(row, { key: "Enter" });
   });
+
+  it("keeps keyboard activation of a copy control out of row navigation", async () => {
+    const onRowClick = vi.fn();
+    const copy = vi.fn();
+    render(
+      <DataTable
+        rows={rows}
+        rowKey={rowKey}
+        onRowClick={onRowClick}
+        columns={[
+          {
+            key: "copy",
+            header: "ID",
+            cell: (row) => (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copy(row.id);
+                }}
+              >
+                Copy {row.id}
+              </button>
+            ),
+          },
+        ]}
+      />,
+    );
+    screen.getByRole("button", { name: "Copy agent_1" }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(copy).toHaveBeenCalledWith("agent_1");
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
 });

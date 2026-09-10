@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
@@ -13,6 +13,9 @@ import {
 } from "@/components/console/bits";
 import { IdCell } from "@/components/console/copy-id";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SkillInspector } from "@/components/console/skill-inspector";
 import {
   Select,
   SelectContent,
@@ -48,7 +51,7 @@ const COLUMNS: Column<Skill>[] = [
     header: "Latest version ID",
     cell: (s) =>
       s.latest_version_id ? (
-        <span className="font-mono text-[13px]">{s.latest_version_id}</span>
+        <IdCell id={s.latest_version_id} />
       ) : (
         <span className="text-muted-foreground">none</span>
       ),
@@ -61,7 +64,24 @@ const COLUMNS: Column<Skill>[] = [
 ];
 
 export default function SkillsPage() {
+  return (
+    <Suspense>
+      <SkillsList />
+    </Suspense>
+  );
+}
+
+function SkillsList() {
   const router = useRouter();
+  const search = useSearchParams();
+  const selected = search.get("skill");
+  const lookup = useRef<HTMLInputElement>(null);
+  const selectSkill = (id?: string) => {
+    const params = new URLSearchParams(search.toString());
+    if (id) params.set("skill", id);
+    else params.delete("skill");
+    router.push(`/skills${params.size ? `?${params}` : ""}`, { scroll: false });
+  };
   const [source, setSource] = useState<"all" | "custom" | "anthropic">("all");
   const pager = useCursorPage(source);
   const { data, error, isPending } = useSkills({
@@ -70,6 +90,8 @@ export default function SkillsPage() {
   });
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="skills" />;
+  const rows = data?.data ?? [];
+  const selectedIndex = rows.findIndex((skill) => skill.id === selected);
 
   return (
     <div>
@@ -78,7 +100,33 @@ export default function SkillsPage() {
         subtitle={SURFACES.skills.blurb}
         actions={<UploadSkillButton />}
       />
-      <div className="flex items-center gap-1.5 pb-4 text-sm">
+      <a
+        className="mb-5 inline-block text-sm text-muted-foreground underline-offset-4 hover:underline"
+        href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+        target="_blank"
+        rel="noreferrer"
+      >
+        View documentation
+      </a>
+      <div className="flex flex-wrap items-center gap-2 pb-4 text-sm">
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const id = lookup.current?.value.trim();
+            if (id) selectSkill(id);
+          }}
+        >
+          <Input
+            ref={lookup}
+            aria-label="Find skill by ID"
+            placeholder="Find skill by ID"
+            className="h-8 w-56"
+          />
+          <Button variant="outline" size="sm" type="submit">
+            Find
+          </Button>
+        </form>
         <span className="text-muted-foreground">Source</span>
         <Select
           value={source}
@@ -108,8 +156,9 @@ export default function SkillsPage() {
             columns={COLUMNS}
             rows={data?.data ?? []}
             rowKey={(s) => s.id}
+            activeRowKey={selected ?? undefined}
             loading={isPending}
-            onRowClick={(s) => router.push(`/skills/${s.id}`)}
+            onRowClick={(s) => selectSkill(s.id)}
             empty={
               <EmptyState
                 title="No skills yet"
@@ -124,6 +173,15 @@ export default function SkillsPage() {
             onNext={() => data?.next_page && pager.goNext(data.next_page)}
           />
         </>
+      )}
+      {selected && (
+        <SkillInspector
+          id={selected}
+          previous={selectedIndex > 0 ? rows[selectedIndex - 1].id : undefined}
+          next={selectedIndex >= 0 ? rows[selectedIndex + 1]?.id : undefined}
+          onSelect={selectSkill}
+          onClose={() => selectSkill()}
+        />
       )}
     </div>
   );
