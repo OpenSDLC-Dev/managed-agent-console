@@ -103,10 +103,10 @@ describe("DreamEditor", () => {
       target: { value: "Keep durable facts." },
     });
     await user.click(screen.getByLabelText("Speed"));
-    await user.click(screen.getByRole("option", { name: "Fast" }));
+    await user.click(await screen.findByRole("option", { name: "Fast" }));
     await user.click(screen.getByLabelText("Output"));
     await user.click(
-      screen.getByRole("option", { name: "Update the input store" }),
+      await screen.findByRole("option", { name: "Update the input store" }),
     );
     await user.click(screen.getByRole("button", { name: "Create dream" }));
 
