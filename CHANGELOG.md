@@ -46,6 +46,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Keyboard focus remains visible in resource action menus, select popups, the
+  session composer and the command palette, with arrow-key navigation and
+  Escape focus restoration for row actions.
+
 - Skills now use the platform's GA names, source objects and version IDs across
   lists, details, agent selection, search and uploads. Version history is paged;
   deleting a skill warns that all versions are removed, while the platform

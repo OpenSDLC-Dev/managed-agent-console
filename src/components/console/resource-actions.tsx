@@ -49,6 +49,12 @@ export function ResourceActions({
 
   useEffect(() => {
     if (!menuOpen) return;
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]',
+      ) ?? [],
+    );
+    items[0]?.focus();
     const onDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (triggerRef.current?.contains(target)) return;
@@ -56,13 +62,32 @@ export function ResourceActions({
       setMenuOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const current = items.indexOf(
+        document.activeElement as HTMLButtonElement,
+      );
+      const next =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : event.key === "ArrowDown"
+              ? (current + 1) % items.length
+              : (current - 1 + items.length) % items.length;
+      items[next]?.focus();
     };
+    const menu = menuRef.current;
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
+    menu?.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
+      menu?.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
 
@@ -108,7 +133,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirm("archive");
@@ -121,7 +146,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive-surface/10"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-none hover:bg-destructive-surface/10 focus:bg-destructive-surface/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);
                   setConfirm("delete");

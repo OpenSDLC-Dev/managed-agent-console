@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import { ResourceActions } from "./resource-actions";
@@ -40,5 +40,27 @@ describe("ResourceActions", () => {
       screen.getByRole("button", { name: "Archive environment" }),
     );
     expect(onArchive).toHaveBeenCalledOnce();
+  });
+
+  it("moves keyboard focus through the menu and returns it on Escape", async () => {
+    const user = userEvent.setup();
+    render(
+      <ResourceActions
+        resource="environment"
+        onArchive={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+
+    await user.click(trigger);
+    const archive = screen.getByRole("menuitem", { name: "Archive" });
+    await waitFor(() => expect(archive).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger).toHaveFocus();
   });
 });

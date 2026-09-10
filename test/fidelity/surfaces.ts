@@ -612,6 +612,43 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "session-composer-focus",
+    route: `/sessions/${SESSION}`,
+    fixture: `${SESSION}, focused composer with a draft`,
+    description: "Keyboard focus ring around the session message composer.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page
+        .getByRole("textbox", { name: "Message to the session" })
+        .fill("Draft follow-up");
+    },
+  },
+  {
+    id: "deployment-filter-focus",
+    route: "/deployments",
+    fixture: "populated deployment list with its status filter open",
+    description: "Keyboard focus ring inside a select popup.",
+    setup: async (page) => {
+      await page.getByText("Weekly research digest").waitFor();
+      await page.getByRole("combobox", { name: "Deployment status" }).focus();
+      await page.keyboard.press("ArrowDown");
+      await page.getByRole("option", { name: "All live" }).waitFor();
+    },
+  },
+  {
+    id: "deployment-actions-focus",
+    route: "/deployments",
+    fixture: "populated deployment list with a row action menu open",
+    description: "Keyboard focus ring inside a row action menu.",
+    setup: async (page) => {
+      await page.getByText("Weekly research digest").waitFor();
+      await page.getByRole("button", { name: "More actions" }).first().focus();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("ArrowDown");
+      await page.getByRole("menuitem", { name: "Archive" }).waitFor();
+    },
+  },
+  {
     id: "api-keys",
     route: "/api-keys",
     fixture: "2 keys, one control-plane managed",

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: completed
 ---
 
 # Platform capability parity
@@ -69,3 +69,9 @@ make archive one-way, purge sealed values on archive, and expose credential
 secrets only as writes. Metadata updates use null tombstones. Chrome verification
 used the local mock because the reference Managed Agents account was no longer
 available to sign in.
+
+The final interaction pass audited every operator route against
+`internal/api/server.go`; only the worker-authenticated work queue remains outside
+the console. Chrome exposed suppressed focus indicators in composite controls and
+the two global text-entry surfaces. The shared ring token now covers them, and row
+action menus move focus through their items and restore it to the trigger.

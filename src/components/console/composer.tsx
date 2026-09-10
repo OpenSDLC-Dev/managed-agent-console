@@ -89,7 +89,7 @@ export function Composer({
         }
         disabled={disabled || send.isPending}
         rows={2}
-        className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="w-full resize-none rounded-sm bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
       />
       <div className="flex items-center justify-between pt-2">
         <div className="text-[12px] text-destructive">
