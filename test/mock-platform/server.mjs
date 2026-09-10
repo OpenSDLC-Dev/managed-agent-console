@@ -13,6 +13,7 @@ import {
   agentVersions,
   deployments,
   deploymentRuns,
+  dreams,
   environments,
   environmentKeys,
   files,
@@ -82,6 +83,8 @@ let deploymentsStore = [];
 let deploymentRunsStore = [];
 let deploymentCounter = 1;
 let deploymentRunCounter = 1;
+let dreamsStore = [];
+let dreamCounter = 1;
 let memoryStoresStore = [];
 let memoriesStore = [];
 let memoryVersionsStore = [];
@@ -209,6 +212,7 @@ function resetStore() {
   environmentsStore = structuredClone(environments);
   deploymentsStore = structuredClone(deployments);
   deploymentRunsStore = structuredClone(deploymentRuns);
+  dreamsStore = structuredClone(dreams);
   memoryStoresStore = structuredClone(memoryStores);
   memoriesStore = structuredClone(memories);
   memoryVersionsStore = structuredClone(memoryVersions);
@@ -226,6 +230,7 @@ function resetStore() {
   sessionCounter = 1;
   deploymentCounter = 1;
   deploymentRunCounter = 1;
+  dreamCounter = 1;
   threadCounter = 1;
   resourceCounter = 1;
   outcomeCounter = 1;
@@ -1073,6 +1078,27 @@ function route(req, url) {
       deploymentRunsStore.find((row) => row.id === deploymentRunMatch[1]) ??
       null
     );
+
+  if (path === "/v1/dreams") {
+    let rows = includeArchived ? dreamsStore : dreamsStore.filter(notArchived);
+    const statuses = url.searchParams.getAll("statuses[]");
+    for (const status of url.searchParams.getAll("statuses"))
+      statuses.push(status);
+    if (statuses.length)
+      rows = rows.filter((row) => statuses.includes(row.status));
+    const createdGt = url.searchParams.get("created_at[gt]");
+    const createdLt = url.searchParams.get("created_at[lt]");
+    if (createdGt) rows = rows.filter((row) => row.created_at > createdGt);
+    if (createdLt) rows = rows.filter((row) => row.created_at < createdLt);
+    rows = [...rows].sort(
+      (a, b) =>
+        b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id),
+    );
+    return keysetPage(rows, url);
+  }
+  const dreamMatch = path.match(/^\/v1\/dreams\/([^/]+)$/);
+  if (dreamMatch)
+    return dreamsStore.find((row) => row.id === dreamMatch[1]) ?? null;
 
   if (path === "/v1/memory_stores") {
     let rows = includeArchived
@@ -2487,6 +2513,191 @@ const server = createServer(async (req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify(deployment));
     return;
+  }
+
+  // Dreams — asynchronous consolidation jobs. The mock accepts writes and
+  // holds new jobs pending; no timer simulates a model runner.
+  if (url.pathname.startsWith("/v1/dreams")) {
+    res.setHeader("content-type", "application/json");
+    const fail = (status, message) => {
+      res.writeHead(status);
+      res.end(
+        envelope(
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
+        ),
+      );
+    };
+    const itemMatch = url.pathname.match(/^\/v1\/dreams\/([^/]+)$/);
+    const cancelMatch = url.pathname.match(/^\/v1\/dreams\/([^/]+)\/cancel$/);
+    const archiveMatch = url.pathname.match(/^\/v1\/dreams\/([^/]+)\/archive$/);
+    const find = (id) => dreamsStore.find((item) => item.id === id);
+
+    if (req.method === "POST" && cancelMatch) {
+      const item = find(cancelMatch[1]);
+      if (!item) return fail(404, `dream ${cancelMatch[1]} not found`);
+      if (!["pending", "running", "canceled"].includes(item.status))
+        return fail(
+          400,
+          `dream ${item.id} is ${item.status}; only a pending or running dream can be canceled`,
+        );
+      if (item.status !== "canceled") {
+        item.status = "canceled";
+        item.ended_at = now();
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method === "POST" && archiveMatch) {
+      const item = find(archiveMatch[1]);
+      if (!item) return fail(404, `dream ${archiveMatch[1]} not found`);
+      if (["pending", "running"].includes(item.status))
+        return fail(400, `dream ${item.id} is ${item.status}; cancel it first`);
+      item.archived_at ??= now();
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/dreams") {
+      let body;
+      try {
+        body = JSON.parse(await readBody(req));
+      } catch {
+        return fail(400, "invalid JSON body");
+      }
+      if (!body || typeof body !== "object" || Array.isArray(body))
+        return fail(400, "dream body must be an object");
+      const allowed = new Set([
+        "inputs",
+        "model",
+        "instructions",
+        "output_behavior",
+      ]);
+      for (const key of Object.keys(body))
+        if (!allowed.has(key)) return fail(400, `unknown field "${key}"`);
+      if (!Array.isArray(body.inputs)) return fail(400, "inputs is required");
+      const storeInputs = body.inputs.filter(
+        (item) => item?.type === "memory_store",
+      );
+      const sessionInputs = body.inputs.filter(
+        (item) => item?.type === "sessions",
+      );
+      if (
+        storeInputs.length !== 1 ||
+        sessionInputs.length !== 1 ||
+        body.inputs.length !== 2
+      )
+        return fail(
+          400,
+          "inputs must carry exactly one memory_store input and one sessions input",
+        );
+      if (
+        Object.keys(storeInputs[0]).some(
+          (key) => !["type", "memory_store_id"].includes(key),
+        )
+      )
+        return fail(400, "invalid memory_store input");
+      if (
+        Object.keys(sessionInputs[0]).some(
+          (key) => !["type", "session_ids"].includes(key),
+        )
+      )
+        return fail(400, "invalid sessions input");
+      const inputStore = memoryStoresStore.find(
+        (item) => item.id === storeInputs[0].memory_store_id,
+      );
+      if (!inputStore || inputStore.archived_at)
+        return fail(
+          400,
+          inputStore ? "memory store is archived" : "memory store not found",
+        );
+      const sessionIds = sessionInputs[0].session_ids;
+      if (
+        !Array.isArray(sessionIds) ||
+        sessionIds.length < 1 ||
+        sessionIds.length > 100
+      )
+        return fail(400, "session_ids must carry 1 to 100 session ids");
+      if (
+        new Set(sessionIds.map((id) => id.replace(/^session_/, "sesn_")))
+          .size !== sessionIds.length
+      )
+        return fail(400, "session_ids must not repeat");
+      if (sessionIds.some((id) => !store.has(id.replace(/^session_/, "sesn_"))))
+        return fail(400, "session not found");
+      const model =
+        typeof body.model === "string" ? { id: body.model } : body.model;
+      if (
+        !model ||
+        typeof model.id !== "string" ||
+        !model.id ||
+        Object.keys(model).some((key) => !["id", "speed"].includes(key)) ||
+        (model.speed !== undefined &&
+          !["standard", "fast"].includes(model.speed))
+      )
+        return fail(400, "invalid model");
+      if (
+        body.instructions != null &&
+        (typeof body.instructions !== "string" ||
+          [...body.instructions].length < 1 ||
+          [...body.instructions].length > 4096)
+      )
+        return fail(400, "instructions must be 1 to 4096 characters");
+      const behavior = body.output_behavior ?? { type: "create_new" };
+      if (
+        !behavior ||
+        !["create_new", "update_existing"].includes(behavior.type)
+      )
+        return fail(400, "invalid output_behavior");
+      if (
+        behavior.type === "create_new" &&
+        Object.keys(behavior).some((key) => key !== "type")
+      )
+        return fail(400, "invalid output_behavior");
+      if (
+        behavior.type === "update_existing" &&
+        (behavior.memory_store_id !== inputStore.id ||
+          Object.keys(behavior).some(
+            (key) => !["type", "memory_store_id"].includes(key),
+          ))
+      )
+        return fail(
+          400,
+          "output_behavior.memory_store_id must be the job's own memory_store input",
+        );
+      const timestamp = now();
+      const item = {
+        id: `drm_mock${String(dreamCounter++).padStart(20, "0")}`,
+        type: "dream",
+        status: "pending",
+        inputs: structuredClone(body.inputs),
+        outputs: [],
+        model,
+        instructions: body.instructions ?? null,
+        output_behavior: behavior,
+        session_id: null,
+        created_at: timestamp,
+        ended_at: null,
+        archived_at: null,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+        },
+        error: null,
+      };
+      dreamsStore.unshift(item);
+      res.writeHead(200);
+      res.end(JSON.stringify(item));
+      return;
+    }
+
+    if (req.method !== "GET" && (itemMatch || cancelMatch || archiveMatch))
+      return fail(405, "method not allowed");
   }
 
   // Session create — exact top-level keys; initial_events is NOT accepted.

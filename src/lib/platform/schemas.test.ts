@@ -32,6 +32,7 @@ import {
   ApiKeySchema,
   DeploymentRunSchema,
   DeploymentSchema,
+  DreamSchema,
   EnvironmentKeyIssuedSchema,
   EnvironmentKeyPageSchema,
   EnvironmentKeySchema,
@@ -109,6 +110,10 @@ describe("mock fixtures conform to the platform wire", () => {
     each(DeploymentRunSchema, fixtures.deploymentRuns, "deploymentRuns");
   });
 
+  it("dreams", () => {
+    each(DreamSchema, fixtures.dreams, "dreams");
+  });
+
   it("memory stores, memories and memory versions", () => {
     each(MemoryStoreSchema, fixtures.memoryStores, "memoryStores");
     each(MemorySchema, fixtures.memories, "memories");
@@ -148,6 +153,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "agents",
       "deploymentRuns",
       "deployments",
+      "dreams",
       "environmentKeys",
       "environments",
       "files",

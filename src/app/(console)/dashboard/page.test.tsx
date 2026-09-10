@@ -99,6 +99,7 @@ describe("DashboardPage", () => {
       ["sessions", "/sessions"],
       ["deployments", "/deployments"],
       ["memory-stores", "/memory-stores"],
+      ["dreams", "/dreams"],
       ["environments", "/environments"],
       ["vaults", "/vaults"],
     ];
@@ -129,6 +130,6 @@ describe("DashboardPage", () => {
 
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(9);
+    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(10);
   });
 });

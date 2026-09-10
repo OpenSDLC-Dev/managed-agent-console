@@ -80,6 +80,28 @@ test("memory store list, detail, memory, version and forms pass axe", async ({
   }
 });
 
+test("dream list, detail, creation and cancellation dialog pass axe", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/dreams");
+  await expect(page.getByRole("heading", { name: "Dreams" })).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto("/dreams/drm_completedresearch000001");
+  await expect(page.getByTestId("dream-usage")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto("/dreams/new");
+  await expect(page.getByLabel("Session IDs")).toBeVisible();
+  await expectNoViolations(page);
+
+  await page.goto("/dreams/drm_pendingresearch0000001");
+  await page.getByRole("button", { name: "Cancel dream" }).click();
+  await dialogSettled(page);
+  await expectNoViolations(page);
+});
+
 /**
  * Waits for a dialog's entry animation to finish before axe measures it.
  * `toBeVisible` resolves the moment the element is painted, which for a

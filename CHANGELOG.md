@@ -8,6 +8,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Dreams can be created from one memory store and 1–100 session transcripts,
+  then inspected, canceled while active and archived after reaching a terminal
+  state. Lists expose status, inputs and output behavior without starting a
+  model run during test verification.
+
 - Session details display typed outcome evaluations and their dedicated trace
   events. Operators can define text- or file-rubric outcomes with the
   platform's iteration budget and see progress, verdicts and explanations.
@@ -43,6 +48,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   protects a skill's last version from individual deletion.
 
 ### Testing
+
+- Added wire-schema, mock lifecycle, end-to-end and Chrome fidelity coverage
+  for Dreams. The live tier limits itself to the collection probe because a
+  real create starts a billed model-backed consolidation run.
 
 - Added mock and model-free local coverage for outcome acceptance, the
   single-active rule and interrupt settlement.

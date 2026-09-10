@@ -10,6 +10,7 @@ import {
   // import loses — a type error whose message names neither the icon nor lucide.
   KeySquare,
   MessagesSquare,
+  Moon,
   Rocket,
   Sparkles,
   Waypoints,
@@ -94,6 +95,7 @@ export const NAV: NavEntry[] = [
       surfaceEntry("sessions", MessagesSquare),
       surfaceEntry("deployments", Rocket),
       surfaceEntry("memory-stores", Database),
+      surfaceEntry("dreams", Moon),
       surfaceEntry("environments", Boxes),
       surfaceEntry("vaults", KeyRound),
     ],

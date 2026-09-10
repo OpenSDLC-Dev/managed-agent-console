@@ -9,6 +9,7 @@ import {
   FileText,
   KeyRound,
   MessagesSquare,
+  Moon,
   Rocket,
   Search,
   Sparkles,
@@ -21,6 +22,7 @@ import { NAV_DESTINATIONS } from "@/lib/nav";
 import {
   useAgents,
   useDeployments,
+  useDreams,
   useEnvironments,
   useFiles,
   useMemoryStores,
@@ -70,6 +72,7 @@ function useSearchItems(query: string): Item[] {
   const limit = 50;
   const agents = useAgents({ limit });
   const deployments = useDeployments({ limit });
+  const dreams = useDreams({ limit });
   const environments = useEnvironments({ limit });
   const memoryStores = useMemoryStores({ limit });
   const sessions = useSessions({});
@@ -120,6 +123,16 @@ function useSearchItems(query: string): Item[] {
           href: `/deployments/${deployment.id}`,
           group: "Deployments",
           icon: Rocket,
+        });
+    }
+    for (const dream of dreams.data?.data ?? []) {
+      if (matches(q, dream.id))
+        items.push({
+          key: dream.id,
+          label: dream.id,
+          href: `/dreams/${dream.id}`,
+          group: "Dreams",
+          icon: Moon,
         });
     }
     for (const e of environments.data?.data ?? []) {
@@ -184,6 +197,7 @@ function useSearchItems(query: string): Item[] {
     agents.data,
     sessions.data,
     deployments.data,
+    dreams.data,
     environments.data,
     memoryStores.data,
     vaults.data,
