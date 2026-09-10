@@ -9,8 +9,10 @@ Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141
 
 - [x] Recheck Skills and Agent creation in Chrome and DevTools.
 - [x] Implement Skills inspector, exact lookup and API view.
-- [ ] Verify behavior and affected fidelity surfaces in both themes.
-- [ ] Pass CI, resolve review threads and squash merge the Skills slice.
+- [x] Verify behavior and affected fidelity surfaces in both themes.
+
+Skills delivery gate: [PR #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142)
+tracks CI, review resolution and squash merge.
 
 Platform capability parity is complete in [plan 09](./docs/plan/09_platform-parity.md).
 Reference measurements and deliberate self-hosting differences live in

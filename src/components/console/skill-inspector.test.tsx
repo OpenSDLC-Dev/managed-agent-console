@@ -7,7 +7,10 @@ import { SkillInspector } from "./skill-inspector";
 vi.mock("./skill-detail", () => ({
   SkillDetail: ({ id }: { id: string }) => <h2>{id}</h2>,
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("focuses the non-modal inspector and restores the connected trigger", () => {
   const trigger = document.createElement("button");
@@ -62,4 +65,41 @@ it("resizes by keyboard within bounds and resets with Home or double click", () 
   fireEvent.keyDown(handle, { key: "ArrowRight" });
   fireEvent.doubleClick(handle);
   expect(handle).toHaveAttribute("aria-valuenow", "560");
+});
+
+it("reports the visible width after a viewport change and reset", () => {
+  const viewport = vi.spyOn(window, "innerWidth", "get");
+  viewport.mockReturnValue(1280);
+  render(<SkillInspector id="xlsx" onClose={vi.fn()} onSelect={vi.fn()} />);
+  const handle = screen.getByRole("separator", { name: "Resize panel" });
+  viewport.mockReturnValue(390);
+  fireEvent.resize(window);
+  expect(handle).toHaveAttribute("aria-valuenow", "326");
+  expect(handle).toHaveAttribute("aria-valuemax", "326");
+  fireEvent.keyDown(handle, { key: "ArrowRight" });
+  expect(handle).toHaveAttribute("aria-valuenow", "320");
+  fireEvent.doubleClick(handle);
+  expect(handle).toHaveAttribute("aria-valuenow", "326");
+  viewport.mockReturnValue(1280);
+  fireEvent.resize(window);
+  expect(handle).toHaveAttribute("aria-valuenow", "560");
+});
+
+it("falls back to the list lookup if the triggering row was deleted", () => {
+  const trigger = document.createElement("button"),
+    lookup = document.createElement("input");
+  document.body.append(trigger, lookup);
+  trigger.focus();
+  const { unmount } = render(
+    <SkillInspector
+      id="xlsx"
+      onClose={vi.fn()}
+      onSelect={vi.fn()}
+      fallbackFocus={{ current: lookup }}
+    />,
+  );
+  trigger.remove();
+  unmount();
+  expect(lookup).toHaveFocus();
+  lookup.remove();
 });
