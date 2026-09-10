@@ -292,3 +292,15 @@ creation form and destructive confirmation patterns. The self-hosted surface
 shows the pipeline session and flat token usage because the platform publishes
 both. Re-shot: `dreams-list`, `dream-detail`, `dream-cancel-confirm` and
 `dream-new`, both themes.
+
+## Final keyboard interaction — checked 2026-09-10
+
+The authenticated reference remains unavailable. The comparison therefore uses
+the focus treatment measured from it on 2026-08-16 and the local Chrome pass.
+Before this pass, Chrome reported `outline-style: none` and no visible box shadow
+on the session composer, command input and active select item. The repaired
+controls paint the shared ring at 3px for text entry and an opaque 2px inset ring
+inside popup items. Row action menus also focus their first item, support arrow
+navigation and return focus to the trigger on Escape. Re-shot:
+`command-palette`, `session-composer-focus`, `deployment-filter-focus` and
+`deployment-actions-focus`, both themes.

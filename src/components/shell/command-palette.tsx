@@ -360,7 +360,7 @@ export function CommandPalette() {
                     ?.click();
                 }
               }}
-              className="border-none shadow-none focus-visible:ring-0"
+              className="border-none shadow-none"
             />
           </div>
           {open && (
