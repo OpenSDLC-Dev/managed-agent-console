@@ -1025,6 +1025,23 @@ export const SURFACES: Surface[] = [
       await tool.scrollIntoViewIfNeeded();
     },
   })),
+  ...[false, true].map((narrow): Surface => ({
+    id: narrow ? "agent-schema-narrow" : "agent-schema",
+    route: "/agents",
+    fixture: "focused custom-tool JSON draft",
+    description: "Schema keyboard help and focus ring in the create dialog.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("button", { name: "Create agent", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Add custom tool" }).click();
+      const tool = page.locator('[data-tool-type="custom"]');
+      await tool.getByText("Definition", { exact: true }).click();
+      await tool.getByLabel("Input schema").focus();
+      await tool.getByLabel("Input schema").scrollIntoViewIfNeeded();
+    },
+  })),
   {
     id: "environment-create",
     route: "/environments",

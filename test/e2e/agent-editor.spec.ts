@@ -187,3 +187,46 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
   expect((await submitted).postDataJSON()).toEqual(config);
   await expect(page).toHaveURL(new RegExp("agents/agent_mock"));
 });
+
+test("schema indentation keeps the modal open and Escape then Tab releases focus", async ({
+  page,
+}) => {
+  await signIn(page, "/agents");
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create agent" });
+  await dialog.getByRole("button", { name: "Add custom tool" }).click();
+  const tool = dialog.locator('[data-tool-type="custom"]');
+  await tool.getByText("Definition", { exact: true }).click();
+  const schema = tool.getByLabel("Input schema");
+  await schema.fill("{}");
+  await schema.press("ArrowLeft");
+  await schema.press("Tab");
+  await expect(schema).toHaveValue("{  }");
+  await schema.press("ControlOrMeta+z");
+  await expect(schema).toHaveValue("{}");
+  await schema.press("ControlOrMeta+Shift+z");
+  await expect(schema).toHaveValue("{  }");
+  await expect(schema).toBeFocused();
+  await schema.press("Escape");
+  await expect(dialog).toBeVisible();
+  await schema.press("Tab");
+  await expect(schema).not.toBeFocused();
+  await expect(dialog).toBeVisible();
+  await schema.focus();
+  await schema.press("ControlOrMeta+A");
+  await schema.press("ArrowRight");
+  await schema.press("Tab");
+  await expect(schema).toHaveValue("{  }  ");
+  await dialog.getByRole("radio", { name: "raw" }).click();
+  const raw = JSON.parse(
+    await dialog.getByLabel("Raw agent config").inputValue(),
+  );
+  expect(raw.tools).toContainEqual({
+    type: "custom",
+    name: "new_tool",
+    description: "",
+    input_schema: {},
+  });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});

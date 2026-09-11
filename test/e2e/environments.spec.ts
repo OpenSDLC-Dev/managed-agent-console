@@ -309,9 +309,9 @@ test("environment editor preserves package arguments and metadata through retry,
   await page.getByRole("button", { name: "Remove metadata row 1" }).click();
   await expect(page.getByLabel("Metadata key 1")).toBeFocused();
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(
