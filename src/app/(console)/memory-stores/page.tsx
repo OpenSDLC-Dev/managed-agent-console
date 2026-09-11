@@ -95,7 +95,9 @@ export default function MemoryStoresPage() {
           onValueChange={(value) => setView(value as typeof view)}
         >
           <SelectTrigger aria-label="Memory store status" className="h-8 w-44">
-            <SelectValue />
+            <SelectValue>
+              {view === "live" ? "Live" : "Include archived"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="live">Live</SelectItem>

@@ -122,7 +122,12 @@ export default function DeploymentsPage() {
           onValueChange={(value) => setAgentId(value ?? "all")}
         >
           <SelectTrigger aria-label="Agent filter" className="h-8 max-w-full">
-            <SelectValue placeholder="All agents" />
+            <SelectValue>
+              {agentId === "all"
+                ? "All agents"
+                : agents.data?.agents.find((agent) => agent.id === agentId)
+                    ?.name || agentId}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All agents</SelectItem>
@@ -145,7 +150,16 @@ export default function DeploymentsPage() {
         )}
         <Select value={view} onValueChange={(value) => setView(value as View)}>
           <SelectTrigger aria-label="Deployment status" className="h-8 w-44">
-            <SelectValue />
+            <SelectValue>
+              {
+                {
+                  live: "All live",
+                  active: "Active",
+                  paused: "Paused",
+                  archived: "Include archived",
+                }[view]
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="live">All live</SelectItem>
