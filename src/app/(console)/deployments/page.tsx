@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+import { Suspense } from "react";
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
 import { useRouter } from "next/navigation";
+import { useListFilters } from "@/lib/use-list-filters";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateDeploymentButton } from "@/components/console/create-deployment-dialog";
 import {
@@ -93,9 +96,24 @@ const COLUMNS: Column<Deployment>[] = [
 type View = "live" | "active" | "paused" | "archived";
 
 export default function DeploymentsPage() {
+  return (
+    <Suspense
+      fallback={<p className="text-muted-foreground">Loading filters…</p>}
+    >
+      <DeploymentsList />
+    </Suspense>
+  );
+}
+
+function DeploymentsList() {
   const router = useRouter();
-  const [view, setView] = useState<View>("live");
-  const [agentId, setAgentId] = useState("all");
+  const filters = useListFilters();
+  const status = filters.params.get("status");
+  const view: View =
+    status === "active" || status === "paused" || status === "archived"
+      ? status
+      : "live";
+  const agentId = filters.params.get("agent") || "all";
   const agents = useAgentOptions();
   const pager = useCursorPage(view + "|" + agentId);
   const query = useDeployments({
@@ -104,6 +122,9 @@ export default function DeploymentsPage() {
     ...(view === "archived" ? { include_archived: true } : {}),
     ...(view === "active" || view === "paused" ? { status: view } : {}),
   });
+
+  const filtered = view !== "live" || agentId !== "all";
+  const resetFilters = () => filters.update({ status: null, agent: null });
 
   if (isUnimplemented(query.error))
     return <UnavailableSurface surface="deployments" />;
@@ -120,7 +141,9 @@ export default function DeploymentsPage() {
         <ExactResourceLookup resource="deployment" path="/deployments" />
         <Select
           value={agentId}
-          onValueChange={(value) => setAgentId(value ?? "all")}
+          onValueChange={(value) =>
+            filters.update({ agent: value && value !== "all" ? value : null })
+          }
         >
           <SelectTrigger aria-label="Agent filter" className="h-8 max-w-full">
             <SelectValue>
@@ -149,7 +172,12 @@ export default function DeploymentsPage() {
             Showing the first 1,000 agents.
           </span>
         )}
-        <Select value={view} onValueChange={(value) => setView(value as View)}>
+        <Select
+          value={view}
+          onValueChange={(value) =>
+            filters.update({ status: value && value !== "live" ? value : null })
+          }
+        >
           <SelectTrigger aria-label="Deployment status" className="h-8 w-44">
             <SelectValue>
               {
@@ -169,6 +197,11 @@ export default function DeploymentsPage() {
             <SelectItem value="archived">Include archived</SelectItem>
           </SelectContent>
         </Select>
+        {filtered && (
+          <Button size="sm" variant="ghost" onClick={resetFilters}>
+            Reset
+          </Button>
+        )}
       </div>
       {query.error ? (
         <ErrorState error={query.error} />
@@ -181,10 +214,22 @@ export default function DeploymentsPage() {
             loading={query.isPending}
             onRowClick={(row) => router.push(`/deployments/${row.id}`)}
             empty={
-              <EmptyState
-                title="No deployments yet"
-                hint="Create a deployment to run an agent manually or on a schedule."
-              />
+              filtered ? (
+                <EmptyState
+                  title="No matching deployments"
+                  hint="No deployments match the current filters."
+                  action={
+                    <Button variant="outline" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No deployments yet"
+                  hint="Create a deployment to run an agent manually or on a schedule."
+                />
+              )
             }
           />
           <Pager

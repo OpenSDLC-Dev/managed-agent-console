@@ -74,7 +74,7 @@ test("created presets bound sessions and agents lists serverside", async ({
   await page.getByRole("combobox", { name: "Created filter" }).click();
   await page.getByRole("option", { name: "Last 24 hours" }).click();
   await boundedAgents;
-  await expect(page.getByText("No agents yet")).toBeVisible();
+  await expect(page.getByText("No matching agents")).toBeVisible();
   await page.getByRole("combobox", { name: "Created filter" }).click();
   await page.getByRole("option", { name: "All time" }).click();
   await expect(
@@ -92,7 +92,7 @@ test("created presets bound sessions and agents lists serverside", async ({
       req.url().includes("created_at%5Bgte%5D="),
   );
   await page.getByRole("combobox", { name: "Created filter" }).click();
-  await page.getByRole("option", { name: "Last 24 hours" }).click();
+  await page.getByRole("option", { name: "Last day" }).click();
   await boundedSessions;
   await expect(page.getByText("No matching sessions")).toBeVisible();
 });

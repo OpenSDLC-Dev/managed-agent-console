@@ -74,6 +74,51 @@ const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  ...["agents", "memory-stores"].map((route): Surface => ({
+    id: route + "-created-range",
+    route: "/" + route + "?created=2026-08-01~2026-08-02",
+    fixture: "custom inclusive date range",
+    description: "Created custom range input and explicit Apply/Cancel.",
+    setup: async (page) => {
+      await page.getByLabel("Created filter").click();
+      await page.getByRole("textbox", { name: "Start", exact: true }).waitFor();
+    },
+  })),
+  {
+    id: "created-calendar-narrow",
+    route: "/agents?created=2026-08-01~2026-08-02",
+    fixture: "selected August range",
+    description: "Inline calendar and range form at 390px.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByLabel("Created filter").click();
+      await page.getByRole("button", { name: "Open End calendar" }).click();
+      await page.getByRole("group", { name: "End calendar" }).waitFor();
+    },
+  },
+  {
+    id: "session-created-presets",
+    route: "/sessions",
+    fixture: "default",
+    description:
+      "Session Created presets include Today, Last hour and Last day.",
+    setup: async (page) => {
+      await page.getByLabel("Created filter").click();
+      await page
+        .getByRole("option", { name: "Last hour", exact: true })
+        .waitFor();
+    },
+  },
+  {
+    id: "deployment-filter-reset",
+    route: "/deployments?agent=agent_researcher00000000001&status=paused",
+    fixture: "empty filtered deployments",
+    description: "URL-backed filters and Reset on an empty list.",
+    setup: async (page) => {
+      await page.getByText("No matching deployments").waitFor();
+    },
+  },
+
   ...[false, true].map((narrow): Surface => ({
     id: "session-filters" + (narrow ? "-narrow" : ""),
     route: "/sessions",

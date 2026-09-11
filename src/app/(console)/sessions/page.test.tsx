@@ -1,3 +1,4 @@
+import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -21,7 +22,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/sessions",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => useTestSearchParams(),
 }));
 
 // Minimal harness for base-ui's portal Select (status-filter.test.tsx pattern).

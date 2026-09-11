@@ -1,3 +1,4 @@
+import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -10,7 +11,10 @@ import {
 } from "../../../../test/mock-platform/fixtures.mjs";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => useTestSearchParams(),
+  useRouter: () => ({ push }),
+}));
 vi.mock("@/components/ui/select", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   const Context = React.createContext<{

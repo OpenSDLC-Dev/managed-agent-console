@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+
+import { Suspense, useMemo } from "react";
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import {
-  CreatedFilter,
-  createdGte,
-  type CreatedPresetKey,
-} from "@/components/console/created-filter";
+import { CreatedFilter } from "@/components/console/created-filter";
 import { useRouter } from "next/navigation";
+import { useListFilters } from "@/lib/use-list-filters";
+import {
+  decodeCreatedFilter,
+  encodeCreatedFilter,
+} from "@/components/console/created-filter-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateMemoryStoreButton } from "@/components/console/create-memory-store-dialog";
 import {
@@ -62,18 +65,33 @@ const COLUMNS: Column<MemoryStore>[] = [
 ];
 
 export default function MemoryStoresPage() {
+  return (
+    <Suspense
+      fallback={<p className="text-muted-foreground">Loading filters…</p>}
+    >
+      <MemoryStoresList />
+    </Suspense>
+  );
+}
+
+function MemoryStoresList() {
   const router = useRouter();
-  const [view, setView] = useState<"live" | "all">("live");
-  const [created, setCreated] = useState<{
-    key: CreatedPresetKey;
-    gte?: string;
-  }>({ key: "all" });
-  const pager = useCursorPage(view + "|" + created.key);
+  const filters = useListFilters();
+  const view = filters.params.get("status") === "all" ? "all" : "live";
+  const createdKey = filters.params.get("created");
+  const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
+  const pager = useCursorPage(
+    `${view}|${created.key}|${created.gte}|${created.lte}`,
+  );
   const query = useMemoryStores({
     page: pager.page,
     "created_at[gte]": created.gte,
+    "created_at[lte]": created.lte,
     include_archived: view === "all" || undefined,
   });
+  const filtered = view !== "live" || created.key !== "all";
+  const resetFilters = () => filters.update({ status: null, created: null });
+
   if (isUnimplemented(query.error))
     return <UnavailableSurface surface="memory-stores" />;
 
@@ -88,11 +106,16 @@ export default function MemoryStoresPage() {
         <ExactResourceLookup resource="memory store" path="/memory-stores" />
         <CreatedFilter
           value={created.key}
-          onChange={(key) => setCreated({ key, gte: createdGte(key) })}
+          range={created.range}
+          onChange={(key, range) =>
+            filters.update({ created: encodeCreatedFilter(key, range) })
+          }
         />
         <Select
           value={view}
-          onValueChange={(value) => setView(value as typeof view)}
+          onValueChange={(value) =>
+            filters.update({ status: value === "all" ? "all" : null })
+          }
         >
           <SelectTrigger aria-label="Memory store status" className="h-8 w-44">
             <SelectValue>
@@ -104,6 +127,11 @@ export default function MemoryStoresPage() {
             <SelectItem value="all">Include archived</SelectItem>
           </SelectContent>
         </Select>
+        {filtered && (
+          <Button size="sm" variant="ghost" onClick={resetFilters}>
+            Reset
+          </Button>
+        )}
       </div>
       {query.error ? (
         <ErrorState error={query.error} />
@@ -116,10 +144,22 @@ export default function MemoryStoresPage() {
             loading={query.isPending}
             onRowClick={(store) => router.push(`/memory-stores/${store.id}`)}
             empty={
-              <EmptyState
-                title="No memory stores yet"
-                hint="Create a store for durable files shared across sessions."
-              />
+              filtered ? (
+                <EmptyState
+                  title="No matching memory stores"
+                  hint="No memory stores match the current filters."
+                  action={
+                    <Button variant="outline" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No memory stores yet"
+                  hint="Create a store for durable files shared across sessions."
+                />
+              )
             }
           />
           <Pager

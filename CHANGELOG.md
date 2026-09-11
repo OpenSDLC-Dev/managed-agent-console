@@ -11,6 +11,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Created filters support custom date ranges and local-day presets. Agent, Session, Memory-store and Deployment list selections survive reload, detail navigation and browser history.
+
 - Sessions offer exact-ID lookup, deployment filtering, multiple runtime statuses with an Active default, and server-backed creation-time sorting.
 
 - Agent drafts prompt before leaving through navigation, cancellation, modal close or template replacement; Stay preserves edits, and reload uses the browser confirmation.

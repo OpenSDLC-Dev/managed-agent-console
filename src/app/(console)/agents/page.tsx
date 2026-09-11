@@ -1,9 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, Suspense, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { useListFilters } from "@/lib/use-list-filters";
+import {
+  decodeCreatedFilter,
+  encodeCreatedFilter,
+} from "@/components/console/created-filter-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
@@ -18,11 +23,7 @@ import { IdCell } from "@/components/console/copy-id";
 import { ResourceActions } from "@/components/console/resource-actions";
 import { CreateAgentButton } from "@/components/console/create-agent-dialog";
 import { StatusFilter } from "@/components/console/status-filter";
-import {
-  CreatedFilter,
-  createdGte,
-  type CreatedPresetKey,
-} from "@/components/console/created-filter";
+import { CreatedFilter } from "@/components/console/created-filter";
 import { useAgents, useArchiveAgent } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
@@ -76,19 +77,34 @@ const COLUMNS: Column<Agent>[] = [
 ];
 
 export default function AgentsPage() {
+  return (
+    <Suspense
+      fallback={<p className="text-muted-foreground">Loading filters…</p>}
+    >
+      <AgentsList />
+    </Suspense>
+  );
+}
+
+function AgentsList() {
   const router = useRouter();
+  const filters = useListFilters();
   const lookup = useRef<HTMLInputElement>(null);
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [created, setCreated] = useState<{
-    key: CreatedPresetKey;
-    gte?: string;
-  }>({ key: "all" });
-  const pager = useCursorPage(`${includeArchived}|${created.key}`);
+  const includeArchived = filters.params.get("status") === "all";
+  const createdKey = filters.params.get("created");
+  const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
+  const pager = useCursorPage(
+    `${includeArchived}|${created.key}|${created.gte}|${created.lte}`,
+  );
   const { data, error, isPending } = useAgents({
     page: pager.page,
     include_archived: includeArchived || undefined,
     "created_at[gte]": created.gte,
+    "created_at[lte]": created.lte,
   });
+
+  const filtered = includeArchived || created.key !== "all";
+  const resetFilters = () => filters.update({ status: null, created: null });
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="agents" />;
 
@@ -120,12 +136,20 @@ export default function AgentsPage() {
         </form>
         <CreatedFilter
           value={created.key}
-          onChange={(key) => setCreated({ key, gte: createdGte(key) })}
+          range={created.range}
+          onChange={(key, range) =>
+            filters.update({ created: encodeCreatedFilter(key, range) })
+          }
         />
         <StatusFilter
           includeArchived={includeArchived}
-          onChange={setIncludeArchived}
+          onChange={(value) => filters.update({ status: value ? "all" : null })}
         />
+        {filtered && (
+          <Button size="sm" variant="ghost" onClick={resetFilters}>
+            Reset
+          </Button>
+        )}
       </div>
       {error ? (
         <ErrorState error={error} />
@@ -138,11 +162,23 @@ export default function AgentsPage() {
             loading={isPending}
             onRowClick={(a) => router.push(`/agents/${a.id}`)}
             empty={
-              <EmptyState
-                title="No agents yet"
-                hint="Create your first agent to get started."
-                action={<CreateAgentButton variant="outline" />}
-              />
+              filtered ? (
+                <EmptyState
+                  title="No matching agents"
+                  hint="No agents match the current filters."
+                  action={
+                    <Button variant="outline" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No agents yet"
+                  hint="Create your first agent to get started."
+                  action={<CreateAgentButton variant="outline" />}
+                />
+              )
             }
           />
           <Pager

@@ -30,7 +30,7 @@ export function StatusFilter({
 
           data-value={includeArchived ? "all" : "active"}
         >
-          <SelectValue />
+          <SelectValue>{includeArchived ? "All" : "Active"}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="active">Active</SelectItem>

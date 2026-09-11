@@ -1,9 +1,14 @@
 "use client";
 
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import { useState } from "react";
+import { useState, Suspense, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { useListFilters } from "@/lib/use-list-filters";
+import {
+  decodeCreatedFilter,
+  encodeCreatedFilter,
+} from "@/components/console/created-filter-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateSessionButton } from "@/components/console/create-session-dialog";
 import { IdCell } from "@/components/console/copy-id";
@@ -24,11 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  CreatedFilter,
-  createdGte,
-  type CreatedPresetKey,
-} from "@/components/console/created-filter";
+import { CreatedFilter } from "@/components/console/created-filter";
 import {
   useAgentOptions,
   useDeploymentOptions,
@@ -90,13 +91,36 @@ const STATUS_OPTIONS: SessionStatus[] = [
 ];
 
 export default function SessionsPage() {
+  return (
+    <Suspense
+      fallback={<p className="text-muted-foreground">Loading filters…</p>}
+    >
+      <SessionsList />
+    </Suspense>
+  );
+}
+
+function SessionsList() {
   const router = useRouter();
-  const [statuses, setStatuses] = useState<SessionStatus[]>([
-    "running",
-    "idle",
-    "rescheduling",
-  ]);
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const filters = useListFilters();
+  const selectedStatuses = (filters.params.get("status") ?? "")
+    .split(",")
+    .filter((status): status is SessionStatus =>
+      STATUS_OPTIONS.includes(status as SessionStatus),
+    );
+  const statuses: SessionStatus[] = selectedStatuses.length
+    ? [...new Set(selectedStatuses)]
+    : ["running", "idle", "rescheduling"];
+  const order = filters.params.get("order") === "asc" ? "asc" : "desc";
+  function setStatuses(values: SessionStatus[]) {
+    const active = values.length === 3 && !values.includes("terminated");
+    filters.update({
+      status: !values.length || active ? null : values.join(","),
+    });
+  }
+  function setOrder(value: "asc" | "desc") {
+    filters.update({ order: value === "desc" ? null : value });
+  }
   const statusLabel =
     statuses.length === 4
       ? "All"
@@ -105,16 +129,27 @@ export default function SessionsPage() {
         : statuses
             .map((status) => status[0].toUpperCase() + status.slice(1))
             .join(", ");
-  const [deploymentId, setDeploymentId] = useState("all");
+  const deploymentId = filters.params.get("deployment") || "all";
+  function setDeploymentId(value: string) {
+    filters.update({ deployment: value === "all" ? null : value });
+  }
   const deployments = useDeploymentOptions();
-  const [agentId, setAgentId] = useState<string>("all");
+  const agentId = filters.params.get("agent") || "all";
+  function setAgentId(value: string) {
+    filters.update({ agent: value === "all" ? null : value });
+  }
   // The gte freezes at selection time so the query key stays stable.
-  const [created, setCreated] = useState<{
-    key: CreatedPresetKey;
-    gte?: string;
-  }>({ key: "all" });
+  const createdKey = filters.params.get("created");
+  const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
   // Sessions are the one bidirectional list: the wire supplies both cursors.
-  const [page, setPage] = useState<string | undefined>(undefined);
+  const [cursor, setCursor] = useState<{ key: string; page?: string }>({
+    key: filters.key,
+  });
+  const page = cursor.key === filters.key ? cursor.page : undefined;
+  if (cursor.key !== filters.key) setCursor({ key: filters.key });
+  function setPage(page: string | undefined) {
+    setCursor({ key: filters.key, page });
+  }
   const agentOptions = useAgentOptions();
   const { data, error, isPending } = useSessions({
     page,
@@ -123,6 +158,7 @@ export default function SessionsPage() {
     order,
     agent_id: agentId === "all" ? undefined : agentId,
     "created_at[gte]": created.gte,
+    "created_at[lte]": created.lte,
   });
 
   const filtered =
@@ -132,11 +168,13 @@ export default function SessionsPage() {
     statuses.length !== 3 ||
     statuses.includes("terminated");
   function resetFilters() {
-    setDeploymentId("all");
-    setAgentId("all");
-    setCreated({ key: "all" });
-    setStatuses(["running", "idle", "rescheduling"]);
-    setOrder("desc");
+    filters.update({
+      deployment: null,
+      agent: null,
+      created: null,
+      status: null,
+      order: null,
+    });
     setPage(undefined);
   }
 
@@ -154,8 +192,10 @@ export default function SessionsPage() {
         <ExactResourceLookup resource="session" path="/sessions" />
         <CreatedFilter
           value={created.key}
-          onChange={(key) => {
-            setCreated({ key, gte: createdGte(key) });
+          range={created.range}
+          sessionPresets
+          onChange={(key, range) => {
+            filters.update({ created: encodeCreatedFilter(key, range) });
             setPage(undefined);
           }}
         />
