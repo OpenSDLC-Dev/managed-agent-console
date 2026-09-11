@@ -105,6 +105,9 @@ describe("DeploymentsPage", () => {
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
     expect(push).not.toHaveBeenCalled();
     await userEvent.click(screen.getByText("Weekly research digest"));
     expect(push).toHaveBeenCalledWith(`/deployments/${deployments[0].id}`);

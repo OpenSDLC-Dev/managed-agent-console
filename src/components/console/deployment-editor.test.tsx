@@ -499,3 +499,17 @@ it("deletes special metadata keys as own properties", () => {
   ).metadata;
   expect(JSON.stringify(metadata)).toBe('{"__proto__":null,"toString":null}');
 });
+
+it.each(["", "  \n "])(
+  "treats cleared metadata as an empty patch: %j",
+  (metadata) => {
+    expect(
+      deploymentBodyFromForm({ ...newDeploymentForm(), metadata }).metadata,
+    ).toEqual({});
+    expect(
+      deploymentBodyFromForm({ ...newDeploymentForm(), metadata }, undefined, {
+        owner: "old",
+      }).metadata,
+    ).toEqual({ owner: null });
+  },
+);

@@ -93,7 +93,10 @@ export function deploymentBodyFromForm(
   resources?: ResourceInput[],
   previousMetadata?: Record<string, string>,
 ): DeploymentWriteBody {
-  const metadata = JSON.parse(form.metadata) as Record<string, string>;
+  const metadata = JSON.parse(form.metadata.trim() || "{}") as Record<
+    string,
+    string
+  >;
   const metadataPatch: Record<string, string | null> = Object.fromEntries([
     ...Object.entries(metadata),
     ...Object.keys(previousMetadata ?? {})
