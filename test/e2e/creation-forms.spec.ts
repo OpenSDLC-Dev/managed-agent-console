@@ -116,7 +116,15 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   await dialog.getByRole("radio", { name: "Schedule", exact: true }).check();
   await dialog.getByRole("button", { name: "Edit cron" }).click();
   await dialog.getByLabel("Cron expression").fill("30 8 * * 1-5");
-  await dialog.getByLabel("IANA timezone").fill("Asia/Shanghai");
+  await dialog
+    .getByRole("combobox", { name: "IANA timezone", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Search timezones" })
+    .fill("Shanghai");
+  await page
+    .getByRole("option", { name: "Asia/Shanghai", exact: true })
+    .click();
   await dialog.getByRole("radio", { name: "Manual", exact: true }).check();
   await dialog.getByRole("radio", { name: "Schedule", exact: true }).check();
   await dialog.getByRole("button", { name: "Edit cron" }).click();
@@ -156,4 +164,35 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   await expect(
     page.getByRole("heading", { name: "Morning triage" }),
   ).toBeVisible();
+});
+
+test("timezone search can cancel, select by keyboard and preserve aliases on edit", async ({
+  page,
+}) => {
+  await signIn(page, "/deployments/depl_weeklyresearch000001/edit");
+  const trigger = page.getByRole("combobox", {
+    name: "IANA timezone",
+    exact: true,
+  });
+  await trigger.click();
+  const search = page.getByRole("combobox", { name: "Search timezones" });
+  await search.fill("Shanghai");
+  await search.press("Escape");
+  await expect(trigger).toContainText("UTC");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await search.fill("US/Eastern");
+  await search.press("ArrowDown");
+  await search.press("Enter");
+  await expect(trigger).toContainText("US/Eastern");
+  const submitted = page.waitForRequest(
+    (req) =>
+      req.method() === "POST" &&
+      req.url().endsWith("/v1/deployments/depl_weeklyresearch000001"),
+  );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  expect((await submitted).postDataJSON().schedule.timezone).toBe("US/Eastern");
+  await expect(page).toHaveURL(/deployments\/depl_weeklyresearch000001$/);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(trigger).toContainText("US/Eastern");
 });

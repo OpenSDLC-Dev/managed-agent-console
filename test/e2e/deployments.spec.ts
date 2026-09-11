@@ -64,7 +64,15 @@ test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await page.getByRole("radio", { name: "Schedule", exact: true }).check();
   await page.getByRole("button", { name: "Edit cron" }).click();
   await page.getByLabel("Cron expression").fill("30 8 * * 1-5");
-  await page.getByLabel("IANA timezone").fill("Asia/Shanghai");
+  await page
+    .getByRole("combobox", { name: "IANA timezone", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Search timezones" })
+    .fill("Shanghai");
+  await page
+    .getByRole("option", { name: "Asia/Shanghai", exact: true })
+    .click();
   await page.getByRole("button", { name: "Create deployment" }).click();
 
   await expect(page).toHaveURL(/\/deployments\/depl_mock/);

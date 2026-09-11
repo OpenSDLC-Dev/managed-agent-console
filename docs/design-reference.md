@@ -443,3 +443,8 @@ platform implements no name predicate, so the console offers exact-ID navigation
 Memory creation bounds come from memorystores.go; deployment agent_id comes from
 deployments.go. The platform only lists newest-first and cannot isolate archived
 memory stores, so the existing Include archived option retains its literal meaning.
+
+The reference schedule timezone trigger opens a searchable list. Console
+suggestions come from the browser IANA list; exact custom values remain selectable
+because platform internal/cron uses its own embedded zoneinfo and accepts aliases
+that Intl may omit. The platform remains responsible for validation and next runs.

@@ -1,4 +1,5 @@
 "use client";
+import { TimezonePicker } from "./timezone-picker";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,12 +103,7 @@ export function DeploymentSchedule({
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="deployment-timezone">IANA timezone</Label>
-          <Input
-            id="deployment-timezone"
-            value={timezone}
-            onChange={(event) => onTimezoneChange(event.target.value)}
-          />
+          <TimezonePicker value={timezone} onChange={onTimezoneChange} />
         </div>
       </div>
       {draft.frequency === "Custom cron" ? (

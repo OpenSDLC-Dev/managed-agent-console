@@ -721,6 +721,25 @@ export const SURFACES: Surface[] = [
       },
     },
   ]),
+  ...[false, true].map((narrow): Surface => ({
+    id: "deployment-timezone" + (narrow ? "-narrow" : ""),
+    route: "/deployments",
+    fixture: "searchable schedule timezone",
+    description: "Timezone popup with filtered IANA suggestions.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("button", { name: "Create deployment", exact: true })
+        .click();
+      await page.getByRole("radio", { name: "Schedule", exact: true }).check();
+      await page
+        .getByRole("combobox", { name: "IANA timezone", exact: true })
+        .click();
+      await page
+        .getByRole("combobox", { name: "Search timezones" })
+        .fill("America/New");
+    },
+  })),
   {
     id: "deployment-create-schedule",
     route: "/deployments",
