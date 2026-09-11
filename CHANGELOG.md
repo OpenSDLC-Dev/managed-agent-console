@@ -139,6 +139,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Background Agent refreshes retain the current edit draft and optimistic version until the operator explicitly reloads.
+
 - List filters permanently reset pagination, including when returning to a previous filter. Deployment page actions wrap on narrow screens.
 
 - **The sidebar is grouped, following the reference console's structure.** `Dashboard` and `API keys`

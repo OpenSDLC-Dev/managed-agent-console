@@ -318,12 +318,14 @@ export function AgentEditor({
   agentId,
   version,
   onCancel,
+  onReload,
 }: {
   mode: "create" | "edit";
   initial: FormState;
   agentId?: string;
   version?: number;
   onCancel?: () => void;
+  onReload?: () => void;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"rendered" | "raw">("rendered");
@@ -1064,7 +1066,13 @@ export function AgentEditor({
             Someone else updated this agent (409).{" "}
             <button
               className="underline"
-              onClick={() => leave.requestLeave(() => router.refresh())}
+              onClick={() =>
+                leave.requestLeave(() => {
+                  leave.setDirty(true);
+                  if (onReload) onReload();
+                  else router.refresh();
+                })
+              }
             >
               Reload the latest version
             </button>{" "}

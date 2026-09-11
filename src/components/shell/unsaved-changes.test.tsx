@@ -3,6 +3,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Link from "next/link";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SignedInAs } from "./signed-in-as";
 import { StrictMode, useState } from "react";
 import { UnsavedChangesProvider, useUnsavedChanges } from "./unsaved-changes";
 const push = vi.fn();
@@ -10,6 +12,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 function Draft({ leave }: { leave: () => void }) {
   const [dirty, setDirty] = useState(false);
@@ -69,4 +72,37 @@ it("guards internal links and clears the browser unload guard after saving", asy
   window.dispatchEvent(clean);
   expect(clean.defaultPrevented).toBe(false);
   fireEvent.click(screen.getByText("Saved"));
+});
+
+it("does not destroy the sign-in session while an operator chooses Stay", async () => {
+  const fetchMock = vi.fn(
+    async () =>
+      new Response(JSON.stringify({ signed_in: true, name: "Operator" }), {
+        status: 200,
+      }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <UnsavedChangesProvider>
+        <Draft leave={vi.fn()} />
+        <SignedInAs />
+      </UnsavedChangesProvider>
+    </QueryClientProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByLabelText("Draft"));
+  await user.click(await screen.findByRole("button", { name: "Sign out" }));
+  await user.click(await screen.findByRole("button", { name: "Stay" }));
+  expect(fetchMock.mock.calls).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  await user.click(await screen.findByRole("button", { name: "Leave" }));
+  expect(fetchMock.mock.calls).toHaveLength(2);
+  const unloading = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(unloading);
+  expect(unloading.defaultPrevented).toBe(false);
 });
