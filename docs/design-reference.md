@@ -392,3 +392,19 @@ environment-edit, environment-create, environment-cloud-detail,
 environment-edit-inline, environment-inspector, environment-inspector-api,
 environment-inspector-narrow, environment-inspector-missing,
 environment-selection, environment-selection-confirm and skill-inspector.
+
+## Creation workflows — checked 2026-09-11
+
+Chrome/DevTools measured the memory-store dialog at 520px and deployment dialog
+at 880px, with 24px insets, 22px/28px titles and 76px description/message fields.
+Deployment sections use a 220px explanation column with a 32px gap. Both open
+over their lists; closing restores the trigger without adding browser history.
+
+Deployment creation uses a plain initial message, Manual/Schedule controls and
+Frequency options: Every minute, Every hour, Daily, Weekdays, Weekly, Custom cron.
+Edit cron switches to the raw five-field expression without changing its value.
+The platform owns occurrence calculation (internal/cron); draft previews are absent
+because there is no preview endpoint. Existing deployment details show returned
+upcoming_runs_at. Budget remains absent because deployments.go rejects that key.
+Advanced events preserve arrays, structured content and outcome definitions;
+metadata stays available as an optional disclosure. Direct creation URLs remain.

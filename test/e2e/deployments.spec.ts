@@ -54,11 +54,15 @@ test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await signIn(page);
   await page.goto("/deployments/new");
   await page.getByLabel("Name").fill("Morning triage");
+  await page
+    .getByRole("textbox", { name: "Initial message" })
+    .fill("Review pending work");
   await page.getByLabel("Agent", { exact: true }).click();
   await page.getByRole("option", { name: /General task agent · v1/ }).click();
   await page.getByLabel("Environment", { exact: true }).click();
   await page.getByRole("option", { name: /byoc-workers/ }).click();
-  await page.getByLabel("Run on a schedule").check();
+  await page.getByRole("radio", { name: "Schedule", exact: true }).check();
+  await page.getByRole("button", { name: "Edit cron" }).click();
   await page.getByLabel("Cron expression").fill("30 8 * * 1-5");
   await page.getByLabel("IANA timezone").fill("Asia/Shanghai");
   await page.getByRole("button", { name: "Create deployment" }).click();

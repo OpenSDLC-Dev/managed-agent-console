@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Button } from "@/components/ui/button";
+import { CreateDeploymentButton } from "@/components/console/create-deployment-dialog";
 import {
   Select,
   SelectContent,
@@ -106,15 +105,7 @@ export default function DeploymentsPage() {
       <PageHeader
         title="Deployments"
         subtitle={SURFACES.deployments.blurb}
-        actions={
-          <Button
-            size="sm"
-            className="h-8"
-            onClick={() => router.push("/deployments/new")}
-          >
-            <Plus className="size-4" /> Create deployment
-          </Button>
-        }
+        actions={<CreateDeploymentButton />}
       />
       <div className="pb-4">
         <Select value={view} onValueChange={(value) => setView(value as View)}>

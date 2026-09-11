@@ -611,6 +611,75 @@ export const SURFACES: Surface[] = [
         .waitFor({ state: "attached" });
     },
   },
+
+  ...["memory-store", "deployment"].flatMap((kind): Surface[] => [
+    {
+      id: kind + "-create",
+      route: kind === "deployment" ? "/deployments" : "/memory-stores",
+      fixture: "empty creation form",
+      description: "Measured creation dialog over the resource list.",
+      setup: async (page) => {
+        await page
+          .getByRole("button", {
+            name:
+              kind === "deployment"
+                ? "Create deployment"
+                : "Create memory store",
+            exact: true,
+          })
+          .click();
+      },
+    },
+    {
+      id: kind + "-create-narrow",
+      route: kind === "deployment" ? "/deployments" : "/memory-stores",
+      fixture: "390px creation form",
+      description: "Creation dialog at a phone viewport.",
+      setup: async (page) => {
+        await page
+          .getByRole("button", {
+            name:
+              kind === "deployment"
+                ? "Create deployment"
+                : "Create memory store",
+            exact: true,
+          })
+          .click();
+        await page.setViewportSize({ width: 390, height: 844 });
+      },
+    },
+  ]),
+  {
+    id: "deployment-create-schedule",
+    route: "/deployments",
+    fixture: "schedule fields",
+    description: "Schedule trigger inside the creation dialog.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create deployment", exact: true })
+        .click();
+      await page.getByRole("radio", { name: "Schedule", exact: true }).check();
+    },
+  },
+  {
+    id: "deployment-create-advanced",
+    route: "/deployments",
+    fixture: "advanced events",
+    description: "Advanced event JSON without dropping platform fields.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create deployment", exact: true })
+        .click();
+      await page.getByRole("radio", { name: "Advanced events" }).check();
+    },
+  },
+  {
+    id: "deployment-edit",
+    route: `/deployments/${DEPLOYMENT}/edit`,
+    fixture: "scheduled deployment",
+    description:
+      "Edit a persisted deployment without changing its pinned agent or events.",
+  },
   {
     id: "deployment-new",
     route: "/deployments/new",
