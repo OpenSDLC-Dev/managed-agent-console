@@ -632,6 +632,16 @@ export const SURFACES: Surface[] = [
       })),
     ),
   ),
+
+  ...["memory-stores", "deployments"].map((kind): Surface => ({
+    id: kind + "-filters-narrow",
+    route: "/" + kind,
+    fixture: "390px list controls",
+    description: "Exact lookup and filters at a phone viewport.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+    },
+  })),
   {
     id: "session-new",
     route: "/sessions/new",

@@ -433,3 +433,13 @@ focus on Escape followed by Tab. The console exposes the same help through
 aria-describedby, consumes that Escape before the surrounding dialog, and keeps
 JSON drafts intact until they parse. Shift-Tab remains normal backward focus
 navigation. This interaction changes no platform schema validation.
+
+## List controls — checked 2026-09-11
+
+Memory stores show ID, Name, Status, Created and Actions, with Created and Status
+filters. Deployments show ID, Name, Status, Agent, Trigger, Created and Actions,
+with an Agent filter. Both reference search boxes accept names or exact IDs; the
+platform implements no name predicate, so the console offers exact-ID navigation.
+Memory creation bounds come from memorystores.go; deployment agent_id comes from
+deployments.go. The platform only lists newest-first and cannot isolate archived
+memory stores, so the existing Include archived option retains its literal meaning.

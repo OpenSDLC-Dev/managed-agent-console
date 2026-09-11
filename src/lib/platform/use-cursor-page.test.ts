@@ -54,4 +54,15 @@ describe("useCursorPage", () => {
     expect(result.current.page).toBeUndefined();
     expect(result.current.hasPrev).toBe(false);
   });
+  it("does not restore an old cursor when a filter returns to its previous value", () => {
+    const { result, rerender } = renderHook(
+      ({ resetKey }) => useCursorPage(resetKey),
+      { initialProps: { resetKey: "all" } },
+    );
+    act(() => result.current.goNext("page2"));
+    rerender({ resetKey: "filtered" });
+    rerender({ resetKey: "all" });
+    expect(result.current.page).toBeUndefined();
+    expect(result.current.hasPrev).toBe(false);
+  });
 });

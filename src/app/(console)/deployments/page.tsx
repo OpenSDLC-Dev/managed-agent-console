@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateDeploymentButton } from "@/components/console/create-deployment-dialog";
@@ -22,7 +23,11 @@ import {
   UnavailableSurface,
 } from "@/components/console/bits";
 import { ResourceActions } from "@/components/console/resource-actions";
-import { useArchiveDeployment, useDeployments } from "@/lib/platform/queries";
+import {
+  useArchiveDeployment,
+  useDeployments,
+  useAgentOptions,
+} from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Deployment } from "@/lib/platform/types";
@@ -65,7 +70,7 @@ const COLUMNS: Column<Deployment>[] = [
   },
   {
     key: "schedule",
-    header: "Schedule",
+    header: "Trigger",
     cell: (row) =>
       row.schedule ? (
         <span className="font-mono text-[13px]">{row.schedule.expression}</span>
@@ -74,9 +79,9 @@ const COLUMNS: Column<Deployment>[] = [
       ),
   },
   {
-    key: "updated",
-    header: "Updated",
-    cell: (row) => <Day iso={row.updated_at} />,
+    key: "created",
+    header: "Created",
+    cell: (row) => <Day iso={row.created_at} />,
   },
   {
     key: "actions",
@@ -90,9 +95,12 @@ type View = "live" | "active" | "paused" | "archived";
 export default function DeploymentsPage() {
   const router = useRouter();
   const [view, setView] = useState<View>("live");
-  const pager = useCursorPage(view);
+  const [agentId, setAgentId] = useState("all");
+  const agents = useAgentOptions();
+  const pager = useCursorPage(view + "|" + agentId);
   const query = useDeployments({
     page: pager.page,
+    agent_id: agentId === "all" ? undefined : agentId,
     ...(view === "archived" ? { include_archived: true } : {}),
     ...(view === "active" || view === "paused" ? { status: view } : {}),
   });
@@ -104,13 +112,55 @@ export default function DeploymentsPage() {
     <div>
       <PageHeader
         title="Deployments"
+        className="flex-wrap"
         subtitle={SURFACES.deployments.blurb}
         actions={<CreateDeploymentButton />}
       />
-      <div className="pb-4">
+      <div className="flex flex-wrap items-center gap-3 pb-4">
+        <ExactResourceLookup resource="deployment" path="/deployments" />
+        <Select
+          value={agentId}
+          onValueChange={(value) => setAgentId(value ?? "all")}
+        >
+          <SelectTrigger aria-label="Agent filter" className="h-8 max-w-full">
+            <SelectValue>
+              {agentId === "all"
+                ? "All agents"
+                : agents.data?.agents.find((agent) => agent.id === agentId)
+                    ?.name || agentId}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All agents</SelectItem>
+            {(agents.data?.agents ?? []).map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                {agent.name || agent.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {agents.isError && (
+          <span className="text-xs text-muted-foreground">
+            Agent options could not be loaded.
+          </span>
+        )}
+        {agents.data?.truncated && (
+          <span className="text-xs text-muted-foreground">
+            Showing the first 1,000 agents.
+          </span>
+        )}
         <Select value={view} onValueChange={(value) => setView(value as View)}>
           <SelectTrigger aria-label="Deployment status" className="h-8 w-44">
-            <SelectValue />
+            <SelectValue>
+              {
+                {
+                  live: "All live",
+                  active: "Active",
+                  paused: "Paused",
+                  archived: "Include archived",
+                }[view]
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="live">All live</SelectItem>
