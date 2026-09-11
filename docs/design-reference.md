@@ -21,9 +21,9 @@ retain their top-level directory, which a normal browser file picker loses.
 
 ## Session resources — checked 2026-09-06
 
-The previous reference inspection established the compact session detail pattern,
-but the Managed Agents area is no longer reachable with the available account, so
-this slice does not claim a fresh reference comparison. The console uses that
+The previous inspection established the compact session detail pattern. On
+2026-09-11 the reference lists were accessible but contained no sessions, so
+this slice does not claim a fresh populated-detail comparison. The console uses that
 existing detail-section pattern for resource rows and dialogs. Its lifecycle is
 forced by the platform: files can be added after creation and removed; repository
 and memory-store attachments are creation-time inputs; repositories remain for a
@@ -32,9 +32,9 @@ fidelity surface records the mounted-file state until reference access is restor
 
 ## Deployments — checked 2026-09-08
 
-The Managed Agents reference remains behind an unavailable sign-in, so this
-slice reuses the recorded compact list, detail-section, action-menu and form
-patterns without claiming a fresh reference comparison. Platform-specific run
+The reference list and creation controls were rechecked on 2026-09-11; populated
+deployment details remain unavailable in the empty reference account. This slice
+reuses the recorded detail-section and action-menu patterns for those states. Platform-specific run
 history stays inline on the deployment detail so operators retain the schedule
 and deployment context while following its run records. A run detail page also
 shows the trigger, linked session and stored error. The five new deployment
@@ -464,6 +464,19 @@ Reference Sessions offer exact-ID lookup, Agent and Deployment filters, and a
 multiselect Status popup. Active selects running, idle and rescheduling; clearing
 selection restores that default. Created is sortable. Platform sessions.go serves
 deployment_id, repeated statuses and order=asc/desc. Archived deployments remain
-in the options because their sessions remain filterable. The reference also
-persists filter choices in the URL; that state/history alignment remains tracked
-in #141 with Created custom ranges.
+in the options because their sessions remain filterable. Filter choices persist
+in the URL and reset list cursors when restored through history.
+
+## Created ranges and filter history — checked 2026-09-11
+
+Reference Created expands Custom range with Start/End text fields, separate
+calendars and Apply. Either bound may be empty; dates persist as
+created=YYYY-MM-DD~YYYY-MM-DD. Sessions additionally offer Today, Last hour and
+Last day. Filtered empty states offer Reset filters.
+
+The console interprets dates in the browser local zone and says so beside Apply;
+the reference's zone conversion was not observed. Bounds are inclusive, using
+created_at[gte]/[lte] from agents.go, sessions.go and memorystores.go.
+Range drafts commit on Apply; Escape/Cancel keep the prior selection.
+Preset bounds freeze while selected. Reload or restoring another preset computes
+a new relative bound. Unknown URL values fall back to supported defaults.

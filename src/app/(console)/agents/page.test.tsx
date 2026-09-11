@@ -1,3 +1,4 @@
+import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -15,7 +16,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/agents",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => useTestSearchParams(),
 }));
 
 // base-ui's portal Select is not reliably drivable in jsdom — replace the

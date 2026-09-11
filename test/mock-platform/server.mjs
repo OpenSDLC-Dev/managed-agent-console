@@ -992,7 +992,15 @@ function route(req, url) {
   if (path === "/v1/agents") {
     let rows = includeArchived ? agentsStore : agentsStore.filter(notArchived);
     const createdGte = url.searchParams.get("created_at[gte]");
-    if (createdGte) rows = rows.filter((r) => r.created_at >= createdGte);
+    if (createdGte)
+      rows = rows.filter(
+        (r) => Date.parse(r.created_at) >= Date.parse(createdGte),
+      );
+    const createdLte = url.searchParams.get("created_at[lte]");
+    if (createdLte)
+      rows = rows.filter(
+        (r) => Date.parse(r.created_at) <= Date.parse(createdLte),
+      );
     return keysetPage(rows, url);
   }
   const agentMatch = path.match(/^\/v1\/agents\/([^/]+)$/);
@@ -1029,7 +1037,15 @@ function route(req, url) {
     if (deploymentId)
       rows = rows.filter((row) => row.deployment_id === deploymentId);
     const createdGte = url.searchParams.get("created_at[gte]");
-    if (createdGte) rows = rows.filter((r) => r.created_at >= createdGte);
+    if (createdGte)
+      rows = rows.filter(
+        (r) => Date.parse(r.created_at) >= Date.parse(createdGte),
+      );
+    const createdLte = url.searchParams.get("created_at[lte]");
+    if (createdLte)
+      rows = rows.filter(
+        (r) => Date.parse(r.created_at) <= Date.parse(createdLte),
+      );
     // Platform keyset order is (created_at, id), descending by default.
     const ascending = url.searchParams.get("order") === "asc";
     rows = [...rows].sort((a, b) => {
@@ -1109,8 +1125,14 @@ function route(req, url) {
       : memoryStoresStore.filter(notArchived);
     const createdGte = url.searchParams.get("created_at[gte]");
     const createdLte = url.searchParams.get("created_at[lte]");
-    if (createdGte) rows = rows.filter((row) => row.created_at >= createdGte);
-    if (createdLte) rows = rows.filter((row) => row.created_at <= createdLte);
+    if (createdGte)
+      rows = rows.filter(
+        (row) => Date.parse(row.created_at) >= Date.parse(createdGte),
+      );
+    if (createdLte)
+      rows = rows.filter(
+        (row) => Date.parse(row.created_at) <= Date.parse(createdLte),
+      );
     return keysetPage(rows, url);
   }
   const memoryStoreMatch = path.match(/^\/v1\/memory_stores\/([^/]+)$/);

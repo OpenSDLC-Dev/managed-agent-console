@@ -54,6 +54,7 @@ export function useAgents(params: {
   include_archived?: boolean;
   limit?: number;
   "created_at[gte]"?: string;
+  "created_at[lte]"?: string;
 }) {
   return useQuery({
     queryKey: ["agents", params],
@@ -148,6 +149,7 @@ export function useSessions(params: {
   order?: "asc" | "desc";
   include_archived?: boolean;
   "created_at[gte]"?: string;
+  "created_at[lte]"?: string;
 }) {
   return useQuery({
     queryKey: ["sessions", params],

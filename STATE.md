@@ -7,8 +7,8 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 **Reference interaction parity** — requested 2026-09-11.
 Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Inspect reference session lookup, multi-status, deployment and sorting controls.
-- [x] Connect supported session predicates and archived deployment options.
+- [x] Inspect reference custom ranges, short-period presets and URL filters.
+- [x] Implement date bounds and list filter/history restoration.
 - [x] Complete coverage and both-theme fidelity verification.
 - [ ] Pass CI and resolve reviews before squash merge.
 

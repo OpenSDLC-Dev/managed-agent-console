@@ -39,12 +39,12 @@ vi.mock("@/components/ui/select", async () => {
         { type: "button", "aria-label": props["aria-label"] },
         props.children,
       ),
-    SelectValue: () => {
+    SelectValue: ({ children }: { children?: React.ReactNode }) => {
       const ctx = React.useContext(Ctx);
       return React.createElement(
         "span",
         { "data-testid": "select-value" },
-        ctx.value,
+        children ?? ctx.value,
       );
     },
     SelectContent: ({ children }: { children?: React.ReactNode }) =>
@@ -73,12 +73,12 @@ describe("StatusFilter", () => {
     expect(
       screen.getByRole("button", { name: "Status filter" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("select-value")).toHaveTextContent("active");
+    expect(screen.getByTestId("select-value")).toHaveTextContent("Active");
   });
 
   it("selects All when archived resources are included", () => {
     render(<StatusFilter includeArchived onChange={vi.fn()} />);
-    expect(screen.getByTestId("select-value")).toHaveTextContent("all");
+    expect(screen.getByTestId("select-value")).toHaveTextContent("All");
   });
 
   it("reports true when All is chosen", async () => {
