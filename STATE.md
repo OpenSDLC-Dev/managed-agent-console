@@ -9,7 +9,7 @@ Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141
 
 - [x] Verify schema Tab indentation and Escape-then-Tab exit in Chrome.
 - [x] Implement keyboard draft editing and accessible help.
-- [ ] Verify modal behavior, coverage and both-theme fidelity.
+- [x] Verify modal behavior, coverage and both-theme fidelity.
 - [ ] Pass CI and resolve reviews before squash merge.
 
 Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142),

@@ -1039,6 +1039,7 @@ export const SURFACES: Surface[] = [
       const tool = page.locator('[data-tool-type="custom"]');
       await tool.getByText("Definition", { exact: true }).click();
       await tool.getByLabel("Input schema").focus();
+      await tool.getByLabel("Input schema").scrollIntoViewIfNeeded();
     },
   })),
   {
