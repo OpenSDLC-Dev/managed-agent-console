@@ -112,6 +112,7 @@ export default function DeploymentsPage() {
     <div>
       <PageHeader
         title="Deployments"
+        className="flex-wrap"
         subtitle={SURFACES.deployments.blurb}
         actions={<CreateDeploymentButton />}
       />

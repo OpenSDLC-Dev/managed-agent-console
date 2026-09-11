@@ -36,6 +36,11 @@ test("memory lookup reaches archived records and creation filtering resets pagin
   await expect(
     page.getByRole("button", { name: "Previous page" }),
   ).toBeDisabled();
+  await page.getByRole("combobox", { name: "Created filter" }).click();
+  await page.getByRole("option", { name: "All time", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Previous page" }),
+  ).toBeDisabled();
   await page
     .getByRole("textbox", { name: "Find memory store by ID" })
     .fill("memstore_archivednotes0001");
@@ -74,10 +79,10 @@ test("deployment Agent filter submits the server predicate and lookup encodes pa
   await expect(
     page.getByText("Weekly research digest", { exact: true }),
   ).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 800 });
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
-    .toBeLessThanOrEqual(390);
+    .toBeLessThanOrEqual(360);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page
     .getByRole("textbox", { name: "Find deployment by ID" })

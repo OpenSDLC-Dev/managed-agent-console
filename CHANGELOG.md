@@ -134,6 +134,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- List filters permanently reset pagination, including when returning to a previous filter. Deployment page actions wrap on narrow screens.
+
 - **The sidebar is grouped, following the reference console's structure.** `Dashboard` and `API keys`
   at the top level, then a `Build` group (Files, Skills) and a `Managed Agents` group (Agents,
   Sessions, Environments, Credential vaults) — the reference's order, and its order inside each

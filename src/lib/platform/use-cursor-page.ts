@@ -20,6 +20,9 @@ export function useCursorPage(resetKey: string) {
       ? state
       : { key: resetKey, page: undefined, stack: [] };
 
+  // Persist the reset even if the user changes back before paging again.
+  if (state.key !== resetKey) setState(current);
+
   return {
     page: current.page,
     hasPrev: current.stack.length > 0,
