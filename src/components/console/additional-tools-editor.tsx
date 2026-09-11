@@ -1,6 +1,7 @@
 "use client";
 
 import { useId } from "react";
+import { SchemaTextarea } from "./schema-textarea";
 import { Plus, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,7 +276,14 @@ export function AdditionalToolsEditor({
                   <Label htmlFor={`${prefix}-tool-${index}-schema`}>
                     Input schema
                   </Label>
-                  <textarea
+                  <p
+                    id={`${prefix}-schema-help-${index}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Tab inserts indentation. Press Escape then Tab to move focus
+                    out of the editor.
+                  </p>
+                  <SchemaTextarea
                     id={`${prefix}-tool-${index}-schema`}
                     rows={7}
                     spellCheck={false}
@@ -284,15 +292,16 @@ export function AdditionalToolsEditor({
                       JSON.stringify(tool.input_schema, null, 2) ??
                       ""
                     }
-                    onChange={(e) =>
+                    onValueChange={(value) =>
                       onChange(tools, servers, {
                         ...schemaDrafts,
-                        [index]: e.target.value,
+                        [index]: value,
                       })
                     }
                     aria-invalid={Boolean(error)}
                     aria-describedby={
-                      error ? `${prefix}-schema-error-${index}` : undefined
+                      `${prefix}-schema-help-${index}` +
+                      (error ? ` ${prefix}-schema-error-${index}` : "")
                     }
                     className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
                   />

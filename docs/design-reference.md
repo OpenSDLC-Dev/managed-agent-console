@@ -425,3 +425,10 @@ Memory store. Memory bindings include a Manage link and multiline instructions.
 The console retains manual memory IDs alongside loaded suggestions because the
 platform list may be paginated or unavailable; resource shapes remain those in
 internal/api/session_resources.go. Uploads finish before creation is enabled.
+## Schema keyboard editing — checked 2026-09-11
+
+The reference custom-tool Input schema inserts two spaces on Tab and releases
+focus on Escape followed by Tab. The console exposes the same help through
+aria-describedby, consumes that Escape before the surrounding dialog, and keeps
+JSON drafts intact until they parse. Shift-Tab remains normal backward focus
+navigation. This interaction changes no platform schema validation.
