@@ -585,3 +585,29 @@ it("removes the last package and metadata rows without losing a blank entry", as
   await user.click(screen.getByRole("button", { name: "Cancel" }));
   expect(done).toHaveBeenCalledOnce();
 });
+
+it("preserves unchanged empty metadata while unrelated fields change", () => {
+  const form = {
+    ...newEnvForm(),
+    name: "Renamed",
+    metadata: [
+      { key: "empty", value: "" },
+      { key: "owner", value: "" },
+    ],
+  };
+  expect(
+    bodyFromForm(form, "edit", { empty: "", owner: "old" }).metadata,
+  ).toEqual({ owner: "" });
+  expect(
+    bodyFromForm({ ...form, metadata: [{ key: "empty", value: "" }] }, "edit", {
+      empty: "",
+    }).metadata,
+  ).toBeUndefined();
+  expect(
+    bodyFromForm({ ...form, metadata: [] }, "edit", { empty: "" }).metadata,
+  ).toEqual({ empty: "" });
+  expect(bodyFromForm(form, "create").metadata).toEqual({
+    empty: "",
+    owner: "",
+  });
+});

@@ -48,9 +48,9 @@ test("environment inspector preserves the list, history, keyboard focus and API 
   await expect(
     panel.getByRole("heading", { name: "cloud-limited" }),
   ).toBeVisible();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
   expect(
     await new AxeBuilder({ page })
       .include('[aria-label="Environment details"]')
@@ -334,4 +334,41 @@ test("environment editor preserves package arguments and metadata through retry,
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Row editor",
   );
+});
+
+test("unrelated environment edits retain stored empty metadata until its row is removed", async ({
+  page,
+  request,
+}) => {
+  const headers = { "x-api-key": "test-key" };
+  const created = await (
+    await request.post("http://127.0.0.1:18080/v1/environments", {
+      headers,
+      data: {
+        name: "Empty metadata",
+        config: { type: "cloud" },
+        metadata: { empty: "" },
+      },
+    })
+  ).json();
+  const endpoint = "http://127.0.0.1:18080/v1/environments/" + created.id;
+  await signIn(page, "/environments/" + created.id);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Renamed environment");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  expect(
+    (await (await request.get(endpoint, { headers })).json()).metadata,
+  ).toEqual({ empty: "" });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Remove metadata row 1" }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  expect(
+    (await (await request.get(endpoint, { headers })).json()).metadata,
+  ).toEqual({});
 });

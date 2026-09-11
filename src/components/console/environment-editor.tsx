@@ -119,7 +119,19 @@ export function bodyFromForm(
   if (new Set(rows.map((row) => row.key)).size !== rows.length)
     throw new Error("Metadata keys must be unique.");
   const metadata = Object.fromEntries([
-    ...rows.map((row) => [row.key, row.value]),
+    // Creation can store an empty value; an update uses that same value to delete.
+    // Preserve untouched empty entries and use the missing-row branch for removal.
+    ...rows
+      .filter(
+        (row) =>
+          !(
+            mode === "edit" &&
+            row.value === "" &&
+            Object.hasOwn(previousMetadata, row.key) &&
+            previousMetadata[row.key] === ""
+          ),
+      )
+      .map((row) => [row.key, row.value]),
     ...(mode === "edit"
       ? Object.keys(previousMetadata)
           .filter((key) => !rows.some((row) => row.key === key))
