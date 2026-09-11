@@ -18,7 +18,6 @@ import {
   platformGet,
   platformPost,
   platformPostForm,
-  type ClassicPage,
   type Page,
 } from "./http";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./surfaces";
@@ -527,28 +526,28 @@ export function useSkillVersions(id: string, page?: string) {
   });
 }
 
-export function useFiles(afterId?: string) {
+export function useFiles(page?: string) {
   return useQuery({
-    queryKey: ["files", afterId],
+    queryKey: ["files", page],
     queryFn: () =>
-      platformGet<ClassicPage<PlatformFile>>("v1/files", {
+      platformGet<Page<PlatformFile>>("v1/files", {
         limit: 20,
-        after_id: afterId,
+        page,
       }),
     placeholderData: keepPreviousData,
   });
 }
 
-/** First 1,000 uploaded files for rubric suggestions; callers keep raw ID input. */
+/** First 1,000 files for rubric suggestions; callers keep raw ID input. */
 export function useFileOptions(enabled = true) {
   return useQuery({
     queryKey: ["file-options"],
     enabled,
     queryFn: async () => {
-      const res = await platformGet<ClassicPage<PlatformFile>>("v1/files", {
+      const res = await platformGet<Page<PlatformFile>>("v1/files", {
         limit: FILE_OPTIONS_PAGE_LIMIT,
       });
-      return { files: res.data, truncated: res.has_more };
+      return { files: res.data, truncated: !!res.next_page };
     },
   });
 }
@@ -736,6 +735,9 @@ export function useDeleteSession(id: string) {
     onSuccess: () => {
       client.removeQueries({ queryKey: ["session", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
+      // internal/api/sessions.go:deleteSession also removes session-produced files.
+      void client.invalidateQueries({ queryKey: ["files"] });
+      void client.invalidateQueries({ queryKey: ["file-options"] });
     },
   });
 }
@@ -1049,6 +1051,7 @@ export function useUploadFile() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["files"] });
+      void queryClient.invalidateQueries({ queryKey: ["file-options"] });
     },
   });
 }
@@ -1474,6 +1477,7 @@ export function useDeleteFile() {
       platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["files"] });
+      void queryClient.invalidateQueries({ queryKey: ["file-options"] });
     },
   });
 }

@@ -179,13 +179,11 @@ describe("SessionOutcomes", () => {
                 mime_type: "text/markdown",
                 size_bytes: 42,
                 downloadable: false,
-                scope: null,
+                expires_at: null,
                 created_at: "2026-09-09T08:00:00Z",
               },
             ],
-            has_more: false,
-            first_id: "file_rubric1",
-            last_id: "file_rubric1",
+            next_page: null,
           }),
     );
     vi.stubGlobal("fetch", fetchMock);

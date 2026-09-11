@@ -85,6 +85,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Files follow the platform cursor across deleted boundary rows and accept its current metadata shape. Session deletion warns that outputs are removed and refreshes file lists and rubric suggestions; uploads and direct file deletion refresh those suggestions too.
+
 - Dashboard now centers its responsive cards, exposes primary shortcuts and uses
   the reference's heading hierarchy. The sidebar folds into a compact rail and
   keeps navigation and its footer within the viewport.

@@ -894,7 +894,7 @@ export const files = [
     mime_type: "text/markdown",
     size_bytes: 48213,
     downloadable: false,
-    scope: null,
+    expires_at: null,
     created_at: T1,
   },
   {
@@ -905,6 +905,7 @@ export const files = [
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     size_bytes: 120400,
     downloadable: true,
+    expires_at: null,
     scope: { id: "sesn_research0000000000001", type: "session" },
     created_at: T2,
   },

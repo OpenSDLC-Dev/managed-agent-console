@@ -155,6 +155,9 @@ it("keeps archived sessions read-only and allows confirmed deletion", async () =
   expect(screen.queryByRole("menuitem", { name: "Archive" })).toBeNull();
   await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   expect(fetch).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog")).toHaveTextContent(
+    "Permanently delete this session, its event history, and the files it produced. Files uploaded through the Files API are retained.",
+  );
   await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/sessions"));
   expect(fetch.mock.calls[0]).toEqual([

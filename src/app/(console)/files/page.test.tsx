@@ -30,19 +30,17 @@ const file = (
   mime_type: "text/plain",
   size_bytes: 512,
   downloadable: false,
-  scope: null,
+  expires_at: null,
   created_at: "2026-08-01T09:12:00Z",
   ...over,
 });
 
-const classicPage = (
+const filePage = (
   data: PlatformFile[],
-  over?: { has_more?: boolean; last_id?: string | null },
+  over?: { next_page?: string | null },
 ) => ({
   data,
-  has_more: over?.has_more ?? false,
-  first_id: data[0]?.id ?? null,
-  last_id: over?.last_id ?? data.at(-1)?.id ?? null,
+  next_page: over?.next_page ?? null,
 });
 
 const json = (payload: unknown, status = 200) =>
@@ -127,7 +125,7 @@ describe("FilesPage", () => {
   });
 
   it("shows the empty state when there are no files", async () => {
-    stubFetch(() => json(classicPage([])));
+    stubFetch(() => json(filePage([])));
     renderPage();
     expect(await screen.findByText("No files yet")).toBeInTheDocument();
   });
@@ -135,7 +133,7 @@ describe("FilesPage", () => {
   it("renders file rows with size, scope, and downloadable flags", async () => {
     stubFetch(() =>
       json(
-        classicPage([
+        filePage([
           file({ id: "file_1", filename: "notes.txt" }),
           file({
             id: "file_2",
@@ -170,7 +168,7 @@ describe("FilesPage", () => {
     const fetchMock = stubFetch((url, init) => {
       if (init?.method === "POST" && url.pathname === "/api/platform/v1/files")
         return json(file({ id: "file_9", filename: "new.txt" }));
-      return json(classicPage([]));
+      return json(filePage([]));
     });
     renderPage();
     await screen.findByText("No files yet");
@@ -202,7 +200,7 @@ describe("FilesPage", () => {
           },
           413,
         );
-      return json(classicPage([]));
+      return json(filePage([]));
     });
     renderPage();
     await screen.findByText("No files yet");
@@ -219,7 +217,7 @@ describe("FilesPage", () => {
     const fetchMock = stubFetch((url, init) => {
       if (init?.method === "DELETE")
         return json({ id: "file_1", type: "file" });
-      return json(classicPage([file({ id: "file_1", filename: "notes.txt" })]));
+      return json(filePage([file({ id: "file_1", filename: "notes.txt" })]));
     });
     renderPage();
     await screen.findByText("notes.txt");
@@ -235,13 +233,13 @@ describe("FilesPage", () => {
     });
   });
 
-  it("pages forward via after_id and back through the client stack", async () => {
+  it("pages with the opaque next_page token and returns through the client stack", async () => {
     const fetchMock = stubFetch((url) =>
-      url.searchParams.get("after_id") === "file_1"
-        ? json(classicPage([file({ id: "file_2", filename: "page-two.txt" })]))
+      url.searchParams.get("page") === "opaque+/cursor="
+        ? json(filePage([file({ id: "file_2", filename: "page-two.txt" })]))
         : json(
-            classicPage([file({ id: "file_1", filename: "notes.txt" })], {
-              has_more: true,
+            filePage([file({ id: "file_1", filename: "notes.txt" })], {
+              next_page: "opaque+/cursor=",
             }),
           ),
     );
@@ -257,7 +255,8 @@ describe("FilesPage", () => {
       String(fetchMock.mock.calls.at(-1)?.[0]),
       "http://console.test",
     );
-    expect(next.searchParams.get("after_id")).toBe("file_1");
+    expect(next.searchParams.has("after_id")).toBe(false);
+    expect(next.searchParams.get("page")).toBe("opaque+/cursor=");
 
     await userEvent.click(
       screen.getByRole("button", { name: "Previous page" }),
@@ -267,7 +266,7 @@ describe("FilesPage", () => {
         String(fetchMock.mock.calls.at(-1)?.[0]),
         "http://console.test",
       );
-      expect(last.searchParams.get("after_id")).toBeNull();
+      expect(last.searchParams.get("page")).toBeNull();
     });
   });
 });

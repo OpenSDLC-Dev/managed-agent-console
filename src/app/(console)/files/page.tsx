@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Trash2, Upload } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
+import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { PlatformFile } from "@/lib/platform/types";
 
 function formatBytes(bytes: number): string {
@@ -69,12 +70,8 @@ const COLUMNS: Column<PlatformFile>[] = [
 ];
 
 export default function FilesPage() {
-  // Classic Files pagination: forward via after_id, back via a client stack.
-  const [after, setAfter] = useState<{
-    current?: string;
-    stack: (string | undefined)[];
-  }>({ stack: [] });
-  const { data, error, isPending } = useFiles(after.current);
+  const pager = useCursorPage("files");
+  const { data, error, isPending, isPlaceholderData } = useFiles(pager.page);
   const upload = useUploadFile();
   const remove = useDeleteFile();
   const input = useRef<HTMLInputElement>(null);
@@ -152,21 +149,10 @@ export default function FilesPage() {
             }
           />
           <Pager
-            hasPrev={after.stack.length > 0}
-            hasNext={!!data?.has_more}
-            onPrev={() =>
-              setAfter((s) => ({
-                current: s.stack[s.stack.length - 1],
-                stack: s.stack.slice(0, -1),
-              }))
-            }
-            onNext={() =>
-              data?.last_id &&
-              setAfter((s) => ({
-                current: data.last_id ?? undefined,
-                stack: [...s.stack, s.current],
-              }))
-            }
+            hasPrev={pager.hasPrev && !isPlaceholderData}
+            hasNext={!!data?.next_page && !isPlaceholderData}
+            onPrev={pager.goPrev}
+            onNext={() => data?.next_page && pager.goNext(data.next_page)}
           />
         </>
       )}
