@@ -342,7 +342,7 @@ describe("deployment editor wire mapping", () => {
       "Shanghai",
     );
     await userEvent.click(
-      await screen.findByRole("option", { name: "Asia/Shanghai" }),
+      await screen.findByRole("option", { name: /Asia\/Shanghai$/ }),
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Resource" }));

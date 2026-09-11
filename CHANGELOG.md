@@ -22,7 +22,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   Created, with deployment schedules under Trigger.
 
 - Deployment schedules offer searchable timezone selection and retain custom
-  platform-supported timezone identifiers.
+  platform-supported timezone identifiers. Suggestions show their current GMT offsets.
 
 - Environments open in a resizable inspector with exact-ID lookup and an API view.
   Selected rows support confirmed archive/delete with partial-failure retry, and

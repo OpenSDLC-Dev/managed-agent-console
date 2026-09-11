@@ -70,9 +70,7 @@ test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await page
     .getByRole("combobox", { name: "Search timezones" })
     .fill("Shanghai");
-  await page
-    .getByRole("option", { name: "Asia/Shanghai", exact: true })
-    .click();
+  await page.getByRole("option", { name: /Asia\/Shanghai$/ }).click();
   await page.getByRole("button", { name: "Create deployment" }).click();
 
   await expect(page).toHaveURL(/\/deployments\/depl_mock/);
