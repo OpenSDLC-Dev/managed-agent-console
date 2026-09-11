@@ -191,7 +191,8 @@ export function useDeployments(params: {
 export function useDeployment(id: string) {
   return useQuery({
     queryKey: ["deployment", id],
-    queryFn: () => platformGet<Deployment>(`v1/deployments/${id}`),
+    queryFn: () =>
+      platformGet<Deployment>(`v1/deployments/${encodeURIComponent(id)}`),
   });
 }
 
@@ -304,7 +305,8 @@ export function useMemoryStoreOptions() {
 export function useMemoryStore(id: string) {
   return useQuery({
     queryKey: ["memory-store", id],
-    queryFn: () => platformGet<MemoryStore>(`v1/memory_stores/${id}`),
+    queryFn: () =>
+      platformGet<MemoryStore>(`v1/memory_stores/${encodeURIComponent(id)}`),
   });
 }
 

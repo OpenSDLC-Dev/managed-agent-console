@@ -7,9 +7,9 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 **Reference interaction parity** — requested 2026-09-11.
 Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Verify schema Tab indentation and Escape-then-Tab exit in Chrome.
-- [x] Implement keyboard draft editing and accessible help.
-- [x] Verify modal behavior, coverage and both-theme fidelity.
+- [x] Inspect reference list columns and filter controls.
+- [x] Align Memory-store and Deployment lists with supported API filters.
+- [ ] Verify lookup, filter pagination, errors and both-theme fidelity.
 - [ ] Pass CI and resolve reviews before squash merge.
 
 Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142),

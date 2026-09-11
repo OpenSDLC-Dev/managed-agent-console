@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
+import {
+  CreatedFilter,
+  createdGte,
+  type CreatedPresetKey,
+} from "@/components/console/created-filter";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateMemoryStoreButton } from "@/components/console/create-memory-store-dialog";
@@ -35,11 +41,6 @@ const COLUMNS: Column<MemoryStore>[] = [
     cell: (store) => store.name,
   },
   {
-    key: "description",
-    header: "Description",
-    cell: (store) => store.description || "—",
-  },
-  {
     key: "status",
     header: "Status",
     cell: (store) => (
@@ -49,9 +50,9 @@ const COLUMNS: Column<MemoryStore>[] = [
     ),
   },
   {
-    key: "updated",
-    header: "Updated",
-    cell: (store) => <Day iso={store.updated_at} />,
+    key: "created",
+    header: "Created",
+    cell: (store) => <Day iso={store.created_at} />,
   },
   {
     key: "actions",
@@ -63,9 +64,14 @@ const COLUMNS: Column<MemoryStore>[] = [
 export default function MemoryStoresPage() {
   const router = useRouter();
   const [view, setView] = useState<"live" | "all">("live");
-  const pager = useCursorPage(view);
+  const [created, setCreated] = useState<{
+    key: CreatedPresetKey;
+    gte?: string;
+  }>({ key: "all" });
+  const pager = useCursorPage(view + "|" + created.key);
   const query = useMemoryStores({
     page: pager.page,
+    "created_at[gte]": created.gte,
     include_archived: view === "all" || undefined,
   });
   if (isUnimplemented(query.error))
@@ -78,7 +84,12 @@ export default function MemoryStoresPage() {
         subtitle={SURFACES["memory-stores"].blurb}
         actions={<CreateMemoryStoreButton />}
       />
-      <div className="pb-4">
+      <div className="flex flex-wrap items-center gap-3 pb-4">
+        <ExactResourceLookup resource="memory store" path="/memory-stores" />
+        <CreatedFilter
+          value={created.key}
+          onChange={(key) => setCreated({ key, gte: createdGte(key) })}
+        />
         <Select
           value={view}
           onValueChange={(value) => setView(value as typeof view)}

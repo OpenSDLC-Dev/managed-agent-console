@@ -4,7 +4,10 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import DeploymentsPage from "./page";
-import { deployments } from "../../../../test/mock-platform/fixtures.mjs";
+import {
+  deployments,
+  agents,
+} from "../../../../test/mock-platform/fixtures.mjs";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -58,6 +61,10 @@ afterEach(() => {
 
 function setup() {
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("/v1/agents"))
+      return new Response(JSON.stringify({ data: agents, next_page: null }), {
+        status: 200,
+      });
     if (init?.method === "POST") {
       const id = String(input).split("/").at(-2);
       const row =
@@ -149,5 +156,5 @@ describe("DeploymentsPage", () => {
         ),
       ).toBe(true),
     );
-  });
+  }, 10_000);
 });

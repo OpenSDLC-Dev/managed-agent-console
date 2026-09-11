@@ -15,6 +15,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   memory attachments. Memory instructions support multiple lines, and file uploads
   complete before creation is enabled.
 
+- Memory-store and deployment lists support exact-ID lookup; memory stores gain
+  creation-time filtering and deployments gain an Agent filter. Both lists show
+  Created, with deployment schedules under Trigger.
+
 - Environments open in a resizable inspector with exact-ID lookup and an API view.
   Selected rows support confirmed archive/delete with partial-failure retry, and
   detail editing saves or cancels in place with multiline descriptions.
