@@ -15,6 +15,7 @@ import {
   EnvironmentEditor,
   formFromEnvironment,
   newEnvForm,
+  bodyFromForm,
 } from "./environment-editor";
 import type { Environment, Packages } from "@/lib/platform/types";
 
@@ -217,7 +218,8 @@ describe("newEnvForm", () => {
       allowedHosts: "",
       allowMcpServers: false,
       allowPackageManagers: true,
-      packages: { apt: "", cargo: "", gem: "", go: "", npm: "", pip: "" },
+      packages: [{ manager: "", value: "" }],
+      metadata: [{ key: "", value: "" }],
     });
   });
 });
@@ -232,14 +234,12 @@ describe("formFromEnvironment", () => {
       allowedHosts: "a.com\nb.com",
       allowMcpServers: true,
       allowPackageManagers: false,
-      packages: {
-        apt: "",
-        cargo: "",
-        gem: "",
-        go: "golang.org/x/tools",
-        npm: "react, next",
-        pip: "",
-      },
+      packages: [
+        { manager: "go", value: "golang.org/x/tools" },
+        { manager: "npm", value: "react" },
+        { manager: "npm", value: "next" },
+      ],
+      metadata: [{ key: "", value: "" }],
     });
   });
 
@@ -256,14 +256,7 @@ describe("formFromEnvironment", () => {
     const form = formFromEnvironment(selfHostedEnv);
     expect(form.kind).toBe("self_hosted");
     expect(form.networkingType).toBe("unrestricted");
-    expect(form.packages).toEqual({
-      apt: "",
-      cargo: "",
-      gem: "",
-      go: "",
-      npm: "",
-      pip: "",
-    });
+    expect(form.packages).toEqual([{ manager: "", value: "" }]);
   });
 });
 
@@ -277,22 +270,33 @@ describe("EnvironmentEditor", () => {
 
     await user.type(screen.getByLabelText("Name"), "Prod");
     await user.type(screen.getByLabelText("Description"), "Main env");
-    await choose(user, "Networking", "limited");
+    await choose(user, "Networking", "Limited");
     fireEvent.change(screen.getByLabelText("Allowed hosts (one per line)"), {
       target: { value: " api.github.com \n\n registry.npmjs.org " },
     });
     await user.click(
-      screen.getByRole("checkbox", { name: "Allow MCP servers" }),
+      screen.getByRole("switch", { name: "Allow MCP server network access" }),
     );
     await user.click(
-      screen.getByRole("checkbox", { name: "Allow package managers" }),
+      screen.getByRole("switch", {
+        name: "Allow package manager network access",
+      }),
     );
-    fireEvent.change(screen.getByLabelText("npm"), {
-      target: { value: " react , next ,, " },
-    });
-    fireEvent.change(screen.getByLabelText("pip"), {
-      target: { value: "requests" },
-    });
+    for (const [index, manager, value] of [
+      [1, "npm", "react"],
+      [2, "npm", "next"],
+      [3, "pip", "requests"],
+    ] as const) {
+      if (index > 1)
+        await user.click(screen.getByRole("button", { name: "Add package" }));
+      await user.selectOptions(
+        screen.getByLabelText("Package manager " + index),
+        manager,
+      );
+      fireEvent.change(screen.getByLabelText("Package " + index), {
+        target: { value },
+      });
+    }
 
     await user.click(
       screen.getByRole("button", { name: "Create environment" }),
@@ -373,7 +377,8 @@ describe("EnvironmentEditor", () => {
     expect(screen.getByLabelText("Allowed hosts (one per line)")).toHaveValue(
       "a.com\nb.com",
     );
-    expect(screen.getByLabelText("npm")).toHaveValue("react, next");
+    expect(screen.getByLabelText("Package 2")).toHaveValue("react");
+    expect(screen.getByLabelText("Package 3")).toHaveValue("next");
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
@@ -471,4 +476,112 @@ describe("EnvironmentEditor", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(backSpy).toHaveBeenCalled();
   });
+});
+
+it("preserves package arguments and deletes environment metadata with empty strings", () => {
+  const form = {
+    ...newEnvForm(),
+    packages: [
+      { manager: "pip" as const, value: "pkg[a,b]>=1" },
+      { manager: "npm" as const, value: " pkg -e " },
+    ],
+    metadata: [
+      { key: "Team", value: "研发" },
+      { key: "__proto__", value: "safe" },
+    ],
+  };
+  const body = bodyFromForm(
+    form,
+    "edit",
+    JSON.parse('{"toString":"remove","owner":"old","__proto__":"old"}'),
+  );
+  expect(body.config).toMatchObject({
+    packages: { pip: ["pkg[a,b]>=1"], npm: [" pkg -e "] },
+  });
+  expect(body.metadata).toEqual(
+    JSON.parse('{"Team":"研发","__proto__":"safe","toString":"","owner":""}'),
+  );
+  expect(
+    JSON.stringify(
+      bodyFromForm(
+        { ...form, metadata: [] },
+        "edit",
+        JSON.parse('{"__proto__":"remove"}'),
+      ).metadata,
+    ),
+  ).toBe('{"__proto__":""}');
+});
+
+it("keeps incomplete package rows and duplicate metadata for correction", async () => {
+  const fetch = stubFetch();
+  const done = vi.fn();
+  const user = userEvent.setup();
+  renderEditor({
+    initial: { ...newEnvForm(), name: "Packages" },
+    onDone: done,
+  });
+  fireEvent.change(screen.getByLabelText("Package 1"), {
+    target: { value: "pkg[a,b]>=1" },
+  });
+  await user.click(screen.getByRole("button", { name: "Create environment" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("Choose a manager");
+  expect(postCalls(fetch)).toHaveLength(0);
+  await user.selectOptions(screen.getByLabelText("Package manager 1"), "pip");
+  fireEvent.change(screen.getByLabelText("Metadata key 1"), {
+    target: { value: "Team" },
+  });
+  fireEvent.change(screen.getByLabelText("Metadata value 1"), {
+    target: { value: "One" },
+  });
+  await user.click(screen.getByRole("button", { name: "Add metadata entry" }));
+  fireEvent.change(screen.getByLabelText("Metadata key 2"), {
+    target: { value: "Team" },
+  });
+  fireEvent.change(screen.getByLabelText("Metadata value 2"), {
+    target: { value: "Two" },
+  });
+  await user.click(screen.getByRole("button", { name: "Create environment" }));
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Metadata keys must be unique",
+  );
+  expect(screen.getByLabelText("Metadata value 2")).toHaveValue("Two");
+  await user.click(
+    screen.getByRole("button", { name: "Remove metadata row 1" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Create environment" }));
+  await waitFor(() => expect(done).toHaveBeenCalledOnce());
+  expect(JSON.parse(postCalls(fetch)[0][1]?.body as string)).toMatchObject({
+    metadata: { Team: "Two" },
+    config: { packages: { pip: ["pkg[a,b]>=1"] } },
+  });
+});
+
+it("removes the last package and metadata rows without losing a blank entry", async () => {
+  const user = userEvent.setup();
+  const done = vi.fn();
+  stubFetch();
+  renderEditor({ onDone: done });
+  expect(
+    screen.getByRole("button", { name: "Remove package 1" }),
+  ).toBeDisabled();
+  await user.selectOptions(screen.getByLabelText("Package manager 1"), "npm");
+  fireEvent.change(screen.getByLabelText("Package 1"), {
+    target: { value: "one" },
+  });
+  await user.click(screen.getByRole("button", { name: "Add package" }));
+  await user.click(screen.getByRole("button", { name: "Remove package 1" }));
+  await user.selectOptions(screen.getByLabelText("Package manager 1"), "pip");
+  await user.click(screen.getByRole("button", { name: "Remove package 1" }));
+  expect(screen.getByLabelText("Package manager 1")).toHaveValue("");
+  expect(screen.getByLabelText("Package manager 1")).toHaveFocus();
+  fireEvent.change(screen.getByLabelText("Metadata key 1"), {
+    target: { value: "owner" },
+  });
+  await user.click(
+    screen.getByRole("button", { name: "Remove metadata row 1" }),
+  );
+  expect(screen.getByLabelText("Metadata key 1")).toHaveValue("");
+  expect(screen.getByLabelText("Metadata key 1")).toHaveFocus();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(done).toHaveBeenCalledOnce();
 });

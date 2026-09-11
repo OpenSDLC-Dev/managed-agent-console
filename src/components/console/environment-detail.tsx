@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Pencil } from "lucide-react";
 import { DetailSection, Field, JsonBlock } from "./detail";
 import {
   Time,
+  Day,
   ErrorState,
   HostingType,
   ResourceStatus,
@@ -15,7 +16,7 @@ import {
 import { Breadcrumb } from "./breadcrumb";
 import { IdCell } from "./copy-id";
 import { ResourceActions } from "./resource-actions";
-import { EnvironmentKeysSection } from "./environment-keys";
+import { EnvironmentFullView } from "./environment-full-view";
 import { EnvironmentEditor, formFromEnvironment } from "./environment-editor";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ export function EnvironmentDetail({
   const router = useRouter();
   const [view, setView] = useState("rendered");
   const [editing, setEditing] = useState(false);
+  const restoreEditFocus = useRef(false);
   const { data: environment, error, isPending } = useEnvironment(id);
   const archive = useArchiveEnvironment(id);
   const remove = useDeleteEnvironment(id);
@@ -70,15 +72,25 @@ export function EnvironmentDetail({
           (inspector ? "pb-4" : "pb-5")
         }
       >
-        <Heading
-          className={
-            inspector
-              ? "min-w-0 break-words text-base font-medium leading-5"
-              : "min-w-0 break-words text-[22px] font-medium leading-7"
-          }
-        >
-          {environment.name}
-        </Heading>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Heading
+            className={
+              inspector
+                ? "min-w-0 break-words text-base font-medium leading-5"
+                : "min-w-0 break-words text-[22px] font-medium leading-7"
+            }
+          >
+            {environment.name}
+          </Heading>
+          {!inspector && (
+            <>
+              <HostingType type={config.type} />
+              {environment.archived_at && (
+                <ResourceStatus archivedAt={environment.archived_at} />
+              )}
+            </>
+          )}
+        </div>
         <span className="flex items-center gap-2">
           {inspector ? (
             <Link
@@ -93,6 +105,12 @@ export function EnvironmentDetail({
               <Button
                 size="sm"
                 variant="outline"
+                ref={(button) => {
+                  if (button && restoreEditFocus.current) {
+                    restoreEditFocus.current = false;
+                    button.focus();
+                  }
+                }}
                 onClick={() => setEditing(true)}
               >
                 <Pencil className="size-4" />
@@ -121,57 +139,61 @@ export function EnvironmentDetail({
           )}
         </span>
       </div>
+      {!inspector && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <IdCell id={id} />
+          <span>
+            Last updated <Day iso={environment.updated_at} />
+          </span>
+        </div>
+      )}
       {editing ? (
         <EnvironmentEditor
           mode="edit"
           initial={formFromEnvironment(environment)}
           environmentId={id}
-          onDone={() => setEditing(false)}
+          onDone={() => {
+            restoreEditFocus.current = true;
+            setEditing(false);
+          }}
         />
       ) : (
         <>
-          <fieldset
-            className={
-              inspector
-                ? "order-last flex shrink-0 justify-end gap-1 pt-3 text-[13px]"
-                : "mb-5 flex gap-1 text-sm"
-            }
-          >
-            <legend className="sr-only">Pane view</legend>
-            {["rendered", "api"].map((value) => (
-              <label key={value} className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  className="peer sr-only"
-                  name={"environment-view-" + id}
-                  value={value}
-                  checked={view === value}
-                  onChange={() => setView(value)}
-                />
-                <span className="inline-block rounded-md border border-transparent px-2 py-1 text-muted-foreground peer-checked:border-border peer-checked:text-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
-                  {value === "api" ? "API" : "Rendered"}
-                </span>
-              </label>
-            ))}
-          </fieldset>
+          {inspector && (
+            <fieldset className="order-last flex shrink-0 justify-end gap-1 pt-3 text-[13px]">
+              <legend className="sr-only">Pane view</legend>
+              {["rendered", "api"].map((value) => (
+                <label key={value} className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    className="peer sr-only"
+                    name={"environment-view-" + id}
+                    value={value}
+                    checked={view === value}
+                    onChange={() => setView(value)}
+                  />
+                  <span className="inline-block rounded-md border border-transparent px-2 py-1 text-muted-foreground peer-checked:border-border peer-checked:text-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+                    {value === "api" ? "API" : "Rendered"}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          )}
           <div
             className={inspector ? "min-h-0 flex-1 overflow-y-auto" : undefined}
           >
-            {view === "api" ? (
+            {view === "api" && inspector ? (
               <div className="space-y-3">
                 <code className="break-all text-sm">
                   GET /v1/environments/{encodeURIComponent(id)}
                 </code>
                 <JsonBlock value={environment} />
               </div>
+            ) : !inspector ? (
+              <EnvironmentFullView environment={environment} />
             ) : (
               <>
                 <dl className={fields + " pb-8"}>
-                  {!inspector && (
-                    <Field label="ID">
-                      <IdCell id={id} />
-                    </Field>
-                  )}
                   <Field label="Created">
                     <Time iso={environment.created_at} />
                   </Field>
@@ -266,9 +288,6 @@ export function EnvironmentDetail({
                     <p className="text-sm text-muted-foreground">None</p>
                   )}
                 </DetailSection>
-                {!inspector && (
-                  <EnvironmentKeysSection environment={environment} />
-                )}
               </>
             )}
           </div>

@@ -242,3 +242,96 @@ test("deleting an inspected environment restores focus before a delayed list ref
     page.getByRole("textbox", { name: "Find environment by ID" }),
   ).toBeFocused();
 });
+
+test("environment editor preserves package arguments and metadata through retry, save and cancel", async ({
+  page,
+  request,
+}) => {
+  await signIn(page);
+  const created = await (
+    await request.post("http://127.0.0.1:18080/v1/environments", {
+      headers: { "x-api-key": "test-key" },
+      data: {
+        name: "Row editor",
+        config: { type: "cloud" },
+        metadata: { Owner: "old" },
+      },
+    })
+  ).json();
+  await page.goto("/environments/" + created.id);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Package manager 1").selectOption("pip");
+  await page.getByLabel("Package 1", { exact: true }).fill("pkg[a,b]>=1");
+  await page.getByRole("button", { name: "Add package", exact: true }).click();
+  await page.getByLabel("Package manager 2").selectOption("npm");
+  await page.getByLabel("Package 2", { exact: true }).fill(" pkg -e ");
+  await page.getByLabel("Metadata key 1").fill("Team");
+  await page.getByLabel("Metadata value 1").fill("研发");
+  const endpoint = "**/api/platform/v1/environments/" + created.id;
+  await page.route(endpoint, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "Try this environment update again",
+        },
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator("form").getByRole("alert")).toContainText(
+    "Try this environment update again",
+  );
+  await expect(page.getByLabel("Package 2", { exact: true })).toHaveValue(
+    " pkg -e ",
+  );
+  await page.unroute(endpoint);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Package 1", { exact: true })).toHaveValue(
+    " pkg -e ",
+  );
+  await expect(page.getByLabel("Package 2", { exact: true })).toHaveValue(
+    "pkg[a,b]>=1",
+  );
+  await expect(page.getByLabel("Metadata key 1")).toHaveValue("Team");
+  await expect(page.getByLabel("Metadata value 1")).toHaveValue("研发");
+  await page.getByRole("button", { name: "Remove package 2" }).click();
+  await expect(page.getByLabel("Package manager 1")).toBeFocused();
+  await page.getByRole("button", { name: "Remove metadata row 1" }).click();
+  await expect(page.getByLabel("Metadata key 1")).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  const saved = await (
+    await request.get("http://127.0.0.1:18080/v1/environments/" + created.id, {
+      headers: { "x-api-key": "test-key" },
+    })
+  ).json();
+  expect(saved.metadata).toEqual({});
+  expect(saved.config.packages).toMatchObject({ npm: [" pkg -e "], pip: [] });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Discard this draft");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Row editor",
+  );
+});

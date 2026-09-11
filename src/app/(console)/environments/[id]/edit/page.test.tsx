@@ -175,7 +175,7 @@ describe("EditEnvironmentPage", () => {
     );
     // The environment kind is immutable in edit mode.
     expect(screen.getByText("Cloud (immutable)")).toBeInTheDocument();
-    expect(screen.getByLabelText("npm")).toHaveValue("left-pad");
+    expect(screen.getByLabelText("Package 1")).toHaveValue("left-pad");
     expect(
       screen.getByRole("button", { name: "Save changes" }),
     ).toBeInTheDocument();

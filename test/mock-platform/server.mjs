@@ -1893,6 +1893,24 @@ const server = createServer(async (req, res) => {
           return;
         }
       }
+      if (body.metadata != null) {
+        const create = url.pathname === "/v1/environments";
+        if (
+          typeof body.metadata !== "object" ||
+          Array.isArray(body.metadata) ||
+          Object.entries(body.metadata).some(
+            ([key, value]) =>
+              (typeof value !== "string" && !(value === null && !create)) ||
+              (key === "" && !(!create && (value === "" || value === null))),
+          )
+        ) {
+          res.writeHead(400);
+          res.end(
+            envelope("invalid_request_error", "invalid environment metadata"),
+          );
+          return;
+        }
+      }
       if (url.pathname === "/v1/environments") {
         if (typeof body.name !== "string" || !body.name) {
           res.writeHead(400);
@@ -1969,6 +1987,18 @@ const server = createServer(async (req, res) => {
             ...body.config.packages,
           };
       }
+      // environments.go uses patchMetadata(..., true): null and empty strings remove keys.
+      if (body.metadata != null)
+        for (const [key, value] of Object.entries(body.metadata)) {
+          if (value === null || value === "") delete env.metadata[key];
+          else
+            Object.defineProperty(env.metadata, key, {
+              value,
+              enumerable: true,
+              configurable: true,
+              writable: true,
+            });
+        }
       env.updated_at = now();
       res.writeHead(200);
       res.end(JSON.stringify(env));
