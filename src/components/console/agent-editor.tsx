@@ -9,6 +9,7 @@ import {
 } from "./additional-tools-editor";
 import { RequestId } from "@/components/console/bits";
 import { useState, type ReactNode } from "react";
+import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Check, Copy, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -332,6 +333,11 @@ export function AgentEditor({
     format: "json",
     text: "",
   });
+  const [rawBaseline, setRawBaseline] = useState("");
+  const leave = useUnsavedChanges(
+    JSON.stringify(form) !== JSON.stringify(initial) ||
+      (tab === "raw" && raw.text !== rawBaseline),
+  );
   const [rawError, setRawError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [memberToAdd, setMemberToAdd] = useState("");
@@ -358,6 +364,7 @@ export function AgentEditor({
     if (next === tab) return true;
     if (next === "raw" && schemaError) return false;
     if (next === "raw") {
+      setRawBaseline(toRaw(configFromForm(form, mode === "edit"), raw.format));
       setRaw((r) => ({
         ...r,
         text: toRaw(configFromForm(form, mode === "edit"), r.format),
@@ -384,7 +391,9 @@ export function AgentEditor({
       return;
     }
     setRawError(null);
-    setRaw({ format, text: toRaw(parsed.config!, format) });
+    const text = toRaw(parsed.config!, format);
+    if (raw.text === rawBaseline) setRawBaseline(text);
+    setRaw({ format, text });
   };
 
   const save = () => {
@@ -403,7 +412,10 @@ export function AgentEditor({
     }
     if (mode === "edit") body = { ...body, version };
     mutation.mutate(body, {
-      onSuccess: (agent) => router.push(`/agents/${agent.id}`),
+      onSuccess: (agent) => {
+        leave.setDirty(false);
+        router.push(`/agents/${agent.id}`);
+      },
       onError: (error) => {
         if (error instanceof PlatformError && error.status === 409) {
           setConflict(true);
@@ -1041,14 +1053,19 @@ export function AgentEditor({
         </Button>
         <Button
           variant="ghost"
-          onClick={() => (onCancel ? onCancel() : router.back())}
+          onClick={() =>
+            leave.requestLeave(() => (onCancel ? onCancel() : router.back()))
+          }
         >
           Cancel
         </Button>
         {conflict ? (
           <span className="text-sm text-destructive">
             Someone else updated this agent (409).{" "}
-            <button className="underline" onClick={() => router.refresh()}>
+            <button
+              className="underline"
+              onClick={() => leave.requestLeave(() => router.refresh())}
+            >
               Reload the latest version
             </button>{" "}
             and re-apply your changes.

@@ -1022,6 +1022,25 @@ export const SURFACES: Surface[] = [
     },
   },
   ...[false, true].map((narrow): Surface => ({
+    id: "agent-unsaved" + (narrow ? "-narrow" : ""),
+    route: "/agents",
+    fixture: "edited agent draft awaiting leave confirmation",
+    description: "Stay and Leave protect unsaved agent configuration.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("button", { name: "Create agent", exact: true })
+        .click();
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("Unsaved agent draft");
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Unsaved changes", exact: true })
+        .waitFor();
+    },
+  })),
+  ...[false, true].map((narrow): Surface => ({
     id: narrow ? "agent-tools-narrow" : "agent-tools",
     route: "/agents",
     fixture: "unsaved custom tool, MCP permissions and selected skill",

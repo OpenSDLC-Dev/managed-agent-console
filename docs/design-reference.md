@@ -448,3 +448,12 @@ The reference schedule timezone trigger opens a searchable list. Console
 suggestions come from the browser IANA list; exact custom values remain selectable
 because platform internal/cron uses its own embedded zoneinfo and accepts aliases
 that Intl may omit. The platform remains responsible for validation and next runs.
+
+## Unsaved Agent drafts — checked 2026-09-11
+
+In the reference, changing an Agent tool and selecting Memory stores in the sidebar
+keeps the editor open and prompts Unsaved changes, with Stay focused and Leave as
+the discard action. The same prompt appears for cancellation. Console Raw drafts,
+including invalid JSON, participate; view changes alone do not count as edits.
+Reload and cross-document exits use the browser-owned confirmation because web
+pages cannot replace beforeunload with an asynchronous custom dialog.
