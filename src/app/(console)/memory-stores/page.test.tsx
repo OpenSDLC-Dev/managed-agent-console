@@ -84,7 +84,9 @@ describe("MemoryStoresPage", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Create memory store" }),
     );
-    expect(push).toHaveBeenCalledWith("/memory-stores/new");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(push).not.toHaveBeenCalled();
     await userEvent.click(screen.getByText("Project notes"));
     expect(push).toHaveBeenCalledWith(
       "/memory-stores/memstore_projectnotes000001",

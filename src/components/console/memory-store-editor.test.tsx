@@ -116,3 +116,10 @@ describe("memory store editor", () => {
     );
   });
 });
+
+it("deletes special metadata keys without prototype lookups", () => {
+  const previous = JSON.parse('{"__proto__":"keep","toString":"old"}');
+  expect(
+    JSON.stringify(memoryStoreBody(newMemoryStoreForm(), previous).metadata),
+  ).toBe('{"__proto__":null,"toString":null}');
+});

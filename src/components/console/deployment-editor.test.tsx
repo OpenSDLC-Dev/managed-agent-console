@@ -14,6 +14,7 @@ import {
   deploymentBodyFromForm,
   formFromDeployment,
   newDeploymentForm,
+  initialMessageFromEvents,
 } from "./deployment-editor";
 import type { Deployment } from "@/lib/platform/types";
 import type { DeploymentWriteBody } from "@/lib/platform/queries";
@@ -79,6 +80,7 @@ describe("deployment editor wire mapping", () => {
   it("pins the selected agent and includes create-only resources", () => {
     const form = {
       ...newDeploymentForm(),
+      initialEvents: '[{"type":"user.message","content":"Run"}]',
       name: "Daily digest",
       agentId: "agent_1",
       agentVersion: 4,
@@ -192,6 +194,7 @@ describe("deployment editor wire mapping", () => {
           deploymentId="depl_1"
           initial={{
             ...newDeploymentForm(),
+            initialEvents: '[{"type":"user.message","content":"Run"}]',
             name: "Run",
             agentId: "agent_1",
             agentVersion: 2,
@@ -315,15 +318,17 @@ describe("deployment editor wire mapping", () => {
       screen.getByRole("button", { name: "Credential vaults" }),
     );
     await userEvent.click(screen.getByRole("checkbox", { name: "GitHub" }));
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Advanced events" }),
+    );
     fireEvent.change(screen.getByLabelText("Initial events (JSON)"), {
       target: { value: '[{"type":"user.message","content":"Go"}]' },
     });
     fireEvent.change(screen.getByLabelText("Metadata (JSON object)"), {
       target: { value: '{"owner":"ops"}' },
     });
-    await userEvent.click(
-      screen.getByRole("checkbox", { name: "Run on a schedule" }),
-    );
+    await userEvent.click(screen.getByRole("radio", { name: "Schedule" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit cron" }));
     await userEvent.clear(screen.getByLabelText("Cron expression"));
     await userEvent.type(
       screen.getByLabelText("Cron expression"),
@@ -403,6 +408,7 @@ describe("deployment editor wire mapping", () => {
     });
     const initial = {
       ...newDeploymentForm(),
+      initialEvents: '[{"type":"user.message","content":"Run"}]',
       name: "Run",
       agentId: "agent_1",
       environmentId: "env_1",
@@ -422,3 +428,88 @@ describe("deployment editor wire mapping", () => {
     );
   });
 });
+
+it.each([
+  "{}",
+  "null",
+  "[null]",
+  "[]",
+  "{",
+  '[{"type":"user.define_outcome","content":"Go"}]',
+  '[{"type":"user.message","content":[]}]',
+  '[{"type":"user.message","content":"Go","metadata":{"keep":true}}]',
+  '[{"type":"user.message","content":"Go"},{"type":"system.message","content":"Keep"}]',
+])("keeps advanced events intact: %s", (raw) => {
+  expect(initialMessageFromEvents(raw)).toBeNull();
+});
+
+it("round-trips plain message drafts between rendered and advanced views", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ data: [] }))),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <DeploymentEditor mode="create" initial={newDeploymentForm()} />
+    </QueryClientProvider>,
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Initial message" }), {
+    target: { value: "First\nSecond" },
+  });
+  await userEvent.click(screen.getByRole("radio", { name: "Advanced events" }));
+  expect(
+    initialMessageFromEvents(
+      (screen.getByLabelText("Initial events (JSON)") as HTMLTextAreaElement)
+        .value,
+    ),
+  ).toBe("First\nSecond");
+  fireEvent.change(screen.getByLabelText("Initial events (JSON)"), {
+    target: { value: "{" },
+  });
+  expect(screen.getByRole("radio", { name: "Initial message" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Initial events (JSON)"), {
+    target: { value: '[{"type":"user.message","content":"Corrected"}]' },
+  });
+  await userEvent.click(screen.getByRole("radio", { name: "Initial message" }));
+  expect(screen.getByRole("textbox", { name: "Initial message" })).toHaveValue(
+    "Corrected",
+  );
+  expect(screen.getByRole("radio", { name: "Manual" })).toBeChecked();
+  await userEvent.click(screen.getByRole("radio", { name: "Schedule" }));
+  await userEvent.click(screen.getByRole("button", { name: "Edit cron" }));
+  fireEvent.change(screen.getByLabelText("Cron expression"), {
+    target: { value: "30 9 * * *" },
+  });
+  await userEvent.click(screen.getByRole("radio", { name: "Manual" }));
+  expect(screen.queryByLabelText("Cron expression")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("radio", { name: "Schedule" }));
+  await userEvent.click(screen.getByRole("button", { name: "Edit cron" }));
+  expect(screen.getByLabelText("Cron expression")).toHaveValue("30 9 * * *");
+});
+
+it("deletes special metadata keys as own properties", () => {
+  const previous = JSON.parse('{"__proto__":"keep","toString":"old"}');
+  const metadata = deploymentBodyFromForm(
+    { ...newDeploymentForm(), metadata: "{}" },
+    undefined,
+    previous,
+  ).metadata;
+  expect(JSON.stringify(metadata)).toBe('{"__proto__":null,"toString":null}');
+});
+
+it.each(["", "  \n "])(
+  "treats cleared metadata as an empty patch: %j",
+  (metadata) => {
+    expect(
+      deploymentBodyFromForm({ ...newDeploymentForm(), metadata }).metadata,
+    ).toEqual({});
+    expect(
+      deploymentBodyFromForm({ ...newDeploymentForm(), metadata }, undefined, {
+        owner: "old",
+      }).metadata,
+    ).toEqual({ owner: null });
+  },
+);

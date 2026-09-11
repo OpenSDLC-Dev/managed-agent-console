@@ -84,6 +84,13 @@ function setup() {
   return fetch;
 }
 
+vi.mock("@/components/console/deployment-editor", () => ({
+  newDeploymentForm: () => ({}),
+  DeploymentEditor: ({ onCancel }: { onCancel: () => void }) => (
+    <button onClick={onCancel}>Cancel</button>
+  ),
+}));
+
 describe("DeploymentsPage", () => {
   it("renders schedules and drives navigation, filtering, paging and archive", async () => {
     const fetch = setup();
@@ -96,7 +103,12 @@ describe("DeploymentsPage", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Create deployment" }),
     );
-    expect(push).toHaveBeenCalledWith("/deployments/new");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(push).not.toHaveBeenCalled();
     await userEvent.click(screen.getByText("Weekly research digest"));
     expect(push).toHaveBeenCalledWith(`/deployments/${deployments[0].id}`);
 

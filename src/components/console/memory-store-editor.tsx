@@ -42,10 +42,12 @@ export function memoryStoreBody(
   if (Object.values(parsed).some((value) => typeof value !== "string"))
     throw new Error("Metadata values must be strings.");
   const metadata = parsed as Record<string, string>;
-  const patch: Record<string, string | null> = { ...metadata };
-  for (const key of Object.keys(previousMetadata ?? {})) {
-    if (!(key in metadata)) patch[key] = null;
-  }
+  const patch: Record<string, string | null> = Object.fromEntries([
+    ...Object.entries(metadata),
+    ...Object.keys(previousMetadata ?? {})
+      .filter((key) => !Object.hasOwn(metadata, key))
+      .map((key) => [key, null]),
+  ]);
   return {
     name: form.name,
     description: form.description,
@@ -57,10 +59,12 @@ export function MemoryStoreEditor({
   mode,
   initial,
   storeId,
+  onCancel,
 }: {
   mode: "create" | "edit";
   initial: MemoryStoreForm;
   storeId?: string;
+  onCancel?: () => void;
 }) {
   const router = useRouter();
   const create = useCreateMemoryStore();
@@ -70,6 +74,7 @@ export function MemoryStoreEditor({
   const [parseError, setParseError] = useState<string | null>(null);
 
   const save = () => {
+    if (mutation.isPending || !form.name) return;
     setParseError(null);
     let body: MemoryStoreWriteBody;
     try {
@@ -86,7 +91,8 @@ export function MemoryStoreEditor({
       return;
     }
     mutation.mutate(body, {
-      onSuccess: (store) => router.push(`/memory-stores/${store.id}`),
+      onSuccess: (store) =>
+        router.push(`/memory-stores/${encodeURIComponent(store.id)}`),
     });
   };
   const error =
@@ -96,7 +102,13 @@ export function MemoryStoreEditor({
     mutation.error instanceof PlatformError ? mutation.error.requestId : null;
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <form
+      className="max-w-2xl space-y-5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+    >
       <div className="space-y-1.5">
         <Label htmlFor="memory-store-name">Name</Label>
         <Input
@@ -109,7 +121,9 @@ export function MemoryStoreEditor({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="memory-store-description">Description</Label>
-        <Input
+        <textarea
+          rows={3}
+          className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
           id="memory-store-description"
           value={form.description}
           onChange={(event) =>
@@ -120,17 +134,29 @@ export function MemoryStoreEditor({
           }
         />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="memory-store-metadata">Metadata (JSON object)</Label>
-        <textarea
-          id="memory-store-metadata"
-          className="min-h-36 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-          value={form.metadata}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, metadata: event.target.value }))
-          }
-        />
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Name and description are included in the agent system prompt when this
+        store is attached.
+      </p>
+      <details open={onCancel ? undefined : true}>
+        <summary className="cursor-pointer text-sm text-muted-foreground">
+          Metadata (optional)
+        </summary>
+        <div className="space-y-1.5">
+          <Label htmlFor="memory-store-metadata">Metadata (JSON object)</Label>
+          <textarea
+            id="memory-store-metadata"
+            className="min-h-36 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            value={form.metadata}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                metadata: event.target.value,
+              }))
+            }
+          />
+        </div>
+      </details>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -138,13 +164,17 @@ export function MemoryStoreEditor({
         </p>
       )}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => router.back()}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => (onCancel ? onCancel() : router.back())}
+        >
           Cancel
         </Button>
-        <Button disabled={!form.name || mutation.isPending} onClick={save}>
+        <Button type="submit" disabled={!form.name || mutation.isPending}>
           {mode === "create" ? "Create memory store" : "Save changes"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }

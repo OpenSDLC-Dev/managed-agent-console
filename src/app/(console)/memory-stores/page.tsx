@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { Button } from "@/components/ui/button";
+import { CreateMemoryStoreButton } from "@/components/console/create-memory-store-dialog";
 import {
   Select,
   SelectContent,
@@ -77,15 +76,7 @@ export default function MemoryStoresPage() {
       <PageHeader
         title="Memory stores"
         subtitle={SURFACES["memory-stores"].blurb}
-        actions={
-          <Button
-            size="sm"
-            className="h-8"
-            onClick={() => router.push("/memory-stores/new")}
-          >
-            <Plus className="size-4" /> Create memory store
-          </Button>
-        }
+        actions={<CreateMemoryStoreButton />}
       />
       <div className="pb-4">
         <Select

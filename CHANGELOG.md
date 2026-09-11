@@ -12,6 +12,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   Selected rows support confirmed archive/delete with partial-failure retry, and
   detail editing saves or cancels in place with multiline descriptions.
 
+- Deployments and memory stores can be created without leaving their lists.
+  Deployment forms provide a plain initial-message editor and manual/schedule
+  controls while retaining advanced events and metadata.
+
 - Agent lists can open an exact ID beyond the loaded page. Sidebar and group
   preferences survive reloads, compact groups open flyouts, and phone navigation remains temporary.
 
