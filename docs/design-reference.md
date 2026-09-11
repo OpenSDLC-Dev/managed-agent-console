@@ -367,3 +367,28 @@ Re-shot in both themes: `dashboard`, `dashboard-compact`, `dashboard-mobile`,
 
 The BFF rejects decoded path delimiters in exact-ID input before forwarding, so
 reserved characters cannot turn a detail lookup into a different upstream route.
+
+## Environments — checked 2026-09-11
+
+A populated reference list opens a non-modal 560px inspector at ?environment=ID,
+with previous/next, copy, Open and Rendered/API controls. Sections show lifecycle,
+hosting type, scope, description, networking, packages and metadata. DevTools
+measured a 16px/20px title, 14px/20px section headings, 12px/17px fields, a
+120px label column and a 16px column gap. Selecting a
+row exposes Clear selection, Archive and Delete; the console applies the existing
+single-resource routes and retains failed selections for retry.
+
+Full-page Edit enters a form without changing the URL. The create dialog measures
+520px wide with 24px content insets, a 22px title and a 76px multiline description.
+Hosting type remains immutable: environments.go's update handler rejects changes
+at lines 600–608, despite normalizeEnvConfig accepting either union arm. Cloud
+creation keeps the platform's unrestricted networking default; the observed
+reference environment's Limited setting does not establish a creation default.
+Name search has no implemented environment list parameter, so the console offers
+exact-ID lookup. Self-hosted worker keys remain on the full detail page.
+
+Re-shot in both themes: environments-list, environment-detail, environment-new,
+environment-edit, environment-create, environment-cloud-detail,
+environment-edit-inline, environment-inspector, environment-inspector-api,
+environment-inspector-narrow, environment-inspector-missing,
+environment-selection, environment-selection-confirm and skill-inspector.

@@ -102,7 +102,7 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive environment" }).click();
-  await expect(page.getByText("archived", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-status="archived"]')).toBeVisible();
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete environment" }).click();

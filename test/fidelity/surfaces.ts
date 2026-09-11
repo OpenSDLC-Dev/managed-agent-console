@@ -226,6 +226,73 @@ export const SURFACES: Surface[] = [
       "Detail sections, coordinator roster, config rendering, version history table.",
   },
   {
+    id: "environment-inspector",
+    route: "/environments?environment=env_cloudlimited000000001",
+    fixture: "cloud limited environment",
+    description: "Non-modal structured environment inspector.",
+  },
+  {
+    id: "environment-inspector-api",
+    route: "/environments?environment=env_cloudlimited000000001",
+    fixture: "cloud limited environment API",
+    description: "Environment response in API view.",
+    setup: async (page) => {
+      await page
+        .getByRole("region", { name: "Environment details" })
+        .getByText("API", { exact: true })
+        .click();
+    },
+  },
+  {
+    id: "environment-inspector-narrow",
+    route: "/environments?environment=env_cloudlimited000000001",
+    fixture: "cloud environment at 390px",
+    description: "Narrow environment inspector.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+    },
+  },
+  {
+    id: "environment-inspector-missing",
+    route: "/environments?environment=env_missing",
+    fixture: "missing environment ID",
+    description: "Recoverable exact-ID error in the inspector.",
+  },
+  {
+    id: "environment-selection",
+    route: "/environments",
+    fixture: "selected environments",
+    description: "Selected-row bulk action toolbar.",
+    setup: async (page) => {
+      await page.getByRole("checkbox", { name: "Select all rows" }).check();
+    },
+  },
+  {
+    id: "environment-selection-confirm",
+    route: "/environments",
+    fixture: "bulk delete confirmation",
+    description: "Confirmation before deleting selected environments.",
+    setup: async (page) => {
+      await page.getByRole("checkbox", { name: "Select all rows" }).check();
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+    },
+  },
+  {
+    id: "environment-cloud-detail",
+    route: "/environments/env_cloudlimited000000001",
+    fixture: "cloud environment",
+    description: "Structured networking, packages and metadata.",
+  },
+  {
+    id: "environment-edit-inline",
+    route: "/environments/env_cloudlimited000000001",
+    fixture: "cloud environment edit",
+    description: "Cancel and save without leaving the environment detail.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+    },
+  },
+  {
     id: "environment-detail",
     route: `/environments/${ENV}`,
     fixture: ENV,

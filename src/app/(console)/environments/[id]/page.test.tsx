@@ -145,13 +145,17 @@ describe("EnvironmentDetailPage", () => {
     expect(screen.getByText("Where the work happens")).toBeInTheDocument();
     expect(screen.getByText("Cloud")).toHaveAttribute("data-type", "cloud");
     expect(
-      screen.getByText("limited — a.example.com, b.example.com"),
+      screen.getByText("a.example.com, b.example.com"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Config")).toBeInTheDocument();
+    expect(screen.getByText("Limited")).toBeInTheDocument();
     expect(screen.getByText("Metadata")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Edit/ }));
-    expect(pushSpy).toHaveBeenCalledWith("/environments/env_1/edit");
+    expect(screen.getByLabelText("Name")).toHaveValue("Prod sandbox");
+    expect(screen.getByLabelText("Description").tagName).toBe("TEXTAREA");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Name")).toBeNull();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("renders an unrestricted cloud environment", async () => {
@@ -169,8 +173,10 @@ describe("EnvironmentDetailPage", () => {
       ),
     );
     renderPage();
-    expect(await screen.findByText("unrestricted")).toBeInTheDocument();
-    expect(screen.queryByText("Metadata")).toBeNull();
+    expect(await screen.findByText("Unrestricted")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Metadata" }),
+    ).toBeInTheDocument();
   });
 
   it("renders an archived self-hosted environment without edit or archive", async () => {
@@ -186,7 +192,7 @@ describe("EnvironmentDetailPage", () => {
     renderPage();
 
     expect(await screen.findByText("Self-hosted")).toBeInTheDocument();
-    expect(screen.getByText("archived")).toBeInTheDocument();
+    expect(screen.getByText("Archived")).toBeInTheDocument();
     expect(screen.queryByText("Networking")).toBeNull();
     expect(screen.queryByRole("button", { name: /Edit/ })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
@@ -246,4 +252,17 @@ describe("EnvironmentDetailPage", () => {
     });
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/environments"));
   });
+});
+it("shows the complete environment response in API view", async () => {
+  stubFetch(() => json(environment()));
+  renderPage();
+  await screen.findByRole("heading", { name: "Prod sandbox" });
+  await userEvent.click(screen.getByRole("radio", { name: "API" }));
+  expect(screen.getByText(/GET \/v1\/environments\/env_1/)).toBeInTheDocument();
+  const pre = screen.getByText(/"allowed_hosts"/);
+  expect(JSON.parse(pre.textContent!)).toEqual(environment());
+  await userEvent.click(screen.getByRole("radio", { name: "Rendered" }));
+  expect(
+    screen.getByRole("heading", { name: "Networking" }),
+  ).toBeInTheDocument();
 });

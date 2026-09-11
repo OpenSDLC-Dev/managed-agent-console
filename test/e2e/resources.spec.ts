@@ -47,12 +47,14 @@ test("environments list and detail render the config union", async ({
 }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Environments", exact: true }).click();
-  await expect(page.getByRole("cell", { name: "cloud-limited" })).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "cloud-limited", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("cell", { name: "Self-hosted" })).toBeVisible();
 
-  await page.getByRole("cell", { name: "cloud-limited" }).click();
+  await page.getByRole("cell", { name: "cloud-limited", exact: true }).click();
   await expect(
-    page.getByText("limited — api.github.com, registry.npmjs.org"),
+    page.getByText("api.github.com, registry.npmjs.org"),
   ).toBeVisible();
   // A cloud environment has no worker to hold a key, so the section is absent
   // rather than empty — the reference makes the same distinction.

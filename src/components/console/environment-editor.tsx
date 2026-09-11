@@ -109,10 +109,12 @@ export function EnvironmentEditor({
   mode,
   initial,
   environmentId,
+  onDone,
 }: {
   mode: "create" | "edit";
   initial: EnvForm;
   environmentId?: string;
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState(initial);
@@ -126,7 +128,9 @@ export function EnvironmentEditor({
   const save = () =>
     mutation.mutate(bodyFromForm(form, mode), {
       onSuccess: (environment) =>
-        router.push(`/environments/${environment.id}`),
+        onDone
+          ? onDone()
+          : router.push(`/environments/${encodeURIComponent(environment.id)}`),
     });
 
   const error = mutation.error instanceof Error ? mutation.error : null;
@@ -171,7 +175,9 @@ export function EnvironmentEditor({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="env-description">Description</Label>
-        <Input
+        <textarea
+          className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+          rows={2}
           id="env-description"
           value={form.description}
           onChange={(e) => set("description", e.target.value)}
@@ -268,7 +274,10 @@ export function EnvironmentEditor({
         <Button onClick={save} disabled={mutation.isPending || !form.name}>
           {mode === "create" ? "Create environment" : "Save changes"}
         </Button>
-        <Button variant="ghost" onClick={() => router.back()}>
+        <Button
+          variant="ghost"
+          onClick={() => (onDone ? onDone() : router.back())}
+        >
           Cancel
         </Button>
         {error && (
