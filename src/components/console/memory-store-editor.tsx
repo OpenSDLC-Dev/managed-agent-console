@@ -42,10 +42,12 @@ export function memoryStoreBody(
   if (Object.values(parsed).some((value) => typeof value !== "string"))
     throw new Error("Metadata values must be strings.");
   const metadata = parsed as Record<string, string>;
-  const patch: Record<string, string | null> = { ...metadata };
-  for (const key of Object.keys(previousMetadata ?? {})) {
-    if (!(key in metadata)) patch[key] = null;
-  }
+  const patch: Record<string, string | null> = Object.fromEntries([
+    ...Object.entries(metadata),
+    ...Object.keys(previousMetadata ?? {})
+      .filter((key) => !Object.hasOwn(metadata, key))
+      .map((key) => [key, null]),
+  ]);
   return {
     name: form.name,
     description: form.description,

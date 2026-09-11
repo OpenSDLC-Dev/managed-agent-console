@@ -489,3 +489,13 @@ it("round-trips plain message drafts between rendered and advanced views", async
   await userEvent.click(screen.getByRole("button", { name: "Edit cron" }));
   expect(screen.getByLabelText("Cron expression")).toHaveValue("30 9 * * *");
 });
+
+it("deletes special metadata keys as own properties", () => {
+  const previous = JSON.parse('{"__proto__":"keep","toString":"old"}');
+  const metadata = deploymentBodyFromForm(
+    { ...newDeploymentForm(), metadata: "{}" },
+    undefined,
+    previous,
+  ).metadata;
+  expect(JSON.stringify(metadata)).toBe('{"__proto__":null,"toString":null}');
+});

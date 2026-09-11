@@ -94,10 +94,12 @@ export function deploymentBodyFromForm(
   previousMetadata?: Record<string, string>,
 ): DeploymentWriteBody {
   const metadata = JSON.parse(form.metadata) as Record<string, string>;
-  const metadataPatch: Record<string, string | null> = { ...metadata };
-  for (const key of Object.keys(previousMetadata ?? {})) {
-    if (!(key in metadata)) metadataPatch[key] = null;
-  }
+  const metadataPatch: Record<string, string | null> = Object.fromEntries([
+    ...Object.entries(metadata),
+    ...Object.keys(previousMetadata ?? {})
+      .filter((key) => !Object.hasOwn(metadata, key))
+      .map((key) => [key, null]),
+  ]);
   return {
     name: form.name,
     description: form.description || null,

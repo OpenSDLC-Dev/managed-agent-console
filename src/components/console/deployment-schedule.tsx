@@ -73,7 +73,12 @@ export function DeploymentSchedule({
 }) {
   const [draft, setDraft] = useState(() => scheduleDraft(expression));
   const change = (patch: Partial<typeof draft>) => {
-    const next = { ...draft, ...patch };
+    const next = {
+      ...(draft.frequency === "Custom cron"
+        ? scheduleDraft(expression)
+        : draft),
+      ...patch,
+    };
     setDraft(next);
     if (next.frequency !== "Custom cron")
       onExpressionChange(expressionFromDraft(next));

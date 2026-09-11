@@ -674,13 +674,6 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "deployment-edit",
-    route: `/deployments/${DEPLOYMENT}/edit`,
-    fixture: "scheduled deployment",
-    description:
-      "Edit a persisted deployment without changing its pinned agent or events.",
-  },
-  {
     id: "deployment-new",
     route: "/deployments/new",
     fixture: "empty form over agent, environment and vault lists",
