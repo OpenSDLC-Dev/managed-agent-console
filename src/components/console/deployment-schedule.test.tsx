@@ -48,7 +48,8 @@ it("translates frequency controls to five-field cron and leaves custom input unt
   });
   expect(expression).toHaveBeenLastCalledWith("25 * * * *");
   await userEvent.selectOptions(screen.getByLabelText("Frequency"), "Daily");
-  fireEvent.change(screen.getByLabelText("At"), { target: { value: "16:45" } });
+  fireEvent.change(screen.getByLabelText("At"), { target: { value: "4:45" } });
+  await userEvent.click(screen.getByRole("radio", { name: "PM" }));
   expect(expression).toHaveBeenLastCalledWith("45 16 * * *");
   await userEvent.selectOptions(screen.getByLabelText("Frequency"), "Weekly");
   await userEvent.selectOptions(screen.getByLabelText("On"), "6");
@@ -75,3 +76,34 @@ it("translates frequency controls to five-field cron and leaves custom input unt
   );
   expect(timezone).toHaveBeenLastCalledWith("Asia/Shanghai");
 }, 10_000);
+
+it.each([
+  ["0 0 * * *", "12:00", "AM", "0 12 * * *"],
+  ["0 12 * * *", "12:00", "PM", "0 0 * * *"],
+  ["59 23 * * *", "11:59", "PM", "59 11 * * *"],
+])(
+  "preserves %s and switches its period without changing minutes",
+  async (cron, time, period, changed) => {
+    const onChange = vi.fn();
+    render(
+      <DeploymentSchedule
+        expression={cron}
+        timezone="UTC"
+        onExpressionChange={onChange}
+        onTimezoneChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("At")).toHaveValue(time);
+    expect(screen.getByRole("radio", { name: period })).toBeChecked();
+    expect(onChange).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("radio", { name: period === "AM" ? "PM" : "AM" }),
+    );
+    expect(onChange).toHaveBeenLastCalledWith(changed);
+    fireEvent.change(screen.getByLabelText("At"), {
+      target: { value: "13:00" },
+    });
+    expect(screen.getByLabelText("At")).toBeInvalid();
+    expect(onChange).toHaveBeenLastCalledWith("");
+  },
+);

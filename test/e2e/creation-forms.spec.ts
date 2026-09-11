@@ -194,3 +194,45 @@ test("timezone search can cancel, select by keyboard and preserve aliases on edi
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(trigger).toContainText("US/Eastern");
 });
+
+test("schedule clock supports AM/PM keyboard changes and preserves midnight on edit", async ({
+  page,
+}) => {
+  await signIn(page, "/deployments/depl_weeklyresearch000001/edit");
+  await page.getByLabel("Frequency", { exact: true }).selectOption("Daily");
+  const time = page.getByLabel("At", { exact: true });
+  await time.fill("12:00");
+  await page.getByRole("radio", { name: "AM", exact: true }).check();
+  await page.getByRole("radio", { name: "AM", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(
+    page.getByRole("radio", { name: "PM", exact: true }),
+  ).toBeChecked();
+  await page.keyboard.press("ArrowLeft");
+  await expect(
+    page.getByRole("radio", { name: "AM", exact: true }),
+  ).toBeChecked();
+  await time.fill("13:00");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(/\/edit$/);
+  expect(
+    await time.evaluate((el: HTMLInputElement) => el.validity.patternMismatch),
+  ).toBe(true);
+  await time.fill("12:00");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  const submitted = page.waitForRequest(
+    (req) =>
+      req.method() === "POST" &&
+      req.url().endsWith("/v1/deployments/depl_weeklyresearch000001"),
+  );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  expect((await submitted).postDataJSON().schedule.expression).toBe(
+    "0 0 * * *",
+  );
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(time).toHaveValue("12:00");
+  await expect(
+    page.getByRole("radio", { name: "AM", exact: true }),
+  ).toBeChecked();
+});

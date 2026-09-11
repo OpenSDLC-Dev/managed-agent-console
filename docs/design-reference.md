@@ -149,10 +149,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
   `KeySquare` rather than the round-bowed key the reference draws, because `KeyRound` is already
   Credential vaults' and one icon may mean one thing.
-- **A collapsed group re-opens on reload.** The reference persists the state; ours is component state,
-  which survives client-side navigation and not a refresh. Deliberate for a first cut: two groups of
-  six items make collapsing a convenience rather than a necessity, and the alternative is a stored
-  preference plus its hydration.
 - **The Dashboard is a router, not a report.** The reference's opens on credits, spend, models and
   resource cards; ours has no billing, no model catalogue and no usage surface to show, so it is one
   card per served surface under the sidebar's own headings. It is also the console's first page that
@@ -413,7 +409,9 @@ over their lists; closing restores the trigger without adding browser history.
 
 Deployment creation uses a plain initial message, Manual/Schedule controls and
 Frequency options: Every minute, Every hour, Daily, Weekdays, Weekly, Custom cron.
-Edit cron switches to the raw five-field expression without changing its value.
+The At field uses a 12-hour clock and AM/PM radios; switching 9:00 to PM
+changes the cron hour from 9 to 21 (Chrome, 2026-09-11). Midnight/noon map
+to cron hours 0/12. Edit cron switches to the raw five-field expression without changing its value.
 The platform owns occurrence calculation (internal/cron); draft previews are absent
 because there is no preview endpoint. Existing deployment details show returned
 upcoming_runs_at. Budget remains absent because deployments.go rejects that key.
@@ -483,3 +481,15 @@ created_at[gte]/[lte] from agents.go, sessions.go and memorystores.go.
 Range drafts commit on Apply; Escape/Cancel keep the prior selection.
 Preset bounds freeze while selected. Reload or restoring another preset computes
 a new relative bound. Unknown URL values fall back to supported defaults.
+
+## Acceptance boundaries — checked 2026-09-11
+
+The full local browser suite passed 118 scenarios; a further 11 date/history/draft
+checks passed after integrating the guard and Session filters. Creation resource
+controls were rechecked in Chrome: GitHub URL/token, default/branch/commit checkout,
+optional mount path, memory binding/access/instructions. The console spells out
+Default branch instead of None because omission uses the repository default.
+Reference populated sessions and approvals remain unavailable; the mock resource,
+SSE approval/denial and permission tests prove local behavior only. Vault credential
+creation beyond Name/Continue also remains unobserved. These checks stay open in
+[#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).

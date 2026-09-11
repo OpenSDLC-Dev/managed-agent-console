@@ -4,22 +4,17 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-**Reference interaction parity** — requested 2026-09-11.
-Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
+**Reference interaction parity** — [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Inspect reference custom ranges, short-period presets and URL filters.
-- [x] Implement date bounds and list filter/history restoration.
-- [x] Complete coverage and both-theme fidelity verification.
-- [ ] Pass CI and resolve reviews before squash merge.
+- [x] Verify reference AM/PM controls and cron conversion in Chrome.
+- [x] Restore the 12-hour schedule clock without changing wire semantics.
+- [x] Complete regression and both-theme fidelity.
 
-Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142),
-[Agent editor #143](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/143),
-[navigation #144](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/144),
-[environments #145](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/145),
-[creation workflows #146](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/146).
+Delivery CI and review: [#156](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/156).
 
-Reference measurements and deliberate platform differences live in
-[docs/design-reference.md](./docs/design-reference.md).
+Outstanding reference acceptance:
 
-- [x] Verify current GMT labels with focused tests and six both-theme screenshots.
-- [ ] Pass GMT-label CI and review before squash merge.
+- [ ] Compare populated detail, approval and nested-resource interactions.
+- [ ] Observe the Vault credential step when reference fixtures are available.
+
+Reference facts and platform boundaries: [docs/design-reference.md](./docs/design-reference.md).
