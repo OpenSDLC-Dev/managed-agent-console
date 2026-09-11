@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { TimezonePicker } from "./timezone-picker";
+import { TimezonePicker, timezoneOffset } from "./timezone-picker";
 afterEach(cleanup);
 it("searches suggestions, preserves exact custom values, and cancels without mutation", async () => {
   const change = vi.fn();
@@ -29,3 +29,13 @@ it("searches suggestions, preserves exact custom values, and cancels without mut
   );
   expect(change).toHaveBeenCalledWith("Custom/ServerZone");
 }, 10_000);
+
+it("formats UTC, fractional offsets and seasonal daylight saving without rejecting aliases", () => {
+  const winter = new Date("2026-01-01T12:00:00Z");
+  const summer = new Date("2026-07-01T12:00:00Z");
+  expect(timezoneOffset("UTC", winter)).toBe("GMT+00:00");
+  expect(timezoneOffset("Asia/Kathmandu", winter)).toBe("GMT+05:45");
+  expect(timezoneOffset("America/New_York", winter)).toBe("GMT-05:00");
+  expect(timezoneOffset("America/New_York", summer)).toBe("GMT-04:00");
+  expect(timezoneOffset("Server/Custom", summer)).toBeUndefined();
+});

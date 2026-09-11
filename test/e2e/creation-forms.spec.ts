@@ -122,9 +122,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   await page
     .getByRole("combobox", { name: "Search timezones" })
     .fill("Shanghai");
-  await page
-    .getByRole("option", { name: "Asia/Shanghai", exact: true })
-    .click();
+  await page.getByRole("option", { name: /Asia\/Shanghai$/ }).click();
   await dialog.getByRole("radio", { name: "Manual", exact: true }).check();
   await dialog.getByRole("radio", { name: "Schedule", exact: true }).check();
   await dialog.getByRole("button", { name: "Edit cron" }).click();

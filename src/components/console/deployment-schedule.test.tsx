@@ -71,7 +71,7 @@ it("translates frequency controls to five-field cron and leaves custom input unt
     "Shanghai",
   );
   await userEvent.click(
-    await screen.findByRole("option", { name: "Asia/Shanghai" }),
+    await screen.findByRole("option", { name: /Asia\/Shanghai$/ }),
   );
   expect(timezone).toHaveBeenLastCalledWith("Asia/Shanghai");
 }, 10_000);

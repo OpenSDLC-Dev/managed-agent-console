@@ -447,7 +447,10 @@ memory stores, so the existing Include archived option retains its literal meani
 The reference schedule timezone trigger opens a searchable list. Console
 suggestions come from the browser IANA list; exact custom values remain selectable
 because platform internal/cron uses its own embedded zoneinfo and accepts aliases
-that Intl may omit. The platform remains responsible for validation and next runs.
+that Intl may omit. Reference suggestions prefix IANA names with GMT offsets.
+The console displays browser offsets at popup open and explains seasonal changes;
+schedules still submit the unchanged zone name. The platform remains responsible
+for validation and next runs.
 
 ## Unsaved Agent drafts — checked 2026-09-11
 

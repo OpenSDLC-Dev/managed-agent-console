@@ -20,3 +20,6 @@ Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-co
 
 Reference measurements and deliberate platform differences live in
 [docs/design-reference.md](./docs/design-reference.md).
+
+- [x] Verify current GMT labels with focused tests and six both-theme screenshots.
+- [ ] Pass GMT-label CI and review before squash merge.
