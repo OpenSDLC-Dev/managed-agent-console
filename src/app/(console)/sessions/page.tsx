@@ -1,6 +1,8 @@
 "use client";
 
+import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateSessionButton } from "@/components/console/create-session-dialog";
@@ -27,7 +29,11 @@ import {
   createdGte,
   type CreatedPresetKey,
 } from "@/components/console/created-filter";
-import { useAgentOptions, useSessions } from "@/lib/platform/queries";
+import {
+  useAgentOptions,
+  useDeploymentOptions,
+  useSessions,
+} from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
@@ -76,17 +82,31 @@ const COLUMNS: Column<Session>[] = [
   },
 ];
 
-const STATUS_OPTIONS: (SessionStatus | "all")[] = [
-  "all",
-  "idle",
+const STATUS_OPTIONS: SessionStatus[] = [
   "running",
+  "idle",
   "rescheduling",
   "terminated",
 ];
 
 export default function SessionsPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<SessionStatus | "all">("all");
+  const [statuses, setStatuses] = useState<SessionStatus[]>([
+    "running",
+    "idle",
+    "rescheduling",
+  ]);
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const statusLabel =
+    statuses.length === 4
+      ? "All"
+      : statuses.length === 3 && !statuses.includes("terminated")
+        ? "Active"
+        : statuses
+            .map((status) => status[0].toUpperCase() + status.slice(1))
+            .join(", ");
+  const [deploymentId, setDeploymentId] = useState("all");
+  const deployments = useDeploymentOptions();
   const [agentId, setAgentId] = useState<string>("all");
   // The gte freezes at selection time so the query key stays stable.
   const [created, setCreated] = useState<{
@@ -98,10 +118,27 @@ export default function SessionsPage() {
   const agentOptions = useAgentOptions();
   const { data, error, isPending } = useSessions({
     page,
-    statuses: status === "all" ? undefined : [status],
+    deployment_id: deploymentId === "all" ? undefined : deploymentId,
+    statuses,
+    order,
     agent_id: agentId === "all" ? undefined : agentId,
     "created_at[gte]": created.gte,
   });
+
+  const filtered =
+    deploymentId !== "all" ||
+    agentId !== "all" ||
+    created.key !== "all" ||
+    statuses.length !== 3 ||
+    statuses.includes("terminated");
+  function resetFilters() {
+    setDeploymentId("all");
+    setAgentId("all");
+    setCreated({ key: "all" });
+    setStatuses(["running", "idle", "rescheduling"]);
+    setOrder("desc");
+    setPage(undefined);
+  }
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="sessions" />;
 
@@ -109,36 +146,20 @@ export default function SessionsPage() {
     <div>
       <PageHeader
         title="Sessions"
+        className="flex-wrap"
         subtitle={SURFACES.sessions.blurb}
         actions={<CreateSessionButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Status</span>
-          <Select
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value as SessionStatus | "all");
-              setPage(undefined);
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              className="h-8 rounded-lg"
-              aria-label="Status filter"
-              data-value={status}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option === "all" ? "All" : option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <ExactResourceLookup resource="session" path="/sessions" />
+        <CreatedFilter
+          value={created.key}
+          onChange={(key) => {
+            setCreated({ key, gte: createdGte(key) });
+            setPage(undefined);
+          }}
+        />
+
         <div className="flex items-center gap-1.5">
           <span className="text-muted-foreground">Agent</span>
           <Select
@@ -154,7 +175,13 @@ export default function SessionsPage() {
               aria-label="Agent filter"
               data-value={agentId}
             >
-              <SelectValue />
+              <SelectValue>
+                {agentId === "all"
+                  ? "All"
+                  : agentOptions.data?.agents.find(
+                      (agent) => agent.id === agentId,
+                    )?.name || agentId}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
@@ -186,30 +213,160 @@ export default function SessionsPage() {
             </span>
           ) : null}
         </div>
-        <CreatedFilter
-          value={created.key}
-          onChange={(key) => {
-            setCreated({ key, gte: createdGte(key) });
-            setPage(undefined);
-          }}
-        />
+        <div className="flex min-w-0 max-w-full items-center gap-1.5">
+          <span className="text-muted-foreground">Deployment</span>
+          <Select
+            value={deploymentId}
+            onValueChange={(value) => {
+              setDeploymentId(value ?? "all");
+              setPage(undefined);
+            }}
+          >
+            <SelectTrigger
+              aria-label="Deployment filter"
+              className="h-8 min-w-0 max-w-64"
+            >
+              <SelectValue>
+                {deploymentId === "all"
+                  ? "All"
+                  : deployments.data?.deployments.find(
+                      (item) => item.id === deploymentId,
+                    )?.name || deploymentId}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {(deployments.data?.deployments ?? []).map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name || item.id}
+                  <ArchivedBadge archivedAt={item.archived_at} />
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {deployments.isError && (
+          <span className="text-xs text-destructive">
+            Deployment options failed to load.{" "}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => void deployments.refetch()}
+            >
+              Retry
+            </button>
+          </span>
+        )}
+        {deployments.data?.truncated && (
+          <span className="text-xs text-muted-foreground">
+            Showing the first 1,000 deployments.
+          </span>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Status</span>
+          <Select
+            multiple
+            value={statuses}
+            onValueChange={(value) => {
+              setStatuses(
+                value.length
+                  ? (value as SessionStatus[])
+                  : ["running", "idle", "rescheduling"],
+              );
+              setPage(undefined);
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className="h-8 rounded-lg"
+              aria-label="Status filter"
+              data-value={statuses.join(",")}
+            >
+              <SelectValue>{statusLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent
+              footer={
+                filtered &&
+                (statuses.length !== 3 || statuses.includes("terminated")) ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-1 w-full border-t"
+                    onClick={() => {
+                      setStatuses(["running", "idle", "rescheduling"]);
+                      setPage(undefined);
+                    }}
+                  >
+                    Clear selection
+                  </Button>
+                ) : undefined
+              }
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option[0].toUpperCase() + option.slice(1)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(filtered || order !== "desc") && (
+          <Button size="sm" variant="ghost" onClick={resetFilters}>
+            Reset
+          </Button>
+        )}
       </div>
       {error ? (
         <ErrorState error={error} />
       ) : (
         <>
           <DataTable
-            columns={COLUMNS}
+            columns={COLUMNS.map((column) =>
+              column.key === "created"
+                ? {
+                    ...column,
+                    header: (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1"
+                        aria-label={
+                          "Created: " +
+                          (order === "desc" ? "newest first" : "oldest first")
+                        }
+                        onClick={() => {
+                          setOrder(order === "desc" ? "asc" : "desc");
+                          setPage(undefined);
+                        }}
+                      >
+                        Created{" "}
+                        <span aria-hidden>{order === "desc" ? "↓" : "↑"}</span>
+                      </button>
+                    ),
+                  }
+                : column,
+            )}
             rows={data?.data ?? []}
             rowKey={(s) => s.id}
             loading={isPending}
             onRowClick={(s) => router.push(`/sessions/${s.id}`)}
             empty={
-              <EmptyState
-                title="No sessions yet"
-                hint="Create a session to get started."
-                action={<CreateSessionButton variant="outline" />}
-              />
+              filtered ? (
+                <EmptyState
+                  title="No matching sessions"
+                  hint="No sessions match the current filters."
+                  action={
+                    <Button variant="outline" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  title="No sessions yet"
+                  hint="Create a session to get started."
+                  action={<CreateSessionButton variant="outline" />}
+                />
+              )
             }
           />
           <Pager

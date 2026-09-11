@@ -457,3 +457,13 @@ the discard action. The same prompt appears for cancellation. Console Raw drafts
 including invalid JSON, participate; view changes alone do not count as edits.
 Reload and cross-document exits use the browser-owned confirmation because web
 pages cannot replace beforeunload with an asynchronous custom dialog.
+
+## Session list interactions — checked 2026-09-11
+
+Reference Sessions offer exact-ID lookup, Agent and Deployment filters, and a
+multiselect Status popup. Active selects running, idle and rescheduling; clearing
+selection restores that default. Created is sortable. Platform sessions.go serves
+deployment_id, repeated statuses and order=asc/desc. Archived deployments remain
+in the options because their sessions remain filterable. The reference also
+persists filter choices in the URL; that state/history alignment remains tracked
+in #141 with Created custom ranges.

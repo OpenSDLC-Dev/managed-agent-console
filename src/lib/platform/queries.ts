@@ -142,6 +142,7 @@ export function useEnvironment(id: string) {
 
 export function useSessions(params: {
   page?: string;
+  deployment_id?: string;
   statuses?: SessionStatus[];
   agent_id?: string;
   order?: "asc" | "desc";
@@ -163,8 +164,31 @@ export function useSessions(params: {
 export function useSession(id: string, refetchInterval?: number) {
   return useQuery({
     queryKey: ["session", id],
-    queryFn: () => platformGet<Session>(`v1/sessions/${id}`),
+    queryFn: () =>
+      platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`),
     refetchInterval,
+  });
+}
+
+/** Include archived deployments so historical sessions remain filterable. */
+export function useDeploymentOptions() {
+  return useQuery({
+    queryKey: ["deployment-options"],
+    queryFn: async () => {
+      const deployments: Deployment[] = [];
+      let page: string | undefined;
+      for (let i = 0; i < 10; i++) {
+        const res = await platformGet<Page<Deployment>>("v1/deployments", {
+          limit: 100,
+          include_archived: true,
+          page,
+        });
+        deployments.push(...res.data);
+        if (!res.next_page) return { deployments, truncated: false };
+        page = res.next_page;
+      }
+      return { deployments, truncated: true };
+    },
   });
 }
 

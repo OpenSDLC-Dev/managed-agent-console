@@ -114,7 +114,10 @@ test("sessions list filters by status", async ({ page }) => {
   await expect(tokens).toHaveAttribute("data-output-tokens", "890");
 
   await page.getByRole("combobox", { name: "Status filter" }).click();
-  await page.getByRole("option", { name: "running" }).click();
+  // Active starts with three selected states; keep only Running.
+  await page.getByRole("option", { name: "Idle", exact: true }).click();
+  await page.getByRole("option", { name: "Rescheduling", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("cell", { name: "Install deps and run tests" }),
   ).toBeHidden();
