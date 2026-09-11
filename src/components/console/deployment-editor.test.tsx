@@ -334,10 +334,15 @@ describe("deployment editor wire mapping", () => {
       screen.getByLabelText("Cron expression"),
       "30 8 * * 1-5",
     );
-    await userEvent.clear(screen.getByLabelText("IANA timezone"));
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "IANA timezone" }),
+    );
     await userEvent.type(
-      screen.getByLabelText("IANA timezone"),
-      "Asia/Shanghai",
+      await screen.findByRole("combobox", { name: "Search timezones" }),
+      "Shanghai",
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Asia/Shanghai" }),
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Resource" }));

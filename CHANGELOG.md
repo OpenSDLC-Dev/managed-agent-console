@@ -19,6 +19,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   creation-time filtering and deployments gain an Agent filter. Both lists show
   Created, with deployment schedules under Trigger.
 
+- Deployment schedules offer searchable timezone selection and retain custom
+  platform-supported timezone identifiers.
+
 - Environments open in a resizable inspector with exact-ID lookup and an API view.
   Selected rows support confirmed archive/delete with partial-failure retry, and
   detail editing saves or cancels in place with multiline descriptions.

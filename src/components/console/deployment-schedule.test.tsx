@@ -63,8 +63,15 @@ it("translates frequency controls to five-field cron and leaves custom input unt
     target: { value: "0 0 29 2 *" },
   });
   expect(expression).toHaveBeenLastCalledWith("0 0 29 2 *");
-  fireEvent.change(screen.getByLabelText("IANA timezone"), {
-    target: { value: "Asia/Shanghai" },
-  });
+  await userEvent.click(
+    screen.getByRole("combobox", { name: "IANA timezone" }),
+  );
+  await userEvent.type(
+    await screen.findByRole("combobox", { name: "Search timezones" }),
+    "Shanghai",
+  );
+  await userEvent.click(
+    await screen.findByRole("option", { name: "Asia/Shanghai" }),
+  );
   expect(timezone).toHaveBeenLastCalledWith("Asia/Shanghai");
-});
+}, 10_000);

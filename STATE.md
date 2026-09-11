@@ -7,9 +7,9 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 **Reference interaction parity** — requested 2026-09-11.
 Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
-- [x] Inspect reference list columns and filter controls.
-- [x] Align Memory-store and Deployment lists with supported API filters.
-- [x] Verify lookup, filter pagination, errors and both-theme fidelity.
+- [x] Inspect reference searchable timezone selection.
+- [x] Add timezone suggestions with exact-value fallback.
+- [x] Verify selection, cancellation, persistence and both-theme fidelity.
 - [ ] Pass CI and resolve reviews before squash merge.
 
 Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142),
