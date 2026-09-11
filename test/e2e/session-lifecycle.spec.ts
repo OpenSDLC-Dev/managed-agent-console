@@ -56,3 +56,40 @@ test("a running session's deletion refusal is visible", async ({ page }) => {
   ).toBeVisible();
   await expect(page).toHaveURL(/\/sessions\/sesn_research0000000000001$/);
 });
+
+test("session deletion removes outputs and keeps uploaded files", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/sessions/sesn_research0000000000001");
+  await page.getByRole("button", { name: "Interrupt", exact: true }).click();
+  await expect(
+    page.locator('[data-testid="session-effective-status"]'),
+  ).toHaveAttribute("data-status", "idle");
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Archive" }).click();
+  await page.getByRole("button", { name: "Archive session" }).click();
+  await expect(page.getByText("archived", { exact: true })).toBeVisible();
+  // Archiving preserves the deliverables. Deleting is the destructive boundary.
+  expect(
+    (
+      await page.request.get("/api/platform/v1/files/file_output000000000001")
+    ).status(),
+  ).toBe(200);
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page.getByRole("button", { name: "Delete session" }).click();
+  await expect(page).toHaveURL(/\/sessions$/);
+  await page.getByRole("link", { name: "Files", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "research-notes.md", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "summary.xlsx", exact: true }),
+  ).toBeHidden();
+  expect(
+    (
+      await page.request.get("/api/platform/v1/files/file_output000000000001")
+    ).status(),
+  ).toBe(404);
+});

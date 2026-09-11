@@ -5,6 +5,23 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## File compatibility check (2026-09-11)
+
+Chrome showed the reference Files empty table, upload action and disabled previous/next
+controls. No populated session deletion dialog was available for comparison. The
+confirmation copy follows platform `c75c5ad` (`internal/api/sessions.go:deleteSession`),
+where deleting a session removes its outputs and retains Files API uploads.
+
+This console revision consumes Files `next_page`/`page`; deploy it with the platform
+file-cursor (`51c1fb7`) and metadata (`e71e585`) changes or later. The existing
+Files columns remain unchanged.
+
+The Docker run at `c75c5ad` passed the Files and session-resource live contracts.
+A test-owned upload scoped as an output through SQL survived archive and returned
+404 for metadata/download after session deletion; the input upload remained. This
+checks deletion against stored output bytes without claiming a model-harvest run.
+Re-shot and inspected `files-list` and `session-delete` in both Chrome themes.
+
 ## Skills — checked 2026-09-11
 
 Chrome and DevTools confirm an exact-ID lookup and a non-modal right inspector:

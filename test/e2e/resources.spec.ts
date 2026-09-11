@@ -199,7 +199,7 @@ test("skills list filters by source; detail shows versions", async ({
   await expect(page.getByText("Initial version.")).toBeVisible();
 });
 
-test("files list renders the classic envelope fields", async ({ page }) => {
+test("files list renders uploads and session outputs", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(

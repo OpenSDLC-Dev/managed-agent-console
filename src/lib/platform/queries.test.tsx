@@ -24,6 +24,7 @@ import {
   useDeleteCredential,
   useDeleteEnvironment,
   useDeleteFile,
+  useDeleteSession,
   useDeleteMemory,
   useDeleteMemoryStore,
   useDeleteSkill,
@@ -391,10 +392,10 @@ const queryCases: QueryCase[] = [
     search: { limit: "20", page: "cur_4" },
   },
   {
-    name: "useFiles (with after_id)",
-    useHook: () => useFiles("file_9"),
+    name: "useFiles (with page)",
+    useHook: () => useFiles("opaque+/cursor="),
     path: "/api/platform/v1/files",
-    search: { limit: "20", after_id: "file_9" },
+    search: { limit: "20", page: "opaque+/cursor=" },
   },
   {
     name: "useFiles (first page)",
@@ -614,9 +615,7 @@ describe("useFileOptions", () => {
   it("loads the platform's maximum first page and reports truncation", async () => {
     const fetchMock = stubFetch({
       data: [{ id: "file_1", filename: "rubric.md" }],
-      has_more: true,
-      first_id: "file_1",
-      last_id: "file_1",
+      next_page: "more-files",
     });
     const { wrapper } = createClient();
     const { result } = renderHook(() => useFileOptions(), { wrapper });
@@ -628,6 +627,48 @@ describe("useFileOptions", () => {
     });
     expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({ limit: "1000" });
   });
+});
+
+it("refreshes cached file rows and rubric suggestions after deleting their session", async () => {
+  let deleted = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        deleted = true;
+        return jsonResponse({ id: "sesn_1", type: "session_deleted" });
+      }
+      return jsonResponse({
+        data: deleted
+          ? [{ id: "upload" }]
+          : [{ id: "output" }, { id: "upload" }],
+        next_page: null,
+      });
+    }),
+  );
+  const { client, wrapper } = createClient();
+  client.setDefaultOptions({ queries: { staleTime: Infinity, retry: false } });
+  const { result } = renderHook(
+    () => ({
+      list: useFiles(),
+      options: useFileOptions(),
+      remove: useDeleteSession("sesn_1"),
+    }),
+    { wrapper },
+  );
+  await waitFor(() =>
+    expect(result.current.options.data?.files).toHaveLength(2),
+  );
+  await waitFor(() => expect(result.current.list.data?.data).toHaveLength(2));
+  await act(async () => {
+    await result.current.remove.mutateAsync();
+  });
+  await waitFor(() =>
+    expect(result.current.list.data?.data).toEqual([{ id: "upload" }]),
+  );
+  await waitFor(() =>
+    expect(result.current.options.data?.files).toEqual([{ id: "upload" }]),
+  );
 });
 
 interface MutationCase {
@@ -921,6 +962,15 @@ const mutationCases: MutationCase[] = [
     invalidates: [["sessions"]],
   },
   {
+    name: "useDeleteSession",
+    useHook: () => useDeleteSession("sesn_1"),
+    path: "/api/platform/v1/sessions/sesn_1",
+    method: "DELETE",
+    meta: { errorTitle: "Delete failed" },
+    invalidates: [["sessions"], ["files"], ["file-options"]],
+    removes: [["session", "sesn_1"]],
+  },
+  {
     name: "useUploadFile",
     useHook: () => useUploadFile(),
     variables: new File(["hello"], "notes.txt", { type: "text/plain" }),
@@ -928,7 +978,7 @@ const mutationCases: MutationCase[] = [
     method: "POST",
     formEntries: [["file", "notes.txt"]],
     meta: { errorToast: false },
-    invalidates: [["files"]],
+    invalidates: [["files"], ["file-options"]],
   },
   {
     name: "useCreateVault",
@@ -1099,7 +1149,7 @@ const mutationCases: MutationCase[] = [
     path: "/api/platform/v1/files/file_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
-    invalidates: [["files"]],
+    invalidates: [["files"], ["file-options"]],
   },
 ];
 

@@ -136,6 +136,14 @@ describe("mock fixtures conform to the platform wire", () => {
 
   it("files", () => {
     each(PlatformFileSchema, fixtures.files, "files");
+    expect(PlatformFileSchema.parse(fixtures.files[0])).toMatchObject({
+      expires_at: null,
+    });
+    expect(fixtures.files[0]).not.toHaveProperty("scope");
+    const missingExpiry = Object.fromEntries(
+      Object.entries(fixtures.files[0]).filter(([key]) => key !== "expires_at"),
+    );
+    expect(PlatformFileSchema.safeParse(missingExpiry).success).toBe(false);
   });
 
   it("memory-store resource snapshots", () => {
@@ -619,6 +627,20 @@ describe("the mock's constructed write-path responses conform too", () => {
         "Content-Type: text/markdown\r\n\r\n# notes\r\n----x--\r\n",
     );
     expectConforms(PlatformFileSchema, uploaded, "POST /v1/files");
+    expect(uploaded).toHaveProperty("expires_at", null);
+    expect(uploaded).not.toHaveProperty("scope");
+  });
+
+  it("files: a page cursor survives deletion of its boundary file", async () => {
+    const first = (await call("/v1/files?limit=1", { method: "GET" })) as {
+      data: { id: string }[];
+      next_page: string;
+    };
+    expect(first.next_page).toEqual(expect.any(String));
+    const path = `/v1/files?limit=1&page=${encodeURIComponent(first.next_page)}`;
+    const before = await call(path, { method: "GET" });
+    await call(`/v1/files/${first.data[0].id}`, { method: "DELETE" });
+    expect(await call(path, { method: "GET" })).toEqual(before);
   });
 
   it("sessions: create, with a mounted file resource", async () => {

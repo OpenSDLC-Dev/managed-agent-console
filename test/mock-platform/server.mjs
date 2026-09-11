@@ -1308,20 +1308,34 @@ function route(req, url) {
     return skillsStore.find((s) => s.id === skillMatch[1]) ?? null;
 
   if (path === "/v1/files") {
-    // Classic Files pagination: after_id/before_id + has_more envelope.
+    // files.go:listFiles carries both dialects; the console uses the position
+    // cursor so deleting its boundary row cannot truncate the walk.
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 1000);
+    const position = (file) => file.created_at + "|" + file.id;
+    let rows = [...filesStore].sort((a, b) =>
+      position(b).localeCompare(position(a)),
+    );
+    const page = url.searchParams.get("page");
     const afterId = url.searchParams.get("after_id");
-    let rows = filesStore;
-    if (afterId) {
-      const at = rows.findIndex((f) => f.id === afterId);
+    if (page) {
+      const after = Buffer.from(page, "base64").toString();
+      rows = rows.filter((file) => position(file) < after);
+    } else if (afterId) {
+      const at = rows.findIndex((file) => file.id === afterId);
       rows = at === -1 ? [] : rows.slice(at + 1);
     }
+    const scopeId = url.searchParams.get("scope_id");
+    if (scopeId) rows = rows.filter((file) => file.scope?.id === scopeId);
     const data = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
     return {
       data,
-      has_more: rows.length > limit,
-      first_id: data.length > 0 ? data[0].id : null,
-      last_id: data.length > 0 ? data[data.length - 1].id : null,
+      next_page: hasMore
+        ? Buffer.from(position(data.at(-1))).toString("base64")
+        : null,
+      has_more: hasMore,
+      first_id: data[0]?.id ?? null,
+      last_id: data.at(-1)?.id ?? null,
     };
   }
   const fileMatch = path.match(/^\/v1\/files\/([^/]+)$/);
@@ -2064,7 +2078,7 @@ const server = createServer(async (req, res) => {
       mime_type: mime.trim(),
       size_bytes: contentSize,
       downloadable: false,
-      scope: null,
+      expires_at: null,
       created_at: now(),
     };
     filesStore.unshift(file);
@@ -2133,6 +2147,10 @@ const server = createServer(async (req, res) => {
       for (const subscriber of state.subscribers) subscriber.end();
       for (const subscribers of state.threadSubscribers.values())
         for (const subscriber of subscribers) subscriber.end();
+      filesStore = filesStore.filter(
+        (file) =>
+          file.scope?.type !== "session" || file.scope.id !== session.id,
+      );
       store.delete(session.id);
       res.writeHead(200);
       res.end(JSON.stringify({ id: session.id, type: "session_deleted" }));

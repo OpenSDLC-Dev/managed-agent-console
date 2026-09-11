@@ -508,6 +508,21 @@ export const SURFACES: Surface[] = [
       await page.getByRole("dialog", { name: "Edit session" }).waitFor();
     },
   },
+  {
+    id: "session-delete",
+    route: `/sessions/${GATED}`,
+    fixture: GATED,
+    description:
+      "Deletion confirmation names session outputs and retained uploads.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByRole("button", { name: "More actions" }).click();
+      await page.getByRole("menuitem", { name: "Delete" }).click();
+      await page
+        .getByRole("dialog", { name: "Delete this session?" })
+        .waitFor();
+    },
+  },
   // ---- the session trace, this console's densest surface ----------------
   {
     id: "session-transcript",

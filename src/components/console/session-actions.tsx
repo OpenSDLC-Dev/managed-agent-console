@@ -69,7 +69,7 @@ export function SessionActions({ session }: { session: Session }) {
         resource="session"
         archived={!!session.archived_at}
         archiveWarning="Interrupt a running session before archiving it."
-        deleteDescription="Permanently delete this session and its event history. Interrupt a running session before deleting it."
+        deleteDescription="Permanently delete this session, its event history, and the files it produced. Files uploaded through the Files API are retained. Interrupt a running session before deleting it."
         onArchive={() => archive.mutate()}
         archivePending={archive.isPending}
         onDelete={() =>

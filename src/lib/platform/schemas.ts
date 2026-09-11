@@ -626,7 +626,7 @@ export const SkillVersionSchema = z.object({
   created_at: z.string(),
 });
 
-// ---- files (internal/api/files.go:31-47)
+// ---- files (internal/api/files.go:fileJSON / renderFile)
 
 export const PlatformFileSchema = z.object({
   id: z.string(),
@@ -635,8 +635,9 @@ export const PlatformFileSchema = z.object({
   mime_type: z.string(),
   size_bytes: z.number(),
   downloadable: z.boolean(),
-  // files.go:42-47 — *fileScopeJSON, no omitempty.
-  scope: z.object({ id: z.string(), type: z.literal("session") }).nullable(),
+  // fileJSON always carries expires_at; renderFile omits an unscoped upload.
+  expires_at: z.string().nullable(),
+  scope: z.object({ id: z.string(), type: z.literal("session") }).optional(),
   created_at: z.string(),
 });
 

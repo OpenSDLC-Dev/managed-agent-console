@@ -32,18 +32,10 @@ export interface Page<T> {
   prev_page?: string | null;
 }
 
-/** Files' classic list envelope. */
-export interface ClassicPage<T> {
-  data: T[];
-  has_more: boolean;
-  first_id: string | null;
-  last_id: string | null;
-}
-
 /**
  * The console API's offset envelope (internal/api/consoleapi.go:92-104) — a
- * third list shape, neither the wire surface's keyset `Page<T>` nor files'
- * `ClassicPage<T>`. It is what the reference console's own listing returns.
+ * separate list shape from the wire surface's keyset `Page<T>`. It is what
+ * the reference console's own listing returns.
  */
 export interface OffsetPage<T> {
   data: T[];
