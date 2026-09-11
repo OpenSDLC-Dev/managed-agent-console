@@ -203,8 +203,11 @@ describe("NewSessionPage", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Prod sandbox · Self-hosted" }),
     );
+    await userEvent.click(screen.getByRole("button", { name: "Resource" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Add repository" }),
+      await screen.findByRole("menuitem", {
+        name: "GitHub repository",
+      }),
     );
     fireEvent.change(screen.getByLabelText("Repository URL"), {
       target: { value: "https://github.com/example/project" },
@@ -222,8 +225,11 @@ describe("NewSessionPage", () => {
     fireEvent.change(screen.getByLabelText("Branch name"), {
       target: { value: "main" },
     });
+    await userEvent.click(screen.getByRole("button", { name: "Resource" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Add memory store" }),
+      await screen.findByRole("menuitem", {
+        name: "Memory store",
+      }),
     );
     await waitFor(() =>
       expect(
@@ -338,7 +344,10 @@ describe("NewSessionPage", () => {
     expect(screen.queryByText("Credential vaults")).toBeNull();
 
     // The visible button forwards the click to the hidden file input.
-    await userEvent.click(screen.getByRole("button", { name: /Attach file/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Resource" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "File" }),
+    );
     fireEvent.change(screen.getByLabelText("Upload file"), {
       target: {
         files: [new File(["hi"], "notes.txt", { type: "text/plain" })],

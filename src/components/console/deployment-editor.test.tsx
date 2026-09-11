@@ -340,8 +340,11 @@ describe("deployment editor wire mapping", () => {
       "Asia/Shanghai",
     );
 
+    await userEvent.click(screen.getByRole("button", { name: "Resource" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Add repository" }),
+      await screen.findByRole("menuitem", {
+        name: "GitHub repository",
+      }),
     );
     await userEvent.type(
       screen.getByLabelText("Repository URL"),
@@ -350,8 +353,11 @@ describe("deployment editor wire mapping", () => {
     await userEvent.type(screen.getByLabelText("Authorization token"), "token");
     await userEvent.selectOptions(screen.getByLabelText("Checkout"), "branch");
     await userEvent.type(screen.getByLabelText("Branch name"), "main");
+    await userEvent.click(screen.getByRole("button", { name: "Resource" }));
     await userEvent.click(
-      screen.getByRole("button", { name: "Add memory store" }),
+      await screen.findByRole("menuitem", {
+        name: "Memory store",
+      }),
     );
     await waitFor(() =>
       expect(

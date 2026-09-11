@@ -147,7 +147,10 @@ test("create a session with file and memory mounts, then drive it", async ({
     buffer: Buffer.from("a,b\n1,2\n"),
   });
   await expect(page.getByText("dataset.csv")).toBeVisible();
-  await page.getByRole("button", { name: "Add memory store" }).click();
+  await page.getByRole("button", { name: "Resource", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "Memory store", exact: true })
+    .click();
   await expect(
     page.locator('[data-memory-store-options-state="ready"]'),
   ).toBeVisible();

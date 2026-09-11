@@ -419,3 +419,9 @@ because there is no preview endpoint. Existing deployment details show returned
 upcoming_runs_at. Budget remains absent because deployments.go rejects that key.
 Advanced events preserve arrays, structured content and outcome definitions;
 metadata stays available as an optional disclosure. Direct creation URLs remain.
+
+Session and Deployment creation share a Resource menu: GitHub repository, File,
+Memory store. Memory bindings include a Manage link and multiline instructions.
+The console retains manual memory IDs alongside loaded suggestions because the
+platform list may be paginated or unavailable; resource shapes remain those in
+internal/api/session_resources.go. Uploads finish before creation is enabled.

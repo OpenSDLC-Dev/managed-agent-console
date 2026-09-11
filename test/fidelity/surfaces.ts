@@ -598,6 +598,40 @@ export const SURFACES: Surface[] = [
     fixture: ENV,
     description: "Populated environment form.",
   },
+  ...["session", "deployment"].flatMap((owner) =>
+    [false, true].flatMap((narrow) =>
+      ["menu", "memory"].map((state): Surface => ({
+        id: owner + "-resource-" + state + (narrow ? "-narrow" : ""),
+        route: "/" + owner + "s",
+        fixture: "creation resources",
+        description:
+          "Resource menu and multiline memory attachment in the creation dialog.",
+        setup: async (page) => {
+          if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+          await page
+            .getByRole("button", { name: "Create " + owner, exact: true })
+            .click();
+          await page
+            .getByRole("button", { name: "Resource", exact: true })
+            .click();
+          if (state === "memory") {
+            await page
+              .getByRole("menuitem", { name: "Memory store", exact: true })
+              .click();
+            await page
+              .getByLabel("Memory store ID")
+              .fill("memstore_projectnotes000001");
+            await page
+              .getByLabel("Memory instructions (optional)")
+              .fill("Read the project notes.\nKeep changes concise.");
+            await page
+              .getByLabel("Memory instructions (optional)")
+              .scrollIntoViewIfNeeded();
+          }
+        },
+      })),
+    ),
+  ),
   {
     id: "session-new",
     route: "/sessions/new",
@@ -628,7 +662,10 @@ export const SURFACES: Surface[] = [
         .getByRole("main")
         .getByText("Credential vaults (optional)")
         .waitFor();
-      await page.getByRole("button", { name: "Add memory store" }).click();
+      await page.getByRole("button", { name: "Resource", exact: true }).click();
+      await page
+        .getByRole("menuitem", { name: "Memory store", exact: true })
+        .click();
       await page
         .locator(
           'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
@@ -729,7 +766,10 @@ export const SURFACES: Surface[] = [
     description: "Expanded reusable memory-store resource fields.",
     setup: async (page) => {
       await page.getByText("Credential vaults (optional)").waitFor();
-      await page.getByRole("button", { name: "Add memory store" }).click();
+      await page.getByRole("button", { name: "Resource", exact: true }).click();
+      await page
+        .getByRole("menuitem", { name: "Memory store", exact: true })
+        .click();
       await page
         .locator(
           'datalist#active-memory-stores option[value="memstore_projectnotes000001"]',
