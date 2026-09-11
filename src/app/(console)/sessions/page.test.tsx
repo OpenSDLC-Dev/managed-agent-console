@@ -28,8 +28,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/ui/select", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   interface CtxShape {
-    value: string;
-    onValueChange: (value: string) => void;
+    value: string | string[];
+    onValueChange: (value: string | string[]) => void;
   }
   const Ctx = React.createContext<CtxShape>({
     value: "",
@@ -75,7 +75,17 @@ vi.mock("@/components/ui/select", async () => {
       const ctx = React.useContext(Ctx);
       return React.createElement(
         "button",
-        { type: "button", onClick: () => ctx.onValueChange(value) },
+        {
+          type: "button",
+          onClick: () =>
+            ctx.onValueChange(
+              Array.isArray(ctx.value)
+                ? ctx.value.includes(value)
+                  ? ctx.value.filter((item) => item !== value)
+                  : [...ctx.value, value]
+                : value,
+            ),
+        },
         children,
       );
     },
@@ -134,6 +144,8 @@ function stubFetch(
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
+      if (url.pathname === "/api/platform/v1/deployments")
+        return json({ data: [] });
       // The agent-filter options query rides along on every mount.
       if (url.pathname === "/api/platform/v1/agents") return agentsHandler(url);
       const response = handler(url, init);
@@ -286,11 +298,11 @@ describe("SessionsPage", () => {
 
     // Status option buttons come from the mocked Select items.
     await userEvent.click(
-      screen.getAllByRole("button", { name: "rescheduling" })[0],
+      screen.getAllByRole("button", { name: "Rescheduling" })[0],
     );
     await waitFor(() => expect(sessionUrls(fetchMock)).toHaveLength(2));
     const url = sessionUrls(fetchMock)[1];
-    expect(url.searchParams.getAll("statuses")).toEqual(["rescheduling"]);
+    expect(url.searchParams.getAll("statuses")).toEqual(["running", "idle"]);
     expect(url.searchParams.get("page")).toBeNull();
   });
 

@@ -51,7 +51,7 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
   );
   await page.getByRole("option", { name: "Fleet agent 019" }).click();
   await filtered;
-  await expect(page.getByText("No sessions yet")).toBeVisible();
+  await expect(page.getByText("No matching sessions")).toBeVisible();
 
   // Filtering to a real agent narrows the table to its sessions.
   await page.getByRole("combobox", { name: "Agent filter" }).click();
@@ -94,5 +94,5 @@ test("created presets bound sessions and agents lists serverside", async ({
   await page.getByRole("combobox", { name: "Created filter" }).click();
   await page.getByRole("option", { name: "Last 24 hours" }).click();
   await boundedSessions;
-  await expect(page.getByText("No sessions yet")).toBeVisible();
+  await expect(page.getByText("No matching sessions")).toBeVisible();
 });

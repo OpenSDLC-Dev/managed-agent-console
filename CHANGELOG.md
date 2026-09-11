@@ -11,6 +11,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Sessions offer exact-ID lookup, deployment filtering, multiple runtime statuses with an Active default, and server-backed creation-time sorting.
+
 - Agent drafts prompt before leaving through navigation, cancellation, modal close or template replacement; Stay preserves edits, and reload uses the browser confirmation.
 
 - Session and deployment creation share a Resource menu for repository, file and

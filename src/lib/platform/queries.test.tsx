@@ -6,6 +6,7 @@ import {
   useAddCredential,
   useAgent,
   useAgentOptions,
+  useDeploymentOptions,
   useAgents,
   useAgentVersions,
   useArchiveAgent,
@@ -518,6 +519,52 @@ describe("useAgentOptions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(result.current.data?.truncated).toBe(true);
     expect(result.current.data?.agents).toHaveLength(10);
+  });
+});
+
+describe("useDeploymentOptions", () => {
+  it("pages v1/deployments to exhaustion with archived included", async () => {
+    const fetchMock = vi.fn(async (input: string) => {
+      const url = new URL(String(input), "http://console.test");
+      return jsonResponse(
+        url.searchParams.get("page") === "cur_2"
+          ? { data: [{ id: "depl_2" }], next_page: null }
+          : { data: [{ id: "depl_1" }], next_page: "cur_2" },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useDeploymentOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({
+      deployments: [{ id: "depl_1" }, { id: "depl_2" }],
+      truncated: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({
+      limit: "100",
+      include_archived: "true",
+    });
+    expect(searchOf(fetchMock.mock.calls[1][0])).toEqual({
+      limit: "100",
+      include_archived: "true",
+      page: "cur_2",
+    });
+  });
+
+  it("stops at the page cap and reports truncation", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ data: [{ id: "depl_x" }], next_page: "again" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useDeploymentOptions(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(result.current.data?.truncated).toBe(true);
+    expect(result.current.data?.deployments).toHaveLength(10);
   });
 });
 

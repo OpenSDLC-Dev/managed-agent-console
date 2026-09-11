@@ -74,6 +74,18 @@ const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  ...[false, true].map((narrow): Surface => ({
+    id: "session-filters" + (narrow ? "-narrow" : ""),
+    route: "/sessions",
+    fixture: "active sessions and deployment options",
+    description:
+      "Exact session lookup, active multi-status selection and deployment filtering.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("combobox", { name: "Status filter" }).click();
+    },
+  })),
+
   {
     id: "dashboard-api-key-create",
     route: "/dashboard",

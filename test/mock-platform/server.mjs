@@ -1025,6 +1025,9 @@ function route(req, url) {
       rows = rows.filter((r) => statuses.includes(r.status));
     const agentId = url.searchParams.get("agent_id");
     if (agentId) rows = rows.filter((r) => r.agent.id === agentId);
+    const deploymentId = url.searchParams.get("deployment_id");
+    if (deploymentId)
+      rows = rows.filter((row) => row.deployment_id === deploymentId);
     const createdGte = url.searchParams.get("created_at[gte]");
     if (createdGte) rows = rows.filter((r) => r.created_at >= createdGte);
     // Platform keyset order is (created_at, id), descending by default.
