@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLeaveConfirmation } from "./unsaved-changes";
 import { useRouter } from "next/navigation";
 import {
   Bot,
@@ -290,6 +291,7 @@ export function CommandPalette({
   onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const leave = useLeaveConfirmation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -311,7 +313,7 @@ export function CommandPalette({
   const navigate = (href: string) => {
     setOpen(false);
     onNavigate?.();
-    router.push(href);
+    leave.requestLeave(() => router.push(href));
   };
 
   const reset = (next: boolean) => {

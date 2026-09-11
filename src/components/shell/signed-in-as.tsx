@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useLeaveConfirmation } from "./unsaved-changes";
 import { useState } from "react";
 import { beginSignOut, leaveAfterSignOut } from "@/lib/identity/signed-out";
 
@@ -40,6 +41,7 @@ async function readSession(): Promise<SessionInfo | null> {
 }
 
 export function SignedInAs() {
+  const leave = useLeaveConfirmation();
   const [signingOut, setSigningOut] = useState(false);
   const { data } = useQuery({
     queryKey: ["console-session"],
@@ -111,7 +113,12 @@ export function SignedInAs() {
       )}
       <button
         type="button"
-        onClick={() => void signOut()}
+        onClick={() =>
+          leave.requestLeave(() => {
+            leave.setDirty(false);
+            void signOut();
+          })
+        }
         disabled={signingOut}
         data-testid="sign-out"
         className="mt-1 text-muted-foreground hover:text-foreground disabled:opacity-50"

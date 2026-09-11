@@ -1,9 +1,10 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import { ErrorState, DetailSkeleton } from "@/components/console/bits";
 import { AgentEditor, formFromAgent } from "@/components/console/agent-editor";
+import type { Agent } from "@/lib/platform/types";
 import { useAgent } from "@/lib/platform/queries";
 
 export default function EditAgentPage({
@@ -12,26 +13,42 @@ export default function EditAgentPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { data: agent, error, isPending } = useAgent(id);
+  const { data: agent, error, isPending, refetch } = useAgent(id);
 
-  if (error) return <ErrorState error={error} />;
+  if (error && !agent) return <ErrorState error={error} />;
   if (isPending || !agent) {
     return <DetailSkeleton />;
   }
 
+  return <LoadedEditor key={agent.id} agent={agent} refetch={refetch} />;
+}
+
+function LoadedEditor({
+  agent,
+  refetch,
+}: {
+  agent: Agent;
+  refetch: () => Promise<{ data?: Agent; error: unknown }>;
+}) {
+  // Keep the draft and its optimistic version together across background refreshes.
+  const [editing, setEditing] = useState(agent);
   return (
     <div>
       <PageHeader
-        title={`Edit ${agent.name}`}
-        subtitle={`Editing v${agent.version} — saving creates v${agent.version + 1}.`}
+        title={`Edit ${editing.name}`}
+        subtitle={`Editing v${editing.version} — saving creates v${editing.version + 1}.`}
       />
       <AgentEditor
         mode="edit"
-        // Remount when a newer version loads so the form resets to it.
-        key={`${agent.id}@${agent.version}`}
-        initial={formFromAgent(agent)}
-        agentId={agent.id}
-        version={agent.version}
+        // Remount only after the operator confirms replacing the draft.
+        key={`${editing.id}@${editing.version}`}
+        initial={formFromAgent(editing)}
+        agentId={editing.id}
+        version={editing.version}
+        onReload={async () => {
+          const latest = await refetch();
+          if (!latest.error && latest.data) setEditing(latest.data);
+        }}
       />
     </div>
   );

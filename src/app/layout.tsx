@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import { UnsavedChangesProvider } from "@/components/shell/unsaved-changes";
 
 export const metadata: Metadata = {
   title: "Managed Agents Console",
@@ -24,7 +25,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <UnsavedChangesProvider>{children}</UnsavedChangesProvider>
         </ThemeProvider>
       </body>
     </html>

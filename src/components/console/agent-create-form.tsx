@@ -7,9 +7,11 @@ import {
   newAgentForm,
 } from "@/components/console/agent-editor";
 import { AGENT_TEMPLATES } from "@/lib/agent-config/templates";
+import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { cn } from "@/lib/utils";
 
 export function AgentCreateForm({ onCancel }: { onCancel?: () => void }) {
+  const leave = useLeaveConfirmation();
   const [template, setTemplate] = useState("blank");
   const chosen = AGENT_TEMPLATES.find((t) => t.key === template);
 
@@ -28,7 +30,10 @@ export function AgentCreateForm({ onCancel }: { onCancel?: () => void }) {
             key={t.key}
             type="button"
             aria-pressed={template === t.key}
-            onClick={() => setTemplate(t.key)}
+            onClick={() => {
+              if (template !== t.key)
+                leave.requestLeave(() => setTemplate(t.key));
+            }}
             className={cn(
               "w-56 rounded-lg border p-3 text-left hover:bg-secondary/40",
               template === t.key && "border-foreground",

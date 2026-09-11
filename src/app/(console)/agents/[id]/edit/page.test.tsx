@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense } from "react";
 import EditAgentPage from "./page";
@@ -109,13 +116,14 @@ function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <Suspense fallback={null}>
         <EditAgentPage params={asParams("agt_1")} />
       </Suspense>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 }
 
 afterEach(() => {
@@ -180,4 +188,51 @@ describe("EditAgentPage", () => {
       screen.getByRole("button", { name: "Save changes" }),
     ).toBeInTheDocument();
   });
+});
+
+it("preserves the draft and optimistic version until an explicit reload", async () => {
+  let current = agent;
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST")
+        return json(
+          {
+            type: "error",
+            error: { type: "conflict_error", message: "version conflict" },
+          },
+          409,
+        );
+      return String(input).endsWith("/agents/agt_1")
+        ? json(current)
+        : json({ data: [] });
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  const { client } = renderPage();
+  const name = await screen.findByLabelText("Name", { exact: true });
+  fireEvent.change(name, { target: { value: "Keep my draft" } });
+  current = { ...agent, version: 4, name: "Someone else's update" };
+  await act(async () => {
+    client.setQueryData(["agent", "agt_1"], current);
+  });
+  expect(screen.getByLabelText("Name", { exact: true })).toHaveValue(
+    "Keep my draft",
+  );
+  expect(screen.getByText(/Editing v3/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  const reload = await screen.findByRole("button", {
+    name: "Reload the latest version",
+  });
+  const sent = fetchMock.mock.calls.find((call) => call[1]?.method === "POST")!;
+  expect(JSON.parse(sent[1]!.body as string)).toMatchObject({
+    name: "Keep my draft",
+    version: 3,
+  });
+  fireEvent.click(reload);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Name", { exact: true })).toHaveValue(
+      "Someone else's update",
+    ),
+  );
+  expect(screen.getByText(/Editing v4/)).toBeInTheDocument();
 });
