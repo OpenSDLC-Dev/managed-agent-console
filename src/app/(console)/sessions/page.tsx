@@ -130,8 +130,7 @@ export default function SessionsPage() {
     agentId !== "all" ||
     created.key !== "all" ||
     statuses.length !== 3 ||
-    statuses.includes("terminated") ||
-    order !== "desc";
+    statuses.includes("terminated");
   function resetFilters() {
     setDeploymentId("all");
     setAgentId("all");
@@ -311,7 +310,7 @@ export default function SessionsPage() {
             </SelectContent>
           </Select>
         </div>
-        {filtered && (
+        {(filtered || order !== "desc") && (
           <Button size="sm" variant="ghost" onClick={resetFilters}>
             Reset
           </Button>

@@ -469,4 +469,14 @@ describe("SessionsPage", () => {
     // Nothing renders ∞ or NaN for the overflowed counter.
     expect(document.body.textContent).not.toMatch(/∞|NaN/);
   });
+  it("keeps the initial empty state when only sorting changes", async () => {
+    stubFetch(() => json({ data: [] }));
+    renderPage();
+    await screen.findByText("No sessions yet");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Created: newest first" }),
+    );
+    expect(screen.getByText("No sessions yet")).toBeInTheDocument();
+    expect(screen.queryByText("No matching sessions")).not.toBeInTheDocument();
+  });
 });
