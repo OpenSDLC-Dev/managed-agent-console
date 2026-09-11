@@ -1,5 +1,14 @@
 "use client";
 
+import { useRef, type ReactNode } from "react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,11 +21,18 @@ export function InitialResources({
   resources,
   onChange,
   owner = "session",
+  onAttachFile,
+  uploadPending,
+  children,
 }: {
   resources: InitialResource[];
   onChange: (resources: InitialResource[]) => void;
   owner?: "session" | "deployment";
+  onAttachFile: () => void;
+  uploadPending: boolean;
+  children?: ReactNode;
 }) {
+  const menuTrigger = useRef<HTMLButtonElement>(null);
   const memoryStores = useMemoryStoreOptions();
   const memoryStoreOptions = memoryStores.data?.memoryStores ?? [];
   const memoryStoreOptionsState = memoryStores.isPending
@@ -32,11 +48,14 @@ export function InitialResources({
     onChange(resources.map((resource, i) => (i === index ? value : resource)));
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">Repositories and memory stores</p>
-      <p className="text-xs text-muted-foreground">
-        Attach these when creating the {owner}. Repositories remain attached to
-        every {owner === "session" ? "session" : "session it starts"}.
+      <p className="text-sm font-medium">
+        {owner === "deployment" ? "Session resources (optional)" : "Resources"}
       </p>
+      <p className="text-xs text-muted-foreground">
+        Mount files, GitHub repositories, or memory stores into{" "}
+        {owner === "deployment" ? "each run’s session" : "the session"}.
+      </p>
+      {children}
       {resources.map((resource, index) => (
         <fieldset key={index} className="space-y-2 rounded-lg border p-3">
           <legend className="px-1 text-sm">
@@ -142,7 +161,16 @@ export function InitialResources({
           ) : (
             <>
               <div className="space-y-1">
-                <Label htmlFor={`memory-id-${index}`}>Memory store ID</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor={`memory-id-${index}`}>Memory store ID</Label>
+                  <Link
+                    href="/memory-stores"
+                    target="_blank"
+                    className="text-xs text-muted-foreground underline"
+                  >
+                    Manage memory stores ↗
+                  </Link>
+                </div>
                 <Input
                   id={`memory-id-${index}`}
                   list="active-memory-stores"
@@ -190,7 +218,9 @@ export function InitialResources({
                 <Label htmlFor={`memory-instructions-${index}`}>
                   Memory instructions (optional)
                 </Label>
-                <Input
+                <textarea
+                  rows={3}
+                  className="min-h-[76px] w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   id={`memory-instructions-${index}`}
                   value={resource.instructions ?? ""}
                   onChange={(e) =>
@@ -206,7 +236,11 @@ export function InitialResources({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onChange(resources.filter((_, i) => i !== index))}
+            type="button"
+            onClick={() => {
+              onChange(resources.filter((_, i) => i !== index));
+              menuTrigger.current?.focus();
+            }}
           >
             Remove attachment {index + 1}
           </Button>
@@ -219,32 +253,50 @@ export function InitialResources({
           </option>
         ))}
       </datalist>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onChange([
-              ...resources,
-              { type: "github_repository", url: "", authorization_token: "" },
-            ])
+      {uploadPending && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Uploading file…
+        </p>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              ref={menuTrigger}
+              type="button"
+              variant="outline"
+              size="sm"
+            />
           }
         >
-          Add repository
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onChange([
-              ...resources,
-              { type: "memory_store", memory_store_id: "" },
-            ])
-          }
-        >
-          Add memory store
-        </Button>
-      </div>
+          <Plus className="size-4" /> Resource
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-48">
+          <DropdownMenuItem
+            onClick={() =>
+              onChange([
+                ...resources,
+                { type: "github_repository", url: "", authorization_token: "" },
+              ])
+            }
+          >
+            GitHub repository
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={uploadPending} onClick={onAttachFile}>
+            File
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() =>
+              onChange([
+                ...resources,
+                { type: "memory_store", memory_store_id: "" },
+              ])
+            }
+          >
+            Memory store
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

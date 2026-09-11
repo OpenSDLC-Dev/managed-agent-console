@@ -65,7 +65,9 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
 
   const vaultList = vaults.data?.data ?? [];
 
-  const save = () =>
+  const save = () => {
+    if (create.isPending || upload.isPending || !agentId || !environmentId)
+      return;
     create.mutate(
       {
         agent: agentId,
@@ -92,6 +94,7 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
         },
       },
     );
+  };
 
   const error =
     create.error instanceof Error
@@ -219,66 +222,63 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
         </div>
       )}
 
-      <div>
-        <Label className="pb-2">File mounts</Label>
-        <div className="space-y-1.5">
-          {attached.map((file) => (
-            <div key={file.file_id} className="flex items-center gap-2 text-sm">
-              <Paperclip className="size-3.5 text-muted-foreground" />
-              {file.filename}
-              <button
-                type="button"
-                aria-label={`Remove ${file.filename}`}
-                onClick={() =>
-                  setAttached(
-                    attached.filter((f) => f.file_id !== file.file_id),
-                  )
-                }
-              >
-                <X className="size-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          ))}
-          <input
-            ref={fileInput}
-            type="file"
-            aria-label="Upload file"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              upload.mutate(file, {
-                onSuccess: (uploaded) =>
-                  setAttached((a) => [
-                    ...a,
-                    { file_id: uploaded.id, filename: uploaded.filename },
-                  ]),
-              });
-              e.target.value = "";
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            disabled={upload.isPending}
-            onClick={() => fileInput.current?.click()}
-          >
-            <Paperclip className="size-4" />
-            {upload.isPending ? "Uploading…" : "Attach file"}
-          </Button>
-        </div>
-      </div>
-
       <InitialResources
         resources={initialResources}
         onChange={setInitialResources}
-      />
+        owner="session"
+        onAttachFile={() => fileInput.current?.click()}
+        uploadPending={upload.isPending}
+      >
+        <div>
+          <div className="space-y-1.5">
+            {attached.map((file) => (
+              <div
+                key={file.file_id}
+                className="flex items-center gap-2 text-sm"
+              >
+                <Paperclip className="size-3.5 text-muted-foreground" />
+                {file.filename}
+                <button
+                  type="button"
+                  aria-label={`Remove ${file.filename}`}
+                  onClick={() =>
+                    setAttached(
+                      attached.filter((f) => f.file_id !== file.file_id),
+                    )
+                  }
+                >
+                  <X className="size-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            ))}
+            <input
+              ref={fileInput}
+              type="file"
+              aria-label="Upload file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                upload.mutate(file, {
+                  onSuccess: (uploaded) =>
+                    setAttached((a) => [
+                      ...a,
+                      { file_id: uploaded.id, filename: uploaded.filename },
+                    ]),
+                });
+                e.target.value = "";
+              }}
+            />
+          </div>
+        </div>
+      </InitialResources>
 
       <div className="flex items-center gap-3">
         <Button
           onClick={save}
-          disabled={create.isPending || !agentId || !environmentId}
+          disabled={
+            create.isPending || upload.isPending || !agentId || !environmentId
+          }
         >
           Create session
         </Button>

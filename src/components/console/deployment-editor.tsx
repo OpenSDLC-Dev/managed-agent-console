@@ -576,65 +576,61 @@ export function DeploymentEditor({
         )}
         {mode === "create" && (
           <>
-            <div>
-              <Label className="pb-2">File resources</Label>
-              <div className="space-y-2">
-                {attached.map((file) => (
-                  <div
-                    key={file.file_id}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Paperclip className="size-3.5" />
-                    {file.filename}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${file.filename}`}
-                      onClick={() =>
-                        setAttached((current) =>
-                          current.filter(
-                            (item) => item.file_id !== file.file_id,
-                          ),
-                        )
-                      }
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                ))}
-                <input
-                  ref={fileInput}
-                  type="file"
-                  aria-label="Upload file"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    upload.mutate(file, {
-                      onSuccess: (uploaded) =>
-                        setAttached((current) => [
-                          ...current,
-                          { file_id: uploaded.id, filename: uploaded.filename },
-                        ]),
-                    });
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={upload.isPending}
-                  onClick={() => fileInput.current?.click()}
-                >
-                  <Paperclip className="size-4" /> Attach file
-                </Button>
-              </div>
-            </div>
             <InitialResources
               resources={resources}
               onChange={setResources}
               owner="deployment"
-            />
+              onAttachFile={() => fileInput.current?.click()}
+              uploadPending={upload.isPending}
+            >
+              <div>
+                <div className="space-y-2">
+                  {attached.map((file) => (
+                    <div
+                      key={file.file_id}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <Paperclip className="size-3.5" />
+                      {file.filename}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${file.filename}`}
+                        onClick={() =>
+                          setAttached((current) =>
+                            current.filter(
+                              (item) => item.file_id !== file.file_id,
+                            ),
+                          )
+                        }
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    aria-label="Upload file"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      upload.mutate(file, {
+                        onSuccess: (uploaded) =>
+                          setAttached((current) => [
+                            ...current,
+                            {
+                              file_id: uploaded.id,
+                              filename: uploaded.filename,
+                            },
+                          ]),
+                      });
+                      event.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+            </InitialResources>
           </>
         )}
       </Section>
