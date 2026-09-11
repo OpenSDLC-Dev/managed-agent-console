@@ -125,8 +125,9 @@ export function TimezonePicker({
               )}
             </Combobox.List>
             <p className="border-t px-2 py-1.5 text-xs text-muted-foreground">
-              Offsets are current and may change with daylight saving time. Type
-              another timezone to use its exact value.
+              Offsets use your browser’s timezone data and may differ from the
+              platform or change seasonally. The platform determines actual run
+              times. Type another timezone to use its exact value.
             </p>
           </Combobox.Popup>
         </Combobox.Positioner>
