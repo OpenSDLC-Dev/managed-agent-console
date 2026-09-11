@@ -68,10 +68,13 @@ it("guards internal links and clears the browser unload guard after saving", asy
   expect(push).not.toHaveBeenCalled();
   await user.click(await screen.findByRole("button", { name: "Leave" }));
   expect(push).toHaveBeenCalledWith("/memory-stores");
+  const retained = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(retained);
+  expect(retained.defaultPrevented).toBe(true);
+  fireEvent.click(screen.getByText("Saved"));
   const clean = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(clean);
   expect(clean.defaultPrevented).toBe(false);
-  fireEvent.click(screen.getByText("Saved"));
 });
 
 it("does not destroy the sign-in session while an operator chooses Stay", async () => {
@@ -105,4 +108,16 @@ it("does not destroy the sign-in session while an operator chooses Stay", async 
   const unloading = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unloading);
   expect(unloading.defaultPrevented).toBe(false);
+});
+
+it("keeps a mounted dirty editor guarded when an accepted action does not leave", async () => {
+  const user = userEvent.setup();
+  const leave = mount();
+  await user.click(screen.getByLabelText("Draft"));
+  await user.click(screen.getByText("Cancel edit"));
+  await user.click(await screen.findByRole("button", { name: "Leave" }));
+  expect(leave).toHaveBeenCalledOnce();
+  await user.click(screen.getByText("Cancel edit"));
+  expect(await screen.findByRole("button", { name: "Stay" })).toBeVisible();
+  expect(leave).toHaveBeenCalledOnce();
 });

@@ -113,7 +113,12 @@ export function SignedInAs() {
       )}
       <button
         type="button"
-        onClick={() => leave.requestLeave(() => void signOut())}
+        onClick={() =>
+          leave.requestLeave(() => {
+            leave.setDirty(false);
+            void signOut();
+          })
+        }
         disabled={signingOut}
         data-testid="sign-out"
         className="mt-1 text-muted-foreground hover:text-foreground disabled:opacity-50"

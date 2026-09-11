@@ -107,8 +107,8 @@ export function UnsavedChangesProvider({
     setPending(null);
   };
   const accept = () => {
-    // Clear synchronously before a route transition or a browser unload starts.
-    dirty.current = false;
+    // Authorize this action; a draft that remains mounted still needs protection.
+    // Saving, unmounting, or committing sign-out clears it explicitly.
     setPending(null);
     if (pending) pending();
   };
