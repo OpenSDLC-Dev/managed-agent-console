@@ -10,6 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense } from "react";
+import { EnvironmentDetail } from "@/components/console/environment-detail";
 import EnvironmentDetailPage from "./page";
 import type { Environment } from "@/lib/platform/types";
 
@@ -88,14 +89,18 @@ function asParams(id: string): Promise<{ id: string }> {
   } as unknown as Promise<{ id: string }>;
 }
 
-function renderPage(id = "env_1") {
+function renderPage(id = "env_1", inspector = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <Suspense fallback={null}>
-        <EnvironmentDetailPage params={asParams(id)} />
+        {inspector ? (
+          <EnvironmentDetail id={id} inspector />
+        ) : (
+          <EnvironmentDetailPage params={asParams(id)} />
+        )}
       </Suspense>
     </QueryClientProvider>,
   );
@@ -253,9 +258,9 @@ describe("EnvironmentDetailPage", () => {
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/environments"));
   });
 });
-it("shows the complete environment response in API view", async () => {
+it("shows the complete environment response in inspector API view", async () => {
   stubFetch(() => json(environment()));
-  renderPage();
+  renderPage("env_1", true);
   await screen.findByRole("heading", { name: "Prod sandbox" });
   await userEvent.click(screen.getByRole("radio", { name: "API" }));
   expect(screen.getByText(/GET \/v1\/environments\/env_1/)).toBeInTheDocument();

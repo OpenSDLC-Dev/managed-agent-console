@@ -393,6 +393,17 @@ environment-edit-inline, environment-inspector, environment-inspector-api,
 environment-inspector-narrow, environment-inspector-missing,
 environment-selection, environment-selection-confirm and skill-inspector.
 
+The full environment page uses stacked General, Networking, Packages and Metadata
+sections, with 800px fields and full-width dividers; Rendered/API belongs to the
+inspector. Inline editing keeps these sections, a 56px description, 36×20px
+network switches and add/remove rows. Hosting type stays in the heading.
+
+The console uses one package argument per row: domain/environment.go permits
+spaces and commas inside an entry, so splitting the reference space-separated
+text would corrupt valid arguments. Metadata accepts the platform's mixed-case
+keys rather than adopting the reference's lowercase-only hint; environment
+updates remove old keys with empty-string tombstones (internal/api/wire.go).
+
 ## Creation workflows — checked 2026-09-11
 
 Chrome/DevTools measured the memory-store dialog at 520px and deployment dialog

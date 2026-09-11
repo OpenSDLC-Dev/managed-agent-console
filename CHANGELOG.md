@@ -6,6 +6,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+- Environment detail and editing follow the reference section layout, with package-manager rows, metadata key/value rows and network switches. Removing metadata preserves platform patch semantics; failed saves retain the draft.
+
 ### Added
 
 - Environments open in a resizable inspector with exact-ID lookup and an API view.

@@ -85,13 +85,19 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await expect(page).toHaveURL(/\/environments\/env_mock/);
 
   await page.getByRole("button", { name: "Edit" }).click();
-  await expect(page.getByText("Cloud (immutable)")).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Environment type" }),
+  ).toHaveCount(0);
   await page.getByLabel("Networking").click();
-  await page.getByRole("option", { name: "limited" }).click();
+  await page.getByRole("option", { name: "Limited" }).click();
   await page
     .getByLabel("Allowed hosts (one per line)")
     .fill("api.example.com\nregistry.npmjs.org");
-  await page.getByLabel("npm", { exact: true }).fill("typescript, vitest");
+  await page.getByLabel("Package manager 1").selectOption("npm");
+  await page.getByLabel("Package 1", { exact: true }).fill("typescript");
+  await page.getByRole("button", { name: "Add package", exact: true }).click();
+  await page.getByLabel("Package manager 2").selectOption("npm");
+  await page.getByLabel("Package 2", { exact: true }).fill("vitest");
   await page.getByLabel("Name").fill("staging-sandbox-2");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(

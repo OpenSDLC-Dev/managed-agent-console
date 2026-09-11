@@ -293,6 +293,31 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "environment-edit-rows",
+    route: "/environments/env_cloudlimited000000001",
+    fixture: "cloud environment with package and metadata drafts",
+    description: "Structured package manager and metadata row editing.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Add package", exact: true })
+        .click();
+      await page.getByLabel("Metadata key 1").fill("Team");
+      await page.getByLabel("Metadata value 1").fill("Research");
+      await page.getByRole("button", { name: "Add metadata entry" }).click();
+    },
+  },
+  {
+    id: "environment-edit-narrow",
+    route: "/environments/env_cloudlimited000000001",
+    fixture: "cloud environment editor at 390px",
+    description: "Narrow structured editor and switches.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Edit", exact: true }).click();
+    },
+  },
+  {
     id: "environment-detail",
     route: `/environments/${ENV}`,
     fixture: ENV,

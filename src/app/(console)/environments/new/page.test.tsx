@@ -107,7 +107,7 @@ describe("NewEnvironmentPage", () => {
     expect(
       screen.getByRole("button", { name: "Networking" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("npm")).toHaveValue("");
+    expect(screen.getByLabelText("Package 1")).toHaveValue("");
     // Create is disabled until a name is present.
     expect(
       screen.getByRole("button", { name: "Create environment" }),
