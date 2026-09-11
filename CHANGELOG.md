@@ -6,6 +6,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+- Schedule presets use a 12-hour clock with keyboard-operable AM/PM controls, preserving midnight and noon in the submitted cron expression.
+
 - Environment detail and editing follow the reference section layout, with package-manager rows, metadata key/value rows and network switches. Removing metadata preserves platform patch semantics; failed saves retain the draft.
 - Custom tool schema drafts support Tab indentation and Escape-then-Tab focus exit, including inside the Agent creation dialog.
 

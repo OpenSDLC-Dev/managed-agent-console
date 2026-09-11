@@ -47,9 +47,10 @@ export function scheduleDraft(expression: string) {
     frequency,
     minute: numericMinute ? String(Number(minute)) : "0",
     time:
-      (numericHour ? hour.padStart(2, "0") : "09") +
+      (numericHour ? String(Number(hour) % 12 || 12) : "9") +
       ":" +
       (numericMinute ? minute.padStart(2, "0") : "00"),
+    period: numericHour && Number(hour) >= 12 ? "PM" : "AM",
     weekday: /^[0-6]$/.test(weekday ?? "") ? weekday : "1",
   };
 }
@@ -57,7 +58,11 @@ export function scheduleDraft(expression: string) {
 function expressionFromDraft(draft: ReturnType<typeof scheduleDraft>) {
   if (draft.frequency === "Every minute") return "* * * * *";
   if (draft.frequency === "Every hour") return `${draft.minute} * * * *`;
-  const [hour, minute] = draft.time.split(":");
+  if (!/^(0?[1-9]|1[0-2]):[0-5]\d$/.test(draft.time)) return "";
+  const [clockHour, minute] = draft.time.split(":");
+  const hour = String(
+    (Number(clockHour) % 12) + (draft.period === "PM" ? 12 : 0),
+  );
   return `${minute ? Number(minute) : ""} ${hour ? Number(hour) : ""} * * ${draft.frequency === "Weekly" ? draft.weekday : draft.frequency === "Weekdays" ? "1-5" : "*"}`;
 }
 
@@ -140,11 +145,33 @@ export function DeploymentSchedule({
                 <Label htmlFor="deployment-at">At</Label>
                 <Input
                   id="deployment-at"
-                  type="time"
+                  className="w-24"
+                  placeholder="9:00"
+                  pattern="(0?[1-9]|1[0-2]):[0-5][0-9]"
+                  title="Enter a time from 1:00 to 12:59"
+                  required
                   value={draft.time}
                   onChange={(event) => change({ time: event.target.value })}
                 />
               </div>
+              <fieldset className="flex rounded-lg bg-muted p-0.5">
+                <legend className="sr-only">Time period</legend>
+                {["AM", "PM"].map((period) => (
+                  <label key={period} className="relative flex">
+                    <input
+                      type="radio"
+                      name="deployment-time-period"
+                      value={period}
+                      checked={draft.period === period}
+                      onChange={() => change({ period })}
+                      className="peer absolute inset-0 size-full cursor-pointer opacity-0"
+                    />
+                    <span className="pointer-events-none rounded-md px-3 py-1 text-sm text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+                      {period}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
               {draft.frequency === "Weekly" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="deployment-weekday">On</Label>

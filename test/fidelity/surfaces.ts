@@ -797,6 +797,21 @@ export const SURFACES: Surface[] = [
         .fill("America/New");
     },
   })),
+  ...[false, true].map((narrow): Surface => ({
+    id: "deployment-schedule-clock" + (narrow ? "-narrow" : ""),
+    route: "/deployments",
+    fixture: "12-hour schedule clock",
+    description: "Schedule time with PM selected and a raw cron summary.",
+    setup: async (page) => {
+      if (narrow) await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("button", { name: "Create deployment", exact: true })
+        .click();
+      await page.getByRole("radio", { name: "Schedule", exact: true }).check();
+      await page.getByRole("radio", { name: "PM", exact: true }).check();
+      await page.getByLabel("At", { exact: true }).scrollIntoViewIfNeeded();
+    },
+  })),
   {
     id: "deployment-create-schedule",
     route: "/deployments",
