@@ -51,6 +51,12 @@ export function SchemaTextarea({ value, onValueChange, ...props }: Props) {
           return;
         event.preventDefault();
         const element = event.currentTarget;
+        // Native insertion retains undo history; direct value replacement does not.
+        // execCommand is deprecated, but textarea undo has no replacement API yet.
+        if (element.ownerDocument.execCommand?.("insertText", false, "  ")) {
+          onValueChange(element.value);
+          return;
+        }
         const next =
           value.slice(0, element.selectionStart) +
           "  " +

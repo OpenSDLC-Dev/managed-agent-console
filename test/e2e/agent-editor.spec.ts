@@ -202,6 +202,10 @@ test("schema indentation keeps the modal open and Escape then Tab releases focus
   await schema.press("ArrowLeft");
   await schema.press("Tab");
   await expect(schema).toHaveValue("{  }");
+  await schema.press("ControlOrMeta+z");
+  await expect(schema).toHaveValue("{}");
+  await schema.press("ControlOrMeta+Shift+z");
+  await expect(schema).toHaveValue("{  }");
   await expect(schema).toBeFocused();
   await schema.press("Escape");
   await expect(dialog).toBeVisible();
@@ -209,7 +213,8 @@ test("schema indentation keeps the modal open and Escape then Tab releases focus
   await expect(schema).not.toBeFocused();
   await expect(dialog).toBeVisible();
   await schema.focus();
-  await schema.press("End");
+  await schema.press("ControlOrMeta+A");
+  await schema.press("ArrowRight");
   await schema.press("Tab");
   await expect(schema).toHaveValue("{  }  ");
   await dialog.getByRole("radio", { name: "raw" }).click();

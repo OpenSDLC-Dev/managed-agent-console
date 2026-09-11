@@ -73,3 +73,24 @@ it("keeps modified Tab and composition available to the browser", () => {
     fireEvent.keyDown(editor, { key: "Tab", ...options });
   expect(change).not.toHaveBeenCalled();
 });
+
+it("synchronizes successful native insertion without replacing the value", () => {
+  const change = vi.fn();
+  render(
+    <SchemaTextarea aria-label="Schema" value="{}" onValueChange={change} />,
+  );
+  const editor = screen.getByLabelText("Schema") as HTMLTextAreaElement;
+  const original = document.execCommand;
+  const command = vi.fn(() => {
+    editor.value = "{  }";
+    return true;
+  });
+  document.execCommand = command;
+  try {
+    fireEvent.keyDown(editor, { key: "Tab" });
+    expect(command).toHaveBeenCalledWith("insertText", false, "  ");
+    expect(change).toHaveBeenCalledWith("{  }");
+  } finally {
+    document.execCommand = original;
+  }
+});
