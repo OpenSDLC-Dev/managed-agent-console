@@ -9,7 +9,7 @@ Backlog: [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141
 
 - [x] Inspect a populated reference environment, selection actions and editing.
 - [x] Implement shared inspector, rendered/API detail and confirmed batch actions.
-- [ ] Verify browser flows and affected fidelity surfaces in both themes.
+- [x] Verify browser flows and affected fidelity surfaces in both themes.
 - [ ] Pass CI and resolve reviews before squash merge.
 
 Prior deliveries: [Skills #142](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/142),

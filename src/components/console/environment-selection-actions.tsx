@@ -28,9 +28,16 @@ export function EnvironmentSelectionActions({
     action: "archive" | "delete";
     ids: string[];
   } | null>(null);
+  const [failed, setFailed] = useState<
+    NonNullable<typeof batch.data>["failed"]
+  >([]);
+  const visibleFailures = failed.filter(({ id }) =>
+    selected.some((environment) => environment.id === id),
+  );
+  if (visibleFailures.length !== failed.length) setFailed(visibleFailures);
   if (
     !selected.length &&
-    !batch.data?.failed.length &&
+    !visibleFailures.length &&
     !confirm &&
     !batch.isPending
   )
@@ -53,6 +60,7 @@ export function EnvironmentSelectionActions({
             onClick={() => {
               clear();
               batch.reset();
+              setFailed([]);
             }}
           >
             Clear selection
@@ -90,7 +98,7 @@ export function EnvironmentSelectionActions({
           </Button>
         </div>
       )}
-      {batch.data?.failed.map(({ id, error }) => (
+      {visibleFailures.map(({ id, error }) => (
         <div key={id}>
           <p className="break-all text-sm">{id}</p>
           <ErrorState error={error} />
@@ -127,8 +135,10 @@ export function EnvironmentSelectionActions({
                 const request = confirm;
                 setConfirm(null);
                 batch.mutate(request, {
-                  onSuccess: (result) =>
-                    onComplete(result.succeeded, request.action),
+                  onSuccess: (result) => {
+                    setFailed(result.failed);
+                    onComplete(result.succeeded, request.action);
+                  },
                 });
               }}
             >

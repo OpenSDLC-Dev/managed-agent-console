@@ -26,6 +26,7 @@ export function ResourceInspector({
   onSelect,
   onClose,
   fallbackFocus,
+  restoreToFallback,
 }: {
   kind: "skill" | "environment";
   children: React.ReactNode;
@@ -35,6 +36,7 @@ export function ResourceInspector({
   onSelect: (id: string) => void;
   onClose: () => void;
   fallbackFocus?: RefObject<HTMLElement | null>;
+  restoreToFallback?: RefObject<boolean>;
 }) {
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
@@ -54,11 +56,17 @@ export function ResourceInspector({
     const fallback = fallbackFocus?.current;
     panel.current?.focus();
     return () => {
-      if (trigger instanceof HTMLElement && trigger.isConnected)
+      if (
+        // This is a close-reason ref, not a DOM ref; cleanup needs its latest value.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        !restoreToFallback?.current &&
+        trigger instanceof HTMLElement &&
+        trigger.isConnected
+      )
         trigger.focus();
       else if (fallback?.isConnected) fallback.focus();
     };
-  }, [fallbackFocus]);
+  }, [fallbackFocus, restoreToFallback]);
 
   return (
     <aside

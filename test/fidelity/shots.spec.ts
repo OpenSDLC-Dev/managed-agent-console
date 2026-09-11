@@ -88,7 +88,7 @@ for (const surface of SURFACES) {
       // data; without this the sidebar is caught mid-"Checking platform…".
       await page
         .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
-        .waitFor();
+        .waitFor({ state: "attached" });
     }
 
     // Outside the branch, not inside the signed-in one: the gate has states a
@@ -100,7 +100,7 @@ for (const surface of SURFACES) {
     if (surface.route !== "/login") {
       await page
         .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
-        .waitFor();
+        .waitFor({ state: "attached" });
     }
 
     // Readiness, using the console's own loading convention: every skeleton

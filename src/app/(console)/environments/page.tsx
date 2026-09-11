@@ -90,13 +90,20 @@ function EnvironmentsList() {
   const search = useSearchParams();
   const inspected = search.get("environment");
   const lookup = useRef<HTMLInputElement>(null);
+  const restoreToFallback = useRef(false);
   const inspect = (id?: string) => {
     const params = new URLSearchParams(window.location.search);
-    if (id) params.set("environment", id);
-    else params.delete("environment");
+    if (id) {
+      restoreToFallback.current = false;
+      params.set("environment", id);
+    } else params.delete("environment");
     router.push("/environments" + (params.size ? "?" + params : ""), {
       scroll: false,
     });
+  };
+  const closeDeletedInspector = () => {
+    restoreToFallback.current = true;
+    inspect();
   };
   const [includeArchived, setIncludeArchived] = useState(false);
   const pager = useCursorPage(String(includeArchived));
@@ -209,7 +216,7 @@ function EnvironmentsList() {
               "environment",
             );
             if (action === "delete" && current && succeeded.includes(current))
-              inspect();
+              closeDeletedInspector();
           }}
         />
       </div>
@@ -249,12 +256,13 @@ function EnvironmentsList() {
           onSelect={inspect}
           onClose={() => inspect()}
           fallbackFocus={lookup}
+          restoreToFallback={restoreToFallback}
         >
           <EnvironmentDetail
             key={inspected}
             id={inspected}
             inspector
-            onDeleted={() => inspect()}
+            onDeleted={closeDeletedInspector}
           />
         </ResourceInspector>
       )}

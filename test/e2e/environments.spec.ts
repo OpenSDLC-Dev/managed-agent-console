@@ -49,6 +49,9 @@ test("environment inspector preserves the list, history, keyboard focus and API 
     panel.getByRole("heading", { name: "cloud-limited" }),
   ).toBeVisible();
   expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  expect(
     await new AxeBuilder({ page })
       .include('[aria-label="Environment details"]')
       .analyze(),
@@ -168,6 +171,18 @@ test("environment batch deletion keeps only failures selected and allows retry",
   await expect(
     page.getByRole("checkbox", { name: "Select Retry target", exact: true }),
   ).toBeChecked();
+  await page
+    .getByRole("checkbox", { name: "Select Retry target", exact: true })
+    .uncheck();
+  await expect(
+    page.getByText("Environment is referenced by sessions"),
+  ).toHaveCount(0);
+  await page
+    .getByRole("checkbox", { name: "Select Retry target", exact: true })
+    .check();
+  await expect(
+    page.getByText("Environment is referenced by sessions"),
+  ).toHaveCount(0);
   await page.unroute(pattern);
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page
@@ -180,4 +195,50 @@ test("environment batch deletion keeps only failures selected and allows retry",
   await expect(
     page.getByText("Environment is referenced by sessions"),
   ).toHaveCount(0);
+});
+
+test("deleting an inspected environment restores focus before a delayed list refresh", async ({
+  page,
+  request,
+}) => {
+  const created = await request.post("http://127.0.0.1:18080/v1/environments", {
+    headers: { "x-api-key": "test-key" },
+    data: { name: "Focus target", config: { type: "self_hosted" } },
+  });
+  expect(created.ok()).toBe(true);
+  await signIn(page);
+  await page.goto("/environments");
+  const row = page.getByRole("row").filter({ hasText: "Focus target" });
+  await row.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("region", { name: "Environment details" });
+  await expect(
+    panel.getByRole("heading", { name: "Focus target" }),
+  ).toBeVisible();
+  let release!: () => void;
+  const refreshed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/api\/platform\/v1\/environments\?/, async (route) => {
+    await refreshed;
+    await route.continue();
+  });
+  await panel.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Delete environment", exact: true })
+    .click();
+  try {
+    await expect(panel).toHaveCount(0);
+    await expect(row).toHaveCount(1);
+    await expect(
+      page.getByRole("textbox", { name: "Find environment by ID" }),
+    ).toBeFocused();
+  } finally {
+    release();
+  }
+  await expect(row).toHaveCount(0);
+  await expect(
+    page.getByRole("textbox", { name: "Find environment by ID" }),
+  ).toBeFocused();
 });

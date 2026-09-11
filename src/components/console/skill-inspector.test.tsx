@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ResourceInspector } from "./resource-inspector";
 import { SkillInspector } from "./skill-inspector";
 
 vi.mock("./skill-detail", () => ({
@@ -100,6 +101,32 @@ it("falls back to the list lookup if the triggering row was deleted", () => {
   );
   trigger.remove();
   unmount();
+  expect(lookup).toHaveFocus();
+  lookup.remove();
+});
+
+it("restores durable focus on deletion before the triggering row is removed", () => {
+  const trigger = document.createElement("button"),
+    lookup = document.createElement("input");
+  document.body.append(trigger, lookup);
+  trigger.focus();
+  const restoreToFallback = { current: false };
+  const { unmount } = render(
+    <ResourceInspector
+      kind="environment"
+      id="env_delete"
+      onClose={vi.fn()}
+      onSelect={vi.fn()}
+      fallbackFocus={{ current: lookup }}
+      restoreToFallback={restoreToFallback}
+    >
+      Details
+    </ResourceInspector>,
+  );
+  restoreToFallback.current = true;
+  unmount();
+  expect(lookup).toHaveFocus();
+  trigger.remove();
   expect(lookup).toHaveFocus();
   lookup.remove();
 });
