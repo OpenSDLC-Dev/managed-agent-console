@@ -28,6 +28,10 @@ test("agent detail shows overview, system prompt, and versions", async ({
 }) => {
   await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
+  await page
+    .getByRole("region", { name: "Agent details" })
+    .getByRole("link", { name: "Open", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
   await expect(
     page.getByRole("heading", { name: "Deep researcher" }),

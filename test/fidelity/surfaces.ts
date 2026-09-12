@@ -74,6 +74,57 @@ const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  ...["rendered", "permissions", "custom", "api", "narrow"].map(
+    (view): Surface => ({
+      id: "agent-inspector-" + view,
+      route: "/agents?agent=" + AGENT,
+      fixture:
+        "versioned coordinator with builtin tools, a skill and pinned roster",
+      description:
+        "Agent list side inspector with permissions and Rendered/API views.",
+      setup: async (page) => {
+        if (view === "custom") {
+          const updated = await page.request.post(
+            MOCK_URL + "/v1/agents/" + AGENT,
+            {
+              headers: { "x-api-key": "test-key" },
+              data: {
+                version: 3,
+                tools: [
+                  {
+                    type: "agent_toolset_20260401",
+                    default_config: { enabled: false },
+                    configs: [
+                      {
+                        name: "bash",
+                        enabled: true,
+                        permission_policy: { type: "always_ask" },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          );
+          if (!updated.ok())
+            throw new Error(
+              "Could not configure fidelity agent: " + updated.status(),
+            );
+          await page.reload();
+        }
+        if (view === "narrow")
+          await page.setViewportSize({ width: 390, height: 844 });
+        const panel = page.getByRole("region", { name: "Agent details" });
+        await panel.getByRole("heading", { name: "Deep researcher" }).waitFor();
+        if (view === "api")
+          await panel.getByRole("button", { name: "API", exact: true }).click();
+        if (view === "permissions" || view === "custom" || view === "narrow")
+          await panel
+            .getByRole("button", { name: /^Tool permissions 8/ })
+            .click();
+      },
+    }),
+  ),
   ...["agents", "memory-stores"].map((route): Surface => ({
     id: route + "-created-range",
     route: "/" + route + "?created=2026-08-01~2026-08-02",

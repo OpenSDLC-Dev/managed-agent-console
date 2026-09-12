@@ -62,6 +62,10 @@ test("create an agent from a starter template", async ({ page }) => {
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
   await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
+  await page
+    .getByRole("region", { name: "Agent details" })
+    .getByRole("link", { name: "Open", exact: true })
+    .click();
   await page.getByRole("button", { name: "Edit" }).click();
   await expect(page).toHaveURL(/\/edit$/);
 
@@ -127,6 +131,10 @@ test("platform validation errors surface inline from the raw tab", async ({
 test("archive an agent from its detail page", async ({ page }) => {
   await signIn(page, "/agents");
   await page.getByRole("cell", { name: /General task agent/ }).click();
+  await page
+    .getByRole("region", { name: "Agent details" })
+    .getByRole("link", { name: "Open", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "General task agent" }),
   ).toBeVisible();

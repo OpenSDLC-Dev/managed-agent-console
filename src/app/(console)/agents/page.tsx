@@ -3,7 +3,6 @@
 import { useRef, Suspense, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 import { useListFilters } from "@/lib/use-list-filters";
 import {
   decodeCreatedFilter,
@@ -20,26 +19,17 @@ import {
   UnavailableSurface,
 } from "@/components/console/bits";
 import { IdCell } from "@/components/console/copy-id";
-import { ResourceActions } from "@/components/console/resource-actions";
+import {
+  AgentInspector,
+  AgentActions,
+} from "@/components/console/agent-inspector";
 import { CreateAgentButton } from "@/components/console/create-agent-dialog";
 import { StatusFilter } from "@/components/console/status-filter";
 import { CreatedFilter } from "@/components/console/created-filter";
-import { useAgents, useArchiveAgent } from "@/lib/platform/queries";
+import { useAgents } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
-
-function AgentRowActions({ agent }: { agent: Agent }) {
-  const archive = useArchiveAgent(agent.id);
-  return (
-    <ResourceActions
-      resource="agent"
-      archived={!!agent.archived_at}
-      onArchive={agent.archived_at ? undefined : () => archive.mutate()}
-      archivePending={archive.isPending}
-    />
-  );
-}
 
 const COLUMNS: Column<Agent>[] = [
   { key: "id", header: "ID", cell: (a) => <IdCell id={a.id} /> },
@@ -72,7 +62,7 @@ const COLUMNS: Column<Agent>[] = [
   {
     key: "actions",
     header: "Actions",
-    cell: (a) => <AgentRowActions agent={a} />,
+    cell: (a) => <AgentActions agent={a} />,
   },
 ];
 
@@ -87,7 +77,6 @@ export default function AgentsPage() {
 }
 
 function AgentsList() {
-  const router = useRouter();
   const filters = useListFilters();
   const lookup = useRef<HTMLInputElement>(null);
   const includeArchived = filters.params.get("status") === "all";
@@ -102,6 +91,11 @@ function AgentsList() {
     "created_at[gte]": created.gte,
     "created_at[lte]": created.lte,
   });
+
+  const inspected = filters.params.get("agent");
+  const rows = data?.data ?? [];
+  const index = rows.findIndex((agent) => agent.id === inspected);
+  const inspect = (id: string) => filters.update({ agent: id });
 
   const filtered = includeArchived || created.key !== "all";
   const resetFilters = () => filters.update({ status: null, created: null });
@@ -121,7 +115,7 @@ function AgentsList() {
           onSubmit={(event) => {
             event.preventDefault();
             const id = lookup.current?.value.trim();
-            if (id) router.push("/agents/" + encodeURIComponent(id));
+            if (id) inspect(id);
           }}
         >
           <Input
@@ -151,6 +145,16 @@ function AgentsList() {
           </Button>
         )}
       </div>
+      {inspected && (
+        <AgentInspector
+          id={inspected}
+          previous={index > 0 ? rows[index - 1]?.id : undefined}
+          next={index >= 0 ? rows[index + 1]?.id : undefined}
+          onSelect={inspect}
+          onClose={() => filters.update({ agent: null })}
+          fallbackFocus={lookup}
+        />
+      )}
       {error ? (
         <ErrorState error={error} />
       ) : (
@@ -160,7 +164,8 @@ function AgentsList() {
             rows={data?.data ?? []}
             rowKey={(a) => a.id}
             loading={isPending}
-            onRowClick={(a) => router.push(`/agents/${a.id}`)}
+            activeRowKey={inspected ?? undefined}
+            onRowClick={(a) => inspect(a.id)}
             empty={
               filtered ? (
                 <EmptyState
