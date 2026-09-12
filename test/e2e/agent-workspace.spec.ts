@@ -180,7 +180,7 @@ test("Start session pins the selected version and navigation remains guarded", a
 test("narrow editing keeps the draft actions reachable and exposes invalid historical versions", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 360, height: 844 });
   await signIn(page, "/agents/" + AGENT);
   await page.getByLabel("Description", { exact: true }).fill("Narrow draft");
   await expect(
@@ -189,11 +189,24 @@ test("narrow editing keeps the draft actions reachable and exposes invalid histo
   await expect(
     page.getByRole("button", { name: "Save new version" }),
   ).toBeInViewport();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    const form = page.locator("fieldset").first();
+    expect(await form.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+      true,
+    );
+    await page
+      .getByRole("button", { name: "deployments", exact: true })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole("button", { name: "deployments", exact: true }),
+    ).toBeInViewport();
+  }
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   await page.goto("/agents/" + AGENT + "?version=bad");

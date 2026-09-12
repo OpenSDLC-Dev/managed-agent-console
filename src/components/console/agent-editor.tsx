@@ -203,7 +203,7 @@ function Section({
 }) {
   const Heading = level === 2 ? "h2" : "h3";
   return (
-    <section className="grid gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
       <div>
         <Heading className="text-[15px] font-medium">{title}</Heading>
         <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
@@ -933,7 +933,7 @@ export function AgentEditor({
               ) : (
                 <div className="space-y-3" data-testid="agent-multiagent">
                   <div className="flex flex-wrap items-end gap-2">
-                    <div className="min-w-64 flex-1 space-y-1.5">
+                    <div className="min-w-0 flex-1 basis-64 space-y-1.5">
                       <Label htmlFor="roster-member">Agent</Label>
                       <select
                         id="roster-member"
@@ -1021,7 +1021,7 @@ export function AgentEditor({
                           <span className="w-6 text-[12px] text-muted-foreground">
                             {index + 1}
                           </span>
-                          <span className="min-w-0 flex-1 text-sm">
+                          <span className="min-w-0 flex-1 break-words text-sm">
                             {member.type === "self" ? (
                               "This coordinator (self)"
                             ) : (

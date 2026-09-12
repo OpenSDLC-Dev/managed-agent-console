@@ -591,3 +591,8 @@ Session tabs use the platform agent_id and optional agent_version filters;
 Deployment tabs use agent_id across versions because that handler has no version
 filter. No per-agent Observability API is implemented, so that reference tab
 is omitted. Model/catalog, Advisor and budget boundaries remain unchanged.
+
+Ubuntu CI exposed a narrow Agent tab-row overflow; a 360px local trace isolated
+the Deployments button at x=382. The row now scrolls within its container. The
+same inspection found the roster grid exceeding its form; its column and member
+selector now shrink and long IDs wrap. Browser checks cover 360px and 390px.

@@ -81,6 +81,7 @@ export const SURFACES: Surface[] = [
     "versions",
     "history",
     "narrow",
+    "narrow-roster",
     "start-session",
     "sessions",
     "deployments",
@@ -98,8 +99,11 @@ export const SURFACES: Surface[] = [
     description:
       "Full Agent configuration, version history, draft actions and related resource tabs.",
     setup: async (page) => {
-      if (view === "narrow")
-        await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "narrow" || view === "narrow-roster")
+        await page.setViewportSize({
+          width: view === "narrow-roster" ? 360 : 390,
+          height: 844,
+        });
       await page
         .getByRole("heading", { name: "Deep researcher", exact: true })
         .waitFor();
@@ -109,6 +113,8 @@ export const SURFACES: Surface[] = [
           .fill(
             "Updated research instructions, ready to save as a new version.",
           );
+      if (view === "narrow-roster")
+        await page.getByTestId("agent-multiagent").scrollIntoViewIfNeeded();
       if (view === "raw")
         await page.getByRole("radio", { name: "raw", exact: true }).click();
       if (view === "versions") {

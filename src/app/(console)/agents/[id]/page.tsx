@@ -116,7 +116,7 @@ function AgentWorkspace({ id }: { id: string }) {
       </div>
       <nav
         aria-label="Agent sections"
-        className="mb-4 flex shrink-0 gap-1 border-b"
+        className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
       >
         {["configuration", "sessions", "deployments"].map((value) => (
           <button
@@ -130,7 +130,7 @@ function AgentWorkspace({ id }: { id: string }) {
                 ? "page"
                 : undefined
             }
-            className="border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+            className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
           >
             {value}
           </button>
