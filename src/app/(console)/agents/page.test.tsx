@@ -195,18 +195,20 @@ describe("AgentsPage", () => {
     expect(pushSpy).not.toHaveBeenCalled();
   });
 
-  it("renders agent rows and navigates on row click", async () => {
-    const fetchMock = stubFetch(() =>
-      json({
-        data: [
-          agent({ id: "agt_1", name: "Support bot" }),
-          agent({
-            id: "agt_2",
-            name: "Old bot",
-            archived_at: "2026-07-01T00:00:00Z",
+  it("renders agent rows and retains list context when inspecting a row", async () => {
+    const fetchMock = stubFetch((url) =>
+      url.pathname.endsWith("/agt_1")
+        ? json(agent({ id: "agt_1", name: "Support bot" }))
+        : json({
+            data: [
+              agent({ id: "agt_1", name: "Support bot" }),
+              agent({
+                id: "agt_2",
+                name: "Old bot",
+                archived_at: "2026-07-01T00:00:00Z",
+              }),
+            ],
           }),
-        ],
-      }),
     );
     renderPage();
 
@@ -227,7 +229,11 @@ describe("AgentsPage", () => {
     expect(url.searchParams.get("include_archived")).toBeNull();
 
     await userEvent.click(screen.getByText("Support bot"));
-    expect(pushSpy).toHaveBeenCalledWith("/agents/agt_1");
+    expect(new URLSearchParams(location.search).get("agent")).toBe("agt_1");
+    expect(
+      await screen.findByRole("region", { name: "Agent details" }),
+    ).toBeVisible();
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("opens the create dialog from the header action", async () => {
@@ -311,7 +317,14 @@ describe("AgentsPage", () => {
 });
 
 it("opens an exact ID outside the current list and safely encodes its route segment", async () => {
-  stubFetch(() => json({ data: [] }));
+  const fetchMock = stubFetch((url) =>
+    url.pathname === "/api/platform/v1/agents"
+      ? json({ data: [] })
+      : json(
+          { error: { type: "not_found_error", message: "Agent not found" } },
+          404,
+        ),
+  );
   const user = userEvent.setup();
   renderPage();
   const input = screen.getByRole("textbox", { name: "Find agent by ID" });
@@ -321,5 +334,15 @@ it("opens an exact ID outside the current list and safely encodes its route segm
   await user.clear(input);
   await user.type(input, "  unknown/id?x=1  ");
   await user.keyboard("{Enter}");
-  expect(pushSpy).toHaveBeenCalledWith("/agents/unknown%2Fid%3Fx%3D1");
+  expect(new URLSearchParams(location.search).get("agent")).toBe(
+    "unknown/id?x=1",
+  );
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("unknown%2Fid%3Fx%3D1"),
+      ),
+    ).toBe(true),
+  );
+  expect(await screen.findByText("Agent not found")).toBeVisible();
 });

@@ -10,9 +10,10 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Inspect populated recordings and verify their integrity.
 - [x] Deliver Vault first-credential workflow, both themes and green CI/review (#158).
 - [x] Deliver direct approval actions and pending eligibility, green CI/review (#159).
-- [x] Implement Memory inspector, contents tree and inline editor.
-- [ ] Verify Memory browser interactions, both themes and CI/review; squash merge.
-- [ ] Align remaining populated inspectors, full editors and nested resources.
+- [x] Deliver Memory inspector and inline contents editing, both themes and green CI/review (#160).
+- [x] Implement Agent list inspection; local coverage and browser/visual checks pass.
+- [ ] Finish Agent inspector CI/review and squash merge (#161).
+- [ ] Align remaining full editors, populated inspectors and nested resources.
 - [ ] Complete local/reference acceptance within implemented platform capabilities.
 
 Reference facts and capability boundaries: [docs/design-reference.md](./docs/design-reference.md).

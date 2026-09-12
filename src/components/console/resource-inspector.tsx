@@ -28,7 +28,7 @@ export function ResourceInspector({
   fallbackFocus,
   restoreToFallback,
 }: {
-  kind: "skill" | "environment" | "memory-store";
+  kind: "skill" | "environment" | "memory-store" | "agent";
   children: React.ReactNode;
   id: string;
   previous?: string;
@@ -42,6 +42,7 @@ export function ResourceInspector({
     skill: "Skill",
     environment: "Environment",
     "memory-store": "Memory store",
+    agent: "Agent",
   }[kind];
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
@@ -66,6 +67,8 @@ export function ResourceInspector({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         !restoreToFallback?.current &&
         trigger instanceof HTMLElement &&
+        trigger !== document.body &&
+        trigger !== document.documentElement &&
         trigger.isConnected
       )
         trigger.focus();

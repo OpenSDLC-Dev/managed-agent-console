@@ -52,6 +52,10 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
 }) => {
   await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
+  await page
+    .getByRole("region", { name: "Agent details" })
+    .getByRole("link", { name: "Open", exact: true })
+    .click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page).toHaveURL(/\/edit$/);
   const editUrl = page.url();
@@ -93,6 +97,10 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
 }) => {
   await signIn(page, "/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
+  await page
+    .getByRole("region", { name: "Agent details" })
+    .getByRole("link", { name: "Open", exact: true })
+    .click();
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page).toHaveURL(/\/edit$/);
   await page.getByRole("radio", { name: "raw", exact: true }).click();

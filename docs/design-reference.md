@@ -563,3 +563,17 @@ announcement on save conflict; both are covered by `memory-inspector.spec.ts`.
 
 Memory Markdown images render as explicit links: agent-written content must not
 initiate requests from an operator's network merely by opening the preview.
+
+## Agent inspector — checked 2026-09-12
+
+Records ec8c4c6, frames 21–23, retain list selection in `?agent=ID`. The 560px
+inspector shows the current version, Open action, expandable built-in permissions,
+skills, multiagent and Rendered/API views. Full configuration editing and its
+version selector (frames 24–27) remain separate #141 work.
+
+Platform `internal/toolset/materialize.go` resolves defaults and explicit overrides;
+it does not emit eight configs when none were supplied. Inspection uses the
+existing editor mapping against `internal/toolset/definitions.go`. Roster order
+and versions come from the server, including the coordinator itself. Unknown tool
+configurations and MCP server records remain inspectable as JSON; no service
+catalog or missing platform capability is invented.
