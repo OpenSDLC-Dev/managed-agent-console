@@ -21,7 +21,8 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Deliver Session list inspector after green CI/review and squash merge (#163).
 - [x] Implement Session transcript cards, inline approval and five inspector tabs.
 - [x] Verify Session workspace coverage, including remounted approval state and missing usage.
-- [ ] Complete integrated Session workspace browsers, Chrome acceptance and CI/review.
+- [x] Verify integrated Session workspace browsers (145 cases) and 19 Chrome surfaces in both themes.
+- [ ] Complete Session workspace CI/review and squash merge.
 - [ ] Align remaining full editors, populated inspectors and nested resources.
 - [ ] Complete local/reference acceptance within implemented platform capabilities.
 
