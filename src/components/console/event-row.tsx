@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -149,6 +149,159 @@ export function TranscriptRow({
   );
 }
 
+/** Readable message/tool cards keep inspection separate from approval buttons. */
+export function TranscriptCard({
+  event,
+  actor,
+  selected,
+  offset,
+  durationMs,
+  onSelect,
+  approval,
+}: {
+  event: SessionEvent;
+  actor: string;
+  selected?: boolean;
+  offset?: string | null;
+  durationMs?: number;
+  onSelect: () => void;
+  approval?: ReactNode;
+}) {
+  const content = event.content as ContentBlock[] | null | undefined;
+  const message =
+    event.type === "user.message" || event.type === "agent.message";
+  const tool = event.input !== undefined || event.type.includes("tool_result");
+  const conversational = message || tool || event.type === "agent.thinking";
+  if (!conversational) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-expanded={selected}
+        data-testid="event-row"
+        data-event-type={event.type}
+        data-event-id={event.id}
+        {...usageAttrs(event)}
+        className={cn(
+          "flex w-full flex-wrap items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground hover:bg-secondary",
+          selected && "bg-secondary",
+        )}
+      >
+        <TypeBadge type={event.type} />
+        <span
+          className="min-w-0 flex-1 break-words"
+          data-testid={
+            isKnownEventType(event.type) ? undefined : "unknown-event-payload"
+          }
+        >
+          {summaryOf(event)}
+        </span>
+        <MetaColumn offset={offset} durationMs={durationMs} />
+      </button>
+    );
+  }
+  const command =
+    event.name === "bash" &&
+    typeof event.input === "object" &&
+    event.input !== null &&
+    "command" in event.input &&
+    typeof event.input.command === "string"
+      ? event.input.command
+      : undefined;
+  return (
+    <article
+      data-testid="event-row"
+      data-event-type={event.type}
+      data-event-id={event.id}
+      {...usageAttrs(event)}
+      className="min-w-0 py-1.5"
+    >
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span
+          className={cn(
+            "rounded px-1.5 py-0.5 text-foreground",
+            event.type === "user.message"
+              ? "bg-pink-100 dark:bg-pink-950"
+              : "bg-secondary",
+          )}
+        >
+          {event.type.startsWith("user.")
+            ? "User"
+            : event.type.startsWith("agent.")
+              ? (event.agent_name ?? actor)
+              : event.type.startsWith("span.")
+                ? "Model"
+                : "Session"}
+        </span>
+        <Time iso={event.processed_at} />
+        <MetaColumn offset={offset} durationMs={durationMs} />
+      </div>
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border bg-card",
+          selected && "ring-1 ring-ring",
+        )}
+      >
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-expanded={selected}
+          className="block w-full space-y-2 p-3 text-left text-sm hover:bg-secondary/30"
+        >
+          <span
+            className={cn(
+              "block break-all font-mono text-xs text-muted-foreground",
+              message && "sr-only",
+            )}
+          >
+            {event.type}
+          </span>
+          {event.name !== undefined && (
+            <span className="block font-medium">{String(event.name)}</span>
+          )}
+          {event.input !== undefined && (
+            <span className="block whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
+              {command !== undefined
+                ? "$ " + command
+                : JSON.stringify(event.input, null, 2)}
+            </span>
+          )}
+          {content?.map((block, index) => (
+            <span
+              key={index}
+              className={cn(
+                "block whitespace-pre-wrap break-words",
+                tool && "rounded-md bg-secondary p-2 font-mono text-xs",
+                event.is_error === true && "bg-destructive/10 text-destructive",
+              )}
+            >
+              {block.type === "text"
+                ? (block.text ?? "")
+                : JSON.stringify(block, null, 2)}
+            </span>
+          ))}
+          {!content?.length && event.input === undefined && (
+            <span
+              className="block whitespace-pre-wrap break-words"
+              data-testid={
+                isKnownEventType(event.type)
+                  ? undefined
+                  : "unknown-event-payload"
+              }
+            >
+              {summaryOf(event)}
+            </span>
+          )}
+          {event.is_error === true && (
+            <span className="block text-xs text-destructive">error</span>
+          )}
+        </button>
+        {approval && <div className="px-3 pb-3">{approval}</div>}
+      </div>
+    </article>
+  );
+}
+
 /** Debug view: every event verbatim — the wire is the truth. */
 export function DebugRow({ event }: { event: SessionEvent }) {
   return (
@@ -219,9 +372,9 @@ export function EventDetailPanel({
       aria-label="Event details"
       className="sticky top-4 max-h-[75vh] self-start overflow-y-auto rounded-lg border bg-card p-4"
     >
-      <div className="flex items-center gap-2 pb-3">
+      <div className="flex flex-wrap items-center gap-2 pb-3">
         <TypeBadge type={event.type} />
-        <span className="text-[12px] text-muted-foreground">
+        <span className="whitespace-nowrap text-[12px] text-muted-foreground">
           <Time iso={event.processed_at} />
         </span>
         <MetaColumn offset={offset} durationMs={durationMs} />

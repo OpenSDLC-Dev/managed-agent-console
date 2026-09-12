@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApprovalBanner } from "./approval-banner";
+import { ApprovalBanner, useToolApprovals } from "./approval-banner";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const toolUse = (id: string, extra?: object): SessionEvent =>
@@ -17,6 +17,23 @@ const toolUse = (id: string, extra?: object): SessionEvent =>
     ...extra,
   }) as SessionEvent;
 
+function Banner({
+  pending,
+  threadId,
+}: {
+  pending: SessionEvent[];
+  threadId?: string;
+}) {
+  const approvals = useToolApprovals("ses_1");
+  return (
+    <ApprovalBanner
+      pending={pending}
+      approvals={approvals}
+      threadId={threadId}
+    />
+  );
+}
+
 function renderBanner(pending: SessionEvent[], threadId?: string) {
   const client = new QueryClient({
     defaultOptions: {
@@ -26,7 +43,7 @@ function renderBanner(pending: SessionEvent[], threadId?: string) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <ApprovalBanner pending={pending} sessionId="ses_1" threadId={threadId} />
+      <Banner pending={pending} threadId={threadId} />
     </QueryClientProvider>,
   );
 }

@@ -25,6 +25,17 @@ export function payloadOf(event: SessionEvent): Record<string, unknown> {
   );
 }
 
+/** Search the full payload; compact summaries deliberately lose lines and long text. */
+export function eventSearchText(event: SessionEvent): string {
+  return [
+    summaryOf(event),
+    textOf(event.content),
+    JSON.stringify(payloadOf(event)),
+    event.type,
+    event.id,
+  ].join("\n");
+}
+
 function firstLine(text: string): string {
   const line = text.split("\n", 1)[0];
   return line.length > 200 ? `${line.slice(0, 200)}…` : line;

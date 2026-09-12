@@ -15,41 +15,69 @@ import { WARNING_BOX, WARNING_MUTED } from "@/components/console/bits";
 import { useSendEvents } from "@/lib/platform/queries";
 import type { SessionEvent } from "@/lib/platform/types";
 
+type ConfirmationState = {
+  status: "pending" | "success" | "error";
+  error?: unknown;
+};
+
+/** Keep acknowledgements for the workspace lifetime: filtering can remount a card before SSE catches up. */
+export function useToolApprovals(sessionId: string) {
+  const send = useSendEvents(sessionId);
+  const [states, setStates] = useState<Record<string, ConfirmationState>>({});
+  const confirm = (id: string, event: object) => {
+    setStates((current) => ({ ...current, [id]: { status: "pending" } }));
+    void send.mutateAsync([event]).then(
+      () =>
+        setStates((current) => ({ ...current, [id]: { status: "success" } })),
+      (error: unknown) =>
+        setStates((current) => ({
+          ...current,
+          [id]: { status: "error", error },
+        })),
+    );
+  };
+  return { states, confirm };
+}
+
 function PendingTool({
   event,
-  sessionId,
+  approvals,
   threadId,
+  compact = false,
 }: {
   event: SessionEvent;
-  sessionId: string;
+  approvals: ReturnType<typeof useToolApprovals>;
   threadId?: string;
+  compact?: boolean;
 }) {
-  const send = useSendEvents(sessionId);
   const [denying, setDenying] = useState(false);
   const [denyMessage, setDenyMessage] = useState("");
-  const submitted = send.isPending || send.isSuccess;
+  const state = approvals.states[event.id];
+  const submitted = state?.status === "pending" || state?.status === "success";
 
   const confirm = (result: "allow" | "deny") =>
-    send.mutate([
-      {
-        type: "user.tool_confirmation",
-        tool_use_id: event.id,
-        result,
-        ...((event.session_thread_id ?? threadId)
-          ? { session_thread_id: event.session_thread_id ?? threadId }
-          : {}),
-        ...(result === "deny" && denying && denyMessage
-          ? { deny_message: denyMessage }
-          : {}),
-      },
-    ]);
+    approvals.confirm(event.id, {
+      type: "user.tool_confirmation",
+      tool_use_id: event.id,
+      result,
+      ...((event.session_thread_id ?? threadId)
+        ? { session_thread_id: event.session_thread_id ?? threadId }
+        : {}),
+      ...(result === "deny" && denying && denyMessage
+        ? { deny_message: denyMessage }
+        : {}),
+    });
 
   return (
     <li className="flex flex-wrap items-center gap-2 text-[13px]">
-      <span className="font-mono">{event.name}</span>
-      <span className={cn("min-w-0 flex-1 truncate", WARNING_MUTED)}>
-        {JSON.stringify(event.input)}
-      </span>
+      {!compact && (
+        <>
+          <span className="font-mono">{event.name}</span>
+          <span className={cn("min-w-0 flex-1 truncate", WARNING_MUTED)}>
+            {JSON.stringify(event.input)}
+          </span>
+        </>
+      )}
       {denying ? (
         <span className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           <Input
@@ -124,14 +152,14 @@ function PendingTool({
           </DropdownMenu>
         </span>
       )}
-      {send.isSuccess && (
+      {state?.status === "success" && (
         <span role="status" className="w-full text-muted-foreground">
           Confirmation sent
         </span>
       )}
-      {send.error && (
+      {state?.status === "error" && (
         <span role="alert" className="w-full text-destructive">
-          {send.error instanceof Error ? send.error.message : "failed"}
+          {state.error instanceof Error ? state.error.message : "failed"}
         </span>
       )}
     </li>
@@ -140,31 +168,36 @@ function PendingTool({
 
 export function ApprovalBanner({
   pending,
-  sessionId,
+  approvals,
   threadId,
+  inline = false,
 }: {
   pending: SessionEvent[];
-  sessionId: string;
+  approvals: ReturnType<typeof useToolApprovals>;
   threadId?: string;
+  inline?: boolean;
 }) {
   if (pending.length === 0) return null;
   return (
     <div
       data-testid="approval-banner"
       data-pending-count={pending.length}
-      className={cn("mb-6 rounded-lg border p-4", WARNING_BOX)}
+      className={
+        inline ? undefined : cn("mb-6 rounded-lg border p-4", WARNING_BOX)
+      }
     >
-      <p className="text-sm font-medium">
+      <p className={inline ? "sr-only" : "text-sm font-medium"}>
         Waiting on {pending.length} tool approval
         {pending.length === 1 ? "" : "s"}
       </p>
-      <ul className="mt-2 space-y-2">
+      <ul className={inline ? "space-y-2" : "mt-2 space-y-2"}>
         {pending.map((event) => (
           <PendingTool
             key={event.id}
             event={event}
-            sessionId={sessionId}
+            approvals={approvals}
             threadId={threadId}
+            compact={inline}
           />
         ))}
       </ul>
