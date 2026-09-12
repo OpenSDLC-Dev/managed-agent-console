@@ -137,6 +137,74 @@ export const SURFACES: Surface[] = [
           .waitFor();
     },
   })),
+  ...[
+    "activity",
+    "api",
+    "narrow",
+    "empty-resources",
+    "archived",
+    "missing",
+  ].map((view): Surface => ({
+    id: "session-inspector-" + view,
+    route: "/sessions?session=" + (view === "missing" ? "sesn_missing" : GATED),
+    fixture: "bounded persisted session events and resource references",
+    description:
+      "Session list inspection preserves selection, history and filters.",
+    setup: async (page) => {
+      if (view === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "empty-resources") {
+        const response = await page.request.post(MOCK_URL + "/v1/sessions", {
+          headers: { "x-api-key": "test-key" },
+          data: {
+            agent: AGENT,
+            environment_id: ENV,
+            title: "Research with project memory",
+            vault_ids: [VAULT],
+            resources: [
+              {
+                type: "memory_store",
+                memory_store_id: MEMORY_STORE,
+                access: "read_only",
+              },
+            ],
+          },
+        });
+        if (!response.ok())
+          throw new Error(
+            "Session resource fixture failed: " + response.status(),
+          );
+        const session = await response.json();
+        await page.goto(
+          new URL("/sessions?session=" + session.id, page.url()).href,
+        );
+      }
+      const panel = page.getByRole("region", { name: "Session details" });
+      if (view === "missing") {
+        await panel.getByTestId("error-state").waitFor();
+        return;
+      }
+      await panel.getByRole("heading", { name: "Latest activity" }).waitFor();
+      if (view === "empty-resources")
+        await panel.getByText("No events yet.").waitFor();
+      else await panel.locator("[data-event-id]").first().waitFor();
+      if (view === "api") {
+        await panel.getByRole("button", { name: "API", exact: true }).click();
+        await panel.getByText(/"stats":/).waitFor();
+      }
+      if (view === "archived") {
+        await panel.getByRole("button", { name: "More actions" }).click();
+        await page
+          .getByRole("menuitem", { name: "Archive", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: "Archive session", exact: true })
+          .click();
+        await panel.getByText("archived", { exact: true }).waitFor();
+        await page.getByRole("dialog").waitFor({ state: "hidden" });
+      }
+    },
+  })),
   ...["rendered", "permissions", "custom", "api", "narrow"].map(
     (view): Surface => ({
       id: "agent-inspector-" + view,

@@ -14,6 +14,11 @@ import SessionsPage from "./page";
 import type { Session } from "@/lib/platform/types";
 
 const pushSpy = vi.fn();
+vi.mock("@/components/console/session-inspector", () => ({
+  SessionInspector: ({ id }: { id: string }) => (
+    <section aria-label="Session details" data-session-id={id} />
+  ),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushSpy,
@@ -241,7 +246,7 @@ describe("SessionsPage", () => {
     expect(pushSpy).not.toHaveBeenCalled();
   });
 
-  it("renders session rows (title, status, agent, tokens) and navigates", async () => {
+  it("renders session rows and selects the inspector without navigation", async () => {
     stubFetch(() =>
       json({
         data: [
@@ -275,7 +280,11 @@ describe("SessionsPage", () => {
     }
 
     await userEvent.click(screen.getByText("Nightly run"));
-    expect(pushSpy).toHaveBeenCalledWith("/sessions/sess_1");
+    expect(location.search).toBe("?session=sess_1");
+    expect(
+      screen.getByRole("region", { name: "Session details" }),
+    ).toHaveAttribute("data-session-id", "sess_1");
+    expect(pushSpy).not.toHaveBeenCalled();
   });
 
   it("opens the create dialog from the header action", async () => {

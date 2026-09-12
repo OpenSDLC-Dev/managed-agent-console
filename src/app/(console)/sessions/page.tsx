@@ -1,9 +1,11 @@
 "use client";
 
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import { useState, Suspense, useMemo } from "react";
+import { useState, Suspense, useMemo, useRef } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+import { SessionInspector } from "@/components/console/session-inspector";
+import { SessionActions } from "@/components/console/session-actions";
 import { useListFilters } from "@/lib/use-list-filters";
 import {
   decodeCreatedFilter,
@@ -101,8 +103,14 @@ export default function SessionsPage() {
 }
 
 function SessionsList() {
-  const router = useRouter();
   const filters = useListFilters();
+  const lookup = useRef<HTMLInputElement>(null);
+  const inspected = filters.params.get("session");
+  const inspect = (id: string) => filters.update({ session: id });
+  const closeInspector = () => filters.update({ session: null });
+  const pageParams = new URLSearchParams(filters.params);
+  pageParams.delete("session");
+  const cursorKey = pageParams.toString();
   const selectedStatuses = (filters.params.get("status") ?? "")
     .split(",")
     .filter((status): status is SessionStatus =>
@@ -143,12 +151,12 @@ function SessionsList() {
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
   // Sessions are the one bidirectional list: the wire supplies both cursors.
   const [cursor, setCursor] = useState<{ key: string; page?: string }>({
-    key: filters.key,
+    key: cursorKey,
   });
-  const page = cursor.key === filters.key ? cursor.page : undefined;
-  if (cursor.key !== filters.key) setCursor({ key: filters.key });
+  const page = cursor.key === cursorKey ? cursor.page : undefined;
+  if (cursor.key !== cursorKey) setCursor({ key: cursorKey });
   function setPage(page: string | undefined) {
-    setCursor({ key: filters.key, page });
+    setCursor({ key: cursorKey, page });
   }
   const agentOptions = useAgentOptions();
   const { data, error, isPending } = useSessions({
@@ -167,6 +175,36 @@ function SessionsList() {
     created.key !== "all" ||
     statuses.length !== 3 ||
     statuses.includes("terminated");
+  const rows = data?.data ?? [];
+  const inspectedIndex = rows.findIndex((row) => row.id === inspected);
+  const columns: Column<Session>[] = [
+    ...COLUMNS,
+    {
+      key: "actions",
+      header: "Actions",
+      cell: (session) => (
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(event) => event.stopPropagation()}
+            render={
+              <Link href={"/sessions/" + encodeURIComponent(session.id)} />
+            }
+          >
+            Open
+          </Button>
+          <SessionActions
+            session={session}
+            compact
+            onDeleted={() => {
+              if (inspected === session.id) closeInspector();
+            }}
+          />
+        </div>
+      ),
+    },
+  ];
   function resetFilters() {
     filters.update({
       deployment: null,
@@ -189,7 +227,12 @@ function SessionsList() {
         actions={<CreateSessionButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">
-        <ExactResourceLookup resource="session" path="/sessions" />
+        <ExactResourceLookup
+          resource="session"
+          path="/sessions"
+          onOpen={inspect}
+          inputRef={lookup}
+        />
         <CreatedFilter
           value={created.key}
           range={created.range}
@@ -356,12 +399,24 @@ function SessionsList() {
           </Button>
         )}
       </div>
+      {inspected && (
+        <SessionInspector
+          id={inspected}
+          previous={
+            inspectedIndex > 0 ? rows[inspectedIndex - 1]?.id : undefined
+          }
+          next={inspectedIndex >= 0 ? rows[inspectedIndex + 1]?.id : undefined}
+          onSelect={inspect}
+          onClose={closeInspector}
+          fallbackFocus={lookup}
+        />
+      )}
       {error ? (
         <ErrorState error={error} />
       ) : (
         <>
           <DataTable
-            columns={COLUMNS.map((column) =>
+            columns={columns.map((column) =>
               column.key === "created"
                 ? {
                     ...column,
@@ -388,7 +443,8 @@ function SessionsList() {
             rows={data?.data ?? []}
             rowKey={(s) => s.id}
             loading={isPending}
-            onRowClick={(s) => router.push(`/sessions/${s.id}`)}
+            activeRowKey={inspected ?? undefined}
+            onRowClick={(s) => inspect(s.id)}
             empty={
               filtered ? (
                 <EmptyState

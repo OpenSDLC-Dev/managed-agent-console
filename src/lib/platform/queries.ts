@@ -197,6 +197,19 @@ export function useSession(id: string, refetchInterval?: number) {
   });
 }
 
+/** events.go:listEvents supports a bounded descending page, independently of SSE. */
+export function useRecentSessionEvents(id: string) {
+  return useQuery({
+    queryKey: ["session-events", id, "recent"],
+    queryFn: () =>
+      platformGet<Page<SessionEvent>>(
+        `v1/sessions/${encodeURIComponent(id)}/events`,
+        { order: "desc", limit: 40 },
+      ),
+    refetchInterval: 5000,
+  });
+}
+
 /** Include archived deployments so historical sessions remain filterable. */
 export function useDeploymentOptions() {
   return useQuery({
