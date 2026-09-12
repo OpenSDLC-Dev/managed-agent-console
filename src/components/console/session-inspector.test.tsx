@@ -110,6 +110,14 @@ it("renders pinned resources and bounded activity without inventing runtime or b
     "href",
     "/memory-stores/" + memoryResources[0].memory_store_id,
   );
+  expect(
+    screen.getByRole("link", {
+      name: session.agent.name + " · v" + session.agent.version,
+    }),
+  ).toHaveAttribute(
+    "href",
+    "/agents/" + session.agent.id + "?version=" + session.agent.version,
+  );
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
     "/sessions/" + session.id,

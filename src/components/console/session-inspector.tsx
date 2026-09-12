@@ -116,7 +116,12 @@ function SessionSummary({
               <Field label="Agent">
                 <Link
                   className="hover:underline"
-                  href={"/agents/" + encodeURIComponent(session.agent.id)}
+                  href={
+                    "/agents/" +
+                    encodeURIComponent(session.agent.id) +
+                    "?version=" +
+                    session.agent.version
+                  }
                 >
                   {session.agent.name} ·{" "}
                   <span data-agent-version={session.agent.version}>
