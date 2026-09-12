@@ -577,3 +577,17 @@ existing editor mapping against `internal/toolset/definitions.go`. Roster order
 and versions come from the server, including the coordinator itself. Unknown tool
 configurations and MCP server records remain inspectable as JSON; no service
 catalog or missing platform capability is invented.
+
+## Agent full configuration — checked 2026-09-12
+
+Records ec8c4c6, frames 24–28: configuration is immediately editable, with
+Discard/Save new version after changes, a version selector and Start session
+in a same-page dialog. The dialog retains the selected saved configuration.
+Platform `internal/api/agents.go` reads `?version=` and treats the update body
+version as an optimistic precondition. Historical configurations are read-only;
+select Latest to edit, so inspecting history does not imply rollback.
+
+Session tabs use the platform agent_id and optional agent_version filters;
+Deployment tabs use agent_id across versions because that handler has no version
+filter. No per-agent Observability API is implemented, so that reference tab
+is omitted. Model/catalog, Advisor and budget boundaries remain unchanged.

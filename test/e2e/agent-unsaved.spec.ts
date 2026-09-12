@@ -56,8 +56,7 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
     .getByRole("region", { name: "Agent details" })
     .getByRole("link", { name: "Open", exact: true })
     .click();
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
   const editUrl = page.url();
   const name = page.getByLabel("Name", { exact: true });
   await name.fill("Kept draft");
@@ -84,7 +83,9 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
   await nativePrompt.dismiss();
   await reload;
   await expect(name).toHaveValue("Kept draft");
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Save new version", exact: true })
+    .click();
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
   await expect(prompt).toBeHidden();
   await expect(
@@ -101,13 +102,13 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .getByRole("region", { name: "Agent details" })
     .getByRole("link", { name: "Open", exact: true })
     .click();
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.goto("/agents/agent_researcher00000000001/edit");
   await expect(page).toHaveURL(/\/edit$/);
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByRole("radio", { name: "rendered", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.goto("/agents/agent_researcher00000000001/edit");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByLabel("Raw agent config").fill("{");
   await page.evaluate(() => history.back());

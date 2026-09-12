@@ -2,6 +2,7 @@
 
 import { useState, type ComponentProps } from "react";
 import Link from "next/link";
+import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import {
   ArrowRight,
   Bot,
@@ -29,11 +30,16 @@ import type { Agent } from "@/lib/platform/types";
 
 export function AgentActions({ agent }: { agent: Agent }) {
   const archive = useArchiveAgent(agent.id);
+  const leave = useLeaveConfirmation();
   return (
     <ResourceActions
       resource="agent"
       archived={!!agent.archived_at}
-      onArchive={agent.archived_at ? undefined : () => archive.mutate()}
+      onArchive={
+        agent.archived_at
+          ? undefined
+          : () => leave.requestLeave(() => archive.mutate())
+      }
       archivePending={archive.isPending}
     />
   );

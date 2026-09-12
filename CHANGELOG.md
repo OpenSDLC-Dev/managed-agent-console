@@ -17,6 +17,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Agent details edit configuration in place with Discard and Save new version, historical version selection, scoped Session/Deployment tabs and a prefilled Start session dialog. Drafts retain their original version across refreshes and conflicts.
+
 - Agent rows and exact-ID lookup open a list inspector with version, tool permissions, skills and pinned multiagent members. Rendered/API views, previous/next navigation and resizing retain list filters and history.
 
 - Memory stores open a list inspector and a folder/content workspace. Memories have Markdown and raw previews, downloads and inline editing with conflict-safe saves and draft navigation protection.

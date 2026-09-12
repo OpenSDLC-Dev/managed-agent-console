@@ -36,14 +36,12 @@ test("agent detail shows overview, system prompt, and versions", async ({
   await expect(
     page.getByRole("heading", { name: "Deep researcher" }),
   ).toBeVisible();
-  await expect(page.getByText("You are a careful researcher.")).toBeVisible();
-  // Three version rows: v3, v2, v1.
-  await expect(
-    page.getByRole("cell", { name: "v3", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("cell", { name: "v1", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByLabel("System prompt")).toHaveValue(
+    "You are a careful researcher.",
+  );
+  await page.getByRole("combobox", { name: "Agent version" }).click();
+  await expect(page.getByRole("option", { name: "v3 Latest" })).toBeVisible();
+  await expect(page.getByRole("option", { name: /^v1/ })).toBeVisible();
 });
 
 test("environments list and detail render the config union", async ({

@@ -104,6 +104,31 @@ export function useAgent(id: string) {
   });
 }
 
+/** agents.go:getAgent accepts a version query; omitted means the current head. */
+export function useAgentVersion(id: string, version: string | null) {
+  return useQuery({
+    queryKey: ["agent-version", id, version],
+    queryFn: () =>
+      platformGet<Agent>("v1/agents/" + encodeURIComponent(id), {
+        version: version ?? undefined,
+      }),
+    enabled: version !== null,
+  });
+}
+
+export function useAgentVersionOptions(id: string) {
+  return useInfiniteQuery({
+    queryKey: ["agent-versions", id, "options"],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      platformGet<Page<Agent>>(
+        "v1/agents/" + encodeURIComponent(id) + "/versions",
+        { limit: 20, page: pageParam },
+      ),
+    getNextPageParam: (last) => last.next_page ?? undefined,
+  });
+}
+
 export function useAgentVersions(id: string, page?: string) {
   return useQuery({
     queryKey: ["agent-versions", id, page],
@@ -145,6 +170,7 @@ export function useSessions(params: {
   deployment_id?: string;
   statuses?: SessionStatus[];
   agent_id?: string;
+  agent_version?: string;
   order?: "asc" | "desc";
   include_archived?: boolean;
   "created_at[gte]"?: string;

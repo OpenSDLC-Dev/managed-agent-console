@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { ChevronsUpDown, Paperclip, X } from "lucide-react";
 import { RequestId, hostingTypeLabel } from "@/components/console/bits";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { PlatformError } from "@/lib/platform/http";
 import { InitialResources } from "./initial-resources";
+import type { Agent } from "@/lib/platform/types";
 import type { ResourceInput } from "@/lib/platform/session-resources";
 import {
   useAgents,
@@ -44,15 +46,22 @@ function ManageLink({ href, children }: { href: string; children: string }) {
   );
 }
 
-export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
+export function SessionCreateForm({
+  onCancel,
+  initialAgent,
+}: {
+  onCancel?: () => void;
+  initialAgent?: Agent;
+}) {
   const router = useRouter();
+  const leave = useLeaveConfirmation();
   const agents = useAgents({ limit: 100 });
   const environments = useEnvironments({ limit: 100 });
   const vaults = useVaults({ limit: 100 });
   const upload = useUploadFile();
   const create = useCreateSession();
 
-  const [agentId, setAgentId] = useState("");
+  const [agentId, setAgentId] = useState(initialAgent?.id ?? "");
   const [environmentId, setEnvironmentId] = useState("");
   const [title, setTitle] = useState("");
   const [vaultIds, setVaultIds] = useState<string[]>([]);
@@ -64,35 +73,49 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const vaultList = vaults.data?.data ?? [];
+  const agentOptions = initialAgent
+    ? [
+        initialAgent,
+        ...(agents.data?.data ?? []).filter(
+          (agent) => agent.id !== initialAgent.id,
+        ),
+      ]
+    : (agents.data?.data ?? []);
 
   const save = () => {
     if (create.isPending || upload.isPending || !agentId || !environmentId)
       return;
-    create.mutate(
-      {
-        agent: agentId,
-        environment_id: environmentId,
-        ...(title ? { title } : {}),
-        ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
-        ...(attached.length > 0 || initialResources.length > 0
-          ? {
-              resources: [
-                ...attached.map((f) => ({
-                  type: "file" as const,
-                  file_id: f.file_id,
-                })),
-                ...initialResources,
-              ],
-            }
-          : {}),
-      },
-      {
-        onSuccess: (session) => {
-          setInitialResources([]);
-          create.reset();
-          router.push(`/sessions/${session.id}`);
+    leave.requestLeave(() =>
+      create.mutate(
+        {
+          agent:
+            initialAgent?.id === agentId
+              ? { type: "agent", id: agentId, version: initialAgent.version }
+              : agentId,
+          environment_id: environmentId,
+          ...(title ? { title } : {}),
+          ...(vaultIds.length > 0 ? { vault_ids: vaultIds } : {}),
+          ...(attached.length > 0 || initialResources.length > 0
+            ? {
+                resources: [
+                  ...attached.map((f) => ({
+                    type: "file" as const,
+                    file_id: f.file_id,
+                  })),
+                  ...initialResources,
+                ],
+              }
+            : {}),
         },
-      },
+        {
+          onSuccess: (session) => {
+            setInitialResources([]);
+            create.reset();
+            leave.setDirty(false);
+            router.push(`/sessions/${session.id}`);
+          },
+        },
+      ),
     );
   };
 
@@ -114,28 +137,38 @@ export function SessionCreateForm({ onCancel }: { onCancel?: () => void }) {
         />
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label>Agent</Label>
-          <ManageLink href="/agents">Manage agents</ManageLink>
+      {initialAgent ? (
+        <p
+          className="text-sm text-muted-foreground"
+          data-session-agent-id={initialAgent.id}
+          data-session-agent-version={initialAgent.version}
+        >
+          {initialAgent.name} · v{initialAgent.version}
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label>Agent</Label>
+            <ManageLink href="/agents">Manage agents</ManageLink>
+          </div>
+          <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
+            <SelectTrigger
+              size="sm"
+              className="h-8 w-full rounded-lg"
+              aria-label="Agent"
+            >
+              <SelectValue placeholder="Select an agent" />
+            </SelectTrigger>
+            <SelectContent>
+              {agentOptions.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name} · v{agent.version}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
-          <SelectTrigger
-            size="sm"
-            className="h-8 w-full rounded-lg"
-            aria-label="Agent"
-          >
-            <SelectValue placeholder="Select an agent" />
-          </SelectTrigger>
-          <SelectContent>
-            {(agents.data?.data ?? []).map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
-                {agent.name} · v{agent.version}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      )}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
