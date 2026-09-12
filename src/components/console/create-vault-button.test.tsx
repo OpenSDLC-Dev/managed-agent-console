@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe("CreateVaultButton", () => {
-  it("posts the trimmed display name and navigates to the new vault", async () => {
+  it("creates the vault at Continue and retains it when the credential step is skipped", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(
@@ -55,7 +55,7 @@ describe("CreateVaultButton", () => {
     const dialog = await screen.findByRole("dialog");
 
     const submit = within(dialog).getByRole("button", {
-      name: "Create vault",
+      name: "Continue",
     });
     expect(submit).toBeDisabled();
 
@@ -74,7 +74,16 @@ describe("CreateVaultButton", () => {
       display_name: "Prod",
       metadata: {},
     });
+    expect(
+      await screen.findByRole("dialog", { name: "Add a credential" }),
+    ).toBeVisible();
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Credential type")).toHaveTextContent(
+      "MCP OAuth",
+    );
+    await user.click(screen.getByRole("button", { name: "Skip for now" }));
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_1"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces the platform error message and keeps the dialog open", async () => {
@@ -97,9 +106,7 @@ describe("CreateVaultButton", () => {
     await user.click(screen.getByRole("button", { name: /Create vault/ }));
     const dialog = await screen.findByRole("dialog");
     await user.type(screen.getByLabelText("Display name"), "Prod");
-    await user.click(
-      within(dialog).getByRole("button", { name: "Create vault" }),
-    );
+    await user.click(within(dialog).getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("name taken")).toBeDefined();
     expect(screen.getByRole("dialog")).toBeDefined();
@@ -132,4 +139,55 @@ describe("CreateVaultButton", () => {
     await screen.findByRole("dialog");
     expect(screen.getByLabelText("Display name")).toHaveValue("");
   });
+});
+
+// Continue commits the parent; a child failure must not create another vault.
+it("retries a failed first credential against the same vault and then opens its detail", async () => {
+  let childCalls = 0;
+  const fetchMock = vi.fn(async (url: string) => {
+    if (!url.includes("/credentials"))
+      return new Response(
+        JSON.stringify({ id: "vlt_new", display_name: "New vault" }),
+      );
+    childCalls++;
+    return childCalls === 1
+      ? new Response(
+          JSON.stringify({
+            error: { type: "invalid_request_error", message: "Try again" },
+          }),
+          { status: 400 },
+        )
+      : new Response(JSON.stringify({ id: "vcred_new" }));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const user = userEvent.setup();
+  renderButton();
+  await user.click(screen.getByRole("button", { name: "Create vault" }));
+  await user.type(screen.getByLabelText("Display name"), "New vault");
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "Add a credential",
+  });
+  await user.type(
+    screen.getByLabelText("MCP server URL"),
+    "https://mcp.example.com",
+  );
+  await user.type(screen.getByLabelText("Access token"), "synthetic-fixture");
+  await user.click(
+    within(dialog).getByRole("button", { name: "Add credential" }),
+  );
+  expect(await screen.findByText("Try again")).toBeVisible();
+  expect(pushSpy).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Access token")).toHaveValue(
+    "synthetic-fixture",
+  );
+  await user.click(
+    within(dialog).getByRole("button", { name: "Add credential" }),
+  );
+  await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_new"));
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    "/api/platform/v1/vaults",
+    "/api/platform/v1/vaults/vlt_new/credentials",
+    "/api/platform/v1/vaults/vlt_new/credentials",
+  ]);
 });

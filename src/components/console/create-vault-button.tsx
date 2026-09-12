@@ -9,17 +9,23 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useCreateVault } from "@/lib/platform/queries";
 import { metadataObject } from "@/lib/platform/metadata";
+import { CredentialDialog } from "./credential-form";
 
 export function CreateVaultButton() {
   const router = useRouter();
   const create = useCreateVault();
   const [open, setOpen] = useState(false);
+  const [created, setCreated] = useState<{
+    id: string;
+    display_name: string;
+  } | null>(null);
   const [name, setName] = useState("");
   const [metadata, setMetadata] = useState("{}");
   const [parseError, setParseError] = useState<string | null>(null);
@@ -29,7 +35,12 @@ export function CreateVaultButton() {
     try {
       create.mutate(
         { display_name: name.trim(), metadata: metadataObject(metadata) },
-        { onSuccess: (vault) => router.push(`/vaults/${vault.id}`) },
+        {
+          onSuccess: (vault) => {
+            setOpen(false);
+            setCreated(vault);
+          },
+        },
       );
     } catch (error) {
       setParseError(
@@ -46,6 +57,7 @@ export function CreateVaultButton() {
       <Dialog
         open={open}
         onOpenChange={(next) => {
+          if (create.isPending) return;
           setOpen(next);
           if (!next) {
             setName("");
@@ -58,6 +70,9 @@ export function CreateVaultButton() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create vault</DialogTitle>
+            <DialogDescription>
+              Store credentials for your agents to use.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -68,7 +83,8 @@ export function CreateVaultButton() {
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <details className="space-y-1.5 text-sm">
+              <summary>Metadata (optional)</summary>
               <Label htmlFor="vault-metadata">Metadata (JSON object)</Label>
               <textarea
                 id="vault-metadata"
@@ -77,7 +93,7 @@ export function CreateVaultButton() {
                 value={metadata}
                 onChange={(event) => setMetadata(event.target.value)}
               />
-            </div>
+            </details>
           </div>
           {(parseError || create.error instanceof Error) && (
             <p role="alert" className="text-sm text-destructive">
@@ -85,18 +101,43 @@ export function CreateVaultButton() {
             </p>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              variant="ghost"
+              disabled={create.isPending}
+              onClick={() => {
+                setOpen(false);
+                setName("");
+                setMetadata("{}");
+                setParseError(null);
+                create.reset();
+              }}
+            >
               Cancel
             </Button>
             <Button
               disabled={!name.trim() || create.isPending}
               onClick={submit}
             >
-              Create vault
+              {create.isPending ? "Creating…" : "Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {created && (
+        <CredentialDialog
+          vaultId={created.id}
+          firstVaultName={created.display_name}
+          open
+          onOpenChange={(next) => {
+            if (!next) {
+              router.push("/vaults/" + created.id);
+              setCreated(null);
+              setName("");
+              setMetadata("{}");
+            }
+          }}
+        />
+      )}
     </>
   );
 }

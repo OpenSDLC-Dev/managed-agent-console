@@ -198,8 +198,10 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
   await page.getByLabel("Display name").fill("CI secrets");
+  await page.getByText("Metadata (optional)", { exact: true }).click();
   await page.getByLabel("Metadata (JSON object)").fill('{"team":"ci"}');
-  await page.getByRole("button", { name: "Create vault", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Skip for now" }).click();
   await expect(page).toHaveURL(/\/vaults\/vlt_mock/);
 
   // Vault updates preserve platform patch semantics.
@@ -213,6 +215,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
 
   // Env-var credential: the secret value leaves the form and never returns.
   await page.getByRole("button", { name: "Add credential" }).click();
+  await page.getByRole("radio", { name: "Unrestricted" }).check();
   await page.getByLabel("Secret name").fill("NPM_TOKEN");
   await page.getByLabel("Secret value").fill("super-secret-value");
   await page
@@ -251,7 +254,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
   // OAuth credential + the validation probe.
   await page.getByRole("button", { name: "Add credential" }).first().click();
   await page.getByLabel("Credential type").click();
-  await page.getByRole("option", { name: "mcp_oauth" }).click();
+  await page.getByRole("option", { name: "MCP OAuth" }).click();
   await page.getByLabel("MCP server URL").fill("https://mcp.example.com/");
   await page.getByLabel("Access token").fill("oauth-token");
   await page

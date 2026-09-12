@@ -4,13 +4,13 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-**Platform file compatibility** — platform main `c75c5ad`.
+**Reference interaction acceptance** — [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
+Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 
-- [x] Align file metadata, cursor paging and session deletion effects.
-- [x] Verify against the updated Docker platform and run regression/fidelity checks.
+- [x] Inspect populated recordings and verify their integrity.
+- [x] Implement Vault creation followed by an optional first credential.
+- [ ] Verify Vault workflow, both themes, CI and review; squash merge.
+- [ ] Align populated inspectors, approvals and nested resources.
+- [ ] Complete local/reference acceptance within implemented platform capabilities.
 
-Delivery CI and review: [#157](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/157).
-
-Reference interaction acceptance remains tracked in
-[#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
-Reference facts and platform boundaries: [docs/design-reference.md](./docs/design-reference.md).
+Reference facts and capability boundaries: [docs/design-reference.md](./docs/design-reference.md).

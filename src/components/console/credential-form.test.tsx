@@ -81,7 +81,9 @@ function renderButton() {
 
 async function openDialog(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /Add credential/ }));
-  return await screen.findByRole("dialog");
+  const dialog = await screen.findByRole("dialog");
+  await user.click(screen.getByRole("radio", { name: "Unrestricted" }));
+  return dialog;
 }
 
 const submitButton = (dialog: HTMLElement) =>
@@ -106,6 +108,7 @@ describe("AddCredentialButton", () => {
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
+    await user.click(screen.getByRole("radio", { name: "Limited" }));
 
     fill("Name (optional)", " GitHub ");
     fill("Secret name", " GITHUB_TOKEN ");
@@ -168,12 +171,13 @@ describe("AddCredentialButton", () => {
     );
   });
 
-  it("sends unrestricted networking and omits display_name when both are empty", async () => {
+  it("sends explicitly selected unrestricted networking and omits the empty name", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
+    await user.click(screen.getByRole("radio", { name: "Unrestricted" }));
 
     await user.type(screen.getByLabelText("Secret name"), "API_KEY");
     await user.type(screen.getByLabelText("Secret value"), "sk-1");

@@ -506,7 +506,24 @@ checks passed after integrating the guard and Session filters. Creation resource
 controls were rechecked in Chrome: GitHub URL/token, default/branch/commit checkout,
 optional mount path, memory binding/access/instructions. The console spells out
 Default branch instead of None because omission uses the repository default.
-Reference populated sessions and approvals remain unavailable; the mock resource,
-SSE approval/denial and permission tests prove local behavior only. Vault credential
-creation beyond Name/Continue also remains unobserved. These checks stay open in
+Populated reference evidence is now available in the private
+managed-agents-wire-recordings repository at `2026-09-12-console-141/`
+(commit `ec8c4c6`): `ISSUE_141_COVERAGE.md` maps each #141 boundary.
+This supplies comparison inputs; local visual acceptance remains open in
 [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
+
+## Vault first credential — checked 2026-09-12
+
+Reference frames 01–12 and UI entries 2, 5, 9 establish that Continue commits
+`POST /v1/vaults`, then opens Add a credential. Skip for now retains the vault;
+adding a credential opens its detail. Failed child saves must not recreate the parent.
+The environment-variable form explicitly chooses Limited or Unrestricted networking.
+Platform `internal/api/vaultcredauth.go` requires non-empty hosts for Limited.
+
+The first step defaults to MCP OAuth. This deployment accepts externally acquired
+OAuth tokens and optional refresh configuration; it does not serve browser OAuth
+initiation or the reference MCP service catalog, so its form uses manual server URL
+and token entry. It does not claim a successful external authentication flow.
+The reference workspace-sharing acknowledgment has no matching workspace model here;
+platform authorization remains authoritative. Metadata remains available as an
+optional disclosure. Ordinary Add credential retains the environment-variable default.
