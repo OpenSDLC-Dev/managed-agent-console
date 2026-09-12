@@ -24,6 +24,11 @@ import {
 } from "@/lib/platform/queries";
 import { summaryOf } from "@/lib/session-trace/summary";
 import { tokenAttr, tokenCount } from "@/lib/utils";
+import type { DeploymentRun } from "@/lib/platform/types";
+import {
+  DeploymentRunDetails,
+  deploymentRunSessionHref,
+} from "./deployment-run-details";
 
 export function SessionInspector(
   props: Omit<ComponentProps<typeof ResourceInspector>, "kind" | "children">,
@@ -59,20 +64,30 @@ function VaultLink({ id }: { id: string }) {
   );
 }
 
-function SessionSummary({
+export function SessionSummary({
   id,
   onDeleted,
+  run,
 }: {
   id: string;
   onDeleted: () => void;
+  run?: DeploymentRun;
 }) {
   const query = useSession(id, 5000);
   const recent = useRecentSessionEvents(id);
   const [api, setApi] = useState(false);
-  if (query.error && !query.data) return <ErrorState error={query.error} />;
+  if (query.error && !query.data)
+    return (
+      <div className="space-y-4 overflow-y-auto">
+        {run && <DeploymentRunDetails run={run} includeApi />}
+        <ErrorState error={query.error} />
+      </div>
+    );
   if (!query.data) return <DetailSkeleton />;
   const session = query.data;
-  const href = "/sessions/" + encodeURIComponent(session.id);
+  const href = run
+    ? deploymentRunSessionHref(run)
+    : "/sessions/" + encodeURIComponent(session.id);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 pb-4">
@@ -91,6 +106,14 @@ function SessionSummary({
         {query.error && <ErrorState error={query.error} />}
         {api ? (
           <>
+            {run && (
+              <section>
+                <h3 className="mb-2 break-all font-mono text-xs">
+                  GET /v1/deployment_runs/{run.id}
+                </h3>
+                <JsonBlock value={run} />
+              </section>
+            )}
             <section>
               <h3 className="mb-2 break-all font-mono text-xs">
                 GET /v1/sessions/{session.id}
@@ -206,6 +229,7 @@ function SessionSummary({
                 </Field>
               )}
             </dl>
+            {run && <DeploymentRunDetails run={run} />}
             <section>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-medium">Latest activity</h3>

@@ -1,4 +1,4 @@
-import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
+import type { SessionEvent } from "@/lib/platform/types";
 import { outcomeIterationLabel, outcomeResultLabel } from "@/lib/outcomes";
 
 /**
@@ -7,8 +7,9 @@ import { outcomeIterationLabel, outcomeResultLabel } from "@/lib/outcomes";
  * full content.
  */
 
-export function textOf(content: ContentBlock[] | null | undefined): string {
+export function textOf(content: SessionEvent["content"]): string {
   if (!content) return "";
+  if (typeof content === "string") return content;
   return content
     .map((block) =>
       block.type === "text" ? (block.text ?? "") : `[${block.type}]`,
@@ -97,9 +98,7 @@ export function summaryOf(event: SessionEvent): string {
     case "agent.tool_result":
     case "user.tool_result":
     case "user.custom_tool_result":
-      return firstLine(
-        textOf(event.content as ContentBlock[] | null | undefined),
-      );
+      return firstLine(textOf(event.content));
     case "user.tool_confirmation": {
       // Only assert a verdict the event actually carries.
       const verdict =

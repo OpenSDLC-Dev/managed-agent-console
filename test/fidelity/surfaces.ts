@@ -123,6 +123,94 @@ export const SURFACES: Surface[] = [
     },
   })),
   ...[
+    "configuration",
+    "dirty",
+    "versions",
+    "resources",
+    "archived",
+    "narrow",
+    "runs",
+    "run-error",
+    "run-deleted",
+    "run-session",
+    "run-api",
+    "run-narrow",
+  ].map((view): Surface => ({
+    id: "deployment-workspace-" + view,
+    route:
+      `/deployments/${DEPLOYMENT}` +
+      (view.startsWith("run")
+        ? "?tab=runs" +
+          (view === "run-error"
+            ? `&run=${DEPLOYMENT_RUN}`
+            : view === "run-deleted"
+              ? "&run=drun_deleted00000000001"
+              : "")
+        : ""),
+    fixture: DEPLOYMENT,
+    description:
+      "Deployment inline configuration and run Session inspection: " + view,
+    setup: async (page) => {
+      if (view === "narrow" || view === "run-narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "archived") {
+        await page.request.post(
+          `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/archive`,
+          { headers: { "x-api-key": "test-key" } },
+        );
+        await page.reload();
+      }
+      if (
+        view.startsWith("run-") &&
+        !["run-error", "run-deleted"].includes(view)
+      ) {
+        const run = await (
+          await page.request.post(
+            `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/run`,
+            { headers: { "x-api-key": "test-key" } },
+          )
+        ).json();
+        await page.goto(`/deployments/${DEPLOYMENT}?tab=runs&run=${run.id}`);
+        await page
+          .getByRole("region", { name: "Session details" })
+          .getByRole("heading", { name: "Run", exact: true })
+          .waitFor();
+        if (view === "run-api")
+          await page
+            .getByRole("region", { name: "Session details" })
+            .getByRole("button", { name: "API", exact: true })
+            .click();
+      } else if (view === "run-error")
+        await page.getByTestId("deployment-run-error").waitFor();
+      else if (view === "run-deleted")
+        await page
+          .getByRole("region", { name: "Deployment run details" })
+          .getByText("Session created", { exact: true })
+          .waitFor();
+      else if (view === "runs")
+        await page.getByText("succeeded", { exact: true }).waitFor();
+      else {
+        await page
+          .getByRole("textbox", { name: "Name", exact: true })
+          .waitFor();
+        if (view === "dirty")
+          await page
+            .getByRole("textbox", { name: "Initial message", exact: true })
+            .fill("Unsaved deployment instructions");
+        if (view === "versions") {
+          await page
+            .getByRole("combobox", { name: "Agent version", exact: true })
+            .click();
+          await page.getByRole("option", { name: "v2", exact: true }).waitFor();
+        }
+        if (view === "resources")
+          await page
+            .getByText("Session resources (optional)", { exact: true })
+            .scrollIntoViewIfNeeded();
+      }
+    },
+  })),
+  ...[
     "store",
     "memory",
     "raw",

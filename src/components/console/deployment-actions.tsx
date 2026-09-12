@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { Pause, Play, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResourceActions } from "@/components/console/resource-actions";
@@ -10,10 +11,17 @@ import {
   useRunDeployment,
   useUnpauseDeployment,
 } from "@/lib/platform/queries";
-import type { Deployment } from "@/lib/platform/types";
+import type { Deployment, DeploymentRun } from "@/lib/platform/types";
 
-export function DeploymentActions({ deployment }: { deployment: Deployment }) {
+export function DeploymentActions({
+  deployment,
+  onRun,
+}: {
+  deployment: Deployment;
+  onRun?: (run: DeploymentRun) => void;
+}) {
   const router = useRouter();
+  const leave = useLeaveConfirmation();
   const archive = useArchiveDeployment(deployment.id);
   const pause = usePauseDeployment(deployment.id);
   const unpause = useUnpauseDeployment(deployment.id);
@@ -32,9 +40,11 @@ export function DeploymentActions({ deployment }: { deployment: Deployment }) {
             onClick={() =>
               run.mutate(undefined, {
                 onSuccess: (created) =>
-                  router.push(
-                    `/deployments/${deployment.id}/runs/${created.id}`,
-                  ),
+                  onRun
+                    ? onRun(created)
+                    : router.push(
+                        `/deployments/${deployment.id}/runs/${created.id}`,
+                      ),
               })
             }
           >
@@ -62,7 +72,11 @@ export function DeploymentActions({ deployment }: { deployment: Deployment }) {
         resource="deployment"
         archived={archived}
         archiveWarning="It can no longer be paused, resumed, edited, or run."
-        onArchive={archived ? undefined : () => archive.mutate()}
+        onArchive={
+          archived
+            ? undefined
+            : () => leave.requestLeave(() => archive.mutate())
+        }
         archivePending={archive.isPending}
       />
     </span>

@@ -113,7 +113,9 @@ describe("probe: the trace store under a violated wire contract", () => {
       }),
     ]);
     expect(state.events).toHaveLength(1);
-    expect(state.events[0].content?.[0].text).toBe("original");
+    expect(state.events[0].content).toEqual([
+      { type: "text", text: "original" },
+    ]);
   });
 
   it("does not let an unknown frame type mark the trace deleted", () => {

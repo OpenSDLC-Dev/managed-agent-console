@@ -641,3 +641,13 @@ Review found coincident markers masking one another. Overlapping visible interva
 Records ec8c4c6 frames 51–53 select `?deployment=ID` beside the list. The pane offers Open, previous/next, Rendered/API, pinned Agent/environment metadata, initial message, trigger and session resources. Exact lookup stays exact: the platform has no name-search predicate.
 
 `domain.Deployment.Agent` pins a version; names resolve against that version. `deployments.go:fillScheduleTimestamps` owns upcoming timestamps, including the paused and archived rules. The console displays those timestamps in explicitly labeled UTC, without computing cron or a draft preview. Advanced initial events retain their whole JSON when a single plain message would discard fields. Budget is not served, and file references link to the implemented Files list rather than inventing a file inspector.
+
+## Deployment workspace — checked 2026-09-12
+
+Records ec8c4c6 frames 54–61 show Configuration/Runs, an independent pinned Agent version, inline Save/Discard, and `?tab=runs&run=ID`. A successful run opens a **Session** inspector with an additional Run section. Open retains `from_deployment`/`from_run`; the local Session breadcrumb accepts deployment context only when it matches the returned Session's deployment.
+
+`deployments.go:updateDeployment` replaces resources, vaults, initial events and schedule; metadata remains a patch. Omitted resources preserve sealed repository credentials. Replacing any attachments requires a token for each retained repository because read responses cannot return those tokens. Drafts survive tab switches and background refresh, clear secrets after successful saves, and lock their rows while uploading. Discard restores the form's last saved baseline. The wire has no optimistic update token; reloading obtains external edits.
+
+`domain.DeploymentRun` records Session creation, not execution completion. Results and `trigger_type`/`has_error` filters come from the platform; Session status is queried independently. Missing/deleted Sessions and failed runs retain run metadata. Saved schedule timestamps remain explicitly separate from draft cron fields; no client cron preview or budget calculation is introduced. Version options use the implemented paged Agent history.
+
+Opening a newly fired run exposed a wire mismatch: `events/inbound.go:normalizeUserMessage` accepts and persists string content verbatim, whereas reference events use block arrays. The Session schema, summaries, cards and event detail now support both forms without altering the raw response. The mock already preserved the string correctly; its deployment conformance test now checks the emitted events too.

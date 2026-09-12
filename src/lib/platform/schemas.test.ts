@@ -538,6 +538,14 @@ describe("the mock's constructed write-path responses conform too", () => {
     );
     expectConforms(SessionSchema, session, "deployment-created session");
     expect(session).toMatchObject({ deployment_id: id });
+    const persisted = (await call(
+      `/v1/sessions/${(run as { session_id: string }).session_id}/events`,
+      { method: "GET" },
+    )) as { data: unknown[] };
+    each(SessionEventSchema, persisted.data, "deployment initial events");
+    expect(persisted.data).toContainEqual(
+      expect.objectContaining({ type: "user.message", content: "Run it." }),
+    );
 
     const resumed = await postJSON(`/v1/deployments/${id}/unpause`, {});
     expect(resumed).toMatchObject({ status: "active", paused_reason: null });

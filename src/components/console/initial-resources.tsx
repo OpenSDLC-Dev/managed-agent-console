@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useMemoryStoreOptions } from "@/lib/platform/queries";
 import type { ResourceInput } from "@/lib/platform/session-resources";
 
-type InitialResource = Exclude<ResourceInput, { type: "file" }>;
+type InitialResource = ResourceInput;
 
 export function InitialResources({
   resources,
@@ -23,6 +23,7 @@ export function InitialResources({
   owner = "session",
   onAttachFile,
   uploadPending,
+  onFileUpload,
   children,
 }: {
   resources: InitialResource[];
@@ -30,6 +31,7 @@ export function InitialResources({
   owner?: "session" | "deployment";
   onAttachFile: () => void;
   uploadPending: boolean;
+  onFileUpload?: (index: number, file: File) => void;
   children?: ReactNode;
 }) {
   const menuTrigger = useRef<HTMLButtonElement>(null);
@@ -59,12 +61,58 @@ export function InitialResources({
       {resources.map((resource, index) => (
         <fieldset key={index} className="space-y-2 rounded-lg border p-3">
           <legend className="px-1 text-sm">
-            {resource.type === "github_repository"
-              ? "GitHub repository"
-              : "Memory store"}{" "}
+            {resource.type === "file"
+              ? "File"
+              : resource.type === "github_repository"
+                ? "GitHub repository"
+                : "Memory store"}{" "}
             {index + 1}
           </legend>
-          {resource.type === "github_repository" ? (
+          {resource.type === "file" ? (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor={`file-id-${index}`}>File ID</Label>
+                <Input
+                  id={`file-id-${index}`}
+                  value={resource.file_id}
+                  onChange={(event) =>
+                    update(index, { ...resource, file_id: event.target.value })
+                  }
+                />
+              </div>
+              {onFileUpload && (
+                <div className="space-y-1">
+                  <Label htmlFor={`file-upload-${index}`}>Upload file</Label>
+                  <input
+                    id={`file-upload-${index}`}
+                    type="file"
+                    className="max-w-full text-xs"
+                    disabled={uploadPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) onFileUpload(index, file);
+                      event.target.value = "";
+                    }}
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label htmlFor={`file-mount-${index}`}>
+                  Mount path (optional)
+                </Label>
+                <Input
+                  id={`file-mount-${index}`}
+                  value={resource.mount_path ?? ""}
+                  onChange={(event) =>
+                    update(index, {
+                      ...resource,
+                      mount_path: event.target.value || undefined,
+                    })
+                  }
+                />
+              </div>
+            </>
+          ) : resource.type === "github_repository" ? (
             <>
               <div className="space-y-1">
                 <Label htmlFor={`repo-url-${index}`}>Repository URL</Label>

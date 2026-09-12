@@ -18,6 +18,7 @@ test("inspect, pause, resume, run, edit and archive a deployment", async ({
     "deployment-schedule",
   );
   await expect(page.locator('[data-upcoming-count="4"]')).toBeVisible();
+  await page.getByRole("button", { name: "Runs", exact: true }).click();
   await expect(page.locator('[data-run-result="succeeded"]')).toBeVisible();
   await expect(page.locator('[data-run-result="failed"]')).toBeVisible();
 
@@ -29,14 +30,25 @@ test("inspect, pause, resume, run, edit and archive a deployment", async ({
 
   await page.getByRole("button", { name: "Run now" }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/deployments/${DEPLOYMENT}/runs/drun_mock`),
+    new RegExp(`/deployments/${DEPLOYMENT}\\?tab=runs&run=drun_mock`),
   );
-  await expect(page.locator('[data-run-result="succeeded"]')).toBeVisible();
-  const sessionLink = page.getByRole("link", { name: /sesn_deploy/ });
-  await expect(sessionLink).toBeVisible();
-
-  await page.getByRole("link", { name: DEPLOYMENT }).click();
-  await page.getByRole("button", { name: "Edit" }).click();
+  const inspector = page.getByRole("region", { name: "Session details" });
+  await expect(
+    inspector.locator('[data-run-result="succeeded"]'),
+  ).toBeVisible();
+  await inspector.getByRole("link", { name: "Open", exact: true }).click();
+  await expect(
+    page
+      .getByTestId("event-row")
+      .filter({ hasText: "Prepare the weekly research digest." }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Deployment runs", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Close details" }).click();
+  await page
+    .getByRole("button", { name: "Configuration", exact: true })
+    .click();
   await page.getByLabel("Name").fill("Weekly platform digest");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(
@@ -77,8 +89,17 @@ test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Morning triage" }),
   ).toBeVisible();
-  await expect(page.getByText("30 8 * * 1-5", { exact: true })).toBeVisible();
-  await expect(page.getByText(/agent_taskrunner.*v1/)).toBeVisible();
+  await expect(
+    page
+      .getByTestId("deployment-schedule")
+      .getByText("30 8 * * 1-5", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Agent", exact: true }),
+  ).toContainText("General task agent");
+  await expect(
+    page.getByRole("combobox", { name: "Agent version", exact: true }),
+  ).toContainText("v1");
 });
 
 test("mock deployment endpoints reject malformed collection and schedule inputs", async ({

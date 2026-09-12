@@ -19,6 +19,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Deployment rows and exact lookup open a resizable inspector with pinned Agent details, initial events, server schedule timestamps and resource metadata. Rendered/API views and previous/next selection retain list filters and paging.
 
+- Deployment configuration edits in place with pinned Agent versions, complete resource editing, draft protection and Save/Discard. Runs open a Session inspector with run metadata, server filters and a return link to the selected run.
+
 - Session resources expand bound Memory trees and show Markdown/Raw content, file metadata and repository details in place. Downloadable outputs offer downloads and bounded text previews; ordinary uploads retain the platform's content restriction.
 
 - Session timelines provide zoom, exact event inspection and a full-trace JSON download. Thread details expose pinned Agent/model metadata, served usage counters and per-request input-token charts.

@@ -10,6 +10,7 @@ import { DetailSection, Field, FieldList } from "@/components/console/detail";
 import { DetailSkeleton, ErrorState, Time } from "@/components/console/bits";
 import { PlatformError } from "@/lib/platform/http";
 import { useDeploymentRun } from "@/lib/platform/queries";
+import { deploymentRunSessionHref } from "@/components/console/deployment-run-details";
 
 const PARENT_MISMATCH = new PlatformError(404, {
   type: "error",
@@ -33,7 +34,10 @@ export default function DeploymentRunPage({
   return (
     <div>
       <Breadcrumb
-        parent={{ href: `/deployments/${id}`, label: "Deployment" }}
+        parent={{
+          href: `/deployments/${id}?tab=runs&run=${encodeURIComponent(runId)}`,
+          label: "Deployment",
+        }}
         current={run.id}
       />
       <PageHeader
@@ -73,7 +77,10 @@ export default function DeploymentRunPage({
             </span>
           </Field>
           <Field label="Agent">
-            <Link className="hover:underline" href={`/agents/${run.agent.id}`}>
+            <Link
+              className="hover:underline"
+              href={`/agents/${encodeURIComponent(run.agent.id)}?version=${run.agent.version}`}
+            >
               {run.agent.id} · v{run.agent.version}
             </Link>
           </Field>
@@ -81,7 +88,7 @@ export default function DeploymentRunPage({
             {run.session_id ? (
               <Link
                 className="hover:underline"
-                href={`/sessions/${run.session_id}`}
+                href={deploymentRunSessionHref(run)}
               >
                 {run.session_id}
               </Link>

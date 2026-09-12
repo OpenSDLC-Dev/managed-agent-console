@@ -167,7 +167,10 @@ export function TranscriptCard({
   onSelect: () => void;
   approval?: ReactNode;
 }) {
-  const content = event.content as ContentBlock[] | null | undefined;
+  const content =
+    typeof event.content === "string"
+      ? [{ type: "text", text: event.content }]
+      : event.content;
   const message =
     event.type === "user.message" || event.type === "agent.message";
   const tool = event.input !== undefined || event.type.includes("tool_result");
@@ -361,7 +364,10 @@ export function EventDetailPanel({
   approvalPending?: boolean;
   onClose: () => void;
 }) {
-  const content = event.content as ContentBlock[] | null | undefined;
+  const content =
+    typeof event.content === "string"
+      ? [{ type: "text", text: event.content }]
+      : event.content;
   const tokens = tokensLine(event);
   const summary = summaryOf(event);
   return (

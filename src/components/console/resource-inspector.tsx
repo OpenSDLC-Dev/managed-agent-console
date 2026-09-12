@@ -34,7 +34,8 @@ export function ResourceInspector({
     | "memory-store"
     | "agent"
     | "session"
-    | "deployment";
+    | "deployment"
+    | "deployment-run";
   children: React.ReactNode;
   id: string;
   previous?: string;
@@ -51,6 +52,7 @@ export function ResourceInspector({
     agent: "Agent",
     session: "Session",
     deployment: "Deployment",
+    "deployment-run": "Deployment run",
   }[kind];
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);

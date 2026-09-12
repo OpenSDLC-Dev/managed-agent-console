@@ -191,7 +191,7 @@ test("timezone search can cancel, select by keyboard and preserve aliases on edi
   await page.getByRole("button", { name: "Save changes" }).click();
   expect((await submitted).postDataJSON().schedule.timezone).toBe("US/Eastern");
   await expect(page).toHaveURL(/deployments\/depl_weeklyresearch000001$/);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.reload();
   await expect(trigger).toContainText("US/Eastern");
 });
 
@@ -214,7 +214,7 @@ test("schedule clock supports AM/PM keyboard changes and preserves midnight on e
   ).toBeChecked();
   await time.fill("13:00");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/\/deployments\/depl_weeklyresearch000001$/);
   expect(
     await time.evaluate((el: HTMLInputElement) => el.validity.patternMismatch),
   ).toBe(true);
@@ -230,7 +230,8 @@ test("schedule clock supports AM/PM keyboard changes and preserves midnight on e
   expect((await submitted).postDataJSON().schedule.expression).toBe(
     "0 0 * * *",
   );
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeHidden();
+  await page.reload();
   await expect(time).toHaveValue("12:00");
   await expect(
     page.getByRole("radio", { name: "AM", exact: true }),

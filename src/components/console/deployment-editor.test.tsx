@@ -18,6 +18,11 @@ import {
 } from "./deployment-editor";
 import type { Deployment } from "@/lib/platform/types";
 import type { DeploymentWriteBody } from "@/lib/platform/queries";
+import {
+  agents,
+  deployments,
+  environments,
+} from "../../../test/mock-platform/fixtures.mjs";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -74,6 +79,187 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+function inlineEditor({
+  readOnly = false,
+  reject = false,
+  holdUpload = false,
+} = {}) {
+  let saved = structuredClone(deployments[0]) as Deployment;
+  saved.resources = [
+    { type: "file", file_id: "file_existing", mount_path: "/notes.txt" },
+    {
+      type: "memory_store",
+      memory_store_id: "mem_project",
+      access: "read_only",
+      instructions: "Read context",
+    },
+    {
+      type: "github_repository",
+      url: "https://github.com/example/project",
+      checkout: { type: "branch", name: "main" },
+    },
+  ];
+  const posts: DeploymentWriteBody[] = [];
+  let fail = reject;
+  let finishUpload: (() => void) | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.body instanceof FormData) {
+        if (holdUpload)
+          await new Promise<void>((resolve) => {
+            finishUpload = resolve;
+          });
+        return Response.json({ id: "file_uploaded", filename: "new.txt" });
+      }
+      if (init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as DeploymentWriteBody;
+        posts.push(body);
+        if (fail) {
+          fail = false;
+          return Response.json(
+            {
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                message: "Repository token required",
+              },
+            },
+            { status: 400 },
+          );
+        }
+        saved = {
+          ...saved,
+          ...body,
+          agent: {
+            ...saved.agent,
+            ...(body.agent as Partial<Deployment["agent"]>),
+          },
+          resources:
+            body.resources?.map((resource) => {
+              if (resource.type !== "github_repository") return resource;
+              const { authorization_token: _token, ...safe } = resource;
+              void _token;
+              return safe;
+            }) ?? saved.resources,
+        } as Deployment;
+        return Response.json(saved);
+      }
+      const data = url.includes("/versions")
+        ? [3, 2].map((version) => ({ ...agents[1], version }))
+        : url.includes("/agents")
+          ? agents
+          : url.includes("/environments")
+            ? environments
+            : [];
+      return Response.json({ data, next_page: null });
+    }),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const onSaved = vi.fn();
+  const element = (item: Deployment) => (
+    <QueryClientProvider client={client}>
+      <DeploymentEditor
+        mode="edit"
+        inline
+        readOnly={readOnly}
+        deploymentId={item.id}
+        initial={formFromDeployment(item)}
+        initialResources={item.resources}
+        onSaved={onSaved}
+      />
+    </QueryClientProvider>
+  );
+  const view = render(element(saved));
+  return {
+    posts,
+    onSaved,
+    saved,
+    refetch: () =>
+      view.rerender(
+        element({
+          ...saved,
+          name: "Server refresh",
+          updated_at: "2026-09-12T12:00:00Z",
+        }),
+      ),
+    finishUpload: () => finishUpload?.(),
+  };
+}
+
+it("keeps inline drafts through refresh, discards locally, and omits unchanged write-only resources", async () => {
+  const { saved, posts, refetch, onSaved } = inlineEditor();
+  expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+  await userEvent.clear(screen.getByLabelText("Name"));
+  await userEvent.type(screen.getByLabelText("Name"), "Draft");
+  refetch();
+  expect(screen.getByLabelText("Name")).toHaveValue("Draft");
+  await userEvent.click(screen.getByRole("button", { name: "Discard" }));
+  expect(screen.getByLabelText("Name")).toHaveValue(saved.name);
+  await userEvent.click(await screen.findByRole("button", { name: "v2" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(posts[0].agent).toMatchObject({ id: saved.agent.id, version: 2 });
+  expect(posts[0]).not.toHaveProperty("resources");
+  expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
+  expect(push).not.toHaveBeenCalled();
+});
+
+it("submits the complete edited resource collection, retains a rejected draft, and clears repository secrets after save", async () => {
+  const { posts, onSaved } = inlineEditor({ reject: true });
+  await userEvent.selectOptions(screen.getByLabelText("Access"), "read_write");
+  await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Repository token required",
+  );
+  expect(screen.getByLabelText("Access")).toHaveValue("read_write");
+  expect(posts[0].resources).toHaveLength(3);
+  await userEvent.type(
+    screen.getByLabelText("Authorization token"),
+    "replacement-token",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  expect(posts[1].resources).toMatchObject([
+    { type: "file", file_id: "file_existing", mount_path: "/notes.txt" },
+    {
+      type: "memory_store",
+      access: "read_write",
+      instructions: "Read context",
+    },
+    {
+      type: "github_repository",
+      authorization_token: "replacement-token",
+      checkout: { type: "branch", name: "main" },
+    },
+  ]);
+  expect(screen.getByLabelText("Authorization token")).toHaveValue("");
+});
+
+it("locks resource rows during upload so an in-flight response cannot attach to a different row", async () => {
+  const { finishUpload } = inlineEditor({ holdUpload: true });
+  await userEvent.upload(
+    screen.getByLabelText("Upload file"),
+    new File(["new"], "new.txt", { type: "text/plain" }),
+  );
+  await waitFor(() => expect(screen.getByLabelText("File ID")).toBeDisabled());
+  expect(screen.getByRole("button", { name: /Remove.*1/ })).toBeDisabled();
+  finishUpload();
+  await waitFor(() =>
+    expect(screen.getByLabelText("File ID")).toHaveValue("file_uploaded"),
+  );
+});
+
+it("renders archived configuration with disabled fields and no save controls", () => {
+  inlineEditor({ readOnly: true });
+  expect(screen.getByLabelText("Name")).toBeDisabled();
+  expect(screen.getByLabelText("File ID")).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull();
 });
 
 describe("deployment editor wire mapping", () => {
