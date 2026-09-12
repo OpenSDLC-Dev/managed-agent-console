@@ -24,6 +24,11 @@ import { useAddCredential } from "@/lib/platform/queries";
 import { metadataObject } from "@/lib/platform/metadata";
 
 type AuthKind = "environment_variable" | "static_bearer" | "mcp_oauth";
+const AUTH_LABELS: Record<AuthKind, string> = {
+  environment_variable: "Environment variable",
+  static_bearer: "Bearer token",
+  mcp_oauth: "MCP OAuth",
+};
 
 /**
  * Add-credential dialog. Secret fields are write-only on the platform —
@@ -31,15 +36,46 @@ type AuthKind = "environment_variable" | "static_bearer" | "mcp_oauth";
  * says out loud.
  */
 export function AddCredentialButton({ vaultId }: { vaultId: string }) {
-  const add = useAddCredential(vaultId);
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<AuthKind>("environment_variable");
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-8"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="size-4" /> Add credential
+      </Button>
+      <CredentialDialog vaultId={vaultId} open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+export function CredentialDialog({
+  vaultId,
+  open,
+  onOpenChange,
+  firstVaultName,
+}: {
+  vaultId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  firstVaultName?: string;
+}) {
+  const add = useAddCredential(vaultId);
+  const [kind, setKind] = useState<AuthKind>(
+    firstVaultName ? "mcp_oauth" : "environment_variable",
+  );
   const [displayName, setDisplayName] = useState("");
   const [serverUrl, setServerUrl] = useState("");
   const [token, setToken] = useState("");
   const [secretName, setSecretName] = useState("");
   const [secretValue, setSecretValue] = useState("");
   const [allowedHosts, setAllowedHosts] = useState("");
+  const [networking, setNetworking] = useState<"limited" | "unrestricted">(
+    "limited",
+  );
   const [injectHeader, setInjectHeader] = useState(true);
   const [injectBody, setInjectBody] = useState(true);
   const [metadata, setMetadata] = useState("{}");
@@ -57,12 +93,14 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
   const [parseError, setParseError] = useState<string | null>(null);
 
   const reset = () => {
+    setKind(firstVaultName ? "mcp_oauth" : "environment_variable");
     setDisplayName("");
     setServerUrl("");
     setToken("");
     setSecretName("");
     setSecretValue("");
     setAllowedHosts("");
+    setNetworking("limited");
     setInjectHeader(true);
     setInjectBody(true);
     setMetadata("{}");
@@ -99,9 +137,9 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
             type: kind,
             secret_name: secretName.trim(),
             secret_value: secretValue,
-            // networking is required on the wire; unrestricted when no hosts.
+            // vaultcredauth.go accepts both arms; limited requires at least one host.
             networking:
-              hosts.length > 0
+              networking === "limited"
                 ? { type: "limited", allowed_hosts: hosts }
                 : { type: "unrestricted" },
             injection_location: {
@@ -144,7 +182,7 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
         onSuccess: () => {
           reset();
           add.reset();
-          setOpen(false);
+          onOpenChange(false);
         },
       },
     );
@@ -152,317 +190,355 @@ export function AddCredentialButton({ vaultId }: { vaultId: string }) {
 
   const valid =
     kind === "environment_variable"
-      ? secretName.trim() && secretValue && (injectHeader || injectBody)
+      ? secretName.trim() &&
+        secretValue &&
+        (injectHeader || injectBody) &&
+        (networking === "unrestricted" || allowedHosts.trim())
       : serverUrl.trim() &&
         token &&
-        (!refreshEnabled ||
+        (kind !== "mcp_oauth" ||
+          !refreshEnabled ||
           (clientId.trim() &&
             refreshToken &&
             tokenEndpoint.trim() &&
             (tokenEndpointAuth === "none" || clientSecret)));
 
   return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8"
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="size-4" /> Add credential
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) {
-            reset();
-            add.reset();
-          }
-        }}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Add credential</DialogTitle>
-            <DialogDescription>
-              The secret is sealed on save — it can be replaced later but never
-              read back.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (add.isPending) return;
+        onOpenChange(next);
+        if (!next) {
+          reset();
+          add.reset();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[85vh] overflow-y-auto p-6 sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle className="text-2xl">
+            {firstVaultName ? "Add a credential" : "Add credential"}
+          </DialogTitle>
+          <DialogDescription>
+            {firstVaultName
+              ? firstVaultName +
+                " is ready. Add its first credential so agents can use it."
+              : "Add a credential for agents to use in their sessions."}{" "}
+            Secrets are sealed when saved and cannot be read back.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Type</Label>
-                <Select
-                  value={kind}
-                  onValueChange={(v) => setKind(v as AuthKind)}
+            <div className="space-y-1.5">
+              <Label htmlFor="cred-name">Name (optional)</Label>
+              <Input
+                id="cred-name"
+                placeholder="Example credential"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select
+                value={kind}
+                onValueChange={(v) => setKind(v as AuthKind)}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="h-8 w-full rounded-lg"
+                  aria-label="Credential type"
                 >
-                  <SelectTrigger
-                    size="sm"
-                    className="h-8 w-full rounded-lg"
-                    aria-label="Credential type"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="environment_variable">
-                      environment_variable
-                    </SelectItem>
-                    <SelectItem value="static_bearer">static_bearer</SelectItem>
-                    <SelectItem value="mcp_oauth">mcp_oauth</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <SelectValue>{AUTH_LABELS[kind]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="environment_variable">
+                    Environment variable
+                  </SelectItem>
+                  <SelectItem value="static_bearer">Bearer token</SelectItem>
+                  <SelectItem value="mcp_oauth">MCP OAuth</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {kind === "environment_variable" ? (
+            <>
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cred-secret-name">Secret name</Label>
+                  <Input
+                    id="cred-secret-name"
+                    className="font-mono"
+                    placeholder="GITHUB_TOKEN"
+                    value={secretName}
+                    onChange={(e) => setSecretName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cred-secret-value">Secret value</Label>
+                  <Input
+                    id="cred-secret-value"
+                    type="password"
+                    value={secretValue}
+                    onChange={(e) => setSecretValue(e.target.value)}
+                  />
+                </div>
               </div>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Network access</legend>
+                <div className="flex gap-4">
+                  {(["limited", "unrestricted"] as const).map((value) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="credential-networking"
+                        value={value}
+                        checked={networking === value}
+                        onChange={() => setNetworking(value)}
+                      />
+                      {value === "limited" ? "Limited" : "Unrestricted"}
+                    </label>
+                  ))}
+                </div>
+                {networking === "limited" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cred-hosts">
+                      Allowed hosts (one per line)
+                    </Label>
+                    <textarea
+                      id="cred-hosts"
+                      value={allowedHosts}
+                      onChange={(e) => setAllowedHosts(e.target.value)}
+                      rows={2}
+                      className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Only these hosts can receive the credential. Enter at
+                      least one host.
+                    </p>
+                  </div>
+                )}
+              </fieldset>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">
+                  Injection location
+                </legend>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={injectHeader}
+                    onChange={(event) => setInjectHeader(event.target.checked)}
+                  />
+                  Header
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={injectBody}
+                    onChange={(event) => setInjectBody(event.target.checked)}
+                  />
+                  Body
+                </label>
+              </fieldset>
+            </>
+          ) : (
+            <>
               <div className="space-y-1.5">
-                <Label htmlFor="cred-name">Name (optional)</Label>
+                <Label htmlFor="cred-url">MCP server URL</Label>
                 <Input
-                  id="cred-name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  id="cred-url"
+                  className="font-mono"
+                  placeholder="https://…"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
                 />
               </div>
-            </div>
-
-            {kind === "environment_variable" ? (
-              <>
-                <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cred-token">
+                  {kind === "mcp_oauth" ? "Access token" : "Bearer token"}
+                </Label>
+                <Input
+                  id="cred-token"
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </div>
+              {kind === "mcp_oauth" && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Enter tokens obtained from your MCP server. Browser OAuth
+                    authorization is not available on this deployment.
+                  </p>
                   <div className="space-y-1.5">
-                    <Label htmlFor="cred-secret-name">Secret name</Label>
+                    <Label htmlFor="cred-expiry">
+                      Expiry (RFC 3339, optional)
+                    </Label>
                     <Input
-                      id="cred-secret-name"
-                      className="font-mono"
-                      placeholder="GITHUB_TOKEN"
-                      value={secretName}
-                      onChange={(e) => setSecretName(e.target.value)}
+                      id="cred-expiry"
+                      placeholder="2026-09-10T12:00:00Z"
+                      value={expiresAt}
+                      onChange={(event) => setExpiresAt(event.target.value)}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cred-secret-value">Secret value</Label>
-                    <Input
-                      id="cred-secret-value"
-                      type="password"
-                      value={secretValue}
-                      onChange={(e) => setSecretValue(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cred-hosts">
-                    Allowed hosts (one per line, empty = unrestricted)
-                  </Label>
-                  <textarea
-                    id="cred-hosts"
-                    value={allowedHosts}
-                    onChange={(e) => setAllowedHosts(e.target.value)}
-                    rows={2}
-                    className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
-                  />
-                </div>
-                <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium">
-                    Injection location
-                  </legend>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-sm font-medium">
                     <input
                       type="checkbox"
-                      checked={injectHeader}
+                      checked={refreshEnabled}
                       onChange={(event) =>
-                        setInjectHeader(event.target.checked)
+                        setRefreshEnabled(event.target.checked)
                       }
                     />
-                    Header
+                    Configure automatic refresh
                   </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={injectBody}
-                      onChange={(event) => setInjectBody(event.target.checked)}
-                    />
-                    Body
-                  </label>
-                </fieldset>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cred-url">MCP server URL</Label>
-                  <Input
-                    id="cred-url"
-                    className="font-mono"
-                    placeholder="https://…"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cred-token">
-                    {kind === "mcp_oauth" ? "Access token" : "Bearer token"}
-                  </Label>
-                  <Input
-                    id="cred-token"
-                    type="password"
-                    value={token}
-                    onChange={(e) => setToken(e.target.value)}
-                  />
-                </div>
-                {kind === "mcp_oauth" && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="cred-expiry">
-                        Expiry (RFC 3339, optional)
-                      </Label>
-                      <Input
-                        id="cred-expiry"
-                        placeholder="2026-09-10T12:00:00Z"
-                        value={expiresAt}
-                        onChange={(event) => setExpiresAt(event.target.value)}
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        checked={refreshEnabled}
-                        onChange={(event) =>
-                          setRefreshEnabled(event.target.checked)
-                        }
-                      />
-                      Configure automatic refresh
-                    </label>
-                    {refreshEnabled && (
-                      <div className="space-y-4 rounded-lg border p-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="cred-client-id">Client ID</Label>
-                            <Input
-                              id="cred-client-id"
-                              value={clientId}
-                              onChange={(event) =>
-                                setClientId(event.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="cred-refresh-token">
-                              Refresh token
-                            </Label>
-                            <Input
-                              id="cred-refresh-token"
-                              type="password"
-                              value={refreshToken}
-                              onChange={(event) =>
-                                setRefreshToken(event.target.value)
-                              }
-                            />
-                          </div>
-                        </div>
+                  {refreshEnabled && (
+                    <div className="space-y-4 rounded-lg border p-3">
+                      <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                          <Label htmlFor="cred-token-endpoint">
-                            Token endpoint
-                          </Label>
+                          <Label htmlFor="cred-client-id">Client ID</Label>
                           <Input
-                            id="cred-token-endpoint"
-                            value={tokenEndpoint}
+                            id="cred-client-id"
+                            value={clientId}
                             onChange={(event) =>
-                              setTokenEndpoint(event.target.value)
+                              setClientId(event.target.value)
                             }
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <Label>Token endpoint authentication</Label>
-                          <Select
-                            value={tokenEndpointAuth}
-                            onValueChange={(value) =>
-                              setTokenEndpointAuth(
-                                value as typeof tokenEndpointAuth,
-                              )
+                          <Label htmlFor="cred-refresh-token">
+                            Refresh token
+                          </Label>
+                          <Input
+                            id="cred-refresh-token"
+                            type="password"
+                            value={refreshToken}
+                            onChange={(event) =>
+                              setRefreshToken(event.target.value)
                             }
-                          >
-                            <SelectTrigger
-                              aria-label="Token endpoint authentication"
-                              className="w-full"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">none</SelectItem>
-                              <SelectItem value="client_secret_basic">
-                                client_secret_basic
-                              </SelectItem>
-                              <SelectItem value="client_secret_post">
-                                client_secret_post
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {tokenEndpointAuth !== "none" && (
-                          <div className="space-y-1.5">
-                            <Label htmlFor="cred-client-secret">
-                              Client secret
-                            </Label>
-                            <Input
-                              id="cred-client-secret"
-                              type="password"
-                              value={clientSecret}
-                              onChange={(event) =>
-                                setClientSecret(event.target.value)
-                              }
-                            />
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="cred-resource">
-                              Resource (optional)
-                            </Label>
-                            <Input
-                              id="cred-resource"
-                              value={resource}
-                              onChange={(event) =>
-                                setResource(event.target.value)
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label htmlFor="cred-scope">Scope (optional)</Label>
-                            <Input
-                              id="cred-scope"
-                              value={scope}
-                              onChange={(event) => setScope(event.target.value)}
-                            />
-                          </div>
+                          />
                         </div>
                       </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-            <div className="space-y-1.5">
-              <Label htmlFor="cred-metadata">Metadata (JSON object)</Label>
-              <textarea
-                id="cred-metadata"
-                rows={3}
-                className="w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring"
-                value={metadata}
-                onChange={(event) => setMetadata(event.target.value)}
-              />
-            </div>
-            {(parseError || add.error instanceof Error) && (
-              <p role="alert" className="text-sm text-destructive">
-                {parseError ?? (add.error as Error).message}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={!valid || add.isPending} onClick={submit}>
-              Add credential
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cred-token-endpoint">
+                          Token endpoint
+                        </Label>
+                        <Input
+                          id="cred-token-endpoint"
+                          value={tokenEndpoint}
+                          onChange={(event) =>
+                            setTokenEndpoint(event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Token endpoint authentication</Label>
+                        <Select
+                          value={tokenEndpointAuth}
+                          onValueChange={(value) =>
+                            setTokenEndpointAuth(
+                              value as typeof tokenEndpointAuth,
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            aria-label="Token endpoint authentication"
+                            className="w-full"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">none</SelectItem>
+                            <SelectItem value="client_secret_basic">
+                              client_secret_basic
+                            </SelectItem>
+                            <SelectItem value="client_secret_post">
+                              client_secret_post
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {tokenEndpointAuth !== "none" && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cred-client-secret">
+                            Client secret
+                          </Label>
+                          <Input
+                            id="cred-client-secret"
+                            type="password"
+                            value={clientSecret}
+                            onChange={(event) =>
+                              setClientSecret(event.target.value)
+                            }
+                          />
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cred-resource">
+                            Resource (optional)
+                          </Label>
+                          <Input
+                            id="cred-resource"
+                            value={resource}
+                            onChange={(event) =>
+                              setResource(event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cred-scope">Scope (optional)</Label>
+                          <Input
+                            id="cred-scope"
+                            value={scope}
+                            onChange={(event) => setScope(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          <details className="space-y-1.5 text-sm">
+            <summary>Metadata (optional)</summary>
+            <Label htmlFor="cred-metadata">Metadata (JSON object)</Label>
+            <textarea
+              id="cred-metadata"
+              rows={3}
+              className="w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring"
+              value={metadata}
+              onChange={(event) => setMetadata(event.target.value)}
+            />
+          </details>
+          {(parseError || add.error instanceof Error) && (
+            <p role="alert" className="text-sm text-destructive">
+              {parseError ?? (add.error as Error).message}
+            </p>
+          )}
+        </div>
+        <DialogFooter className="m-0 border-0 bg-transparent p-0">
+          <Button
+            variant="outline"
+            disabled={add.isPending}
+            onClick={() => {
+              reset();
+              add.reset();
+              onOpenChange(false);
+            }}
+          >
+            {firstVaultName ? "Skip for now" : "Cancel"}
+          </Button>
+          <Button disabled={!valid || add.isPending} onClick={submit}>
+            Add credential
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

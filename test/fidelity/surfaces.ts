@@ -1098,6 +1098,21 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "vault-first-credential",
+    route: "/vaults",
+    fixture: "newly created vault awaiting its first credential",
+    description:
+      "Continue commits the vault and opens the optional credential step with Skip for now.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create vault" }).click();
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("Production credentials");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await page.getByRole("dialog", { name: "Add a credential" }).waitFor();
+    },
+  },
+  {
     id: "agent-create",
     route: "/agents",
     fixture: "empty dialog form",
