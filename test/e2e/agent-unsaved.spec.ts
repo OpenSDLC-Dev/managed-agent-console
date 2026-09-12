@@ -102,13 +102,15 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .getByRole("region", { name: "Agent details" })
     .getByRole("link", { name: "Open", exact: true })
     .click();
-  await page.goto("/agents/agent_researcher00000000001/edit");
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByRole("radio", { name: "rendered", exact: true }).click();
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "sessions", exact: true }).click();
+  await expect(page).toHaveURL(/tab=sessions$/);
+  await page
+    .getByRole("button", { name: "configuration", exact: true })
+    .click();
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
-  await page.goto("/agents/agent_researcher00000000001/edit");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByLabel("Raw agent config").fill("{");
   await page.evaluate(() => history.back());
@@ -117,9 +119,9 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     exact: true,
   });
   await prompt.getByRole("button", { name: "Leave" }).click();
-  await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
+  await expect(page).toHaveURL(/tab=sessions$/);
   await page.evaluate(() => history.forward());
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
   await page.getByLabel("Name", { exact: true }).fill("Sidebar draft");
   await page
     .getByRole("navigation", { name: "Main navigation" })

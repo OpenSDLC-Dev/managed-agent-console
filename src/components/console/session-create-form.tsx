@@ -73,14 +73,6 @@ export function SessionCreateForm({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const vaultList = vaults.data?.data ?? [];
-  const agentOptions = initialAgent
-    ? [
-        initialAgent,
-        ...(agents.data?.data ?? []).filter(
-          (agent) => agent.id !== initialAgent.id,
-        ),
-      ]
-    : (agents.data?.data ?? []);
 
   const save = () => {
     if (create.isPending || upload.isPending || !agentId || !environmentId)
@@ -160,7 +152,7 @@ export function SessionCreateForm({
               <SelectValue placeholder="Select an agent" />
             </SelectTrigger>
             <SelectContent>
-              {agentOptions.map((agent) => (
+              {(agents.data?.data ?? []).map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   {agent.name} · v{agent.version}
                 </SelectItem>
@@ -322,7 +314,7 @@ export function SessionCreateForm({
           Cancel
         </Button>
         {error && (
-          <span className="text-sm text-destructive">
+          <span role="alert" className="text-sm text-destructive">
             {error.message}
             {error instanceof PlatformError && error.requestId && (
               <span className="pl-2">

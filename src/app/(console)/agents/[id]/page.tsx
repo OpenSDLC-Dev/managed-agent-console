@@ -215,7 +215,11 @@ function AgentVersionPicker({
           )}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent
+        alignItemWithTrigger={false}
+        align="start"
+        className="min-w-64"
+      >
         <SelectItem value="latest">v{head} Latest</SelectItem>
         {versions
           .filter((row) => row.version !== head)

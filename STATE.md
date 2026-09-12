@@ -14,7 +14,8 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Implement Agent list inspection; local coverage and browser/visual checks pass.
 - [x] Deliver Agent inspector after green CI/review and squash merge (#161).
 - [x] Implement Agent inline configuration, version selection and related resource tabs.
-- [ ] Verify full Agent browser flows, both themes, CI/review and squash merge.
+- [x] Verify Agent configuration browser flows, coverage and Chrome in both themes.
+- [ ] Complete Agent configuration CI/review and squash merge.
 - [ ] Align remaining full editors, populated inspectors and nested resources.
 - [ ] Complete local/reference acceptance within implemented platform capabilities.
 

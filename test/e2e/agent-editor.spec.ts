@@ -141,7 +141,7 @@ test("archive an agent from its detail page", async ({ page }) => {
     .getByRole("link", { name: "Open", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "General task agent" }),
+    page.getByRole("heading", { name: "General task agent", level: 1 }),
   ).toBeVisible();
   await page
     .getByRole("main")

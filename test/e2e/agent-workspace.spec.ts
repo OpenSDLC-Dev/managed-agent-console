@@ -245,3 +245,50 @@ test("Start session cancellation retains the Agent draft and creation confirms l
   await expect(page).toHaveURL(/sessions\/sesn_mock/);
   expect(posts).toBe(1);
 });
+
+test("failed session creation keeps the Agent draft and its navigation protection", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/" + AGENT);
+  await page
+    .getByLabel("Description", { exact: true })
+    .fill("Draft survives failure");
+  await page
+    .getByRole("button", { name: "Start session", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Create session" });
+  await dialog
+    .getByRole("combobox", { name: "Environment", exact: true })
+    .click();
+  await page.getByRole("option").first().click();
+  await page.route("**/api/platform/v1/sessions", async (route) => {
+    if (route.request().method() === "POST")
+      await route.fulfill({
+        status: 500,
+        json: {
+          error: { type: "api_error", message: "Session creation unavailable" },
+        },
+      });
+    else await route.continue();
+  });
+  await dialog
+    .getByRole("button", { name: "Create session", exact: true })
+    .click();
+  const prompt = page.getByRole("dialog", {
+    name: "Unsaved changes",
+    exact: true,
+  });
+  await prompt.getByRole("button", { name: "Leave" }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Session creation unavailable",
+  );
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+    "Draft survives failure",
+  );
+  await page.getByRole("button", { name: "sessions", exact: true }).click();
+  await prompt.getByRole("button", { name: "Stay" }).click();
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+    "Draft survives failure",
+  );
+});

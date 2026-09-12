@@ -485,16 +485,21 @@ export function AgentEditor({
 
   return (
     <div
-      className={
-        inline ? "flex h-full min-h-0 w-full max-w-3xl flex-col" : "max-w-4xl"
-      }
+      className={inline ? "flex h-full min-h-0 w-full flex-col" : "max-w-4xl"}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 pb-4">
+      <div
+        className={cn(
+          "flex shrink-0 flex-wrap items-center gap-1.5 pb-4",
+          inline && "w-full max-w-3xl",
+        )}
+      >
         {toolbar && <div className="mr-auto">{toolbar}</div>}
         <div
           role="radiogroup"
           aria-label="Agent config view"
-          className="flex gap-1.5"
+          className={
+            inline ? "flex rounded-lg bg-secondary p-0.5" : "flex gap-1.5"
+          }
         >
           {(["rendered", "raw"] as const).map((key) => (
             <button
@@ -527,9 +532,13 @@ export function AgentEditor({
               }}
               className={cn(
                 "h-[30px] rounded-md border px-3 text-sm capitalize",
-                tab === key
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-secondary",
+                inline
+                  ? tab === key
+                    ? "border-border bg-background text-foreground shadow-sm"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  : tab === key
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary",
               )}
             >
               {key}
@@ -560,7 +569,11 @@ export function AgentEditor({
       </div>
 
       <div
-        className={inline ? "min-h-0 flex-1 overflow-y-auto pr-2" : undefined}
+        className={
+          inline
+            ? "min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pr-2"
+            : undefined
+        }
       >
         {readOnly && (
           <p className="pb-4 text-sm text-muted-foreground">
@@ -1134,7 +1147,7 @@ export function AgentEditor({
         <div
           className={
             inline
-              ? "mt-3 flex shrink-0 flex-wrap items-center gap-3 rounded-lg border bg-background p-3 shadow-sm"
+              ? "mt-3 flex w-fit max-w-full shrink-0 flex-wrap items-center gap-3 self-center rounded-xl border bg-background p-2 shadow-md"
               : "flex items-center gap-3 pt-6"
           }
         >
@@ -1147,7 +1160,7 @@ export function AgentEditor({
           {saveButton}
           {!inline && cancelButton}
           {conflict ? (
-            <span className="text-sm text-destructive">
+            <span role="alert" className="text-sm text-destructive">
               Someone else updated this agent (409).{" "}
               <button
                 className="underline"
@@ -1165,7 +1178,7 @@ export function AgentEditor({
             </span>
           ) : (
             error && (
-              <span className="text-sm text-destructive">
+              <span role="alert" className="text-sm text-destructive">
                 {error.message}
                 {error instanceof PlatformError && error.requestId && (
                   <span className="pl-2">

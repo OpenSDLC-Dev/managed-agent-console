@@ -568,8 +568,8 @@ initiate requests from an operator's network merely by opening the preview.
 
 Records ec8c4c6, frames 21–23, retain list selection in `?agent=ID`. The 560px
 inspector shows the current version, Open action, expandable built-in permissions,
-skills, multiagent and Rendered/API views. Full configuration editing and its
-version selector (frames 24–27) remain separate #141 work.
+skills, multiagent and Rendered/API views. Full configuration and version
+selection are covered below.
 
 Platform `internal/toolset/materialize.go` resolves defaults and explicit overrides;
 it does not emit eight configs when none were supplied. Inspection uses the

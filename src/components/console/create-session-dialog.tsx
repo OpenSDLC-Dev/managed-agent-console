@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SessionCreateForm } from "@/components/console/session-create-form";
+import { cn } from "@/lib/utils";
 
 export function CreateSessionButton({
   variant = "default",
@@ -40,7 +41,12 @@ export function CreateSessionButton({
         {initialAgent ? "Start session" : "Create session"}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent
+          className={cn(
+            "max-h-[90vh] overflow-y-auto sm:max-w-lg",
+            initialAgent && "sm:max-w-[720px] sm:p-6",
+          )}
+        >
           <DialogHeader>
             <DialogTitle>Create session</DialogTitle>
             <DialogDescription>
