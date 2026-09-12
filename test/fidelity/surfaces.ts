@@ -226,6 +226,72 @@ export const SURFACES: Surface[] = [
     },
   })),
   ...[
+    "fit",
+    "zoom",
+    "selected",
+    "empty",
+    "thread",
+    "requests",
+    "child",
+    "narrow",
+  ].map((view): Surface => ({
+    id: "session-timeline-" + view,
+    route:
+      "/sessions/" + (view === "child" ? SESSION : GATED) + "?inspector=thread",
+    fixture: view === "child" ? SESSION : GATED,
+    description:
+      "Persisted-event timeline, zoom and thread metadata/usage with explicit platform field boundaries.",
+    setup: async (page) => {
+      if (view === "empty") {
+        const response = await page.request.post(MOCK_URL + "/v1/sessions", {
+          headers: { "x-api-key": "test-key" },
+          data: { agent: AGENT, environment_id: ENV, title: "Empty timeline" },
+        });
+        if (!response.ok())
+          throw new Error("Could not create empty timeline fixture");
+        const session = await response.json();
+        await page.goto("/sessions/" + session.id + "?inspector=thread");
+      }
+      await traceLive(page);
+      if (view === "zoom") {
+        await page
+          .getByRole("button", { name: "Zoom in", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: "Zoom in", exact: true })
+          .click();
+      }
+      if (view === "selected") {
+        const event = page
+          .getByRole("group", { name: "Event timeline" })
+          .getByRole("button", { name: /^span.model_request_end/ });
+        await event.focus();
+        await event.press("Enter");
+        await page.getByTestId("event-detail").waitFor();
+      }
+      if (view === "child") {
+        await page
+          .getByRole("button", {
+            name: "Child thread General task agent",
+            exact: true,
+          })
+          .click();
+        await page
+          .locator('[data-inspected-thread-id="sthr_taskrunnerresearch0001"]')
+          .waitFor();
+        await traceLive(page);
+      }
+      if (view === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "requests" || view === "narrow") {
+        await page.getByText("Inspect model requests", { exact: true }).click();
+        await page
+          .getByRole("region", { name: "Thread details" })
+          .scrollIntoViewIfNeeded();
+      }
+    },
+  })),
+  ...[
     "session",
     "events",
     "tools",
