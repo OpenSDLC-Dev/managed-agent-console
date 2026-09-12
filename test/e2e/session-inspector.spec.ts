@@ -99,13 +99,25 @@ test("deep links, missing sessions, resizing and narrow inspector accessibility 
   const width = Number(await separator.getAttribute("aria-valuenow"));
   await separator.press("ArrowLeft");
   await expect(separator).toHaveAttribute("aria-valuenow", String(width + 32));
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-  ).toBe(true);
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  for (const narrowWidth of [390, 360]) {
+    await page.setViewportSize({ width: narrowWidth, height: 844 });
+    // Resizing the browser precedes its matchMedia/resize subscribers on macOS.
+    // Measure the responsive state, not the still-expanded desktop sidebar.
+    await expect(page.locator("[data-sidebar-state]")).toHaveAttribute(
+      "data-sidebar-state",
+      "collapsed",
+    );
+    await expect(separator).toHaveAttribute(
+      "aria-valuenow",
+      String(narrowWidth - 64),
+    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  }
   await panel.getByRole("button", { name: "Close details" }).click();
   await page.getByLabel("Find session by ID").fill("sesn_missing");
   await page.getByLabel("Find session by ID").press("Enter");

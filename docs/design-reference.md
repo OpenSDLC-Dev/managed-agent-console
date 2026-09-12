@@ -657,3 +657,5 @@ Chrome geometry inspection found visually hidden schedule legends extending the 
 The archived editor exposed a keyboard access failure in that scroll container: a disabled fieldset is not a tab stop, even with `tabIndex`. Scrolling now belongs to a named, focusable region outside the disabled form controls. Browser acceptance uses actual Tab/ArrowDown input before the accessibility scan.
 
 Preparing the real Docker fixture exposed creation selectors falling back to raw IDs once option popups unmounted. Agent/version and Environment/hosting labels now resolve from loaded choices in both creation and inline editing, with IDs retained only as unavailable-resource fallbacks.
+
+The combined macOS CI trace caught the Session inspector's width check before the responsive subscriptions ran: the viewport was 390px while the DOM still had the expanded desktop sidebar and 592px resize value. The check now waits for the collapsed sidebar and clamped inspector before measuring overflow and accessibility, at both 390px and 360px.
