@@ -467,10 +467,14 @@ export const SURFACES: Surface[] = [
       await panel.getByRole("heading", { name: "Project notes" }).waitFor();
       if (view === "api")
         await panel.getByRole("button", { name: "API", exact: true }).click();
-      else
+      else {
         await panel
           .getByRole("treeitem", { name: "decisions", exact: true })
           .click();
+        await panel
+          .getByRole("treeitem", { name: /architecture.md/ })
+          .waitFor();
+      }
     },
   })),
   ...["rendered", "raw", "edit", "actions"].map((view): Surface => ({

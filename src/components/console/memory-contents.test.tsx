@@ -107,10 +107,11 @@ it("opens URL-selected content, renders Markdown and preserves exact raw/downloa
   expect(copyText).toHaveBeenCalledWith(memories[0].content);
   await userEvent.click(screen.getByRole("button", { name: "Rendered" }));
   const create = vi.fn(() => "blob:download");
-  vi.stubGlobal(
-    "URL",
-    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() }),
-  );
+  class MockURL extends URL {
+    static createObjectURL = create;
+    static revokeObjectURL = vi.fn();
+  }
+  vi.stubGlobal("URL", MockURL);
   const click = vi
     .spyOn(HTMLAnchorElement.prototype, "click")
     .mockImplementation(() => {});
