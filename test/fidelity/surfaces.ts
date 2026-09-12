@@ -496,6 +496,32 @@ export const SURFACES: Surface[] = [
     },
   })),
   {
+    id: "memory-content-image",
+    route: "/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
+    fixture: "agent-written Markdown image",
+    description:
+      "External images require explicit navigation instead of automatic loading.",
+    setup: async (page) => {
+      await page.request.post(
+        MOCK_URL +
+          "/v1/memory_stores/" +
+          MEMORY_STORE +
+          "/memories/" +
+          MEMORY +
+          "?view=full",
+        {
+          headers: { "x-api-key": "test-key" },
+          data: {
+            content:
+              "# Image reference\n\n![diagram](https://memory-assets.example/diagram.png)",
+          },
+        },
+      );
+      await page.reload();
+      await page.getByRole("link", { name: "Open image: diagram" }).waitFor();
+    },
+  },
+  {
     id: "memory-store-advanced",
     route: "/memory-stores/" + MEMORY_STORE,
     fixture: "2 memories and 3 attributed versions",
