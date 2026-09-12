@@ -22,7 +22,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function setup(archived = false, status = 200) {
+function setup(archived = false, status = 200, compact = false) {
   const saved = { ...session, title: "Renamed" };
   const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(
     async () =>
@@ -49,6 +49,7 @@ function setup(archived = false, status = 200) {
   const view = render(
     <QueryClientProvider client={client}>
       <SessionActions
+        compact={compact}
         session={{
           ...session,
           archived_at: archived ? "2026-09-01T00:00:00Z" : null,
@@ -131,20 +132,38 @@ it("lets the platform validate metadata and displays its refusal", async () => {
   expect(fetch).toHaveBeenCalledOnce();
 });
 
-it("archives only after confirmation and updates the cache", async () => {
+it("archives directly, updates the cache and returns the full page to Sessions", async () => {
   const { fetch, client, saved } = setup();
   await userEvent.click(screen.getByRole("button", { name: "More actions" }));
   await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
-  expect(fetch).not.toHaveBeenCalled();
-  await userEvent.click(
-    screen.getByRole("button", { name: "Archive session" }),
-  );
+  expect(screen.queryByRole("dialog")).toBeNull();
   await waitFor(() =>
     expect(client.getQueryData(["session", session.id])).toEqual(saved),
   );
   expect(fetch.mock.calls[0][0]).toBe(
     `/api/platform/v1/sessions/${session.id}/archive`,
   );
+  expect(push).toHaveBeenCalledWith("/sessions");
+});
+
+it("keeps compact archive actions in their current list or inspector", async () => {
+  const { client, saved } = setup(false, 200, true);
+  await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+  await waitFor(() =>
+    expect(client.getQueryData(["session", session.id])).toEqual(saved),
+  );
+  expect(push).not.toHaveBeenCalled();
+});
+
+it("keeps the Session page when the platform refuses to archive", async () => {
+  const { fetch, client } = setup(false, 400);
+  await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(client.getQueryData(["session", session.id])).toBeUndefined();
+  expect(push).not.toHaveBeenCalled();
 });
 
 it("keeps archived sessions read-only and allows confirmed deletion", async () => {

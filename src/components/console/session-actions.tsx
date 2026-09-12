@@ -76,9 +76,15 @@ export function SessionActions({
       <ResourceActions
         resource="session"
         archived={!!session.archived_at}
-        archiveWarning="Interrupt a running session before archiving it."
+        confirmArchive={false}
         deleteDescription="Permanently delete this session, its event history, and the files it produced. Files uploaded through the Files API are retained. Interrupt a running session before deleting it."
-        onArchive={() => archive.mutate()}
+        onArchive={() =>
+          archive.mutate(undefined, {
+            onSuccess: () => {
+              if (!compact) router.push("/sessions");
+            },
+          })
+        }
         archivePending={archive.isPending}
         onDelete={() =>
           remove.mutate(undefined, {

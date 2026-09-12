@@ -64,6 +64,57 @@ describe("ResourceActions", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("disables a pending direct archive and keeps keyboard access to Delete", async () => {
+    const onArchive = vi.fn();
+    const view = render(
+      <ResourceActions
+        resource="session"
+        confirmArchive={false}
+        onArchive={onArchive}
+        onDelete={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+    await userEvent.click(trigger);
+    await userEvent.keyboard("{Enter}");
+    expect(onArchive).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+    view.rerender(
+      <ResourceActions
+        resource="session"
+        confirmArchive={false}
+        onArchive={onArchive}
+        onDelete={vi.fn()}
+        archivePending
+      />,
+    );
+    await userEvent.click(trigger);
+    const archive = screen.getByRole("menuitem", { name: "Archive" });
+    expect(archive).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveFocus(),
+    );
+    await userEvent.click(archive);
+    expect(onArchive).toHaveBeenCalledOnce();
+  });
+
+  it("prevents reopening an archive-only menu while its action is pending", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ResourceActions resource="agent" onArchive={vi.fn()} archivePending />
+        <button type="button">Next control</button>
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Next control" })).toHaveFocus();
+  });
+
   it("closes the menu and continues the tab sequence", async () => {
     const user = userEvent.setup();
     render(

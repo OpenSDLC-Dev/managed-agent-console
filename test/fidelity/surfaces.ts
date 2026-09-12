@@ -633,9 +633,6 @@ export const SURFACES: Surface[] = [
         await page
           .getByRole("menuitem", { name: "Archive", exact: true })
           .click();
-        await page
-          .getByRole("button", { name: "Archive session", exact: true })
-          .click();
         await panel.getByText("archived", { exact: true }).waitFor();
         await page.getByRole("dialog").waitFor({ state: "hidden" });
       }
@@ -1220,6 +1217,41 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   },
+  ...["menu", "narrow", "return", "error"].map((view): Surface => ({
+    id: "session-archive-" + view,
+    route: `/sessions/${view === "error" ? SESSION : GATED}`,
+    fixture: view === "error" ? SESSION : GATED,
+    description:
+      "Direct Session archive, successful return to the list and visible running-session refusal.",
+    setup: async (page) => {
+      if (view === "narrow") {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page
+          .getByRole("button", { name: "Close session inspector" })
+          .click();
+      }
+      await traceLive(page);
+      await page.getByRole("button", { name: "More actions" }).click();
+      if (view === "return" || view === "error") {
+        const response = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            response.url().endsWith("/archive"),
+        );
+        await page.getByRole("menuitem", { name: "Archive" }).click();
+        const archived = await response;
+        if (view === "return") {
+          if (!archived.ok()) throw new Error("Session archive fixture failed");
+          await page.waitForURL("**/sessions");
+          await page.getByRole("table").waitFor();
+        } else {
+          if (archived.status() !== 400)
+            throw new Error("Expected running Session archive refusal");
+          await page.getByText("Archive failed", { exact: true }).waitFor();
+        }
+      } else await page.getByRole("menuitem", { name: "Archive" }).waitFor();
+    },
+  })),
   // ---- the session trace, this console's densest surface ----------------
   {
     id: "session-transcript",
@@ -1428,6 +1460,35 @@ export const SURFACES: Surface[] = [
       await page
         .getByRole("main")
         .getByText("Credential vaults (optional)")
+        .waitFor();
+    },
+  },
+  {
+    id: "session-create-selected",
+    route: "/sessions",
+    fixture: GATED,
+    description:
+      "Session creation retains Agent/version and Environment/hosting labels after selection.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create session", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Create session" });
+      await dialog
+        .getByRole("combobox", { name: "Agent", exact: true })
+        .click();
+      await page.getByRole("option", { name: /General task agent/ }).click();
+      await dialog
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .click();
+      await page.getByRole("option", { name: /byoc-workers/ }).click();
+      await dialog
+        .getByRole("combobox", { name: "Agent", exact: true })
+        .getByText("General task agent · v1")
+        .waitFor();
+      await dialog
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .getByText("byoc-workers · Self-hosted")
         .waitFor();
     },
   },
@@ -1952,6 +2013,31 @@ export const SURFACES: Surface[] = [
         .first()
         .click();
       await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "agent-archive-pending",
+    route: `/agents/${AGENT}`,
+    fixture: AGENT,
+    description:
+      "An archive-only action menu cannot reopen while its request is pending.",
+    setup: async (page) => {
+      await page.route("**/api/platform/v1/agents/*/archive", async (route) => {
+        await new Promise<void>((resolve) =>
+          page.once("close", () => resolve()),
+        );
+        await route.abort().catch(() => {});
+      });
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "More actions" })
+        .click();
+      await page.getByRole("menuitem", { name: "Archive" }).click();
+      await page.getByRole("button", { name: "Archive agent" }).click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page
+        .locator('button[aria-label="More actions"]:disabled')
+        .waitFor();
     },
   },
   {

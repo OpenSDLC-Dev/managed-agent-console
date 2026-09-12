@@ -509,7 +509,7 @@ Default branch instead of None because omission uses the repository default.
 Populated reference evidence is now available in the private
 managed-agents-wire-recordings repository at `2026-09-12-console-141/`
 (commit `ec8c4c6`): `ISSUE_141_COVERAGE.md` maps each #141 boundary.
-This supplies comparison inputs; local visual acceptance remains open in
+The comparison and Docker acceptance are recorded below. Delivery status is tracked in
 [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
 ## Vault first credential — checked 2026-09-12
@@ -534,7 +534,7 @@ optional disclosure. Ordinary Add credential retains the environment-variable de
 Records ec8c4c6, frames 39/41 and UI[139]/[155], show direct Approve/Deny
 without a required reason step. The console retains the platform's optional
 deny_message under Approval options. This slice aligns those actions;
-reference transcript cards and the multi-tab Session inspector remain #141 work.
+the transcript cards and multi-tab inspector are covered in Session workspace below.
 
 Platform internal/events/toolflow.go permits confirmations only for ask-gated
 built-in/MCP calls. A custom call in requires_action needs a custom result, not
@@ -659,3 +659,19 @@ The archived editor exposed a keyboard access failure in that scroll container: 
 Preparing the real Docker fixture exposed creation selectors falling back to raw IDs once option popups unmounted. Agent/version and Environment/hosting labels now resolve from loaded choices in both creation and inline editing, with IDs retained only as unavailable-resource fallbacks.
 
 The combined macOS CI trace caught the Session inspector's width check before the responsive subscriptions ran: the viewport was 390px while the DOM still had the expanded desktop sidebar and 592px resize value. The check now waits for the collapsed sidebar and clamped inspector before measuring overflow and accessibility, at both 390px and 360px.
+
+## Session archive — checked 2026-09-12
+
+Records ec8c4c6 UI[301] archives directly and returns to Sessions. Frame 65's filename says "confirmation", but its contents show the returned list, not a dialog. Full-page Archive now returns to the list only after success; embedded actions retain their list/inspector context. Pending requests disable repeat activation.
+
+Platform `sessions.go:archiveSession` requires an explicit interrupt before archiving a running Session. Its refusal remains visible without navigation or an implicit interrupt. Delete keeps confirmation because `deleteSession` removes event history and produced files; Archive preserves those records.
+
+## Combined Docker acceptance — checked 2026-09-12
+
+Console `7221805` against platform `c42da36` preserved Deployment drafts across tabs, restored Discard, and persisted saved configuration after reload. A manual run with synthetic file and read-only Memory bindings returned `CONSOLE_PARITY_OK`. Run success appeared before the Session became idle; its transcript and Thread reported the served 347 input / 7 output tokens. The breadcrumb restored the selected run.
+
+The real Session expanded `/acceptance/brief.md` in place and switched between Markdown and raw content. File inspection resolved the 44-byte upload's filename, type, attachment time and IDs while explaining its unavailable content. The Memory-store editor saved with Ctrl+Enter, and reload retained the updated 185-byte content. The browser error log was empty. Four model-free API contracts also passed: Deployment lifecycle, Files paging, Memory optimistic writes/history and Session file bindings.
+
+These checks cover one primary Thread and a manual run. They do not establish populated reference multiagent behavior, raw SSE deltas, external OAuth authorization or scheduled execution; unsupported budget, billing and catalog features remain capability boundaries. Final PR/CI and Docker revision evidence lives in [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
+
+The final creation-dialog walk reproduced the same selected-label loss in Session creation: closed menus showed Agent and Environment IDs. Both labels now resolve from loaded options, retaining the pinned-version display for Agent-originated creation and using IDs only when an option is unavailable. The existing resource-creation browser cases check both labels before submission.

@@ -143,12 +143,32 @@ test("archive an agent from its detail page", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "General task agent", level: 1 }),
   ).toBeVisible();
-  await page
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/platform/v1/agents/*/archive", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  const actions = page
     .getByRole("main")
-    .getByRole("button", { name: "More actions" })
-    .click();
-  await page.getByRole("menuitem", { name: "Archive" }).click();
-  await page.getByRole("button", { name: "Archive agent" }).click();
+    .getByRole("button", { name: "More actions" });
+  try {
+    await actions.click();
+    await page.getByRole("menuitem", { name: "Archive" }).click();
+    await page.getByRole("button", { name: "Archive agent" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(actions).toBeDisabled();
+    await page
+      .getByRole("button", { name: "Start session", exact: true })
+      .focus();
+    await page.keyboard.press("Tab");
+    await expect(actions).not.toBeFocused();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+  } finally {
+    release();
+  }
   await expect(page.getByText("Archived", { exact: true })).toBeVisible();
 });
 

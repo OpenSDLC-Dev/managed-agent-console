@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * The reference's row/detail ⋯ menu: Archive and/or Delete, each confirming
- * through the same dialog the old header buttons used. The menu is portaled
+ * The row/detail ⋯ menu: Archive and/or Delete, with confirmation by default.
+ * Sessions opt into the recorded direct-archive interaction. The menu is portaled
  * so a last-row open is not clipped by the table's overflow-x-auto.
  */
 export function ResourceActions({
@@ -28,6 +28,7 @@ export function ResourceActions({
   onDownload,
   archivePending,
   deletePending,
+  confirmArchive = true,
   menuLabel = "More actions",
 }: {
   resource: string;
@@ -39,6 +40,7 @@ export function ResourceActions({
   onDownload?: () => void;
   archivePending?: boolean;
   deletePending?: boolean;
+  confirmArchive?: boolean;
   menuLabel?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -53,7 +55,7 @@ export function ResourceActions({
     if (!menuOpen) return;
     const items = Array.from(
       menuRef.current?.querySelectorAll<HTMLButtonElement>(
-        '[role="menuitem"]',
+        '[role="menuitem"]:not(:disabled)',
       ) ?? [],
     );
     items[0]?.focus();
@@ -124,6 +126,7 @@ export function ResourceActions({
         aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
+        disabled={!!archivePending && !canDelete && !onDownload}
         onClick={toggleMenu}
       >
         <MoreHorizontal className="size-4" />
@@ -154,10 +157,15 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
+                disabled={archivePending}
                 className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);
-                  setConfirm("archive");
+                  if (confirmArchive) setConfirm("archive");
+                  else {
+                    triggerRef.current?.focus();
+                    onArchive?.();
+                  }
                 }}
               >
                 Archive

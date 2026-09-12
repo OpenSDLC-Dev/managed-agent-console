@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Session Archive acts directly and returns full-page inspection to the list after success. Embedded inspectors retain their context; pending requests cannot be duplicated, and platform refusals stay visible.
+
+- Session creation retains selected Agent/version and Environment/hosting names after option menus close.
+
 - Session inspection and transcripts accept the platform's persisted plain-string user messages, including newly started Deployment runs.
 
 - Session approvals now offer direct Approve/Deny actions, retain optional denial reasons in a secondary menu, and stop showing resolved calls or custom-result requests as pending approvals.
