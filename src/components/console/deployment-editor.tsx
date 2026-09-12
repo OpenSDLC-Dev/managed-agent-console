@@ -389,411 +389,440 @@ export function DeploymentEditor({
         save();
       }}
     >
-      <fieldset
-        disabled={readOnly || mutation.isPending || upload.isPending}
+      <div
+        role={inline ? "region" : undefined}
+        aria-label={inline ? "Deployment configuration" : undefined}
+        tabIndex={inline ? 0 : undefined}
         className={
-          inline ? "min-h-0 min-w-0 flex-1 overflow-y-auto pr-2" : "min-w-0"
+          inline
+            ? "relative min-h-0 min-w-0 flex-1 overflow-y-auto pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            : undefined
         }
       >
-        <Section title="General" hint="What this deployment runs, and where.">
-          <div className="space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="deployment-name">Name</Label>
-              <Input
-                id="deployment-name"
-                value={form.name}
-                onChange={(event) => set("name", event.target.value)}
-              />
+        <fieldset
+          disabled={readOnly || mutation.isPending || upload.isPending}
+          className="min-w-0"
+        >
+          <Section title="General" hint="What this deployment runs, and where.">
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="deployment-name">Name</Label>
+                <Input
+                  id="deployment-name"
+                  value={form.name}
+                  onChange={(event) => set("name", event.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="deployment-description">Description</Label>
+                <Input
+                  id="deployment-description"
+                  value={form.description}
+                  onChange={(event) => set("description", event.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="deployment-description">Description</Label>
-              <Input
-                id="deployment-description"
-                value={form.description}
-                onChange={(event) => set("description", event.target.value)}
-              />
+            <div className={inline ? "grid gap-3 sm:grid-cols-[2fr_1fr]" : ""}>
+              <div className="space-y-1.5">
+                <div className="flex justify-between gap-3">
+                  <Label>Agent</Label>
+                  <a
+                    href="/agents"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-muted-foreground underline"
+                  >
+                    Manage agents ↗
+                  </a>
+                </div>
+                <Select
+                  value={inline ? form.agentId : agentValue}
+                  onValueChange={(value) => {
+                    const agent = visibleAgentChoices.find(
+                      (candidate) =>
+                        (inline
+                          ? candidate.id
+                          : `${candidate.id}:${candidate.version}`) === value,
+                    );
+                    if (!agent) return;
+                    setForm((current) => ({
+                      ...current,
+                      agentId: agent.id,
+                      agentVersion: agent.version,
+                    }));
+                  }}
+                >
+                  <SelectTrigger aria-label="Agent" className="h-8 w-full">
+                    <SelectValue placeholder="Select an agent">
+                      {inline
+                        ? (visibleAgentChoices.find(
+                            (agent) => agent.id === form.agentId,
+                          )?.name ?? form.agentId)
+                        : undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleAgentChoices.map((agent) => (
+                      <SelectItem
+                        key={`${agent.id}:${agent.version}`}
+                        value={
+                          inline ? agent.id : `${agent.id}:${agent.version}`
+                        }
+                      >
+                        {agent.name}
+                        {!inline &&
+                          ` · v${agent.version}${agent.pinned ? " (pinned)" : ""}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {inline && form.agentId && (
+                <DeploymentAgentVersion
+                  id={form.agentId}
+                  version={form.agentVersion}
+                  head={
+                    agentList.find((agent) => agent.id === form.agentId)
+                      ?.version
+                  }
+                  onChange={(version) => set("agentVersion", version)}
+                  disabled={readOnly || mutation.isPending || upload.isPending}
+                />
+              )}
             </div>
-          </div>
-          <div className={inline ? "grid gap-3 sm:grid-cols-[2fr_1fr]" : ""}>
             <div className="space-y-1.5">
               <div className="flex justify-between gap-3">
-                <Label>Agent</Label>
+                <Label>Environment</Label>
                 <a
-                  href="/agents"
+                  href="/environments"
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-muted-foreground underline"
                 >
-                  Manage agents ↗
+                  Manage environments ↗
                 </a>
               </div>
               <Select
-                value={inline ? form.agentId : agentValue}
-                onValueChange={(value) => {
-                  const agent = visibleAgentChoices.find(
-                    (candidate) =>
-                      (inline
-                        ? candidate.id
-                        : `${candidate.id}:${candidate.version}`) === value,
-                  );
-                  if (!agent) return;
-                  setForm((current) => ({
-                    ...current,
-                    agentId: agent.id,
-                    agentVersion: agent.version,
-                  }));
-                }}
+                value={form.environmentId}
+                onValueChange={(id) => set("environmentId", id ?? "")}
               >
-                <SelectTrigger aria-label="Agent" className="h-8 w-full">
-                  <SelectValue placeholder="Select an agent">
+                <SelectTrigger aria-label="Environment" className="h-8 w-full">
+                  <SelectValue placeholder="Select an environment">
                     {inline
-                      ? (visibleAgentChoices.find(
-                          (agent) => agent.id === form.agentId,
-                        )?.name ?? form.agentId)
+                      ? (environmentList.find(
+                          (environment) =>
+                            environment.id === form.environmentId,
+                        )?.name ?? form.environmentId)
                       : undefined}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {visibleAgentChoices.map((agent) => (
-                    <SelectItem
-                      key={`${agent.id}:${agent.version}`}
-                      value={inline ? agent.id : `${agent.id}:${agent.version}`}
-                    >
-                      {agent.name}
-                      {!inline &&
-                        ` · v${agent.version}${agent.pinned ? " (pinned)" : ""}`}
+                  {form.environmentId &&
+                    !environmentList.some(
+                      (environment) => environment.id === form.environmentId,
+                    ) && (
+                      <SelectItem value={form.environmentId}>
+                        {form.environmentId}
+                      </SelectItem>
+                    )}
+                  {environmentList.map((environment) => (
+                    <SelectItem key={environment.id} value={environment.id}>
+                      {environment.name} ·{" "}
+                      {hostingTypeLabel(environment.config.type)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            {inline && form.agentId && (
-              <DeploymentAgentVersion
-                id={form.agentId}
-                version={form.agentVersion}
-                head={
-                  agentList.find((agent) => agent.id === form.agentId)?.version
-                }
-                onChange={(version) => set("agentVersion", version)}
-                disabled={readOnly || mutation.isPending || upload.isPending}
+            <div className="space-y-2">
+              <Choice
+                label="Initial event editor"
+                value={eventsView}
+                onChange={setEventsView}
+                options={[
+                  {
+                    value: "message",
+                    label: "Initial message",
+                    disabled: initialMessage === null,
+                  },
+                  { value: "advanced", label: "Advanced events" },
+                ]}
               />
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex justify-between gap-3">
-              <Label>Environment</Label>
-              <a
-                href="/environments"
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-muted-foreground underline"
-              >
-                Manage environments ↗
-              </a>
-            </div>
-            <Select
-              value={form.environmentId}
-              onValueChange={(id) => set("environmentId", id ?? "")}
-            >
-              <SelectTrigger aria-label="Environment" className="h-8 w-full">
-                <SelectValue placeholder="Select an environment">
-                  {inline
-                    ? (environmentList.find(
-                        (environment) => environment.id === form.environmentId,
-                      )?.name ?? form.environmentId)
-                    : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {form.environmentId &&
-                  !environmentList.some(
-                    (environment) => environment.id === form.environmentId,
-                  ) && (
-                    <SelectItem value={form.environmentId}>
-                      {form.environmentId}
-                    </SelectItem>
-                  )}
-                {environmentList.map((environment) => (
-                  <SelectItem key={environment.id} value={environment.id}>
-                    {environment.name} ·{" "}
-                    {hostingTypeLabel(environment.config.type)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Choice
-              label="Initial event editor"
-              value={eventsView}
-              onChange={setEventsView}
-              options={[
-                {
-                  value: "message",
-                  label: "Initial message",
-                  disabled: initialMessage === null,
-                },
-                { value: "advanced", label: "Advanced events" },
-              ]}
-            />
-            {eventsView === "message" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="deployment-message">Initial message</Label>
-                <textarea
-                  id="deployment-message"
-                  rows={3}
-                  placeholder="What should the agent do on each run?"
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
-                  value={initialMessage ?? ""}
-                  onChange={(event) =>
-                    set(
-                      "initialEvents",
-                      JSON.stringify(
-                        [{ type: "user.message", content: event.target.value }],
-                        null,
-                        2,
-                      ),
-                    )
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Sent to the agent at the start of every run.
-                </p>
-              </div>
-            ) : (
-              <>
+              {eventsView === "message" ? (
                 <div className="space-y-1.5">
-                  <Label htmlFor="deployment-events">
-                    Initial events (JSON)
-                  </Label>
+                  <Label htmlFor="deployment-message">Initial message</Label>
                   <textarea
-                    id="deployment-events"
-                    value={form.initialEvents}
+                    id="deployment-message"
+                    rows={3}
+                    placeholder="What should the agent do on each run?"
+                    className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+                    value={initialMessage ?? ""}
                     onChange={(event) =>
-                      set("initialEvents", event.target.value)
+                      set(
+                        "initialEvents",
+                        JSON.stringify(
+                          [
+                            {
+                              type: "user.message",
+                              content: event.target.value,
+                            },
+                          ],
+                          null,
+                          2,
+                        ),
+                      )
                     }
-                    rows={9}
-                    spellCheck={false}
-                    className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
                   />
                   <p className="text-xs text-muted-foreground">
-                    A non-empty array of user.message, user.define_outcome and
-                    optional trailing system.message events.
+                    Sent to the agent at the start of every run.
                   </p>
                 </div>
-                {initialMessage === null && (
-                  <p className="text-xs text-muted-foreground">
-                    Keep advanced events to preserve multiple messages,
-                    structured content and outcome definitions.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </Section>
-        <Section title="Trigger" hint="Start runs on demand or on a schedule.">
-          <div className="space-y-3">
-            <Choice
-              label="Trigger type"
-              value={form.scheduleEnabled ? "schedule" : "manual"}
-              onChange={(value) => set("scheduleEnabled", value === "schedule")}
-              options={[
-                { value: "manual", label: "Manual" },
-                { value: "schedule", label: "Schedule" },
-              ]}
-            />
-            {!form.scheduleEnabled && (
-              <p className="rounded-lg border p-3 text-sm text-muted-foreground">
-                Start a run with Run now or{" "}
-                <code>POST /v1/deployments/:id/run</code>.
-              </p>
-            )}
-            {form.scheduleEnabled && (
-              <DeploymentSchedule
-                expression={form.scheduleExpression}
-                timezone={form.scheduleTimezone}
-                onExpressionChange={(value) => set("scheduleExpression", value)}
-                onTimezoneChange={(value) => set("scheduleTimezone", value)}
-              />
-            )}
-          </div>
-          {scheduleDetails}
-        </Section>
-        <Section
-          title="Resources"
-          hint="Credentials and resources available to each run."
-        >
-          {vaultChoices.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="flex justify-between gap-3">
-                <Label>Credential vaults (optional)</Label>
-                <a
-                  href="/vaults"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-muted-foreground underline"
-                >
-                  Manage credential vaults ↗
-                </a>
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="Credential vaults"
-                  aria-expanded={vaultOpen}
-                  className="flex h-8 w-full items-center justify-between rounded-lg border px-2.5 text-sm"
-                  onClick={() => setVaultOpen((open) => !open)}
-                >
-                  <span className="truncate text-muted-foreground">
-                    {form.vaultIds.length === 0
-                      ? "Select one or more vaults"
-                      : vaultChoices
-                          .filter((vault) => form.vaultIds.includes(vault.id))
-                          .map((vault) => vault.display_name)
-                          .join(", ")}
-                  </span>
-                  <ChevronsUpDown className="size-3.5" />
-                </button>
-                {vaultOpen && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border bg-popover p-1 shadow-md">
-                    {vaultChoices.map((vault) => (
-                      <label
-                        key={vault.id}
-                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.vaultIds.includes(vault.id)}
-                          onChange={(event) =>
-                            set(
-                              "vaultIds",
-                              event.target.checked
-                                ? [...form.vaultIds, vault.id]
-                                : form.vaultIds.filter((id) => id !== vault.id),
-                            )
-                          }
-                        />
-                        {vault.display_name}
-                      </label>
-                    ))}
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="deployment-events">
+                      Initial events (JSON)
+                    </Label>
+                    <textarea
+                      id="deployment-events"
+                      value={form.initialEvents}
+                      onChange={(event) =>
+                        set("initialEvents", event.target.value)
+                      }
+                      rows={9}
+                      spellCheck={false}
+                      className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      A non-empty array of user.message, user.define_outcome and
+                      optional trailing system.message events.
+                    </p>
                   </div>
-                )}
-              </div>
+                  {initialMessage === null && (
+                    <p className="text-xs text-muted-foreground">
+                      Keep advanced events to preserve multiple messages,
+                      structured content and outcome definitions.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
-          )}
-          {mode === "edit" && inline && (
-            <>
-              {resources.some(
-                (resource) => resource.type === "github_repository",
-              ) && (
-                <p className="text-xs text-muted-foreground">
-                  Changing attachments requires a token for each repository.
-                  Existing tokens are kept when attachments are unchanged.
+          </Section>
+          <Section
+            title="Trigger"
+            hint="Start runs on demand or on a schedule."
+          >
+            <div className="space-y-3">
+              <Choice
+                label="Trigger type"
+                value={form.scheduleEnabled ? "schedule" : "manual"}
+                onChange={(value) =>
+                  set("scheduleEnabled", value === "schedule")
+                }
+                options={[
+                  { value: "manual", label: "Manual" },
+                  { value: "schedule", label: "Schedule" },
+                ]}
+              />
+              {!form.scheduleEnabled && (
+                <p className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  Start a run with Run now or{" "}
+                  <code>POST /v1/deployments/:id/run</code>.
                 </p>
               )}
-              <InitialResources
-                resources={resources}
-                onChange={setResources}
-                owner="deployment"
-                uploadPending={upload.isPending}
-                onAttachFile={() =>
-                  setResources((current) => [
-                    ...current,
-                    { type: "file", file_id: "" },
-                  ])
-                }
-                onFileUpload={(index, file) => {
-                  upload.mutate(file, {
-                    onSuccess: (result) =>
-                      setResources((current) =>
-                        current.map((resource, i) =>
-                          i === index && resource.type === "file"
-                            ? { ...resource, file_id: result.id }
-                            : resource,
-                        ),
-                      ),
-                  });
-                }}
-              />
-            </>
-          )}
-          {mode === "create" && (
-            <>
-              <InitialResources
-                resources={resources}
-                onChange={setResources}
-                owner="deployment"
-                onAttachFile={() => fileInput.current?.click()}
-                uploadPending={upload.isPending}
-              >
-                <div>
-                  <div className="space-y-2">
-                    {attached.map((file) => (
-                      <div
-                        key={file.file_id}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <Paperclip className="size-3.5" />
-                        {file.filename}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${file.filename}`}
-                          onClick={() =>
-                            setAttached((current) =>
-                              current.filter(
-                                (item) => item.file_id !== file.file_id,
-                              ),
-                            )
-                          }
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                    <input
-                      ref={fileInput}
-                      type="file"
-                      aria-label="Upload file"
-                      className="hidden"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (!file) return;
-                        upload.mutate(file, {
-                          onSuccess: (uploaded) =>
-                            setAttached((current) => [
-                              ...current,
-                              {
-                                file_id: uploaded.id,
-                                filename: uploaded.filename,
-                              },
-                            ]),
-                        });
-                        event.target.value = "";
-                      }}
-                    />
-                  </div>
+              {form.scheduleEnabled && (
+                <DeploymentSchedule
+                  expression={form.scheduleExpression}
+                  timezone={form.scheduleTimezone}
+                  onExpressionChange={(value) =>
+                    set("scheduleExpression", value)
+                  }
+                  onTimezoneChange={(value) => set("scheduleTimezone", value)}
+                />
+              )}
+            </div>
+            {scheduleDetails}
+          </Section>
+          <Section
+            title="Resources"
+            hint="Credentials and resources available to each run."
+          >
+            {vaultChoices.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between gap-3">
+                  <Label>Credential vaults (optional)</Label>
+                  <a
+                    href="/vaults"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-muted-foreground underline"
+                  >
+                    Manage credential vaults ↗
+                  </a>
                 </div>
-              </InitialResources>
-            </>
-          )}
-        </Section>
-        <details className="mb-6 rounded-lg border p-3">
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            Metadata (optional)
-          </summary>
-          <div className="space-y-1.5">
-            <Label htmlFor="deployment-metadata">Metadata (JSON object)</Label>
-            <textarea
-              id="deployment-metadata"
-              value={form.metadata}
-              onChange={(event) => set("metadata", event.target.value)}
-              rows={4}
-              spellCheck={false}
-              className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
-            />
-          </div>
-        </details>
-      </fieldset>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Credential vaults"
+                    aria-expanded={vaultOpen}
+                    className="flex h-8 w-full items-center justify-between rounded-lg border px-2.5 text-sm"
+                    onClick={() => setVaultOpen((open) => !open)}
+                  >
+                    <span className="truncate text-muted-foreground">
+                      {form.vaultIds.length === 0
+                        ? "Select one or more vaults"
+                        : vaultChoices
+                            .filter((vault) => form.vaultIds.includes(vault.id))
+                            .map((vault) => vault.display_name)
+                            .join(", ")}
+                    </span>
+                    <ChevronsUpDown className="size-3.5" />
+                  </button>
+                  {vaultOpen && (
+                    <div className="absolute z-20 mt-1 w-full rounded-lg border bg-popover p-1 shadow-md">
+                      {vaultChoices.map((vault) => (
+                        <label
+                          key={vault.id}
+                          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.vaultIds.includes(vault.id)}
+                            onChange={(event) =>
+                              set(
+                                "vaultIds",
+                                event.target.checked
+                                  ? [...form.vaultIds, vault.id]
+                                  : form.vaultIds.filter(
+                                      (id) => id !== vault.id,
+                                    ),
+                              )
+                            }
+                          />
+                          {vault.display_name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {mode === "edit" && inline && (
+              <>
+                {resources.some(
+                  (resource) => resource.type === "github_repository",
+                ) && (
+                  <p className="text-xs text-muted-foreground">
+                    Changing attachments requires a token for each repository.
+                    Existing tokens are kept when attachments are unchanged.
+                  </p>
+                )}
+                <InitialResources
+                  resources={resources}
+                  onChange={setResources}
+                  owner="deployment"
+                  uploadPending={upload.isPending}
+                  onAttachFile={() =>
+                    setResources((current) => [
+                      ...current,
+                      { type: "file", file_id: "" },
+                    ])
+                  }
+                  onFileUpload={(index, file) => {
+                    upload.mutate(file, {
+                      onSuccess: (result) =>
+                        setResources((current) =>
+                          current.map((resource, i) =>
+                            i === index && resource.type === "file"
+                              ? { ...resource, file_id: result.id }
+                              : resource,
+                          ),
+                        ),
+                    });
+                  }}
+                />
+              </>
+            )}
+            {mode === "create" && (
+              <>
+                <InitialResources
+                  resources={resources}
+                  onChange={setResources}
+                  owner="deployment"
+                  onAttachFile={() => fileInput.current?.click()}
+                  uploadPending={upload.isPending}
+                >
+                  <div>
+                    <div className="space-y-2">
+                      {attached.map((file) => (
+                        <div
+                          key={file.file_id}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <Paperclip className="size-3.5" />
+                          {file.filename}
+                          <button
+                            type="button"
+                            aria-label={`Remove ${file.filename}`}
+                            onClick={() =>
+                              setAttached((current) =>
+                                current.filter(
+                                  (item) => item.file_id !== file.file_id,
+                                ),
+                              )
+                            }
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <input
+                        ref={fileInput}
+                        type="file"
+                        aria-label="Upload file"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          upload.mutate(file, {
+                            onSuccess: (uploaded) =>
+                              setAttached((current) => [
+                                ...current,
+                                {
+                                  file_id: uploaded.id,
+                                  filename: uploaded.filename,
+                                },
+                              ]),
+                          });
+                          event.target.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+                </InitialResources>
+              </>
+            )}
+          </Section>
+          <details className="mb-6 rounded-lg border p-3">
+            <summary className="cursor-pointer text-sm text-muted-foreground">
+              Metadata (optional)
+            </summary>
+            <div className="space-y-1.5">
+              <Label htmlFor="deployment-metadata">
+                Metadata (JSON object)
+              </Label>
+              <textarea
+                id="deployment-metadata"
+                value={form.metadata}
+                onChange={(event) => set("metadata", event.target.value)}
+                rows={4}
+                spellCheck={false}
+                className="w-full rounded-lg border bg-transparent p-2.5 font-mono text-[13px] outline-none focus-visible:border-ring"
+              />
+            </div>
+          </details>
+        </fieldset>
+      </div>
       {!readOnly && (!inline || dirty || error) && (
         <div
           className={

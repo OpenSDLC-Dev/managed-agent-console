@@ -121,6 +121,10 @@ export const WARNING_BOX =
 export const WARNING_MUTED = "text-amber-700 dark:text-amber-300";
 
 const SESSION_STATUS_STYLE: Record<string, string> = {
+  succeeded:
+    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
+  failed:
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50",
   active:
     "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
   paused:

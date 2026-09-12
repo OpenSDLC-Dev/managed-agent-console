@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, tokenAttr } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
-import type { ContentBlock, SessionEvent } from "@/lib/platform/types";
+import type { SessionEvent } from "@/lib/platform/types";
 import { Time, WARNING_BOX } from "@/components/console/bits";
 import { JsonBlock } from "@/components/console/detail";
 import { durationLabel } from "@/lib/session-trace/timing";

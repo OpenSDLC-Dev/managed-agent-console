@@ -18,6 +18,7 @@ import {
 import { Field, JsonBlock } from "./detail";
 import {
   useEnvironment,
+  useFile,
   useRecentSessionEvents,
   useSession,
   useVault,
@@ -60,6 +61,15 @@ function VaultLink({ id }: { id: string }) {
       href={"/vaults/" + encodeURIComponent(id)}
     >
       {query.data?.display_name ?? <IdCode id={id} />}
+    </Link>
+  );
+}
+
+function FileLink({ id }: { id: string }) {
+  const query = useFile(id);
+  return (
+    <Link href="/files" className="break-all hover:underline">
+      {query.data?.filename ?? <IdCode id={id} />}
     </Link>
   );
 }
@@ -196,7 +206,7 @@ export function SessionSummary({
                         ) : resource.type === "github_repository" ? (
                           <span className="break-all">{resource.url}</span>
                         ) : (
-                          <IdCode id={resource.file_id} />
+                          <FileLink id={resource.file_id} />
                         )}
                         <div className="break-all font-mono text-xs text-muted-foreground">
                           {resource.mount_path}

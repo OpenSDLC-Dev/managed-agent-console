@@ -271,8 +271,18 @@ function Runs({ deploymentId }: { deploymentId: string }) {
             })
           }
         >
-          <SelectTrigger aria-label="Trigger filter" className="h-8">
-            <SelectValue />
+          <SelectTrigger
+            aria-label="Trigger filter"
+            className="h-8"
+            data-trigger-filter={triggerType ?? "all"}
+          >
+            <SelectValue>
+              {triggerType === "manual"
+                ? "Manual"
+                : triggerType === "schedule"
+                  ? "Schedule"
+                  : "Trigger All"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Trigger All</SelectItem>
@@ -291,8 +301,20 @@ function Runs({ deploymentId }: { deploymentId: string }) {
             })
           }
         >
-          <SelectTrigger aria-label="Result filter" className="h-8">
-            <SelectValue />
+          <SelectTrigger
+            aria-label="Result filter"
+            className="h-8"
+            data-result-filter={
+              hasError === undefined ? "all" : hasError ? "failed" : "succeeded"
+            }
+          >
+            <SelectValue>
+              {hasError === undefined
+                ? "Result All"
+                : hasError
+                  ? "Failed"
+                  : "Succeeded"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Result All</SelectItem>

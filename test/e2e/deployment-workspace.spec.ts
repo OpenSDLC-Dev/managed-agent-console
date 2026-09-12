@@ -184,3 +184,49 @@ test("run pagination survives selection and closes without changing the cursor",
     page.getByRole("button", { name: "Previous page" }),
   ).toBeEnabled();
 });
+
+test("narrow configuration keeps its save bar visible and archived values remain read-only", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, PATH);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Weekly research digest",
+  );
+  for (const width of [390, 360]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeLessThanOrEqual(844);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+  }
+  await page
+    .getByRole("textbox", { name: "Initial message", exact: true })
+    .fill("Visible save bar");
+  const save = page.getByRole("button", { name: "Save changes" });
+  const bounds = await save.boundingBox();
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  expect(
+    (
+      await page.request.post(`/api/platform/v1/deployments/${ID}/archive`)
+    ).ok(),
+  ).toBe(true);
+  await page.reload();
+  await expect(page.getByLabel("Name", { exact: true })).toBeDisabled();
+  await expect(save).toBeHidden();
+  const configuration = page.getByRole("region", {
+    name: "Deployment configuration",
+    exact: true,
+  });
+  await page.getByRole("button", { name: "Runs", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(configuration).toBeFocused();
+  await configuration.press("ArrowDown");
+  await expect
+    .poll(() => configuration.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(0);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+});

@@ -1011,7 +1011,7 @@ export const SURFACES: Surface[] = [
     route: `/deployments/${DEPLOYMENT}`,
     fixture: DEPLOYMENT,
     description:
-      "Scheduled deployment details, upcoming fires, actions and mixed run history.",
+      "Inline deployment configuration, pinned Agent version and saved schedule timestamps.",
   },
   {
     id: "deployment-run-error",
@@ -1583,7 +1583,7 @@ export const SURFACES: Surface[] = [
     route: `/deployments/${DEPLOYMENT}/edit`,
     fixture: DEPLOYMENT,
     description:
-      "Populated deployment form that preserves write-only resource credentials.",
+      "Legacy edit URL redirects to inline configuration, preserving write-only resource credentials.",
   },
 
   // ---- the shared states every surface can fall into --------------------

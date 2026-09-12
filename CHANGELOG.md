@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Session inspection and transcripts accept the platform's persisted plain-string user messages, including newly started Deployment runs.
+
 - Session approvals now offer direct Approve/Deny actions, retain optional denial reasons in a secondary menu, and stop showing resolved calls or custom-result requests as pending approvals.
 
 - Schedule presets use a 12-hour clock with keyboard-operable AM/PM controls, preserving midnight and noon in the submitted cron expression.
