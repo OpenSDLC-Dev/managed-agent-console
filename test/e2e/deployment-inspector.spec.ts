@@ -11,6 +11,9 @@ test("Deployment selection preserves list history and opens the full page explic
   page,
 }) => {
   await signIn(page, "/deployments");
+  await expect(
+    page.getByRole("cell", { name: "Weekly research digest", exact: true }),
+  ).toBeVisible();
   const first = page.locator("tbody tr").first().getByRole("cell").nth(1);
   const name = await first.innerText();
   await first.click();
