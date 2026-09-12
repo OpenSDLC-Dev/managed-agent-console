@@ -632,4 +632,6 @@ Records ec8c4c6 frames 39–43 show the event strip, 1.00× zoom controls, Copy/
 
 Timeline positions use `events.go:eventWire`'s persisted `processed_at`; only matched `span.model_request_start/end` pairs contribute model span widths. Unstamped events remain in the transcript and full JSON export. Filters do not truncate the export. The range ends at the last loaded stamp, with no estimated runtime.
 
+Review found coincident markers masking one another. Overlapping visible intervals now occupy separate lanes inside a bounded, scrollable track; pointer regression checks every fixture event at fit and zoomed scales. This preserves timestamp positions while keeping each event reachable.
+
 `threads.go:renderThread/threadScope` supplies the pinned Agent snapshot, usage and event scope; its primary view is the Session view. The chart reads each `domain.ModelUsage.input_tokens` counter in request order. It does not infer context size, costs or thread totals. The reference's context/cost/active-time fields have no implemented platform equivalent; raw API responses remain available. Populated child-thread behavior is verified locally, but the reference recording contains only a primary thread.

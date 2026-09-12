@@ -85,7 +85,7 @@ it("handles empty and coincident timelines without inventing elapsed time", () =
   const button = within(
     screen.getByRole("group", { name: "Event timeline" }),
   ).getByRole("button");
-  expect(button).toHaveStyle({ left: "calc(0% - 0px)" });
+  expect(button).toHaveStyle({ left: "0%" });
   expect(button).toHaveAttribute("data-duration-ms", "0");
 });
 

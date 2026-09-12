@@ -86,3 +86,24 @@ test("Thread details expose pinned metadata, server usage and an inspectable req
   );
   await expect(page).toHaveURL(/event=sevt_000000000000000006/);
 });
+
+test("pointer users can inspect every coincident marker at fit and zoomed scales", async ({
+  page,
+}) => {
+  await signIn(page, SESSION);
+  const bar = page.getByRole("group", { name: "Event timeline" });
+  await expect(bar).toHaveAttribute("data-timed-events", "7");
+  for (const zoom of [1, 2]) {
+    if (zoom === 2)
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    const ids = await bar
+      .locator("[data-event-id]")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("data-event-id")!),
+      );
+    for (const id of ids) {
+      await bar.locator(`[data-event-id="${id}"]`).click();
+      await expect(page).toHaveURL(new RegExp(`event=${id}`));
+    }
+  }
+});

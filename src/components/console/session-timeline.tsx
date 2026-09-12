@@ -38,6 +38,19 @@ export function SessionTimeline({
   );
   const end = timed.reduce((max, item) => Math.max(max, item.at), -Infinity);
   const range = Math.max(1, end - start);
+  // The track is at least 400px wide, so a 1% marker remains a 4px target.
+  // Pack overlapping rendered intervals into lanes; timestamps stay unchanged.
+  const laneEnds: number[] = [];
+  const markers = [...timed]
+    .sort((a, b) => a.start - b.start)
+    .map((item) => {
+      const left = Math.min(0.99, (item.start - start) / range);
+      const width = Math.max(0.01, item.duration / range);
+      let lane = laneEnds.findIndex((last) => last <= left);
+      if (lane === -1) lane = laneEnds.length;
+      laneEnds[lane] = left + width;
+      return { ...item, left, width, lane };
+    });
 
   return (
     <div className="shrink-0 space-y-2 border-b pb-3">
@@ -96,24 +109,27 @@ export function SessionTimeline({
         </div>
       </div>
       <div
-        className="min-w-0 overflow-x-auto rounded-md border bg-muted"
+        className="max-h-32 min-w-0 overflow-auto rounded-md border bg-muted"
         role="group"
         aria-label="Event timeline"
         data-timed-events={timed.length}
       >
         {timed.length ? (
           <div
-            className="relative h-8"
-            style={{ width: `${zoom * 100}%` }}
+            className="relative min-w-[400px]"
+            style={{
+              width: `${zoom * 100}%`,
+              height: laneEnds.length * 28 + 4,
+            }}
             data-start-ms={start}
             data-end-ms={end}
           >
-            {timed.map(({ event, start: at, duration }) => (
+            {markers.map(({ event, duration, left, width, lane }) => (
               <button
                 key={event.id}
                 type="button"
                 className={cn(
-                  "absolute top-1 h-6 min-w-1 rounded-sm opacity-75 hover:z-10 hover:opacity-100 focus:z-20 focus:min-w-5 focus:outline-2 focus:outline-ring",
+                  "absolute h-6 rounded-sm opacity-75 hover:opacity-100 focus:z-20 focus:outline-2 focus:outline-ring",
                   event.type.startsWith("span.model_request")
                     ? "bg-blue-500"
                     : event.type.startsWith("user.")
@@ -122,8 +138,9 @@ export function SessionTimeline({
                   selectedId === event.id && "z-10 outline-2 outline-ring",
                 )}
                 style={{
-                  left: `calc(${((at - start) / range) * 100}% - ${at === end && at > start ? 4 : 0}px)`,
-                  width: `${(duration / range) * 100}%`,
+                  left: `${left * 100}%`,
+                  width: `${width * 100}%`,
+                  top: lane * 28 + 4,
                 }}
                 data-event-id={event.id}
                 data-duration-ms={duration}
