@@ -478,7 +478,11 @@ export const SessionEventSchema = z.looseObject({
   id: z.string(),
   type: z.string(), // "{domain}.{action}"
   processed_at: z.string().nullable(),
-  content: z.array(ContentBlockSchema).nullable().optional(),
+  // events/inbound.go:normalizeUserMessage preserves plain strings verbatim.
+  content: z
+    .union([z.array(ContentBlockSchema), z.string()])
+    .nullable()
+    .optional(),
   name: z.string().optional(), // agent.tool_use
   // `.optional()` is load-bearing: a bare z.unknown() infers a *required* key.
   input: z.unknown().optional(), // agent.tool_use

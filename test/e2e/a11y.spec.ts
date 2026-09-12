@@ -43,6 +43,9 @@ test("deployment list, detail, run error and create form pass axe", async ({
   await expectNoViolations(page);
 
   await page.goto("/deployments/depl_weeklyresearch000001");
+  await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
+  await expectNoViolations(page);
+  await page.getByRole("button", { name: "Runs", exact: true }).click();
   await expect(page.getByTestId("deployment-runs")).toBeVisible();
   await expectNoViolations(page);
 

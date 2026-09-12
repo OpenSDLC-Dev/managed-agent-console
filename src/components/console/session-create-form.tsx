@@ -67,9 +67,7 @@ export function SessionCreateForm({
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [attached, setAttached] = useState<AttachedFile[]>([]);
-  const [initialResources, setInitialResources] = useState<
-    Exclude<ResourceInput, { type: "file" }>[]
-  >([]);
+  const [initialResources, setInitialResources] = useState<ResourceInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const vaultList = vaults.data?.data ?? [];

@@ -282,7 +282,10 @@ export function useDeploymentRuns(params: {
 export function useDeploymentRun(id: string) {
   return useQuery({
     queryKey: ["deployment-run", id],
-    queryFn: () => platformGet<DeploymentRun>(`v1/deployment_runs/${id}`),
+    queryFn: () =>
+      platformGet<DeploymentRun>(
+        `v1/deployment_runs/${encodeURIComponent(id)}`,
+      ),
   });
 }
 

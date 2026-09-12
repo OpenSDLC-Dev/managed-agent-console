@@ -4,6 +4,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense } from "react";
+import type { ReactNode } from "react";
+import { useTestSearchParams } from "../../../../../test/search-params";
 import DeploymentDetailPage from "./page";
 import {
   deployments,
@@ -12,7 +14,31 @@ import {
 
 const push = vi.fn();
 const LINKED_SESSION_ID = "sesn_linked000000000000001";
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  useSearchParams: () => useTestSearchParams(),
+}));
+vi.mock("@/components/console/deployment-editor", async (original) => ({
+  ...(await original<
+    typeof import("@/components/console/deployment-editor")
+  >()),
+  DeploymentEditor: ({ scheduleDetails }: { scheduleDetails: ReactNode }) => (
+    <div>{scheduleDetails}</div>
+  ),
+}));
+vi.mock("@/components/console/deployment-run-inspector", () => ({
+  DeploymentRunInspector: ({
+    id,
+    onClose,
+  }: {
+    id: string;
+    onClose: () => void;
+  }) => (
+    <div data-testid="run-inspector" data-id={id}>
+      <button onClick={onClose}>Close run</button>
+    </div>
+  ),
+}));
 
 function params(id: string): Promise<{ id: string }> {
   const value = { id };
@@ -30,6 +56,7 @@ afterEach(() => {
 });
 
 function setup() {
+  window.history.replaceState(null, "", "/deployments/" + deployments[0].id);
   const base = structuredClone(deployments[0]);
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -95,13 +122,12 @@ describe("DeploymentDetailPage", () => {
     ).toBeInTheDocument();
     expect(document.querySelector('[data-upcoming-count="4"]')).not.toBeNull();
     expect(screen.getByText("Show 1 more")).toBeInTheDocument();
-    expect(screen.getByText("succeeded")).toBeInTheDocument();
-    expect(screen.getByText("failed")).toBeInTheDocument();
-
     await userEvent.click(screen.getByText("Show 1 more"));
     expect(screen.getByText("Show less")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
-    expect(push).toHaveBeenCalledWith(`/deployments/${base.id}/edit`);
+    await userEvent.click(screen.getByRole("button", { name: "Runs" }));
+    await screen.findByText("succeeded");
+    expect(screen.getByText("succeeded")).toBeInTheDocument();
+    expect(screen.getByText("failed")).toBeInTheDocument();
 
     push.mockClear();
     await userEvent.click(
@@ -120,16 +146,20 @@ describe("DeploymentDetailPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Run now" }));
     await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(
-        `/deployments/${base.id}/runs/drun_new`,
+      expect(screen.getByTestId("run-inspector")).toHaveAttribute(
+        "data-id",
+        "drun_new",
       ),
     );
 
     const rows = document.querySelectorAll("tbody tr");
     await userEvent.click(rows[0]);
-    expect(push).toHaveBeenCalledWith(
-      `/deployments/${base.id}/runs/${deploymentRuns[0].id}`,
+    expect(screen.getByTestId("run-inspector")).toHaveAttribute(
+      "data-id",
+      deploymentRuns[0].id,
     );
+    await userEvent.click(screen.getByRole("button", { name: "Close run" }));
+    expect(new URLSearchParams(location.search).get("run")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
@@ -137,7 +167,7 @@ describe("DeploymentDetailPage", () => {
       screen.getByRole("button", { name: "Archive deployment" }),
     );
     await waitFor(() =>
-      expect(screen.getAllByText("archived")).toHaveLength(2),
+      expect(screen.getAllByText("archived")).toHaveLength(1),
     );
     expect(screen.queryByRole("button", { name: "Run now" })).toBeNull();
     expect(

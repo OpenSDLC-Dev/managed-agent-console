@@ -12,7 +12,9 @@ import {
   EventDetailPanel,
   IdleBand,
   TranscriptRow,
+  TranscriptCard,
 } from "./event-row";
+import { eventSearchText } from "@/lib/session-trace/summary";
 import type { SessionEvent } from "@/lib/platform/types";
 
 const ev = (type: string, extra?: object): SessionEvent =>
@@ -25,6 +27,27 @@ const ev = (type: string, extra?: object): SessionEvent =>
 
 const renderRow = (event: SessionEvent, approvalPending = false) =>
   render(<TranscriptRow event={event} approvalPending={approvalPending} />);
+
+it("renders persisted plain-string user messages without changing the raw event", async () => {
+  const event = ev("user.message", {
+    content: "First line\n<script>literal text</script>",
+  });
+  const select = vi.fn();
+  const card = render(
+    <TranscriptCard event={event} actor="User" onSelect={select} />,
+  );
+  expect(screen.getByTestId("event-row")).toHaveTextContent(
+    "<script>literal text</script>",
+  );
+  expect(document.querySelector("script")).toBeNull();
+  expect(eventSearchText(event)).toContain("<script>literal text</script>");
+  card.unmount();
+  render(<EventDetailPanel event={event} onClose={vi.fn()} />);
+  expect(screen.getByTestId("event-detail")).toHaveTextContent(
+    "<script>literal text</script>",
+  );
+  expect(event.content).toBe("First line\n<script>literal text</script>");
+});
 
 describe("TranscriptRow", () => {
   it("renders the timestamp, type badge, and data attributes", () => {

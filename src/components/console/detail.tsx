@@ -53,7 +53,10 @@ export function Field({
 
 export function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed">
+    <pre
+      tabIndex={0}
+      className="overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
+    >
       {JSON.stringify(value, null, 2)}
     </pre>
   );

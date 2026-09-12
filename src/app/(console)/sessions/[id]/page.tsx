@@ -338,6 +338,12 @@ function SessionWorkspace({ id }: { id: string }) {
     return <DetailSkeleton />;
   }
   const data = session.data;
+  const fromDeployment = filters.params.get("from_deployment");
+  const fromRun = filters.params.get("from_run");
+  const deploymentBack =
+    fromDeployment && fromDeployment === data.deployment_id
+      ? `/deployments/${encodeURIComponent(fromDeployment)}?${new URLSearchParams({ tab: "runs", ...(fromRun ? { run: fromRun } : {}) })}`
+      : null;
   // Older wire-compatible deployments can serve sessions without Outcomes.
   // Presence of the projection is the side-effect-free capability signal: the
   // shared events endpoint has no narrower route that can be probed safely.
@@ -347,7 +353,11 @@ function SessionWorkspace({ id }: { id: string }) {
   return (
     <div className="flex h-[calc(100dvh-48px)] min-h-[480px] min-w-0 flex-col">
       <Breadcrumb
-        parent={{ href: "/sessions", label: "Sessions" }}
+        parent={
+          deploymentBack
+            ? { href: deploymentBack, label: "Deployment runs" }
+            : { href: "/sessions", label: "Sessions" }
+        }
         current={data.title || data.id}
       />
       <PageHeader

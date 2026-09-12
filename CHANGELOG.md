@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Session inspection and transcripts accept the platform's persisted plain-string user messages, including newly started Deployment runs.
+
 - Session approvals now offer direct Approve/Deny actions, retain optional denial reasons in a secondary menu, and stop showing resolved calls or custom-result requests as pending approvals.
 
 - Schedule presets use a 12-hour clock with keyboard-operable AM/PM controls, preserving midnight and noon in the submitted cron expression.
@@ -18,6 +20,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 ### Added
 
 - Deployment rows and exact lookup open a resizable inspector with pinned Agent details, initial events, server schedule timestamps and resource metadata. Rendered/API views and previous/next selection retain list filters and paging.
+
+- Deployment configuration edits in place with pinned Agent versions, complete resource editing, draft protection and Save/Discard. Runs open a Session inspector with run metadata, server filters and a return link to the selected run.
 
 - Session resources expand bound Memory trees and show Markdown/Raw content, file metadata and repository details in place. Downloadable outputs offer downloads and bounded text previews; ordinary uploads retain the platform's content restriction.
 
