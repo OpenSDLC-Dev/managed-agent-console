@@ -200,7 +200,9 @@ test("the first credential returns to the populated vault after creation", async
   await page.getByLabel("Display name").fill("First credential vault");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add a credential" });
-  await expect(dialog.getByLabel("Credential type")).toHaveText("MCP OAuth");
+  await expect(
+    dialog.getByLabel("Credential type").locator('[data-slot="select-value"]'),
+  ).toHaveText("MCP OAuth");
   await dialog.getByLabel("Credential type").click();
   await page
     .getByRole("option", { name: "Environment variable", exact: true })
