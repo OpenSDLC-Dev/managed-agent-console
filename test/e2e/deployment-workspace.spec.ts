@@ -56,6 +56,59 @@ test("configuration retains drafts across tabs and lifecycle refresh, saves a pi
   ).toContainText("v2");
 });
 
+test("Agent version paging retains its selection after an error and retries from the popup footer", async ({
+  page,
+}) => {
+  let versions: unknown[] = [];
+  let allowOlder = false;
+  await page.route(
+    "**/api/platform/v1/agents/agent_researcher00000000001/versions?*",
+    async (route) => {
+      if (!new URL(route.request().url()).searchParams.has("page")) {
+        const response = await route.fetch();
+        const body = await response.json();
+        versions = body.data;
+        await route.fulfill({
+          json: { ...body, data: versions.slice(0, 1), next_page: "older" },
+        });
+      } else if (!allowOlder) {
+        await route.fulfill({
+          status: 503,
+          json: {
+            type: "error",
+            error: { type: "api_error", message: "Version page unavailable" },
+          },
+        });
+      } else {
+        await route.fulfill({
+          json: { data: versions.slice(1), next_page: null },
+        });
+      }
+    },
+  );
+  await signIn(page, PATH);
+  const version = page.getByRole("combobox", {
+    name: "Agent version",
+    exact: true,
+  });
+  await version.click();
+  const older = page.getByRole("button", { name: "Load older versions" });
+  await older.click();
+  await expect(page.getByTestId("error-state")).toContainText(
+    "Version page unavailable",
+  );
+  await expect(version).toContainText("v3");
+  await expect(older).toBeEnabled();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  allowOlder = true;
+  await older.focus();
+  await older.press("Enter");
+  await page.getByRole("option", { name: "v2", exact: true }).click();
+  await expect(version).toContainText("v2");
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(version).toContainText("v3");
+});
+
 test("resource edits submit full replacements and a failed save retains the draft", async ({
   page,
 }) => {

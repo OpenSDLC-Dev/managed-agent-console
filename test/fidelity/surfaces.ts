@@ -126,6 +126,8 @@ export const SURFACES: Surface[] = [
     "configuration",
     "dirty",
     "versions",
+    "version-pages",
+    "version-error",
     "resources",
     "archived",
     "narrow",
@@ -153,23 +155,57 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       if (view === "narrow" || view === "run-narrow")
         await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "version-pages" || view === "version-error") {
+        await page.route(
+          `**/api/platform/v1/agents/${AGENT}/versions?*`,
+          async (route) => {
+            if (new URL(route.request().url()).searchParams.has("page")) {
+              await route.fulfill({
+                status: 503,
+                json: {
+                  type: "error",
+                  error: {
+                    type: "api_error",
+                    message: "Version page unavailable",
+                  },
+                },
+              });
+            } else {
+              const response = await route.fetch();
+              const body = await response.json();
+              await route.fulfill({
+                json: {
+                  ...body,
+                  data: body.data.slice(0, 1),
+                  next_page: "older",
+                },
+              });
+            }
+          },
+        );
+        await page.reload();
+      }
       if (view === "archived") {
-        await page.request.post(
+        const archived = await page.request.post(
           `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/archive`,
           { headers: { "x-api-key": "test-key" } },
         );
+        if (!archived.ok())
+          throw new Error("Could not archive deployment fixture");
         await page.reload();
+        await page.locator('[data-status="archived"]').waitFor();
       }
       if (
         view.startsWith("run-") &&
         !["run-error", "run-deleted"].includes(view)
       ) {
-        const run = await (
-          await page.request.post(
-            `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/run`,
-            { headers: { "x-api-key": "test-key" } },
-          )
-        ).json();
+        const response = await page.request.post(
+          `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/run`,
+          { headers: { "x-api-key": "test-key" } },
+        );
+        if (!response.ok())
+          throw new Error("Could not create deployment run fixture");
+        const run = await response.json();
         await page.goto(`/deployments/${DEPLOYMENT}?tab=runs&run=${run.id}`);
         await page
           .getByRole("region", { name: "Session details" })
@@ -197,11 +233,24 @@ export const SURFACES: Surface[] = [
           await page
             .getByRole("textbox", { name: "Initial message", exact: true })
             .fill("Unsaved deployment instructions");
-        if (view === "versions") {
+        if (["versions", "version-pages", "version-error"].includes(view)) {
           await page
             .getByRole("combobox", { name: "Agent version", exact: true })
             .click();
-          await page.getByRole("option", { name: "v2", exact: true }).waitFor();
+          if (view === "versions")
+            await page
+              .getByRole("option", { name: "v2", exact: true })
+              .waitFor();
+          else {
+            const older = page.getByRole("button", {
+              name: "Load older versions",
+            });
+            await older.waitFor();
+            if (view === "version-error") {
+              await older.click();
+              await page.getByTestId("error-state").waitFor();
+            }
+          }
         }
         if (view === "resources")
           await page

@@ -17,6 +17,7 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Verify drafts, resource replacement, upload locking and unavailable run/Session components.
 - [x] Support the platform's persisted plain-string user messages after a real wire mismatch surfaced in browser tests.
 - [x] Verify 42 affected Chrome surfaces in both themes, including configuration, run/Session inspection, creation selection labels and narrow layouts.
+- [x] Fix review findings in archived fixture verification and version paging; verify failed-page retention, keyboard retry and popup accessibility.
 - [x] Complete integrated coverage (1,296 tests, 85.90% branches) and browser regression; fix archived keyboard scrolling and pass all 22 affected browser cases.
 - [ ] Complete Deployment workspace CI/review and squash merge.
 - [ ] Complete combined Docker/Chrome acceptance within implemented platform capabilities.

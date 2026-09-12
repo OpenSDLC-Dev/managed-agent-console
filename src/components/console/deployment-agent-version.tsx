@@ -50,7 +50,27 @@ export function DeploymentAgentVersion({
             </span>
           </SelectValue>
         </SelectTrigger>
-        <SelectContent alignItemWithTrigger={false}>
+        <SelectContent
+          alignItemWithTrigger={false}
+          role="region"
+          aria-label="Agent versions"
+          footer={
+            <>
+              {query.error && <ErrorState error={query.error} />}
+              {query.hasNextPage && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={query.isFetchingNextPage}
+                  onClick={() => void query.fetchNextPage()}
+                >
+                  Load older versions
+                </Button>
+              )}
+            </>
+          }
+        >
           {version && !versions.some((item) => item.version === version) && (
             <SelectItem value={String(version)}>v{version} (pinned)</SelectItem>
           )}
@@ -60,18 +80,6 @@ export function DeploymentAgentVersion({
               {item.version === head ? " Latest" : ""}
             </SelectItem>
           ))}
-          {query.error && <ErrorState error={query.error} />}
-          {query.hasNextPage && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={query.isFetchingNextPage}
-              onClick={() => void query.fetchNextPage()}
-            >
-              Load older versions
-            </Button>
-          )}
         </SelectContent>
       </Select>
       <p className="text-xs text-muted-foreground">
