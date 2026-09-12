@@ -455,7 +455,56 @@ export const SURFACES: Surface[] = [
     route: `/memory-stores/${MEMORY_STORE}`,
     fixture: "2 live memories, a folder rollup and 3 attributed versions",
     description:
-      "Store metadata, path browsing and append-only version history in one view.",
+      "Memory contents tree with no file selected; store actions and status.",
+  },
+  ...["rendered", "api"].map((view): Surface => ({
+    id: "memory-store-inspector-" + view,
+    route: "/memory-stores?store=" + MEMORY_STORE,
+    fixture: "populated memory store with server prefix rollups",
+    description: "Memory store side inspector, contents and API views.",
+    setup: async (page) => {
+      const panel = page.getByRole("region", { name: "Memory store details" });
+      await panel.getByRole("heading", { name: "Project notes" }).waitFor();
+      if (view === "api")
+        await panel.getByRole("button", { name: "API", exact: true }).click();
+      else
+        await panel
+          .getByRole("treeitem", { name: "decisions", exact: true })
+          .click();
+    },
+  })),
+  ...["rendered", "raw", "edit", "actions"].map((view): Surface => ({
+    id: "memory-content-" + view,
+    route: "/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
+    fixture: MEMORY,
+    description:
+      "Selected memory in the contents tree: Markdown, raw bytes and inline editor.",
+    setup: async (page) => {
+      await page
+        .getByRole("heading", { name: "Project brief", exact: true })
+        .waitFor();
+      if (view === "actions")
+        await page
+          .getByRole("button", { name: "Memory actions", exact: true })
+          .click();
+      if (view === "raw")
+        await page.getByRole("button", { name: "Raw", exact: true }).click();
+      if (view === "edit")
+        await page
+          .getByRole("button", { name: "Edit memory", exact: true })
+          .click();
+    },
+  })),
+  {
+    id: "memory-store-advanced",
+    route: "/memory-stores/" + MEMORY_STORE,
+    fixture: "2 memories and 3 attributed versions",
+    description: "Optional platform path queries and version history.",
+    setup: async (page) => {
+      await page
+        .getByText("Store details and version history", { exact: true })
+        .click();
+    },
   },
   {
     id: "dream-detail",

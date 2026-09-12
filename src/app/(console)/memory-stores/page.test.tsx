@@ -62,6 +62,10 @@ function setup() {
         }),
         { status: 200 },
       );
+    if (String(input).includes("/memories?"))
+      return new Response(JSON.stringify({ data: [], next_page: null }));
+    if (String(input).endsWith("/" + memoryStores[0].id))
+      return new Response(JSON.stringify(memoryStores[0]));
     return new Response(
       JSON.stringify({ data: memoryStores, next_page: "cur_2" }),
       { status: 200 },
@@ -92,8 +96,14 @@ describe("MemoryStoresPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(push).not.toHaveBeenCalled();
     await userEvent.click(screen.getByText("Project notes"));
-    expect(push).toHaveBeenCalledWith(
-      "/memory-stores/memstore_projectnotes000001",
+    expect(new URLSearchParams(location.search).get("store")).toBe(
+      memoryStores[0].id,
+    );
+    expect(
+      await screen.findByRole("region", { name: "Memory store details" }),
+    ).toBeVisible();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close details" }),
     );
 
     await userEvent.click(

@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,16 @@ import { Button } from "@/components/ui/button";
 export function ExactResourceLookup({
   resource,
   path,
+  onOpen,
+  inputRef,
 }: {
   resource: string;
   path: string;
+  onOpen?: (id: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
-  const input = useRef<HTMLInputElement>(null);
+  const localInput = useRef<HTMLInputElement>(null);
+  const input = inputRef ?? localInput;
   const router = useRouter();
   return (
     <form
@@ -19,7 +24,10 @@ export function ExactResourceLookup({
       onSubmit={(event) => {
         event.preventDefault();
         const id = input.current?.value.trim();
-        if (id) router.push(path + "/" + encodeURIComponent(id));
+        if (id) {
+          if (onOpen) onOpen(id);
+          else router.push(path + "/" + encodeURIComponent(id));
+        }
       }}
     >
       <Input

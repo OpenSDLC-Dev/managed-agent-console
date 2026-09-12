@@ -544,3 +544,19 @@ CI on macOS exposed two browser-test timing gaps: axe sampled the unsaved-dialog
 entry fade (reproduced by slowing that animation); rapid Created-filter reopen
 filled the still-mounted closing form before its draft reset (confirmed in trace).
 The checks now wait for settled dialog/open-filter state before measuring or editing.
+
+## Memory stores — checked 2026-09-12
+
+Records ec8c4c6, frames 14–20: list inspection uses `?store=ID`; full contents
+select by `?memory=ID`, with a folder tree, Rendered/Raw views and inline editing.
+The editor changes content in place; the platform SHA precondition protects its
+original snapshot even after a background refetch.
+
+Platform `internal/api/memories.go` supplies `depth=1` prefix rollups; the console
+never invents folders or aggregate sizes. Memory has no updated-by actor field,
+so the reference actor row is omitted. Platform path filters and attributed version
+history remain under Store details and version history; the recordings show no
+version picker. Existing direct memory/edit/version routes remain available.
+
+The local browser pass found a narrow-header overflow and a missing live error
+announcement on save conflict; both are covered by `memory-inspector.spec.ts`.

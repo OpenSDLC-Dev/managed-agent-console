@@ -25,6 +25,7 @@ export function ResourceActions({
   deleteDescription,
   onArchive,
   onDelete,
+  onDownload,
   archivePending,
   deletePending,
   menuLabel = "More actions",
@@ -35,6 +36,7 @@ export function ResourceActions({
   deleteDescription?: string;
   onArchive?: () => void;
   onDelete?: () => void;
+  onDownload?: () => void;
   archivePending?: boolean;
   deletePending?: boolean;
   menuLabel?: string;
@@ -96,7 +98,7 @@ export function ResourceActions({
     };
   }, [menuOpen]);
 
-  if (!canArchive && !canDelete) return null;
+  if (!canArchive && !canDelete && !onDownload) return null;
 
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
@@ -134,6 +136,20 @@ export function ResourceActions({
             className="fixed z-50 min-w-36 rounded-lg border bg-popover p-1 shadow-md"
             style={{ top: menuPos.top, right: menuPos.right }}
           >
+            {onDownload && (
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                onClick={() => {
+                  setMenuOpen(false);
+                  triggerRef.current?.focus();
+                  onDownload();
+                }}
+              >
+                Download
+              </button>
+            )}
             {canArchive && (
               <button
                 type="button"

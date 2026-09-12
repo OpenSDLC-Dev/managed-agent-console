@@ -356,9 +356,10 @@ export function useMemories(
   });
 }
 
-export function useMemory(storeId: string, memoryId: string) {
+export function useMemory(storeId: string, memoryId: string, enabled = true) {
   return useQuery({
     queryKey: ["memory", storeId, memoryId],
+    enabled,
     queryFn: () =>
       platformGet<Memory>(`v1/memory_stores/${storeId}/memories/${memoryId}`, {
         view: "full",
