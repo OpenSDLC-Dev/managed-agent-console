@@ -13,7 +13,7 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Deliver Session list inspection (#163), transcript/approval workspace (#164) and nested resource previews (#165).
 - [x] Implement timeline/zoom/download and Thread metadata/usage; local integrated browser and Chrome checks pass.
 - [x] Fix overlapping timeline markers found in review and verify pointer selection at both scales.
-- [ ] Complete timeline/Thread CI/review and squash merge (#166).
+- [x] Deliver timeline/Thread after green CI/review and squash merge (#166).
 - [x] Implement Deployment list inspection, including related resources and raw API views.
 - [x] Verify Deployment inspector coverage: 1,280 tests, 85.88% branches before timeline integration.
 - [x] Verify integrated Deployment inspector browsers (153 cases), 11 Chrome surfaces in both themes, and probes.
