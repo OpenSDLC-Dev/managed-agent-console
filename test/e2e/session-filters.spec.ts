@@ -36,7 +36,7 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
     .getByRole("textbox", { name: "Find session by ID" })
     .fill("sesn_research0000000000001");
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL(/sessions\/sesn_research0000000000001$/);
+  await expect(page).toHaveURL(/session=sesn_research0000000000001/);
   await page.goBack();
   await page
     .getByRole("textbox", { name: "Find session by ID" })
@@ -44,7 +44,7 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
   await page
     .getByRole("textbox", { name: "Find session by ID" })
     .press("Enter");
-  await expect(page).toHaveURL(new RegExp("sessions/" + run.session_id + "$"));
+  await expect(page).toHaveURL(new RegExp("session=" + run.session_id + "$"));
 });
 
 test("status multi-select defaults to active and Created sorts on the server", async ({

@@ -596,3 +596,14 @@ Ubuntu CI exposed a narrow Agent tab-row overflow; a 360px local trace isolated
 the Deployments button at x=382. The row now scrolls within its container. The
 same inspection found the roster grid exceeding its form; its column and member
 selector now shrink and long IDs wrap. Browser checks cover 360px and 390px.
+
+## Session list inspector — checked 2026-09-12
+
+Records ec8c4c6, frames 46–48, use `?session=ID` for list selection and a 560px
+inspector with Open, actions, Rendered/API and a descending page of 40 events.
+Selection must not change the list cursor; detail navigation remains explicit.
+
+Platform `sessions.go:renderSession` emits zero-only runtime stats, and
+`domain.Usage` has no cost fields. These placeholders remain in API view;
+Rendered does not claim measured duration, active time or billing. Resource
+file previews and the full Session tabbed inspector remain separate #141 work.

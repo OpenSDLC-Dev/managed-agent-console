@@ -28,7 +28,7 @@ export function ResourceInspector({
   fallbackFocus,
   restoreToFallback,
 }: {
-  kind: "skill" | "environment" | "memory-store" | "agent";
+  kind: "skill" | "environment" | "memory-store" | "agent" | "session";
   children: React.ReactNode;
   id: string;
   previous?: string;
@@ -43,6 +43,7 @@ export function ResourceInspector({
     environment: "Environment",
     "memory-store": "Memory store",
     agent: "Agent",
+    session: "Session",
   }[kind];
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);

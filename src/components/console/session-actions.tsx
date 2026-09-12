@@ -21,7 +21,15 @@ import {
 } from "@/lib/platform/queries";
 import type { Session } from "@/lib/platform/types";
 
-export function SessionActions({ session }: { session: Session }) {
+export function SessionActions({
+  session,
+  onDeleted,
+  compact = false,
+}: {
+  session: Session;
+  onDeleted?: () => void;
+  compact?: boolean;
+}) {
   const router = useRouter();
   const update = useUpdateSession(session.id);
   const archive = useArchiveSession(session.id);
@@ -49,7 +57,7 @@ export function SessionActions({ session }: { session: Session }) {
 
   return (
     <>
-      {!session.archived_at && (
+      {!session.archived_at && !compact && (
         <Button
           variant="outline"
           size="sm"
@@ -74,7 +82,8 @@ export function SessionActions({ session }: { session: Session }) {
         archivePending={archive.isPending}
         onDelete={() =>
           remove.mutate(undefined, {
-            onSuccess: () => router.push("/sessions"),
+            onSuccess: () =>
+              onDeleted ? onDeleted() : router.push("/sessions"),
           })
         }
         deletePending={remove.isPending}

@@ -49,7 +49,7 @@ test("session choices restore after visiting a detail and returning", async ({
     .getByRole("textbox", { name: "Find session by ID" })
     .fill("sesn_research0000000000001");
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL(/sessions\/sesn_research0000000000001$/);
+  await expect(page).toHaveURL(/session=sesn_research0000000000001/);
   await page.goBack();
   await expect(page.getByLabel("Status filter")).toHaveAttribute(
     "data-value",
