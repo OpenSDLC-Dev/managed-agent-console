@@ -8,35 +8,17 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 
 - [x] Inspect populated recordings and verify their integrity.
-- [x] Deliver Vault first-credential workflow, both themes and green CI/review (#158).
-- [x] Deliver direct approval actions and pending eligibility, green CI/review (#159).
-- [x] Deliver Memory inspector and inline contents editing, both themes and green CI/review (#160).
-- [x] Implement Agent list inspection; local coverage and browser/visual checks pass.
-- [x] Deliver Agent inspector after green CI/review and squash merge (#161).
-- [x] Implement Agent inline configuration, version selection and related resource tabs.
-- [x] Verify Agent configuration browser flows, coverage and Chrome in both themes.
-- [x] Deliver Agent configuration after green CI/review and squash merge (#162).
-- [x] Implement Session list inspection and bounded recent activity.
-- [x] Verify integrated Session inspector browsers (141 cases) and Chrome in both themes.
-- [x] Deliver Session list inspector after green CI/review and squash merge (#163).
-- [x] Implement Session transcript cards, inline approval and five inspector tabs.
-- [x] Verify Session workspace coverage, including remounted approval state and missing usage.
-- [x] Verify integrated Session workspace browsers (145 cases) and 19 Chrome surfaces in both themes.
-- [x] Deliver Session workspace after green CI/review and squash merge (#164).
-- [x] Implement nested Memory and file resource previews; component and focused browser checks pass.
-- [x] Verify resource previews: 1,276 tests with coverage, 147 browser cases and 14 Chrome surfaces in both themes.
-- [x] Deliver nested resource previews after green CI/review and squash merge (#165).
-<<<<<<< HEAD
-- [x] Implement event timeline/zoom/download and typed Thread details; affected component checks pass.
-- [x] Verify timeline/Thread coverage (1,275 tests), 8 focused browser cases and 8 Chrome surfaces in both themes.
-- [x] Verify integrated timeline/Thread browsers (149 cases) and 37 Chrome surfaces in both themes.
-- [ ] Complete timeline/Thread CI/review and squash merge.
-- [ ] Align Deployment inspectors and full editor.
-=======
-- [ ] Align Session timeline/Thread details and Deployment inspectors/editor.
-- [x] Implement Deployment list inspection; component checks pass.
-- [ ] Complete Deployment inspector browser/Chrome acceptance, coverage and CI/review.
->>>>>>> 0bf4cfc (feat: inspect deployments from the resource list)
-- [ ] Complete local/reference acceptance within implemented platform capabilities.
+- [x] Deliver Vault first credentials (#158), direct approvals (#159) and Memory workspace (#160).
+- [x] Deliver Agent list inspection (#161) and inline configuration/version/resource views (#162).
+- [x] Deliver Session list inspection (#163), transcript/approval workspace (#164) and nested resource previews (#165).
+- [x] Implement timeline/zoom/download and Thread metadata/usage; local integrated browser and Chrome checks pass.
+- [x] Fix overlapping timeline markers found in review and verify pointer selection at both scales.
+- [ ] Complete timeline/Thread CI/review and squash merge (#166).
+- [x] Implement Deployment list inspection, including related resources and raw API views.
+- [x] Verify Deployment inspector coverage: 1,280 tests, 85.88% branches before timeline integration.
+- [x] Verify integrated Deployment inspector browsers (153 cases), 11 Chrome surfaces in both themes, and probes.
+- [ ] Complete Deployment inspector CI/review and squash merge.
+- [ ] Complete Deployment full editor and run inspection.
+- [ ] Complete combined Docker/Chrome acceptance within implemented platform capabilities.
 
 Reference facts and capability boundaries: [docs/design-reference.md](./docs/design-reference.md).
