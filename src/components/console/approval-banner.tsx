@@ -1,6 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -20,6 +27,7 @@ function PendingTool({
   const send = useSendEvents(sessionId);
   const [denying, setDenying] = useState(false);
   const [denyMessage, setDenyMessage] = useState("");
+  const submitted = send.isPending || send.isSuccess;
 
   const confirm = (result: "allow" | "deny") =>
     send.mutate([
@@ -30,7 +38,7 @@ function PendingTool({
         ...((event.session_thread_id ?? threadId)
           ? { session_thread_id: event.session_thread_id ?? threadId }
           : {}),
-        ...(result === "deny" && denyMessage
+        ...(result === "deny" && denying && denyMessage
           ? { deny_message: denyMessage }
           : {}),
       },
@@ -43,19 +51,21 @@ function PendingTool({
         {JSON.stringify(event.input)}
       </span>
       {denying ? (
-        <span className="flex items-center gap-1.5">
+        <span className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           <Input
             aria-label="Deny reason"
+            autoFocus
+            disabled={submitted}
             value={denyMessage}
             onChange={(e) => setDenyMessage(e.target.value)}
             placeholder="Reason (optional)"
-            className="h-7 w-56 bg-background text-[13px]"
+            className="h-7 min-w-0 flex-1 bg-background text-[13px] sm:w-56"
           />
           <Button
             size="sm"
             variant="destructive"
             className="h-7"
-            disabled={send.isPending}
+            disabled={submitted}
             onClick={() => confirm("deny")}
           >
             Deny
@@ -64,7 +74,11 @@ function PendingTool({
             size="sm"
             variant="ghost"
             className="h-7"
-            onClick={() => setDenying(false)}
+            disabled={submitted}
+            onClick={() => {
+              setDenying(false);
+              setDenyMessage("");
+            }}
           >
             Cancel
           </Button>
@@ -74,24 +88,49 @@ function PendingTool({
           <Button
             size="sm"
             className="h-7"
-            disabled={send.isPending}
+            disabled={submitted}
             onClick={() => confirm("allow")}
           >
-            Allow
+            Approve
           </Button>
           <Button
             size="sm"
             variant="outline"
             className="h-7"
-            disabled={send.isPending}
-            onClick={() => setDenying(true)}
+            disabled={submitted}
+            onClick={() => confirm("deny")}
           >
-            Deny…
+            Deny
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label="Approval options"
+                  disabled={submitted}
+                />
+              }
+            >
+              <MoreHorizontal className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setDenying(true)}>
+                Deny with reason…
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
+      )}
+      {send.isSuccess && (
+        <span role="status" className="w-full text-muted-foreground">
+          Confirmation sent
         </span>
       )}
       {send.error && (
-        <span className="w-full text-destructive">
+        <span role="alert" className="w-full text-destructive">
           {send.error instanceof Error ? send.error.message : "failed"}
         </span>
       )}
@@ -112,6 +151,7 @@ export function ApprovalBanner({
   return (
     <div
       data-testid="approval-banner"
+      data-pending-count={pending.length}
       className={cn("mb-6 rounded-lg border p-4", WARNING_BOX)}
     >
       <p className="text-sm font-medium">

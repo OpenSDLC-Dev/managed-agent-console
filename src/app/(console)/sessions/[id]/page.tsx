@@ -439,6 +439,7 @@ export default function SessionDetailPage({
                     offset={offsetLabel(data.created_at, e.processed_at)}
                     durationMs={durations.get(e.id)}
                     selected={e.id === selectedId}
+                    approvalPending={pending.some((tool) => tool.id === e.id)}
                     onSelect={() =>
                       setSelectedId((current) =>
                         current === e.id ? null : e.id,
@@ -477,6 +478,9 @@ export default function SessionDetailPage({
             {selected && (
               <EventDetailPanel
                 event={selected}
+                approvalPending={pending.some(
+                  (tool) => tool.id === selected.id,
+                )}
                 offset={offsetLabel(data.created_at, selected.processed_at)}
                 durationMs={durations.get(selected.id)}
                 onClose={() => setSelectedId(null)}

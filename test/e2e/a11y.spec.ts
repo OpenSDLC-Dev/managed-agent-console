@@ -212,7 +212,11 @@ for (const theme of ["light", "dark"] as const) {
     // approval banner's amber. `globals.test.ts` cannot reach this one.
     await page.goto("/sessions/sesn_gatedbash00000000001");
     await expect(page.getByTestId("approval-banner")).toBeVisible();
-    await page.getByRole("button", { name: "Deny…" }).first().click();
+    await page
+      .getByRole("button", { name: "Approval options" })
+      .first()
+      .click();
+    await page.getByRole("menuitem", { name: "Deny with reason…" }).click();
     await expect(
       page.getByRole("button", { name: "Deny", exact: true }),
     ).toBeVisible();

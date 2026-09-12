@@ -466,7 +466,7 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
       .getByText("needs approval"),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
   await expect(
     page
       .getByTestId("event-row")
@@ -534,7 +534,8 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
     .filter({ hasText: "session.status_idle" });
   const idleCountAtDeny = await idleRows.count();
 
-  await page.getByRole("button", { name: "Deny…" }).click();
+  await page.getByRole("button", { name: "Approval options" }).click();
+  await page.getByRole("menuitem", { name: "Deny with reason…" }).click();
   await page.getByPlaceholder("Reason (optional)").fill("Denied by live e2e");
   await page.getByRole("button", { name: "Deny", exact: true }).click();
   await expect(

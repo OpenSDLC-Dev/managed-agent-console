@@ -80,12 +80,14 @@ export function TranscriptRow({
   offset,
   durationMs,
   selected,
+  approvalPending = false,
   onSelect,
 }: {
   event: SessionEvent;
   offset?: string | null;
   durationMs?: number;
   selected?: boolean;
+  approvalPending?: boolean;
   onSelect?: () => void;
 }) {
   const summary = summaryOf(event);
@@ -131,7 +133,7 @@ export function TranscriptRow({
             {event.agent_name ?? event.session_thread_id}
           </Badge>
         )}
-        {event.evaluated_permission === "ask" && (
+        {approvalPending && (
           <Badge className={cn("shrink-0", WARNING_BOX)} variant="outline">
             needs approval
           </Badge>
@@ -197,11 +199,13 @@ export function EventDetailPanel({
   event,
   offset,
   durationMs,
+  approvalPending = false,
   onClose,
 }: {
   event: SessionEvent;
   offset?: string | null;
   durationMs?: number;
+  approvalPending?: boolean;
   onClose: () => void;
 }) {
   const content = event.content as ContentBlock[] | null | undefined;
@@ -234,7 +238,7 @@ export function EventDetailPanel({
           </Button>
         </span>
       </div>
-      {event.evaluated_permission === "ask" && (
+      {approvalPending && (
         <Badge className={cn("mb-2", WARNING_BOX)} variant="outline">
           needs approval
         </Badge>

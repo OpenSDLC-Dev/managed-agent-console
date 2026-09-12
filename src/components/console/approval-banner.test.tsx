@@ -67,7 +67,7 @@ describe("ApprovalBanner", () => {
       screen.getByText(JSON.stringify({ command: "rm -rf /tmp/scratch" })),
     ).toBeDefined();
     expect(screen.getByText("WebFetch")).toBeDefined();
-    expect(screen.getAllByRole("button", { name: "Allow" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);
   });
 
   it("uses the singular headline for one pending approval", () => {
@@ -82,7 +82,7 @@ describe("ApprovalBanner", () => {
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Allow" }));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(sentEvents(fetchMock)).toEqual([
       {
@@ -91,6 +91,22 @@ describe("ApprovalBanner", () => {
         result: "allow",
       },
     ]);
+  });
+
+  it("keeps confirmation controls disabled after acceptance while the stream catches up", async () => {
+    const fetchMock = vi.fn(async () => okEvents());
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    renderBanner([toolUse("sevt_t1")]);
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(await screen.findByText("Confirmation sent")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Approval options" }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("routes confirmation to the tool event's child thread", async () => {
@@ -102,7 +118,7 @@ describe("ApprovalBanner", () => {
       "sthr_selected",
     );
 
-    await user.click(screen.getByRole("button", { name: "Allow" }));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(sentEvents(fetchMock)).toEqual([
       {
@@ -120,7 +136,10 @@ describe("ApprovalBanner", () => {
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Deny…" }));
+    await user.click(screen.getByRole("button", { name: "Approval options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Deny with reason…" }),
+    );
     await user.type(screen.getByLabelText("Deny reason"), "too destructive");
     await user.click(screen.getByRole("button", { name: "Deny" }));
 
@@ -135,13 +154,13 @@ describe("ApprovalBanner", () => {
     ]);
   });
 
-  it("deny with an empty reason omits deny_message", async () => {
+  it("deny submits immediately without a reason dialog or deny_message", async () => {
     const fetchMock = vi.fn(async () => okEvents());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Deny…" }));
+    expect(screen.queryByLabelText("Deny reason")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Deny" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -154,19 +173,32 @@ describe("ApprovalBanner", () => {
     ]);
   });
 
-  it("cancel backs out of the deny flow without sending", async () => {
-    const fetchMock = vi.fn();
+  it("cancel discards the reason before a later direct denial", async () => {
+    const fetchMock = vi.fn(async () => okEvents());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Deny…" }));
-    expect(screen.getByLabelText("Deny reason")).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "Approval options" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Deny with reason…" }),
+    );
+    expect(screen.getByLabelText("Deny reason")).toHaveFocus();
+    await user.type(screen.getByLabelText("Deny reason"), "discarded reason");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByLabelText("Deny reason")).toBeNull();
-    expect(screen.getByRole("button", { name: "Allow" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDefined();
     expect(fetchMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Deny" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(sentEvents(fetchMock)).toEqual([
+      {
+        type: "user.tool_confirmation",
+        tool_use_id: "sevt_t1",
+        result: "deny",
+      },
+    ]);
   });
 
   it("surfaces the platform error message on a failed confirmation", async () => {
@@ -189,7 +221,7 @@ describe("ApprovalBanner", () => {
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Allow" }));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
     expect(await screen.findByText("tool_use already resolved")).toBeDefined();
   });
 
@@ -201,7 +233,7 @@ describe("ApprovalBanner", () => {
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
-    await user.click(screen.getByRole("button", { name: "Allow" }));
+    await user.click(screen.getByRole("button", { name: "Approve" }));
     expect(await screen.findByText("failed")).toBeDefined();
   });
 });
