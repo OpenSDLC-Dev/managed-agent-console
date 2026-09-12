@@ -655,3 +655,5 @@ Opening a newly fired run exposed a wire mismatch: `events/inbound.go:normalizeU
 Chrome geometry inspection found visually hidden schedule legends extending the narrow document below its viewport. Positioning the scrolling editor as their containing block reduced document height from 1,229px to the 844px viewport. A 360px/390px regression guards this and the visible floating save bar; raw JSON regions also retain keyboard scrolling.
 
 The archived editor exposed a keyboard access failure in that scroll container: a disabled fieldset is not a tab stop, even with `tabIndex`. Scrolling now belongs to a named, focusable region outside the disabled form controls. Browser acceptance uses actual Tab/ArrowDown input before the accessibility scan.
+
+Preparing the real Docker fixture exposed creation selectors falling back to raw IDs once option popups unmounted. Agent/version and Environment/hosting labels now resolve from loaded choices in both creation and inline editing, with IDs retained only as unavailable-resource fallbacks.

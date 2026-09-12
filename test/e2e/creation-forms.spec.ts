@@ -90,6 +90,12 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
     .getByRole("combobox", { name: "Environment", exact: true })
     .click();
   await page.getByRole("option", { name: /byoc-workers/ }).click();
+  await expect(
+    dialog.getByRole("combobox", { name: "Agent", exact: true }),
+  ).toContainText("General task agent · v1");
+  await expect(
+    dialog.getByRole("combobox", { name: "Environment", exact: true }),
+  ).toContainText("byoc-workers · Self-hosted");
   await dialog
     .getByRole("textbox", { name: "Initial message" })
     .fill("Review changes\nReport failures");

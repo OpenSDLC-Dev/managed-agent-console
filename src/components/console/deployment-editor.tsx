@@ -315,6 +315,14 @@ export function DeploymentEditor({
   const visibleAgentChoices = inline
     ? [...new Map(agentChoices.map((agent) => [agent.id, agent])).values()]
     : agentChoices;
+  const selectedAgent = visibleAgentChoices.find(
+    (agent) =>
+      agent.id === form.agentId &&
+      (inline || agent.version === form.agentVersion),
+  );
+  const selectedEnvironment = environmentList.find(
+    (environment) => environment.id === form.environmentId,
+  );
 
   const save = () => {
     if (
@@ -454,10 +462,8 @@ export function DeploymentEditor({
                 >
                   <SelectTrigger aria-label="Agent" className="h-8 w-full">
                     <SelectValue placeholder="Select an agent">
-                      {inline
-                        ? (visibleAgentChoices.find(
-                            (agent) => agent.id === form.agentId,
-                          )?.name ?? form.agentId)
+                      {form.agentId
+                        ? `${selectedAgent?.name ?? form.agentId}${!inline && form.agentVersion ? ` · v${form.agentVersion}${selectedAgent?.pinned ? " (pinned)" : ""}` : ""}`
                         : undefined}
                     </SelectValue>
                   </SelectTrigger>
@@ -508,11 +514,8 @@ export function DeploymentEditor({
               >
                 <SelectTrigger aria-label="Environment" className="h-8 w-full">
                   <SelectValue placeholder="Select an environment">
-                    {inline
-                      ? (environmentList.find(
-                          (environment) =>
-                            environment.id === form.environmentId,
-                        )?.name ?? form.environmentId)
+                    {form.environmentId
+                      ? `${selectedEnvironment?.name ?? form.environmentId}${!inline && selectedEnvironment ? ` · ${hostingTypeLabel(selectedEnvironment.config.type)}` : ""}`
                       : undefined}
                   </SelectValue>
                 </SelectTrigger>

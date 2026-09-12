@@ -1500,6 +1500,28 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "deployment-create-selected",
+    route: "/deployments",
+    fixture: "selected Agent and Environment retain their display names",
+    description: "Creation choices after their option popups unmount.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create deployment", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog
+        .getByRole("combobox", { name: "Agent", exact: true })
+        .click();
+      await page
+        .getByRole("option", { name: /General task agent · v1/ })
+        .click();
+      await dialog
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .click();
+      await page.getByRole("option", { name: /byoc-workers/ }).click();
+    },
+  },
+  {
     id: "deployment-new",
     route: "/deployments/new",
     fixture: "empty form over agent, environment and vault lists",
