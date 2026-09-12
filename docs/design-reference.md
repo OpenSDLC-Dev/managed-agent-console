@@ -612,7 +612,7 @@ inspection and nested resource facts follow below.
 
 Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools/Resources/Threads; `inspector=thread` selects Threads and `event=ID` restores event detail. Message/tool cards retain full content and place approval controls beside the pending call. Debug and the platform Outcomes projection remain available.
 
-Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Reference timeline/zoom acceptance remains follow-up work within #141.
+Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Timeline and zoom boundaries follow below.
 
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
 
