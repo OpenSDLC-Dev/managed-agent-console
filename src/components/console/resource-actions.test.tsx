@@ -99,6 +99,22 @@ describe("ResourceActions", () => {
     expect(onArchive).toHaveBeenCalledOnce();
   });
 
+  it("prevents reopening an archive-only menu while its action is pending", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ResourceActions resource="agent" onArchive={vi.fn()} archivePending />
+        <button type="button">Next control</button>
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Next control" })).toHaveFocus();
+  });
+
   it("closes the menu and continues the tab sequence", async () => {
     const user = userEvent.setup();
     render(

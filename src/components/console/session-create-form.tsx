@@ -71,6 +71,10 @@ export function SessionCreateForm({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const vaultList = vaults.data?.data ?? [];
+  const selectedAgent = agents.data?.data.find((agent) => agent.id === agentId);
+  const selectedEnvironment = environments.data?.data.find(
+    (environment) => environment.id === environmentId,
+  );
 
   const save = () => {
     if (create.isPending || upload.isPending || !agentId || !environmentId)
@@ -147,7 +151,11 @@ export function SessionCreateForm({
               className="h-8 w-full rounded-lg"
               aria-label="Agent"
             >
-              <SelectValue placeholder="Select an agent" />
+              <SelectValue placeholder="Select an agent">
+                {selectedAgent
+                  ? `${selectedAgent.name} · v${selectedAgent.version}`
+                  : agentId || undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {(agents.data?.data ?? []).map((agent) => (
@@ -174,7 +182,11 @@ export function SessionCreateForm({
             className="h-8 w-full rounded-lg"
             aria-label="Environment"
           >
-            <SelectValue placeholder="Select an environment" />
+            <SelectValue placeholder="Select an environment">
+              {selectedEnvironment
+                ? `${selectedEnvironment.name} · ${hostingTypeLabel(selectedEnvironment.config.type)}`
+                : environmentId || undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {(environments.data?.data ?? []).map((environment) => (

@@ -23,6 +23,12 @@ for (const owner of ["session", "deployment"] as const) {
         .getByRole("combobox", { name: "Environment", exact: true })
         .click();
       await page.getByRole("option", { name: /byoc-workers/ }).click();
+      await expect(
+        dialog.getByRole("combobox", { name: "Agent", exact: true }),
+      ).toContainText("General task agent · v1");
+      await expect(
+        dialog.getByRole("combobox", { name: "Environment", exact: true }),
+      ).toContainText("byoc-workers · Self-hosted");
       if (owner === "deployment") {
         await dialog
           .getByLabel("Name", { exact: true })

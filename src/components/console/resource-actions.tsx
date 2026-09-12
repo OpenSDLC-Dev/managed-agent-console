@@ -126,6 +126,7 @@ export function ResourceActions({
         aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
+        disabled={!!archivePending && !canDelete && !onDownload}
         onClick={toggleMenu}
       >
         <MoreHorizontal className="size-4" />

@@ -1464,6 +1464,35 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "session-create-selected",
+    route: "/sessions",
+    fixture: GATED,
+    description:
+      "Session creation retains Agent/version and Environment/hosting labels after selection.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Create session", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Create session" });
+      await dialog
+        .getByRole("combobox", { name: "Agent", exact: true })
+        .click();
+      await page.getByRole("option", { name: /General task agent/ }).click();
+      await dialog
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .click();
+      await page.getByRole("option", { name: /byoc-workers/ }).click();
+      await dialog
+        .getByRole("combobox", { name: "Agent", exact: true })
+        .getByText("General task agent · v1")
+        .waitFor();
+      await dialog
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .getByText("byoc-workers · Self-hosted")
+        .waitFor();
+    },
+  },
+  {
     id: "session-new-memory-resource",
     route: "/sessions/new",
     fixture: "active memory-store suggestions",
@@ -1984,6 +2013,31 @@ export const SURFACES: Surface[] = [
         .first()
         .click();
       await page.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    id: "agent-archive-pending",
+    route: `/agents/${AGENT}`,
+    fixture: AGENT,
+    description:
+      "An archive-only action menu cannot reopen while its request is pending.",
+    setup: async (page) => {
+      await page.route("**/api/platform/v1/agents/*/archive", async (route) => {
+        await new Promise<void>((resolve) =>
+          page.once("close", () => resolve()),
+        );
+        await route.abort().catch(() => {});
+      });
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "More actions" })
+        .click();
+      await page.getByRole("menuitem", { name: "Archive" }).click();
+      await page.getByRole("button", { name: "Archive agent" }).click();
+      await page.getByRole("dialog").waitFor({ state: "hidden" });
+      await page
+        .locator('button[aria-label="More actions"]:disabled')
+        .waitFor();
     },
   },
   {
