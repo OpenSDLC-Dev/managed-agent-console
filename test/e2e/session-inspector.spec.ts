@@ -116,3 +116,28 @@ test("deep links, missing sessions, resizing and narrow inspector accessibility 
   await panel.getByRole("button", { name: "Close details" }).click();
   await expect(page.getByLabel("Find session by ID")).toBeFocused();
 });
+
+test("row Open enters the full session without inserting an inspector history entry", async ({
+  page,
+}) => {
+  await signIn(page, "/sessions?order=asc");
+  for (const activation of ["click", "keyboard"]) {
+    const row = page
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", {
+          name: "Install deps and run tests",
+          exact: true,
+        }),
+      });
+    const open = row.getByRole("link", { name: "Open", exact: true });
+    if (activation === "click") await open.click();
+    else await open.press("Enter");
+    await expect(page).toHaveURL("/sessions/" + GATED);
+    await page.goBack();
+    await expect(page).toHaveURL("/sessions?order=asc");
+    await expect(
+      page.getByRole("region", { name: "Session details" }),
+    ).toHaveCount(0);
+  }
+});

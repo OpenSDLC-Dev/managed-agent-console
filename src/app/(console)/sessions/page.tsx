@@ -187,6 +187,7 @@ function SessionsList() {
           <Button
             size="sm"
             variant="outline"
+            onClick={(event) => event.stopPropagation()}
             render={
               <Link href={"/sessions/" + encodeURIComponent(session.id)} />
             }
