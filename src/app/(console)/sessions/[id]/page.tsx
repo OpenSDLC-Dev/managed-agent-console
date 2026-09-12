@@ -16,7 +16,7 @@ import {
   SessionEventIndex,
   SessionToolIndex,
 } from "@/components/console/session-workspace-views";
-import { summaryOf } from "@/lib/session-trace/summary";
+import { eventSearchText } from "@/lib/session-trace/summary";
 import { PageHeader } from "@/components/shell/page-header";
 import { Breadcrumb } from "@/components/console/breadcrumb";
 import { DetailSection } from "@/components/console/detail";
@@ -313,7 +313,8 @@ function SessionWorkspace({ id }: { id: string }) {
     return events.filter(
       (e) =>
         (!types || types.includes(e.type)) &&
-        summaryOf(e).toLowerCase().includes(search.toLowerCase()),
+        (!search ||
+          eventSearchText(e).toLowerCase().includes(search.toLowerCase())),
     );
   }, [filter, search, trace.events]);
   const selected = selectedId

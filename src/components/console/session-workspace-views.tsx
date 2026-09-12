@@ -7,7 +7,7 @@ import { Field, JsonBlock } from "./detail";
 import { IdCode, StatusBadge, Time } from "./bits";
 import { parseTools, TOOL_NAMES } from "@/lib/agent-config/toolset";
 import { tokenAttr, tokenCount } from "@/lib/utils";
-import { summaryOf } from "@/lib/session-trace/summary";
+import { eventSearchText, summaryOf } from "@/lib/session-trace/summary";
 import type {
   Session,
   SessionEvent,
@@ -138,9 +138,7 @@ export function SessionEventIndex({
   const visible = events.filter(
     (event) =>
       (!type || event.type === type) &&
-      (event.type + " " + event.id + " " + summaryOf(event))
-        .toLowerCase()
-        .includes(search.toLowerCase()),
+      eventSearchText(event).toLowerCase().includes(search.toLowerCase()),
   );
   return (
     <div className="space-y-3">

@@ -615,3 +615,5 @@ Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools
 Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Nested resource previews and reference timeline/zoom acceptance remain follow-up work within #141.
 
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
+
+Review caught transcript search using one-line, 200-character summaries. Search now reads complete content and payloads; a regression covers later lines, multiple text blocks and long tool inputs in both transcript and event filters.

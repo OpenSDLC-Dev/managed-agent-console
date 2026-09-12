@@ -903,10 +903,25 @@ it("searches full transcript content and previews without dropping the persisted
     "live",
     [
       ev("m1", "user.message", {
-        content: [{ type: "text", text: "A persisted sentence" }],
+        content: [
+          {
+            type: "text",
+            text: "First line\n" + "x".repeat(260) + " A persisted sentence",
+          },
+        ],
       }),
       ev("m2", "agent.message", {
         content: [{ type: "text", text: "A response" }],
+      }),
+      ev("t1", "agent.tool_result", {
+        content: [
+          { type: "text", text: "First block\n" },
+          { type: "text", text: "x".repeat(260) + " deep-result" },
+        ],
+      }),
+      ev("t2", "agent.tool_use", {
+        name: "bash",
+        input: { command: "echo " + "x".repeat(260) + " deep-input" },
       }),
     ],
     [{ id: "preview", type: "agent.message", parts: ["Live response"] }],
@@ -922,10 +937,23 @@ it("searches full transcript content and previews without dropping the persisted
   expect(screen.queryByTestId("preview-row")).toBeNull();
   expect(screen.getByTestId("events-toolbar")).toHaveAttribute(
     "data-total-events",
-    "2",
+    "4",
+  );
+  for (const term of ["deep-result", "deep-input"]) {
+    await userEvent.clear(screen.getByLabelText("Find in transcript"));
+    await userEvent.type(screen.getByLabelText("Find in transcript"), term);
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+    expect(screen.getByTestId("event-row")).toHaveTextContent(term);
+  }
+  await userEvent.click(screen.getByRole("tab", { name: "Events" }));
+  await userEvent.type(screen.getByLabelText("Filter events"), "deep-result");
+  expect(screen.getAllByTestId("inspector-event-row")).toHaveLength(1);
+  expect(screen.getByTestId("inspector-event-row")).toHaveAttribute(
+    "data-event-id",
+    "t1",
   );
   await userEvent.click(screen.getByRole("button", { name: "Debug" }));
-  expect(screen.getAllByTestId("debug-row")).toHaveLength(2);
+  expect(screen.getAllByTestId("debug-row")).toHaveLength(4);
 });
 
 it("moves resources into the inspector and restores focus when it closes", async () => {
