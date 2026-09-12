@@ -149,3 +149,37 @@ test("stale inline saves retain the draft and report the platform precondition f
     "External edit",
   );
 });
+
+test("rendering agent-written Markdown does not fetch remote images", async ({
+  page,
+  request,
+}) => {
+  let imageRequests = 0;
+  await page.route("https://memory-assets.example/**", (route) => {
+    imageRequests++;
+    return route.abort();
+  });
+  const response = await request.post(
+    "http://127.0.0.1:18080/v1/memory_stores/" +
+      store +
+      "/memories/" +
+      memory +
+      "?view=full",
+    {
+      headers: { "x-api-key": "test-key" },
+      data: {
+        content: "![diagram](https://memory-assets.example/diagram.png)",
+      },
+    },
+  );
+  expect(response.ok()).toBe(true);
+  await signIn(page, "/memory-stores/" + store + "?memory=" + memory);
+  await expect(
+    page.getByRole("link", { name: "Open image: diagram" }),
+  ).toHaveAttribute("href", "https://memory-assets.example/diagram.png");
+  await expect(
+    page.getByRole("region", { name: "Memory preview" }).locator("img"),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  expect(imageRequests).toBe(0);
+});

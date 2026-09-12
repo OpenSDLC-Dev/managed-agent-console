@@ -560,3 +560,6 @@ version picker. Existing direct memory/edit/version routes remain available.
 
 The local browser pass found a narrow-header overflow and a missing live error
 announcement on save conflict; both are covered by `memory-inspector.spec.ts`.
+
+Memory Markdown images render as explicit links: agent-written content must not
+initiate requests from an operator's network merely by opening the preview.

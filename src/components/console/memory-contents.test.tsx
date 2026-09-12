@@ -284,3 +284,26 @@ it("preserves the editor when a background content refresh fails", async () => {
   await userEvent.click(screen.getByRole("button", { name: /^Save/ }));
   expect(await screen.findByText("Survives a failed refresh")).toBeVisible();
 });
+
+it("renders untrusted Markdown images as explicit links rather than automatic requests", async () => {
+  const { client, head } = setup();
+  await screen.findByRole("heading", { name: "Project brief" });
+  act(() =>
+    client.setQueryData(["memory", head.memory_store_id, head.id], {
+      ...head,
+      content: "![diagram](https://memory-assets.example/diagram.png)",
+    }),
+  );
+  expect(
+    await screen.findByRole("link", { name: "Open image: diagram" }),
+  ).toHaveAttribute("href", "https://memory-assets.example/diagram.png");
+  expect(screen.queryByRole("img")).toBeNull();
+  act(() =>
+    client.setQueryData(["memory", head.memory_store_id, head.id], {
+      ...head,
+      content: "![no source]()",
+    }),
+  );
+  expect(await screen.findByText("no source")).toBeVisible();
+  expect(screen.queryByRole("img")).toBeNull();
+});
