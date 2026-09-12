@@ -539,3 +539,8 @@ reference transcript cards and the multi-tab Session inspector remain #141 work.
 Platform internal/events/toolflow.go permits confirmations only for ask-gated
 built-in/MCP calls. A custom call in requires_action needs a custom result, not
 a confirmation; answered calls must not keep approval controls or badges.
+
+CI on macOS exposed two browser-test timing gaps: axe sampled the unsaved-dialog
+entry fade (reproduced by slowing that animation); rapid Created-filter reopen
+filled the still-mounted closing form before its draft reset (confirmed in trace).
+The checks now wait for settled dialog/open-filter state before measuring or editing.
