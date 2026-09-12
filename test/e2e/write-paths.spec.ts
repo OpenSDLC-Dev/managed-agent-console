@@ -197,7 +197,7 @@ test("the first credential returns to the populated vault after creation", async
     .getByRole("link", { name: "Credential vaults", exact: true })
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
-  await page.getByLabel("Display name").fill("First credential vault");
+  await page.getByLabel("Name", { exact: true }).fill("First credential vault");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add a credential" });
   await expect(
@@ -232,7 +232,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
     .getByRole("link", { name: "Credential vaults", exact: true })
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
-  await page.getByLabel("Display name").fill("CI secrets");
+  await page.getByLabel("Name", { exact: true }).fill("CI secrets");
   await page.getByText("Metadata (optional)", { exact: true }).click();
   await page.getByLabel("Metadata (JSON object)").fill('{"team":"ci"}');
   await page.getByRole("button", { name: "Continue", exact: true }).click();

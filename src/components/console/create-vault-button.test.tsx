@@ -59,7 +59,7 @@ describe("CreateVaultButton", () => {
     });
     expect(submit).toBeDisabled();
 
-    await user.type(screen.getByLabelText("Display name"), "  Prod  ");
+    await user.type(screen.getByLabelText("Name"), "  Prod  ");
     expect(submit).toBeEnabled();
     await user.click(submit);
 
@@ -105,7 +105,7 @@ describe("CreateVaultButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Create vault/ }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(screen.getByLabelText("Display name"), "Prod");
+    await user.type(screen.getByLabelText("Name"), "Prod");
     await user.click(within(dialog).getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("name taken")).toBeDefined();
@@ -131,13 +131,13 @@ describe("CreateVaultButton", () => {
 
     await user.click(screen.getByRole("button", { name: /Create vault/ }));
     await screen.findByRole("dialog");
-    await user.type(screen.getByLabelText("Display name"), "scratch");
+    await user.type(screen.getByLabelText("Name"), "scratch");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     await user.click(screen.getByRole("button", { name: /Create vault/ }));
     await screen.findByRole("dialog");
-    expect(screen.getByLabelText("Display name")).toHaveValue("");
+    expect(screen.getByLabelText("Name")).toHaveValue("");
   });
 });
 
@@ -163,7 +163,7 @@ it("retries a failed first credential against the same vault and then opens the 
   const user = userEvent.setup();
   renderButton();
   await user.click(screen.getByRole("button", { name: "Create vault" }));
-  await user.type(screen.getByLabelText("Display name"), "New vault");
+  await user.type(screen.getByLabelText("Name"), "New vault");
   await user.click(screen.getByRole("button", { name: "Continue" }));
   const dialog = await screen.findByRole("dialog", {
     name: "Add a credential",

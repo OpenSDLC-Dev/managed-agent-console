@@ -1105,7 +1105,9 @@ export const SURFACES: Surface[] = [
       "Continue commits the vault and opens the optional credential step with Skip for now.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Create vault" }).click();
-      await page.getByLabel("Display name").fill("Production credentials");
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("Production credentials");
       await page.getByRole("button", { name: "Continue" }).click();
       await page.getByRole("dialog", { name: "Add a credential" }).waitFor();
     },

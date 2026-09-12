@@ -215,9 +215,9 @@ export function CredentialDialog({
         }
       }}
     >
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto p-6 sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="text-2xl">
             {firstVaultName ? "Add a credential" : "Add credential"}
           </DialogTitle>
           <DialogDescription>
@@ -234,6 +234,7 @@ export function CredentialDialog({
               <Label htmlFor="cred-name">Name (optional)</Label>
               <Input
                 id="cred-name"
+                placeholder="Example credential"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
@@ -521,7 +522,7 @@ export function CredentialDialog({
             </p>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="m-0 border-0 bg-transparent p-0">
           <Button
             variant="outline"
             disabled={add.isPending}

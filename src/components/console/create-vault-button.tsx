@@ -67,18 +67,19 @@ export function CreateVaultButton() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto p-6 sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Create vault</DialogTitle>
+            <DialogTitle className="text-2xl">Create vault</DialogTitle>
             <DialogDescription>
               Store credentials for your agents to use.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="vault-name">Display name</Label>
+              <Label htmlFor="vault-name">Name</Label>
               <Input
                 id="vault-name"
+                placeholder="Example vault"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -100,7 +101,7 @@ export function CreateVaultButton() {
               {parseError ?? (create.error as Error).message}
             </p>
           )}
-          <DialogFooter>
+          <DialogFooter className="m-0 border-0 bg-transparent p-0">
             <Button
               variant="ghost"
               disabled={create.isPending}
