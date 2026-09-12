@@ -23,8 +23,8 @@ const ev = (type: string, extra?: object): SessionEvent =>
     ...extra,
   }) as SessionEvent;
 
-const renderRow = (event: SessionEvent) =>
-  render(<TranscriptRow event={event} />);
+const renderRow = (event: SessionEvent, approvalPending = false) =>
+  render(<TranscriptRow event={event} approvalPending={approvalPending} />);
 
 describe("TranscriptRow", () => {
   it("renders the timestamp, type badge, and data attributes", () => {
@@ -57,13 +57,14 @@ describe("TranscriptRow", () => {
     expect(screen.getByText("hmm").className).toContain("italic");
   });
 
-  it("shows the approval badge when permission is ask, not when allow", () => {
+  it("shows the approval badge only while the call is awaiting confirmation", () => {
     renderRow(
       ev("agent.tool_use", {
         name: "bash",
         input: {},
         evaluated_permission: "ask",
       }),
+      true,
     );
     expect(screen.getByText("needs approval")).toBeInTheDocument();
     cleanup();
@@ -71,7 +72,7 @@ describe("TranscriptRow", () => {
       ev("agent.tool_use", {
         name: "bash",
         input: {},
-        evaluated_permission: "allow",
+        evaluated_permission: "ask",
       }),
     );
     expect(screen.queryByText("needs approval")).toBeNull();
@@ -167,13 +168,19 @@ describe("DebugRow", () => {
 describe("EventDetailPanel", () => {
   const renderPanel = (
     event: SessionEvent,
-    over?: { offset?: string; durationMs?: number; onClose?: () => void },
+    over?: {
+      offset?: string;
+      durationMs?: number;
+      approvalPending?: boolean;
+      onClose?: () => void;
+    },
   ) =>
     render(
       <EventDetailPanel
         event={event}
         offset={over?.offset}
         durationMs={over?.durationMs}
+        approvalPending={over?.approvalPending}
         onClose={over?.onClose ?? (() => {})}
       />,
     );
@@ -205,8 +212,20 @@ describe("EventDetailPanel", () => {
     );
     expect(screen.getByText("bash")).toBeInTheDocument();
     expect(screen.getByText("Input")).toBeInTheDocument();
-    expect(screen.getByText("needs approval")).toBeInTheDocument();
+    expect(screen.queryByText("needs approval")).toBeNull();
     expect(container.textContent).toContain('"command": "ls"');
+  });
+
+  it("marks a selected event only when it is still awaiting approval", () => {
+    renderPanel(
+      ev("agent.tool_use", {
+        name: "bash",
+        input: {},
+        evaluated_permission: "ask",
+      }),
+      { approvalPending: true },
+    );
+    expect(screen.getByText("needs approval")).toBeVisible();
   });
 
   it("renders the tokens line for a span end", () => {

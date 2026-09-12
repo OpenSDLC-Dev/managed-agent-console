@@ -564,7 +564,7 @@ describe("SessionDetailPage", () => {
     expect(banner).toHaveTextContent("Waiting on 1 tool approval");
 
     await userEvent.click(
-      within(banner).getByRole("button", { name: "Allow" }),
+      within(banner).getByRole("button", { name: "Approve" }),
     );
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0][0].pathname).toBe(

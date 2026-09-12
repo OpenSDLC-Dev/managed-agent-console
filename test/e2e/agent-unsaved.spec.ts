@@ -33,6 +33,10 @@ test("agent modal retains drafts on Stay and discards only on Leave", async ({
   );
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
+  // Visibility includes the entry fade; axe must measure the settled palette.
+  await expect
+    .poll(() => prompt.evaluate((el) => getComputedStyle(el).opacity))
+    .toBe("1");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))

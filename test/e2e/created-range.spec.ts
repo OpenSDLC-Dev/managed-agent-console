@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
 
@@ -6,12 +6,25 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+// During a quick reopen, the fading-out form is still editable to Playwright.
+// Wait for the new open state before filling so its draft reset has committed.
+async function openCreatedFilter(page: Page) {
+  const trigger = page.getByLabel("Created filter");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const filter = page.getByRole("region", { name: "Created date filter" });
+  await expect(filter).toHaveAttribute("data-open", "");
+  await expect
+    .poll(() => filter.evaluate((el) => getComputedStyle(el).opacity))
+    .toBe("1");
+}
+
 for (const route of ["agents", "sessions", "memory-stores"]) {
   test(`${route}: custom bounds apply only on Apply, support one side and reset pagination`, async ({
     page,
   }) => {
     await signIn(page, `/${route}`);
-    await page.getByLabel("Created filter").click();
+    await openCreatedFilter(page);
     await page.getByRole("button", { name: "Custom range" }).click();
     await page
       .getByRole("textbox", { name: "Start", exact: true })
@@ -39,7 +52,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
       "data-value",
       "custom",
     );
-    await page.getByLabel("Created filter").click();
+    await openCreatedFilter(page);
     await page
       .getByRole("textbox", { name: "Start", exact: true })
       .fill("2026-02-30");
@@ -47,7 +60,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
       page.getByRole("button", { name: "Apply", exact: true }),
     ).toBeDisabled();
     await page.keyboard.press("Escape");
-    await page.getByLabel("Created filter").click();
+    await openCreatedFilter(page);
     await expect(
       page.getByRole("textbox", { name: "Start", exact: true }),
     ).toHaveValue("2026-08-01");
@@ -60,7 +73,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
     );
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     await oneSided;
-    await page.getByLabel("Created filter").click();
+    await openCreatedFilter(page);
     await page.getByRole("button", { name: "Open End calendar" }).click();
     await expect(
       page.getByRole("group", { name: "End calendar" }),
@@ -72,7 +85,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
     ).toHaveValue("2026-08-03");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByLabel("Created filter").click();
+    await openCreatedFilter(page);
     await page.getByRole("button", { name: "Open End calendar" }).click();
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(

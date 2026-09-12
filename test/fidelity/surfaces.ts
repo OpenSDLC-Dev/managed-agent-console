@@ -613,7 +613,7 @@ export const SURFACES: Surface[] = [
     route: `/sessions/${GATED}`,
     fixture: GATED,
     description:
-      "Human-in-the-loop: the approval banner with Allow / Deny controls.",
+      "Human-in-the-loop: the approval banner with Approve / Deny controls.",
     setup: async (page) => {
       await traceLive(page);
       await page.getByTestId("approval-banner").waitFor();
@@ -1251,6 +1251,19 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "approval-options",
+    route: "/sessions/" + GATED,
+    fixture: GATED,
+    description:
+      "Optional denial reason is offered in a secondary menu; Approve and Deny remain direct actions.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByTestId("approval-banner").waitFor();
+      await page.getByRole("button", { name: "Approval options" }).click();
+      await page.getByRole("menuitem", { name: "Deny with reason…" }).waitFor();
+    },
+  },
+  {
     id: "approval-deny",
     route: `/sessions/${GATED}`,
     fixture: GATED,
@@ -1259,7 +1272,11 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await traceLive(page);
       await page.getByTestId("approval-banner").waitFor();
-      await page.getByRole("button", { name: "Deny…" }).first().click();
+      await page
+        .getByRole("button", { name: "Approval options" })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: "Deny with reason…" }).click();
       await page.getByRole("button", { name: "Deny", exact: true }).waitFor();
     },
   },

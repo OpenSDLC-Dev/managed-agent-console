@@ -528,3 +528,19 @@ and token entry. It does not claim a successful external authentication flow.
 The reference workspace-sharing acknowledgment has no matching workspace model here;
 platform authorization remains authoritative. Metadata remains available as an
 optional disclosure. Ordinary Add credential retains the environment-variable default.
+
+## Session approvals — checked 2026-09-12
+
+Records ec8c4c6, frames 39/41 and UI[139]/[155], show direct Approve/Deny
+without a required reason step. The console retains the platform's optional
+deny_message under Approval options. This slice aligns those actions;
+reference transcript cards and the multi-tab Session inspector remain #141 work.
+
+Platform internal/events/toolflow.go permits confirmations only for ask-gated
+built-in/MCP calls. A custom call in requires_action needs a custom result, not
+a confirmation; answered calls must not keep approval controls or badges.
+
+CI on macOS exposed two browser-test timing gaps: axe sampled the unsaved-dialog
+entry fade (reproduced by slowing that animation); rapid Created-filter reopen
+filled the still-mounted closing form before its draft reset (confirmed in trace).
+The checks now wait for settled dialog/open-filter state before measuring or editing.

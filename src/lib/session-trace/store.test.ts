@@ -111,12 +111,18 @@ describe("trace store", () => {
 
   it("keeps pending approvals from each thread's latest idle boundary", () => {
     const events = [
-      ev("tool_a", "agent.tool_use", { session_thread_id: "thread_a" }),
+      ev("tool_a", "agent.tool_use", {
+        session_thread_id: "thread_a",
+        evaluated_permission: "ask",
+      }),
       ev("idle_a", "session.thread_status_idle", {
         session_thread_id: "thread_a",
         stop_reason: { type: "requires_action", event_ids: ["tool_a"] },
       }),
-      ev("tool_b", "agent.tool_use", { session_thread_id: "thread_b" }),
+      ev("tool_b", "agent.tool_use", {
+        session_thread_id: "thread_b",
+        evaluated_permission: "ask",
+      }),
       ev("idle_b", "session.thread_status_idle", {
         session_thread_id: "thread_b",
         stop_reason: { type: "requires_action", event_ids: ["tool_b"] },
@@ -143,4 +149,41 @@ describe("trace store", () => {
       ),
     ).toEqual([]);
   });
+});
+
+it("keeps custom results and non-ask calls out of approval controls", () => {
+  const events = [
+    ev("ask", "agent.tool_use", { evaluated_permission: "ask" }),
+    ev("mcp", "agent.mcp_tool_use", { evaluated_permission: "ask" }),
+    ev("custom", "agent.custom_tool_use"),
+    ev("allowed", "agent.tool_use", { evaluated_permission: "allow" }),
+    ev("idle", "session.status_idle", {
+      stop_reason: {
+        type: "requires_action",
+        event_ids: ["ask", "mcp", "custom", "allowed"],
+      },
+    }),
+  ];
+  expect(pendingToolUses(events).map((e) => e.id)).toEqual(["ask", "mcp"]);
+  expect(
+    pendingToolUses([
+      ...events,
+      ev("result", "agent.tool_result", { tool_use_id: "ask" }),
+      ev("mcp-result", "agent.mcp_tool_result", { mcp_tool_use_id: "mcp" }),
+      ev("custom-result", "user.custom_tool_result", {
+        custom_tool_use_id: "custom",
+      }),
+    ]),
+  ).toEqual([]);
+});
+it("a self-hosted tool result resolves its approval before the next lifecycle event", () => {
+  expect(
+    pendingToolUses([
+      ev("ask", "agent.tool_use", { evaluated_permission: "ask" }),
+      ev("idle", "session.status_idle", {
+        stop_reason: { type: "requires_action", event_ids: ["ask"] },
+      }),
+      ev("result", "user.tool_result", { tool_use_id: "ask" }),
+    ]),
+  ).toEqual([]);
 });

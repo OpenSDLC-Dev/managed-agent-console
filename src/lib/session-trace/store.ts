@@ -147,7 +147,10 @@ export function latestThreadStatus(state: TraceState): string | undefined {
   return undefined;
 }
 
-/** Tool calls still blocked by the newest idle boundary on each visible thread. */
+/** Ask-gated platform/MCP calls on the newest idle boundary of each visible thread.
+ * Platform internal/events/toolflow.go: ValidateToolConfirmations excludes custom
+ * calls and already answered calls; requires_action can also request custom results.
+ */
 export function pendingToolUses(
   events: SessionEvent[],
   aggregateThreads = false,
@@ -185,11 +188,26 @@ export function pendingToolUses(
   );
   if (pendingIds.size === 0) return [];
   const answered = new Set(
-    events
-      .filter((event) => event.type === "user.tool_confirmation")
-      .map((event) => event.tool_use_id),
+    events.flatMap((event) => {
+      if (
+        [
+          "user.tool_confirmation",
+          "agent.tool_result",
+          "user.tool_result",
+        ].includes(event.type)
+      )
+        return [event.tool_use_id];
+      if (event.type === "agent.mcp_tool_result")
+        return [event.mcp_tool_use_id];
+      return [];
+    }),
   );
   return events.filter(
-    (event) => pendingIds.has(event.id) && !answered.has(event.id),
+    (event) =>
+      (event.type === "agent.tool_use" ||
+        event.type === "agent.mcp_tool_use") &&
+      event.evaluated_permission === "ask" &&
+      pendingIds.has(event.id) &&
+      !answered.has(event.id),
   );
 }

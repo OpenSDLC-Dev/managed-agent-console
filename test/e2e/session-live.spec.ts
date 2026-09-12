@@ -49,7 +49,7 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
   ).toBeVisible();
 
   // Approving wakes the session; the real idle interval becomes a band.
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("idle-band")).toContainText("Session idle ·", {
     timeout: 15_000,
   });
@@ -271,17 +271,43 @@ test("the trace goes live over SSE and approving a tool call completes the turn"
   );
   await expect(page.getByTestId("approval-banner")).toBeVisible();
 
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
 
   // Confirmation, tool result, and the streamed reply all arrive over SSE.
   await expect(page.getByText("Dependencies installed.")).toBeVisible({
     timeout: 15_000,
   });
   await expect(page.getByTestId("approval-banner")).toBeHidden();
+  await expect(page.getByText("needs approval", { exact: true })).toHaveCount(
+    0,
+  );
   const confirmationRow = page
     .getByTestId("event-row")
     .filter({ hasText: "user.tool_confirmation" });
   await expect(confirmationRow).toHaveCount(1);
+});
+
+test("Deny submits immediately without opening a reason form", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto(GATED);
+  await expect(page.getByTestId("approval-banner")).toBeVisible();
+  const posted = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" && request.url().endsWith("/events"),
+  );
+  await page.getByRole("button", { name: "Deny", exact: true }).click();
+  const request = await posted;
+  expect(request.postDataJSON().events).toEqual([
+    expect.objectContaining({ type: "user.tool_confirmation", result: "deny" }),
+  ]);
+  expect(request.postDataJSON().events[0]).not.toHaveProperty("deny_message");
+  await expect(page.getByLabel("Deny reason")).toHaveCount(0);
+  await expect(page.getByTestId("approval-banner")).toBeHidden();
+  await expect(page.getByText("needs approval", { exact: true })).toHaveCount(
+    0,
+  );
 });
 
 test("denying with a message lands as an error tool result", async ({
@@ -296,7 +322,8 @@ test("denying with a message lands as an error tool result", async ({
   );
   await expect(page.getByTestId("approval-banner")).toBeVisible();
 
-  await page.getByRole("button", { name: "Deny…" }).click();
+  await page.getByRole("button", { name: "Approval options" }).click();
+  await page.getByRole("menuitem", { name: "Deny with reason…" }).click();
   await page.getByPlaceholder("Reason (optional)").fill("Wrong directory");
   await page.getByRole("button", { name: "Deny", exact: true }).click();
 
@@ -321,7 +348,7 @@ test("the composer sends a message and the reply streams in", async ({
     { timeout: 15_000 },
   );
   // Clear the pending gate first so the session is idle.
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Dependencies installed.")).toBeVisible({
     timeout: 15_000,
   });
@@ -351,7 +378,7 @@ test("interrupt while running lands a user.interrupt in the log", async ({
     "live",
     { timeout: 15_000 },
   );
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Dependencies installed.")).toBeVisible({
     timeout: 15_000,
   });

@@ -6,6 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Fixed
+
+- Session approvals now offer direct Approve/Deny actions, retain optional denial reasons in a secondary menu, and stop showing resolved calls or custom-result requests as pending approvals.
+
 - Schedule presets use a 12-hour clock with keyboard-operable AM/PM controls, preserving midnight and noon in the submitted cron expression.
 
 - Environment detail and editing follow the reference section layout, with package-manager rows, metadata key/value rows and network switches. Removing metadata preserves platform patch semantics; failed saves retain the draft.
