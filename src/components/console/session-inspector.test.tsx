@@ -174,10 +174,9 @@ it("archives in place and closes after deletion without resetting list filters",
   await screen.findByRole("heading", { name: sessions[0].title });
   await userEvent.click(screen.getByRole("button", { name: "More actions" }));
   await userEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
-  await userEvent.click(
-    screen.getByRole("button", { name: "Archive session" }),
-  );
+  expect(screen.queryByRole("dialog")).toBeNull();
   await screen.findByText("archived", { exact: true });
+  expect(onClose).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: "More actions" }));
   await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
