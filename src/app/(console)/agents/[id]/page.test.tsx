@@ -111,6 +111,7 @@ function setup({
             next_page: url.searchParams.has("page") ? null : "older",
           });
     if (url.pathname.endsWith("/archive")) {
+      if (init?.method !== "POST") return error("Method not allowed", 405);
       head = { ...head, archived_at: "2026-09-12T00:00:00Z" };
       return Response.json(head);
     }
