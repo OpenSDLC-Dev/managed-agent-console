@@ -633,9 +633,6 @@ export const SURFACES: Surface[] = [
         await page
           .getByRole("menuitem", { name: "Archive", exact: true })
           .click();
-        await page
-          .getByRole("button", { name: "Archive session", exact: true })
-          .click();
         await panel.getByText("archived", { exact: true }).waitFor();
         await page.getByRole("dialog").waitFor({ state: "hidden" });
       }
@@ -1220,6 +1217,41 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   },
+  ...["menu", "narrow", "return", "error"].map((view): Surface => ({
+    id: "session-archive-" + view,
+    route: `/sessions/${view === "error" ? SESSION : GATED}`,
+    fixture: view === "error" ? SESSION : GATED,
+    description:
+      "Direct Session archive, successful return to the list and visible running-session refusal.",
+    setup: async (page) => {
+      if (view === "narrow") {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page
+          .getByRole("button", { name: "Close session inspector" })
+          .click();
+      }
+      await traceLive(page);
+      await page.getByRole("button", { name: "More actions" }).click();
+      if (view === "return" || view === "error") {
+        const response = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            response.url().endsWith("/archive"),
+        );
+        await page.getByRole("menuitem", { name: "Archive" }).click();
+        const archived = await response;
+        if (view === "return") {
+          if (!archived.ok()) throw new Error("Session archive fixture failed");
+          await page.waitForURL("**/sessions");
+          await page.getByRole("table").waitFor();
+        } else {
+          if (archived.status() !== 400)
+            throw new Error("Expected running Session archive refusal");
+          await page.getByText("Archive failed", { exact: true }).waitFor();
+        }
+      } else await page.getByRole("menuitem", { name: "Archive" }).waitFor();
+    },
+  })),
   // ---- the session trace, this console's densest surface ----------------
   {
     id: "session-transcript",
