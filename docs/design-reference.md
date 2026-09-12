@@ -516,7 +516,8 @@ This supplies comparison inputs; local visual acceptance remains open in
 
 Reference frames 01–12 and UI entries 2, 5, 9 establish that Continue commits
 `POST /v1/vaults`, then opens Add a credential. Skip for now retains the vault;
-adding a credential opens its detail. Failed child saves must not recreate the parent.
+adding a credential opens the populated vault detail and credential list (frame 08),
+not a separate credential page. Failed child saves must not recreate the parent.
 The environment-variable form explicitly chooses Limited or Unrestricted networking.
 Platform `internal/api/vaultcredauth.go` requires non-empty hosts for Limited.
 

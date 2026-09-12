@@ -189,6 +189,39 @@ test("create a session with file and memory mounts, then drive it", async ({
   });
 });
 
+test("the first credential returns to the populated vault after creation", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page
+    .getByRole("link", { name: "Credential vaults", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Create vault" }).click();
+  await page.getByLabel("Display name").fill("First credential vault");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a credential" });
+  await expect(dialog.getByLabel("Credential type")).toHaveText("MCP OAuth");
+  await dialog.getByLabel("Credential type").click();
+  await page
+    .getByRole("option", { name: "Environment variable", exact: true })
+    .click();
+  await dialog.getByLabel("Name (optional)").fill("First credential");
+  await dialog.getByLabel("Secret name").fill("CI_TOKEN");
+  await dialog.getByLabel("Secret value").fill("synthetic-first-secret");
+  await dialog.getByRole("radio", { name: "Unrestricted" }).check();
+  await dialog
+    .getByRole("button", { name: "Add credential", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/vaults\/vlt_mock[^/]+$/);
+  await expect(
+    page.getByRole("heading", { name: "First credential vault", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "First credential" }),
+  ).toBeVisible();
+  await expect(page.getByText("synthetic-first-secret")).toBeHidden();
+});
+
 test("vault lifecycle: create, add credentials, validate, archive", async ({
   page,
 }) => {

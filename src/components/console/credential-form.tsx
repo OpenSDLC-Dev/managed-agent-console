@@ -224,7 +224,8 @@ export function CredentialDialog({
             {firstVaultName
               ? firstVaultName +
                 " is ready. Add its first credential so agents can use it."
-              : "Add a credential for agents to use in their sessions."}
+              : "Add a credential for agents to use in their sessions."}{" "}
+            Secrets are sealed when saved and cannot be read back.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

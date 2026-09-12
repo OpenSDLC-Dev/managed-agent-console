@@ -142,7 +142,7 @@ describe("CreateVaultButton", () => {
 });
 
 // Continue commits the parent; a child failure must not create another vault.
-it("retries a failed first credential against the same vault and then opens its detail", async () => {
+it("retries a failed first credential against the same vault and then opens the vault", async () => {
   let childCalls = 0;
   const fetchMock = vi.fn(async (url: string) => {
     if (!url.includes("/credentials"))
@@ -168,6 +168,11 @@ it("retries a failed first credential against the same vault and then opens its 
   const dialog = await screen.findByRole("dialog", {
     name: "Add a credential",
   });
+  expect(
+    within(dialog).getByText(
+      /Secrets are sealed when saved and cannot be read back/,
+    ),
+  ).toBeVisible();
   await user.type(
     screen.getByLabelText("MCP server URL"),
     "https://mcp.example.com",
