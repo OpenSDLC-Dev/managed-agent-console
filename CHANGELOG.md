@@ -19,6 +19,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Session resources expand bound Memory trees and show Markdown/Raw content, file metadata and repository details in place. Downloadable outputs offer downloads and bounded text previews; ordinary uploads retain the platform's content restriction.
 
+- Session timelines provide zoom, exact event inspection and a full-trace JSON download. Thread details expose pinned Agent/model metadata, served usage counters and per-request input-token charts.
+
 - Session details present message and tool cards with inline approvals beside a resizable inspector for Session, Events, Tools, Resources and Threads. Transcript search and exact event inspection retain the complete persisted trace.
 
 - Agent details edit configuration in place with Discard and Save new version, historical version selection, scoped Session/Deployment tabs and a prefilled Start session dialog. Drafts retain their original version across refreshes and conflicts.

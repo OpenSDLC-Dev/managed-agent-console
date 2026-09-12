@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Check, Copy, PanelRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useListFilters } from "@/lib/use-list-filters";
-import { JsonBlock } from "@/components/console/detail";
+import { SessionTimeline } from "@/components/console/session-timeline";
+import { SessionThreadPreview } from "@/components/console/session-thread-preview";
 import {
   SessionWorkspacePanel,
   SESSION_INSPECTORS,
@@ -280,6 +281,10 @@ function SessionWorkspace({ id }: { id: string }) {
   const selectedThread = threads.data?.data.find(
     (thread) => thread.id === selectedThreadId,
   );
+  // threads.go:threadScope serves the primary's events through the Session view.
+  const inspectedThread =
+    selectedThread ??
+    threads.data?.data.find((thread) => thread.parent_thread_id === null);
 
   const status = selectedThread
     ? selectedThread.archived_at || selectedThread.status === "terminated"
@@ -361,7 +366,31 @@ function SessionWorkspace({ id }: { id: string }) {
         }
       />
       <SessionChips session={data} />
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b pb-3">
+      <SessionTimeline
+        key={selectedThreadId ?? id}
+        scopeId={selectedThreadId ?? id}
+        events={trace.events}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        actions={
+          <>
+            <CopyAllButton events={trace.events} />
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Open session inspector"
+              aria-expanded={inspector !== "closed"}
+              onClick={() =>
+                filters.update({
+                  inspector: inspector === "closed" ? null : "closed",
+                })
+              }
+            >
+              <PanelRight /> Inspector
+            </Button>
+          </>
+        }
+      >
         <Input
           aria-label="Find in transcript"
           placeholder="Find in transcript"
@@ -369,21 +398,7 @@ function SessionWorkspace({ id }: { id: string }) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto"
-          aria-label="Open session inspector"
-          aria-expanded={inspector !== "closed"}
-          onClick={() =>
-            filters.update({
-              inspector: inspector === "closed" ? null : "closed",
-            })
-          }
-        >
-          <PanelRight /> Inspector
-        </Button>
-      </div>
+      </SessionTimeline>
       <div className="relative flex min-h-0 flex-1 gap-3 pt-3">
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -474,7 +489,6 @@ function SessionWorkspace({ id }: { id: string }) {
                 >
                   {CONNECTION_LABEL[connection]}
                 </Badge>
-                <CopyAllButton events={trace.events} />
               </div>
               {tab === "debug" ? (
                 trace.events.length === 0 ? (
@@ -607,7 +621,13 @@ function SessionWorkspace({ id }: { id: string }) {
                     setSelectedId(null);
                   }}
                 />
-                {selectedThread && <JsonBlock value={selectedThread} />}
+                {inspectedThread && (
+                  <SessionThreadPreview
+                    thread={inspectedThread}
+                    events={trace.events}
+                    onSelectEvent={setSelectedId}
+                  />
+                )}
               </>
             )}
             {inspector === "tools" && (

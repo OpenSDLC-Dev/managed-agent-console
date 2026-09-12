@@ -25,8 +25,12 @@ Reference: managed-agents-wire-recordings, 2026-09-12-console-141, ec8c4c6.
 - [x] Deliver Session workspace after green CI/review and squash merge (#164).
 - [x] Implement nested Memory and file resource previews; component and focused browser checks pass.
 - [x] Verify resource previews: 1,276 tests with coverage, 147 browser cases and 14 Chrome surfaces in both themes.
-- [ ] Complete resource-preview CI/review and squash merge.
-- [ ] Align Session timeline/Thread details and Deployment inspectors/editor.
+- [x] Deliver nested resource previews after green CI/review and squash merge (#165).
+- [x] Implement event timeline/zoom/download and typed Thread details; affected component checks pass.
+- [x] Verify timeline/Thread coverage (1,275 tests), 8 focused browser cases and 8 Chrome surfaces in both themes.
+- [x] Verify integrated timeline/Thread browsers (149 cases) and 37 Chrome surfaces in both themes.
+- [ ] Complete timeline/Thread CI/review and squash merge.
+- [ ] Align Deployment inspectors and full editor.
 - [ ] Complete local/reference acceptance within implemented platform capabilities.
 
 Reference facts and capability boundaries: [docs/design-reference.md](./docs/design-reference.md).

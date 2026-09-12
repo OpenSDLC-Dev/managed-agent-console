@@ -11,6 +11,7 @@ import { eventSearchText, summaryOf } from "@/lib/session-trace/summary";
 import type {
   Session,
   SessionEvent,
+  SessionUsage,
   SessionThread,
 } from "@/lib/platform/types";
 
@@ -66,52 +67,7 @@ export function SessionOverview({ session }: { session: Session }) {
             : "—"}
         </Field>
       </dl>
-      <section className="space-y-2 border-t pt-3">
-        <h2 className="text-sm font-medium">Usage</h2>
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-y-2 text-sm">
-          <Field label="Input tokens">
-            <span data-input-tokens={tokenAttr(session.usage?.input_tokens)}>
-              {tokenCount(session.usage?.input_tokens)}
-            </span>
-          </Field>
-          <Field label="Output tokens">
-            <span data-output-tokens={tokenAttr(session.usage?.output_tokens)}>
-              {tokenCount(session.usage?.output_tokens)}
-            </span>
-          </Field>
-          <Field label="Cache read">
-            <span
-              data-cache-read-tokens={tokenAttr(
-                session.usage?.cache_read_input_tokens,
-              )}
-            >
-              {tokenCount(session.usage?.cache_read_input_tokens)}
-            </span>
-          </Field>
-          <Field label="Cache write (1h)">
-            <span
-              data-cache-write-1h-tokens={tokenAttr(
-                session.usage?.cache_creation?.ephemeral_1h_input_tokens,
-              )}
-            >
-              {tokenCount(
-                session.usage?.cache_creation?.ephemeral_1h_input_tokens,
-              )}
-            </span>
-          </Field>
-          <Field label="Cache write (5m)">
-            <span
-              data-cache-write-5m-tokens={tokenAttr(
-                session.usage?.cache_creation?.ephemeral_5m_input_tokens,
-              )}
-            >
-              {tokenCount(
-                session.usage?.cache_creation?.ephemeral_5m_input_tokens,
-              )}
-            </span>
-          </Field>
-        </dl>
-      </section>
+      <SessionUsageDetails usage={session.usage} />
       {/* sessions.go and threads.go render zero-only stats. The raw response remains available below. */}
       <details>
         <summary className="cursor-pointer text-sm">
@@ -296,5 +252,54 @@ export function SessionToolIndex({
         </details>
       )}
     </div>
+  );
+}
+
+export function SessionUsageDetails({
+  usage,
+}: {
+  usage: SessionUsage | undefined;
+}) {
+  return (
+    <section className="space-y-2 border-t pt-3">
+      <h2 className="text-sm font-medium">Usage</h2>
+      <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-y-2 text-sm">
+        <Field label="Input tokens">
+          <span data-input-tokens={tokenAttr(usage?.input_tokens)}>
+            {tokenCount(usage?.input_tokens)}
+          </span>
+        </Field>
+        <Field label="Output tokens">
+          <span data-output-tokens={tokenAttr(usage?.output_tokens)}>
+            {tokenCount(usage?.output_tokens)}
+          </span>
+        </Field>
+        <Field label="Cache read">
+          <span
+            data-cache-read-tokens={tokenAttr(usage?.cache_read_input_tokens)}
+          >
+            {tokenCount(usage?.cache_read_input_tokens)}
+          </span>
+        </Field>
+        <Field label="Cache write (1h)">
+          <span
+            data-cache-write-1h-tokens={tokenAttr(
+              usage?.cache_creation?.ephemeral_1h_input_tokens,
+            )}
+          >
+            {tokenCount(usage?.cache_creation?.ephemeral_1h_input_tokens)}
+          </span>
+        </Field>
+        <Field label="Cache write (5m)">
+          <span
+            data-cache-write-5m-tokens={tokenAttr(
+              usage?.cache_creation?.ephemeral_5m_input_tokens,
+            )}
+          >
+            {tokenCount(usage?.cache_creation?.ephemeral_5m_input_tokens)}
+          </span>
+        </Field>
+      </dl>
+    </section>
   );
 }

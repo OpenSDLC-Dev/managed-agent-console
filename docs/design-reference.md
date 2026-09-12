@@ -612,7 +612,7 @@ inspection and nested resource facts follow below.
 
 Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools/Resources/Threads; `inspector=thread` selects Threads and `event=ID` restores event detail. Message/tool cards retain full content and place approval controls beside the pending call. Debug and the platform Outcomes projection remain available.
 
-Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Reference timeline/zoom acceptance remains follow-up work within #141.
+Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Timeline and zoom boundaries follow below.
 
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
 
@@ -625,3 +625,13 @@ Records ec8c4c6 frames 30–32 expand a bound store in Resources, then show the 
 Frames 49–50 inspect a mounted upload's type, size, attachment time and both File/Resource IDs. Attachment time comes from the resource binding, not the file's earlier upload time.
 
 Memory trees use the existing server prefix/depth paging. File metadata and bytes come from `files.go:getFile/downloadFile`: uploads have `downloadable=false`, and expired content returns 404 while metadata remains. The console does not borrow environment credentials to read uploads. Downloadable text can be previewed up to 1 MiB; other outputs retain Download. File bodies render as escaped text and Memory Markdown never automatically fetches remote images.
+
+## Session timeline and Thread details — checked 2026-09-12
+
+Records ec8c4c6 frames 39–43 show the event strip, 1.00× zoom controls, Copy/Download and a selected Thread's Agent, model, context chart and usage. No zoom action or resulting scale was recorded. Local zoom uses a bounded horizontal 1×–8× viewport; this is an interaction choice, not a verified reference zoom factor.
+
+Timeline positions use `events.go:eventWire`'s persisted `processed_at`; only matched `span.model_request_start/end` pairs contribute model span widths. Unstamped events remain in the transcript and full JSON export. Filters do not truncate the export. The range ends at the last loaded stamp, with no estimated runtime.
+
+Review found coincident markers masking one another. Overlapping visible intervals now occupy separate lanes inside a bounded, scrollable track; pointer regression checks every fixture event at fit and zoomed scales. This preserves timestamp positions while keeping each event reachable.
+
+`threads.go:renderThread/threadScope` supplies the pinned Agent snapshot, usage and event scope; its primary view is the Session view. The chart reads each `domain.ModelUsage.input_tokens` counter in request order. It does not infer context size, costs or thread totals. The reference's context/cost/active-time fields have no implemented platform equivalent; raw API responses remain available. Populated child-thread behavior is verified locally, but the reference recording contains only a primary thread.
