@@ -171,6 +171,43 @@ export function TranscriptCard({
   const message =
     event.type === "user.message" || event.type === "agent.message";
   const tool = event.input !== undefined || event.type.includes("tool_result");
+  const conversational = message || tool || event.type === "agent.thinking";
+  if (!conversational) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-expanded={selected}
+        data-testid="event-row"
+        data-event-type={event.type}
+        data-event-id={event.id}
+        {...usageAttrs(event)}
+        className={cn(
+          "flex w-full flex-wrap items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground hover:bg-secondary",
+          selected && "bg-secondary",
+        )}
+      >
+        <TypeBadge type={event.type} />
+        <span
+          className="min-w-0 flex-1 break-words"
+          data-testid={
+            isKnownEventType(event.type) ? undefined : "unknown-event-payload"
+          }
+        >
+          {summaryOf(event)}
+        </span>
+        <MetaColumn offset={offset} durationMs={durationMs} />
+      </button>
+    );
+  }
+  const command =
+    event.name === "bash" &&
+    typeof event.input === "object" &&
+    event.input !== null &&
+    "command" in event.input &&
+    typeof event.input.command === "string"
+      ? event.input.command
+      : undefined;
   return (
     <article
       data-testid="event-row"
@@ -224,7 +261,9 @@ export function TranscriptCard({
           )}
           {event.input !== undefined && (
             <span className="block whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
-              {JSON.stringify(event.input, null, 2)}
+              {command !== undefined
+                ? "$ " + command
+                : JSON.stringify(event.input, null, 2)}
             </span>
           )}
           {content?.map((block, index) => (
@@ -241,7 +280,7 @@ export function TranscriptCard({
                 : JSON.stringify(block, null, 2)}
             </span>
           ))}
-          {!content && event.input === undefined && (
+          {!content?.length && event.input === undefined && (
             <span
               className="block whitespace-pre-wrap break-words"
               data-testid={
@@ -333,9 +372,9 @@ export function EventDetailPanel({
       aria-label="Event details"
       className="sticky top-4 max-h-[75vh] self-start overflow-y-auto rounded-lg border bg-card p-4"
     >
-      <div className="flex items-center gap-2 pb-3">
+      <div className="flex flex-wrap items-center gap-2 pb-3">
         <TypeBadge type={event.type} />
-        <span className="text-[12px] text-muted-foreground">
+        <span className="whitespace-nowrap text-[12px] text-muted-foreground">
           <Time iso={event.processed_at} />
         </span>
         <MetaColumn offset={offset} durationMs={durationMs} />

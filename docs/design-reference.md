@@ -607,3 +607,11 @@ Platform `sessions.go:renderSession` emits zero-only runtime stats, and
 `domain.Usage` has no cost fields. These placeholders remain in API view;
 Rendered does not claim measured duration, active time or billing. Resource
 file previews and the full Session tabbed inspector remain separate #141 work.
+
+## Session workspace — checked 2026-09-12
+
+Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools/Resources/Threads; `inspector=thread` selects Threads and `event=ID` restores event detail. Message/tool cards retain full content and place approval controls beside the pending call. Debug and the platform Outcomes projection remain available.
+
+Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Nested resource previews and reference timeline/zoom acceptance remain follow-up work within #141.
+
+Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.

@@ -35,7 +35,10 @@ import {
   IdleBand,
   TranscriptCard,
 } from "@/components/console/event-row";
-import { ApprovalBanner } from "@/components/console/approval-banner";
+import {
+  ApprovalBanner,
+  useToolApprovals,
+} from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
 import { SessionActions } from "@/components/console/session-actions";
 import { SessionResources } from "@/components/console/session-resources";
@@ -46,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import { cn, tokenAttr, tokenCount } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { useSession, useSessionThreads } from "@/lib/platform/queries";
+import { PlatformError } from "@/lib/platform/http";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import {
   latestStatus,
@@ -142,7 +146,10 @@ function SessionChips({ session }: { session: Session }) {
         <IdCode id={session.id} />
       </Badge>
       <Badge variant="outline" className={chip}>
-        <Link href={`/agents/${session.agent.id}`} className="hover:underline">
+        <Link
+          href={`/agents/${session.agent.id}?version=${session.agent.version}`}
+          className="hover:underline"
+        >
           {session.agent.name} · v{session.agent.version}
         </Link>
       </Badge>
@@ -230,14 +237,24 @@ export default function SessionDetailPage({
   const { id } = use(params);
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      <SessionWorkspace id={id} />
+      <SessionWorkspace key={id} id={id} />
     </Suspense>
   );
 }
 
 function SessionWorkspace({ id }: { id: string }) {
+  const approvals = useToolApprovals(id);
+  const threads = useSessionThreads(id, 15_000);
+  const threadsAvailable = !(
+    threads.error instanceof PlatformError &&
+    [404, 501].includes(threads.error.status)
+  );
   const filters = useListFilters();
-  const inspectorValue = filters.params.get("inspector");
+  const requestedInspector = filters.params.get("inspector");
+  const inspectorValue =
+    requestedInspector === "thread" && !threadsAvailable
+      ? null
+      : requestedInspector;
   const inspector: SessionInspectorTab | "closed" =
     inspectorValue === "closed"
       ? "closed"
@@ -255,7 +272,6 @@ function SessionWorkspace({ id }: { id: string }) {
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const session = useSession(id, 15_000);
-  const threads = useSessionThreads(id, 15_000);
   const { trace, connection } = useSessionTrace(
     id,
     selectedThreadId ?? undefined,
@@ -330,7 +346,7 @@ function SessionWorkspace({ id }: { id: string }) {
       />
       <PageHeader
         title={data.title || data.id}
-        subtitle={`${data.agent.name} · v${data.agent.version}`}
+        className="flex-wrap pb-2"
         actions={
           <span className="flex items-center gap-2">
             {status && (
@@ -377,7 +393,7 @@ function SessionWorkspace({ id }: { id: string }) {
                     tab === "debug" ||
                     !visible.some((event) => event.id === tool.id),
                 )}
-                sessionId={id}
+                approvals={approvals}
                 threadId={selectedThreadId ?? undefined}
               />
             )}
@@ -480,7 +496,7 @@ function SessionWorkspace({ id }: { id: string }) {
                   <EmptyState title="No events" />
                 )
               ) : (
-                <div className="min-w-0">
+                <div className="mx-auto w-full min-w-0 max-w-[720px]">
                   <div>
                     {visible.map((e) => (
                       <Fragment key={e.id}>
@@ -497,7 +513,7 @@ function SessionWorkspace({ id }: { id: string }) {
                               <ApprovalBanner
                                 inline
                                 pending={[e]}
-                                sessionId={id}
+                                approvals={approvals}
                                 threadId={selectedThreadId ?? undefined}
                               />
                             ) : undefined
@@ -542,19 +558,22 @@ function SessionWorkspace({ id }: { id: string }) {
             </DetailSection>
           </div>
 
-          <Composer
-            sessionId={id}
-            running={running}
-            disabled={!!data.archived_at || trace.deleted}
-            threadId={
-              selectedThread?.parent_thread_id ? selectedThread.id : undefined
-            }
-            threadName={selectedThread?.agent.name}
-          />
+          <div className="mx-auto w-full max-w-[720px]">
+            <Composer
+              sessionId={id}
+              running={running}
+              disabled={!!data.archived_at || trace.deleted}
+              threadId={
+                selectedThread?.parent_thread_id ? selectedThread.id : undefined
+              }
+              threadName={selectedThread?.agent.name}
+            />
+          </div>
         </div>
         {inspector !== "closed" && (
           <SessionWorkspacePanel
             tab={inspector}
+            threadsAvailable={threadsAvailable}
             onTab={(value) =>
               filters.update({ inspector: value === "session" ? null : value })
             }

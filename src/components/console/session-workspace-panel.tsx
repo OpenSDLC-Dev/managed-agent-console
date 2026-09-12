@@ -30,14 +30,19 @@ export function SessionWorkspacePanel({
   tab,
   onTab,
   onClose,
+  threadsAvailable,
   children,
 }: {
   tab: SessionInspectorTab;
   onTab: (tab: SessionInspectorTab) => void;
   onClose: () => void;
+  threadsAvailable: boolean;
   children: ReactNode;
 }) {
   const panelId = useId();
+  const tabs = SESSION_INSPECTORS.filter(
+    ([key]) => key !== "thread" || threadsAvailable,
+  );
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(440);
@@ -84,7 +89,7 @@ export function SessionWorkspacePanel({
           onClose();
         }
       }}
-      className="fixed inset-y-20 right-2 z-30 flex max-w-[calc(100vw-64px)] shrink-0 flex-col rounded-lg border bg-background shadow-lg lg:static lg:z-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none"
+      className="fixed inset-y-2 right-2 z-30 flex max-w-[calc(100vw-64px)] shrink-0 flex-col rounded-lg border bg-background shadow-lg outline-none lg:static lg:z-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none"
       style={{ width: visibleWidth }}
     >
       <div
@@ -133,7 +138,7 @@ export function SessionWorkspacePanel({
           aria-label="Session inspector views"
           className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
         >
-          {SESSION_INSPECTORS.map(([key, label], index) => (
+          {tabs.map(([key, label], index) => (
             <button
               key={key}
               role="tab"
@@ -145,17 +150,17 @@ export function SessionWorkspacePanel({
               onKeyDown={(event) => {
                 const target =
                   event.key === "ArrowRight"
-                    ? (index + 1) % 5
+                    ? (index + 1) % tabs.length
                     : event.key === "ArrowLeft"
-                      ? (index + 4) % 5
+                      ? (index + tabs.length - 1) % tabs.length
                       : event.key === "Home"
                         ? 0
                         : event.key === "End"
-                          ? 4
+                          ? tabs.length - 1
                           : null;
                 if (target === null) return;
                 event.preventDefault();
-                onTab(SESSION_INSPECTORS[target][0]);
+                onTab(tabs[target][0]);
                 event.currentTarget.parentElement
                   ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
                   [target]?.focus();

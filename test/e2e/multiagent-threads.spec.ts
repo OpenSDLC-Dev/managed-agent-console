@@ -35,7 +35,7 @@ test("switches to a child trace and archives the idle child", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto("/sessions/sesn_research0000000000001?inspector=thread");
 
   const child = page.locator('[data-thread-id="sthr_taskrunnerresearch0001"]');
   await expect(child).toHaveAttribute("data-thread-status", "idle");

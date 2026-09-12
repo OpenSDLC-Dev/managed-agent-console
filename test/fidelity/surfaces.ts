@@ -75,6 +75,40 @@ const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
   ...[
+    "session",
+    "events",
+    "tools",
+    "resources",
+    "thread",
+    "closed",
+    "narrow",
+  ].map((view): Surface => ({
+    id: "session-workspace-" + view,
+    route:
+      "/sessions/" +
+      GATED +
+      (view === "narrow" ? "?inspector=events" : "?inspector=" + view),
+    fixture: GATED,
+    description:
+      "Session transcript with a URL-addressed inspector and inline approval.",
+    setup: async (page) => {
+      if (view === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      await traceLive(page);
+      await page.getByTestId("event-row").first().waitFor();
+      if (view === "events" || view === "narrow") {
+        await page
+          .getByTestId("inspector-event-row")
+          .filter({ hasText: "agent.tool_use" })
+          .click();
+        await page.getByTestId("event-detail").waitFor();
+      }
+      if (view === "tools")
+        await page.locator('[data-tool-name="bash"]').click();
+    },
+  })),
+
+  ...[
     "rendered",
     "draft",
     "raw",
@@ -790,7 +824,7 @@ export const SURFACES: Surface[] = [
     route: `/sessions/${SESSION}`,
     fixture: SESSION,
     description:
-      "Transcript: chips, type badges, one-line summaries, idle bands, offsets.",
+      "Transcript: message and tool cards, inline approval and the Session inspector.",
     setup: traceLive,
   },
   {
@@ -857,7 +891,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-child-thread",
-    route: `/sessions/${SESSION}`,
+    route: `/sessions/${SESSION}?inspector=thread`,
     fixture: `${SESSION}, General task agent child thread`,
     description:
       "Thread switcher with the child selected and its thread-scoped trace attached.",
@@ -882,7 +916,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-resources",
-    route: `/sessions/${GATED}`,
+    route: `/sessions/${GATED}?inspector=resources`,
     fixture: `${GATED} with an attached file`,
     description:
       "Session resources: mounted-file row, its mount path, and the attach affordance.",

@@ -123,7 +123,11 @@ const json = (payload: unknown, status = 200) =>
 
 function stubFetch(over?: {
   session?: Session;
-  onPost?: (url: URL, init: RequestInit) => Response | undefined;
+  threadsStatus?: number;
+  onPost?: (
+    url: URL,
+    init: RequestInit,
+  ) => Response | Promise<Response> | undefined;
 }) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -135,7 +139,18 @@ function stubFetch(over?: {
       if (url.pathname === "/api/platform/v1/sessions/sess_1")
         return json(over?.session ?? session());
       if (url.pathname === "/api/platform/v1/sessions/sess_1/threads")
-        return json({ data: [], next_page: null });
+        return over?.threadsStatus
+          ? json(
+              {
+                type: "error",
+                error: {
+                  type: "not_found_error",
+                  message: "Threads unavailable",
+                },
+              },
+              over.threadsStatus,
+            )
+          : json({ data: [], next_page: null });
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );
@@ -587,6 +602,85 @@ describe("SessionDetailPage", () => {
       ],
     });
   });
+
+  it.each(["accepted", "in flight"])(
+    "preserves an %s approval across transcript filters and Debug",
+    async (state) => {
+      setTrace("live", [
+        ev("tu_1", "agent.tool_use", {
+          name: "bash",
+          input: { command: "echo hello" },
+          evaluated_permission: "ask",
+        }),
+        ev("sevt_2", "session.status_idle", {
+          stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+        }),
+      ]);
+      let finish!: (response: Response) => void;
+      const response = new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+      const onPost = vi.fn(() =>
+        state === "accepted" ? json({ data: [] }) : response,
+      );
+      stubFetch({ onPost });
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Approve" }),
+      );
+      if (state === "accepted") await screen.findByText("Confirmation sent");
+      for (const name of ["Messages", "All", "Debug", "Transcript"]) {
+        await userEvent.click(screen.getByRole("button", { name }));
+        expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled();
+      }
+      expect(onPost).toHaveBeenCalledTimes(1);
+      if (state === "in flight") {
+        // A response may arrive while its original inline controls are gone.
+        await userEvent.click(screen.getByRole("button", { name: "Messages" }));
+        finish(
+          json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "retry confirmation" },
+            },
+            503,
+          ),
+        );
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+          "retry confirmation",
+        );
+        await userEvent.click(screen.getByRole("button", { name: "All" }));
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "retry confirmation",
+        );
+        expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+      }
+    },
+  );
+
+  it.each([404, 501])(
+    "hides unavailable Threads and falls back from its deep link (%s)",
+    async (threadsStatus) => {
+      window.history.replaceState(
+        null,
+        "",
+        "/sessions/sess_1?inspector=thread",
+      );
+      setTrace("live");
+      stubFetch({ threadsStatus });
+      renderPage();
+      await screen.findByRole("heading", { name: "Debug run" });
+      await waitFor(() =>
+        expect(screen.queryByRole("tab", { name: "Threads" })).toBeNull(),
+      );
+      const sessionTab = screen.getByRole("tab", { name: "Session" });
+      expect(sessionTab).toHaveAttribute("aria-selected", "true");
+      sessionTab.focus();
+      await userEvent.keyboard("{End}");
+      expect(screen.getByRole("tab", { name: "Resources" })).toHaveFocus();
+    },
+  );
 
   it.each(["archived", "deleted"])(
     "removes pending approval controls when the session is %s",
