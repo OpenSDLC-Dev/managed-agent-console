@@ -617,3 +617,11 @@ Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
 
 Review caught transcript search using one-line, 200-character summaries. Search now reads complete content and payloads; a regression covers later lines, multiple text blocks and long tool inputs in both transcript and event filters.
+
+## Session nested resources — checked 2026-09-12
+
+Records ec8c4c6 frames 30–32 expand a bound store in Resources, then show the selected memory's details and content without changing the Session URL. The preview links to its Memory-store workspace. Read-only previews remain available on archived Sessions; binding access describes the Agent's mount and is not used to infer the operator's write role.
+
+Frames 49–50 inspect a mounted upload's type, size, attachment time and both File/Resource IDs. Attachment time comes from the resource binding, not the file's earlier upload time.
+
+Memory trees use the existing server prefix/depth paging. File metadata and bytes come from `files.go:getFile/downloadFile`: uploads have `downloadable=false`, and expired content returns 404 while metadata remains. The console does not borrow environment credentials to read uploads. Downloadable text can be previewed up to 1 MiB; other outputs retain Download. File bodies render as escaped text and Memory Markdown never automatically fetches remote images.

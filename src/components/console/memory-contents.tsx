@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Markdown from "react-markdown";
+import { MemoryMarkdown } from "./memory-markdown";
 import { toast } from "sonner";
 import { copyText } from "@/lib/copy-text";
 import { Copy, FileText, Pencil } from "lucide-react";
@@ -302,23 +302,7 @@ function MemoryContent({
                 </pre>
               </div>
             ) : (
-              <div className="space-y-3 break-words text-sm leading-6 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 [&_code]:font-mono [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_a]:underline">
-                <Markdown
-                  components={{
-                    // Agent-written content must not initiate requests from the operator's network.
-                    img: ({ src, alt }) =>
-                      typeof src === "string" && src ? (
-                        <a href={src} target="_blank" rel="noopener noreferrer">
-                          Open image: {alt || "image"}
-                        </a>
-                      ) : (
-                        <span>{alt || "Image"}</span>
-                      ),
-                  }}
-                >
-                  {memory.content ?? ""}
-                </Markdown>
-              </div>
+              <MemoryMarkdown content={memory.content ?? ""} />
             )}
           </div>
         </>

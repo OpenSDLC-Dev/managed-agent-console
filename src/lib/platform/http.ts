@@ -98,6 +98,13 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** File content is bytes, not a JSON envelope (internal/api/files.go:downloadFile). */
+export async function platformGetText(path: string): Promise<string> {
+  const response = await fetch(`/api/platform/${path}`);
+  await assertOk(response);
+  return response.text();
+}
+
 export async function platformPostForm<T>(
   path: string,
   form: FormData,

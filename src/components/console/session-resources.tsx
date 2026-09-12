@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Fragment, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { DetailSection } from "./detail";
 import { ConfirmIconButton } from "./archive-button";
+import { MemoryTree } from "./memory-tree";
+import { SessionResourcePreview } from "./session-resource-preview";
 import { useUploadFile } from "@/lib/platform/queries";
 import {
   useAddSessionFile,
@@ -32,6 +34,45 @@ export function SessionResources({ session }: { session: Session }) {
   const [fileId, setFileId] = useState("");
   const [mount, setMount] = useState("");
   const [token, setToken] = useState("");
+  const [filter, setFilter] = useState("");
+  const filterInput = useRef<HTMLInputElement>(null);
+  const previewTrigger = useRef<HTMLElement | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [selection, setSelection] = useState<{
+    resourceId: string;
+    memoryId?: string;
+  } | null>(null);
+  const inspect = (resourceId: string, memoryId?: string) => {
+    previewTrigger.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setSelection({ resourceId, memoryId });
+  };
+  const clearSelection = () => {
+    setSelection(null);
+    if (previewTrigger.current?.isConnected) previewTrigger.current.focus();
+    else filterInput.current?.focus();
+  };
+  const selected = session.resources.find(
+    (resource) =>
+      (resource.type === "memory_store"
+        ? resource.memory_store_id
+        : resource.id) === selection?.resourceId,
+  );
+  const visibleResources = session.resources.filter((resource) =>
+    [
+      resource.mount_path,
+      resource.type === "memory_store"
+        ? resource.name
+        : resource.type === "file"
+          ? resource.file_id
+          : resource.url,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(filter.toLowerCase()),
+  );
   const editable = !session.archived_at;
   const close = () => {
     setDialog(null);
@@ -42,70 +83,120 @@ export function SessionResources({ session }: { session: Session }) {
   return (
     <DetailSection title="Resources">
       <div className="space-y-3">
+        <Input
+          ref={filterInput}
+          className="h-8"
+          aria-label="Filter resources"
+          placeholder="Filter resources"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
         {session.resources.length === 0 && (
           <p className="text-sm text-muted-foreground">
             No resources attached.
           </p>
         )}
-        {session.resources.map((resource) => {
+        {session.resources.length > 0 && visibleResources.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No matching resources.
+          </p>
+        )}
+        {visibleResources.map((resource) => {
           const id =
             resource.type === "memory_store"
               ? resource.memory_store_id
               : resource.id;
           return (
-            <div
-              key={id}
-              className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
-            >
-              <div className="min-w-0 space-y-1">
-                <p className="break-all font-medium">
-                  {resource.type === "file"
-                    ? resource.file_id
-                    : resource.type === "github_repository"
-                      ? resource.url
-                      : resource.name}
-                </p>
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                  {resource.mount_path}
-                </p>
+            <Fragment key={id}>
+              <div className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm">
                 {resource.type === "memory_store" && (
-                  <p className="text-xs">
-                    {resource.access} · {resource.description}
-                  </p>
-                )}
-                {resource.type === "github_repository" && resource.checkout && (
-                  <p className="text-xs">
-                    {resource.checkout.type === "branch"
-                      ? resource.checkout.name
-                      : resource.checkout.sha}
-                  </p>
-                )}
-              </div>
-              {editable &&
-                (resource.type === "github_repository" ? (
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      rotate.reset();
-                      setToken("");
-                      setDialog(id);
-                    }}
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={`${expanded[id] ? "Collapse" : "Expand"} ${resource.mount_path}`}
+                    aria-expanded={!!expanded[id]}
+                    onClick={() =>
+                      setExpanded((current) => ({
+                        ...current,
+                        [id]: !current[id],
+                      }))
+                    }
                   >
-                    Rotate token
+                    {expanded[id] ? <ChevronDown /> : <ChevronRight />}
                   </Button>
-                ) : (
-                  <ConfirmIconButton
-                    label={`Remove resource ${id}`}
-                    title="Remove resource"
-                    description="Remove this resource reference from the session. The source resource is kept; an already mounted file is not unmounted from a live sandbox."
-                    pending={remove.isPending}
-                    onConfirm={() => remove.mutate(id)}
+                )}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <button
+                    className="break-all text-left font-medium hover:underline"
+                    aria-label={`Inspect resource ${resource.mount_path}`}
+                    aria-pressed={selected === resource && !selection?.memoryId}
+                    onClick={() => inspect(id)}
                   >
-                    <Trash2 className="size-3.5" />
-                  </ConfirmIconButton>
-                ))}
-            </div>
+                    {resource.type === "file"
+                      ? resource.file_id
+                      : resource.type === "github_repository"
+                        ? resource.url
+                        : resource.name}
+                  </button>
+                  <p className="break-all font-mono text-xs text-muted-foreground">
+                    {resource.mount_path}
+                  </p>
+                  {resource.type === "memory_store" && (
+                    <p className="text-xs" data-access={resource.access}>
+                      {resource.access === "read_only"
+                        ? "Read only"
+                        : "Read/write"}{" "}
+                      · {resource.description}
+                    </p>
+                  )}
+                  {resource.type === "github_repository" &&
+                    resource.checkout && (
+                      <p className="text-xs">
+                        {resource.checkout.type === "branch"
+                          ? resource.checkout.name
+                          : resource.checkout.sha}
+                      </p>
+                    )}
+                </div>
+                {editable &&
+                  (resource.type === "github_repository" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        rotate.reset();
+                        setToken("");
+                        setDialog(id);
+                      }}
+                    >
+                      Rotate token
+                    </Button>
+                  ) : (
+                    <ConfirmIconButton
+                      label={`Remove resource ${id}`}
+                      title="Remove resource"
+                      description="Remove this resource reference from the session. The source resource is kept; an already mounted file is not unmounted from a live sandbox."
+                      pending={remove.isPending}
+                      onConfirm={() => remove.mutate(id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </ConfirmIconButton>
+                  ))}
+              </div>
+              {resource.type === "memory_store" && expanded[id] && (
+                <div className="ml-3 min-w-0 border-l pl-2">
+                  <MemoryTree
+                    storeId={resource.memory_store_id}
+                    selectedId={
+                      selection?.resourceId === id
+                        ? selection.memoryId
+                        : undefined
+                    }
+                    onSelect={(memoryId) => inspect(id, memoryId)}
+                  />
+                </div>
+              )}
+            </Fragment>
           );
         })}
         {editable && (
@@ -124,6 +215,13 @@ export function SessionResources({ session }: { session: Session }) {
           </Button>
         )}
       </div>
+      {selected && (
+        <SessionResourcePreview
+          resource={selected}
+          memoryId={selection?.memoryId}
+          onClose={clearSelection}
+        />
+      )}
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {

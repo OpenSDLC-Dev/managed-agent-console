@@ -131,5 +131,12 @@ it("renders archived attachments without mutation controls", () => {
   setup(true);
   expect(screen.getByText(repository.url)).toBeInTheDocument();
   expect(screen.getByText("Project notes")).toBeInTheDocument();
-  expect(screen.queryByRole("button")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Inspect resource /workspace/project" }),
+  ).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /^Remove resource / }),
+  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Rotate token" })).toBeNull();
 });
