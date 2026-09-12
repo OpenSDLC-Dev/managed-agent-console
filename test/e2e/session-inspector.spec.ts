@@ -122,14 +122,12 @@ test("row Open enters the full session without inserting an inspector history en
 }) => {
   await signIn(page, "/sessions?order=asc");
   for (const activation of ["click", "keyboard"]) {
-    const row = page
-      .getByRole("row")
-      .filter({
-        has: page.getByRole("cell", {
-          name: "Install deps and run tests",
-          exact: true,
-        }),
-      });
+    const row = page.getByRole("row").filter({
+      has: page.getByRole("cell", {
+        name: "Install deps and run tests",
+        exact: true,
+      }),
+    });
     const open = row.getByRole("link", { name: "Open", exact: true });
     if (activation === "click") await open.click();
     else await open.press("Enter");
