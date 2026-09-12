@@ -75,6 +75,54 @@ const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
   ...[
+    "rendered",
+    "api",
+    "resources",
+    "manual",
+    "archived",
+    "missing",
+    "narrow",
+  ].map((view): Surface => ({
+    id: "deployment-inspector-" + view,
+    route:
+      "/deployments?deployment=" +
+      (view === "manual"
+        ? "depl_manualtask000000001"
+        : view === "missing"
+          ? "depl_missing"
+          : DEPLOYMENT),
+    fixture:
+      "Deployment with file/memory bindings, pinned Agent and server schedule timestamps",
+    description:
+      "Deployment list inspection with Rendered/API, linked resources and archived/missing/narrow states.",
+    setup: async (page) => {
+      const panel = page.getByRole("region", { name: "Deployment details" });
+      if (view === "missing") {
+        await panel.getByTestId("error-state").waitFor();
+        return;
+      }
+      await panel.getByRole("heading").first().waitFor();
+      if (view === "archived") {
+        const response = await page.request.post(
+          MOCK_URL + "/v1/deployments/" + DEPLOYMENT + "/archive",
+          { headers: { "x-api-key": "test-key" } },
+        );
+        if (!response.ok())
+          throw new Error("Could not archive inspector fixture");
+        await page.reload();
+        await panel.locator('[data-status="archived"]').waitFor();
+      }
+      if (view === "api")
+        await panel.getByRole("button", { name: "API", exact: true }).click();
+      if (view === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      if (view === "resources" || view === "narrow")
+        await panel
+          .getByRole("link", { name: "Project notes", exact: true })
+          .scrollIntoViewIfNeeded();
+    },
+  })),
+  ...[
     "store",
     "memory",
     "raw",
