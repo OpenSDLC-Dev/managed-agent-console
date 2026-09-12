@@ -27,8 +27,11 @@ test("create an agent through the rendered form", async ({ page }) => {
     page.getByRole("heading", { name: "Deploy helper" }),
   ).toBeVisible();
   // The saved config carries the ask policy and the picked skill.
-  await expect(page.getByText("always_ask")).toBeVisible();
-  await expect(page.getByText('"skill_id": "xlsx"')).toBeVisible();
+  await page.getByRole("radio", { name: "raw" }).click();
+  await expect(page.getByLabel("Raw agent config")).toHaveValue(/always_ask/);
+  await expect(page.getByLabel("Raw agent config")).toHaveValue(
+    /"skill_id": "xlsx"/,
+  );
 });
 
 test("create an agent from a starter template", async ({ page }) => {
@@ -56,7 +59,8 @@ test("create an agent from a starter template", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Code task runner" }),
   ).toBeVisible();
-  await expect(page.getByText("always_ask")).toBeVisible();
+  await page.getByRole("radio", { name: "raw" }).click();
+  await expect(page.getByLabel("Raw agent config")).toHaveValue(/always_ask/);
 });
 
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
@@ -66,8 +70,7 @@ test("edit through the raw tab with the YAML toggle", async ({ page }) => {
     .getByRole("region", { name: "Agent details" })
     .getByRole("link", { name: "Open", exact: true })
     .click();
-  await page.getByRole("button", { name: "Edit" }).click();
-  await expect(page).toHaveURL(/\/edit$/);
+  await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
 
   await page.getByRole("radio", { name: "raw" }).click();
   await page.getByRole("button", { name: "YAML" }).click();
@@ -86,10 +89,12 @@ test("edit through the raw tab with the YAML toggle", async ({ page }) => {
     "skills: []",
   ].join("\n");
   await editor.fill(yaml);
-  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.getByRole("button", { name: "Save new version" }).click();
 
   await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
-  await expect(page.getByText("Edited via YAML.")).toBeVisible();
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+    "Edited via YAML.",
+  );
 });
 
 test("stale-version saves surface the 409 conflict", async ({ context }) => {
@@ -136,7 +141,7 @@ test("archive an agent from its detail page", async ({ page }) => {
     .getByRole("link", { name: "Open", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "General task agent" }),
+    page.getByRole("heading", { name: "General task agent", level: 1 }),
   ).toBeVisible();
   await page
     .getByRole("main")
@@ -144,7 +149,7 @@ test("archive an agent from its detail page", async ({ page }) => {
     .click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive agent" }).click();
-  await expect(page.getByText("archived", { exact: true })).toBeVisible();
+  await expect(page.getByText("Archived", { exact: true })).toBeVisible();
 });
 
 test("structured custom tools and MCP settings survive Raw and save", async ({

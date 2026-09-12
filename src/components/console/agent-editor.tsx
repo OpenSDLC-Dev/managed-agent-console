@@ -194,15 +194,18 @@ function Section({
   title,
   hint,
   children,
+  level = 3,
 }: {
   title: string;
   hint: string;
   children: ReactNode;
+  level?: 2 | 3;
 }) {
+  const Heading = level === 2 ? "h2" : "h3";
   return (
-    <section className="grid gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
       <div>
-        <h3 className="text-[15px] font-medium">{title}</h3>
+        <Heading className="text-[15px] font-medium">{title}</Heading>
         <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
       </div>
       <div className="space-y-6">{children}</div>
@@ -319,6 +322,10 @@ export function AgentEditor({
   version,
   onCancel,
   onReload,
+  onSaved,
+  inline = false,
+  readOnly = false,
+  toolbar,
 }: {
   mode: "create" | "edit";
   initial: FormState;
@@ -326,6 +333,10 @@ export function AgentEditor({
   version?: number;
   onCancel?: () => void;
   onReload?: () => void;
+  onSaved?: (agent: Agent) => void;
+  inline?: boolean;
+  readOnly?: boolean;
+  toolbar?: ReactNode;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"rendered" | "raw">("rendered");
@@ -336,10 +347,11 @@ export function AgentEditor({
     text: "",
   });
   const [rawBaseline, setRawBaseline] = useState("");
-  const leave = useUnsavedChanges(
-    JSON.stringify(form) !== JSON.stringify(initial) ||
-      (tab === "raw" && raw.text !== rawBaseline),
-  );
+  const dirty =
+    !readOnly &&
+    (JSON.stringify(form) !== JSON.stringify(initial) ||
+      (tab === "raw" && raw.text !== rawBaseline));
+  const leave = useUnsavedChanges(dirty);
   const [rawError, setRawError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [memberToAdd, setMemberToAdd] = useState("");
@@ -399,7 +411,8 @@ export function AgentEditor({
   };
 
   const save = () => {
-    if (tab === "rendered" && schemaError) return;
+    if (readOnly || mutation.isPending || (tab === "rendered" && schemaError))
+      return;
     setConflict(false);
     let body: AgentWriteBody;
     if (tab === "raw") {
@@ -416,7 +429,8 @@ export function AgentEditor({
     mutation.mutate(body, {
       onSuccess: (agent) => {
         leave.setDirty(false);
-        router.push(`/agents/${agent.id}`);
+        if (onSaved) onSaved(agent);
+        else router.push(`/agents/${agent.id}`);
       },
       onError: (error) => {
         if (error instanceof PlatformError && error.status === 409) {
@@ -433,13 +447,59 @@ export function AgentEditor({
         ? mutation.error
         : null;
 
+  const saveButton = (
+    <Button
+      onClick={save}
+      disabled={
+        mutation.isPending || (tab === "rendered" && Boolean(schemaError))
+      }
+    >
+      {mode === "create"
+        ? "Create agent"
+        : inline
+          ? "Save new version"
+          : "Save changes"}
+    </Button>
+  );
+  const cancelButton = (
+    <Button
+      variant="ghost"
+      disabled={mutation.isPending}
+      onClick={() => {
+        if (inline) {
+          setForm(initial);
+          setRaw({ format: "json", text: "" });
+          setRawBaseline("");
+          setTab("rendered");
+          setRawError(null);
+          setConflict(false);
+          mutation.reset();
+          leave.setDirty(false);
+        } else
+          leave.requestLeave(() => (onCancel ? onCancel() : router.back()));
+      }}
+    >
+      {inline ? "Discard" : "Cancel"}
+    </Button>
+  );
+
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center gap-1.5 pb-4">
+    <div
+      className={inline ? "flex h-full min-h-0 w-full flex-col" : "max-w-4xl"}
+    >
+      <div
+        className={cn(
+          "flex shrink-0 flex-wrap items-center gap-1.5 pb-4",
+          inline && "w-full max-w-3xl",
+        )}
+      >
+        {toolbar && <div className="mr-auto">{toolbar}</div>}
         <div
           role="radiogroup"
           aria-label="Agent config view"
-          className="flex gap-1.5"
+          className={
+            inline ? "flex rounded-lg bg-secondary p-0.5" : "flex gap-1.5"
+          }
         >
           {(["rendered", "raw"] as const).map((key) => (
             <button
@@ -472,9 +532,13 @@ export function AgentEditor({
               }}
               className={cn(
                 "h-[30px] rounded-md border px-3 text-sm capitalize",
-                tab === key
-                  ? "border-transparent bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-secondary",
+                inline
+                  ? tab === key
+                    ? "border-border bg-background text-foreground shadow-sm"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                  : tab === key
+                    ? "border-transparent bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary",
               )}
             >
               {key}
@@ -504,593 +568,628 @@ export function AgentEditor({
         )}
       </div>
 
-      {tab === "rendered" ? (
-        <div>
-          <Section
-            title="General"
-            hint="Name, model, and the instructions the agent runs with."
-          >
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="agent-name">Name</Label>
-                <Input
-                  id="agent-name"
-                  value={form.name}
-                  onChange={(e) => set("name", e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-[1fr_130px] gap-2">
+      <div
+        className={
+          inline
+            ? "min-h-0 w-full max-w-3xl flex-1 overflow-y-auto pr-2"
+            : undefined
+        }
+      >
+        {readOnly && (
+          <p className="pb-4 text-sm text-muted-foreground">
+            This configuration is read-only. Select the latest active version to
+            edit.
+          </p>
+        )}
+        {tab === "rendered" ? (
+          <fieldset disabled={readOnly} className="min-w-0">
+            <Section
+              level={inline ? 2 : 3}
+              title="General"
+              hint="Name, model, and the instructions the agent runs with."
+            >
+              <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="agent-model">Model</Label>
+                  <Label htmlFor="agent-name">Name</Label>
                   <Input
-                    id="agent-model"
-                    className="font-mono"
-                    value={form.modelId}
-                    onChange={(e) => set("modelId", e.target.value)}
+                    id="agent-name"
+                    value={form.name}
+                    onChange={(e) => set("name", e.target.value)}
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Speed</Label>
-                  <Select
-                    value={form.speed || "default"}
-                    onValueChange={(v) =>
-                      set(
-                        "speed",
-                        v === "default" ? "" : (v as "standard" | "fast"),
-                      )
-                    }
-                  >
-                    <SelectTrigger
-                      size="sm"
-                      className="h-8 w-full rounded-lg"
-                      aria-label="Model speed"
+                <div className="grid grid-cols-[1fr_130px] gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="agent-model">Model</Label>
+                    <Input
+                      id="agent-model"
+                      className="font-mono"
+                      value={form.modelId}
+                      onChange={(e) => set("modelId", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Speed</Label>
+                    <Select
+                      value={form.speed || "default"}
+                      onValueChange={(v) =>
+                        set(
+                          "speed",
+                          v === "default" ? "" : (v as "standard" | "fast"),
+                        )
+                      }
                     >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default">default</SelectItem>
-                      <SelectItem value="standard">standard</SelectItem>
-                      <SelectItem value="fast">fast</SelectItem>
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger
+                        size="sm"
+                        className="h-8 w-full rounded-lg"
+                        aria-label="Model speed"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">default</SelectItem>
+                        <SelectItem value="standard">standard</SelectItem>
+                        <SelectItem value="fast">fast</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-description">Description</Label>
-              <textarea
-                rows={2}
-                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-                id="agent-description"
-                value={form.description}
-                onChange={(e) => set("description", e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-system">System prompt</Label>
-              <textarea
-                id="agent-system"
-                value={form.system}
-                onChange={(e) => set("system", e.target.value)}
-                rows={3}
-                className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-              />
-            </div>
-          </Section>
-
-          <Section
-            title="Tools"
-            hint="What the agent may do. The default row covers every tool; per-tool rows override it. “always ask” holds the call for approval in the session view."
-          >
-            <div>
-              <div className="flex items-center justify-between pb-2">
-                <Label>Built-in tools</Label>
-                {form.toolset === null ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7"
-                    onClick={() => {
-                      set("toolset", defaultToolsetForm());
-                      setToolsOpen(true);
-                    }}
-                  >
-                    Add toolset
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-muted-foreground"
-                    onClick={() => set("toolset", null)}
-                  >
-                    Remove toolset
-                  </Button>
-                )}
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-description">Description</Label>
+                <textarea
+                  rows={2}
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                  id="agent-description"
+                  value={form.description}
+                  onChange={(e) => set("description", e.target.value)}
+                />
               </div>
-              {form.toolset && (
-                <div className="space-y-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    aria-expanded={toolsOpen}
-                    onClick={() => setToolsOpen((open) => !open)}
-                  >
-                    Tool permissions {TOOL_NAMES.length}
-                  </Button>
-                  {toolsOpen && (
-                    <div className="divide-y rounded-lg border">
-                      <div className="flex items-center justify-between gap-3 bg-secondary/40 px-3 py-2">
-                        <label className="flex items-center gap-2.5 text-sm">
-                          <input
-                            type="checkbox"
-                            aria-label="default enabled"
-                            checked={form.toolset.default.enabled}
-                            onChange={(e) =>
+              <div className="space-y-1.5">
+                <Label htmlFor="agent-system">System prompt</Label>
+                <textarea
+                  id="agent-system"
+                  value={form.system}
+                  onChange={(e) => set("system", e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                />
+              </div>
+            </Section>
+
+            <Section
+              level={inline ? 2 : 3}
+              title="Tools"
+              hint="What the agent may do. The default row covers every tool; per-tool rows override it. “always ask” holds the call for approval in the session view."
+            >
+              <div>
+                <div className="flex items-center justify-between pb-2">
+                  <Label>Built-in tools</Label>
+                  {form.toolset === null ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7"
+                      onClick={() => {
+                        set("toolset", defaultToolsetForm());
+                        setToolsOpen(true);
+                      }}
+                    >
+                      Add toolset
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-muted-foreground"
+                      onClick={() => set("toolset", null)}
+                    >
+                      Remove toolset
+                    </Button>
+                  )}
+                </div>
+                {form.toolset && (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      aria-expanded={toolsOpen || readOnly}
+                      onClick={() => setToolsOpen((open) => !open)}
+                    >
+                      Tool permissions {TOOL_NAMES.length}
+                    </Button>
+                    {(toolsOpen || readOnly) && (
+                      <div className="divide-y rounded-lg border">
+                        <div className="flex items-center justify-between gap-3 bg-secondary/40 px-3 py-2">
+                          <label className="flex items-center gap-2.5 text-sm">
+                            <input
+                              type="checkbox"
+                              aria-label="default enabled"
+                              checked={form.toolset.default.enabled}
+                              onChange={(e) =>
+                                set(
+                                  "toolset",
+                                  withDefault(form.toolset!, {
+                                    ...form.toolset!.default,
+                                    enabled: e.target.checked,
+                                  }),
+                                )
+                              }
+                            />
+                            <span className="text-[13px] font-medium">
+                              Default for all tools
+                            </span>
+                          </label>
+                          <PolicySelect
+                            value={form.toolset.default.policy}
+                            disabled={!form.toolset.default.enabled}
+                            ariaLabel="default policy"
+                            onChange={(policy) =>
                               set(
                                 "toolset",
                                 withDefault(form.toolset!, {
                                   ...form.toolset!.default,
-                                  enabled: e.target.checked,
+                                  policy,
                                 }),
                               )
                             }
                           />
-                          <span className="text-[13px] font-medium">
-                            Default for all tools
-                          </span>
-                        </label>
-                        <PolicySelect
-                          value={form.toolset.default.policy}
-                          disabled={!form.toolset.default.enabled}
-                          ariaLabel="default policy"
-                          onChange={(policy) =>
-                            set(
-                              "toolset",
-                              withDefault(form.toolset!, {
-                                ...form.toolset!.default,
-                                policy,
-                              }),
-                            )
-                          }
-                        />
-                      </div>
-                      {TOOL_NAMES.map((name) => {
-                        const setting = form.toolset!.tools[name];
-                        return (
-                          <div
-                            key={name}
-                            className="flex items-center justify-between gap-3 px-3 py-2"
-                          >
-                            <label className="flex min-w-0 items-center gap-2.5 text-sm">
-                              <input
-                                type="checkbox"
-                                aria-label={`${name} enabled`}
-                                checked={setting.enabled}
-                                onChange={(e) =>
-                                  setTool(name, {
-                                    ...setting,
-                                    enabled: e.target.checked,
-                                  })
+                        </div>
+                        {TOOL_NAMES.map((name) => {
+                          const setting = form.toolset!.tools[name];
+                          return (
+                            <div
+                              key={name}
+                              className="flex items-center justify-between gap-3 px-3 py-2"
+                            >
+                              <label className="flex min-w-0 items-center gap-2.5 text-sm">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`${name} enabled`}
+                                  checked={setting.enabled}
+                                  onChange={(e) =>
+                                    setTool(name, {
+                                      ...setting,
+                                      enabled: e.target.checked,
+                                    })
+                                  }
+                                />
+                                <span className="font-mono text-[13px]">
+                                  {name}
+                                </span>
+                                <span className="truncate text-[13px] text-muted-foreground">
+                                  — {TOOL_DESCRIPTIONS[name]}
+                                </span>
+                              </label>
+                              <PolicySelect
+                                value={setting.policy}
+                                disabled={!setting.enabled}
+                                ariaLabel={`${name} policy`}
+                                onChange={(policy) =>
+                                  setTool(name, { ...setting, policy })
                                 }
                               />
-                              <span className="font-mono text-[13px]">
-                                {name}
-                              </span>
-                              <span className="truncate text-[13px] text-muted-foreground">
-                                — {TOOL_DESCRIPTIONS[name]}
-                              </span>
-                            </label>
-                            <PolicySelect
-                              value={setting.policy}
-                              disabled={!setting.enabled}
-                              ariaLabel={`${name} policy`}
-                              onChange={(policy) =>
-                                setTool(name, { ...setting, policy })
-                              }
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-              <AdditionalToolsEditor
-                tools={form.otherTools}
-                servers={form.mcpServers}
-                schemaDrafts={form.toolSchemas ?? {}}
-                bindings={form.mcpBindings}
-                onChange={(otherTools, mcpServers, toolSchemas, mcpBindings) =>
-                  setForm((form) => ({
-                    ...form,
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <AdditionalToolsEditor
+                  tools={form.otherTools}
+                  servers={form.mcpServers}
+                  schemaDrafts={form.toolSchemas ?? {}}
+                  bindings={form.mcpBindings}
+                  onChange={(
                     otherTools,
                     mcpServers,
                     toolSchemas,
                     mcpBindings,
-                  }))
-                }
-              />
-            </div>
-          </Section>
+                  ) =>
+                    setForm((form) => ({
+                      ...form,
+                      otherTools,
+                      mcpServers,
+                      toolSchemas,
+                      mcpBindings,
+                    }))
+                  }
+                />
+              </div>
+            </Section>
 
-          <Section
-            title="Skills"
-            hint="Skill bundles uploaded to this platform, attached by reference."
-          >
-            <div className="space-y-3">
-              {form.skills.map((ref, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="break-all text-sm">
-                      {skillOptions.find((skill) => skill.id === ref.skill_id)
-                        ?.display_name ?? ref.skill_id}
-                    </p>
-                    <p className="break-all font-mono text-xs text-muted-foreground">
-                      {ref.skill_id} · {ref.version}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={"Remove skill " + ref.skill_id}
-                    onClick={() =>
-                      set(
-                        "skills",
-                        form.skills.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))}
-              <Select
-                value=""
-                onValueChange={(id) => {
-                  const skill = skillOptions.find((skill) => skill.id === id);
-                  if (!skill || form.skills.some((ref) => ref.skill_id === id))
-                    return;
-                  set("skills", [
-                    ...form.skills,
-                    {
-                      type:
-                        skill.source.type === "anthropic"
-                          ? "anthropic"
-                          : "custom",
-                      skill_id: skill.id,
-                      version: "latest",
-                    },
-                  ]);
-                }}
-              >
-                <SelectTrigger
-                  aria-label="Add skill"
-                  className="w-full sm:w-80"
-                  disabled={skillsQuery.isPending}
-                >
-                  <SelectValue
-                    placeholder={
-                      skillsQuery.isPending ? "Loading skills…" : "Add skill"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {skillOptions
-                    .filter(
-                      (skill) =>
-                        !form.skills.some((ref) => ref.skill_id === skill.id),
-                    )
-                    .map((skill) => (
-                      <SelectItem key={skill.id} value={skill.id}>
-                        {skill.display_name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {skillsQuery.isError && (
-                <p role="alert" className="text-sm text-destructive">
-                  Could not load skills.{" "}
-                  <button
-                    type="button"
-                    className="underline"
-                    onClick={() => void skillsQuery.refetch()}
-                  >
-                    Retry
-                  </button>
-                </p>
-              )}
-              {skillsQuery.isSuccess && skillOptions.length === 0 && (
-                <p className="text-[13px] text-muted-foreground">
-                  No skills on the platform yet.
-                </p>
-              )}
-              {skillsQuery.hasNextPage && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={skillsQuery.isFetchingNextPage}
-                  onClick={() => void skillsQuery.fetchNextPage()}
-                >
-                  {skillsQuery.isFetchingNextPage
-                    ? "Loading more skills…"
-                    : "Load more skills"}
-                </Button>
-              )}
-            </div>
-          </Section>
-
-          <Section
-            title="Multiagent"
-            hint="Turn this agent into a coordinator and choose the pinned agents it may run as child threads."
-          >
-            {form.multiagent === null ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() => set("multiagent", [{ type: "self" }])}
-              >
-                Enable coordinator
-              </Button>
-            ) : (
+            <Section
+              level={inline ? 2 : 3}
+              title="Skills"
+              hint="Skill bundles uploaded to this platform, attached by reference."
+            >
               <div className="space-y-3">
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="min-w-64 flex-1 space-y-1.5">
-                    <Label htmlFor="roster-member">Agent</Label>
-                    <select
-                      id="roster-member"
-                      value={memberToAdd}
-                      onChange={(event) => setMemberToAdd(event.target.value)}
-                      className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
-                    >
-                      <option value="">Choose an agent…</option>
-                      {!form.multiagent.some(
-                        (member) => member.type === "self",
-                      ) && (
-                        <option value="__self">This coordinator (self)</option>
-                      )}
-                      {(agentsQuery.data?.agents ?? [])
-                        .filter(
-                          (agent) =>
-                            !agent.archived_at &&
-                            !agent.multiagent &&
-                            agent.id !== agentId &&
-                            !form.multiagent!.some(
-                              (member) =>
-                                member.type === "agent" &&
-                                member.id === agent.id,
-                            ),
-                        )
-                        .map((agent) => (
-                          <option key={agent.id} value={agent.id}>
-                            {agent.name} · v{agent.version}
-                          </option>
-                        ))}
-                    </select>
-                    {agentsQuery.data?.truncated && (
-                      <p className="text-[12px] text-muted-foreground">
-                        Only the first 1,000 agents are available here.
+                {form.skills.map((ref, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="break-all text-sm">
+                        {skillOptions.find((skill) => skill.id === ref.skill_id)
+                          ?.display_name ?? ref.skill_id}
                       </p>
-                    )}
+                      <p className="break-all font-mono text-xs text-muted-foreground">
+                        {ref.skill_id} · {ref.version}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={"Remove skill " + ref.skill_id}
+                      onClick={() =>
+                        set(
+                          "skills",
+                          form.skills.filter((_, i) => i !== index),
+                        )
+                      }
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
+                ))}
+                <Select
+                  value=""
+                  onValueChange={(id) => {
+                    const skill = skillOptions.find((skill) => skill.id === id);
+                    if (
+                      !skill ||
+                      form.skills.some((ref) => ref.skill_id === id)
+                    )
+                      return;
+                    set("skills", [
+                      ...form.skills,
+                      {
+                        type:
+                          skill.source.type === "anthropic"
+                            ? "anthropic"
+                            : "custom",
+                        skill_id: skill.id,
+                        version: "latest",
+                      },
+                    ]);
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Add skill"
+                    className="w-full sm:w-80"
+                    disabled={skillsQuery.isPending}
+                  >
+                    <SelectValue
+                      placeholder={
+                        skillsQuery.isPending ? "Loading skills…" : "Add skill"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {skillOptions
+                      .filter(
+                        (skill) =>
+                          !form.skills.some((ref) => ref.skill_id === skill.id),
+                      )
+                      .map((skill) => (
+                        <SelectItem key={skill.id} value={skill.id}>
+                          {skill.display_name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {skillsQuery.isError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    Could not load skills.{" "}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => void skillsQuery.refetch()}
+                    >
+                      Retry
+                    </button>
+                  </p>
+                )}
+                {skillsQuery.isSuccess && skillOptions.length === 0 && (
+                  <p className="text-[13px] text-muted-foreground">
+                    No skills on the platform yet.
+                  </p>
+                )}
+                {skillsQuery.hasNextPage && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8"
-                    disabled={!memberToAdd || form.multiagent.length >= 20}
-                    onClick={() => {
-                      if (!memberToAdd) return;
-                      const member: RosterMember =
-                        memberToAdd === "__self"
-                          ? { type: "self" }
-                          : {
-                              type: "agent",
-                              id: memberToAdd,
-                              version: agentsQuery.data?.agents.find(
-                                (agent) => agent.id === memberToAdd,
-                              )?.version,
-                            };
-                      set("multiagent", [...form.multiagent!, member]);
-                      setMemberToAdd("");
-                    }}
+                    disabled={skillsQuery.isFetchingNextPage}
+                    onClick={() => void skillsQuery.fetchNextPage()}
                   >
-                    <Plus className="size-4" /> Add member
+                    {skillsQuery.isFetchingNextPage
+                      ? "Loading more skills…"
+                      : "Load more skills"}
                   </Button>
-                </div>
-                <ol className="divide-y rounded-lg border">
-                  {form.multiagent.map((member, index) => {
-                    const agent =
-                      member.type === "agent"
-                        ? agentsQuery.data?.agents.find(
-                            (candidate) => candidate.id === member.id,
-                          )
-                        : undefined;
-                    return (
-                      <li
-                        key={member.type === "self" ? "self" : member.id}
-                        className="flex items-center gap-2 px-3 py-2"
-                      >
-                        <span className="w-6 text-[12px] text-muted-foreground">
-                          {index + 1}
-                        </span>
-                        <span className="min-w-0 flex-1 text-sm">
-                          {member.type === "self" ? (
-                            "This coordinator (self)"
-                          ) : (
-                            <>
-                              {agent?.name ?? member.id}
-                              <span className="pl-2 font-mono text-[12px] text-muted-foreground">
-                                {member.id} · v{member.version ?? "latest"}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Move member ${index + 1} up`}
-                          disabled={index === 0}
-                          onClick={() => {
-                            const next = [...form.multiagent!];
-                            [next[index - 1], next[index]] = [
-                              next[index],
-                              next[index - 1],
-                            ];
-                            set("multiagent", next);
-                          }}
-                        >
-                          <ArrowUp className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Move member ${index + 1} down`}
-                          disabled={index === form.multiagent!.length - 1}
-                          onClick={() => {
-                            const next = [...form.multiagent!];
-                            [next[index], next[index + 1]] = [
-                              next[index + 1],
-                              next[index],
-                            ];
-                            set("multiagent", next);
-                          }}
-                        >
-                          <ArrowDown className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remove member ${index + 1}`}
-                          disabled={form.multiagent!.length === 1}
-                          onClick={() =>
-                            set(
-                              "multiagent",
-                              form.multiagent!.filter((_, i) => i !== index),
-                            )
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ol>
+                )}
+              </div>
+            </Section>
+
+            <Section
+              level={inline ? 2 : 3}
+              title="Multiagent"
+              hint="Turn this agent into a coordinator and choose the pinned agents it may run as child threads."
+            >
+              {form.multiagent === null ? (
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  className="h-8 text-muted-foreground"
-                  onClick={() => set("multiagent", null)}
+                  className="h-8"
+                  onClick={() => set("multiagent", [{ type: "self" }])}
                 >
-                  Disable coordinator
+                  Enable coordinator
                 </Button>
-              </div>
-            )}
-          </Section>
+              ) : (
+                <div className="space-y-3" data-testid="agent-multiagent">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="min-w-0 flex-1 basis-64 space-y-1.5">
+                      <Label htmlFor="roster-member">Agent</Label>
+                      <select
+                        id="roster-member"
+                        value={memberToAdd}
+                        onChange={(event) => setMemberToAdd(event.target.value)}
+                        className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
+                      >
+                        <option value="">Choose an agent…</option>
+                        {!form.multiagent.some(
+                          (member) => member.type === "self",
+                        ) && (
+                          <option value="__self">
+                            This coordinator (self)
+                          </option>
+                        )}
+                        {(agentsQuery.data?.agents ?? [])
+                          .filter(
+                            (agent) =>
+                              !agent.archived_at &&
+                              !agent.multiagent &&
+                              agent.id !== agentId &&
+                              !form.multiagent!.some(
+                                (member) =>
+                                  member.type === "agent" &&
+                                  member.id === agent.id,
+                              ),
+                          )
+                          .map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.name} · v{agent.version}
+                            </option>
+                          ))}
+                      </select>
+                      {agentsQuery.data?.truncated && (
+                        <p className="text-[12px] text-muted-foreground">
+                          Only the first 1,000 agents are available here.
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      disabled={!memberToAdd || form.multiagent.length >= 20}
+                      onClick={() => {
+                        if (!memberToAdd) return;
+                        const member: RosterMember =
+                          memberToAdd === "__self"
+                            ? { type: "self" }
+                            : {
+                                type: "agent",
+                                id: memberToAdd,
+                                version: agentsQuery.data?.agents.find(
+                                  (agent) => agent.id === memberToAdd,
+                                )?.version,
+                              };
+                        set("multiagent", [...form.multiagent!, member]);
+                        setMemberToAdd("");
+                      }}
+                    >
+                      <Plus className="size-4" /> Add member
+                    </Button>
+                  </div>
+                  <ol className="divide-y rounded-lg border">
+                    {form.multiagent.map((member, index) => {
+                      const agent =
+                        member.type === "agent"
+                          ? agentsQuery.data?.agents.find(
+                              (candidate) => candidate.id === member.id,
+                            )
+                          : undefined;
+                      return (
+                        <li
+                          key={member.type === "self" ? "self" : member.id}
+                          data-roster-index={index}
+                          data-agent-id={
+                            member.type === "self" ? agentId : member.id
+                          }
+                          data-agent-version={
+                            member.type === "self" ? version : member.version
+                          }
+                          className="flex items-center gap-2 px-3 py-2"
+                        >
+                          <span className="w-6 text-[12px] text-muted-foreground">
+                            {index + 1}
+                          </span>
+                          <span className="min-w-0 flex-1 break-words text-sm">
+                            {member.type === "self" ? (
+                              "This coordinator (self)"
+                            ) : (
+                              <>
+                                {agent?.name ?? member.id}
+                                <span className="pl-2 font-mono text-[12px] text-muted-foreground">
+                                  {member.id} · v{member.version ?? "latest"}
+                                </span>
+                              </>
+                            )}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Move member ${index + 1} up`}
+                            disabled={index === 0}
+                            onClick={() => {
+                              const next = [...form.multiagent!];
+                              [next[index - 1], next[index]] = [
+                                next[index],
+                                next[index - 1],
+                              ];
+                              set("multiagent", next);
+                            }}
+                          >
+                            <ArrowUp className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Move member ${index + 1} down`}
+                            disabled={index === form.multiagent!.length - 1}
+                            onClick={() => {
+                              const next = [...form.multiagent!];
+                              [next[index], next[index + 1]] = [
+                                next[index + 1],
+                                next[index],
+                              ];
+                              set("multiagent", next);
+                            }}
+                          >
+                            <ArrowDown className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Remove member ${index + 1}`}
+                            disabled={form.multiagent!.length === 1}
+                            onClick={() =>
+                              set(
+                                "multiagent",
+                                form.multiagent!.filter((_, i) => i !== index),
+                              )
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-muted-foreground"
+                    onClick={() => set("multiagent", null)}
+                  >
+                    Disable coordinator
+                  </Button>
+                </div>
+              )}
+            </Section>
 
-          {!schemaError && (
-            <CurlBlock
-              getBody={() =>
-                mode === "edit"
-                  ? { ...configFromForm(form, true), version }
-                  : configFromForm(form)
-              }
-              agentId={mode === "edit" ? agentId : undefined}
+            {!schemaError && !readOnly && (
+              <CurlBlock
+                getBody={() =>
+                  mode === "edit"
+                    ? { ...configFromForm(form, true), version }
+                    : configFromForm(form)
+                }
+                agentId={mode === "edit" ? agentId : undefined}
+              />
+            )}
+          </fieldset>
+        ) : (
+          <div>
+            <textarea
+              aria-label="Raw agent config"
+              readOnly={readOnly}
+              value={raw.text}
+              onChange={(e) => {
+                setRaw((r) => ({ ...r, text: e.target.value }));
+                // The parse error describes the text that was there a keystroke
+                // ago; keeping it would leave the field announced invalid while
+                // it is being fixed.
+                setRawError(null);
+              }}
+              rows={22}
+              spellCheck={false}
+              aria-invalid={rawError !== null}
+              aria-describedby={rawError ? "raw-config-error" : undefined}
+              // Hand-rolled rather than the <Input> primitive, so it carries its
+              // own copy of the one invalid rule (issue #104). Opaque, no halo.
+              className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
             />
+            {rawError && (
+              <p
+                id="raw-config-error"
+                className="pt-1 text-sm text-destructive"
+                role="alert"
+              >
+                {rawError}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+      {!readOnly && (!inline || dirty || error) && (
+        <div
+          className={
+            inline
+              ? "mt-3 flex w-fit max-w-full shrink-0 flex-wrap items-center gap-3 self-center rounded-xl border bg-background p-2 shadow-md"
+              : "flex items-center gap-3 pt-6"
+          }
+        >
+          {inline && dirty && (
+            <span className="mr-auto text-sm" role="status">
+              Unsaved changes
+            </span>
           )}
-        </div>
-      ) : (
-        <div>
-          <textarea
-            aria-label="Raw agent config"
-            value={raw.text}
-            onChange={(e) => {
-              setRaw((r) => ({ ...r, text: e.target.value }));
-              // The parse error describes the text that was there a keystroke
-              // ago; keeping it would leave the field announced invalid while
-              // it is being fixed.
-              setRawError(null);
-            }}
-            rows={22}
-            spellCheck={false}
-            aria-invalid={rawError !== null}
-            aria-describedby={rawError ? "raw-config-error" : undefined}
-            // Hand-rolled rather than the <Input> primitive, so it carries its
-            // own copy of the one invalid rule (issue #104). Opaque, no halo.
-            className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
-          />
-          {rawError && (
-            <p
-              id="raw-config-error"
-              className="pt-1 text-sm text-destructive"
-              role="alert"
-            >
-              {rawError}
-            </p>
+          {inline && cancelButton}
+          {saveButton}
+          {!inline && cancelButton}
+          {conflict ? (
+            <span role="alert" className="text-sm text-destructive">
+              Someone else updated this agent (409).{" "}
+              <button
+                className="underline"
+                onClick={() =>
+                  leave.requestLeave(() => {
+                    leave.setDirty(true);
+                    if (onReload) onReload();
+                    else router.refresh();
+                  })
+                }
+              >
+                Reload the latest version
+              </button>{" "}
+              and re-apply your changes.
+            </span>
+          ) : (
+            error && (
+              <span role="alert" className="text-sm text-destructive">
+                {error.message}
+                {error instanceof PlatformError && error.requestId && (
+                  <span className="pl-2">
+                    <RequestId id={error.requestId} />
+                  </span>
+                )}
+              </span>
+            )
           )}
         </div>
       )}
-
-      <div className="flex items-center gap-3 pt-6">
-        <Button
-          onClick={save}
-          disabled={
-            mutation.isPending || (tab === "rendered" && Boolean(schemaError))
-          }
-        >
-          {mode === "create" ? "Create agent" : "Save changes"}
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() =>
-            leave.requestLeave(() => (onCancel ? onCancel() : router.back()))
-          }
-        >
-          Cancel
-        </Button>
-        {conflict ? (
-          <span className="text-sm text-destructive">
-            Someone else updated this agent (409).{" "}
-            <button
-              className="underline"
-              onClick={() =>
-                leave.requestLeave(() => {
-                  leave.setDirty(true);
-                  if (onReload) onReload();
-                  else router.refresh();
-                })
-              }
-            >
-              Reload the latest version
-            </button>{" "}
-            and re-apply your changes.
-          </span>
-        ) : (
-          error && (
-            <span className="text-sm text-destructive">
-              {error.message}
-              {error instanceof PlatformError && error.requestId && (
-                <span className="pl-2">
-                  <RequestId id={error.requestId} />
-                </span>
-              )}
-            </span>
-          )
-        )}
-      </div>
     </div>
   );
 }

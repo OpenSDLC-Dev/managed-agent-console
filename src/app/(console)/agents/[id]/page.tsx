@@ -1,49 +1,39 @@
 "use client";
-
-import { use } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/shell/page-header";
+import { Suspense, use, useState, type ReactNode } from "react";
+import { Bot } from "lucide-react";
+import { toast } from "sonner";
 import { Breadcrumb } from "@/components/console/breadcrumb";
-import { ResourceActions } from "@/components/console/resource-actions";
-import { IdCell } from "@/components/console/copy-id";
+import { Button } from "@/components/ui/button";
+import { CreateSessionButton } from "@/components/console/create-session-dialog";
 import {
-  DetailSection,
-  Field,
-  FieldList,
-  JsonBlock,
-} from "@/components/console/detail";
-import { DataTable, type Column } from "@/components/console/data-table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { CopyIdButton } from "@/components/console/copy-id";
 import {
-  ArchivedBadge,
-  Day,
-  EmptyState,
-  ErrorState,
   DetailSkeleton,
+  ErrorState,
+  Time,
+  Day,
 } from "@/components/console/bits";
+import { AgentActions } from "@/components/console/agent-inspector";
+import { AgentEditor, formFromAgent } from "@/components/console/agent-editor";
+import {
+  AgentSessions,
+  AgentDeployments,
+} from "@/components/console/agent-related";
 import {
   useAgent,
-  useAgentVersions,
-  useArchiveAgent,
+  useAgentVersion,
+  useAgentVersionOptions,
 } from "@/lib/platform/queries";
+import { useListFilters } from "@/lib/use-list-filters";
+import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import type { Agent } from "@/lib/platform/types";
-
-const VERSION_COLUMNS: Column<Agent>[] = [
-  { key: "version", header: "Version", cell: (v) => `v${v.version}` },
-  {
-    key: "model",
-    header: "Model",
-    className: "w-full",
-    cell: (v) => <span className="font-mono text-[13px]">{v.model.id}</span>,
-  },
-  {
-    key: "created",
-    header: "Created",
-    cell: (v) => <Day iso={v.updated_at} />,
-  },
-];
 
 export default function AgentDetailPage({
   params,
@@ -51,139 +41,248 @@ export default function AgentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const router = useRouter();
-  const { data: agent, error, isPending } = useAgent(id);
-  const versions = useAgentVersions(id);
-  const archive = useArchiveAgent(id);
-
-  if (error)
-    return (
-      <div>
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <AgentWorkspace id={id} />
+    </Suspense>
+  );
+}
+function AgentWorkspace({ id }: { id: string }) {
+  const filters = useListFilters();
+  const version = filters.params.get("version") || null;
+  const tab = filters.params.get("tab");
+  const leave = useLeaveConfirmation();
+  const query = useAgent(id);
+  const historical = useAgentVersion(id, version);
+  if (query.error && !query.data) return <ErrorState error={query.error} />;
+  if (!query.data) return <DetailSkeleton />;
+  const agent = query.data;
+  const selected = version ? historical.data : agent;
+  const selector = (
+    <AgentVersionPicker
+      id={id}
+      head={agent.version}
+      selected={version}
+      onSelect={(value) =>
+        leave.requestLeave(() => filters.update({ version: value }))
+      }
+    />
+  );
+  const changeTab = (value: string) =>
+    leave.requestLeave(() =>
+      filters.update({ tab: value === "configuration" ? null : value }),
+    );
+  return (
+    <div className="flex h-[calc(100dvh-64px)] min-h-[480px] flex-col">
+      <div className="shrink-0 pb-4">
         <Breadcrumb
           parent={{ href: "/agents", label: "Agents" }}
-          current={id}
+          current={agent.name}
         />
-        <ErrorState error={error} />
-      </div>
-    );
-  if (isPending || !agent) {
-    return <DetailSkeleton />;
-  }
-
-  return (
-    <div>
-      <Breadcrumb
-        parent={{ href: "/agents", label: "Agents" }}
-        current={agent.name}
-      />
-      <PageHeader
-        title={agent.name}
-        subtitle={agent.description || undefined}
-        actions={
-          <span className="flex items-center gap-2">
-            <ArchivedBadge archivedAt={agent.archived_at} />
-            {!agent.archived_at && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                onClick={() => router.push(`/agents/${agent.id}/edit`)}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Bot className="size-5 shrink-0" />
+              <h1 className="min-w-0 break-words text-2xl font-semibold">
+                {agent.name}
+              </h1>
+              <Badge
+                variant="secondary"
+                data-status={agent.archived_at ? "archived" : "active"}
               >
-                <Pencil className="size-4" /> Edit
-              </Button>
+                {agent.archived_at ? "Archived" : "Active"}
+              </Badge>
+            </div>
+            {agent.description && (
+              <p className="pt-2 text-sm">{agent.description}</p>
             )}
-            <ResourceActions
-              resource="agent"
-              archived={!!agent.archived_at}
-              onArchive={agent.archived_at ? undefined : () => archive.mutate()}
-              archivePending={archive.isPending}
-            />
-          </span>
-        }
-      />
-      <DetailSection title="Overview">
-        <FieldList>
-          <Field label="ID">
-            <IdCell id={agent.id} />
-          </Field>
-          <Field label="Model">
-            <span className="font-mono text-[13px]">
-              {agent.model.id}
-              {agent.model.speed ? ` · ${agent.model.speed}` : ""}
-            </span>
-          </Field>
-          <Field label="Current version">v{agent.version}</Field>
-          <Field label="Created">
-            <Day iso={agent.created_at} />
-          </Field>
-          <Field label="Last updated">
-            <Day iso={agent.updated_at} />
-          </Field>
-        </FieldList>
-      </DetailSection>
-      {agent.system && (
-        <DetailSection title="System prompt">
-          <pre className="whitespace-pre-wrap rounded-lg border bg-card p-3 text-[13px] leading-relaxed">
-            {agent.system}
-          </pre>
-        </DetailSection>
-      )}
-      <DetailSection title="Tools">
-        <JsonBlock value={agent.tools} />
-      </DetailSection>
-      {agent.skills.length > 0 && (
-        <DetailSection title="Skills">
-          <JsonBlock value={agent.skills} />
-        </DetailSection>
-      )}
-      {agent.mcp_servers.length > 0 && (
-        <DetailSection title="MCP servers">
-          <JsonBlock value={agent.mcp_servers} />
-        </DetailSection>
-      )}
-      {agent.multiagent && (
-        <DetailSection title="Multiagent roster" testId="agent-multiagent">
-          <ol className="divide-y rounded-lg border bg-card">
-            {agent.multiagent.agents.map((member, index) => (
-              <li
-                key={`${member.id}:${member.version}`}
-                className="flex items-center gap-3 px-3 py-2 text-sm"
-                data-roster-index={index}
-                data-agent-id={member.id}
-                data-agent-version={member.version}
-              >
-                <span className="w-6 text-muted-foreground">{index + 1}</span>
-                {member.id === agent.id ? (
-                  <span className="font-medium">This coordinator (self)</span>
-                ) : (
-                  <Link
-                    href={`/agents/${member.id}`}
-                    className="hover:underline"
-                  >
-                    {member.id}
-                  </Link>
-                )}
-                <span className="font-mono text-[12px] text-muted-foreground">
-                  v{member.version}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </DetailSection>
-      )}
-      <DetailSection title="Versions">
-        {versions.error ? (
-          <ErrorState error={versions.error} />
+            <div className="flex flex-wrap items-center gap-3 pt-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <code className="break-all">{agent.id}</code>
+                <CopyIdButton id={agent.id} />
+              </span>
+              <span>
+                Last updated <Time iso={agent.updated_at} />
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!agent.archived_at && selected && (
+              <CreateSessionButton variant="outline" initialAgent={selected} />
+            )}
+            <AgentActions agent={agent} />
+          </div>
+        </div>
+      </div>
+      <nav
+        aria-label="Agent sections"
+        className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
+      >
+        {["configuration", "sessions", "deployments"].map((value) => (
+          <button
+            key={value}
+            onClick={() => changeTab(value)}
+            aria-current={
+              tab === value ||
+              (value === "configuration" &&
+                tab !== "sessions" &&
+                tab !== "deployments")
+                ? "page"
+                : undefined
+            }
+            className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+          >
+            {value}
+          </button>
+        ))}
+      </nav>
+      <div className="min-h-0 flex-1">
+        {tab === "sessions" ? (
+          <div className="h-full overflow-y-auto">
+            <div className="mb-4">{selector}</div>
+            <AgentSessions id={id} version={version} />
+          </div>
+        ) : tab === "deployments" ? (
+          <div className="h-full overflow-y-auto">
+            <AgentDeployments id={id} />
+          </div>
+        ) : historical.error && version ? (
+          <>
+            <div className="mb-4">{selector}</div>
+            <ErrorState error={historical.error} />
+          </>
+        ) : !selected ? (
+          <DetailSkeleton />
         ) : (
-          <DataTable
-            columns={VERSION_COLUMNS}
-            rows={versions.data?.data ?? []}
-            rowKey={(v) => String(v.version)}
-            loading={versions.isPending}
-            empty={<EmptyState title="No versions" />}
+          <AgentConfiguration
+            key={id + ":" + (version ?? "latest")}
+            agent={selected}
+            readOnly={!!version || !!agent.archived_at}
+            toolbar={(editingVersion, reload) => (
+              <AgentVersionPicker
+                id={id}
+                head={agent.version}
+                selected={
+                  version ??
+                  (editingVersion !== agent.version
+                    ? String(editingVersion)
+                    : null)
+                }
+                onSelect={(value) =>
+                  leave.requestLeave(() => {
+                    if (value === null && version === null) void reload();
+                    else filters.update({ version: value });
+                  })
+                }
+              />
+            )}
+            refetch={query.refetch}
           />
         )}
-      </DetailSection>
+      </div>
     </div>
+  );
+}
+function AgentVersionPicker({
+  id,
+  head,
+  selected,
+  onSelect,
+}: {
+  id: string;
+  head: number;
+  selected: string | null;
+  onSelect: (value: string | null) => void;
+}) {
+  const query = useAgentVersionOptions(id);
+  const versions = query.data?.pages.flatMap((page) => page.data) ?? [];
+  return (
+    <Select
+      value={selected ?? "latest"}
+      onValueChange={(value) =>
+        value && onSelect(value === "latest" ? null : value)
+      }
+    >
+      <SelectTrigger aria-label="Agent version" className="h-8 w-fit min-w-44">
+        <SelectValue>
+          {selected ? (
+            "Version: " + selected
+          ) : (
+            <span className="flex items-center gap-2">
+              Version: {head}
+              <Badge variant="secondary">Latest</Badge>
+            </span>
+          )}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent
+        alignItemWithTrigger={false}
+        align="start"
+        className="min-w-64"
+      >
+        <SelectItem value="latest">v{head} Latest</SelectItem>
+        {versions
+          .filter((row) => row.version !== head)
+          .map((row) => (
+            <SelectItem key={row.version} value={String(row.version)}>
+              v{row.version} · Created <Day iso={row.updated_at} />
+            </SelectItem>
+          ))}
+        {query.error && (
+          <div className="p-2">
+            <ErrorState error={query.error} />
+          </div>
+        )}
+        {query.hasNextPage && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            Load older versions
+          </Button>
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+function AgentConfiguration({
+  agent,
+  readOnly,
+  toolbar,
+  refetch,
+}: {
+  agent: Agent;
+  readOnly: boolean;
+  toolbar: (version: number, reload: () => Promise<void>) => ReactNode;
+  refetch: () => Promise<{ data?: Agent; error: unknown }>;
+}) {
+  const [editing, setEditing] = useState(agent);
+  const [reset, setReset] = useState(0);
+  const reload = async () => {
+    const latest = await refetch();
+    if (!latest.error && latest.data) {
+      setEditing(latest.data);
+      setReset((value) => value + 1);
+    }
+  };
+  return (
+    <AgentEditor
+      key={editing.id + ":" + reset}
+      mode="edit"
+      inline
+      readOnly={readOnly}
+      initial={formFromAgent(editing)}
+      agentId={editing.id}
+      version={editing.version}
+      toolbar={toolbar(editing.version, reload)}
+      onReload={reload}
+      onSaved={(saved) => {
+        setEditing(saved);
+        setReset((value) => value + 1);
+        toast.success("Saved new agent version.");
+      }}
+    />
   );
 }

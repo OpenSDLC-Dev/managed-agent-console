@@ -82,7 +82,7 @@ test("a failed archive surfaces the standardized envelope toast", async ({
     .getByRole("link", { name: "Open", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Deep researcher" }),
+    page.getByRole("heading", { name: "Deep researcher", level: 1 }),
   ).toBeVisible();
   await page
     .getByRole("main")

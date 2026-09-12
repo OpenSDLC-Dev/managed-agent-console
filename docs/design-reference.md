@@ -568,8 +568,8 @@ initiate requests from an operator's network merely by opening the preview.
 
 Records ec8c4c6, frames 21–23, retain list selection in `?agent=ID`. The 560px
 inspector shows the current version, Open action, expandable built-in permissions,
-skills, multiagent and Rendered/API views. Full configuration editing and its
-version selector (frames 24–27) remain separate #141 work.
+skills, multiagent and Rendered/API views. Full configuration and version
+selection are covered below.
 
 Platform `internal/toolset/materialize.go` resolves defaults and explicit overrides;
 it does not emit eight configs when none were supplied. Inspection uses the
@@ -577,3 +577,22 @@ existing editor mapping against `internal/toolset/definitions.go`. Roster order
 and versions come from the server, including the coordinator itself. Unknown tool
 configurations and MCP server records remain inspectable as JSON; no service
 catalog or missing platform capability is invented.
+
+## Agent full configuration — checked 2026-09-12
+
+Records ec8c4c6, frames 24–28: configuration is immediately editable, with
+Discard/Save new version after changes, a version selector and Start session
+in a same-page dialog. The dialog retains the selected saved configuration.
+Platform `internal/api/agents.go` reads `?version=` and treats the update body
+version as an optimistic precondition. Historical configurations are read-only;
+select Latest to edit, so inspecting history does not imply rollback.
+
+Session tabs use the platform agent_id and optional agent_version filters;
+Deployment tabs use agent_id across versions because that handler has no version
+filter. No per-agent Observability API is implemented, so that reference tab
+is omitted. Model/catalog, Advisor and budget boundaries remain unchanged.
+
+Ubuntu CI exposed a narrow Agent tab-row overflow; a 360px local trace isolated
+the Deployments button at x=382. The row now scrolls within its container. The
+same inspection found the roster grid exceeding its form; its column and member
+selector now shrink and long IDs wrap. Browser checks cover 360px and 390px.

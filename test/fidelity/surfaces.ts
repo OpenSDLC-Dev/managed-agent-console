@@ -74,6 +74,69 @@ const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  ...[
+    "rendered",
+    "draft",
+    "raw",
+    "versions",
+    "history",
+    "narrow",
+    "narrow-roster",
+    "start-session",
+    "sessions",
+    "deployments",
+  ].map((view): Surface => ({
+    id: "agent-configuration-" + view,
+    route:
+      "/agents/" +
+      AGENT +
+      (view === "history"
+        ? "?version=2"
+        : view === "sessions" || view === "deployments"
+          ? "?tab=" + view
+          : ""),
+    fixture: "versioned researcher with pinned roster and related resources",
+    description:
+      "Full Agent configuration, version history, draft actions and related resource tabs.",
+    setup: async (page) => {
+      if (view === "narrow" || view === "narrow-roster")
+        await page.setViewportSize({
+          width: view === "narrow-roster" ? 360 : 390,
+          height: 844,
+        });
+      await page
+        .getByRole("heading", { name: "Deep researcher", exact: true })
+        .waitFor();
+      if (view === "draft" || view === "narrow")
+        await page
+          .getByLabel("Description", { exact: true })
+          .fill(
+            "Updated research instructions, ready to save as a new version.",
+          );
+      if (view === "narrow-roster")
+        await page.getByTestId("agent-multiagent").scrollIntoViewIfNeeded();
+      if (view === "raw")
+        await page.getByRole("radio", { name: "raw", exact: true }).click();
+      if (view === "versions") {
+        await page.getByRole("combobox", { name: "Agent version" }).click();
+        await page.getByRole("option", { name: /^v2 · Created/ }).waitFor();
+      }
+      if (view === "start-session") {
+        await page
+          .getByRole("button", { name: "Start session", exact: true })
+          .click();
+        await page.getByRole("dialog", { name: "Create session" }).waitFor();
+      }
+      if (view === "sessions")
+        await page
+          .getByRole("cell", { name: "Survey agent frameworks" })
+          .waitFor();
+      if (view === "deployments")
+        await page
+          .getByRole("cell", { name: "Weekly research digest" })
+          .waitFor();
+    },
+  })),
   ...["rendered", "permissions", "custom", "api", "narrow"].map(
     (view): Surface => ({
       id: "agent-inspector-" + view,

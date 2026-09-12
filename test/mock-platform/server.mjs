@@ -1004,8 +1004,24 @@ function route(req, url) {
     return keysetPage(rows, url);
   }
   const agentMatch = path.match(/^\/v1\/agents\/([^/]+)$/);
-  if (agentMatch)
-    return agentsStore.find((a) => a.id === agentMatch[1]) ?? null;
+  if (agentMatch) {
+    const agent = agentsStore.find((a) => a.id === agentMatch[1]);
+    if (!agent) return null;
+    const version = url.searchParams.get("version");
+    if (!version) return agent;
+    // agents.go:getAgentVersion combines versioned config with parent metadata/state.
+    const snapshot = agentVersionsStore[agent.id]?.find(
+      (row) => row.version === Number(version),
+    );
+    return snapshot
+      ? {
+          ...snapshot,
+          metadata: agent.metadata,
+          created_at: agent.created_at,
+          archived_at: agent.archived_at,
+        }
+      : null;
+  }
   const versionsMatch = path.match(/^\/v1\/agents\/([^/]+)\/versions$/);
   if (versionsMatch) {
     const versions = agentVersionsStore[versionsMatch[1]];
@@ -1033,6 +1049,9 @@ function route(req, url) {
       rows = rows.filter((r) => statuses.includes(r.status));
     const agentId = url.searchParams.get("agent_id");
     if (agentId) rows = rows.filter((r) => r.agent.id === agentId);
+    const agentVersion = url.searchParams.get("agent_version");
+    if (agentId && agentVersion)
+      rows = rows.filter((row) => row.agent.version === Number(agentVersion));
     const deploymentId = url.searchParams.get("deployment_id");
     if (deploymentId)
       rows = rows.filter((row) => row.deployment_id === deploymentId);
@@ -4074,6 +4093,21 @@ const server = createServer(async (req, res) => {
   }
 
   res.setHeader("content-type", "application/json");
+  const requestedVersion = url.searchParams.get("version");
+  if (
+    req.method === "GET" &&
+    /^\/v1\/agents\/[^/]+$/.test(url.pathname) &&
+    requestedVersion &&
+    (!/^[+]?\d+$/.test(requestedVersion) ||
+      BigInt(requestedVersion) < 1n ||
+      BigInt(requestedVersion) > 9223372036854775807n)
+  ) {
+    res.writeHead(400);
+    res.end(
+      envelope("invalid_request_error", "version must be a positive integer"),
+    );
+    return;
+  }
   const result = route(req, url);
   if (result === null) {
     res.writeHead(404);
