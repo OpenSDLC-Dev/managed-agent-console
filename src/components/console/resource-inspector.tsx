@@ -28,7 +28,7 @@ export function ResourceInspector({
   fallbackFocus,
   restoreToFallback,
 }: {
-  kind: "skill" | "environment";
+  kind: "skill" | "environment" | "memory-store";
   children: React.ReactNode;
   id: string;
   previous?: string;
@@ -38,6 +38,11 @@ export function ResourceInspector({
   fallbackFocus?: RefObject<HTMLElement | null>;
   restoreToFallback?: RefObject<boolean>;
 }) {
+  const label = {
+    skill: "Skill",
+    environment: "Environment",
+    "memory-store": "Memory store",
+  }[kind];
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(560);
@@ -72,7 +77,7 @@ export function ResourceInspector({
     <aside
       ref={panel}
       role="region"
-      aria-label={kind === "skill" ? "Skill details" : "Environment details"}
+      aria-label={label + " details"}
       tabIndex={-1}
       {...{ ["data-" + kind + "-id"]: id }}
       className="fixed inset-y-2 right-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
@@ -132,19 +137,19 @@ export function ResourceInspector({
       <div className="flex shrink-0 items-center gap-2 px-4 py-2">
         <span
           className={
-            kind === "environment"
+            kind !== "skill"
               ? "text-sm text-muted-foreground max-[480px]:sr-only"
               : "text-sm text-muted-foreground"
           }
         >
-          {kind === "skill" ? "Skill" : "Environment"}
+          {label}
         </span>
         <IdCell id={id} />
         <div className="ml-auto flex gap-1">
           <Button
             variant="ghost"
             size="icon"
-            aria-label={"Previous " + kind}
+            aria-label={"Previous " + label.toLowerCase()}
             disabled={!previous}
             onClick={() => previous && onSelect(previous)}
           >
@@ -153,7 +158,7 @@ export function ResourceInspector({
           <Button
             variant="ghost"
             size="icon"
-            aria-label={"Next " + kind}
+            aria-label={"Next " + label.toLowerCase()}
             disabled={!next}
             onClick={() => next && onSelect(next)}
           >
@@ -171,7 +176,7 @@ export function ResourceInspector({
       </div>
       <div
         className={
-          kind === "environment"
+          kind !== "skill"
             ? "min-h-0 flex-1 px-4 pb-4 pt-1"
             : "min-h-0 flex-1 p-4"
         }

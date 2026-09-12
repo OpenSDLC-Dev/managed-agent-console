@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useRef } from "react";
+import { MemoryStoreInspector } from "@/components/console/memory-store-inspector";
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
 import { CreatedFilter } from "@/components/console/created-filter";
-import { useRouter } from "next/navigation";
 import { useListFilters } from "@/lib/use-list-filters";
 import {
   decodeCreatedFilter,
@@ -75,8 +75,14 @@ export default function MemoryStoresPage() {
 }
 
 function MemoryStoresList() {
-  const router = useRouter();
   const filters = useListFilters();
+  const inspected = filters.params.get("store");
+  const lookup = useRef<HTMLInputElement>(null);
+  const deleted = useRef(false);
+  const inspect = (id: string) => {
+    deleted.current = false;
+    filters.update({ store: id });
+  };
   const view = filters.params.get("status") === "all" ? "all" : "live";
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
@@ -89,6 +95,8 @@ function MemoryStoresList() {
     "created_at[lte]": created.lte,
     include_archived: view === "all" || undefined,
   });
+  const rows = query.data?.data ?? [];
+  const index = rows.findIndex((row) => row.id === inspected);
   const filtered = view !== "live" || created.key !== "all";
   const resetFilters = () => filters.update({ status: null, created: null });
 
@@ -103,7 +111,12 @@ function MemoryStoresList() {
         actions={<CreateMemoryStoreButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4">
-        <ExactResourceLookup resource="memory store" path="/memory-stores" />
+        <ExactResourceLookup
+          resource="memory store"
+          path="/memory-stores"
+          onOpen={inspect}
+          inputRef={lookup}
+        />
         <CreatedFilter
           value={created.key}
           range={created.range}
@@ -133,6 +146,21 @@ function MemoryStoresList() {
           </Button>
         )}
       </div>
+      {inspected && (
+        <MemoryStoreInspector
+          id={inspected}
+          previous={index > 0 ? rows[index - 1]?.id : undefined}
+          next={index >= 0 ? rows[index + 1]?.id : undefined}
+          onSelect={inspect}
+          onClose={() => filters.update({ store: null })}
+          onDeleted={() => {
+            deleted.current = true;
+            filters.update({ store: null });
+          }}
+          fallbackFocus={lookup}
+          restoreToFallback={deleted}
+        />
+      )}
       {query.error ? (
         <ErrorState error={query.error} />
       ) : (
@@ -142,7 +170,8 @@ function MemoryStoresList() {
             rows={query.data?.data ?? []}
             rowKey={(store) => store.id}
             loading={query.isPending}
-            onRowClick={(store) => router.push(`/memory-stores/${store.id}`)}
+            activeRowKey={inspected ?? undefined}
+            onRowClick={(store) => inspect(store.id)}
             empty={
               filtered ? (
                 <EmptyState

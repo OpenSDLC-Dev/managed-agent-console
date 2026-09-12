@@ -47,16 +47,28 @@ test("memory lookup reaches archived records and creation filtering resets pagin
   await page
     .getByRole("textbox", { name: "Find memory store by ID" })
     .press("Enter");
-  await expect(page).toHaveURL(/memory-stores\/memstore_archivednotes0001$/);
+  await expect(page).toHaveURL(
+    /memory-stores\?store=memstore_archivednotes0001$/,
+  );
   await expect(
     page.getByRole("heading", { name: "Archived notes", exact: true }),
   ).toBeVisible();
   await page.goBack();
+  await expect(
+    page.getByRole("region", { name: "Memory store details" }),
+  ).toBeHidden();
+  await expect(
+    page.getByRole("textbox", { name: "Find memory store by ID" }),
+  ).toBeFocused();
   await page
     .getByRole("textbox", { name: "Find memory store by ID" })
     .fill("memstore_missing");
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Memory store details" })
+      .getByTestId("error-state"),
+  ).toContainText(/not found/i);
 });
 
 test("deployment Agent filter submits the server predicate and lookup encodes path delimiters", async ({

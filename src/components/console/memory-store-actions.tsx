@@ -8,7 +8,13 @@ import {
 } from "@/lib/platform/queries";
 import type { MemoryStore } from "@/lib/platform/types";
 
-export function MemoryStoreActions({ store }: { store: MemoryStore }) {
+export function MemoryStoreActions({
+  store,
+  onDeleted,
+}: {
+  store: MemoryStore;
+  onDeleted?: () => void;
+}) {
   const router = useRouter();
   const archive = useArchiveMemoryStore(store.id);
   const remove = useDeleteMemoryStore(store.id);
@@ -21,7 +27,8 @@ export function MemoryStoreActions({ store }: { store: MemoryStore }) {
       onArchive={store.archived_at ? undefined : () => archive.mutate()}
       onDelete={() =>
         remove.mutate(undefined, {
-          onSuccess: () => router.push("/memory-stores"),
+          onSuccess: () =>
+            onDeleted ? onDeleted() : router.push("/memory-stores"),
         })
       }
       archivePending={archive.isPending}

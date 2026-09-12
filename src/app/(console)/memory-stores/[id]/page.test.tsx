@@ -1,3 +1,4 @@
+import { useTestSearchParams } from "../../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -18,7 +19,10 @@ import {
 } from "../../../../../test/mock-platform/fixtures.mjs";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  useSearchParams: () => useTestSearchParams(),
+}));
 
 function params(id: string): Promise<{ id: string }> {
   const value = { id };
@@ -76,13 +80,14 @@ describe("MemoryStoreDetailPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Project notes" }),
     ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByText("Store details and version history"),
+    );
     expect(screen.getAllByText("/brief.md").length).toBeGreaterThan(0);
     expect(screen.getAllByText("modified").length).toBeGreaterThan(0);
     expect(screen.getByText(/"owner": "research"/)).toBeInTheDocument();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Create memory" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Add memory" }));
     expect(push).toHaveBeenCalledWith(
       `/memory-stores/${store.id}/memories/new`,
     );

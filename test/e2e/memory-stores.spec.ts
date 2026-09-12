@@ -27,6 +27,9 @@ test("create, edit, archive and delete a memory store", async ({ page }) => {
   await page.getByLabel("Description").fill("Updated context");
   await page.getByLabel("Metadata (JSON object)").fill('{"owner":"platform"}');
   await page.getByRole("button", { name: "Save changes" }).click();
+  await page
+    .getByText("Store details and version history", { exact: true })
+    .click();
   await expect(page.getByText('"owner": "platform"')).toBeVisible();
   await expect(page.getByText(/remove/)).toHaveCount(0);
 
@@ -34,9 +37,7 @@ test("create, edit, archive and delete a memory store", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("button", { name: "Archive memory store" }).click();
   await expect(page.getByText("Archived · read only")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create memory" }),
-  ).toBeHidden();
+  await expect(page.getByRole("button", { name: "Add memory" })).toBeHidden();
 
   await page.goto(`/memory-stores/${storeId}/edit`);
   await expect(
@@ -97,6 +98,9 @@ test("memory writes keep history, enforce preconditions and redact old versions"
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete memory" }).click();
   await expect(page).toHaveURL(new RegExp(`/memory-stores/${storeId}$`));
+  await page
+    .getByText("Store details and version history", { exact: true })
+    .click();
   await expect(page.getByTestId("memory-version-list")).toContainText(
     "deleted",
   );
