@@ -2,9 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
+import Link from "next/link";
+import { DeploymentInspector } from "@/components/console/deployment-inspector";
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import { useRouter } from "next/navigation";
 import { useListFilters } from "@/lib/use-list-filters";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateDeploymentButton } from "@/components/console/create-deployment-dialog";
@@ -89,7 +90,19 @@ const COLUMNS: Column<Deployment>[] = [
   {
     key: "actions",
     header: "Actions",
-    cell: (row) => <RowActions deployment={row} />,
+    cell: (row) => (
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(event) => event.stopPropagation()}
+          render={<Link href={`/deployments/${encodeURIComponent(row.id)}`} />}
+        >
+          Open
+        </Button>
+        <RowActions deployment={row} />
+      </div>
+    ),
   },
 ];
 
@@ -106,8 +119,11 @@ export default function DeploymentsPage() {
 }
 
 function DeploymentsList() {
-  const router = useRouter();
   const filters = useListFilters();
+  const lookup = useRef<HTMLInputElement>(null);
+  const inspected = filters.params.get("deployment");
+  const inspect = (id: string) => filters.update({ deployment: id });
+  const closeInspector = () => filters.update({ deployment: null });
   const status = filters.params.get("status");
   const view: View =
     status === "active" || status === "paused" || status === "archived"
@@ -124,6 +140,8 @@ function DeploymentsList() {
   });
 
   const filtered = view !== "live" || agentId !== "all";
+  const rows = query.data?.data ?? [];
+  const inspectedIndex = rows.findIndex((row) => row.id === inspected);
   const resetFilters = () => filters.update({ status: null, agent: null });
 
   if (isUnimplemented(query.error))
@@ -138,7 +156,12 @@ function DeploymentsList() {
         actions={<CreateDeploymentButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4">
-        <ExactResourceLookup resource="deployment" path="/deployments" />
+        <ExactResourceLookup
+          resource="deployment"
+          path="/deployments"
+          onOpen={inspect}
+          inputRef={lookup}
+        />
         <Select
           value={agentId}
           onValueChange={(value) =>
@@ -203,6 +226,18 @@ function DeploymentsList() {
           </Button>
         )}
       </div>
+      {inspected && (
+        <DeploymentInspector
+          id={inspected}
+          previous={
+            inspectedIndex > 0 ? rows[inspectedIndex - 1]?.id : undefined
+          }
+          next={inspectedIndex >= 0 ? rows[inspectedIndex + 1]?.id : undefined}
+          onSelect={inspect}
+          onClose={closeInspector}
+          fallbackFocus={lookup}
+        />
+      )}
       {query.error ? (
         <ErrorState error={query.error} />
       ) : (
@@ -212,7 +247,8 @@ function DeploymentsList() {
             rows={query.data?.data ?? []}
             rowKey={(row) => row.id}
             loading={query.isPending}
-            onRowClick={(row) => router.push(`/deployments/${row.id}`)}
+            activeRowKey={inspected ?? undefined}
+            onRowClick={(row) => inspect(row.id)}
             empty={
               filtered ? (
                 <EmptyState

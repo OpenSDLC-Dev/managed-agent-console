@@ -635,3 +635,9 @@ Timeline positions use `events.go:eventWire`'s persisted `processed_at`; only ma
 Review found coincident markers masking one another. Overlapping visible intervals now occupy separate lanes inside a bounded, scrollable track; pointer regression checks every fixture event at fit and zoomed scales. This preserves timestamp positions while keeping each event reachable.
 
 `threads.go:renderThread/threadScope` supplies the pinned Agent snapshot, usage and event scope; its primary view is the Session view. The chart reads each `domain.ModelUsage.input_tokens` counter in request order. It does not infer context size, costs or thread totals. The reference's context/cost/active-time fields have no implemented platform equivalent; raw API responses remain available. Populated child-thread behavior is verified locally, but the reference recording contains only a primary thread.
+
+## Deployment list inspector — checked 2026-09-12
+
+Records ec8c4c6 frames 51–53 select `?deployment=ID` beside the list. The pane offers Open, previous/next, Rendered/API, pinned Agent/environment metadata, initial message, trigger and session resources. Exact lookup stays exact: the platform has no name-search predicate.
+
+`domain.Deployment.Agent` pins a version; names resolve against that version. `deployments.go:fillScheduleTimestamps` owns upcoming timestamps, including the paused and archived rules. The console displays those timestamps in explicitly labeled UTC, without computing cron or a draft preview. Advanced initial events retain their whole JSON when a single plain message would discard fields. Budget is not served, and file references link to the implemented Files list rather than inventing a file inspector.

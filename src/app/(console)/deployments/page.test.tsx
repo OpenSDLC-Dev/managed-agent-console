@@ -15,6 +15,19 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => useTestSearchParams(),
   useRouter: () => ({ push }),
 }));
+vi.mock("@/components/console/deployment-inspector", () => ({
+  DeploymentInspector: ({
+    id,
+    onClose,
+  }: {
+    id: string;
+    onClose: () => void;
+  }) => (
+    <div data-testid="deployment-inspector" data-id={id}>
+      <button onClick={onClose}>Close details</button>
+    </div>
+  ),
+}));
 vi.mock("@/components/ui/select", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   const Context = React.createContext<{
@@ -121,7 +134,19 @@ describe("DeploymentsPage", () => {
     );
     expect(push).not.toHaveBeenCalled();
     await userEvent.click(screen.getByText("Weekly research digest"));
-    expect(push).toHaveBeenCalledWith(`/deployments/${deployments[0].id}`);
+    expect(screen.getByTestId("deployment-inspector")).toHaveAttribute(
+      "data-id",
+      deployments[0].id,
+    );
+    expect(new URL(window.location.href).searchParams.get("deployment")).toBe(
+      deployments[0].id,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close details" }),
+    );
+    expect(
+      screen.queryByTestId("deployment-inspector"),
+    ).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Paused" }));
     await waitFor(() =>
