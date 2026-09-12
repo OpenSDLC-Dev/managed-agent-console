@@ -75,6 +75,157 @@ const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
   ...[
+    "store",
+    "memory",
+    "raw",
+    "file",
+    "text",
+    "download",
+    "repository",
+    "archived",
+    "narrow",
+    "missing-file",
+  ].map((view): Surface => ({
+    id: "session-resource-preview-" + view,
+    route: `/sessions/${GATED}?inspector=resources`,
+    fixture:
+      "Session memory/file/repository bindings; synthetic downloadable text for the text view",
+    description:
+      "Nested resource selection, read-only memory content and platform-gated file previews.",
+    setup: async (page) => {
+      const fileView = ["file", "text", "download", "missing-file"].includes(
+        view,
+      );
+      const fileId =
+        view === "text" || view === "download"
+          ? "file_output000000000001"
+          : "file_notes0000000000001";
+      const response = await page.request.post("/api/platform/v1/sessions", {
+        data: {
+          agent: AGENT,
+          environment_id: ENV,
+          title: "Project resource inspection",
+          resources: fileView
+            ? [
+                {
+                  type: "file",
+                  file_id: fileId,
+                  mount_path: "/mnt/session/uploads/notes.md",
+                },
+              ]
+            : view === "repository"
+              ? [
+                  {
+                    type: "github_repository",
+                    url: "https://github.com/example/project",
+                    authorization_token: "test-only-reference",
+                  },
+                ]
+              : [
+                  {
+                    type: "memory_store",
+                    memory_store_id: MEMORY_STORE,
+                    access: "read_only",
+                    instructions: "Use the project notes as reference.",
+                  },
+                ],
+        },
+      });
+      if (!response.ok())
+        throw new Error("Resource preview fixture creation failed");
+      const session = (await response.json()) as { id: string };
+      if (view === "archived") {
+        const archived = await page.request.post(
+          `/api/platform/v1/sessions/${session.id}/archive`,
+        );
+        if (!archived.ok()) throw new Error("Resource preview archive failed");
+      }
+      if (view === "text") {
+        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
+          route.fulfill({
+            json: {
+              id: fileId,
+              type: "file",
+              filename: "summary.txt",
+              mime_type: "text/plain",
+              size_bytes: 44,
+              downloadable: true,
+              created_at: "2026-09-01T10:00:00Z",
+              expires_at: null,
+            },
+          }),
+        );
+        await page.route(
+          `**/api/platform/v1/files/${fileId}/content`,
+          (route) =>
+            route.fulfill({
+              contentType: "text/plain",
+              body: "Project output\n\nAll requested checks passed.\n",
+            }),
+        );
+      }
+      if (view === "missing-file")
+        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
+          route.fulfill({
+            status: 404,
+            json: {
+              type: "error",
+              error: {
+                type: "not_found_error",
+                message: "The source file is no longer available.",
+              },
+            },
+          }),
+        );
+      if (view === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`/sessions/${session.id}?inspector=resources`);
+      if (fileView) {
+        await page
+          .getByRole("button", {
+            name: "Inspect resource /mnt/session/uploads/notes.md",
+          })
+          .click();
+        if (view === "missing-file")
+          await page
+            .getByText("The source file is no longer available.")
+            .waitFor();
+        else await page.getByTestId("session-file-preview").waitFor();
+        if (view === "text") {
+          await page.getByRole("button", { name: "Preview content" }).click();
+          await page
+            .getByTestId("session-file-preview")
+            .getByText("Project output", { exact: false })
+            .waitFor();
+        }
+      } else if (view === "repository")
+        await page
+          .getByRole("button", { name: /Inspect resource.*project$/ })
+          .click();
+      else {
+        await page
+          .getByRole("button", {
+            name: "Inspect resource /mnt/memory/project-notes",
+          })
+          .click();
+        if (view !== "store") {
+          await page
+            .getByRole("button", { name: "Expand /mnt/memory/project-notes" })
+            .click();
+          await page.getByRole("treeitem", { name: /brief.md/ }).click();
+          await page.getByTestId("session-memory-preview").waitFor();
+          if (view === "raw")
+            await page
+              .getByRole("button", { name: "Raw", exact: true })
+              .click();
+        }
+      }
+      await page
+        .getByRole("region", { name: "Resource preview" })
+        .scrollIntoViewIfNeeded();
+    },
+  })),
+  ...[
     "session",
     "events",
     "tools",

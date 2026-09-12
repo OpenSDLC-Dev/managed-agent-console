@@ -16,6 +16,7 @@ import {
   consolePostNoContent,
   platformDelete,
   platformGet,
+  platformGetText,
   platformPost,
   platformPostForm,
   type Page,
@@ -563,6 +564,22 @@ export function useSkillVersions(id: string, page?: string) {
         },
       ),
     placeholderData: keepPreviousData,
+  });
+}
+
+// internal/api/files.go:getFile, downloadFile. The latter enforces downloadable and expiry.
+export function useFile(id: string) {
+  return useQuery({
+    queryKey: ["file", id],
+    queryFn: () => platformGet<PlatformFile>(`v1/files/${id}`),
+  });
+}
+
+export function useFileText(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["file-content", id],
+    enabled,
+    queryFn: () => platformGetText(`v1/files/${id}/content`),
   });
 }
 
