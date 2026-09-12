@@ -1,8 +1,22 @@
 "use client";
 
-import { Fragment, use, useMemo, useState } from "react";
+import { Fragment, Suspense, use, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, PanelRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useListFilters } from "@/lib/use-list-filters";
+import { JsonBlock } from "@/components/console/detail";
+import {
+  SessionWorkspacePanel,
+  SESSION_INSPECTORS,
+  type SessionInspectorTab,
+} from "@/components/console/session-workspace-panel";
+import {
+  SessionOverview,
+  SessionEventIndex,
+  SessionToolIndex,
+} from "@/components/console/session-workspace-views";
+import { summaryOf } from "@/lib/session-trace/summary";
 import { PageHeader } from "@/components/shell/page-header";
 import { Breadcrumb } from "@/components/console/breadcrumb";
 import { DetailSection } from "@/components/console/detail";
@@ -19,7 +33,7 @@ import {
   DebugRow,
   EventDetailPanel,
   IdleBand,
-  TranscriptRow,
+  TranscriptCard,
 } from "@/components/console/event-row";
 import { ApprovalBanner } from "@/components/console/approval-banner";
 import { Composer } from "@/components/console/composer";
@@ -60,6 +74,8 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
     types: [
       "agent.tool_use",
       "agent.tool_result",
+      "agent.mcp_tool_use",
+      "agent.mcp_tool_result",
       "agent.custom_tool_use",
       "user.tool_result",
       "user.custom_tool_result",
@@ -119,7 +135,7 @@ function SessionChips({ session }: { session: Session }) {
   const age = ageLabel(session.created_at, useNow());
   return (
     <div
-      className="flex flex-wrap items-center gap-1.5 pb-6"
+      className="flex flex-wrap items-center gap-1.5 pb-3"
       data-testid="session-chips"
     >
       <Badge variant="outline" className={chip}>
@@ -212,9 +228,31 @@ export default function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  return (
+    <Suspense fallback={<DetailSkeleton />}>
+      <SessionWorkspace id={id} />
+    </Suspense>
+  );
+}
+
+function SessionWorkspace({ id }: { id: string }) {
+  const filters = useListFilters();
+  const inspectorValue = filters.params.get("inspector");
+  const inspector: SessionInspectorTab | "closed" =
+    inspectorValue === "closed"
+      ? "closed"
+      : (SESSION_INSPECTORS.find(([key]) => key === inspectorValue)?.[0] ??
+        "session");
+  const selectedId = filters.params.get("event");
+  const setSelectedId = (
+    value: string | null | ((current: string | null) => string | null),
+  ) => {
+    const event = typeof value === "function" ? value(selectedId) : value;
+    filters.update({ event, ...(event ? { inspector: "events" } : {}) });
+  };
+  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const session = useSession(id, 15_000);
   const threads = useSessionThreads(id, 15_000);
@@ -256,15 +294,21 @@ export default function SessionDetailPage({
     const events = trace.events.filter(
       (e) => e.type !== "span.model_request_start" || !pairedStarts.has(e.id),
     );
-    return types ? events.filter((e) => types.includes(e.type)) : events;
-  }, [filter, trace.events]);
+    return events.filter(
+      (e) =>
+        (!types || types.includes(e.type)) &&
+        summaryOf(e).toLowerCase().includes(search.toLowerCase()),
+    );
+  }, [filter, search, trace.events]);
   const selected = selectedId
     ? trace.events.find((e) => e.id === selectedId)
     : undefined;
   // Streaming previews are agent messages — visible under All and Messages.
   const visiblePreviews =
     filter === "all" || filter === "messages"
-      ? [...trace.previews.values()]
+      ? [...trace.previews.values()].filter((preview) =>
+          preview.parts.join("").toLowerCase().includes(search.toLowerCase()),
+        )
       : [];
 
   if (session.error) return <ErrorState error={session.error} />;
@@ -279,7 +323,7 @@ export default function SessionDetailPage({
   const outcomeEvaluations = outcomesSupported ? data.outcome_evaluations : [];
 
   return (
-    <div>
+    <div className="flex h-[calc(100dvh-48px)] min-h-[480px] min-w-0 flex-col">
       <Breadcrumb
         parent={{ href: "/sessions", label: "Sessions" }}
         current={data.title || data.id}
@@ -300,36 +344,46 @@ export default function SessionDetailPage({
         }
       />
       <SessionChips session={data} />
-      <SessionResources session={data} />
-      {!selectedThreadId && outcomesSupported && (
-        <SessionOutcomes
-          sessionId={id}
-          outcomes={outcomeEvaluations}
-          disabled={!!data.archived_at || trace.deleted}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b pb-3">
+        <Input
+          aria-label="Find in transcript"
+          placeholder="Find in transcript"
+          className="h-8 w-56 max-w-full"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
         />
-      )}
-      <SessionThreads
-        sessionId={id}
-        threads={threads.data?.data ?? []}
-        error={threads.error}
-        loading={threads.isPending}
-        selectedId={selectedThreadId}
-        onSelect={(threadId) => {
-          setSelectedThreadId(threadId);
-          setSelectedId(null);
-        }}
-      />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto"
+          aria-label="Open session inspector"
+          aria-expanded={inspector !== "closed"}
+          onClick={() =>
+            filters.update({
+              inspector: inspector === "closed" ? null : "closed",
+            })
+          }
+        >
+          <PanelRight /> Inspector
+        </Button>
+      </div>
+      <div className="relative flex min-h-0 flex-1 gap-3 pt-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!data.archived_at && !trace.deleted && (
+              <ApprovalBanner
+                pending={pending.filter(
+                  (tool) =>
+                    tab === "debug" ||
+                    !visible.some((event) => event.id === tool.id),
+                )}
+                sessionId={id}
+                threadId={selectedThreadId ?? undefined}
+              />
+            )}
 
-      {!data.archived_at && !trace.deleted && (
-        <ApprovalBanner
-          pending={pending}
-          sessionId={id}
-          threadId={selectedThreadId ?? undefined}
-        />
-      )}
-
-      <DetailSection title="Events">
-        {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
+            <DetailSection title="Events">
+              {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
             and filter are active, and how much of the log they leave visible.
             e2e reads these instead of the rendered strings.
 
@@ -340,165 +394,237 @@ export default function SessionDetailPage({
             rendered surface, the one failure this convention exists to
             prevent. `data-filter` is therefore absent in Debug, on the same
             rule as `tokenAttr`: say nothing rather than something untrue. */}
-        <div
-          className="flex items-center gap-1.5 pb-3"
-          data-testid="events-toolbar"
-          data-tab={tab}
-          data-filter={tab === "transcript" ? filter : undefined}
-          data-visible-events={
-            tab === "debug"
-              ? trace.events.length
-              : visible.length + visiblePreviews.length
-          }
-          data-total-events={trace.events.length}
-        >
-          <div className="flex items-center rounded-lg border p-0.5">
-            {(
-              [
-                ["transcript", "Transcript"],
-                ["debug", "Debug"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                aria-pressed={tab === key}
-                onClick={() => setTab(key)}
-                className={cn(
-                  "h-6 rounded-md px-2.5 text-[13px]",
-                  tab === key
-                    ? "bg-secondary font-medium"
-                    : "text-muted-foreground hover:bg-secondary/50",
-                )}
+              <div
+                className="flex flex-wrap items-center gap-1.5 pb-3"
+                data-testid="events-toolbar"
+                data-tab={tab}
+                data-filter={tab === "transcript" ? filter : undefined}
+                data-visible-events={
+                  tab === "debug"
+                    ? trace.events.length
+                    : visible.length + visiblePreviews.length
+                }
+                data-total-events={trace.events.length}
               >
-                {label}
-              </button>
-            ))}
-          </div>
-          {tab === "transcript" &&
-            FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={cn(
-                  "h-7 rounded-full border px-3 text-[13px]",
-                  filter === key
-                    ? "border-transparent bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-secondary",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          <Badge
-            data-testid="stream-state"
-            data-state={connection}
-            variant="outline"
-            className={cn(
-              "ml-2 font-normal",
-              connection === "live" && "text-emerald-700 dark:text-emerald-400",
-              connection === "reconnecting" &&
-                "text-amber-700 dark:text-amber-300",
-            )}
-          >
-            {CONNECTION_LABEL[connection]}
-          </Badge>
-          <CopyAllButton events={trace.events} />
-        </div>
-        {tab === "debug" ? (
-          trace.events.length === 0 ? (
-            connection === "connecting" ? (
-              <ListSkeleton rows={4} />
-            ) : (
-              <EmptyState title="No events" />
-            )
-          ) : (
-            <div>
-              {trace.events.map((e) => (
-                <DebugRow key={e.id} event={e} />
-              ))}
-            </div>
-          )
-        ) : visible.length === 0 && visiblePreviews.length === 0 ? (
-          connection === "connecting" ? (
-            <ListSkeleton rows={4} />
-          ) : (
-            <EmptyState title="No events" />
-          )
-        ) : (
-          <div
-            className={cn(
-              selected &&
-                "grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,42%)]",
-            )}
-          >
-            <div>
-              {visible.map((e) => (
-                <Fragment key={e.id}>
-                  <TranscriptRow
-                    event={e}
-                    offset={offsetLabel(data.created_at, e.processed_at)}
-                    durationMs={durations.get(e.id)}
-                    selected={e.id === selectedId}
-                    approvalPending={pending.some((tool) => tool.id === e.id)}
-                    onSelect={() =>
-                      setSelectedId((current) =>
-                        current === e.id ? null : e.id,
-                      )
-                    }
-                  />
-                  {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
-                </Fragment>
-              ))}
-              {visiblePreviews.map((preview) => (
-                <div
-                  key={preview.id}
-                  data-testid="preview-row"
-                  className="flex gap-3 border-b py-2.5 last:border-b-0"
-                >
-                  <div className="w-36 shrink-0 text-[12px] text-muted-foreground">
-                    …
-                  </div>
-                  <div className="w-52 shrink-0">
-                    <Badge
-                      variant="outline"
-                      className="animate-pulse font-mono text-[11px] font-normal"
+                <div className="flex items-center rounded-lg border p-0.5">
+                  {(
+                    [
+                      ["transcript", "Transcript"],
+                      ["debug", "Debug"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      aria-pressed={tab === key}
+                      onClick={() => setTab(key)}
+                      className={cn(
+                        "h-6 rounded-md px-2.5 text-[13px]",
+                        tab === key
+                          ? "bg-secondary font-medium"
+                          : "text-muted-foreground hover:bg-secondary/50",
+                      )}
                     >
-                      {preview.type}
-                    </Badge>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {tab === "transcript" &&
+                  FILTERS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setFilter(key)}
+                      className={cn(
+                        "h-7 rounded-full border px-3 text-[13px]",
+                        filter === key
+                          ? "border-transparent bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                <Badge
+                  data-testid="stream-state"
+                  data-state={connection}
+                  variant="outline"
+                  className={cn(
+                    "ml-2 font-normal",
+                    connection === "live" &&
+                      "text-emerald-700 dark:text-emerald-400",
+                    connection === "reconnecting" &&
+                      "text-amber-700 dark:text-amber-300",
+                  )}
+                >
+                  {CONNECTION_LABEL[connection]}
+                </Badge>
+                <CopyAllButton events={trace.events} />
+              </div>
+              {tab === "debug" ? (
+                trace.events.length === 0 ? (
+                  connection === "connecting" ? (
+                    <ListSkeleton rows={4} />
+                  ) : (
+                    <EmptyState title="No events" />
+                  )
+                ) : (
+                  <div>
+                    {trace.events.map((e) => (
+                      <DebugRow key={e.id} event={e} />
+                    ))}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="whitespace-pre-wrap">
-                      {preview.parts.join("")}
-                      <span className="animate-pulse">▍</span>
-                    </p>
+                )
+              ) : visible.length === 0 && visiblePreviews.length === 0 ? (
+                connection === "connecting" ? (
+                  <ListSkeleton rows={4} />
+                ) : (
+                  <EmptyState title="No events" />
+                )
+              ) : (
+                <div className="min-w-0">
+                  <div>
+                    {visible.map((e) => (
+                      <Fragment key={e.id}>
+                        <TranscriptCard
+                          event={e}
+                          offset={offsetLabel(data.created_at, e.processed_at)}
+                          durationMs={durations.get(e.id)}
+                          selected={e.id === selectedId}
+                          actor={selectedThread?.agent.name ?? data.agent.name}
+                          approval={
+                            !data.archived_at &&
+                            !trace.deleted &&
+                            pending.some((tool) => tool.id === e.id) ? (
+                              <ApprovalBanner
+                                inline
+                                pending={[e]}
+                                sessionId={id}
+                                threadId={selectedThreadId ?? undefined}
+                              />
+                            ) : undefined
+                          }
+                          onSelect={() =>
+                            setSelectedId((current) =>
+                              current === e.id ? null : e.id,
+                            )
+                          }
+                        />
+                        {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
+                      </Fragment>
+                    ))}
+                    {visiblePreviews.map((preview) => (
+                      <div
+                        key={preview.id}
+                        data-testid="preview-row"
+                        className="flex flex-wrap gap-3 border-b py-2.5 last:border-b-0"
+                      >
+                        <div className="text-[12px] text-muted-foreground">
+                          …
+                        </div>
+                        <div className="min-w-0">
+                          <Badge
+                            variant="outline"
+                            className="animate-pulse font-mono text-[11px] font-normal"
+                          >
+                            {preview.type}
+                          </Badge>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="whitespace-pre-wrap">
+                            {preview.parts.join("")}
+                            <span className="animate-pulse">▍</span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-            {selected && (
-              <EventDetailPanel
-                event={selected}
-                approvalPending={pending.some(
-                  (tool) => tool.id === selected.id,
+              )}
+            </DetailSection>
+          </div>
+
+          <Composer
+            sessionId={id}
+            running={running}
+            disabled={!!data.archived_at || trace.deleted}
+            threadId={
+              selectedThread?.parent_thread_id ? selectedThread.id : undefined
+            }
+            threadName={selectedThread?.agent.name}
+          />
+        </div>
+        {inspector !== "closed" && (
+          <SessionWorkspacePanel
+            tab={inspector}
+            onTab={(value) =>
+              filters.update({ inspector: value === "session" ? null : value })
+            }
+            onClose={() => filters.update({ inspector: "closed" })}
+          >
+            {inspector === "session" && (
+              <div className="space-y-5">
+                <SessionOverview session={data} />{" "}
+                {!selectedThreadId && outcomesSupported && (
+                  <SessionOutcomes
+                    sessionId={id}
+                    outcomes={outcomeEvaluations}
+                    disabled={!!data.archived_at || trace.deleted}
+                  />
                 )}
-                offset={offsetLabel(data.created_at, selected.processed_at)}
-                durationMs={durations.get(selected.id)}
-                onClose={() => setSelectedId(null)}
+              </div>
+            )}
+            {inspector === "resources" && <SessionResources session={data} />}
+            {inspector === "thread" && (
+              <>
+                <SessionThreads
+                  compact
+                  sessionId={id}
+                  threads={threads.data?.data ?? []}
+                  error={threads.error}
+                  loading={threads.isPending}
+                  selectedId={selectedThreadId}
+                  onSelect={(threadId) => {
+                    setSelectedThreadId(threadId);
+                    setSelectedId(null);
+                  }}
+                />
+                {selectedThread && <JsonBlock value={selectedThread} />}
+              </>
+            )}
+            {inspector === "tools" && (
+              <SessionToolIndex
+                agent={selectedThread?.agent ?? data.agent}
+                events={trace.events}
+                onSelect={setSelectedId}
               />
             )}
-          </div>
+            {inspector === "events" && (
+              <div className="space-y-4">
+                <SessionEventIndex
+                  events={trace.events}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+                {selected && (
+                  <EventDetailPanel
+                    event={selected}
+                    approvalPending={pending.some(
+                      (tool) => tool.id === selected.id,
+                    )}
+                    offset={offsetLabel(data.created_at, selected.processed_at)}
+                    durationMs={durations.get(selected.id)}
+                    onClose={() => setSelectedId(null)}
+                  />
+                )}
+                {selectedId && !selected && (
+                  <p className="text-sm text-muted-foreground">
+                    No loaded event matches this ID.
+                  </p>
+                )}
+              </div>
+            )}
+          </SessionWorkspacePanel>
         )}
-      </DetailSection>
-
-      <Composer
-        sessionId={id}
-        running={running}
-        disabled={!!data.archived_at || trace.deleted}
-        threadId={
-          selectedThread?.parent_thread_id ? selectedThread.id : undefined
-        }
-        threadName={selectedThread?.agent.name}
-      />
+      </div>
     </div>
   );
 }

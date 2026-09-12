@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,120 @@ export function TranscriptRow({
       </div>
       <MetaColumn offset={offset} durationMs={durationMs} />
     </button>
+  );
+}
+
+/** Readable message/tool cards keep inspection separate from approval buttons. */
+export function TranscriptCard({
+  event,
+  actor,
+  selected,
+  offset,
+  durationMs,
+  onSelect,
+  approval,
+}: {
+  event: SessionEvent;
+  actor: string;
+  selected?: boolean;
+  offset?: string | null;
+  durationMs?: number;
+  onSelect: () => void;
+  approval?: ReactNode;
+}) {
+  const content = event.content as ContentBlock[] | null | undefined;
+  const message =
+    event.type === "user.message" || event.type === "agent.message";
+  const tool = event.input !== undefined || event.type.includes("tool_result");
+  return (
+    <article
+      data-testid="event-row"
+      data-event-type={event.type}
+      data-event-id={event.id}
+      {...usageAttrs(event)}
+      className="min-w-0 py-1.5"
+    >
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span
+          className={cn(
+            "rounded px-1.5 py-0.5 text-foreground",
+            event.type === "user.message"
+              ? "bg-pink-100 dark:bg-pink-950"
+              : "bg-secondary",
+          )}
+        >
+          {event.type.startsWith("user.")
+            ? "User"
+            : event.type.startsWith("agent.")
+              ? (event.agent_name ?? actor)
+              : event.type.startsWith("span.")
+                ? "Model"
+                : "Session"}
+        </span>
+        <Time iso={event.processed_at} />
+        <MetaColumn offset={offset} durationMs={durationMs} />
+      </div>
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border bg-card",
+          selected && "ring-1 ring-ring",
+        )}
+      >
+        <button
+          type="button"
+          onClick={onSelect}
+          aria-expanded={selected}
+          className="block w-full space-y-2 p-3 text-left text-sm hover:bg-secondary/30"
+        >
+          <span
+            className={cn(
+              "block break-all font-mono text-xs text-muted-foreground",
+              message && "sr-only",
+            )}
+          >
+            {event.type}
+          </span>
+          {event.name !== undefined && (
+            <span className="block font-medium">{String(event.name)}</span>
+          )}
+          {event.input !== undefined && (
+            <span className="block whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
+              {JSON.stringify(event.input, null, 2)}
+            </span>
+          )}
+          {content?.map((block, index) => (
+            <span
+              key={index}
+              className={cn(
+                "block whitespace-pre-wrap break-words",
+                tool && "rounded-md bg-secondary p-2 font-mono text-xs",
+                event.is_error === true && "bg-destructive/10 text-destructive",
+              )}
+            >
+              {block.type === "text"
+                ? (block.text ?? "")
+                : JSON.stringify(block, null, 2)}
+            </span>
+          ))}
+          {!content && event.input === undefined && (
+            <span
+              className="block whitespace-pre-wrap break-words"
+              data-testid={
+                isKnownEventType(event.type)
+                  ? undefined
+                  : "unknown-event-payload"
+              }
+            >
+              {summaryOf(event)}
+            </span>
+          )}
+          {event.is_error === true && (
+            <span className="block text-xs text-destructive">error</span>
+          )}
+        </button>
+        {approval && <div className="px-3 pb-3">{approval}</div>}
+      </div>
+    </article>
   );
 }
 

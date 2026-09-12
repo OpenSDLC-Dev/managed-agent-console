@@ -1,3 +1,4 @@
+import { useTestSearchParams } from "../../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
@@ -23,7 +24,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/sessions/sess_1",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => useTestSearchParams(),
 }));
 
 vi.mock("next/link", () => ({
@@ -238,7 +239,11 @@ describe("SessionDetailPage", () => {
       await screen.findByRole("heading", { name: "Debug run" }),
     ).toBeInTheDocument();
     // Subtitle and the agent chip both carry the agent · version.
-    expect(screen.getAllByText("Support bot · v2")).toHaveLength(2);
+    expect(
+      within(screen.getByTestId("session-chips")).getByRole("link", {
+        name: "Support bot · v2",
+      }),
+    ).toBeInTheDocument();
     const chips = screen.getByTestId("session-chips");
     // Counters as raw integers (CLAUDE.md's data-* convention); the rendered
     // string is owned by `utils.test.ts` and the e2e formatting test.
@@ -398,11 +403,13 @@ describe("SessionDetailPage", () => {
     await screen.findByRole("heading", { name: "Debug run" });
     expect(screen.queryByTestId("event-detail")).toBeNull();
 
-    const row = screen.getAllByTestId("event-row")[0];
+    const row = within(screen.getAllByTestId("event-row")[0]).getByRole(
+      "button",
+    );
     await userEvent.click(row);
     expect(row).toHaveAttribute("aria-expanded", "true");
     const panel = screen.getByTestId("event-detail");
-    // The row clamps to the first line; the panel carries the whole text.
+    // The card and the inspector both retain the full message.
     expect(panel.textContent).toContain("full body full body");
 
     await userEvent.click(
@@ -764,4 +771,127 @@ describe("SessionDetailPage under a violated wire contract", () => {
     expect(screen.getAllByTestId("event-row")).toHaveLength(2);
     expect(document.body.textContent).not.toMatch(/NaN|Invalid Date|undefined/);
   });
+});
+
+it("restores the inspector URL and filters/selects exact persisted event types", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/sessions/sess_1?inspector=events&event=missing",
+  );
+  setTrace("live", [
+    ev("m1", "user.message", {
+      content: [{ type: "text", text: "Full message" }],
+    }),
+    ev("c1", "user.tool_confirmation", { result: "deny", tool_use_id: "tool" }),
+  ]);
+  stubFetch();
+  renderPage();
+  await screen.findByText("No loaded event matches this ID.");
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "Event type" }),
+    "user.tool_confirmation",
+  );
+  expect(screen.getAllByTestId("inspector-event-row")).toHaveLength(1);
+  await userEvent.click(screen.getByTestId("inspector-event-row"));
+  expect(new URLSearchParams(window.location.search).get("event")).toBe("c1");
+  expect(screen.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-type",
+    "user.tool_confirmation",
+  );
+  await userEvent.type(screen.getByLabelText("Filter events"), "no-match");
+  expect(screen.getByText("No matching events.")).toBeVisible();
+  expect(screen.getByTestId("event-detail")).toBeVisible();
+});
+
+it("searches full transcript content and previews without dropping the persisted API trace", async () => {
+  setTrace(
+    "live",
+    [
+      ev("m1", "user.message", {
+        content: [{ type: "text", text: "A persisted sentence" }],
+      }),
+      ev("m2", "agent.message", {
+        content: [{ type: "text", text: "A response" }],
+      }),
+    ],
+    [{ id: "preview", type: "agent.message", parts: ["Live response"] }],
+  );
+  stubFetch();
+  renderPage();
+  await screen.findByTestId("stream-state");
+  await userEvent.type(
+    screen.getByLabelText("Find in transcript"),
+    "persisted",
+  );
+  expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+  expect(screen.queryByTestId("preview-row")).toBeNull();
+  expect(screen.getByTestId("events-toolbar")).toHaveAttribute(
+    "data-total-events",
+    "2",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+  expect(screen.getAllByTestId("debug-row")).toHaveLength(2);
+});
+
+it("moves resources into the inspector and restores focus when it closes", async () => {
+  setTrace("live");
+  stubFetch();
+  renderPage();
+  await screen.findByTestId("stream-state");
+  expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+  await userEvent.click(screen.getByRole("tab", { name: "Resources" }));
+  expect(screen.getByRole("button", { name: "Attach file" })).toBeVisible();
+  expect(new URLSearchParams(window.location.search).get("inspector")).toBe(
+    "resources",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Close session inspector" }),
+  );
+  expect(
+    screen.queryByRole("tablist", { name: "Session inspector views" }),
+  ).toBeNull();
+  const open = screen.getByRole("button", { name: "Open session inspector" });
+  await userEvent.click(open);
+  await userEvent.keyboard("{Escape}");
+  expect(open).toHaveFocus();
+});
+
+it("shows pinned tool permissions and links calls from the loaded trace", async () => {
+  const current = session();
+  current.agent.tools = [
+    {
+      type: "agent_toolset_20260401",
+      default_config: { enabled: false },
+      configs: [
+        {
+          name: "bash",
+          enabled: true,
+          permission_policy: { type: "always_ask" },
+        },
+      ],
+    },
+  ];
+  setTrace("live", [
+    ev("tool1", "agent.tool_use", { name: "bash", input: { command: "pwd" } }),
+  ]);
+  stubFetch({ session: current });
+  renderPage();
+  await screen.findByTestId("stream-state");
+  await userEvent.click(screen.getByRole("tab", { name: "Tools" }));
+  const bash = document.querySelector('[data-tool-name="bash"]')!;
+  expect(bash).toHaveAttribute("data-permission", "Ask");
+  expect(bash).toHaveAttribute("data-call-count", "1");
+  await userEvent.click(bash);
+  await userEvent.click(
+    within(screen.getByRole("tabpanel")).getByRole("button", { name: /pwd/ }),
+  );
+  expect(screen.getByRole("tab", { name: "Events" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(screen.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-type",
+    "agent.tool_use",
+  );
 });

@@ -24,6 +24,7 @@ export function SessionThreads({
   loading,
   selectedId,
   onSelect,
+  compact = false,
 }: {
   sessionId: string;
   threads: SessionThread[];
@@ -31,6 +32,7 @@ export function SessionThreads({
   loading: boolean;
   selectedId: string | null;
   onSelect: (threadId: string | null) => void;
+  compact?: boolean;
 }) {
   const archive = useArchiveSessionThread(sessionId);
 
@@ -79,35 +81,57 @@ export function SessionThreads({
                 >
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    className={
+                      compact
+                        ? "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-left"
+                        : "flex min-w-0 flex-1 items-center gap-3 text-left"
+                    }
                     aria-label={`${primary ? "Primary" : "Child"} thread ${thread.agent.name}`}
                     aria-pressed={selectedId === thread.id}
                     onClick={() => onSelect(thread.id)}
                   >
-                    <span className="w-16 shrink-0 text-[12px] text-muted-foreground">
+                    <span
+                      className={
+                        compact
+                          ? "sr-only"
+                          : "w-16 shrink-0 text-[12px] text-muted-foreground"
+                      }
+                    >
                       {primary ? "Primary" : "Child"}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {thread.agent.name}
                     </span>
-                    <span className="hidden font-mono text-[12px] text-muted-foreground lg:inline">
+                    <span
+                      className={
+                        compact
+                          ? "hidden"
+                          : "hidden font-mono text-[12px] text-muted-foreground lg:inline"
+                      }
+                    >
                       <IdCode id={thread.id} />
                     </span>
                     <StatusBadge status={thread.status} />
                     <span
-                      className="w-24 shrink-0 text-right text-[12px] text-muted-foreground"
+                      className={
+                        compact
+                          ? "col-span-2 text-xs text-muted-foreground"
+                          : "w-24 shrink-0 text-right text-[12px] text-muted-foreground"
+                      }
                       data-input-tokens={thread.usage.input_tokens}
                       data-output-tokens={thread.usage.output_tokens}
                     >
                       {tokenCount(thread.usage.input_tokens)} in ·{" "}
                       {tokenCount(thread.usage.output_tokens)} out
                     </span>
-                    <span
-                      className="w-14 shrink-0 text-right text-[12px] text-muted-foreground"
-                      data-duration-seconds={thread.stats.duration_seconds}
-                    >
-                      {durationLabel(thread.stats.duration_seconds * 1000)}
-                    </span>
+                    {!compact && (
+                      <span
+                        className="w-14 shrink-0 text-right text-[12px] text-muted-foreground"
+                        data-duration-seconds={thread.stats.duration_seconds}
+                      >
+                        {durationLabel(thread.stats.duration_seconds * 1000)}
+                      </span>
+                    )}
                   </button>
                   {!primary &&
                     !thread.archived_at &&

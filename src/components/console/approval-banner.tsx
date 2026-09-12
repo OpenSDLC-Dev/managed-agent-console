@@ -19,10 +19,12 @@ function PendingTool({
   event,
   sessionId,
   threadId,
+  compact = false,
 }: {
   event: SessionEvent;
   sessionId: string;
   threadId?: string;
+  compact?: boolean;
 }) {
   const send = useSendEvents(sessionId);
   const [denying, setDenying] = useState(false);
@@ -46,10 +48,14 @@ function PendingTool({
 
   return (
     <li className="flex flex-wrap items-center gap-2 text-[13px]">
-      <span className="font-mono">{event.name}</span>
-      <span className={cn("min-w-0 flex-1 truncate", WARNING_MUTED)}>
-        {JSON.stringify(event.input)}
-      </span>
+      {!compact && (
+        <>
+          <span className="font-mono">{event.name}</span>
+          <span className={cn("min-w-0 flex-1 truncate", WARNING_MUTED)}>
+            {JSON.stringify(event.input)}
+          </span>
+        </>
+      )}
       {denying ? (
         <span className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
           <Input
@@ -142,29 +148,34 @@ export function ApprovalBanner({
   pending,
   sessionId,
   threadId,
+  inline = false,
 }: {
   pending: SessionEvent[];
   sessionId: string;
   threadId?: string;
+  inline?: boolean;
 }) {
   if (pending.length === 0) return null;
   return (
     <div
       data-testid="approval-banner"
       data-pending-count={pending.length}
-      className={cn("mb-6 rounded-lg border p-4", WARNING_BOX)}
+      className={
+        inline ? undefined : cn("mb-6 rounded-lg border p-4", WARNING_BOX)
+      }
     >
-      <p className="text-sm font-medium">
+      <p className={inline ? "sr-only" : "text-sm font-medium"}>
         Waiting on {pending.length} tool approval
         {pending.length === 1 ? "" : "s"}
       </p>
-      <ul className="mt-2 space-y-2">
+      <ul className={inline ? "space-y-2" : "mt-2 space-y-2"}>
         {pending.map((event) => (
           <PendingTool
             key={event.id}
             event={event}
             sessionId={sessionId}
             threadId={threadId}
+            compact={inline}
           />
         ))}
       </ul>
