@@ -15,12 +15,22 @@ import type {
   SessionThread,
 } from "@/lib/platform/types";
 
-export function SessionOverview({ session }: { session: Session }) {
+export function SessionOverview({
+  session,
+  status = session.status,
+}: {
+  session: Session;
+  status?: string;
+}) {
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      data-testid="session-overview"
+      data-status={status}
+    >
       <dl className="grid grid-cols-[100px_minmax(0,1fr)] gap-y-2 text-sm">
         <Field label="Status">
-          <StatusBadge status={session.status} />
+          <StatusBadge status={status} />
         </Field>
         <Field label="Agent">
           <Link

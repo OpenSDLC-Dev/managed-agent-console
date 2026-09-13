@@ -13,6 +13,7 @@ import {
   IdleBand,
   TranscriptRow,
   TranscriptCard,
+  StreamingPreview,
 } from "./event-row";
 import { eventSearchText } from "@/lib/session-trace/summary";
 import type { SessionEvent } from "@/lib/platform/types";
@@ -27,6 +28,37 @@ const ev = (type: string, extra?: object): SessionEvent =>
 
 const renderRow = (event: SessionEvent, approvalPending = false) =>
   render(<TranscriptRow event={event} approvalPending={approvalPending} />);
+
+it("shows start-only thinking without invented duration or an inspectable event", () => {
+  const { rerender } = render(
+    <StreamingPreview
+      preview={{ id: "thinking", type: "agent.thinking", parts: [] }}
+      actor="Alpha"
+    />,
+  );
+  const preview = screen.getByTestId("preview-row");
+  expect(preview).toHaveAttribute("data-event-id", "thinking");
+  expect(preview).toHaveTextContent("Thinking…");
+  expect(preview.querySelector("[data-duration-ms]")).toBeNull();
+  expect(screen.queryByRole("button")).toBeNull();
+  rerender(
+    <StreamingPreview
+      preview={{
+        id: "message",
+        type: "agent.message",
+        parts: ["<script>literal</script>"],
+      }}
+      actor="Beta"
+    />,
+  );
+  expect(preview).toHaveAttribute("data-event-id", "message");
+  expect(preview.querySelector("[data-event-actor]")).toHaveAttribute(
+    "data-event-actor",
+    "Beta",
+  );
+  expect(preview).toHaveTextContent("<script>literal</script>");
+  expect(preview.querySelector("script")).toBeNull();
+});
 
 it("renders persisted plain-string user messages without changing the raw event", async () => {
   const event = ev("user.message", {

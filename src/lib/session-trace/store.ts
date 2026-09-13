@@ -22,7 +22,8 @@ export interface PreviewState {
 }
 
 export interface TraceState {
-  /** Persisted events in arrival order (log order — the wire appends). */
+  /** History plus ID-bearing live events, in arrival order. Live archive
+   * termination may be ephemeral; reloading uses the server history only. */
   events: SessionEvent[];
   /** ids present in `events`, for dedup. */
   seen: Set<string>;
@@ -33,6 +34,11 @@ export interface TraceState {
 
 export function emptyTrace(): TraceState {
   return { events: [], seen: new Set(), previews: new Map(), deleted: false };
+}
+
+/** Preview bytes are best-effort, never stored or replayed by the platform. */
+export function clearPreviews(state: TraceState): TraceState {
+  return state.previews.size ? { ...state, previews: new Map() } : state;
 }
 
 export function applyPersisted(
@@ -80,10 +86,13 @@ interface EventDeltaFrame {
 }
 
 export function applyFrame(state: TraceState, data: unknown): TraceState {
+  if (!data || typeof data !== "object") return state;
   const frame = data as { type?: string };
   switch (frame.type) {
     case "event_start": {
       const { event } = frame as unknown as EventStartFrame;
+      if (typeof event?.id !== "string" || typeof event.type !== "string")
+        return state;
       if (state.seen.has(event.id) || state.previews.has(event.id))
         return state;
       const previews = new Map(state.previews);
@@ -92,8 +101,18 @@ export function applyFrame(state: TraceState, data: unknown): TraceState {
     }
     case "event_delta": {
       const { event_id, delta } = frame as unknown as EventDeltaFrame;
-      if (delta?.type !== "content_delta") return state;
-      // A delta can arrive before its start after a reconnect — open lazily.
+      const index = delta?.index ?? 0;
+      const text = delta?.content?.text ?? "";
+      if (
+        typeof event_id !== "string" ||
+        delta?.type !== "content_delta" ||
+        !Number.isSafeInteger(index) ||
+        index < 0 ||
+        typeof text !== "string"
+      )
+        return state;
+      // A mid-turn subscription may miss the start. Show the available suffix;
+      // only the final event (or history) supplies the complete message.
       if (state.seen.has(event_id)) return state;
       const previews = new Map(state.previews);
       const preview = previews.get(event_id) ?? {
@@ -102,13 +121,12 @@ export function applyFrame(state: TraceState, data: unknown): TraceState {
         parts: [],
       };
       const parts = [...preview.parts];
-      const index = delta.index ?? 0;
-      parts[index] = (parts[index] ?? "") + (delta.content?.text ?? "");
+      parts[index] = (parts[index] ?? "") + text;
       previews.set(event_id, { ...preview, parts });
       return { ...state, previews };
     }
     case "session.deleted":
-      return { ...state, deleted: true };
+      return { ...clearPreviews(state), deleted: true };
     case "ping":
     case "error":
       return state;

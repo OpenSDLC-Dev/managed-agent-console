@@ -35,6 +35,7 @@ import {
   EventDetailPanel,
   IdleBand,
   TranscriptCard,
+  StreamingPreview,
 } from "@/components/console/event-row";
 import {
   ApprovalBanner,
@@ -635,29 +636,11 @@ function SessionWorkspace({ id }: { id: string }) {
                       </Fragment>
                     ))}
                     {visiblePreviews.map((preview) => (
-                      <div
+                      <StreamingPreview
                         key={preview.id}
-                        data-testid="preview-row"
-                        className="flex flex-wrap gap-3 border-b py-2.5 last:border-b-0"
-                      >
-                        <div className="text-[12px] text-muted-foreground">
-                          …
-                        </div>
-                        <div className="min-w-0">
-                          <Badge
-                            variant="outline"
-                            className="animate-pulse font-mono text-[11px] font-normal"
-                          >
-                            {preview.type}
-                          </Badge>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="whitespace-pre-wrap">
-                            {preview.parts.join("")}
-                            <span className="animate-pulse">▍</span>
-                          </p>
-                        </div>
-                      </div>
+                        preview={preview}
+                        actor={selectedThread?.agent.name ?? data.agent.name}
+                      />
                     ))}
                   </div>
                 </div>
@@ -686,7 +669,7 @@ function SessionWorkspace({ id }: { id: string }) {
           >
             {inspector === "session" && (
               <div className="space-y-5">
-                <SessionOverview session={data} />{" "}
+                <SessionOverview session={data} status={status} />{" "}
                 {!selectedThreadId && outcomesSupported && (
                   <SessionOutcomes
                     sessionId={id}

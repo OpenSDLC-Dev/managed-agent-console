@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn, tokenAttr } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import type { SessionEvent } from "@/lib/platform/types";
+import type { PreviewState } from "@/lib/session-trace/store";
 import { Time, WARNING_BOX } from "@/components/console/bits";
 import { JsonBlock } from "@/components/console/detail";
 import { durationLabel } from "@/lib/session-trace/timing";
@@ -146,6 +147,50 @@ export function TranscriptRow({
       </div>
       <MetaColumn offset={offset} durationMs={durationMs} />
     </button>
+  );
+}
+
+/** The same message shell while the final, inspectable event is still in flight. */
+export function StreamingPreview({
+  preview,
+  actor,
+}: {
+  preview: PreviewState;
+  actor: string;
+}) {
+  const thinking = preview.type === "agent.thinking";
+  return (
+    <article
+      data-testid="preview-row"
+      data-event-id={preview.id}
+      data-event-type={preview.type}
+      data-streaming="true"
+      className="min-w-0 py-1.5"
+    >
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span
+          data-event-actor={actor}
+          className="rounded bg-secondary px-1.5 py-0.5 text-foreground"
+        >
+          {actor}
+        </span>
+        {!thinking && <span>Responding…</span>}
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card p-3 text-sm">
+        {thinking ? (
+          <p className="animate-pulse italic text-muted-foreground">
+            Thinking…
+          </p>
+        ) : (
+          <p className="whitespace-pre-wrap break-words">
+            {preview.parts.join("")}
+            <span aria-hidden="true" className="animate-pulse">
+              ▍
+            </span>
+          </p>
+        )}
+      </div>
+    </article>
   );
 }
 

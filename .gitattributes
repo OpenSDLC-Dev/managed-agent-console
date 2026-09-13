@@ -9,3 +9,6 @@
 *.woff binary
 *.woff2 binary
 *.zip binary
+
+# Captured SSE bytes include a required blank-line frame terminator at EOF.
+test/fixtures/recordings-8/*.sse -text whitespace=-blank-at-eof

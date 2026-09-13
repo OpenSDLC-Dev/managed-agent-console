@@ -294,7 +294,15 @@ describe("SessionDetailPage", () => {
     expect(within(preview).getByText(/Streaming/)).toBeInTheDocument();
 
     // The latest trace status (running) wins over the fetched session status.
-    expect(screen.getByText("running")).toBeInTheDocument();
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "Session inspector" }),
+      ).getByText("running"),
+    ).toBeInTheDocument();
+    // The display projection must not rewrite the underlying GET response.
+    expect(screen.getByTestId("session-overview")).toHaveTextContent(
+      '"status": "idle"',
+    );
     expect(
       screen.getByRole("button", { name: /Interrupt/ }),
     ).toBeInTheDocument();

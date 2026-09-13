@@ -53,7 +53,10 @@ describe("platformGet", () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(platformGet("v1/agents")).resolves.toEqual({ data: [] });
-    expect(fetchMock).toHaveBeenCalledWith("/api/platform/v1/agents");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/platform/v1/agents",
+      undefined,
+    );
   });
 
   it("serializes scalars and arrays and skips undefined params", async () => {
@@ -69,6 +72,7 @@ describe("platformGet", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/platform/v1/sessions?limit=1000&order=asc&active=true" +
         "&event_types%5B%5D=user.message&event_types%5B%5D=agent.message",
+      undefined,
     );
   });
 

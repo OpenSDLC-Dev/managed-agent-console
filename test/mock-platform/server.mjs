@@ -6,6 +6,7 @@
 // approval round trip and streamed replies.
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import {
@@ -65,6 +66,19 @@ let outcomeCounter = 1;
 const nextOutcomeId = () =>
   `outc_mock${String(outcomeCounter++).padStart(20, "0")}`;
 const now = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+
+// Deterministic controls for the captured #8 preview; no wall-clock animation
+// race in E2E/fidelity, and the payloads stay byte-derived from the recording.
+const previewFrames = readFileSync(
+  new URL("../fixtures/recordings-8/preview-00.sse", import.meta.url),
+  "utf8",
+)
+  .split(/\r?\n/)
+  .filter((line) => line.startsWith("data: "))
+  .map((line) => JSON.parse(line.slice(6)));
+const previewDeltas = previewFrames.filter(
+  (event) => event.type === "event_delta",
+);
 
 // ---- mutable session store (reset via POST /__reset) ---------------------
 
@@ -1392,6 +1406,53 @@ const server = createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === "POST" && url.pathname === "/__live-preview") {
+    const state = store.get("sesn_gatedbash00000000001");
+    const step = url.searchParams.get("step");
+    const send = (event) =>
+      event.id
+        ? broadcast(state, event)
+        : broadcastRaw(state, "message", event);
+    if (step === "setup") {
+      cancelStreams(state);
+      for (const subscriber of state.subscribers) subscriber.end();
+      state.subscribers.clear();
+      state.events = [];
+      state.session.status = "idle";
+      state.session.title = "Live response preview";
+      state.streamOffline = false;
+    } else if (step === "thinking") {
+      setStatus(state, "running");
+      send(previewFrames.find((event) => event.type === "user.message"));
+      send(
+        previewFrames.find((event) => event.event?.type === "agent.thinking"),
+      );
+    } else if (step === "text") {
+      send(previewFrames.find((event) => event.type === "agent.thinking"));
+      send(
+        previewFrames.find((event) => event.event?.type === "agent.message"),
+      );
+      previewDeltas.slice(0, 40).forEach(send);
+    } else if (step === "finish") {
+      previewDeltas.slice(40).forEach(send);
+      send(previewFrames.find((event) => event.type === "agent.message"));
+      setStatus(state, "idle", { type: "end_turn" });
+    } else if (step === "drop") {
+      state.streamOffline = true;
+      for (const subscriber of state.subscribers) subscriber.end();
+      state.subscribers.clear();
+    } else if (step === "resume") {
+      state.streamOffline = false;
+    } else {
+      res.writeHead(400);
+      res.end();
+      return;
+    }
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   // Test hook: restore fixtures between e2e tests. No auth on purpose.
   if (req.method === "POST" && url.pathname === "/__multiagent") {
     const fixture = multiagentScenario(
@@ -1828,6 +1889,11 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && (streamMatch || threadStreamMatch)) {
     const match = streamMatch ?? threadStreamMatch;
     const state = store.get(match[1]);
+    if (state?.streamOffline) {
+      res.writeHead(503);
+      res.end();
+      return;
+    }
     if (!state) {
       res.setHeader("content-type", "application/json");
       res.writeHead(404);
