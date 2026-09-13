@@ -24,7 +24,7 @@ test.beforeEach(async ({ request, page }) => {
 test("an empty archived Session reloads from empty history without requiring a terminal frame", async ({
   page,
 }) => {
-  await page.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
   await expect(page).toHaveURL(/\/sessions$/);
   await page.goto(ROUTE);
