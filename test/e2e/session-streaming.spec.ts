@@ -43,6 +43,10 @@ test("thinking and growing text share the final message shell and reconcile by d
 }) => {
   await step(request, "thinking");
   const preview = page.getByTestId("preview-row");
+  await expect(page.getByTestId("session-overview")).toHaveAttribute(
+    "data-status",
+    "running",
+  );
   await expect(preview).toHaveAttribute("data-event-type", "agent.thinking");
   await expect(preview.locator("[data-event-actor]")).toHaveAttribute(
     "data-event-actor",
@@ -54,6 +58,10 @@ test("thinking and growing text share the final message shell and reconcile by d
   await expect(preview).not.toContainText("PREVIEW_400");
   await step(request, "finish");
   await expect(preview).toHaveCount(0);
+  await expect(page.getByTestId("session-overview")).toHaveAttribute(
+    "data-status",
+    "idle",
+  );
   const final = page
     .getByTestId("event-row")
     .and(page.locator(`[data-event-id="${ID}"]`));

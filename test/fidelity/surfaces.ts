@@ -93,8 +93,12 @@ export const SURFACES: Surface[] = [
         await step("setup");
         await page.reload();
         await traceLive(page);
-        if (view === "narrow")
+        if (view === "narrow") {
           await page.setViewportSize({ width: 480, height: 900 });
+          await page
+            .getByRole("button", { name: "Close session inspector" })
+            .click();
+        }
         await step("thinking");
         await page
           .locator(
@@ -107,6 +111,7 @@ export const SURFACES: Surface[] = [
           '[data-testid="preview-row"][data-event-type="agent.message"]',
         );
         await preview.waitFor();
+        if (view === "narrow") await preview.scrollIntoViewIfNeeded();
         if (view === "final") {
           await step("finish");
           await preview.waitFor({ state: "detached" });

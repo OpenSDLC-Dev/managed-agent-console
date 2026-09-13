@@ -669,7 +669,7 @@ function SessionWorkspace({ id }: { id: string }) {
           >
             {inspector === "session" && (
               <div className="space-y-5">
-                <SessionOverview session={data} />{" "}
+                <SessionOverview session={data} status={status} />{" "}
                 {!selectedThreadId && outcomesSupported && (
                   <SessionOutcomes
                     sessionId={id}
