@@ -44,7 +44,8 @@ test("thinking and growing text share the final message shell and reconcile by d
   await step(request, "thinking");
   const preview = page.getByTestId("preview-row");
   await expect(preview).toHaveAttribute("data-event-type", "agent.thinking");
-  await expect(preview.locator("[data-event-actor]")).toHaveText(
+  await expect(preview.locator("[data-event-actor]")).toHaveAttribute(
+    "data-event-actor",
     "General task agent",
   );
   await step(request, "text");

@@ -127,6 +127,44 @@ const flush = () =>
   });
 
 describe("useSessionTrace", () => {
+  it("ignores malformed and repeated live stop frames without losing a new preview", async () => {
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_status"),
+    );
+    await flush();
+    streams[0].push(ev("idle", "session.status_idle"));
+    streams[0].push({
+      type: "event_start",
+      event: { id: "new_preview", type: "agent.message" },
+    });
+    streams[0].push({ type: "session.status_idle" });
+    streams[0].push(ev("idle", "session.status_idle"));
+    await flush();
+    expect([...result.current.trace.previews.keys()]).toEqual(["new_preview"]);
+    unmount();
+  });
+
+  it("still ends an aborted preview when the first live stop frame overlaps catch-up history", async () => {
+    seedPages = [
+      { data: [] },
+      { data: [ev("overlap_idle", "session.status_idle")] },
+    ];
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_overlap"),
+    );
+    await flush();
+    // The tail buffered this start and stop while catch-up already saw the
+    // persisted idle. The aborted preview has no final event in that history.
+    streams[0].push({
+      type: "event_start",
+      event: { id: "aborted", type: "agent.message" },
+    });
+    streams[0].push(ev("overlap_idle", "session.status_idle"));
+    await flush();
+    expect(result.current.trace.previews.size).toBe(0);
+    unmount();
+  });
+
   it("retains the attached stream when catch-up returns 404 after session deletion", async () => {
     const baseFetch = fetchMock.getMockImplementation()!;
     let refuseHistory!: () => void;

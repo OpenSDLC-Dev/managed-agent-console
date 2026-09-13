@@ -43,6 +43,7 @@ export function useSessionTrace(
     let controller: AbortController | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let finishWait: (() => void) | undefined;
+    const liveStops = new Set<string>();
     traceRef.current = emptyTrace();
     setTrace(traceRef.current);
     setConnection("connecting");
@@ -149,15 +150,23 @@ export function useSessionTrace(
             update(applyFrame(traceRef.current, data));
             // A stopped/aborted turn may never persist its previews. Child
             // status fan-out on the parent must not clear the parent's reply.
-            const type = (data as { type?: string } | null)?.type;
+            const event = data as { id?: unknown; type?: unknown } | null;
+            const type = event?.type;
             const prefix = threadId
               ? "session.thread_status_"
               : "session.status_";
             if (
+              typeof event?.id === "string" &&
+              traceRef.current.seen.has(event.id) &&
+              !liveStops.has(event.id) &&
               ["idle", "rescheduled", "terminated"].some(
                 (status) => type === prefix + status,
               )
             ) {
+              // A first live stop can already be in catch-up history and must
+              // still end a buffered, aborted preview. Only repeated LIVE
+              // boundaries are ignored; history dedup alone cannot decide it.
+              liveStops.add(event.id);
               update(clearPreviews(traceRef.current));
             }
             if (traceRef.current.deleted) {
