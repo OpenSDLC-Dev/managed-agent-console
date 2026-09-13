@@ -462,7 +462,7 @@ export function useSessionThreads(id: string, refetchInterval?: number) {
 /**
  * Send events into a session's log (user.message, user.tool_confirmation,
  * user.interrupt). The SSE trace picks up the results; only the session
- * object (status, usage) needs invalidating.
+ * and thread resources (status, usage) need invalidating.
  */
 export function useSendEvents(sessionId: string) {
   const queryClient = useQueryClient();
@@ -475,6 +475,9 @@ export function useSendEvents(sessionId: string) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["session-threads", sessionId],
+      });
     },
   });
 }

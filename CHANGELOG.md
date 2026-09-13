@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Multiagent inspection restores child selection from the URL, keeps approvals in the parent view and interrupts the whole Session. Thread history no longer sends the unsupported order parameter.
+
+- Agent rosters use removable subagent chips with Raw version pins; Session timelines retain named thread rows and messages link to their peer threads.
+
 - Session Archive acts directly and returns full-page inspection to the list after success. Embedded inspectors retain their context; pending requests cannot be duplicated, and platform refusals stay visible.
 
 - Session creation retains selected Agent/version and Environment/hosting names after option menus close.
@@ -106,8 +110,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Agents can be configured as coordinators with an ordered, version-pinned
   roster. Session details list primary and child threads, switch to each
-  thread's live trace, route approvals and interrupts to the selected child,
-  and archive idle child threads.
+  thread's live trace, keep approvals in the parent view and interrupt the
+  whole Session. Idle-child archival is available in Thread API response.
 
 - Sessions can attach and remove uploaded-file resources, and can be created
   with GitHub repository or memory-store attachments. Repository tokens are

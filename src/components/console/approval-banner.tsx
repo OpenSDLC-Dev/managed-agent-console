@@ -42,12 +42,10 @@ export function useToolApprovals(sessionId: string) {
 function PendingTool({
   event,
   approvals,
-  threadId,
   compact = false,
 }: {
   event: SessionEvent;
   approvals: ReturnType<typeof useToolApprovals>;
-  threadId?: string;
   compact?: boolean;
 }) {
   const [denying, setDenying] = useState(false);
@@ -60,9 +58,7 @@ function PendingTool({
       type: "user.tool_confirmation",
       tool_use_id: event.id,
       result,
-      ...((event.session_thread_id ?? threadId)
-        ? { session_thread_id: event.session_thread_id ?? threadId }
-        : {}),
+      // api/events.go resolves the owning thread from tool_use_id.
       ...(result === "deny" && denying && denyMessage
         ? { deny_message: denyMessage }
         : {}),
@@ -169,12 +165,10 @@ function PendingTool({
 export function ApprovalBanner({
   pending,
   approvals,
-  threadId,
   inline = false,
 }: {
   pending: SessionEvent[];
   approvals: ReturnType<typeof useToolApprovals>;
-  threadId?: string;
   inline?: boolean;
 }) {
   if (pending.length === 0) return null;
@@ -196,7 +190,6 @@ export function ApprovalBanner({
             key={event.id}
             event={event}
             approvals={approvals}
-            threadId={threadId}
             compact={inline}
           />
         ))}

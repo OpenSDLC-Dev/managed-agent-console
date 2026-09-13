@@ -1,156 +1,88 @@
 "use client";
-
-import { Archive } from "lucide-react";
-import { ConfirmIconButton } from "@/components/console/archive-button";
 import {
   EmptyState,
   ErrorState,
-  IdCode,
   ListSkeleton,
   StatusBadge,
 } from "@/components/console/bits";
 import { DetailSection } from "@/components/console/detail";
-import { Button } from "@/components/ui/button";
 import { PlatformError } from "@/lib/platform/http";
-import { useArchiveSessionThread } from "@/lib/platform/queries";
 import type { SessionThread } from "@/lib/platform/types";
-import { durationLabel } from "@/lib/session-trace/timing";
 import { cn, tokenCount } from "@/lib/utils";
-
 export function SessionThreads({
-  sessionId,
   threads,
   error,
   loading,
   selectedId,
   onSelect,
-  compact = false,
 }: {
-  sessionId: string;
   threads: SessionThread[];
   error: Error | null;
   loading: boolean;
   selectedId: string | null;
   onSelect: (threadId: string | null) => void;
-  compact?: boolean;
 }) {
-  const archive = useArchiveSessionThread(sessionId);
-
-  // Older wire-compatible deployments may serve sessions without the nested
-  // threads route. The existing session remains usable in that case.
-  if (
-    error instanceof PlatformError &&
-    (error.status === 404 || error.status === 501)
-  )
+  if (error instanceof PlatformError && [404, 501].includes(error.status))
     return null;
-
   return (
     <DetailSection title="Threads" testId="session-threads">
       {error ? (
         <ErrorState error={error} />
       ) : loading ? (
         <ListSkeleton rows={2} />
-      ) : threads.length === 0 ? (
+      ) : !threads.length ? (
         <EmptyState title="No threads" />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card">
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn(
-              "h-auto w-full justify-start rounded-none border-b px-3 py-2 text-left",
-              selectedId === null && "bg-secondary/60",
-            )}
-            aria-pressed={selectedId === null}
-            onClick={() => onSelect(null)}
-          >
-            All threads
-          </Button>
-          <ol className="divide-y">
+        <table className="w-full table-fixed text-xs">
+          <thead className="border-b text-left text-muted-foreground">
+            <tr>
+              <th className="w-[42%] py-2 font-normal">Thread</th>
+              <th className="w-[25%] font-normal">Status</th>
+              <th className="text-right font-normal">Tokens</th>
+            </tr>
+          </thead>
+          <tbody>
             {threads.map((thread) => {
               const primary = thread.parent_thread_id === null;
+              const selected =
+                selectedId === thread.id || (selectedId === null && primary);
               return (
-                <li
+                <tr
                   key={thread.id}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2",
-                    selectedId === thread.id && "bg-secondary/60",
-                  )}
+                  className={cn("border-b", selected && "bg-secondary/60")}
                   data-thread-id={thread.id}
                   data-thread-status={thread.status}
+                  data-selected={selected}
                 >
-                  <button
-                    type="button"
-                    className={
-                      compact
-                        ? "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-left"
-                        : "flex min-w-0 flex-1 items-center gap-3 text-left"
-                    }
-                    aria-label={`${primary ? "Primary" : "Child"} thread ${thread.agent.name}`}
-                    aria-pressed={selectedId === thread.id}
-                    onClick={() => onSelect(thread.id)}
-                  >
-                    <span
-                      className={
-                        compact
-                          ? "sr-only"
-                          : "w-16 shrink-0 text-[12px] text-muted-foreground"
-                      }
+                  <td className="py-2 pr-2">
+                    <button
+                      type="button"
+                      className="w-full truncate rounded-sm px-1 py-1 text-left font-medium hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`${primary ? "Primary" : "Child"} thread ${thread.agent.name}`}
+                      aria-pressed={selected}
+                      onClick={() => onSelect(primary ? null : thread.id)}
                     >
-                      {primary ? "Primary" : "Child"}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
                       {thread.agent.name}
-                    </span>
-                    <span
-                      className={
-                        compact
-                          ? "hidden"
-                          : "hidden font-mono text-[12px] text-muted-foreground lg:inline"
-                      }
-                    >
-                      <IdCode id={thread.id} />
-                    </span>
+                    </button>
+                  </td>
+                  <td>
                     <StatusBadge status={thread.status} />
-                    <span
-                      className={
-                        compact
-                          ? "col-span-2 text-xs text-muted-foreground"
-                          : "w-24 shrink-0 text-right text-[12px] text-muted-foreground"
-                      }
-                      data-input-tokens={thread.usage.input_tokens}
-                      data-output-tokens={thread.usage.output_tokens}
-                    >
-                      {tokenCount(thread.usage.input_tokens)} in ·{" "}
-                      {tokenCount(thread.usage.output_tokens)} out
+                  </td>
+                  <td
+                    className="text-right text-muted-foreground"
+                    data-input-tokens={thread.usage.input_tokens}
+                    data-output-tokens={thread.usage.output_tokens}
+                  >
+                    <span className="block">
+                      {tokenCount(thread.usage.input_tokens)} in
                     </span>
-                    {!compact && (
-                      <span
-                        className="w-14 shrink-0 text-right text-[12px] text-muted-foreground"
-                        data-duration-seconds={thread.stats.duration_seconds}
-                      >
-                        {durationLabel(thread.stats.duration_seconds * 1000)}
-                      </span>
-                    )}
-                  </button>
-                  {!primary &&
-                    !thread.archived_at &&
-                    thread.status === "idle" && (
-                      <ConfirmIconButton
-                        label={`Archive thread ${thread.agent.name}`}
-                        title="Archive thread"
-                        description="The child thread becomes terminated and cannot accept more work."
-                        pending={archive.isPending}
-                        onConfirm={() => archive.mutate(thread.id)}
-                      >
-                        <Archive className="size-4" />
-                      </ConfirmIconButton>
-                    )}
-                </li>
+                    <span>{tokenCount(thread.usage.output_tokens)} out</span>
+                  </td>
+                </tr>
               );
             })}
-          </ol>
-        </div>
+          </tbody>
+        </table>
       )}
     </DetailSection>
   );

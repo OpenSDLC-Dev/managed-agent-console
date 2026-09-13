@@ -333,3 +333,38 @@ describe("IdleBand", () => {
     expect(band).toHaveTextContent("Session idle ·");
   });
 });
+
+it.each(["sent", "received"])(
+  "renders a thread message %s with its complete content and peer navigation",
+  async (direction) => {
+    const received = direction === "received";
+    const select = vi.fn();
+    render(
+      <TranscriptCard
+        actor="Coordinator"
+        onSelect={vi.fn()}
+        onSelectThread={select}
+        threadNames={new Map([["sthr_peer", "Worker"]])}
+        event={ev(`agent.thread_message_${direction}`, {
+          content: [
+            {
+              type: "text",
+              text: "Inspect this workspace.\nKeep the second line.",
+            },
+          ],
+          [received ? "from_session_thread_id" : "to_session_thread_id"]:
+            "sthr_peer",
+        })}
+      />,
+    );
+    expect(screen.getByTestId("event-row")).toHaveTextContent(
+      "Keep the second line.",
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: `${received ? "From" : "To"} Worker`,
+      }),
+    );
+    expect(select).toHaveBeenCalledWith("sthr_peer");
+  },
+);

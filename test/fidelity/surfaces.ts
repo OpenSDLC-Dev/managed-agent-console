@@ -1323,6 +1323,29 @@ export const SURFACES: Surface[] = [
       await page.getByTestId("debug-row").first().waitFor();
     },
   },
+  ...["parent", "child", "child-running", "child-narrow"].map(
+    (view): Surface => ({
+      id: "session-multiagent-" + view,
+      route: `/sessions/${SESSION}?inspector=thread`,
+      fixture: "recordings #7, coordinator and Alpha/Beta child threads",
+      description:
+        "Named timeline rows, parent-only approvals, child navigation and Session-wide interrupt.",
+      setup: async (page) => {
+        await page.request.post(
+          `${MOCK_URL}/__multiagent${view === "child-running" ? "?running=true" : ""}`,
+        );
+        if (view === "child-narrow")
+          await page.setViewportSize({ width: 480, height: 900 });
+        await page.goto(
+          `/sessions/${SESSION}?inspector=thread${view !== "parent" ? "&thread=sthr_multiagentalpha00001" : ""}`,
+        );
+        await traceLive(page);
+        await page
+          .locator('[data-thread-id="sthr_multiagentbeta00001"]')
+          .waitFor();
+      },
+    }),
+  ),
   {
     id: "session-child-thread",
     route: `/sessions/${SESSION}?inspector=thread`,

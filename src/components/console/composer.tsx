@@ -40,31 +40,43 @@ export function Composer({
     send.mutate([
       {
         type: "user.interrupt",
-        ...(threadId ? { session_thread_id: threadId } : {}),
       },
     ]);
 
   if (threadId) {
     return (
       <div
-        className="flex items-center justify-between rounded-lg border bg-card p-3"
+        className="space-y-2 rounded-lg border bg-card p-3"
         data-session-thread-id={threadId}
         data-agent-name={threadName}
       >
-        <p className="text-[13px] text-muted-foreground">
-          {threadName ?? "This child"} receives work from the coordinator.
-        </p>
-        {running && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            disabled={disabled || send.isPending}
-            onClick={interrupt}
+        <textarea
+          aria-label="Child thread message"
+          readOnly
+          value=""
+          rows={2}
+          placeholder={`${threadName ?? "This child"} receives work from the coordinator.`}
+          className="w-full resize-none bg-transparent text-sm text-muted-foreground outline-none"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <p
+            role={send.error ? "alert" : undefined}
+            className="text-xs text-destructive"
           >
-            <OctagonX className="size-4" /> Interrupt child
-          </Button>
-        )}
+            {send.error instanceof Error ? send.error.message : ""}
+          </p>
+          {running && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              disabled={disabled || send.isPending}
+              onClick={interrupt}
+            >
+              <OctagonX className="size-4" /> Interrupt session
+            </Button>
+          )}
+        </div>
       </div>
     );
   }

@@ -9,26 +9,23 @@ test("creates a coordinator with an ordered roster", async ({ page }) => {
   await signIn(page);
   await page.goto("/agents/new");
   await page.getByLabel("Name").fill("Coordinator");
-  await page.getByRole("button", { name: "Enable coordinator" }).click();
+  await page.getByRole("combobox", { name: "Add subagent" }).click();
   await page
-    .getByLabel("Agent", { exact: true })
-    .selectOption("agent_taskrunner0000000001");
-  await page.getByRole("button", { name: "Add member" }).click();
+    .getByRole("option", { name: "General task agent", exact: true })
+    .click();
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
 
   await expect(page).toHaveURL(/\/agents\/agent_mock/);
   const roster = page.getByTestId("agent-multiagent");
   await expect(roster).toBeVisible();
   const members = roster.locator("[data-roster-index]");
-  await expect(members).toHaveCount(2);
+  await expect(members).toHaveCount(1);
   await expect(members.nth(0)).toHaveAttribute("data-roster-index", "0");
-  await expect(members.nth(0)).toHaveAttribute("data-agent-id", /agent_mock/);
-  await expect(members.nth(1)).toHaveAttribute("data-roster-index", "1");
-  await expect(members.nth(1)).toHaveAttribute(
+  await expect(members.nth(0)).toHaveAttribute(
     "data-agent-id",
     "agent_taskrunner0000000001",
   );
-  await expect(members.nth(1)).toHaveAttribute("data-agent-version", "1");
+  await expect(members.nth(0)).toHaveAttribute("data-agent-version", "1");
 });
 
 test("switches to a child trace and archives the idle child", async ({
@@ -45,7 +42,7 @@ test("switches to a child trace and archives the idle child", async ({
     "live",
   );
   const attribution = page.locator(
-    '[data-session-thread-id="sthr_taskrunnerresearch0001"]',
+    '[data-session-thread-id="sthr_taskrunnerresearch0001"][data-agent-name="General task agent"]',
   );
   await expect(attribution).toHaveAttribute(
     "data-agent-name",
@@ -100,6 +97,7 @@ test("switches to a child trace and archives the idle child", async ({
     1,
   );
 
+  await page.getByText("Thread API response", { exact: true }).click();
   await page
     .getByRole("button", { name: "Archive thread General task agent" })
     .click();
@@ -107,7 +105,7 @@ test("switches to a child trace and archives the idle child", async ({
   await expect(child).toHaveAttribute("data-thread-status", "terminated");
   await expect(page.getByTestId("session-effective-status")).toHaveAttribute(
     "data-status",
-    "terminated",
+    "running",
   );
   const terminatedThreadStatus = await page.evaluate(async () => {
     const response = await fetch(

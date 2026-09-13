@@ -166,3 +166,43 @@ it("keeps a thread without finite model usage inspectable", () => {
     screen.getByText("No model usage in the loaded thread view."),
   ).toBeVisible();
 });
+
+it("retains named rows across a child selection and uses explicit cross-post attribution", async () => {
+  const child = {
+    ...thread,
+    id: "sthr_child",
+    parent_thread_id: thread.id,
+    agent: { ...thread.agent, name: "Worker" },
+  };
+  const onSelectThread = vi.fn();
+  render(
+    <SessionTimeline
+      events={[
+        ...events,
+        { ...events[4], id: "child_call", session_thread_id: child.id },
+        { ...events[0], id: "unknown_thread", session_thread_id: "sthr_new" },
+      ]}
+      threads={[thread, child]}
+      selectedThreadId={child.id}
+      onSelectThread={onSelectThread}
+      scopeId="session"
+      selectedId={null}
+      onSelect={vi.fn()}
+      actions={null}
+    >
+      {null}
+    </SessionTimeline>,
+  );
+  const row = document.querySelector('[data-timeline-thread-id="sthr_child"]')!;
+  expect(row).toHaveAttribute("data-selected", "true");
+  expect(row.querySelector('[data-event-id="child_call"]')).not.toBeNull();
+  expect(
+    document.querySelector(
+      '[data-timeline-thread-id="unassigned"] [data-event-id="unknown_thread"]',
+    ),
+  ).not.toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: `View thread ${thread.agent.name}` }),
+  );
+  expect(onSelectThread).toHaveBeenCalledWith(thread.id);
+});

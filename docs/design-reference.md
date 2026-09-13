@@ -612,7 +612,7 @@ inspection and nested resource facts follow below.
 
 Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools/Resources/Threads; `inspector=thread` selects Threads and `event=ID` restores event detail. Message/tool cards retain full content and place approval controls beside the pending call. Debug and the platform Outcomes projection remain available.
 
-Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. Real multiagent reference traces and raw SSE deltas remain unrecorded. Timeline and zoom boundaries follow below.
+Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. The later multiagent recording and its implemented boundaries follow below. Raw SSE follow-up is separate from this UI change.
 
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
 
@@ -634,7 +634,7 @@ Timeline positions use `events.go:eventWire`'s persisted `processed_at`; only ma
 
 Review found coincident markers masking one another. Overlapping visible intervals now occupy separate lanes inside a bounded, scrollable track; pointer regression checks every fixture event at fit and zoomed scales. This preserves timestamp positions while keeping each event reachable.
 
-`threads.go:renderThread/threadScope` supplies the pinned Agent snapshot, usage and event scope; its primary view is the Session view. The chart reads each `domain.ModelUsage.input_tokens` counter in request order. It does not infer context size, costs or thread totals. The reference's context/cost/active-time fields have no implemented platform equivalent; raw API responses remain available. Populated child-thread behavior is verified locally, but the reference recording contains only a primary thread.
+`threads.go:renderThread/threadScope` supplies the pinned Agent snapshot, usage and event scope; its primary view is the Session view. The chart reads each `domain.ModelUsage.input_tokens` counter in request order. It does not infer context size, costs or thread totals. The reference's context/cost/active-time fields have no implemented platform equivalent; raw API responses remain available. The September 12 multiagent follow-up below supersedes the earlier primary-only reference coverage.
 
 ## Deployment list inspector — checked 2026-09-12
 
@@ -675,3 +675,17 @@ The real Session expanded `/acceptance/brief.md` in place and switched between M
 These checks cover one primary Thread and a manual run. They do not establish populated reference multiagent behavior, raw SSE deltas, external OAuth authorization or scheduled execution; unsupported budget, billing and catalog features remain capability boundaries. Final PR/CI and Docker revision evidence lives in [#141](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/141).
 
 The final creation-dialog walk reproduced the same selected-label loss in Session creation: closed menus showed Agent and Environment IDs. Both labels now resolve from loaded options, retaining the pinned-version display for Agent-originated creation and using IDs only when an option is unavailable. The existing resource-creation browser cases check both labels before submission.
+
+## Populated multiagent — checked 2026-09-13
+
+[Recordings #7](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/7) is closed with an explicit feasibility boundary: `2026-09-12-console-followups` at `ff39763` records roster chips, Raw version pins, child URL/history and parent approvals; `2026-09-12-child-lifecycle` at `de7beb0` records native Session-wide interruption with both children running. Both sealed offline verifiers passed locally.
+
+- Follow-ups frames 004/007/011: Add subagent and removable chips, ordered by removal/reinsertion; explicit versions remain in Raw. Platform `api/roster.go` resolves omitted member versions on save. Saved pins survive unrelated edits and existing Session snapshots remain server-owned. Self is an explicit platform option; Advisor is unsupported.
+- Frames 016–025: named timeline rows, a Threads table and `?inspector=thread&thread=ID`; child transcripts show Viewing/Parent thread and Spawned by navigation. Only the parent view offers Approve/Deny. Native `approvals[13,37]` omits thread IDs; platform `events.go` resolves confirmations by tool ID.
+- Lifecycle `ui[146]`: child-selected Interrupt posts a bare `user.interrupt` and stops both children. `ui[215]` directly archives the Session. No native targeted-child interrupt or child-archive control was observed; scripted cleanup is not native evidence. The platform's idle-child archive remains an explicit extension inside Thread API response, outside the reference table and Session actions.
+- `threads.go` rejects Session-only event ordering/filter parameters on thread history. The child list uses its ascending default. Parent and selected-child streams stay distinct; parent timeline/export and Session status retain Session scope.
+- Platform `events/threadmsg.go` supplies peer IDs and full message content. Named timeline rows use explicit cross-post IDs and tool/result correlation; the parent API does not expose every child's model spans, so the Console does not fabricate those bars. Token counters and request input charts stand in for unsupported context/cost fields.
+
+This change ends with owner verification. Recording follow-ups #8, #9 and #10 are deferred.
+
+The real `c42da36` Docker run created Alpha and Beta as distinct child threads, each parked on its own ask-gated bash call. Its cross-posted tool calls carry `session_thread_id` without `agent_name`; transcript attribution therefore resolves the pinned thread name by ID, and tool results through their call correlation. The old child history request returned no usable trace because of its unsupported `order` parameter. Bookmarks also retain the Session fallback when the Threads capability is unavailable.

@@ -125,7 +125,7 @@ describe("Composer", () => {
     expect(sentEvents(fetchMock)).toEqual([{ type: "user.interrupt" }]);
   });
 
-  it("targets an interrupt at the selected child thread", async () => {
+  it("keeps a child read-only and interrupts the whole Session", async () => {
     const fetchMock = vi.fn(async () => okEvents());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
@@ -136,15 +136,15 @@ describe("Composer", () => {
     });
 
     expect(
-      screen.getByText("Research worker receives work from the coordinator."),
+      screen.getByPlaceholderText(
+        "Research worker receives work from the coordinator.",
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByLabelText("Message to the session")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Interrupt child" }));
+    await user.click(screen.getByRole("button", { name: "Interrupt session" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(sentEvents(fetchMock)).toEqual([
-      { type: "user.interrupt", session_thread_id: "sthr_child" },
-    ]);
+    expect(sentEvents(fetchMock)).toEqual([{ type: "user.interrupt" }]);
   });
 
   it("interrupt & send batches the interrupt with the new message and clears text", async () => {

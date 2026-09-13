@@ -18,6 +18,7 @@ import {
   useArchiveSession,
   useDeleteSession,
   useUpdateSession,
+  useSendEvents,
 } from "@/lib/platform/queries";
 import type { Session } from "@/lib/platform/types";
 
@@ -32,6 +33,7 @@ export function SessionActions({
 }) {
   const router = useRouter();
   const update = useUpdateSession(session.id);
+  const interrupt = useSendEvents(session.id);
   const archive = useArchiveSession(session.id);
   const remove = useDeleteSession(session.id);
   const [open, setOpen] = useState(false);
@@ -75,6 +77,12 @@ export function SessionActions({
       )}
       <ResourceActions
         resource="session"
+        onInterrupt={
+          !session.archived_at
+            ? () => interrupt.mutate([{ type: "user.interrupt" }])
+            : undefined
+        }
+        interruptPending={interrupt.isPending}
         archived={!!session.archived_at}
         confirmArchive={false}
         deleteDescription="Permanently delete this session, its event history, and the files it produced. Files uploaded through the Files API are retained. Interrupt a running session before deleting it."
@@ -94,6 +102,11 @@ export function SessionActions({
         }
         deletePending={remove.isPending}
       />
+      {interrupt.error && (
+        <p role="alert" className="text-xs text-destructive">
+          {interrupt.error.message}
+        </p>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
