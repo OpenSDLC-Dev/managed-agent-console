@@ -154,6 +154,21 @@ describe("mock fixtures conform to the platform wire", () => {
     eachIn(EnvironmentKeySchema, fixtures.environmentKeys, "environmentKeys");
   });
 
+  it.each([false, true])(
+    "multiagent follow-up scenario conforms (running=%s)",
+    (running) => {
+      const scenario = fixtures.multiagentScenario(running);
+      expectConforms(SessionSchema, scenario.session, "multiagent.session");
+      each(SessionThreadSchema, scenario.threads, "multiagent.threads");
+      each(SessionEventSchema, scenario.events, "multiagent.events");
+      eachIn(
+        SessionEventSchema,
+        scenario.threadEvents,
+        "multiagent.threadEvents",
+      );
+    },
+  );
+
   it("covers every collection the mock exports", () => {
     // A new fixture collection must be validated here, not silently skipped.
     expect(Object.keys(fixtures).sort()).toEqual([
@@ -169,6 +184,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "memoryResources",
       "memoryStores",
       "memoryVersions",
+      "multiagentScenario",
       "sessionEvents",
       "sessionThreadEvents",
       "sessionThreads",

@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Archive } from "lucide-react";
+import { ConfirmIconButton } from "./archive-button";
+import { useArchiveSessionThread } from "@/lib/platform/queries";
 import type { SessionEvent, SessionThread } from "@/lib/platform/types";
 import { tokenAttr, tokenCount } from "@/lib/utils";
 import { Field, JsonBlock } from "./detail";
@@ -12,10 +15,14 @@ export function SessionThreadPreview({
   thread,
   events,
   onSelectEvent,
+  parent,
+  onSelectThread,
 }: {
   thread: SessionThread;
   events: SessionEvent[];
   onSelectEvent: (id: string) => void;
+  parent?: SessionThread;
+  onSelectThread?: (id: string) => void;
 }) {
   // domain/event.go:ModelUsage. These are per-request input counters, not context-size estimates.
   const requests = events.filter(
@@ -51,6 +58,16 @@ export function SessionThreadPreview({
             {thread.agent.name} · v{thread.agent.version}
           </Link>
         </Field>
+        {parent && onSelectThread && (
+          <Field label="Spawned by">
+            <button
+              className="break-words text-left hover:underline"
+              onClick={() => onSelectThread(parent.id)}
+            >
+              {parent.agent.name}
+            </button>
+          </Field>
+        )}
         <Field label="Model">
           <code className="break-all">{thread.agent.model.id}</code>
         </Field>
@@ -152,7 +169,29 @@ export function SessionThreadPreview({
           Thread API response
         </summary>
         <JsonBlock value={thread} />
+        {thread.parent_thread_id &&
+          !thread.archived_at &&
+          thread.status === "idle" && <ArchiveChildThread thread={thread} />}
       </details>
     </section>
+  );
+}
+
+// Platform extension, outside the reference's Session actions and thread table.
+function ArchiveChildThread({ thread }: { thread: SessionThread }) {
+  const archive = useArchiveSessionThread(thread.session_id);
+  return (
+    <div className="mt-2 flex items-center gap-2 text-xs">
+      <span>Archive this idle child thread</span>
+      <ConfirmIconButton
+        label={`Archive thread ${thread.agent.name}`}
+        title="Archive thread"
+        description="The child thread becomes terminated and cannot accept more work."
+        pending={archive.isPending}
+        onConfirm={() => archive.mutate(thread.id)}
+      >
+        <Archive className="size-4" />
+      </ConfirmIconButton>
+    </div>
   );
 }

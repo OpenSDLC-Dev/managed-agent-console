@@ -951,3 +951,96 @@ export const environmentKeys = {
     },
   ],
 };
+
+// recordings #7 visual scenario, expressed only with implemented platform fields.
+export function multiagentScenario(running = false) {
+  const base = structuredClone(sessions[1]);
+  const primary = structuredClone(sessionThreads[base.id][0]);
+  const children = ["Alpha", "Beta"].map((name, index) => ({
+    ...structuredClone(sessionThreads[base.id][1]),
+    id: `sthr_multiagent${name.toLowerCase()}00001`,
+    agent: {
+      ...threadAgentOf(agents[1]),
+      id: `agent_${name.toLowerCase()}00000000000001`,
+      name,
+      version: index + 1,
+    },
+    status: running ? "running" : "idle",
+  }));
+  primary.status = running ? "running" : "idle";
+  base.status = primary.status;
+  base.title = "Multiagent reference acceptance";
+  base.outcome_evaluations = [];
+  base.agent.multiagent = {
+    type: "coordinator",
+    agents: children.map((child) => child.agent),
+  };
+  const events = [
+    {
+      id: "sevt_multiagentstart00001",
+      type: running ? "session.status_running" : "session.status_idle",
+      processed_at: T1,
+    },
+  ];
+  /** @type {Record<string, any[]>} */
+  const threadEvents = {};
+  for (const child of children) {
+    const status = {
+      id: `sevt_${child.id}status`,
+      type: running
+        ? "session.thread_status_running"
+        : "session.thread_status_idle",
+      processed_at: T2,
+      session_thread_id: child.id,
+      agent_name: child.agent.name,
+      ...(!running
+        ? {
+            stop_reason: {
+              type: "requires_action",
+              event_ids: [`sevt_${child.id}tool`],
+            },
+          }
+        : {}),
+    };
+    const sent = {
+      id: `sevt_${child.id}sent`,
+      type: "agent.thread_message_sent",
+      processed_at: T1,
+      to_session_thread_id: child.id,
+      to_agent_name: child.agent.name,
+      content: [
+        { type: "text", text: `Inspect the ${child.agent.name} workspace.` },
+      ],
+    };
+    const tool = {
+      id: `sevt_${child.id}tool`,
+      type: "agent.tool_use",
+      processed_at: T2,
+      name: "bash",
+      input: { command: `echo ${child.agent.name}` },
+      evaluated_permission: "ask",
+      session_thread_id: child.id,
+      agent_name: child.agent.name,
+    };
+    events.push(sent, ...(!running ? [tool] : []), status);
+    threadEvents[child.id] = [
+      {
+        id: `sevt_${child.id}received`,
+        type: "agent.thread_message_received",
+        processed_at: T1,
+        from_session_thread_id: primary.id,
+        from_agent_name: null,
+        content: sent.content,
+      },
+      ...(!running ? [{ ...tool, session_thread_id: null }] : []),
+      status,
+    ];
+  }
+  threadEvents[primary.id] = events;
+  return {
+    session: base,
+    threads: [primary, ...children],
+    events,
+    threadEvents,
+  };
+}

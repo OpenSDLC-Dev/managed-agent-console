@@ -11,7 +11,7 @@ import { RequestId } from "@/components/console/bits";
 import { useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, Check, Copy, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -354,7 +354,6 @@ export function AgentEditor({
   const leave = useUnsavedChanges(dirty);
   const [rawError, setRawError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [memberToAdd, setMemberToAdd] = useState("");
 
   const create = useCreateAgent();
   const update = useUpdateAgent(agentId ?? "");
@@ -918,94 +917,19 @@ export function AgentEditor({
             <Section
               level={inline ? 2 : 3}
               title="Multiagent"
-              hint="Turn this agent into a coordinator and choose the pinned agents it may run as child threads."
+              hint="Choose the agents this coordinator can delegate to. Pin specific versions in Raw."
             >
-              {form.multiagent === null ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => set("multiagent", [{ type: "self" }])}
-                >
-                  Enable coordinator
-                </Button>
-              ) : (
-                <div className="space-y-3" data-testid="agent-multiagent">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="min-w-0 flex-1 basis-64 space-y-1.5">
-                      <Label htmlFor="roster-member">Agent</Label>
-                      <select
-                        id="roster-member"
-                        value={memberToAdd}
-                        onChange={(event) => setMemberToAdd(event.target.value)}
-                        className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
-                      >
-                        <option value="">Choose an agent…</option>
-                        {!form.multiagent.some(
-                          (member) => member.type === "self",
-                        ) && (
-                          <option value="__self">
-                            This coordinator (self)
-                          </option>
-                        )}
-                        {(agentsQuery.data?.agents ?? [])
-                          .filter(
-                            (agent) =>
-                              !agent.archived_at &&
-                              !agent.multiagent &&
-                              agent.id !== agentId &&
-                              !form.multiagent!.some(
-                                (member) =>
-                                  member.type === "agent" &&
-                                  member.id === agent.id,
-                              ),
-                          )
-                          .map((agent) => (
-                            <option key={agent.id} value={agent.id}>
-                              {agent.name} · v{agent.version}
-                            </option>
-                          ))}
-                      </select>
-                      {agentsQuery.data?.truncated && (
-                        <p className="text-[12px] text-muted-foreground">
-                          Only the first 1,000 agents are available here.
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      disabled={!memberToAdd || form.multiagent.length >= 20}
-                      onClick={() => {
-                        if (!memberToAdd) return;
-                        const member: RosterMember =
-                          memberToAdd === "__self"
-                            ? { type: "self" }
-                            : {
-                                type: "agent",
-                                id: memberToAdd,
-                                version: agentsQuery.data?.agents.find(
-                                  (agent) => agent.id === memberToAdd,
-                                )?.version,
-                              };
-                        set("multiagent", [...form.multiagent!, member]);
-                        setMemberToAdd("");
-                      }}
-                    >
-                      <Plus className="size-4" /> Add member
-                    </Button>
-                  </div>
-                  <ol className="divide-y rounded-lg border">
+              <div className="space-y-3" data-testid="agent-multiagent">
+                <Label>Agents</Label>
+                {!!form.multiagent?.length && (
+                  <ol className="flex flex-wrap gap-2" aria-label="Subagents">
                     {form.multiagent.map((member, index) => {
-                      const agent =
-                        member.type === "agent"
-                          ? agentsQuery.data?.agents.find(
-                              (candidate) => candidate.id === member.id,
-                            )
-                          : undefined;
+                      const name =
+                        member.type === "self"
+                          ? "This coordinator (self)"
+                          : (agentsQuery.data?.agents.find(
+                              (agent) => agent.id === member.id,
+                            )?.name ?? member.id);
                       return (
                         <li
                           key={member.type === "self" ? "self" : member.id}
@@ -1016,87 +940,79 @@ export function AgentEditor({
                           data-agent-version={
                             member.type === "self" ? version : member.version
                           }
-                          className="flex items-center gap-2 px-3 py-2"
+                          className="inline-flex max-w-full items-center gap-1 rounded-md border bg-secondary/40 py-0.5 pl-2 text-sm"
                         >
-                          <span className="w-6 text-[12px] text-muted-foreground">
-                            {index + 1}
-                          </span>
-                          <span className="min-w-0 flex-1 break-words text-sm">
-                            {member.type === "self" ? (
-                              "This coordinator (self)"
-                            ) : (
-                              <>
-                                {agent?.name ?? member.id}
-                                <span className="pl-2 font-mono text-[12px] text-muted-foreground">
-                                  {member.id} · v{member.version ?? "latest"}
-                                </span>
-                              </>
-                            )}
-                          </span>
+                          <span className="truncate">{name}</span>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label={`Move member ${index + 1} up`}
-                            disabled={index === 0}
+                            aria-label={`Remove subagent ${name}`}
                             onClick={() => {
-                              const next = [...form.multiagent!];
-                              [next[index - 1], next[index]] = [
-                                next[index],
-                                next[index - 1],
-                              ];
-                              set("multiagent", next);
+                              const next = form.multiagent!.filter(
+                                (_, i) => i !== index,
+                              );
+                              set("multiagent", next.length ? next : null);
                             }}
                           >
-                            <ArrowUp className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Move member ${index + 1} down`}
-                            disabled={index === form.multiagent!.length - 1}
-                            onClick={() => {
-                              const next = [...form.multiagent!];
-                              [next[index], next[index + 1]] = [
-                                next[index + 1],
-                                next[index],
-                              ];
-                              set("multiagent", next);
-                            }}
-                          >
-                            <ArrowDown className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Remove member ${index + 1}`}
-                            disabled={form.multiagent!.length === 1}
-                            onClick={() =>
-                              set(
-                                "multiagent",
-                                form.multiagent!.filter((_, i) => i !== index),
-                              )
-                            }
-                          >
-                            <Trash2 className="size-4" />
+                            <X className="size-3.5" />
                           </Button>
                         </li>
                       );
                     })}
                   </ol>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 text-muted-foreground"
-                    onClick={() => set("multiagent", null)}
+                )}
+                <Select
+                  value=""
+                  disabled={(form.multiagent?.length ?? 0) >= 20}
+                  onValueChange={(id) => {
+                    if (!id) return;
+                    const member: RosterMember =
+                      id === "__self"
+                        ? { type: "self" }
+                        : { type: "agent", id };
+                    set("multiagent", [...(form.multiagent ?? []), member]);
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Add subagent"
+                    className="h-8 w-auto text-xs"
                   >
-                    Disable coordinator
-                  </Button>
-                </div>
-              )}
+                    <Plus className="size-3.5" />
+                    <SelectValue placeholder="Add subagent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!form.multiagent?.some(
+                      (member) => member.type === "self",
+                    ) && (
+                      <SelectItem value="__self">
+                        This coordinator (self)
+                      </SelectItem>
+                    )}
+                    {(agentsQuery.data?.agents ?? [])
+                      .filter(
+                        (agent) =>
+                          !agent.archived_at &&
+                          !agent.multiagent &&
+                          agent.id !== agentId &&
+                          !form.multiagent?.some(
+                            (member) =>
+                              member.type === "agent" && member.id === agent.id,
+                          ),
+                      )
+                      .map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {agentsQuery.data?.truncated && (
+                  <p className="text-xs text-muted-foreground">
+                    Only the first 1,000 agents are available here.
+                  </p>
+                )}
+              </div>
             </Section>
 
             {!schemaError && !readOnly && (

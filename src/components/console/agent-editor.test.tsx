@@ -319,23 +319,19 @@ describe("AgentEditor", () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(
-      screen.getByRole("button", { name: "Enable coordinator" }),
-    );
     await waitFor(() =>
-      expect(screen.getByLabelText("Agent")).toHaveTextContent("Worker · v4"),
+      expect(
+        screen.getByRole("button", { name: "Worker" }),
+      ).toBeInTheDocument(),
     );
-    fireEvent.change(screen.getByLabelText("Agent"), {
-      target: { value: worker.id },
-    });
-    await user.click(screen.getByRole("button", { name: "Add member" }));
+    await choose(user, "Add subagent", "Worker");
     expect(screen.getByText("Worker")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create agent" }));
     const body = JSON.parse(postCalls(mock)[0][1]?.body as string);
     expect(body.multiagent).toEqual({
       type: "coordinator",
-      agents: [{ type: "self" }, { type: "agent", id: worker.id, version: 4 }],
+      agents: [{ type: "agent", id: worker.id }],
     });
   });
 
@@ -358,12 +354,53 @@ describe("AgentEditor", () => {
     });
 
     await user.click(
-      screen.getByRole("button", { name: "Disable coordinator" }),
+      screen.getByRole("button", {
+        name: "Remove subagent This coordinator (self)",
+      }),
     );
     await user.click(screen.getByRole("button", { name: "Save changes" }));
 
     const body = JSON.parse(postCalls(mock)[0][1]?.body as string);
     expect(body).toMatchObject({ version: 3, multiagent: null });
+  });
+
+  it("preserves saved version pins and orders the roster by removal and reinsertion", async () => {
+    const alpha = agentResponse({
+      id: "agent_alpha",
+      name: "Alpha",
+      version: 9,
+    });
+    const beta = agentResponse({ id: "agent_beta", name: "Beta", version: 8 });
+    const mock = stubFetch({ agents: { data: [alpha, beta] } });
+    const user = userEvent.setup();
+    renderEditor({
+      mode: "edit",
+      agentId: "agent_coordinator",
+      version: 3,
+      initial: {
+        ...newAgentForm(),
+        multiagent: [
+          { type: "agent", id: alpha.id, version: 1 },
+          { type: "agent", id: beta.id, version: 2 },
+        ],
+      },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Remove subagent Alpha" }),
+      ).toBeInTheDocument(),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Remove subagent Alpha" }),
+    );
+    await choose(user, "Add subagent", "Alpha");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(
+      JSON.parse(postCalls(mock)[0][1]?.body as string).multiagent.agents,
+    ).toEqual([
+      { type: "agent", id: beta.id, version: 2 },
+      { type: "agent", id: alpha.id },
+    ]);
   });
 
   it("saves rendered-tab edits as the wire body and navigates on success", async () => {

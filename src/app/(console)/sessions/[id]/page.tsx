@@ -52,11 +52,7 @@ import { copyText } from "@/lib/copy-text";
 import { useSession, useSessionThreads } from "@/lib/platform/queries";
 import { PlatformError } from "@/lib/platform/http";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
-import {
-  latestStatus,
-  latestThreadStatus,
-  pendingToolUses,
-} from "@/lib/session-trace/store";
+import { latestStatus, pendingToolUses } from "@/lib/session-trace/store";
 import {
   ageLabel,
   idleGaps,
@@ -71,7 +67,13 @@ const FILTERS: { key: string; label: string; types?: string[] }[] = [
   {
     key: "messages",
     label: "Messages",
-    types: ["user.message", "agent.message", "agent.thinking"],
+    types: [
+      "user.message",
+      "agent.message",
+      "agent.thinking",
+      "agent.thread_message_sent",
+      "agent.thread_message_received",
+    ],
   },
   {
     key: "tools",
@@ -271,26 +273,46 @@ function SessionWorkspace({ id }: { id: string }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const requestedThreadId = filters.params.get("thread") || null;
+  const selectedThreadId =
+    threads.data?.data.find((thread) => thread.id === requestedThreadId)
+      ?.parent_thread_id === null
+      ? null
+      : requestedThreadId;
+  const selectThread = (thread: string | null) => {
+    const primary =
+      threads.data?.data.find((item) => item.id === thread)
+        ?.parent_thread_id === null;
+    filters.update({
+      thread: primary ? null : thread,
+      event: null,
+      inspector: "thread",
+    });
+  };
   const session = useSession(id, 15_000);
-  const { trace, connection } = useSessionTrace(
+  // Keep the shared timeline and Session controls live while viewing a child.
+  const sessionTrace = useSessionTrace(id);
+  const childTrace = useSessionTrace(
     id,
     selectedThreadId ?? undefined,
+    selectedThreadId !== null,
   );
+  const { trace, connection } = selectedThreadId ? childTrace : sessionTrace;
 
   const selectedThread = threads.data?.data.find(
     (thread) => thread.id === selectedThreadId,
   );
   // threads.go:threadScope serves the primary's events through the Session view.
-  const inspectedThread =
-    selectedThread ??
-    threads.data?.data.find((thread) => thread.parent_thread_id === null);
+  const inspectedThread = selectedThreadId
+    ? selectedThread
+    : threads.data?.data.find((thread) => thread.parent_thread_id === null);
+  const parentThread = threads.data?.data.find(
+    (thread) => thread.id === selectedThread?.parent_thread_id,
+  );
 
-  const status = selectedThread
-    ? selectedThread.archived_at || selectedThread.status === "terminated"
-      ? selectedThread.status
-      : (latestThreadStatus(trace) ?? selectedThread.status)
-    : (latestStatus(trace) ?? session.data?.status);
+  const status = session.data?.archived_at
+    ? session.data.status
+    : (latestStatus(sessionTrace.trace) ?? session.data?.status);
   const running = status === "running";
 
   const pending = useMemo(
@@ -377,14 +399,19 @@ function SessionWorkspace({ id }: { id: string }) {
       />
       <SessionChips session={data} />
       <SessionTimeline
-        key={selectedThreadId ?? id}
-        scopeId={selectedThreadId ?? id}
-        events={trace.events}
+        key={id}
+        scopeId={id}
+        events={sessionTrace.trace.events}
+        threads={threads.data?.data}
+        selectedThreadId={selectedThreadId}
+        onSelectThread={selectThread}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelect={(event) =>
+          filters.update({ thread: null, event, inspector: "events" })
+        }
         actions={
           <>
-            <CopyAllButton events={trace.events} />
+            <CopyAllButton events={sessionTrace.trace.events} />
             <Button
               variant="ghost"
               size="sm"
@@ -411,8 +438,27 @@ function SessionWorkspace({ id }: { id: string }) {
       </SessionTimeline>
       <div className="relative flex min-h-0 flex-1 gap-3 pt-3">
         <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {selectedThreadId && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm"
+              data-viewing-thread-id={selectedThreadId}
+            >
+              <span>
+                Viewing{" "}
+                {selectedThread?.agent.name ??
+                  (threads.isPending ? "thread…" : "unavailable thread")}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => selectThread(parentThread?.id ?? null)}
+              >
+                Parent thread
+              </Button>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {!data.archived_at && !trace.deleted && (
+            {!selectedThreadId && !data.archived_at && !trace.deleted && (
               <ApprovalBanner
                 pending={pending.filter(
                   (tool) =>
@@ -420,7 +466,6 @@ function SessionWorkspace({ id }: { id: string }) {
                     !visible.some((event) => event.id === tool.id),
                 )}
                 approvals={approvals}
-                threadId={selectedThreadId ?? undefined}
               />
             )}
 
@@ -531,16 +576,37 @@ function SessionWorkspace({ id }: { id: string }) {
                           durationMs={durations.get(e.id)}
                           selected={e.id === selectedId}
                           actor={selectedThread?.agent.name ?? data.agent.name}
+                          onSelectThread={selectThread}
+                          threadNames={
+                            new Map(
+                              threads.data?.data.map((thread) => [
+                                thread.id,
+                                thread.agent.name,
+                              ]),
+                            )
+                          }
                           approval={
                             !data.archived_at &&
                             !trace.deleted &&
                             pending.some((tool) => tool.id === e.id) ? (
-                              <ApprovalBanner
-                                inline
-                                pending={[e]}
-                                approvals={approvals}
-                                threadId={selectedThreadId ?? undefined}
-                              />
+                              selectedThreadId ? (
+                                <p
+                                  className="text-xs text-muted-foreground"
+                                  data-approval-state={
+                                    approvals.states[e.id]?.status ?? "required"
+                                  }
+                                >
+                                  {approvals.states[e.id]?.status === "success"
+                                    ? "Confirmation sent"
+                                    : "Requires approval"}
+                                </p>
+                              ) : (
+                                <ApprovalBanner
+                                  inline
+                                  pending={[e]}
+                                  approvals={approvals}
+                                />
+                              )
                             ) : undefined
                           }
                           onSelect={() =>
@@ -587,10 +653,8 @@ function SessionWorkspace({ id }: { id: string }) {
             <Composer
               sessionId={id}
               running={running}
-              disabled={!!data.archived_at || trace.deleted}
-              threadId={
-                selectedThread?.parent_thread_id ? selectedThread.id : undefined
-              }
+              disabled={!!data.archived_at || sessionTrace.trace.deleted}
+              threadId={selectedThreadId ?? undefined}
               threadName={selectedThread?.agent.name}
             />
           </div>
@@ -620,20 +684,17 @@ function SessionWorkspace({ id }: { id: string }) {
             {inspector === "thread" && (
               <>
                 <SessionThreads
-                  compact
-                  sessionId={id}
                   threads={threads.data?.data ?? []}
                   error={threads.error}
                   loading={threads.isPending}
                   selectedId={selectedThreadId}
-                  onSelect={(threadId) => {
-                    setSelectedThreadId(threadId);
-                    setSelectedId(null);
-                  }}
+                  onSelect={selectThread}
                 />
                 {inspectedThread && (
                   <SessionThreadPreview
                     thread={inspectedThread}
+                    parent={parentThread}
+                    onSelectThread={selectThread}
                     events={trace.events}
                     onSelectEvent={setSelectedId}
                   />

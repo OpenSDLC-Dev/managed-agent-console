@@ -26,6 +26,8 @@ export function ResourceActions({
   onArchive,
   onDelete,
   onDownload,
+  onInterrupt,
+  interruptPending,
   archivePending,
   deletePending,
   confirmArchive = true,
@@ -38,6 +40,8 @@ export function ResourceActions({
   onArchive?: () => void;
   onDelete?: () => void;
   onDownload?: () => void;
+  onInterrupt?: () => void;
+  interruptPending?: boolean;
   archivePending?: boolean;
   deletePending?: boolean;
   confirmArchive?: boolean;
@@ -100,7 +104,7 @@ export function ResourceActions({
     };
   }, [menuOpen]);
 
-  if (!canArchive && !canDelete && !onDownload) return null;
+  if (!canArchive && !canDelete && !onDownload && !onInterrupt) return null;
 
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
@@ -139,6 +143,21 @@ export function ResourceActions({
             className="fixed z-50 min-w-36 rounded-lg border bg-popover p-1 shadow-md"
             style={{ top: menuPos.top, right: menuPos.right }}
           >
+            {onInterrupt && (
+              <button
+                type="button"
+                role="menuitem"
+                disabled={interruptPending}
+                className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                onClick={() => {
+                  setMenuOpen(false);
+                  triggerRef.current?.focus();
+                  onInterrupt();
+                }}
+              >
+                Send interrupt
+              </button>
+            )}
             {onDownload && (
               <button
                 type="button"

@@ -17,24 +17,12 @@ const toolUse = (id: string, extra?: object): SessionEvent =>
     ...extra,
   }) as SessionEvent;
 
-function Banner({
-  pending,
-  threadId,
-}: {
-  pending: SessionEvent[];
-  threadId?: string;
-}) {
+function Banner({ pending }: { pending: SessionEvent[] }) {
   const approvals = useToolApprovals("ses_1");
-  return (
-    <ApprovalBanner
-      pending={pending}
-      approvals={approvals}
-      threadId={threadId}
-    />
-  );
+  return <ApprovalBanner pending={pending} approvals={approvals} />;
 }
 
-function renderBanner(pending: SessionEvent[], threadId?: string) {
+function renderBanner(pending: SessionEvent[]) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -43,7 +31,7 @@ function renderBanner(pending: SessionEvent[], threadId?: string) {
   });
   return render(
     <QueryClientProvider client={client}>
-      <Banner pending={pending} threadId={threadId} />
+      <Banner pending={pending} />
     </QueryClientProvider>,
   );
 }
@@ -126,14 +114,11 @@ describe("ApprovalBanner", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("routes confirmation to the tool event's child thread", async () => {
+  it("lets the platform resolve the child from the confirmed tool ID", async () => {
     const fetchMock = vi.fn(async () => okEvents());
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
-    renderBanner(
-      [toolUse("sevt_t1", { session_thread_id: "sthr_event" })],
-      "sthr_selected",
-    );
+    renderBanner([toolUse("sevt_t1", { session_thread_id: "sthr_event" })]);
 
     await user.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -142,7 +127,6 @@ describe("ApprovalBanner", () => {
         type: "user.tool_confirmation",
         tool_use_id: "sevt_t1",
         result: "allow",
-        session_thread_id: "sthr_event",
       },
     ]);
   });

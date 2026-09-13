@@ -126,8 +126,31 @@ describe("useSessionTrace", () => {
     await flush();
     expect(result.current.connection).toBe("live");
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000&order=asc",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
       "/api/platform/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message",
+    ]);
+    unmount();
+  });
+
+  it("does not subscribe to a disabled child and clears the old trace when switching", async () => {
+    const { result, rerender, unmount } = renderHook(
+      ({ id, enabled }) => useSessionTrace("sess_1", id, enabled),
+      {
+        initialProps: { id: "sthr_1", enabled: false },
+      },
+    );
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    seedPages = [{ data: [ev("alpha", "agent.message")] }];
+    rerender({ id: "sthr_1", enabled: true });
+    await flush();
+    expect(result.current.trace.events[0].id).toBe("alpha");
+    seedPages = [{ data: [ev("beta", "agent.message")] }];
+    rerender({ id: "sthr_2", enabled: true });
+    expect(result.current.trace.events).toEqual([]);
+    await flush();
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "beta",
     ]);
     unmount();
   });

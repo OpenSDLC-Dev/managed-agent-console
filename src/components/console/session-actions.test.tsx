@@ -185,3 +185,18 @@ it("keeps archived sessions read-only and allows confirmed deletion", async () =
   ]);
   expect(client.getQueryData(["session", session.id])).toBeUndefined();
 });
+
+it("offers a Session-wide interrupt in Actions", async () => {
+  const { fetch } = setup();
+  await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+  await userEvent.click(
+    screen.getByRole("menuitem", { name: "Send interrupt" }),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(fetch.mock.calls[0][0]).toBe(
+    `/api/platform/v1/sessions/${session.id}/events`,
+  );
+  expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toEqual({
+    events: [{ type: "user.interrupt" }],
+  });
+});

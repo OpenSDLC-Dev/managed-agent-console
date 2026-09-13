@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Multiagent inspection restores child selection from the URL, keeps approvals in the parent view and interrupts the whole Session. Thread history no longer sends the unsupported order parameter.
+
+- Agent rosters use removable subagent chips with Raw version pins; Session timelines retain named thread rows and messages link to their peer threads.
+
 - Session Archive acts directly and returns full-page inspection to the list after success. Embedded inspectors retain their context; pending requests cannot be duplicated, and platform refusals stay visible.
 
 - Session creation retains selected Agent/version and Environment/hosting names after option menus close.

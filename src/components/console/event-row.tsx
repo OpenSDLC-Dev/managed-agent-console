@@ -158,6 +158,8 @@ export function TranscriptCard({
   durationMs,
   onSelect,
   approval,
+  onSelectThread,
+  threadNames,
 }: {
   event: SessionEvent;
   actor: string;
@@ -166,13 +168,28 @@ export function TranscriptCard({
   durationMs?: number;
   onSelect: () => void;
   approval?: ReactNode;
+  onSelectThread?: (id: string) => void;
+  threadNames?: Map<string, string>;
 }) {
   const content =
     typeof event.content === "string"
       ? [{ type: "text", text: event.content }]
       : event.content;
+  const received = event.type === "agent.thread_message_received";
+  const threadMessage = received || event.type === "agent.thread_message_sent";
+  const peerId = received
+    ? event.from_session_thread_id
+    : event.to_session_thread_id;
+  const peerName = received ? event.from_agent_name : event.to_agent_name;
+  const peerLabel =
+    typeof peerId === "string"
+      ? (threadNames?.get(peerId) ??
+        (typeof peerName === "string" ? peerName : peerId))
+      : undefined;
   const message =
-    event.type === "user.message" || event.type === "agent.message";
+    threadMessage ||
+    event.type === "user.message" ||
+    event.type === "agent.message";
   const tool = event.input !== undefined || event.type.includes("tool_result");
   const conversational = message || tool || event.type === "agent.thinking";
   if (!conversational) {
@@ -231,11 +248,21 @@ export function TranscriptCard({
           {event.type.startsWith("user.")
             ? "User"
             : event.type.startsWith("agent.")
-              ? (event.agent_name ?? actor)
+              ? received
+                ? (peerLabel ?? actor)
+                : (event.agent_name ?? actor)
               : event.type.startsWith("span.")
                 ? "Model"
                 : "Session"}
         </span>
+        {threadMessage && typeof peerId === "string" && onSelectThread && (
+          <button
+            className="rounded-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onSelectThread(peerId)}
+          >
+            {received ? "From" : "To"} {peerLabel}
+          </button>
+        )}
         <Time iso={event.processed_at} />
         <MetaColumn offset={offset} durationMs={durationMs} />
       </div>

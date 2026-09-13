@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SessionThreadPreview } from "./session-thread-preview";
 import { SessionThreads } from "./session-threads";
 import { PlatformError } from "@/lib/platform/http";
 import type { SessionThread } from "@/lib/platform/types";
@@ -68,7 +69,6 @@ it("selects a child thread and archives an idle child", async () => {
   render(
     <QueryClientProvider client={client}>
       <SessionThreads
-        sessionId="sess_1"
         threads={[
           thread("sthr_primary", null),
           thread("sthr_child", "sthr_primary"),
@@ -84,6 +84,25 @@ it("selects a child thread and archives an idle child", async () => {
   await user.click(screen.getByRole("button", { name: "Child thread Worker" }));
   expect(onSelect).toHaveBeenCalledWith("sthr_child");
 
+  expect(screen.queryByRole("button", { name: /Archive/ })).toBeNull();
+  await user.click(
+    screen.getByRole("button", { name: "Primary thread Coordinator" }),
+  );
+  expect(onSelect).toHaveBeenLastCalledWith(null);
+  render(
+    <QueryClientProvider client={client}>
+      <SessionThreadPreview
+        thread={thread("sthr_child", "sthr_primary")}
+        parent={thread("sthr_primary", null)}
+        onSelectThread={onSelect}
+        events={[]}
+        onSelectEvent={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+  await user.click(screen.getByRole("button", { name: "Coordinator" }));
+  expect(onSelect).toHaveBeenLastCalledWith("sthr_primary");
+  await user.click(screen.getByText("Thread API response"));
   await user.click(
     screen.getByRole("button", { name: "Archive thread Worker" }),
   );
@@ -102,7 +121,6 @@ it.each([404, 501])("hides the optional surface on HTTP %s", (status) => {
   const { container } = render(
     <QueryClientProvider client={client}>
       <SessionThreads
-        sessionId="sess_1"
         threads={[]}
         error={
           new PlatformError(status, {

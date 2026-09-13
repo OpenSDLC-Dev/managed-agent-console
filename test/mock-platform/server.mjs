@@ -10,6 +10,7 @@ import { argv } from "node:process";
 import { fileURLToPath } from "node:url";
 import {
   agents,
+  multiagentScenario,
   agentVersions,
   deployments,
   deploymentRuns,
@@ -732,7 +733,12 @@ function handleInbound(state, incoming) {
   const posted = [];
   const definitions = [];
   for (const raw of incoming) {
-    const threadId = raw.session_thread_id;
+    const threadId =
+      raw.session_thread_id ??
+      (raw.type === "user.tool_confirmation"
+        ? state.events.find((event) => event.id === raw.tool_use_id)
+            ?.session_thread_id
+        : undefined);
     const event = { id: nextEventId(), type: raw.type, processed_at: now() };
     switch (raw.type) {
       case "user.message":
@@ -787,7 +793,13 @@ function handleInbound(state, incoming) {
         threadId,
       );
     }
-    setStatus(state, "idle", { type: "end_turn" }, interrupt.session_thread_id);
+    if (!threadId)
+      for (const child of state.threads.filter(
+        (thread) => thread.parent_thread_id && !thread.archived_at,
+      )) {
+        setStatus(state, "idle", { type: "end_turn" }, child.id);
+      }
+    setStatus(state, "idle", { type: "end_turn" }, threadId);
   }
 
   if (interrupt) {
@@ -835,7 +847,10 @@ function handleInbound(state, incoming) {
   }
 
   for (const confirmation of confirmations) {
-    const threadId = confirmation.session_thread_id;
+    const threadId =
+      confirmation.session_thread_id ??
+      state.events.find((event) => event.id === confirmation.tool_use_id)
+        ?.session_thread_id;
     const denied = confirmation.result === "deny";
     appendEvent(
       state,
@@ -1378,6 +1393,17 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   // Test hook: restore fixtures between e2e tests. No auth on purpose.
+  if (req.method === "POST" && url.pathname === "/__multiagent") {
+    const fixture = multiagentScenario(
+      url.searchParams.get("running") === "true",
+    );
+    const state = store.get(fixture.session.id);
+    Object.assign(state, fixture);
+    res.setHeader("content-type", "application/json");
+    res.writeHead(200);
+    res.end(JSON.stringify({ id: fixture.session.id }));
+    return;
+  }
   if (req.method === "POST" && url.pathname === "/__reset") {
     resetStore();
     res.setHeader("content-type", "application/json");

@@ -878,7 +878,10 @@ const mutationCases: MutationCase[] = [
     method: "POST",
     jsonBody: { events: [{ type: "user.interrupt" }] },
     meta: { errorToast: false },
-    invalidates: [["session", "sess_1"]],
+    invalidates: [
+      ["session", "sess_1"],
+      ["session-threads", "sess_1"],
+    ],
   },
   {
     name: "useCreateAgent",

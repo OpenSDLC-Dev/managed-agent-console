@@ -24,7 +24,13 @@ export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
  * agent.message deltas, reconcile through the trace store, and reconnect
  * with backoff, reseeding to cover the gap.
  */
-export function useSessionTrace(sessionId: string, threadId?: string) {
+export function useSessionTrace(
+  sessionId: string,
+  threadId?: string,
+  enabled = true,
+) {
+  const scope = `${sessionId}/${threadId ?? ""}`;
+  const [loadedScope, setLoadedScope] = useState(scope);
   const [trace, setTrace] = useState<TraceState>(emptyTrace);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   // The store is also read/written inside the stream loop between renders.
@@ -36,6 +42,8 @@ export function useSessionTrace(sessionId: string, threadId?: string) {
     traceRef.current = emptyTrace();
     setTrace(traceRef.current);
     setConnection("connecting");
+    setLoadedScope(scope);
+    if (!enabled) return;
 
     const update = (next: TraceState) => {
       if (next !== traceRef.current && !cancelled) {
@@ -52,7 +60,8 @@ export function useSessionTrace(sessionId: string, threadId?: string) {
           : `v1/sessions/${sessionId}/events`;
         const result = await platformGet<Page<SessionEvent>>(eventPath, {
           limit: 1000,
-          order: "asc",
+          // api/threads.go: thread histories are ascending and reject order.
+          ...(threadId ? {} : { order: "asc" }),
           page,
         });
         update(applyPersisted(traceRef.current, result.data));
@@ -126,7 +135,10 @@ export function useSessionTrace(sessionId: string, threadId?: string) {
       cancelled = true;
       controller.abort();
     };
-  }, [sessionId, threadId]);
+  }, [sessionId, threadId, enabled, scope]);
 
-  return { trace, connection };
+  // A URL switch must never paint the previous child's events under a new name.
+  return loadedScope === scope
+    ? { trace, connection }
+    : { trace: emptyTrace(), connection: "connecting" as const };
 }
