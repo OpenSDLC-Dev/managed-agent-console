@@ -6,7 +6,7 @@ import {
   hasBouncedToLogin,
   isSignedOut,
 } from "@/lib/identity/signed-out";
-import { platformGet, type Page } from "@/lib/platform/http";
+import { platformGet, PlatformError, type Page } from "@/lib/platform/http";
 import type { SessionEvent } from "@/lib/platform/types";
 import { parseSseStream } from "./sse";
 import {
@@ -55,6 +55,12 @@ export function useSessionTrace(
         setTrace(next);
       }
     };
+
+    const waitForRetry = (ms: number) =>
+      new Promise<void>((resolve) => {
+        finishWait = resolve;
+        retryTimer = setTimeout(resolve, ms);
+      });
 
     async function seed(signal: AbortSignal) {
       let page: string | undefined;
@@ -110,9 +116,27 @@ export function useSessionTrace(
           if (!response.ok || !response.body) {
             throw new Error(`stream failed: HTTP ${response.status}`);
           }
-          await seed(controller.signal);
+          // A catch-up failure must not throw away live-only terminal bytes.
+          // Retry transient history failures on this SAME attached stream.
+          // Deletion makes history 404; consume the valid tail's deletion frame
+          // instead of trying to open a new stream on a now-missing Session.
+          while (!cancelled) {
+            try {
+              await seed(controller.signal);
+              break;
+            } catch (error) {
+              if (cancelled || hasBouncedToLogin()) throw error;
+              if (error instanceof PlatformError) {
+                if (error.status === 404) break;
+                if (error.status < 500) throw error;
+              }
+              setConnection("reconnecting");
+              await waitForRetry(backoff);
+              backoff = Math.min(backoff * 2, 15_000);
+            }
+          }
           if (cancelled) return;
-          if (!cancelled) setConnection("live");
+          setConnection("live");
           backoff = 1_000;
           for await (const frame of parseSseStream(response.body)) {
             if (cancelled) return;
@@ -155,10 +179,7 @@ export function useSessionTrace(
             return;
           }
           setConnection("reconnecting");
-          await new Promise<void>((resolve) => {
-            finishWait = resolve;
-            retryTimer = setTimeout(resolve, backoff);
-          });
+          await waitForRetry(backoff);
           backoff = Math.min(backoff * 2, 15_000);
         } finally {
           controller.abort();

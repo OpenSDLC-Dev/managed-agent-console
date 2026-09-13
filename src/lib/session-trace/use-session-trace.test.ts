@@ -127,6 +127,71 @@ const flush = () =>
   });
 
 describe("useSessionTrace", () => {
+  it("retains the attached stream when catch-up returns 404 after session deletion", async () => {
+    const baseFetch = fetchMock.getMockImplementation()!;
+    let refuseHistory!: () => void;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!String(input).includes("/stream?") && seedCount === 1) {
+        seedCount++;
+        return new Promise<Response>((resolve) => {
+          refuseHistory = () =>
+            resolve(
+              new Response(
+                JSON.stringify({
+                  type: "error",
+                  error: {
+                    type: "not_found_error",
+                    message: "no such session",
+                  },
+                }),
+                { status: 404 },
+              ),
+            );
+        });
+      }
+      return baseFetch(input, init);
+    });
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_deleted_during_seed"),
+    );
+    await flush();
+    streams[0].push({ type: "session.deleted" });
+    refuseHistory();
+    await flush();
+    expect(result.current.trace.deleted).toBe(true);
+    expect(result.current.connection).toBe("closed");
+    unmount();
+  });
+
+  it("keeps ephemeral termination bytes through a transient catch-up failure", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const baseFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      if (!String(input).includes("/stream?") && seedCount === 1) {
+        seedCount++;
+        streams[0].push(ev("ephemeral", "session.status_terminated"));
+        return new Response(null, { status: 502 });
+      }
+      return baseFetch(input, init);
+    });
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_ephemeral"),
+    );
+    await flush();
+    expect(result.current.connection).toBe("reconnecting");
+    expect(streams[0].signal?.aborted).toBe(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    await flush();
+    expect(streams).toHaveLength(1);
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "ephemeral",
+    ]);
+    expect(result.current.connection).toBe("live");
+    unmount();
+  });
+
   it("buffers live events during paginated catch-up and deduplicates the final event", async () => {
     const baseFetch = fetchMock.getMockImplementation()!;
     let releaseHistory!: (response: Response) => void;
