@@ -274,10 +274,13 @@ function SessionWorkspace({ id }: { id: string }) {
   const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
   const requestedThreadId = filters.params.get("thread") || null;
+  const requestedThread = threads.data?.data.find(
+    (thread) => thread.id === requestedThreadId,
+  );
   const selectedThreadId =
     !threadsAvailable ||
-    threads.data?.data.find((thread) => thread.id === requestedThreadId)
-      ?.parent_thread_id === null
+    (threads.data &&
+      (!requestedThread || requestedThread.parent_thread_id === null))
       ? null
       : requestedThreadId;
   const selectThread = (thread: string | null) => {

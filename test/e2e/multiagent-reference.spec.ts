@@ -264,3 +264,24 @@ for (const status of [404, 501]) {
     expect(childRequests).toBe(0);
   });
 }
+
+test("an unknown child bookmark retains the Session transcript and approvals", async ({
+  page,
+}) => {
+  let childRequests = 0;
+  page.on("request", (request) => {
+    if (request.url().includes(`/sessions/${session}/threads/`))
+      childRequests++;
+  });
+  await signIn(page, route + "&thread=sthr_missing");
+  await expect(page.locator("[data-thread-id]")).toHaveCount(3);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+  );
+  await expect(
+    page.getByRole("button", { name: "Approve", exact: true }),
+  ).toHaveCount(2);
+  await expect(page.locator("[data-viewing-thread-id]")).toHaveCount(0);
+  expect(childRequests).toBe(0);
+});
