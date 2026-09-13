@@ -309,6 +309,52 @@ describe("formFromAgent", () => {
 });
 
 describe("AgentEditor", () => {
+  it("shows agent loading and retries a failed list without changing saved members", async () => {
+    const worker = agentResponse({ id: "agent_worker", name: "Worker" });
+    let resolveAgents!: (response: Response) => void;
+    let attempts = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith("/api/platform/v1/skills"))
+          return json({ data: [] });
+        if (url.startsWith("/api/platform/v1/agents")) {
+          if (attempts++ === 0)
+            return new Promise<Response>((resolve) => {
+              resolveAgents = resolve;
+            });
+          return json({ data: [worker] });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    const user = userEvent.setup();
+    const saved = [{ type: "agent" as const, id: worker.id, version: 3 }];
+    renderEditor({ initial: { ...newAgentForm(), multiagent: saved } });
+    expect(screen.getByRole("button", { name: "Add subagent" })).toBeDisabled();
+    resolveAgents(
+      json({ error: { type: "api_error", message: "Unavailable" } }, 500),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not load agents",
+    );
+    expect(screen.getByRole("button", { name: "Add subagent" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Retry agents" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Remove subagent Worker" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "raw" }));
+    expect(rawConfig().multiagent).toEqual({
+      type: "coordinator",
+      agents: saved,
+    });
+    expect(attempts).toBe(2);
+  });
+
   it("builds an ordered coordinator roster from platform agents", async () => {
     const worker = agentResponse({
       id: "agent_worker",

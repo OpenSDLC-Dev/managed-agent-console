@@ -195,36 +195,42 @@ export function SessionTimeline({
                   </button>
                 )}
                 <div
-                  className="relative min-w-[400px] flex-1"
-                  style={{ height: row.height }}
+                  className={cn(
+                    "min-w-[400px] flex-1",
+                    row.label && "max-h-10 overflow-y-auto",
+                  )}
                 >
-                  {row.markers.map(({ event, duration, left, width, lane }) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      className={cn(
-                        "absolute h-6 rounded-sm opacity-75 hover:opacity-100 focus:z-20 focus:outline-2 focus:outline-ring",
-                        event.type.startsWith("span.model_request")
-                          ? "bg-blue-500"
-                          : event.type.startsWith("user.")
-                            ? "bg-pink-400"
-                            : "bg-muted-foreground",
-                        selectedId === event.id &&
-                          "z-10 outline-2 outline-ring",
-                      )}
-                      style={{
-                        left: `${left * 100}%`,
-                        width: `${width * 100}%`,
-                        top: lane * 28 + 4,
-                      }}
-                      data-event-id={event.id}
-                      data-duration-ms={duration}
-                      aria-label={`${event.type} at ${event.processed_at}`}
-                      aria-pressed={selectedId === event.id}
-                      title={`${event.type} · ${event.processed_at}`}
-                      onClick={() => onSelect(event.id)}
-                    />
-                  ))}
+                  <div className="relative" style={{ height: row.height }}>
+                    {row.markers.map(
+                      ({ event, duration, left, width, lane }) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          className={cn(
+                            "absolute h-6 rounded-sm opacity-75 hover:opacity-100 focus:z-20 focus:outline-2 focus:outline-ring",
+                            event.type.startsWith("span.model_request")
+                              ? "bg-blue-500"
+                              : event.type.startsWith("user.")
+                                ? "bg-pink-400"
+                                : "bg-muted-foreground",
+                            selectedId === event.id &&
+                              "z-10 outline-2 outline-ring",
+                          )}
+                          style={{
+                            left: `${left * 100}%`,
+                            width: `${width * 100}%`,
+                            top: lane * 28 + 4,
+                          }}
+                          data-event-id={event.id}
+                          data-duration-ms={duration}
+                          aria-label={`${event.type} at ${event.processed_at}`}
+                          aria-pressed={selectedId === event.id}
+                          title={`${event.type} · ${event.processed_at}`}
+                          onClick={() => onSelect(event.id)}
+                        />
+                      ),
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

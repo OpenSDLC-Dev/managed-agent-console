@@ -110,8 +110,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Agents can be configured as coordinators with an ordered, version-pinned
   roster. Session details list primary and child threads, switch to each
-  thread's live trace, route approvals and interrupts to the selected child,
-  and archive idle child threads.
+  thread's live trace, keep approvals in the parent view and interrupt the
+  whole Session. Idle-child archival is available in Thread API response.
 
 - Sessions can attach and remove uploaded-file resources, and can be created
   with GitHub repository or memory-store attachments. Repository tokens are

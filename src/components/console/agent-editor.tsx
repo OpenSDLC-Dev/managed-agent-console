@@ -964,7 +964,10 @@ export function AgentEditor({
                 )}
                 <Select
                   value=""
-                  disabled={(form.multiagent?.length ?? 0) >= 20}
+                  disabled={
+                    agentsQuery.isPending ||
+                    (form.multiagent?.length ?? 0) >= 20
+                  }
                   onValueChange={(id) => {
                     if (!id) return;
                     const member: RosterMember =
@@ -977,9 +980,16 @@ export function AgentEditor({
                   <SelectTrigger
                     aria-label="Add subagent"
                     className="h-8 w-auto text-xs"
+                    disabled={agentsQuery.isPending}
                   >
                     <Plus className="size-3.5" />
-                    <SelectValue placeholder="Add subagent" />
+                    <SelectValue
+                      placeholder={
+                        agentsQuery.isPending
+                          ? "Loading agents…"
+                          : "Add subagent"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {!form.multiagent?.some(
@@ -1007,6 +1017,18 @@ export function AgentEditor({
                       ))}
                   </SelectContent>
                 </Select>
+                {agentsQuery.isError && (
+                  <p className="text-xs text-destructive" role="alert">
+                    Could not load agents.{" "}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => agentsQuery.refetch()}
+                    >
+                      Retry agents
+                    </button>
+                  </p>
+                )}
                 {agentsQuery.data?.truncated && (
                   <p className="text-xs text-muted-foreground">
                     Only the first 1,000 agents are available here.

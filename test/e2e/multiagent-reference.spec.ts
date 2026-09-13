@@ -15,6 +15,28 @@ test.beforeEach(async ({ request }) => {
   );
 });
 
+test("all three thread labels remain visible and overlapping events remain clickable", async ({
+  page,
+}) => {
+  await signIn(page, route);
+  const timeline = page.getByRole("group", { name: "Event timeline" });
+  await expect(timeline.locator("[data-timeline-thread-id]")).toHaveCount(3);
+  for (const name of ["Deep researcher", "Alpha", "Beta"])
+    await expect(
+      timeline.getByRole("button", { name: `View thread ${name}` }),
+    ).toBeInViewport({ ratio: 1 });
+  const ids = await timeline
+    .locator("[data-event-id]")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute("data-event-id")!),
+    );
+  expect(ids.length).toBeGreaterThan(3);
+  for (const id of ids) {
+    await timeline.locator(`[data-event-id="${id}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`event=${id}`));
+  }
+});
+
 test("child selection survives reload and browser history while approval stays in the parent", async ({
   page,
 }) => {
