@@ -129,7 +129,15 @@ export function useSessionTrace(
               if (cancelled || hasBouncedToLogin()) throw error;
               if (error instanceof PlatformError) {
                 if (error.status === 404) break;
-                if (error.status < 500) throw error;
+                // Timeout/rate limiting can recover, like the query layer's
+                // retryable client errors (components/shell/providers.tsx).
+                if (
+                  error.status < 500 &&
+                  error.status !== 408 &&
+                  error.status !== 429
+                ) {
+                  throw error;
+                }
               }
               setConnection("reconnecting");
               await waitForRetry(backoff);
