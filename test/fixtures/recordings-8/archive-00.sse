@@ -1,0 +1,5 @@
+: connected
+
+event: message
+data: {"id":"sevt_01U6AArx1ZTmeTozYn75uzkk","processed_at":"2026-09-12T14:33:31.269923Z","type":"session.status_terminated"}
+

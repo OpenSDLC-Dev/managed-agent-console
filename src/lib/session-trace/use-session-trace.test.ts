@@ -22,6 +22,14 @@ class StreamHandle {
     },
   });
 
+  constructor(readonly signal?: AbortSignal | null) {
+    signal?.addEventListener(
+      "abort",
+      () => this.controller.error(new DOMException("Aborted", "AbortError")),
+      { once: true },
+    );
+  }
+
   push(frame: object) {
     const type = (frame as { type?: string }).type ?? "message";
     this.controller.enqueue(
@@ -49,7 +57,7 @@ let streams: StreamHandle[];
 let streamFails: boolean;
 let holdStream: boolean;
 let releaseStream: (() => void) | undefined;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 /** Seed requests from this call onwards come back signed out. */
 let signedOutFrom: number;
 let streamSignedOut: boolean;
@@ -74,7 +82,7 @@ beforeEach(() => {
   signedOutFrom = Number.POSITIVE_INFINITY;
   streamSignedOut = false;
   seedCount = 0;
-  fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (
       url.includes("/events/stream") ||
@@ -88,7 +96,7 @@ beforeEach(() => {
           releaseStream = resolve;
         });
       }
-      const handle = new StreamHandle();
+      const handle = new StreamHandle(init?.signal);
       streams.push(handle);
       return new Response(handle.stream, {
         status: 200,
@@ -119,6 +127,184 @@ const flush = () =>
   });
 
 describe("useSessionTrace", () => {
+  it("buffers live events during paginated catch-up and deduplicates the final event", async () => {
+    const baseFetch = fetchMock.getMockImplementation()!;
+    let releaseHistory!: (response: Response) => void;
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(input).includes("/stream?") && seedCount === 1) {
+          seedCount++;
+          return new Promise<Response>((resolve) => {
+            releaseHistory = resolve;
+          });
+        }
+        return baseFetch(input, init);
+      },
+    );
+    seedPages = [{ data: [ev("first", "user.message")] }];
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sess_buffer"),
+    );
+    await flush();
+    streams[0].push({
+      type: "event_start",
+      event: { id: "final", type: "agent.message" },
+    });
+    streams[0].push(ev("final", "agent.message"));
+    streams[0].push(ev("last", "session.status_idle"));
+    expect(result.current.connection).toBe("connecting");
+    seedPages = [{ data: [ev("final", "agent.message")] }];
+    releaseHistory(
+      new Response(
+        JSON.stringify({
+          data: [ev("first", "user.message"), ev("gap", "agent.thinking")],
+          next_page: "next",
+        }),
+      ),
+    );
+    await flush();
+    expect(result.current.connection).toBe("live");
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "first",
+      "gap",
+      "final",
+      "last",
+    ]);
+    expect(result.current.trace.previews.size).toBe(0);
+    unmount();
+  });
+
+  it("stops pagination and aborts history when a thread changes during a seed", async () => {
+    const baseFetch = fetchMock.getMockImplementation()!;
+    let releaseHistory!: (response: Response) => void;
+    let oldSignal: AbortSignal | null | undefined;
+    fetchMock.mockImplementationOnce(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        oldSignal = init?.signal;
+        return new Promise<Response>((resolve) => {
+          releaseHistory = resolve;
+        });
+      },
+    );
+    const { result, rerender, unmount } = renderHook(
+      ({ thread }) => useSessionTrace("sess_scope", thread),
+      { initialProps: { thread: "alpha" } },
+    );
+    await flush();
+    fetchMock.mockImplementation(baseFetch);
+    rerender({ thread: "beta" });
+    await flush();
+    expect(oldSignal?.aborted).toBe(true);
+    const calls = fetchMock.mock.calls.length;
+    releaseHistory(
+      new Response(
+        JSON.stringify({
+          data: [ev("alpha_only", "agent.message")],
+          next_page: "stale_page",
+        }),
+      ),
+    );
+    await flush();
+    expect(result.current.trace.events).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+    unmount();
+  });
+
+  it("isolates parent and child previews, boundaries and connection cancellation", async () => {
+    const { result, rerender, unmount } = renderHook(
+      ({ thread }) => ({
+        parent: useSessionTrace("sess_both"),
+        child: useSessionTrace("sess_both", thread),
+      }),
+      { initialProps: { thread: "alpha" } },
+    );
+    await flush();
+    for (const [index, id] of ["parent_preview", "alpha_preview"].entries())
+      streams[index].push({
+        type: "event_start",
+        event: { id, type: "agent.message" },
+      });
+    const childIdle = {
+      ...ev("idle_alpha", "session.thread_status_idle"),
+      session_thread_id: "alpha",
+    };
+    streams[0].push(childIdle);
+    streams[1].push(childIdle);
+    await flush();
+    expect([...result.current.parent.trace.previews.keys()]).toEqual([
+      "parent_preview",
+    ]);
+    expect(result.current.child.trace.previews.size).toBe(0);
+    rerender({ thread: "beta" });
+    await flush();
+    expect(streams[0].signal?.aborted).toBe(false);
+    expect(streams[1].signal?.aborted).toBe(true);
+    expect(result.current.child.trace.events).toEqual([]);
+    streams[0].push(ev("idle_parent", "session.status_idle"));
+    await flush();
+    expect(result.current.parent.trace.previews.size).toBe(0);
+    unmount();
+  });
+
+  it("recovers events committed between the initial history and live subscription", async () => {
+    holdStream = true;
+    seedPages = [{ data: [ev("before", "user.message")] }];
+    const { result, unmount } = renderHook(() => useSessionTrace("sess_gap"));
+    await flush();
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "before",
+    ]);
+    // The live-only tail will never replay this event: it committed before
+    // subscription. A history read AFTER attachment must cover that window.
+    seedPages = [
+      { data: [ev("before", "user.message"), ev("gap", "agent.message")] },
+    ];
+    releaseStream?.();
+    await flush();
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "before",
+      "gap",
+    ]);
+    unmount();
+  });
+
+  it("discards incomplete previews on a dropped connection while retaining received events", async () => {
+    seedPages = [{ data: [ev("before", "user.message")] }];
+    const { result, unmount } = renderHook(() => useSessionTrace("sess_drop"));
+    await flush();
+    streams[0].push({
+      type: "event_start",
+      event: { id: "aborted", type: "agent.message" },
+    });
+    await flush();
+    expect(result.current.trace.previews.size).toBe(1);
+    streams[0].end();
+    await flush();
+    expect(result.current.connection).toBe("reconnecting");
+    expect(result.current.trace.previews.size).toBe(0);
+    expect(result.current.trace.events.map((event) => event.id)).toEqual([
+      "before",
+    ]);
+    unmount();
+  });
+
+  it("opts into start-only thinking as well as text deltas without a replay cursor", async () => {
+    const { unmount } = renderHook(() => useSessionTrace("sess_thinking"));
+    await flush();
+    const streamCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/stream?"),
+    )!;
+    expect(
+      new URL(String(streamCall[0]), "http://console.test").searchParams.getAll(
+        "event_deltas[]",
+      ),
+    ).toEqual(["agent.message", "agent.thinking"]);
+    expect(new Headers(streamCall[1]?.headers).has("Last-Event-ID")).toBe(
+      false,
+    );
+    unmount();
+  });
+
   it("uses the thread history and stream when a thread is selected", async () => {
     const { result, unmount } = renderHook(() =>
       useSessionTrace("sess_1", "sthr_1"),
@@ -127,7 +313,8 @@ describe("useSessionTrace", () => {
     expect(result.current.connection).toBe("live");
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
     ]);
     unmount();
   });
@@ -162,7 +349,8 @@ describe("useSessionTrace", () => {
     await flush();
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/stream?event_deltas[]=agent.message",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
     ]);
     unmount();
   });
@@ -185,7 +373,8 @@ describe("useSessionTrace", () => {
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc",
       "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc&page=tok_2",
-      "/api/platform/v1/sessions/sess_1/events/stream?event_deltas[]=agent.message",
+      "/api/platform/v1/sessions/sess_1/events/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc",
     ]);
     expect(fetchMock.mock.calls[2][1]).toMatchObject({
       headers: { accept: "text/event-stream" },
@@ -210,6 +399,13 @@ describe("useSessionTrace", () => {
 
     // Malformed frames are skipped without killing the stream.
     streams[0].pushRaw("event: agent.message\ndata: {not-json\n\n");
+    streams[0].pushRaw("event: message\ndata: null\n\n");
+    streams[0].push({ type: "event_start" });
+    streams[0].push({
+      type: "event_delta",
+      event_id: "bad",
+      delta: { type: "content_delta", index: -1 },
+    });
     streams[0].push(ev("sevt_3", "agent.message"));
     await flush();
     expect(result.current.trace.previews.has("sevt_3")).toBe(false);
@@ -241,7 +437,7 @@ describe("useSessionTrace", () => {
     const { result, unmount } = renderHook(() => useSessionTrace("sess_rc"));
     await flush();
     expect(result.current.connection).toBe("live");
-    expect(fetchMock).toHaveBeenCalledTimes(2); // seed + stream
+    expect(fetchMock).toHaveBeenCalledTimes(3); // seed + stream + catch-up
 
     // Upstream closes without session.deleted — treated as a drop.
     streams[0].end();
@@ -253,21 +449,21 @@ describe("useSessionTrace", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(999);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
 
     // First retry: reseed + stream attach, which 502s.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
     });
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(result.current.connection).toBe("reconnecting");
 
     // Backoff doubled: 1s in is still waiting…
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
 
     // …the second second completes the 2s wait and this attempt succeeds.
     streamFails = false;
@@ -275,7 +471,7 @@ describe("useSessionTrace", () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(8);
     expect(result.current.connection).toBe("live");
 
     // A live connection resets the backoff to 1s.
@@ -286,7 +482,7 @@ describe("useSessionTrace", () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
     await flush();
-    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(fetchMock).toHaveBeenCalledTimes(11);
     expect(result.current.connection).toBe("live");
     unmount();
   });
@@ -299,18 +495,16 @@ describe("useSessionTrace", () => {
     const before = result.current.trace;
 
     unmount();
-    // Frames after cancellation never reach state…
-    streams[0].push(ev("sevt_9", "agent.message"));
+    expect(streams[0].signal?.aborted).toBe(true);
     await flush();
     expect(result.current.trace).toBe(before);
 
-    // …and a post-unmount drop schedules no reconnect.
-    streams[0].fail();
+    // The aborted reader schedules no reconnect.
     await flush();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(result.current.connection).toBe("live");
   });
 
@@ -328,7 +522,7 @@ describe("useSessionTrace", () => {
     expect(result.current.connection).toBe("connecting");
 
     // …and the drop that follows schedules no reconnect.
-    streams[0].end();
+    expect(streams[0].signal?.aborted).toBe(true);
     await flush();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
@@ -348,7 +542,7 @@ describe("useSessionTrace", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   // A dead console session is the one drop retrying cannot fix: every attempt
@@ -356,7 +550,7 @@ describe("useSessionTrace", () => {
   // at a 15s backoff while the real answer is that the operator is signed out.
   it("probe: stops retrying once the console session is gone", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    signedOutFrom = 1; // seed once, then the session dies
+    signedOutFrom = 2; // initial seed + post-attach history, then session dies
 
     const { result, unmount } = renderHook(() => useSessionTrace("sess_out"));
     await flush();

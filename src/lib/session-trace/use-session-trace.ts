@@ -12,6 +12,7 @@ import { parseSseStream } from "./sse";
 import {
   applyFrame,
   applyPersisted,
+  clearPreviews,
   emptyTrace,
   type TraceState,
 } from "./store";
@@ -21,8 +22,9 @@ export type ConnectionState = "connecting" | "live" | "reconnecting" | "closed";
 /**
  * Live session trace: seed the full history (the stream has no replay —
  * docs/plan/01 § Ground truth), attach the proxied SSE stream with
- * agent.message deltas, reconcile through the trace store, and reconnect
- * with backoff, reseeding to cover the gap.
+ * message/thinking previews, then read history again AFTER attachment. The
+ * live-only tail cannot cover commits between the first seed and subscription.
+ * Buffer stream bytes until catch-up completes so history stays in log order.
  */
 export function useSessionTrace(
   sessionId: string,
@@ -38,7 +40,9 @@ export function useSessionTrace(
 
   useEffect(() => {
     let cancelled = false;
-    const controller = new AbortController();
+    let controller: AbortController | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let finishWait: (() => void) | undefined;
     traceRef.current = emptyTrace();
     setTrace(traceRef.current);
     setConnection("connecting");
@@ -52,18 +56,23 @@ export function useSessionTrace(
       }
     };
 
-    async function seed() {
+    async function seed(signal: AbortSignal) {
       let page: string | undefined;
       for (;;) {
         const eventPath = threadId
           ? `v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/events`
           : `v1/sessions/${encodeURIComponent(sessionId)}/events`;
-        const result = await platformGet<Page<SessionEvent>>(eventPath, {
-          limit: 1000,
-          // api/threads.go: thread histories are ascending and reject order.
-          ...(threadId ? {} : { order: "asc" }),
-          page,
-        });
+        const result = await platformGet<Page<SessionEvent>>(
+          eventPath,
+          {
+            limit: 1000,
+            // api/threads.go: thread histories are ascending and reject order.
+            ...(threadId ? {} : { order: "asc" }),
+            page,
+          },
+          signal,
+        );
+        if (cancelled) return;
         update(applyPersisted(traceRef.current, result.data));
         if (!result.next_page) return;
         page = result.next_page;
@@ -73,18 +82,22 @@ export function useSessionTrace(
     async function run() {
       let backoff = 1_000;
       while (!cancelled) {
+        controller = new AbortController();
+        let response: Response | undefined;
         try {
-          await seed();
+          await seed(controller.signal);
+          if (cancelled) return;
           const streamPath = threadId
             ? `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/stream`
             : `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/events/stream`;
-          const response = await fetch(
-            `${streamPath}?event_deltas[]=agent.message`,
+          response = await fetch(
+            `${streamPath}?event_deltas[]=agent.message&event_deltas[]=agent.thinking`,
             {
               signal: controller.signal,
               headers: { accept: "text/event-stream" },
             },
           );
+          if (cancelled) return;
           // A dead console session is the one failure reconnecting cannot fix:
           // every retry re-sends the same handle, so the backoff would climb to
           // 15s and sit there saying "reconnecting" while the real answer is
@@ -97,9 +110,12 @@ export function useSessionTrace(
           if (!response.ok || !response.body) {
             throw new Error(`stream failed: HTTP ${response.status}`);
           }
+          await seed(controller.signal);
+          if (cancelled) return;
           if (!cancelled) setConnection("live");
           backoff = 1_000;
           for await (const frame of parseSseStream(response.body)) {
+            if (cancelled) return;
             let data: unknown;
             try {
               data = JSON.parse(frame.data);
@@ -107,6 +123,19 @@ export function useSessionTrace(
               continue;
             }
             update(applyFrame(traceRef.current, data));
+            // A stopped/aborted turn may never persist its previews. Child
+            // status fan-out on the parent must not clear the parent's reply.
+            const type = (data as { type?: string } | null)?.type;
+            const prefix = threadId
+              ? "session.thread_status_"
+              : "session.status_";
+            if (
+              ["idle", "rescheduled", "terminated"].some(
+                (status) => type === prefix + status,
+              )
+            ) {
+              update(clearPreviews(traceRef.current));
+            }
             if (traceRef.current.deleted) {
               if (!cancelled) setConnection("closed");
               return;
@@ -116,6 +145,8 @@ export function useSessionTrace(
           throw new Error("stream ended");
         } catch {
           if (cancelled || controller.signal.aborted) return;
+          controller.abort();
+          update(clearPreviews(traceRef.current));
           // The seed above goes through `assertOk`, which bounces on its own —
           // so by the time a signed-out failure lands here the navigation has
           // already started, and what is left to do is stop retrying.
@@ -124,8 +155,16 @@ export function useSessionTrace(
             return;
           }
           setConnection("reconnecting");
-          await new Promise((resolve) => setTimeout(resolve, backoff));
+          await new Promise<void>((resolve) => {
+            finishWait = resolve;
+            retryTimer = setTimeout(resolve, backoff);
+          });
           backoff = Math.min(backoff * 2, 15_000);
+        } finally {
+          controller.abort();
+          if (response?.body && !response.body.locked) {
+            await response.body.cancel().catch(() => undefined);
+          }
         }
       }
     }
@@ -133,7 +172,9 @@ export function useSessionTrace(
     void run();
     return () => {
       cancelled = true;
-      controller.abort();
+      controller?.abort();
+      clearTimeout(retryTimer);
+      finishWait?.();
     };
   }, [sessionId, threadId, enabled, scope]);
 

@@ -82,8 +82,12 @@ function queryString(
 export async function platformGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(`/api/platform/${path}${queryString(params)}`);
+  const response = await fetch(
+    `/api/platform/${path}${queryString(params)}`,
+    signal ? { signal } : undefined,
+  );
   await assertOk(response);
   return (await response.json()) as T;
 }

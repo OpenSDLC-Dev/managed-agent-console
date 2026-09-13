@@ -37,6 +37,8 @@ export async function* parseSseStream(
       }
     }
   } finally {
+    // Returning early (session.deleted / scope change) must close the body too.
+    await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

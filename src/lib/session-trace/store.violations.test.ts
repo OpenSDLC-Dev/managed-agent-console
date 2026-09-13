@@ -50,8 +50,8 @@ describe("probe: the trace store under a violated wire contract", () => {
 
   it("keeps a streaming preview that never persists, without blocking the log", () => {
     // A content_delta whose event never lands (turn interrupted, stream cut).
-    // The preview must stay — it is what actually arrived — and must not stop
-    // later events from appending.
+    // The store retains the bytes without blocking later events; the hook
+    // clears them at the current scope's live idle boundary or disconnect.
     let state = applyFrame(emptyTrace(), {
       type: "event_delta",
       event_id: "sevt_orphan",

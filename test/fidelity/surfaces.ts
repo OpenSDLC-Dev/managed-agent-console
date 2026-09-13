@@ -74,6 +74,57 @@ const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
 
 export const SURFACES: Surface[] = [
+  ...["thinking", "growing", "final", "reconnecting", "narrow"].map(
+    (view): Surface => ({
+      id: "session-streaming-" + view,
+      route: "/sessions/" + GATED,
+      fixture: "recordings #8 preview-00 raw SSE",
+      description:
+        "Start-only thinking, partial response, final replacement and dropped stream; same Agent card shell.",
+      setup: async (page) => {
+        const step = async (name: string) => {
+          if (
+            !(
+              await page.request.post(MOCK_URL + "/__live-preview?step=" + name)
+            ).ok()
+          )
+            throw new Error("Cannot stage live preview");
+        };
+        await step("setup");
+        await page.reload();
+        await traceLive(page);
+        if (view === "narrow")
+          await page.setViewportSize({ width: 480, height: 900 });
+        await step("thinking");
+        await page
+          .locator(
+            '[data-testid="preview-row"][data-event-type="agent.thinking"]',
+          )
+          .waitFor();
+        if (view === "thinking") return;
+        await step("text");
+        const preview = page.locator(
+          '[data-testid="preview-row"][data-event-type="agent.message"]',
+        );
+        await preview.waitFor();
+        if (view === "final") {
+          await step("finish");
+          await preview.waitFor({ state: "detached" });
+          await page
+            .locator(
+              '[data-testid="event-row"][data-event-id="sevt_01HmTd92anY6GDkWZ1qMCiEM"]',
+            )
+            .scrollIntoViewIfNeeded();
+        } else if (view === "reconnecting") {
+          await step("drop");
+          await page
+            .locator('[data-testid="stream-state"][data-state="reconnecting"]')
+            .waitFor();
+          await preview.waitFor({ state: "detached" });
+        }
+      },
+    }),
+  ),
   ...[
     "rendered",
     "api",

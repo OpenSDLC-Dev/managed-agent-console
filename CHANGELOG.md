@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Live Session and child traces recover events committed before subscription, discard interrupted previews, and replace streamed text with one final message. Thinking and text previews use the Agent's transcript card.
+
 - Multiagent inspection restores child selection from the URL, keeps approvals in the parent view and interrupts the whole Session. Thread history no longer sends the unsupported order parameter.
 
 - Agent rosters use removable subagent chips with Raw version pins; Session timelines retain named thread rows and messages link to their peer threads.
