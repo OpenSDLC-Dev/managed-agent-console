@@ -687,3 +687,5 @@ The final creation-dialog walk reproduced the same selected-label loss in Sessio
 - Platform `events/threadmsg.go` supplies peer IDs and full message content. Named timeline rows use explicit cross-post IDs and tool/result correlation; the parent API does not expose every child's model spans, so the Console does not fabricate those bars. Token counters and request input charts stand in for unsupported context/cost fields.
 
 This change ends with owner verification. Recording follow-ups #8, #9 and #10 are deferred.
+
+The real `c42da36` Docker run created Alpha and Beta as distinct child threads, each parked on its own ask-gated bash call. Its cross-posted tool calls carry `session_thread_id` without `agent_name`; transcript attribution therefore resolves the pinned thread name by ID, and tool results through their call correlation. The old child history request returned no usable trace because of its unsupported `order` parameter. Bookmarks also retain the Session fallback when the Threads capability is unavailable.

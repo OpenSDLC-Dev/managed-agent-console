@@ -1020,7 +1020,6 @@ export function multiagentScenario(running = false) {
       input: { command: `echo ${child.agent.name}` },
       evaluated_permission: "ask",
       session_thread_id: child.id,
-      agent_name: child.agent.name,
     };
     events.push(sent, ...(!running ? [tool] : []), status);
     threadEvents[child.id] = [

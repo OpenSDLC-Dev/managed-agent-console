@@ -275,6 +275,7 @@ function SessionWorkspace({ id }: { id: string }) {
   const [tab, setTab] = useState<"transcript" | "debug">("transcript");
   const requestedThreadId = filters.params.get("thread") || null;
   const selectedThreadId =
+    !threadsAvailable ||
     threads.data?.data.find((thread) => thread.id === requestedThreadId)
       ?.parent_thread_id === null
       ? null
@@ -295,9 +296,21 @@ function SessionWorkspace({ id }: { id: string }) {
   const childTrace = useSessionTrace(
     id,
     selectedThreadId ?? undefined,
-    selectedThreadId !== null,
+    selectedThreadId !== null && !threads.isPending,
   );
   const { trace, connection } = selectedThreadId ? childTrace : sessionTrace;
+  const threadNames = useMemo(
+    () =>
+      new Map(
+        threads.data?.data.map((thread) => [thread.id, thread.agent.name]),
+      ),
+    [threads.data],
+  );
+  const eventThreads = useMemo(
+    () =>
+      new Map(trace.events.map((event) => [event.id, event.session_thread_id])),
+    [trace.events],
+  );
 
   const selectedThread = threads.data?.data.find(
     (thread) => thread.id === selectedThreadId,
@@ -360,6 +373,13 @@ function SessionWorkspace({ id }: { id: string }) {
     return <DetailSkeleton />;
   }
   const data = session.data;
+  const actorFor = (event: SessionEvent) => {
+    const threadId =
+      event.session_thread_id ??
+      eventThreads.get(event.tool_use_id ?? event.mcp_tool_use_id ?? "") ??
+      selectedThreadId;
+    return threadId ? (threadNames.get(threadId) ?? threadId) : data.agent.name;
+  };
   const fromDeployment = filters.params.get("from_deployment");
   const fromRun = filters.params.get("from_run");
   const deploymentBack =
@@ -575,16 +595,9 @@ function SessionWorkspace({ id }: { id: string }) {
                           offset={offsetLabel(data.created_at, e.processed_at)}
                           durationMs={durations.get(e.id)}
                           selected={e.id === selectedId}
-                          actor={selectedThread?.agent.name ?? data.agent.name}
+                          actor={actorFor(e)}
                           onSelectThread={selectThread}
-                          threadNames={
-                            new Map(
-                              threads.data?.data.map((thread) => [
-                                thread.id,
-                                thread.agent.name,
-                              ]),
-                            )
-                          }
+                          threadNames={threadNames}
                           approval={
                             !data.archived_at &&
                             !trace.deleted &&

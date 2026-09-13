@@ -147,7 +147,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
-                disabled={interruptPending}
+                disabled={interruptPending || archivePending}
                 className="flex w-full rounded-md px-2 py-1.5 text-left text-sm outline-hidden hover:bg-accent focus:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);

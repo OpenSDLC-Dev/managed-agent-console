@@ -155,6 +155,18 @@ describe("useSessionTrace", () => {
     unmount();
   });
 
+  it("encodes a bookmarked thread ID so delimiters cannot change the requested route", async () => {
+    const { unmount } = renderHook(() =>
+      useSessionTrace("sess_1", "sthr_1/../other?x=1#frag"),
+    );
+    await flush();
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
+      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/stream?event_deltas[]=agent.message",
+    ]);
+    unmount();
+  });
+
   it("seeds every history page, goes live, and applies stream frames", async () => {
     seedPages = [
       { data: [ev("sevt_1", "user.message")], next_page: "tok_2" },

@@ -56,8 +56,8 @@ export function useSessionTrace(
       let page: string | undefined;
       for (;;) {
         const eventPath = threadId
-          ? `v1/sessions/${sessionId}/threads/${threadId}/events`
-          : `v1/sessions/${sessionId}/events`;
+          ? `v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/events`
+          : `v1/sessions/${encodeURIComponent(sessionId)}/events`;
         const result = await platformGet<Page<SessionEvent>>(eventPath, {
           limit: 1000,
           // api/threads.go: thread histories are ascending and reject order.
@@ -76,8 +76,8 @@ export function useSessionTrace(
         try {
           await seed();
           const streamPath = threadId
-            ? `/api/platform/v1/sessions/${sessionId}/threads/${threadId}/stream`
-            : `/api/platform/v1/sessions/${sessionId}/events/stream`;
+            ? `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/stream`
+            : `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/events/stream`;
           const response = await fetch(
             `${streamPath}?event_deltas[]=agent.message`,
             {

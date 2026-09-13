@@ -228,6 +228,11 @@ export function TranscriptCard({
     typeof event.input.command === "string"
       ? event.input.command
       : undefined;
+  const displayActor = event.type.startsWith("user.")
+    ? "User"
+    : received
+      ? (peerLabel ?? actor)
+      : (event.agent_name ?? actor);
   return (
     <article
       data-testid="event-row"
@@ -238,6 +243,7 @@ export function TranscriptCard({
     >
       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span
+          data-event-actor={displayActor}
           className={cn(
             "rounded px-1.5 py-0.5 text-foreground",
             event.type === "user.message"
@@ -245,15 +251,7 @@ export function TranscriptCard({
               : "bg-secondary",
           )}
         >
-          {event.type.startsWith("user.")
-            ? "User"
-            : event.type.startsWith("agent.")
-              ? received
-                ? (peerLabel ?? actor)
-                : (event.agent_name ?? actor)
-              : event.type.startsWith("span.")
-                ? "Model"
-                : "Session"}
+          {displayActor}
         </span>
         {threadMessage && typeof peerId === "string" && onSelectThread && (
           <button

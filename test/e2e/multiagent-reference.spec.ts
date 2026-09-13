@@ -30,6 +30,16 @@ test("child selection survives reload and browser history while approval stays i
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),
   ).toHaveCount(2);
+  for (const [id, name] of [
+    [alpha, "Alpha"],
+    [beta, "Beta"],
+  ]) {
+    await expect(
+      page.locator(
+        `[data-testid="event-row"][data-event-id="sevt_${id}tool"] [data-event-actor]`,
+      ),
+    ).toHaveAttribute("data-event-actor", name);
+  }
   await page
     .getByRole("button", { name: "Child thread Alpha", exact: true })
     .click();
@@ -195,3 +205,40 @@ test("a narrow child inspector remains reachable without document overflow", asy
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(480);
 });
+
+for (const status of [404, 501]) {
+  test(`a child bookmark falls back to Session when Threads returns ${status}`, async ({
+    page,
+  }) => {
+    let childRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().includes(`/sessions/${session}/threads/`))
+        childRequests++;
+    });
+    await page.route(
+      `**/api/platform/v1/sessions/${session}/threads?*`,
+      (route) =>
+        route.fulfill({
+          status,
+          contentType: "application/json",
+          body: JSON.stringify({
+            type: "error",
+            error: { type: "not_found_error", message: "unsupported" },
+          }),
+        }),
+    );
+    await signIn(page, route + `&thread=${alpha}`);
+    await expect(page.getByTestId("stream-state")).toHaveAttribute(
+      "data-state",
+      "live",
+    );
+    await expect(
+      page.getByRole("button", { name: "Approve", exact: true }),
+    ).toHaveCount(2);
+    await expect(page.locator("[data-viewing-thread-id]")).toHaveCount(0);
+    await expect(
+      page.getByRole("tab", { name: "Threads", exact: true }),
+    ).toHaveCount(0);
+    expect(childRequests).toBe(0);
+  });
+}

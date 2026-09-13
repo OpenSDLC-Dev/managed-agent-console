@@ -46,56 +46,63 @@ export function SessionTimeline({
   const range = Math.max(1, end - start);
   // The track is at least 400px wide, so a 1% marker remains a 4px target.
   // Pack overlapping rendered intervals into lanes; timestamps stay unchanged.
-  const primary = threads.find((thread) => thread.parent_thread_id === null);
-  const calls = new Map(
-    events.map((event) => [event.id, event.session_thread_id]),
-  );
-  const addressed = (event: SessionEvent) =>
-    event.session_thread_id ??
-    (event.tool_use_id ? calls.get(event.tool_use_id) : undefined) ??
-    primary?.id;
-  const rows: {
-    id: string;
-    label: string | null;
-    selected: boolean;
-    items: typeof timed;
-  }[] = threads.length
-    ? threads.map((thread) => ({
-        id: thread.id,
-        label: thread.agent.name,
-        selected:
-          selectedThreadId === thread.id ||
-          (!selectedThreadId && !thread.parent_thread_id),
-        items: timed.filter(({ event }) => addressed(event) === thread.id),
-      }))
-    : [{ id: scopeId, label: null, selected: false, items: timed }];
-  const unassigned = threads.length
-    ? timed.filter(
-        ({ event }) =>
-          !threads.some((thread) => thread.id === addressed(event)),
-      )
-    : [];
-  if (unassigned.length)
-    rows.push({
-      id: "unassigned",
-      label: "Other threads",
-      selected: false,
-      items: unassigned,
-    });
-  const tracks = rows.map((row) => {
-    const laneEnds: number[] = [];
-    const markers = [...row.items]
-      .sort((a, b) => a.start - b.start)
-      .map((item) => {
-        const left = Math.min(0.99, (item.start - start) / range);
-        const width = Math.max(0.01, item.duration / range);
-        let lane = laneEnds.findIndex((last) => last <= left);
-        if (lane === -1) lane = laneEnds.length;
-        laneEnds[lane] = left + width;
-        return { ...item, left, width, lane };
+  const tracks = useMemo(() => {
+    const primary = threads.find((thread) => thread.parent_thread_id === null);
+    const calls = new Map(
+      events.map((event) => [event.id, event.session_thread_id]),
+    );
+    const addressed = (event: SessionEvent) =>
+      event.session_thread_id ??
+      calls.get(event.tool_use_id ?? event.mcp_tool_use_id ?? "") ??
+      primary?.id;
+    const threadIds = new Set(threads.map((thread) => thread.id));
+    const grouped = new Map<string, typeof timed>();
+    if (threads.length)
+      for (const item of timed) {
+        const id = addressed(item.event);
+        const key = id && threadIds.has(id) ? id : "unassigned";
+        const group = grouped.get(key);
+        if (group) group.push(item);
+        else grouped.set(key, [item]);
+      }
+    const rows: {
+      id: string;
+      label: string | null;
+      selected: boolean;
+      items: typeof timed;
+    }[] = threads.length
+      ? threads.map((thread) => ({
+          id: thread.id,
+          label: thread.agent.name,
+          selected:
+            selectedThreadId === thread.id ||
+            (!selectedThreadId && !thread.parent_thread_id),
+          items: grouped.get(thread.id) ?? [],
+        }))
+      : [{ id: scopeId, label: null, selected: false, items: timed }];
+    const unassigned = grouped.get("unassigned") ?? [];
+    if (unassigned.length)
+      rows.push({
+        id: "unassigned",
+        label: "Other threads",
+        selected: false,
+        items: unassigned,
       });
-    return { ...row, markers, height: Math.max(1, laneEnds.length) * 28 + 4 };
-  });
+    return rows.map((row) => {
+      const laneEnds: number[] = [];
+      const markers = [...row.items]
+        .sort((a, b) => a.start - b.start)
+        .map((item) => {
+          const left = Math.min(0.99, (item.start - start) / range);
+          const width = Math.max(0.01, item.duration / range);
+          let lane = laneEnds.findIndex((last) => last <= left);
+          if (lane === -1) lane = laneEnds.length;
+          laneEnds[lane] = left + width;
+          return { ...item, left, width, lane };
+        });
+      return { ...row, markers, height: Math.max(1, laneEnds.length) * 28 + 4 };
+    });
+  }, [events, timed, threads, selectedThreadId, scopeId, start, range]);
 
   return (
     <div className="shrink-0 space-y-2 border-b pb-3">
