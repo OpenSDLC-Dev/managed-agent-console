@@ -213,6 +213,7 @@ test("the console connects to the real platform and lists real agents", async ({
   page,
 }) => {
   await signIn(page);
+  await page.goto("/agents");
   await expect(page.getByText("Platform connected")).toBeVisible();
   // The stack has at least one real agent (the model-discovery precondition).
   await expect
@@ -339,9 +340,9 @@ test("sessions filter by agent server-side; created presets bound real lists", a
     page.getByRole("cell", { name: new RegExp(`live-e2e-session-b-${RUN}`) }),
   ).toBeHidden();
 
-  // Created preset: fresh sessions stay under "Last 24 hours".
+  // Created preset: fresh sessions stay under "Last day".
   await page.getByRole("combobox", { name: "Created filter" }).click();
-  await page.getByRole("option", { name: "Last 24 hours" }).click();
+  await page.getByRole("option", { name: "Last day", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: new RegExp(`live-e2e-session-a-${RUN}`) }),
   ).toBeVisible();
@@ -394,7 +395,8 @@ test("a starter template creates a real gated agent", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: `live-e2e-runner-${RUN}` }),
   ).toBeVisible();
-  await expect(page.getByText("always_ask")).toBeVisible();
+  await page.getByRole("button", { name: /Tool permissions/ }).click();
+  await expect(page.getByLabel("bash policy")).toContainText("always_ask");
 
   // What the template promises on the wire, and it is **both halves** of
   // "Full workspace access; bash gated behind approval"
@@ -459,14 +461,15 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
   await expect(page.getByTestId("approval-banner")).toBeVisible({
     timeout: turnTimeout,
   });
-  await expect(
-    page
-      .getByTestId("event-row")
-      .filter({ hasText: "agent.tool_use" })
-      .getByText("needs approval"),
-  ).toBeVisible();
+  const pendingTool = page
+    .getByTestId("event-row")
+    .filter({ has: page.getByTestId("approval-banner") });
+  await expect(pendingTool).toHaveAttribute(
+    "data-event-type",
+    "agent.tool_use",
+  );
 
-  await page.getByRole("button", { name: "Approve" }).click();
+  await pendingTool.getByRole("button", { name: "Approve" }).click();
   await expect(
     page
       .getByTestId("event-row")

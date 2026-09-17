@@ -11,5 +11,5 @@ export async function signIn(page: Page): Promise<void> {
   await page.locator("form[data-hydrated]").waitFor();
   await page.getByLabel("Password").fill(LIVE_CONSOLE_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
