@@ -6,7 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Deployment workflow header now describes the single platform API key payload and clarifies that
+  IAP is specific to this GKE deployment; self-hosters can still use `CONSOLE_PASSWORD` (#177).
 
 ## Released
 
