@@ -6,15 +6,19 @@ name: deploy
 # "merged" are the same event and a separate promotion step would only be a
 # button somebody forgets to press. workflow_dispatch stays for re-deploying
 # without a commit (a rotated secret, a cluster rebuilt under the same name);
-# that works because the pod template carries a checksum of the two secret
-# payloads, so a rotation changes the Deployment and the pod actually rolls.
+# that works because the pod template carries a checksum of the platform API
+# key payload, so a rotation changes the Deployment and the pod actually rolls.
 #
 # **No GitHub secret is involved.** The job mints a short-lived OIDC token,
 # Workload Identity Federation exchanges it for an impersonation of
-# the deploy service account, and every credential the deployment needs — the platform's
-# management key, the console password — is read from Secret Manager inside the
-# job. Nothing long-lived is stored in this repository, and rotating a value
-# means adding a Secret Manager version, not editing settings here.
+# the deploy service account. The platform's management key is the only secret
+# payload read from Secret Manager inside the job. Nothing long-lived is stored
+# in this repository, and rotating the key means adding a Secret Manager version,
+# not editing settings here.
+#
+# This GKE deployment uses IAP at the load balancer and sets no console password.
+# The image still honours CONSOLE_PASSWORD when set, so deployments without IAP
+# can use the built-in password gate.
 #
 # What this workflow owns: build → push → deploy → smoke. It does **not** run
 # Terraform. Infrastructure (the cluster, the WIF pool, the service account, the
