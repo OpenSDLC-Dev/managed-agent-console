@@ -5,8 +5,8 @@ import {
 } from "../../src/lib/platform/schemas";
 import { test } from "./fixtures";
 
-// A self-hosted session with no worker keeps the outcome pending, so this
-// checks acceptance, projection and interrupt settlement without a model call.
+// self_hosted withholds tool execution, not model turns: the brain can start
+// the outcome before GET observes it (platform internal/brain/brain.go).
 test("outcome definition and interrupt settlement", async ({ request }) => {
   const name = `outcome-contract-${Date.now()}`;
   const ok = async (response: APIResponse) => {
@@ -14,6 +14,14 @@ test("outcome definition and interrupt settlement", async ({ request }) => {
       200,
     );
     return response.json();
+  };
+  const cleanup = async (label: string, action: () => Promise<unknown>) => {
+    try {
+      await action();
+    } catch (error) {
+      // Report leaks without replacing the body's error or skipping cleanup.
+      expect.soft(error, `Cleanup failed: ${label}`).toBeUndefined();
+    }
   };
   const agent = await ok(
     await request.post("/v1/agents", {
@@ -52,14 +60,14 @@ test("outcome definition and interrupt settlement", async ({ request }) => {
     });
     expect(defined.outcome_id).toMatch(/^outc_/);
 
-    const pending = SessionSchema.parse(
+    const active = SessionSchema.parse(
       await ok(await request.get(`/v1/sessions/${sessionId}`)),
     );
-    expect(pending.outcome_evaluations).toEqual([
+    expect(active.outcome_evaluations).toEqual([
       expect.objectContaining({
         outcome_id: defined.outcome_id,
         description: definition.description,
-        result: "pending",
+        result: expect.stringMatching(/^(pending|running)$/),
         iteration: 0,
         completed_at: null,
       }),
@@ -96,18 +104,26 @@ test("outcome definition and interrupt settlement", async ({ request }) => {
       iteration: 0,
     });
   } finally {
-    try {
-      if (sessionId)
-        await ok(await request.delete(`/v1/sessions/${sessionId}`));
-    } finally {
-      try {
-        if (environmentId)
-          await ok(await request.delete(`/v1/environments/${environmentId}`));
-      } finally {
-        await ok(
-          await request.post(`/v1/agents/${agent.id}/archive`, { data: {} }),
-        );
-      }
+    if (sessionId) {
+      // deleteSession refuses running sessions. The body may have failed
+      // before its interrupt (platform internal/api/sessions.go).
+      await cleanup(`interrupt ${sessionId}`, async () =>
+        ok(
+          await request.post(`/v1/sessions/${sessionId}/events`, {
+            data: { events: [{ type: "user.interrupt" }] },
+          }),
+        ),
+      );
+      await cleanup(`delete ${sessionId}`, async () =>
+        ok(await request.delete(`/v1/sessions/${sessionId}`)),
+      );
     }
+    if (environmentId)
+      await cleanup(`delete ${environmentId}`, async () =>
+        ok(await request.delete(`/v1/environments/${environmentId}`)),
+      );
+    await cleanup(`archive ${agent.id}`, async () =>
+      ok(await request.post(`/v1/agents/${agent.id}/archive`, { data: {} })),
+    );
   }
 });

@@ -8,8 +8,8 @@ import {
 } from "../../src/lib/platform/schemas";
 import { test } from "./fixtures";
 
-// Control-plane only: the self-hosted environment has no worker attached, so
-// the manual fire exercises session creation without invoking a model.
+// The manual fire's initial message can invoke a model: self_hosted withholds
+// tool execution, not the brain's turn (platform internal/brain/brain.go).
 test("deployment lifecycle and persistent run history", async ({ request }) => {
   const stamp = Date.now();
   const ok = async (response: APIResponse) => {

@@ -43,8 +43,8 @@ and removed a file resource without sending an agent turn.
 
 Deployments: the local control-plane contract covered create/update,
 pause/manual-run/resume/archive, the pinned Agent snapshot, and run retention
-after its Session is deleted. The self-hosted contract environment has no
-worker, so this exercised no model turn.
+after its Session is deleted. The earlier inference that no worker meant no
+model turn was wrong: the initial message still wakes the brain (#176).
 
 Memory stores: `internal/api/memorystores.go`, `memories.go` and
 `memoryversions.go` establish one-way archive, metadata tombstones, literal path
@@ -53,9 +53,12 @@ compliance redaction. The model-free contract covers those routes directly.
 
 Outcomes: `user.define_outcome` is accepted through the session event endpoint;
 the session projects its current state in `outcome_evaluations`, and evaluation
-cycles remain in the event log. A self-hosted session with no worker proved the
-pending projection, single-active rejection and interrupt settlement without a
-model call.
+cycles remain in the event log. The GKE run in #176 disproved the model-free
+premise: the brain advanced the projection from pending to running before GET,
+and cleanup hid the assertion failure. Model-bearing contract opt-in is in
+[README.md](../../README.md#development).
+Local HTTP replay reproduced both failures; after the fix, pending/running
+both pass and simultaneous body/cleanup failures remain visible together.
 
 Dreams: `internal/api/dreams.go` serves asynchronous memory consolidation over
 one active memory store and 1–100 existing sessions. The console follows the

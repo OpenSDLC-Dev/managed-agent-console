@@ -83,6 +83,13 @@ calls, configure `.env.local` and run
 removes a dedicated test skill; it fails on missing configuration or an old wire
 shape. It does not replace the model-backed live session suite.
 
+Outcome and deployment contracts enqueue model turns even with a `self_hosted`
+environment and no worker. They require the additional opt-in
+`RUN_LIVE_MODEL_CONTRACT_TESTS=1` alongside `RUN_LIVE_CONTRACT_TESTS=1` (PowerShell:
+`$env:RUN_LIVE_MODEL_CONTRACT_TESTS='1'`) and may spend real model tokens.
+Set the opt-in flags in the invoking shell; dotenv files cannot grant consent.
+Add `--project=model-backed` to `pnpm test:contract:live` to run only those tests.
+
 The live tier drives a **real platform stack** (the platform repo's `deploy/compose`) and spends real
 model tokens:
 

@@ -8,6 +8,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Outcome contracts accept a brain-started evaluation and preserve the original failure
+  through cleanup; model-bearing outcome and deployment contracts now require a separate
+  spend opt-in (#176).
 - Deployment workflow header now describes the single platform API key payload and clarifies that
   IAP is specific to this GKE deployment; self-hosters can still use `CONSOLE_PASSWORD` (#177).
 
