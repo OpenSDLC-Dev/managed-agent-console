@@ -12,6 +12,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.{ts,tsx}",
       "test/playwright-env.test.ts",
+      "test/playwright-contract-config.test.ts",
       "test/fidelity/*.test.ts",
       // The changelog transform releasing leans on: a bad cut corrupts the one
       // file that carries every change's narrative.
