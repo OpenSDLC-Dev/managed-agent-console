@@ -6,6 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Security
+
+- Upgrade Next.js to 16.3.6 to address remote code execution in `next/og ImageResponse`
+  ([GHSA-vcvr-r3jv-pc5j](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j), #183).
+
 ### Fixed
 
 - Outcome contracts accept a brain-started evaluation and preserve the original failure
