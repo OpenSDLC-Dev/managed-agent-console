@@ -16,7 +16,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - A memory store may omit `archived_at`, as the reference does until the store is archived. The
   console reads a store without the key as live, and the mock platform now serves that recorded
   shape. Deploy this console before any platform release that omits the key
-  ([platform #817](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/817)).
+  ([platform #817](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/817), #185).
 - Outcome contracts accept a brain-started evaluation and preserve the original failure
   through cleanup; model-bearing outcome and deployment contracts now require a separate
   spend opt-in (#176).
