@@ -13,6 +13,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- A session thread's `stats` and `usage` may be null, as the spec allows before the thread's
+  first status transition and first idle. The Threads view shows "—" instead of failing the page.
+  Deploy this console before any platform release that serves null
+  ([platform #674](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/674)).
 - Outcome contracts accept a brain-started evaluation and preserve the original failure
   through cleanup; model-bearing outcome and deployment contracts now require a separate
   spend opt-in (#176).
