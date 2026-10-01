@@ -545,7 +545,8 @@ export const SessionThreadSchema = z.object({
   status: SessionStatusSchema,
   // Required but nullable in the spec (anthropic-sdk-go v1.70.1): usage is
   // null until the thread's first idle transition, stats until its first
-  // status transition. The platform renders objects until platform#674 part 3.
+  // status transition. The platform keys both on the first status transition,
+  // as the recordings show (platform#674 part 3).
   usage: SessionUsageSchema.nullable(),
   stats: z
     .object({
