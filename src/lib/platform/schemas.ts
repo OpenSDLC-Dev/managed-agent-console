@@ -543,12 +543,17 @@ export const SessionThreadSchema = z.object({
   parent_thread_id: z.string().nullable(),
   agent: SessionThreadAgentSchema,
   status: SessionStatusSchema,
-  usage: SessionUsageSchema,
-  stats: z.object({
-    active_seconds: z.number(),
-    duration_seconds: z.number(),
-    startup_seconds: z.number(),
-  }),
+  // Required but nullable in the spec (anthropic-sdk-go v1.70.1): usage is
+  // null until the thread's first idle transition, stats until its first
+  // status transition. The platform renders objects until platform#674 part 3.
+  usage: SessionUsageSchema.nullable(),
+  stats: z
+    .object({
+      active_seconds: z.number(),
+      duration_seconds: z.number(),
+      startup_seconds: z.number(),
+    })
+    .nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   archived_at: z.string().nullable(),

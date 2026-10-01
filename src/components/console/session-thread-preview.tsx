@@ -45,6 +45,7 @@ export function SessionThreadPreview({
       aria-label="Thread details"
       className="mt-4 min-w-0 space-y-4 border-t pt-3"
       data-inspected-thread-id={thread.id}
+      data-usage-state={thread.usage ? "reported" : "pending"}
     >
       <h2 className="break-words text-sm font-medium">
         Thread {thread.agent.name}
@@ -163,7 +164,7 @@ export function SessionThreadPreview({
           </p>
         )}
       </figure>
-      <SessionUsageDetails usage={thread.usage} />
+      <SessionUsageDetails usage={thread.usage ?? undefined} />
       <details>
         <summary className="cursor-pointer text-sm">
           Thread API response

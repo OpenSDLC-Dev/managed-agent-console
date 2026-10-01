@@ -98,6 +98,11 @@ describe("mock fixtures conform to the platform wire", () => {
     each(SessionSchema, fixtures.sessions, "sessions");
     eachIn(SessionEventSchema, fixtures.sessionEvents, "sessionEvents");
     eachIn(SessionThreadSchema, fixtures.sessionThreads, "sessionThreads");
+    expectConforms(
+      SessionThreadSchema,
+      fixtures.neverRunThread,
+      "neverRunThread",
+    );
     for (const [sessionId, threads] of Object.entries(
       fixtures.sessionThreadEvents,
     )) {
@@ -199,6 +204,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "memoryStores",
       "memoryVersions",
       "multiagentScenario",
+      "neverRunThread",
       "sessionEvents",
       "sessionThreadEvents",
       "sessionThreads",
@@ -239,6 +245,15 @@ describe("probe: the conformance gate catches lies, not only truths", () => {
       ),
     },
     {
+      // The spec marks both keys required and nullable: null is "not yet",
+      // a missing key is a broken wire.
+      label: "a thread's null usage omitted instead of rendered",
+      schema: SessionThreadSchema,
+      value: Object.fromEntries(
+        Object.entries(fixtures.neverRunThread).filter(([k]) => k !== "usage"),
+      ),
+    },
+    {
       label: "an enum value the platform's validation rejects",
       schema: SessionSchema,
       value: { ...fixtures.sessions[0], status: "paused" },
@@ -273,6 +288,11 @@ describe("probe: the conformance gate catches lies, not only truths", () => {
     // a red canary means the gate broke — not that the fixture rotted.
     expectConforms(SessionSchema, fixtures.sessions[0], "canary base session");
     expectConforms(AgentSchema, fixtures.agents[0], "canary base agent");
+    expectConforms(
+      SessionThreadSchema,
+      fixtures.neverRunThread,
+      "canary base thread",
+    );
     expectConforms(
       EnvironmentSchema,
       fixtures.environments[0],
@@ -707,6 +727,14 @@ describe("the mock's constructed write-path responses conform too", () => {
     // unvalidated — no fixture session mounts one on the create path.
     expect((session as { resources: unknown[] }).resources).toHaveLength(1);
     const sessionId = (session as { id: string }).id;
+    const threads = (await call(`/v1/sessions/${sessionId}/threads`, {
+      method: "GET",
+    })) as { data: unknown[] };
+    each(SessionThreadSchema, threads.data, "created session's threads");
+    // Never run, so the spec's null arm (fixtures.mjs:neverRunThread).
+    expect(threads.data).toEqual([
+      expect.objectContaining({ usage: null, stats: null }),
+    ]);
     const rejected = await fetch(`${base}/v1/sessions/${sessionId}/archive`, {
       method: "DELETE",
       headers: { "x-api-key": API_KEY },
