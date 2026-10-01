@@ -938,12 +938,47 @@ function handleInbound(state, incoming) {
 
 // ---- request plumbing -----------------------------------------------------
 
-function envelope(type, message) {
+// `details` is the object the platform nests inside `error` on the few
+// refusals the reference was recorded carrying one (internal/api/errors.go
+// withDetails).
+function envelope(type, message, details) {
   return JSON.stringify({
     type: "error",
     request_id: `req_mock${requestCounter}`,
-    error: { type, message },
+    error: details ? { type, message, details } : { type, message },
   });
+}
+
+// The organization gate both console namespaces share
+// (internal/api/consoleapi.go consoleOrganization): `default` is served; a
+// UUID, in any of the four spellings isUUID takes, is a foreign
+// organization's 401, and anything else the 400 for a segment that is not a
+// UUID (managed-agent-platform#820). Answers and returns true when it refused.
+const HEX_UUID = "[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}";
+const UUID = new RegExp(
+  `^(?:[0-9a-fA-F]{32}|${HEX_UUID}|\\{${HEX_UUID}\\}|urn:uuid:${HEX_UUID})$`,
+);
+function refuseOrganization(res, org) {
+  if (org === "default") return false;
+  if (UUID.test(org)) {
+    res.writeHead(401);
+    res.end(
+      envelope(
+        "authentication_error",
+        `not authenticated for organization ${org}`,
+        { error_visibility: "user_facing" },
+      ),
+    );
+    return true;
+  }
+  res.writeHead(400);
+  res.end(
+    envelope(
+      "invalid_request_error",
+      `${JSON.stringify(org)} is not an organization id`,
+    ),
+  );
+  return true;
 }
 
 // ---- credential dispatch -------------------------------------------------
@@ -1591,16 +1626,15 @@ const server = createServer(async (req, res) => {
   if (apiKeysMatch || apiKeyMatch) {
     res.setHeader("content-type", "application/json");
     const [, org, workspace] = apiKeysMatch ?? apiKeyMatch;
-    // Both segments answer the same 404 shape, so the namespace is no better an
-    // enumeration oracle than /v1 is.
-    if (org !== "default") {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", `organization ${org} not found`));
-      return;
-    }
+    if (refuseOrganization(res, org)) return;
+    // consoleapikeys.go consoleWorkspace: the reference's 404, details included.
     if (workspace !== "default") {
       res.writeHead(404);
-      res.end(envelope("not_found_error", `workspace ${workspace} not found`));
+      res.end(
+        envelope("not_found_error", `workspace ${workspace} not found`, {
+          error_visibility: "user_facing",
+        }),
+      );
       return;
     }
 
@@ -1630,11 +1664,21 @@ const server = createServer(async (req, res) => {
         res.end(envelope("invalid_request_error", "invalid JSON body"));
         return;
       }
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      if (!name || [...name].length > 128) {
+      // consoleapikeys.go apiKeyName: taken as sent, nothing trimmed, and
+      // bounded at the reference's recorded 500 with its recorded message.
+      const name = typeof body.name === "string" ? body.name : "";
+      if (!name) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "name is required"));
+        return;
+      }
+      if ([...name].length > 500) {
         res.writeHead(400);
         res.end(
-          envelope("invalid_request_error", "name must be 1-128 characters"),
+          envelope(
+            "invalid_request_error",
+            "name: String should have at most 500 characters",
+          ),
         );
         return;
       }
@@ -1752,7 +1796,8 @@ const server = createServer(async (req, res) => {
         return;
       }
       if (status !== null) row.status = status;
-      if (typeof body.name === "string") row.name = body.name.trim();
+      // A rename is held to the create's rule, so it is stored as sent too.
+      if (typeof body.name === "string") row.name = body.name;
       res.writeHead(200);
       res.end(JSON.stringify(render(row)));
       return;
@@ -1765,7 +1810,7 @@ const server = createServer(async (req, res) => {
 
   // ---- console API (internal/api/consoleapi.go), reached through the
   // console's own /api/oauth passthrough. `default` is the only organization
-  // v1 answers for (consoleapi.go:52-53).
+  // the platform answers for (refuseOrganization).
   const tokensMatch = url.pathname.match(
     /^\/api\/oauth\/organizations\/([^/]+)\/environments\/([^/]+)\/tokens$/,
   );
@@ -1775,11 +1820,7 @@ const server = createServer(async (req, res) => {
   if (tokensMatch || revokeMatch) {
     res.setHeader("content-type", "application/json");
     const [, org, envId] = tokensMatch ?? revokeMatch;
-    if (org !== "default") {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", `organization ${org} not found`));
-      return;
-    }
+    if (refuseOrganization(res, org)) return;
     const env = environmentsStore.find((e) => e.id === envId);
     if (!env) {
       res.writeHead(404);
@@ -1833,24 +1874,8 @@ const server = createServer(async (req, res) => {
         );
         return;
       }
-      // Both refusals the platform makes, in its order (consoleapi.go:200-205).
-      if (env.config?.type !== "self_hosted") {
-        res.writeHead(400);
-        res.end(
-          envelope(
-            "invalid_request_error",
-            `environment ${envId} is a ${env.config?.type} environment; only a self_hosted environment runs a worker that authenticates with an environment key`,
-          ),
-        );
-        return;
-      }
-      if (env.archived_at) {
-        res.writeHead(400);
-        res.end(
-          envelope("invalid_request_error", `environment ${envId} is archived`),
-        );
-        return;
-      }
+      // Issued on any environment, a cloud or an archived one included, as the
+      // reference issues (consoleapi.go createEnvironmentKey; #820).
       const n = envKeyCounter++;
       const id = `envkey_new${String(n).padStart(14, "0")}`;
       const created = now();

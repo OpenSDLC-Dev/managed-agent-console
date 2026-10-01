@@ -199,6 +199,11 @@ export async function forward(
   //
   // Only `session !== undefined` reaches this: a 401 while identity is off is a
   // management key the platform rejects, which no sign-in can fix.
+  //
+  // The reading holds only while a 401 can mean nothing else, and a link from
+  // any site can make this request. So where the platform answers 401 for a
+  // value the browser chose — a foreign organization on the console
+  // namespaces — the route refuses that path before it reaches here.
   if (upstream.status === 401 && session !== undefined) {
     deleteSession(handle);
     responseHeaders.set(SIGNED_OUT_HEADER, "1");

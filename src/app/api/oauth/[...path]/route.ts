@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { envelope, forward } from "@/lib/platform-proxy";
+import { CONSOLE_ORG } from "@/lib/platform/tenancy";
 
 /**
  * BFF passthrough for the platform's **console API** — the off-wire namespace
@@ -25,21 +26,30 @@ import { envelope, forward } from "@/lib/platform-proxy";
 
 /**
  * What an id may be made of. Deliberately narrower than "not a slash": every
- * value that lands in these slots is a platform id (`env_…`, `envkey_…`) or an
- * organization handle — our platform pins that to the literal `default`, the
- * reference uses a uuid, and neither needs a dot or a percent sign. Excluding
- * both is what stops `..` and `%2e%2e` from satisfying the shapes below and
- * then being resolved away when `fetch` reparses the URL. `forward` refuses
- * them again for any route that forgets.
+ * value that lands in these slots is a platform id (`env_…`, `envkey_…`), and
+ * none needs a dot or a percent sign. Excluding both is what stops `..` and
+ * `%2e%2e` from satisfying the shapes below and then being resolved away when
+ * `fetch` reparses the URL. `forward` refuses them again for any route that
+ * forgets.
  */
 const ID = "[A-Za-z0-9_-]+";
 
-/** `organizations/{org}/environments/{env}/tokens` */
-const TOKENS = new RegExp(`^organizations/${ID}/environments/${ID}/tokens$`);
-/** `organizations/{org}/environments/{env}/tokens/{token}/revoke` */
-const REVOKE = new RegExp(
-  `^organizations/${ID}/environments/${ID}/tokens/${ID}/revoke$`,
-);
+/**
+ * The organization is not an id slot: it is pinned to the one this console
+ * manages. The platform answers a foreign organization UUID with a 401
+ * `authentication_error`, as the reference was recorded doing
+ * (managed-agent-platform#820), and `forward` reads any upstream 401 as the
+ * operator's own token refused — it ends the session and clears the cookie.
+ * That cookie is `SameSite=Lax`, so a cross-site link to this route naming any
+ * UUID would sign an operator out. Refused here, before anything is forwarded,
+ * such a path is a 404 that leaves the session alone.
+ */
+const ORG = `organizations/${CONSOLE_ORG}`;
+
+/** `organizations/default/environments/{env}/tokens` */
+const TOKENS = new RegExp(`^${ORG}/environments/${ID}/tokens$`);
+/** `organizations/default/environments/{env}/tokens/{token}/revoke` */
+const REVOKE = new RegExp(`^${ORG}/environments/${ID}/tokens/${ID}/revoke$`);
 
 /**
  * Method is part of the shape: the platform serves GET+POST on the collection

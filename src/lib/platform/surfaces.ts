@@ -2,15 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PlatformError, consoleKeysGet, platformGet } from "./http";
-
-/**
- * The tenancy segments the platform reserves and answers for by name — the
- * literal `default` on both (`internal/api/consoleapi.go`,
- * `internal/api/consoleapikeys.go`). They exist because the reference's URLs
- * carry them; any other value names something that does not exist.
- */
-export const CONSOLE_ORG = "default";
-export const CONSOLE_WORKSPACE = "default";
+import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 
 /**
  * Feature detection for surfaces a deployment does not serve (CLAUDE.md
