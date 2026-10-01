@@ -142,7 +142,9 @@ test("memory store lifecycle, optimistic writes and retained versions", async ({
         }),
       ),
     );
-    expect(archived.archived_at).not.toBeNull();
+    // The schema admits a missing key (an unarchived store omits it), so an
+    // archive response must be checked for the timestamp itself.
+    expect(archived.archived_at).toEqual(expect.any(String));
     const refused = await request.post(
       `/v1/memory_stores/${store.id}/memories`,
       { data: { path: "/late.md", content: "Too late" } },
