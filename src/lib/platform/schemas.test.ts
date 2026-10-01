@@ -98,6 +98,11 @@ describe("mock fixtures conform to the platform wire", () => {
     each(SessionSchema, fixtures.sessions, "sessions");
     eachIn(SessionEventSchema, fixtures.sessionEvents, "sessionEvents");
     eachIn(SessionThreadSchema, fixtures.sessionThreads, "sessionThreads");
+    expectConforms(
+      SessionThreadSchema,
+      fixtures.neverRunThread,
+      "neverRunThread",
+    );
     for (const [sessionId, threads] of Object.entries(
       fixtures.sessionThreadEvents,
     )) {
@@ -185,6 +190,7 @@ describe("mock fixtures conform to the platform wire", () => {
       "memoryStores",
       "memoryVersions",
       "multiagentScenario",
+      "neverRunThread",
       "sessionEvents",
       "sessionThreadEvents",
       "sessionThreads",
@@ -225,6 +231,15 @@ describe("probe: the conformance gate catches lies, not only truths", () => {
       ),
     },
     {
+      // The spec marks both keys required and nullable: null is "not yet",
+      // a missing key is a broken wire.
+      label: "a thread's null usage omitted instead of rendered",
+      schema: SessionThreadSchema,
+      value: Object.fromEntries(
+        Object.entries(fixtures.neverRunThread).filter(([k]) => k !== "usage"),
+      ),
+    },
+    {
       label: "an enum value the platform's validation rejects",
       schema: SessionSchema,
       value: { ...fixtures.sessions[0], status: "paused" },
@@ -259,6 +274,11 @@ describe("probe: the conformance gate catches lies, not only truths", () => {
     // a red canary means the gate broke — not that the fixture rotted.
     expectConforms(SessionSchema, fixtures.sessions[0], "canary base session");
     expectConforms(AgentSchema, fixtures.agents[0], "canary base agent");
+    expectConforms(
+      SessionThreadSchema,
+      fixtures.neverRunThread,
+      "canary base thread",
+    );
     expectConforms(
       EnvironmentSchema,
       fixtures.environments[0],

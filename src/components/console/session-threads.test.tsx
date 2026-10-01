@@ -7,6 +7,7 @@ import { SessionThreadPreview } from "./session-thread-preview";
 import { SessionThreads } from "./session-threads";
 import { PlatformError } from "@/lib/platform/http";
 import type { SessionThread } from "@/lib/platform/types";
+import { neverRunThread } from "../../../test/mock-platform/fixtures.mjs";
 
 const usage = {
   input_tokens: 12,
@@ -80,6 +81,12 @@ it("selects a child thread and archives an idle child", async () => {
       />
     </QueryClientProvider>,
   );
+  const tokens = document.querySelector(
+    '[data-thread-id="sthr_primary"] [data-usage-state]',
+  );
+  expect(tokens).toHaveAttribute("data-usage-state", "reported");
+  expect(tokens).toHaveAttribute("data-input-tokens", "12");
+  expect(tokens).toHaveAttribute("data-output-tokens", "3");
 
   await user.click(screen.getByRole("button", { name: "Child thread Worker" }));
   expect(onSelect).toHaveBeenCalledWith("sthr_child");
@@ -113,6 +120,42 @@ it("selects a child thread and archives an idle child", async () => {
     "/api/platform/v1/sessions/sess_1/threads/sthr_child/archive",
   );
   expect(init?.method).toBe("POST");
+});
+
+it("renders a never-run thread's null usage as pending instead of throwing", () => {
+  vi.stubGlobal("fetch", vi.fn());
+  const fresh = neverRunThread as SessionThread;
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <SessionThreads
+        threads={[fresh]}
+        error={null}
+        loading={false}
+        selectedId={null}
+        onSelect={() => {}}
+      />
+      <SessionThreadPreview
+        thread={fresh}
+        events={[]}
+        onSelectEvent={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+
+  const tokens = document.querySelector(
+    `[data-thread-id="${fresh.id}"] [data-usage-state]`,
+  );
+  expect(tokens).toHaveAttribute("data-usage-state", "pending");
+  expect(tokens).not.toHaveAttribute("data-input-tokens");
+  expect(tokens).not.toHaveAttribute("data-output-tokens");
+  // The one assertion on this cell's human string; everything else reads the
+  // attribute (CLAUDE.md's derived-state rule).
+  expect(tokens).toHaveTextContent(/^—$/);
+
+  const preview = screen.getByRole("region", { name: "Thread details" });
+  expect(preview).toHaveAttribute("data-usage-state", "pending");
+  expect(preview.querySelector("[data-input-tokens]")).toBeNull();
+  expect(preview.querySelector("[data-output-tokens]")).toBeNull();
 });
 
 it.each([404, 501])("hides the optional surface on HTTP %s", (status) => {
