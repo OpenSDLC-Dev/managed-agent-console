@@ -954,11 +954,18 @@ function envelope(type, message, details) {
 // UUID, in any of the four spellings isUUID takes, is a foreign
 // organization's 401, and anything else the 400 for a segment that is not a
 // UUID (managed-agent-platform#820). Answers and returns true when it refused.
+// The segment is judged decoded, as the platform's PathValue hands it over; a
+// malformed escape stays as sent and so takes the 400.
 const HEX_UUID = "[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}";
 const UUID = new RegExp(
   `^(?:[0-9a-fA-F]{32}|${HEX_UUID}|\\{${HEX_UUID}\\}|urn:uuid:${HEX_UUID})$`,
 );
 function refuseOrganization(res, org) {
+  try {
+    org = decodeURIComponent(org);
+  } catch {
+    // Not a well-formed escape: judged as sent.
+  }
   if (org === "default") return false;
   if (UUID.test(org)) {
     res.writeHead(401);
