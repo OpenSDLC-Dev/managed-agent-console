@@ -110,7 +110,7 @@ it("shows the pinned thread Agent and model with server usage and inspectable mo
   );
   expect(preview.querySelector("dl [data-output-tokens]")).toHaveAttribute(
     "data-output-tokens",
-    String(thread.usage.output_tokens),
+    String(thread.usage!.output_tokens),
   );
   await userEvent.click(screen.getByText("Inspect model requests"));
   await userEvent.click(

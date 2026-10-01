@@ -78,7 +78,7 @@ export function SessionOverview({
         </Field>
       </dl>
       <SessionUsageDetails usage={session.usage} />
-      {/* sessions.go and threads.go render zero-only stats. The raw response remains available below. */}
+      {/* sessions.go renders zero-only stats, and a thread's are zeros or null before its first transition. The raw response remains available below. */}
       <details>
         <summary className="cursor-pointer text-sm">
           Session API response

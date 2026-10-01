@@ -613,6 +613,26 @@ export const sessionThreads = {
   ],
 };
 
+// A never-run primary, as recorded (`session.threads.get.primary`,
+// managed-agents-wire-recordings 2026-09-02): both null, by the spec rule cited
+// on SessionThreadSchema. The platform renders zeroed objects here until
+// platform#674 part 3 ships; the mock serves this shape for the primary of
+// every session `POST /v1/sessions` creates, so e2e covers the null arm and the
+// threads above cover the object arm.
+export const neverRunThread = {
+  id: "sthr_neverrunprimary000001",
+  type: "session_thread",
+  session_id: "sesn_neverrun000000000001",
+  parent_thread_id: null,
+  agent: threadAgentOf(agents[1]),
+  status: "idle",
+  usage: null,
+  stats: null,
+  created_at: T2,
+  updated_at: T2,
+  archived_at: null,
+};
+
 // Event log for sesn_gatedbash…: a turn that parked on an ask-gated bash
 // call (requires_action), matching the platform's exact per-type key sets.
 export const sessionEvents = {

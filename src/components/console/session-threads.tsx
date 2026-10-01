@@ -8,7 +8,7 @@ import {
 import { DetailSection } from "@/components/console/detail";
 import { PlatformError } from "@/lib/platform/http";
 import type { SessionThread } from "@/lib/platform/types";
-import { cn, tokenCount } from "@/lib/utils";
+import { cn, tokenAttr, tokenCount } from "@/lib/utils";
 export function SessionThreads({
   threads,
   error,
@@ -70,13 +70,22 @@ export function SessionThreads({
                   </td>
                   <td
                     className="text-right text-muted-foreground"
-                    data-input-tokens={thread.usage.input_tokens}
-                    data-output-tokens={thread.usage.output_tokens}
+                    data-usage-state={thread.usage ? "reported" : "pending"}
+                    data-input-tokens={tokenAttr(thread.usage?.input_tokens)}
+                    data-output-tokens={tokenAttr(thread.usage?.output_tokens)}
                   >
-                    <span className="block">
-                      {tokenCount(thread.usage.input_tokens)} in
-                    </span>
-                    <span>{tokenCount(thread.usage.output_tokens)} out</span>
+                    {thread.usage ? (
+                      <>
+                        <span className="block">
+                          {tokenCount(thread.usage.input_tokens)} in
+                        </span>
+                        <span>
+                          {tokenCount(thread.usage.output_tokens)} out
+                        </span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               );
