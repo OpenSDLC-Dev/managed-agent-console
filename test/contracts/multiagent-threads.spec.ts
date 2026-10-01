@@ -78,6 +78,9 @@ test("coordinator rosters resolve into session snapshots and threads", async ({
     const primary = SessionThreadSchema.parse(page.data[0]);
     expect(primary.parent_thread_id).toBeNull();
     expect(primary.agent.id).toBe(coordinator.id);
+    // A primary that has never run reports neither (platform#674 part 3).
+    expect(primary.stats).toBeNull();
+    expect(primary.usage).toBeNull();
 
     const cleared = AgentSchema.parse(
       await ok(
