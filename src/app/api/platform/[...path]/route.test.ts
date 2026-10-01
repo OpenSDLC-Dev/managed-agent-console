@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   IDENTITY_COOKIE,
+  getSession,
   putSession,
   resetIdentityStoreForTests,
 } from "@/lib/identity/session";
@@ -85,6 +86,68 @@ describe("platform BFF proxy", () => {
       error: { type: "invalid_request_error" },
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The work API is a worker's surface, authenticated by an environment key;
+  // the platform answers any other credential there with a 401, which
+  // `forward` reads as the operator's own token refused. The console never
+  // calls it, so the proxy refuses it outright.
+  it.each([
+    ["the work listing", "GET", ["v1", "environments", "env_1", "work"]],
+    ["a poll", "GET", ["v1", "environments", "env_1", "work", "poll"]],
+    [
+      "the queue stats",
+      "GET",
+      ["v1", "environments", "env_1", "work", "stats"],
+    ],
+    ["an item", "GET", ["v1", "environments", "env_1", "work", "work_1"]],
+    [
+      "an item's ack",
+      "POST",
+      ["v1", "environments", "env_1", "work", "work_1", "ack"],
+    ],
+    [
+      "an item's stop",
+      "POST",
+      ["v1", "environments", "env_1", "work", "work_1", "stop"],
+    ],
+  ])(
+    "refuses the work API's %s without contacting the platform",
+    async (_label, method, path) => {
+      const response = await (method === "GET" ? GET : POST)(
+        new NextRequest(
+          `http://localhost:3000/api/platform/${path.join("/")}`,
+          {
+            method,
+          },
+        ),
+        ctx(...path),
+      );
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({
+        type: "error",
+        error: { type: "invalid_request_error" },
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  // Only the work subtree: the environment itself and its other routes are
+  // the console's own, and a segment merely named `work` elsewhere is not it.
+  it.each([
+    [["v1", "environments", "env_1"]],
+    [["v1", "environments", "env_1", "archive"]],
+    [["v1", "environments"]],
+    [["v1", "agents", "work"]],
+    [["v1", "sessions", "work", "events"]],
+  ])("still forwards %j", async (path) => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    await GET(
+      new NextRequest(`http://localhost:3000/api/platform/${path.join("/")}`),
+      ctx(...path),
+    );
+    const [url] = upstreamCall();
+    expect(url).toBe(`http://platform.local/${path.join("/")}`);
   });
 
   it("still forwards an ordinary /v1 path unchanged", async () => {
@@ -459,6 +522,44 @@ describe("identity mode", () => {
     fetchMock.mockClear();
     expect((await agents()).status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // The sign-out a cross-site link could otherwise cause. The identity cookie
+  // is `SameSite=Lax`, so a top-level navigation from another site carries it,
+  // and the platform answers an operator's token on the work API with a 401
+  // (its dispatcher sends every work path to the environment-key lane). So a
+  // link to `<console>/api/platform/v1/environments/env_x/work` would end the
+  // session — unless the proxy refuses it first, without touching the session.
+  // Next decodes each segment once, so `%77ork` arrives here as `work`.
+  it("probe: a work API path is refused without ending the operator's session", async () => {
+    configureOidc();
+    signIn();
+    // What the platform would answer, were the request forwarded.
+    fetchMock.mockResolvedValue(
+      new Response('{"type":"error"}', { status: 401 }),
+    );
+
+    for (const path of [
+      ["v1", "environments", "env_x", "work"],
+      ["v1", "environments", "env_x", "work", "poll"],
+    ]) {
+      const refused = await GET(
+        new NextRequest(
+          `http://localhost:3000/api/platform/${path.join("/")}`,
+          { headers: { cookie: `${IDENTITY_COOKIE}=sid` } },
+        ),
+        ctx(...path),
+      );
+      expect(refused.status).toBe(404);
+      expect(refused.headers.get(SIGNED_OUT_HEADER)).toBeNull();
+      expect(refused.headers.get("set-cookie")).toBeNull();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getSession("sid", Date.now())).toBeDefined();
+
+    // The operator's own requests are still served on the same session.
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    expect((await agents()).status).toBe(200);
   });
 
   it("marks its own refusal so the browser can tell it from a bad management key", async () => {

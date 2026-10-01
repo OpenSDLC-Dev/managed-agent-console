@@ -10,6 +10,17 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 - Upgrade Next.js to 16.3.6 to address remote code execution in `next/og ImageResponse`
   ([GHSA-vcvr-r3jv-pc5j](https://github.com/vercel/next.js/security/advisories/GHSA-vcvr-r3jv-pc5j), #183).
+- The BFF forwards the console namespaces (`/api/oauth/…`, `/api/console/…`) only for the
+  `default` organization and workspace, the only ones this console manages. Any other value is
+  now a 404 from the console itself. The platform will answer a foreign organization UUID with a
+  401, as the reference does, and the proxy ends the operator's session on any upstream 401. So,
+  with SSO on, a link from another site naming such a UUID would have signed an operator out.
+  Deploy this console before the platform release that answers that 401
+  ([platform #820](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/820), #187).
+- The `/v1` proxy refuses the work API (`/v1/environments/{id}/work…`) with its own 404. That
+  surface takes an environment key, so the platform answers an SSO operator's token there with a
+  401, and a link from another site could sign the operator out the same way. The console never
+  calls it (#187).
 
 ### Fixed
 

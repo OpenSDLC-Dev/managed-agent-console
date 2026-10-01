@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  IDENTITY_COOKIE,
+  getSession,
+  putSession,
+  resetIdentityStoreForTests,
+} from "@/lib/identity/session";
+import { SIGNED_OUT_HEADER } from "@/lib/identity/signed-out";
 import { GET, POST } from "./route";
 
 vi.mock("server-only", () => ({}));
@@ -19,11 +26,17 @@ const upstreamCall = (index = 0): [string, ProxyInit] => {
 const TOKENS = "organizations/default/environments/env_byoc1/tokens";
 const REVOKE = `${TOKENS}/envkey_1/revoke`;
 
+// An organization this console does not manage, spelled as the platform's
+// foreign-organization branch reads one: a UUID (managed-agent-platform#820).
+const FOREIGN_ORG = "8d3f6c2e-4b1a-4f6e-9c7d-2a5b8e1f0c3d";
+
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   vi.stubEnv("PLATFORM_BASE_URL", "http://platform.local");
   vi.stubEnv("PLATFORM_API_KEY", "sk-mgmt-test");
+  vi.stubEnv("IDENTITY_MODE", undefined);
+  resetIdentityStoreForTests();
 });
 
 afterEach(() => {
@@ -163,6 +176,37 @@ describe("console-API BFF passthrough", () => {
       "GET",
       ["organizations", "", "environments", "env_byoc1", "tokens"],
     ],
+    // The organization is pinned to the one this console manages. The platform
+    // answers a foreign UUID with a 401 (managed-agent-platform#820), which
+    // `forward` would read as the operator's own token refused.
+    [
+      "a foreign organization UUID on the listing",
+      "GET",
+      ["organizations", FOREIGN_ORG, "environments", "env_byoc1", "tokens"],
+    ],
+    [
+      "a foreign organization UUID on issuance",
+      "POST",
+      ["organizations", FOREIGN_ORG, "environments", "env_byoc1", "tokens"],
+    ],
+    [
+      "a foreign organization UUID on revoke",
+      "POST",
+      [
+        "organizations",
+        FOREIGN_ORG,
+        "environments",
+        "env_byoc1",
+        "tokens",
+        "envkey_1",
+        "revoke",
+      ],
+    ],
+    [
+      "an organization other than default",
+      "GET",
+      ["organizations", "acme", "environments", "env_byoc1", "tokens"],
+    ],
   ])(
     "refuses %s without contacting the platform",
     async (_label, method, path) => {
@@ -199,5 +243,79 @@ describe("console-API BFF passthrough", () => {
       ctx(...TOKENS.split("/")),
     );
     expect(response.status).toBe(502);
+  });
+});
+
+// The sign-out a cross-site link could otherwise cause. The identity cookie is
+// `SameSite=Lax`, so a top-level navigation from another site carries it, and
+// `forward` ends the session on any upstream 401. The platform answers a
+// foreign organization UUID with exactly that 401 (managed-agent-platform#820),
+// so a link naming one would sign an operator out — unless this route refuses
+// it first, without touching the session.
+describe("identity mode", () => {
+  const configureOidc = () => {
+    vi.stubEnv("IDENTITY_MODE", "oidc");
+    vi.stubEnv("IDENTITY_OIDC_ISSUER", "https://idp.example.com");
+    vi.stubEnv("IDENTITY_OIDC_CLIENT_ID", "console-client");
+  };
+
+  const signIn = () =>
+    putSession("sid", {
+      idToken: "id-token",
+      expiresAt: Date.now() + 60_000,
+      subject: "user-1",
+    });
+
+  const asOperator = (path: string[], method = "GET") =>
+    (method === "GET" ? GET : POST)(
+      new NextRequest(`http://localhost:3000/api/oauth/${path.join("/")}`, {
+        method,
+        headers: { cookie: `${IDENTITY_COOKIE}=sid` },
+      }),
+      ctx(...path),
+    );
+
+  it("probe: a foreign organization is refused without ending the operator's session", async () => {
+    configureOidc();
+    signIn();
+    // What the platform would answer, were the request forwarded.
+    fetchMock.mockResolvedValue(
+      new Response('{"type":"error"}', { status: 401 }),
+    );
+
+    for (const [path, method] of [
+      [
+        ["organizations", FOREIGN_ORG, "environments", "env_byoc1", "tokens"],
+        "GET",
+      ],
+      [
+        [
+          "organizations",
+          FOREIGN_ORG,
+          "environments",
+          "env_byoc1",
+          "tokens",
+          "envkey_1",
+          "revoke",
+        ],
+        "POST",
+      ],
+    ] as const) {
+      const refused = await asOperator([...path], method);
+      expect(refused.status).toBe(404);
+      expect(refused.headers.get(SIGNED_OUT_HEADER)).toBeNull();
+      expect(refused.headers.get("set-cookie")).toBeNull();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getSession("sid", Date.now())).toBeDefined();
+
+    // The operator's own requests are still served on the same session.
+    fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+    expect((await asOperator(TOKENS.split("/"))).status).toBe(200);
+    const [url, init] = upstreamCall();
+    expect(url).toBe(`http://platform.local/api/oauth/${TOKENS}`);
+    expect(new Headers(init.headers).get("authorization")).toBe(
+      "Bearer id-token",
+    );
   });
 });

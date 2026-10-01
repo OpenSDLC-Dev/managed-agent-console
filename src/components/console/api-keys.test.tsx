@@ -352,7 +352,7 @@ describe("creating a key", () => {
               request_id: "req_x",
               error: {
                 type: "invalid_request_error",
-                message: "name must be 1-128 characters",
+                message: "name: String should have at most 500 characters",
               },
             },
             400,
@@ -367,7 +367,7 @@ describe("creating a key", () => {
 
     const alert = await screen.findByRole("alert");
     expect(
-      within(alert).getByText(/name must be 1-128 characters/),
+      within(alert).getByText(/at most 500 characters/),
     ).toBeInTheDocument();
   });
 });

@@ -370,6 +370,8 @@ describe("issuing a key", () => {
     });
   });
 
+  // The name bound is the platform's own (consoleapi.go environmentKeyName);
+  // the dialog does not mirror it, so this is a refusal an operator can meet.
   it("shows the platform's refusal inline, not as a toast behind the modal", async () => {
     const user = userEvent.setup();
     stubRoutes({
@@ -380,7 +382,7 @@ describe("issuing a key", () => {
             request_id: "req_xyz",
             error: {
               type: "invalid_request_error",
-              message: "environment env_1 is archived",
+              message: "name must be 1-128 characters",
             },
           },
           400,
@@ -395,7 +397,7 @@ describe("issuing a key", () => {
     );
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("environment env_1 is archived");
+    expect(alert).toHaveTextContent("name must be 1-128 characters");
     expect(alert).toHaveTextContent("req_xyz");
     // Still open, so the operator can correct and retry.
     expect(screen.getByRole("dialog")).toBeInTheDocument();

@@ -21,7 +21,7 @@ import {
   platformPostForm,
   type Page,
 } from "./http";
-import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./surfaces";
+import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 import type { ResourceInput } from "./session-resources";
 import type {
   Agent,
@@ -1183,10 +1183,14 @@ export function useDeleteVault(id: string) {
 // ---- environment keys (the console API, plan 07)
 //
 // The organization segment is the platform's reserved `default`
-// (internal/api/consoleapi.go:52-53): the segment exists because the
-// reference's does, and v1 answers for no other value.
+// (internal/api/consoleapi.go reservedOrganization): the segment exists because
+// the reference's does, and the platform answers for no other value.
 
-/** consoleapi.go:62 — both the default and the maximum page size. */
+/**
+ * The platform's default page size (consoleapi.go consoleKeyLimit). It is no
+ * longer its cap — a larger `limit` is taken and echoed since
+ * managed-agent-platform#820 — but this section asks for one page of it.
+ */
 const ENVIRONMENT_KEY_LIMIT = 100;
 
 export function useEnvironmentKeys(environmentId: string, enabled = true) {

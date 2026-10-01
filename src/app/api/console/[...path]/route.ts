@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { envelope, forward } from "@/lib/platform-proxy";
+import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 
 /**
  * BFF passthrough for the platform's **management-key console routes**
@@ -19,13 +20,21 @@ import { envelope, forward } from "@/lib/platform-proxy";
  * credential the console itself runs on.
  */
 
-/** As on the sibling namespace: ids and tenancy handles, no dots, no percent. */
+/** As on the sibling namespace: platform ids, no dots, no percent. */
 const ID = "[A-Za-z0-9_-]+";
 
-/** `organizations/{org}/workspaces/{workspace}/api_keys` */
-const KEYS = new RegExp(`^organizations/${ID}/workspaces/${ID}/api_keys$`);
-/** `organizations/{org}/workspaces/{workspace}/api_keys/{key_id}` */
-const KEY = new RegExp(`^organizations/${ID}/workspaces/${ID}/api_keys/${ID}$`);
+/**
+ * The tenancy segments are pinned, as on the sibling namespace and for its
+ * reason: a foreign organization UUID is the platform's 401, which `forward`
+ * would read as the operator's token refused. The workspace is pinned with it
+ * because this console sends no other.
+ */
+const SCOPE = `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}`;
+
+/** `organizations/default/workspaces/default/api_keys` */
+const KEYS = new RegExp(`^${SCOPE}/api_keys$`);
+/** `organizations/default/workspaces/default/api_keys/{key_id}` */
+const KEY = new RegExp(`^${SCOPE}/api_keys/${ID}$`);
 
 /**
  * Method is part of the shape. The platform registers GET+POST on the

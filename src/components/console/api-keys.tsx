@@ -27,7 +27,7 @@ import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
 import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
-import { CONSOLE_WORKSPACE } from "@/lib/platform/surfaces";
+import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import type { ApiKey } from "@/lib/platform/types";
 
 /**

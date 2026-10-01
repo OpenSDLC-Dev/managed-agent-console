@@ -64,14 +64,15 @@ export function environmentKeyState(
 }
 
 /**
- * Whether this environment can be issued a key at all.
+ * Whether this console offers to issue this environment a key.
  *
- * The platform refuses both cases with a 400 — a non-`self_hosted` environment
- * because its work is run by the platform's own executor, which holds no
- * environment key, and an archived one outright
- * (`internal/api/consoleapi.go:200-205`). Hiding the control rather than
- * letting an operator discover the refusal mirrors the reference, and is a
- * client-side mirror of the wire rather than a rule stricter than it.
+ * The platform issues one on any environment, a `cloud` or an archived one
+ * included, as the reference does (managed-agent-platform#820). The console
+ * offers it only where a new key has a use. A `cloud` environment's work is run
+ * by the platform's own executor, and the platform refuses that key its poll,
+ * so the reference shows no key UI there either. An archived environment
+ * starts no new sessions, so its keys are listed and revocable but not added
+ * to. Both are presentation choices: the wire would accept the request.
  */
 export function canIssueEnvironmentKey(environment: Environment): boolean {
   return (
