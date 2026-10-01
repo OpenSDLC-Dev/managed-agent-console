@@ -613,13 +613,12 @@ export const sessionThreads = {
   ],
 };
 
-// A never-run primary, as the reference renders one (wire recording
-// `session.threads.get.primary`, managed-agents-wire-recordings 2026-09-02):
-// `stats` is null until the thread's first status transition and `usage` until
-// its first idle (anthropic-sdk-go v1.70.1 spec). The platform renders zeroed
-// objects here until platform#674 part 3 ships; the mock serves this shape for
-// the primary of every session `POST /v1/sessions` creates, so e2e covers the
-// null arm and the threads above cover the object arm.
+// A never-run primary, as recorded (`session.threads.get.primary`,
+// managed-agents-wire-recordings 2026-09-02): both null, by the spec rule cited
+// on SessionThreadSchema. The platform renders zeroed objects here until
+// platform#674 part 3 ships; the mock serves this shape for the primary of
+// every session `POST /v1/sessions` creates, so e2e covers the null arm and the
+// threads above cover the object arm.
 export const neverRunThread = {
   id: "sthr_neverrunprimary000001",
   type: "session_thread",

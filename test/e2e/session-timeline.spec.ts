@@ -87,6 +87,33 @@ test("Thread details expose pinned metadata, server usage and an inspectable req
   await expect(page).toHaveURL(/event=sevt_000000000000000006/);
 });
 
+// platform#674: a never-run thread's usage and stats are null on the wire.
+test("a never-run thread renders pending usage instead of failing the Threads view", async ({
+  page,
+  request,
+}) => {
+  const created = await request.post("http://127.0.0.1:18080/v1/sessions", {
+    headers: { "x-api-key": "test-key" },
+    data: {
+      agent: "agent_taskrunner0000000001",
+      environment_id: "env_cloudlimited000000001",
+      title: "Never run",
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const { id } = await created.json();
+  await signIn(page, `/sessions/${id}?inspector=thread`);
+
+  const tokens = page
+    .getByTestId("session-threads")
+    .locator("[data-usage-state]");
+  await expect(tokens).toHaveAttribute("data-usage-state", "pending");
+  await expect(tokens).not.toHaveAttribute("data-input-tokens");
+  const preview = page.getByRole("region", { name: "Thread details" });
+  await expect(preview).toHaveAttribute("data-usage-state", "pending");
+  await expect(preview.locator("[data-input-tokens]")).toHaveCount(0);
+});
+
 test("pointer users can inspect every coincident marker at fit and zoomed scales", async ({
   page,
 }) => {

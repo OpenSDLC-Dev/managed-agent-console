@@ -3078,8 +3078,9 @@ const server = createServer(async (req, res) => {
       parent_thread_id: null,
       agent: mockThreadAgent(agent),
       status: session.status,
-      usage: structuredClone(session.usage),
-      stats: { active_seconds: 0, duration_seconds: 0, startup_seconds: 0 },
+      // Never run, so null — the shape fixtures.mjs:neverRunThread documents.
+      usage: null,
+      stats: null,
       created_at: timestamp,
       updated_at: timestamp,
       archived_at: null,

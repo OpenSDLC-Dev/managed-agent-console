@@ -713,6 +713,14 @@ describe("the mock's constructed write-path responses conform too", () => {
     // unvalidated — no fixture session mounts one on the create path.
     expect((session as { resources: unknown[] }).resources).toHaveLength(1);
     const sessionId = (session as { id: string }).id;
+    const threads = (await call(`/v1/sessions/${sessionId}/threads`, {
+      method: "GET",
+    })) as { data: unknown[] };
+    each(SessionThreadSchema, threads.data, "created session's threads");
+    // Never run, so the spec's null arm (fixtures.mjs:neverRunThread).
+    expect(threads.data).toEqual([
+      expect.objectContaining({ usage: null, stats: null }),
+    ]);
     const rejected = await fetch(`${base}/v1/sessions/${sessionId}/archive`, {
       method: "DELETE",
       headers: { "x-api-key": API_KEY },
