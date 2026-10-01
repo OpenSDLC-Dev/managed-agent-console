@@ -530,13 +530,31 @@ function appendEvent(state, type, fields = {}, threadId) {
   return event;
 }
 
+/**
+ * A thread's first status transition starts its stats and usage: null until
+ * then. The platform fills both at that one marker (platform#674), as the
+ * recordings do for children that are still running.
+ */
+function transitionThread(thread, status) {
+  thread.status = status;
+  thread.updated_at = now();
+  if (thread.stats !== null) return;
+  thread.stats = { active_seconds: 0, duration_seconds: 0, startup_seconds: 0 };
+  thread.usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_read_input_tokens: 0,
+    cache_creation: {
+      ephemeral_1h_input_tokens: 0,
+      ephemeral_5m_input_tokens: 0,
+    },
+  };
+}
+
 function setStatus(state, status, stopReason, threadId) {
   if (threadId) {
     const thread = state.threads.find((candidate) => candidate.id === threadId);
-    if (thread) {
-      thread.status = status;
-      thread.updated_at = now();
-    }
+    if (thread) transitionThread(thread, status);
     appendEvent(
       state,
       `session.thread_status_${status}`,
@@ -550,6 +568,8 @@ function setStatus(state, status, stopReason, threadId) {
     return;
   }
   state.session.status = status;
+  const primary = state.threads.find((thread) => !thread.parent_thread_id);
+  if (primary) transitionThread(primary, status);
   appendEvent(
     state,
     status === "running" ? "session.status_running" : "session.status_idle",
