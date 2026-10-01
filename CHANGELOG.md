@@ -16,7 +16,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   401, as the reference does, and the proxy ends the operator's session on any upstream 401. So,
   with SSO on, a link from another site naming such a UUID would have signed an operator out.
   Deploy this console before the platform release that answers that 401
-  ([platform #820](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/820)).
+  ([platform #820](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/820), #187).
 
 ### Fixed
 
