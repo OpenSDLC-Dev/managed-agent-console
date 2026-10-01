@@ -1010,7 +1010,8 @@ function keysetPage(rows, url, { bi = false } = {}) {
   return page;
 }
 
-const notArchived = (row) => row.archived_at === null;
+// `== null`: an unarchived memory store omits the key (fixtures.mjs).
+const notArchived = (row) => row.archived_at == null;
 
 function route(req, url) {
   const path = url.pathname;
@@ -3186,7 +3187,7 @@ const server = createServer(async (req, res) => {
         metadata: body.metadata ?? {},
         created_at: timestamp,
         updated_at: timestamp,
-        archived_at: null,
+        // No archived_at until archived: the recorded shape (fixtures.mjs).
       };
       memoryStoresStore.unshift(item);
       res.writeHead(200);

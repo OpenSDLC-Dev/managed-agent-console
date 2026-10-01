@@ -1,7 +1,13 @@
 import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import MemoryStoresPage from "./page";
@@ -84,6 +90,21 @@ function setup() {
 }
 
 describe("MemoryStoresPage", () => {
+  it("reads a store without archived_at as live, and one with it as archived", async () => {
+    setup();
+    const live = (await screen.findByText("Project notes")).closest("tr")!;
+    expect(memoryStores[0]).not.toHaveProperty("archived_at");
+    expect(within(live).getByText("Live")).toHaveAttribute(
+      "data-status",
+      "live",
+    );
+    const archived = screen.getByText("Archived notes").closest("tr")!;
+    expect(within(archived).getByText("Archived")).toHaveAttribute(
+      "data-status",
+      "archived",
+    );
+  });
+
   it("renders stores and drives create, filtering, paging and row actions", async () => {
     const fetch = setup();
     expect(await screen.findByText("Project notes")).toBeInTheDocument();

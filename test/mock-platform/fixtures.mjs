@@ -19,6 +19,9 @@ export const memoryResources = [
   },
 ];
 
+// An unarchived store carries no archived_at key at all, as recorded
+// (managed-agents-wire-recordings 2026-09-02/free_batch1.json, `store.create`
+// and `store.list.include_archived`; platform#817). Only an archived one has it.
 export const memoryStores = [
   {
     id: "memstore_projectnotes000001",
@@ -28,7 +31,6 @@ export const memoryStores = [
     metadata: { owner: "research" },
     created_at: T0,
     updated_at: T2,
-    archived_at: null,
   },
   {
     id: "memstore_archivednotes0001",
@@ -48,7 +50,6 @@ export const memoryStores = [
     metadata: {},
     created_at: T2,
     updated_at: T2,
-    archived_at: null,
   },
 ];
 

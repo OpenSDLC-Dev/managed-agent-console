@@ -395,7 +395,10 @@ export const MemoryStoreSchema = z.object({
   metadata: z.record(z.string(), z.string()),
   created_at: z.string(),
   updated_at: z.string(),
-  archived_at: z.string().nullable(),
+  // Optional and nullable in the spec. The reference omits the key until the
+  // store is archived (recorded 2026-09-02, platform#817); earlier platform
+  // releases render null.
+  archived_at: z.string().nullish(),
 });
 
 export const MemorySchema = z.object({
