@@ -125,6 +125,20 @@ describe("mock fixtures conform to the platform wire", () => {
     each(MemoryVersionSchema, fixtures.memoryVersions, "memoryVersions");
   });
 
+  it("a memory store carries archived_at only once archived", () => {
+    // The recorded shape (platform#817): an unarchived store has no key at all.
+    const [live, archived] = fixtures.memoryStores;
+    expect(live).not.toHaveProperty("archived_at");
+    expect(MemoryStoreSchema.parse(live).archived_at).toBeUndefined();
+    expect(archived.archived_at).toEqual(expect.any(String));
+    // A platform release before #817 renders the key as null.
+    expectConforms(
+      MemoryStoreSchema,
+      { ...live, archived_at: null },
+      "a store with a null archived_at",
+    );
+  });
+
   it("vaults and their credentials", () => {
     each(VaultSchema, fixtures.vaults, "vaults");
     eachIn(
@@ -600,12 +614,14 @@ describe("the mock's constructed write-path responses conform too", () => {
       metadata: { owner: "console", remove: "me" },
     });
     expectConforms(MemoryStoreSchema, store, "POST /v1/memory_stores");
+    expect(store).not.toHaveProperty("archived_at");
     const storeId = (store as { id: string }).id;
 
     const patched = await postJSON(`/v1/memory_stores/${storeId}`, {
       metadata: { owner: "platform", remove: null },
     });
     expectConforms(MemoryStoreSchema, patched, "PATCH-like store update");
+    expect(patched).not.toHaveProperty("archived_at");
     expect((patched as { metadata: object }).metadata).toEqual({
       owner: "platform",
     });
@@ -659,9 +675,7 @@ describe("the mock's constructed write-path responses conform too", () => {
 
     const archived = await postJSON(`/v1/memory_stores/${storeId}/archive`, {});
     expectConforms(MemoryStoreSchema, archived, "POST store archive");
-    expect(
-      (archived as { archived_at: string | null }).archived_at,
-    ).not.toBeNull();
+    expect(archived).toHaveProperty("archived_at", expect.any(String));
   });
 
   it("files: upload", async () => {
