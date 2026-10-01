@@ -11,6 +11,25 @@ import { envelope, forward } from "@/lib/platform-proxy";
  * `src/app/api/oauth/[...path]/route.ts`.
  */
 
+/**
+ * Whether `path` is under the work API, `v1/environments/{id}/work…`.
+ *
+ * That is a worker's surface: the platform's dispatcher authenticates every
+ * request there as an environment key (`internal/api/server.go` dispatchAuth,
+ * isWorkPath), so the operator's own token is a 401 there, and `forward` reads
+ * a 401 as that token refused and ends the session. A link from any site can
+ * aim this proxy at the path, and the identity cookie is `SameSite=Lax`, so it
+ * would sign an operator out. The console never calls the work API, so the
+ * subtree is refused here instead. It is the only `/v1` path that answers an
+ * authenticated operator 401: everywhere else the platform verifies the token
+ * itself, and refuses a role with 403 (managed-agent-platform#820).
+ *
+ * Segments arrive decoded, so an encoded spelling (`%77ork`) is caught too.
+ */
+function isWorkApi(path: string[]): boolean {
+  return path[1] === "environments" && path[3] === "work";
+}
+
 async function proxy(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -19,7 +38,11 @@ async function proxy(
   const joined = path.join("/");
   // Next decodes each segment. A decoded delimiter must not select another
   // upstream endpoint or become a query/fragment when joined below.
-  if (path[0] !== "v1" || path.some((segment) => /[/?#]/.test(segment))) {
+  if (
+    path[0] !== "v1" ||
+    path.some((segment) => /[/?#]/.test(segment)) ||
+    isWorkApi(path)
+  ) {
     return envelope(
       404,
       "invalid_request_error",

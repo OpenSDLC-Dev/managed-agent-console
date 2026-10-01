@@ -17,6 +17,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   with SSO on, a link from another site naming such a UUID would have signed an operator out.
   Deploy this console before the platform release that answers that 401
   ([platform #820](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/820), #187).
+- The `/v1` proxy refuses the work API (`/v1/environments/{id}/work…`) with its own 404. That
+  surface takes an environment key, so the platform answers an SSO operator's token there with a
+  401, and a link from another site could sign the operator out the same way. The console never
+  calls it (#187).
 
 ### Fixed
 
