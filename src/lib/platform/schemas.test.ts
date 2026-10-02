@@ -869,6 +869,61 @@ describe("the mock's constructed write-path responses conform too", () => {
     },
   );
 
+  // sessions.go createSession: environment_id and agent present, then every
+  // resource's shape, all before a lookup; inside the create, the
+  // environment, then the agent, then the stores and files.
+  it("sessions: the body is judged before the environment, the environment before the agent", async () => {
+    const create = (body: Record<string, unknown>) =>
+      answer("POST", "/v1/sessions", body);
+    const env = fixtures.environments[0].id;
+    expect(
+      await create({ agent: "agent_absent", resources: [{ type: "volume" }] }),
+    ).toEqual(invalid("environment_id is required"));
+    expect(await create({ environment_id: env })).toEqual(
+      invalid("agent: value is required"),
+    );
+    expect(
+      await create({
+        agent: "agent_absent",
+        environment_id: "env_absent",
+        resources: [{ type: "volume" }],
+      }),
+    ).toEqual(invalid('resource type "volume" is not supported'));
+    expect(
+      await create({ agent: "agent_absent", environment_id: "env_absent" }),
+    ).toEqual(notFound("Environment env_absent not found."));
+    expect(
+      await create({
+        agent: "agent_absent",
+        environment_id: env,
+        resources: [
+          { type: "memory_store", memory_store_id: "memstore_absent" },
+        ],
+      }),
+    ).toEqual(notFound("agent agent_absent not found"));
+    expect(
+      await create({ agent: fixtures.agents[2].id, environment_id: env }),
+    ).toEqual(
+      invalid(
+        `agent ${fixtures.agents[2].id} is archived and cannot be used to create a session`,
+      ),
+    );
+    expect(
+      await create({
+        agent: { id: fixtures.agents[0].id },
+        environment_id: env,
+      }),
+    ).toEqual(
+      invalid("Failed to parse request: agent.selector.type: Field required"),
+    );
+    resetStore();
+    await call(`/v1/environments/${env}/archive`, { method: "POST" });
+    expect(
+      await create({ agent: "agent_absent", environment_id: env }),
+    ).toEqual(invalid(`environment ${env} is archived`));
+    resetStore();
+  });
+
   it("sessions: the memory stores' own rules, then the lookups", async () => {
     resetStore();
     const element = (id: string) => ({
@@ -927,8 +982,79 @@ describe("the mock's constructed write-path responses conform too", () => {
     ["/v1/files/file_absent", "File `file_absent` not found."],
     ["/v1/skills/skill_absent", "Skill not found: skill_absent"],
     ["/v1/skills/skill_absent/versions", "Skill not found: skill_absent"],
+    ["/v1/agents/agent_absent", "agent agent_absent not found"],
+    [
+      "/v1/agents/agent_absent?version=2",
+      "agent agent_absent version 2 not found",
+    ],
+    [
+      `/v1/agents/${fixtures.agents[1].id}?version=9`,
+      `agent ${fixtures.agents[1].id} version 9 not found`,
+    ],
+    ["/v1/agents/agent_absent/versions", "agent agent_absent not found"],
+    ["/v1/deployments/depl_absent", "deployment depl_absent not found"],
+    ["/v1/deployment_runs/drun_absent", "deployment run drun_absent not found"],
+    ["/v1/dreams/drm_absent", "dream drm_absent not found"],
+    ["/v1/vaults/vlt_absent", "vault vlt_absent not found"],
+    ["/v1/vaults/vlt_absent/credentials", "vault vlt_absent not found"],
+    [
+      "/v1/vaults/vlt_github00000000000001/credentials/vcrd_absent",
+      "Credential not found.",
+    ],
+    // A credential under another vault is the same 404 (#540).
+    [
+      "/v1/vaults/vlt_pastsafe000000000001/credentials/vcred_ghtoken000000000001",
+      "Credential not found.",
+    ],
+    [
+      "/v1/memory_stores/memstore_absent/memories",
+      "memory store memstore_absent not found",
+    ],
+    [
+      `/v1/memory_stores/${store}/memories/mem_absent`,
+      "memory `mem_absent` not found",
+    ],
+    [
+      "/v1/memory_stores/memstore_absent/memories/mem_absent",
+      "memory store memstore_absent not found",
+    ],
+    [
+      "/v1/memory_stores/memstore_absent/memory_versions",
+      "memory store memstore_absent not found",
+    ],
+    [
+      "/v1/memory_stores/memstore_absent/memory_versions/memver_absent",
+      "memory version memver_absent not found",
+    ],
+    ["/v1/sessions/sesn_absent/events", "session sesn_absent not found"],
+    ["/v1/sessions/sesn_absent/threads", "session sesn_absent not found"],
+    [
+      "/v1/sessions/sesn_absent/threads/sthr_absent",
+      "session sesn_absent not found",
+    ],
+    [
+      "/v1/sessions/sesn_research0000000000001/threads/sthr_absent",
+      "thread sthr_absent not found",
+    ],
+    [
+      "/v1/sessions/sesn_research0000000000001/threads/sthr_absent/events",
+      "thread sthr_absent not found",
+    ],
+    [
+      "/v1/sessions/sesn_research0000000000001/threads/sthr_absent/stream",
+      "thread sthr_absent not found",
+    ],
+    ["/v1/sessions/sesn_absent/events/stream", "session sesn_absent not found"],
+    // server.go errUnknownPath: a path no route matches (#540).
+    ["/v1/unknown", "Not found"],
   ])("GET %s answers the resource's own 404", async (path, message) => {
     expect(await answer("GET", path)).toEqual(notFound(message));
+  });
+
+  it("a cursor the list did not mint is page.go's 400", async () => {
+    expect(await answer("GET", "/v1/agents?page=bogus")).toEqual(
+      invalid("invalid page cursor"),
+    );
   });
 
   // wire.go checkAgentPathID and threads.go threadIDs: a path id that is no
@@ -961,11 +1087,10 @@ describe("the mock's constructed write-path responses conform too", () => {
       await answer(method, path, method === "POST" ? {} : undefined),
     ).toEqual(invalid(`Invalid thread ID: ${thread}`));
   });
-  it("a well-formed agent id the mock does not hold is still a 404, and an update reads its body's keys first", async () => {
+  it("a well-formed agent id the mock does not hold is the agent's 404, and an update reads its body's keys first", async () => {
     expect(
-      (await answer("GET", "/v1/agents/agent_0000000000000000000000000"))
-        .status,
-    ).toBe(404);
+      await answer("GET", "/v1/agents/agent_0000000000000000000000000"),
+    ).toEqual(notFound("agent agent_0000000000000000000000000 not found"));
     expect(
       await answer("POST", "/v1/agents/undefined", { z: 1, a: 2 }),
     ).toEqual(invalid('Failed to parse request body: unknown field "a"'));
@@ -1169,6 +1294,94 @@ describe("the mock's constructed write-path responses conform too", () => {
       ).toEqual(invalid(message));
     },
   );
+
+  // deployments.go: everything the body says is judged before the
+  // transaction; then an update's row, then the environment, the vaults and
+  // the agent, in that order.
+  it("deployments: the body is judged before any lookup, the environment first among them", async () => {
+    const absent = {
+      ...deployment,
+      agent: "agent_absent",
+      environment_id: "env_absent",
+      vault_ids: ["vlt_absent"],
+    };
+    expect(
+      await answer("POST", "/v1/deployments", {
+        ...absent,
+        schedule: { ...schedule, type: "interval" },
+      }),
+    ).toEqual(
+      invalid(
+        'schedule.type "interval" is not supported; the only schedule type is "cron"',
+      ),
+    );
+    expect(
+      await answer("POST", "/v1/deployments", { ...absent, vault_ids: ["x"] }),
+    ).toEqual(invalid('vault_ids entry "x" is not a vault id'));
+    expect(await answer("POST", "/v1/deployments", absent)).toEqual(
+      notFound("Environment env_absent not found."),
+    );
+    expect(
+      await answer("POST", "/v1/deployments", {
+        ...absent,
+        environment_id: fixtures.environments[0].id,
+      }),
+    ).toEqual(invalid("vault vlt_absent not found"));
+    expect(
+      await answer("POST", "/v1/deployments", {
+        ...absent,
+        environment_id: fixtures.environments[0].id,
+        vault_ids: [],
+      }),
+    ).toEqual(notFound("agent agent_absent not found"));
+    expect(
+      await answer("POST", "/v1/deployments", {
+        ...deployment,
+        agent: { type: "agent", id: fixtures.agents[0].id, version: 99 },
+      }),
+    ).toEqual(notFound(`agent ${fixtures.agents[0].id} version 99 not found`));
+    // An update: its body before its row, the row before what it sets.
+    expect(
+      await answer("POST", "/v1/deployments/depl_absent", {
+        schedule: { ...schedule, type: "interval" },
+      }),
+    ).toEqual(
+      invalid(
+        'schedule.type "interval" is not supported; the only schedule type is "cron"',
+      ),
+    );
+    expect(
+      await answer("POST", "/v1/deployments/depl_absent", {
+        environment_id: "env_absent",
+      }),
+    ).toEqual(notFound("deployment depl_absent not found"));
+    expect(
+      await answer("POST", "/v1/deployments/depl_weekresearch00000001", {
+        agent: "agent_absent",
+        initial_events: null,
+      }),
+    ).toEqual(notFound("agent agent_absent not found"));
+    expect(
+      await answer("POST", "/v1/deployments/depl_weekresearch00000001", {
+        environment_id: null,
+      }),
+    ).toEqual(invalid("environment_id cannot be cleared"));
+    resetStore();
+    await call("/v1/deployments/depl_weekresearch00000001/archive", {
+      method: "POST",
+    });
+    expect(
+      await answer("POST", "/v1/deployments/depl_weekresearch00000001", {
+        initial_events: {},
+      }),
+    ).toEqual(invalid("initial_events must be an array of events"));
+    expect(
+      await answer("POST", "/v1/deployments/depl_weekresearch00000001", {
+        name: "renamed",
+      }),
+    ).toEqual(invalid("Cannot modify archived deployment"));
+    resetStore();
+  });
 
   it.each(["null", "[]"])(
     "sessions: reject non-object resource mutation body %s",
@@ -1439,6 +1652,45 @@ describe("the mock's constructed write-path responses conform too", () => {
       ).toEqual(refused);
     },
   );
+
+  // events.go sendSessionEvents reads the body (decodeObject, the unknown
+  // keys, rawList) before it looks the session up, and the batch's floor
+  // after.
+  it("events: the body is read before the session, the floor after", async () => {
+    const send = (session: string, body: string) =>
+      fetch(`${base}/v1/sessions/${session}/events`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": API_KEY },
+        body,
+      }).then(async (response) => ({
+        status: response.status,
+        retry: response.headers.get("x-should-retry"),
+        error: ((await response.json()) as { error: unknown }).error,
+      }));
+    expect(await send("sesn_absent", "{not json")).toEqual(
+      invalid("request body must be a JSON object"),
+    );
+    expect(await send("sesn_absent", '{"events":[],"z":1}')).toEqual(
+      invalid('Failed to parse request body: unknown field "z"'),
+    );
+    expect(await send("sesn_absent", '{"events":{}}')).toEqual(
+      invalid("events must be an array"),
+    );
+    expect(await send("sesn_absent", '{"events":[]}')).toEqual(
+      notFound("session sesn_absent not found"),
+    );
+    expect(await send("session_absent", "")).toEqual(
+      invalid("events must be an array"),
+    );
+    resetStore();
+    await call("/v1/sessions/sesn_gatedbash00000000001/archive", {
+      method: "POST",
+    });
+    expect(await send("sesn_gatedbash00000000001", '{"events":[]}')).toEqual(
+      invalid("session sesn_gatedbash00000000001 is archived and read-only"),
+    );
+    resetStore();
+  });
 
   // inbound.go answerClaim: a confirmation is written, and echoed, on the
   // thread of the call it answers, whatever thread it names.
