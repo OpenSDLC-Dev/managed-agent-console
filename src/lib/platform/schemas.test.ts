@@ -903,6 +903,124 @@ describe("the mock's constructed write-path responses conform too", () => {
     ).toBe(true);
   });
 
+  // The platform's #841 statuses (managed-agent-platform 91fb7293), each
+  // refusal asserted whole, status and type included. route.go RouteInbound
+  // and inbound.go threadClaim: an interrupt's session_thread_id that is no
+  // thread id is the reference's 400, a well-formed one naming no thread of
+  // the session its 404, and one that is not a string is refused on its type.
+  it.each([
+    [
+      "sth_01HbamSkv49mRn4JHt9ryS6T",
+      400,
+      "invalid_request_error",
+      "Invalid session_thread_id: sth_01HbamSkv49mRn4JHt9ryS6T",
+    ],
+    // The I in its token is what makes it malformed (domain.WellFormedID).
+    [
+      "sthr_01UnknownThreadIdXXXXXXXXX",
+      400,
+      "invalid_request_error",
+      "Invalid session_thread_id: sthr_01UnknownThreadIdXXXXXXXXX",
+    ],
+    [
+      "sthr_01DdMGc4KudV1Z22t2L7Y9QH",
+      404,
+      "not_found_error",
+      "Thread not found: sthr_01DdMGc4KudV1Z22t2L7Y9QH",
+    ],
+    // Another session's child.
+    [
+      "sthr_taskrunnerresearch0001",
+      404,
+      "not_found_error",
+      "Thread not found: sthr_taskrunnerresearch0001",
+    ],
+    [
+      7,
+      400,
+      "invalid_request_error",
+      "events[0]: session_thread_id must be a string or null",
+    ],
+  ])(
+    "an interrupt naming %j is refused in the platform's words",
+    async (claim, status, type, message) => {
+      const response = await fetch(
+        `${base}/v1/sessions/sesn_gatedbash00000000001/events`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": API_KEY,
+          },
+          body: JSON.stringify({
+            events: [{ type: "user.interrupt", session_thread_id: claim }],
+          }),
+        },
+      );
+      expect(response.status).toBe(status);
+      expect((await response.json()).error).toEqual({ type, message });
+    },
+  );
+
+  // inbound.go answerClaim: a confirmation is written, and echoed, on the
+  // thread of the call it answers, whatever thread it names.
+  it.each([
+    "sthr_multiagentbeta00001", // another thread of the session
+    "sthr_01DdMGc4KudV1Z22t2L7Y9QH", // no thread at all
+    "sth_01HbamSkv49mRn4JHt9ryS6T", // no thread id at all
+  ])("a confirmation naming %s lands on its call's thread", async (claim) => {
+    resetStore();
+    await fetch(`${base}/__multiagent`, { method: "POST" });
+    const id = "sesn_research0000000000001";
+    const alpha = "sthr_multiagentalpha00001";
+    const posted = (await postJSON(`/v1/sessions/${id}/events`, {
+      events: [
+        {
+          type: "user.tool_confirmation",
+          tool_use_id: `sevt_${alpha}tool`,
+          result: "allow",
+          session_thread_id: claim,
+        },
+      ],
+    })) as { data: { id: string; session_thread_id: string | null }[] };
+    expect(posted.data[0].session_thread_id).toBe(alpha);
+    const thread = (await call(`/v1/sessions/${id}/threads/${alpha}/events`, {
+      method: "GET",
+    })) as { data: { id: string }[] };
+    expect(thread.data.map((event) => event.id)).toContain(posted.data[0].id);
+    resetStore();
+  });
+
+  // environments.go environmentStillReferenced: sessions alone holding an
+  // environment refuse its delete with the reference's 409, every session
+  // counted, under a header that keeps the SDK from retrying it.
+  it("an environment its sessions hold refuses its delete with the 409", async () => {
+    resetStore();
+    const del = () =>
+      fetch(`${base}/v1/environments/env_cloudlimited000000001`, {
+        method: "DELETE",
+        headers: { "x-api-key": API_KEY },
+      });
+    // The fixture deployment there is the platform's own 400, unmodelled.
+    await postJSON("/v1/deployments/depl_weeklyresearch000001", {
+      environment_id: "env_byoc0000000000000001",
+    });
+    const refused = await del();
+    expect(refused.status).toBe(409);
+    expect(refused.headers.get("x-should-retry")).toBe("false");
+    expect((await refused.json()).error).toEqual({
+      type: "invalid_request_error",
+      message:
+        "Environment has 2 active sessions. Use force=true to delete anyway.",
+    });
+    // The count is the template's, "1 active sessions" too.
+    await call("/v1/sessions/sesn_gatedbash00000000001", { method: "DELETE" });
+    expect((await (await del()).json()).error.message).toBe(
+      "Environment has 1 active sessions. Use force=true to delete anyway.",
+    );
+    resetStore();
+  });
+
   it("vaults: create, and a credential of each auth type", async () => {
     const vault = await postJSON("/v1/vaults", {
       display_name: "conformance",
@@ -1060,9 +1178,10 @@ describe("the mock's constructed write-path responses conform too", () => {
     });
 
     // identitylane.go: a Bearer without the JWT silhouette is left for the
-    // environment-key lane, which on a management path falls through to
-    // requireAPIKey and its unchanged message. An unauthenticated caller learns
-    // nothing about whether SSO is configured.
+    // environment-key lane, which on a management path, for a key no
+    // environment issued, falls through to requireAPIKey and its unchanged
+    // message (envauth.go answerEnvironmentKey, #840). An unauthenticated
+    // caller learns nothing about whether SSO is configured.
     it("does not read a non-JWT Bearer as a human credential", async () => {
       const key = await get({ authorization: "Bearer sk-map-env01-abc" });
       expect(key.status).toBe(401);

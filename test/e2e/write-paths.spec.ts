@@ -116,15 +116,32 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await expect(page.getByText("staging-sandbox-2")).toBeHidden();
 });
 
-test("deleting an in-use environment surfaces the platform 400", async ({
+test("deleting an environment its sessions hold surfaces the platform 409", async ({
   page,
+  request,
 }) => {
+  // The fixture deployment holds this environment too, and on the platform a
+  // deployment in the way is its own 400 (environments.go
+  // environmentStillReferenced), which the mock does not model. Moved off, the
+  // sessions alone hold it: the case the 409 answers.
+  const moved = await request.post(
+    "http://127.0.0.1:18080/v1/deployments/depl_weeklyresearch000001",
+    {
+      headers: { "x-api-key": "test-key" },
+      data: { environment_id: "env_byoc0000000000000001" },
+    },
+  );
+  expect(moved.ok()).toBe(true);
   await signIn(page);
   await page.goto("/environments/env_cloudlimited000000001");
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete environment" }).click();
-  await expect(page.getByText("environment still has sessions")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Environment has 2 active sessions. Use force=true to delete anyway.",
+    ),
+  ).toBeVisible();
 });
 
 test("create a session with file and memory mounts, then drive it", async ({
