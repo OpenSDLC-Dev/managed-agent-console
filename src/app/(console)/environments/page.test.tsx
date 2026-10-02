@@ -161,7 +161,7 @@ describe("EnvironmentsPage", () => {
           type: "error",
           error: {
             type: "not_found_error",
-            message: "no such endpoint: /v1/environments",
+            message: "Not found",
           },
         },
         404,

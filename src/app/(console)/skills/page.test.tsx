@@ -203,7 +203,7 @@ describe("SkillsPage", () => {
           type: "error",
           error: {
             type: "not_found_error",
-            message: "no such endpoint: /v1/skills",
+            message: "Not found",
           },
         },
         404,

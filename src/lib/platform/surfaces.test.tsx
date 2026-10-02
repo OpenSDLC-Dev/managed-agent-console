@@ -47,7 +47,7 @@ function stubProbes(status: (surface: string) => number) {
                   type: "error",
                   error: {
                     type: "not_found_error",
-                    message: `no such endpoint: /v1/${surface}`,
+                    message: "Not found",
                   },
                 },
           ),
@@ -67,7 +67,7 @@ afterEach(() => {
 const notFound = (status = 404) =>
   new PlatformError(status, {
     type: "error",
-    error: { type: "not_found_error", message: "no such endpoint: /v1/skills" },
+    error: { type: "not_found_error", message: "Not found" },
   });
 
 describe("isUnimplemented", () => {

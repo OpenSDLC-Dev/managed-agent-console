@@ -154,7 +154,7 @@ describe("VaultsPage", () => {
           type: "error",
           error: {
             type: "not_found_error",
-            message: "no such endpoint: /v1/vaults",
+            message: "Not found",
           },
         },
         404,

@@ -123,7 +123,7 @@ function renderNav(
                   type: "error",
                   error: {
                     type: "not_found_error",
-                    message: `no such endpoint: ${input}`,
+                    message: "Not found",
                   },
                 }
               : { data: [] },

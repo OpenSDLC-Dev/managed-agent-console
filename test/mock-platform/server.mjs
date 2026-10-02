@@ -273,12 +273,32 @@ const AGENT_KEYS = new Set([
   "version",
 ]);
 
+// internal/unknownkey.Least: of obj's keys outside allowed, the one a refusal
+// names — the least in byte order, as Go compares strings (UTF-8 bytes, not
+// UTF-16 units), so a body with several names the same one every time.
+function leastUnknownKey(obj, allowed) {
+  const permitted = new Set(allowed);
+  let least;
+  for (const key of Object.keys(obj)) {
+    if (permitted.has(key)) continue;
+    if (
+      least === undefined ||
+      Buffer.compare(Buffer.from(key), Buffer.from(least)) < 0
+    )
+      least = key;
+  }
+  return least;
+}
+
+// wire.go rejectUnknownKeys: the reference's strict decoder's sentence (#540).
+const unknownField = (key) =>
+  `Failed to parse request body: unknown field ${JSON.stringify(key)}`;
+
 function validateAgentBody(body, { requireCore, self }) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     return "agent body must be an object";
-  for (const key of Object.keys(body)) {
-    if (!AGENT_KEYS.has(key)) return `unknown field "${key}"`;
-  }
+  const unknownKey = leastUnknownKey(body, AGENT_KEYS);
+  if (unknownKey !== undefined) return unknownField(unknownKey);
   if (body.multiagent != null) {
     if (
       typeof body.multiagent !== "object" ||
@@ -300,8 +320,9 @@ function validateAgentBody(body, { requireCore, self }) {
         id = entry;
       } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
         if (entry.type === "self") {
-          if (Object.keys(entry).some((key) => key !== "type"))
-            return `multiagent.agents[${index}] has unknown fields`;
+          // roster.go names the bare key, as its strict decoder does.
+          const unknown = leastUnknownKey(entry, ["type"]);
+          if (unknown !== undefined) return unknownField(unknown);
           isSelf = true;
           id = self?.id ?? "__self";
         } else if (
@@ -337,18 +358,18 @@ function validateAgentBody(body, { requireCore, self }) {
         const target = agentsStore.find((agent) => agent.id === id);
         if (!target) return `multiagent.agents[${index}] agent ${id} not found`;
         if (target.archived_at)
-          return `multiagent.agents[${index}] agent ${id} is archived`;
+          return `Agent has invalid configuration: subagent ${id} is archived`;
         const pinned = version ?? target.version;
         const snapshot = agentVersionsStore[id]?.find(
           (candidate) => candidate.version === pinned,
         );
         if (!snapshot)
-          return `multiagent.agents[${index}] agent ${id} version ${pinned} not found`;
+          return `Agent has invalid configuration: subagent ${id} version ${pinned} not found`;
         if (snapshot.multiagent)
-          return `multiagent.agents[${index}] agent ${id} is a coordinator`;
+          return `Agent has invalid configuration: subagent ${id} has its own subagents; maximum depth is 1`;
       }
       if (seen.has(id))
-        return `multiagent.agents[${index}] agent ${id} is referenced more than once`;
+        return `Agent has invalid configuration: subagent ${id} referenced multiple times`;
       seen.add(id);
     }
   }
@@ -398,7 +419,10 @@ function createAgent(body) {
 
 function updateAgent(agent, body) {
   if (body.version !== undefined && body.version !== agent.version) {
-    return { conflict: `version conflict: agent is at v${agent.version}` };
+    return {
+      conflict:
+        "Concurrent modification detected. Please fetch the latest version and retry.",
+    };
   }
   for (const key of ["name", "model", "system", "description"]) {
     if (body[key] !== undefined)
@@ -949,40 +973,70 @@ function envelope(type, message, details) {
   });
 }
 
+// server.go errUnknownPath: a path no route matches takes the reference's
+// words, one letter apart by where the path falls (#540).
+const unknownPath = (pathname) =>
+  pathname.startsWith("/v1/deployments/") || pathname.startsWith("/v1/dreams/")
+    ? "Not Found"
+    : "Not found";
+
 // The organization gate both console namespaces share
 // (internal/api/consoleapi.go consoleOrganization): `default` is served; a
 // UUID, in any of the four spellings isUUID takes, is a foreign
 // organization's 401, and anything else the 400 for a segment that is not a
-// UUID (managed-agent-platform#820). Answers and returns true when it refused.
-// The segment is judged decoded, as the platform's PathValue hands it over; a
-// malformed escape stays as sent and so takes the 400.
+// UUID (managed-agent-platform#820), both in the reference's words (#540).
+// Answers and returns true when it refused. The segment is judged decoded, as
+// the platform's PathValue hands it over; one that does not decode stays as
+// sent and takes the 400 in the platform's own words, as invalid UTF-8 does
+// there.
 const HEX_UUID = "[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}";
 const UUID = new RegExp(
   `^(?:[0-9a-fA-F]{32}|${HEX_UUID}|\\{${HEX_UUID}\\}|urn:uuid:${HEX_UUID})$`,
 );
+// consoleapi.go uuidInvalidCharacter: the uuid crate's refusal of the first
+// character that is neither a hyphen nor a hex digit, at its 1-based position
+// in the value as sent (a stripped `{` or `urn:uuid:` counted), or null.
+function uuidInvalidCharacter(value) {
+  let body = value;
+  let offset = 0;
+  if (value.length >= 2 && value.startsWith("{") && value.endsWith("}")) {
+    body = value.slice(1, -1);
+    offset = 1;
+  } else if (value.startsWith("urn:uuid:")) {
+    body = value.slice("urn:uuid:".length);
+    offset = "urn:uuid:".length;
+  }
+  const index = body.search(/[^0-9a-fA-F-]/);
+  if (index < 0) return null;
+  const found = String.fromCodePoint(body.codePointAt(index));
+  return `invalid character: expected an optional prefix of \`urn:uuid:\` followed by [0-9a-fA-F-], found \`${found}\` at ${index + offset + 1}`;
+}
 function refuseOrganization(res, org) {
+  let decoded = true;
   try {
     org = decodeURIComponent(org);
   } catch {
     // Not a well-formed escape: judged as sent.
+    decoded = false;
   }
   if (org === "default") return false;
   if (UUID.test(org)) {
     res.writeHead(401);
     res.end(
-      envelope(
-        "authentication_error",
-        `not authenticated for organization ${org}`,
-        { error_visibility: "user_facing" },
-      ),
+      envelope("authentication_error", "Unable to authenticate session.", {
+        error_visibility: "user_facing",
+      }),
     );
     return true;
   }
+  const why = decoded ? uuidInvalidCharacter(org) : null;
   res.writeHead(400);
   res.end(
     envelope(
       "invalid_request_error",
-      `${JSON.stringify(org)} is not an organization id`,
+      why
+        ? `path.organization_uuid: Input should be a valid UUID, ${why}`
+        : `${JSON.stringify(org)} is not an organization id`,
     ),
   );
   return true;
@@ -1046,8 +1100,9 @@ function authenticate(req, res) {
 
   // Neither credential — including a Bearer that is not JWT-shaped, which the
   // platform leaves for the environment-key lane and which then falls through
-  // to exactly this message.
-  return deny("missing x-api-key header");
+  // to exactly this message (auth.go requireAPIKey, the reference's words
+  // since #540).
+  return deny("x-api-key header is required");
 }
 
 // Opaque index cursor standing in for the platform's keyset tokens.
@@ -1595,7 +1650,7 @@ const server = createServer(async (req, res) => {
   ) {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
-    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    res.end(envelope("not_found_error", unknownPath(url.pathname)));
     return;
   }
   // The same hook for the console API: `environment-keys` stands for a platform
@@ -1606,7 +1661,7 @@ const server = createServer(async (req, res) => {
   ) {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
-    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    res.end(envelope("not_found_error", unknownPath(url.pathname)));
     return;
   }
 
@@ -1620,7 +1675,7 @@ const server = createServer(async (req, res) => {
   ) {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
-    res.end(envelope("not_found_error", `no such endpoint: ${url.pathname}`));
+    res.end(envelope("not_found_error", unknownPath(url.pathname)));
     return;
   }
 
@@ -1634,11 +1689,12 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     const [, org, workspace] = apiKeysMatch ?? apiKeyMatch;
     if (refuseOrganization(res, org)) return;
-    // consoleapikeys.go consoleWorkspace: the reference's 404, details included.
+    // consoleapikeys.go consoleWorkspace: the reference's 404, words and
+    // details included; it does not name the workspace.
     if (workspace !== "default") {
       res.writeHead(404);
       res.end(
-        envelope("not_found_error", `workspace ${workspace} not found`, {
+        envelope("not_found_error", "Not found", {
           error_visibility: "user_facing",
         }),
       );
@@ -1671,14 +1727,26 @@ const server = createServer(async (req, res) => {
         res.end(envelope("invalid_request_error", "invalid JSON body"));
         return;
       }
-      // consoleapikeys.go apiKeyName: taken as sent, nothing trimmed, and
-      // bounded at the reference's recorded 500 with its recorded message.
-      const name = typeof body.name === "string" ? body.name : "";
-      if (!name) {
+      // consoleapikeys.go apiKeyCreateName: taken as sent, nothing trimmed, and
+      // bounded at the reference's recorded 500 with its recorded message. A
+      // missing, non-string or empty name is refused in the reference's words
+      // too (#540); a null one in the platform's own.
+      const nameRefusal =
+        body.name === undefined
+          ? "name: Field required"
+          : body.name === null
+            ? "name is required"
+            : typeof body.name !== "string"
+              ? "name: Input should be a valid string"
+              : body.name === ""
+                ? "name: String should have at least 1 character"
+                : null;
+      if (nameRefusal) {
         res.writeHead(400);
-        res.end(envelope("invalid_request_error", "name is required"));
+        res.end(envelope("invalid_request_error", nameRefusal));
         return;
       }
+      const name = body.name;
       if ([...name].length > 500) {
         res.writeHead(400);
         res.end(
@@ -1748,7 +1816,7 @@ const server = createServer(async (req, res) => {
       const row = apiKeysStore.find((k) => k.id === keyId);
       if (!row) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", `api key ${keyId} not found`));
+        res.end(envelope("not_found_error", `API Key \`${keyId}\` not found.`));
         return;
       }
       // The platform's guards, in its order — the env-var one FIRST, because a
@@ -1770,7 +1838,7 @@ const server = createServer(async (req, res) => {
         res.end(
           envelope(
             "invalid_request_error",
-            `api key ${keyId} is archived, and an archived key cannot be updated`,
+            "Archived API keys cannot be updated.",
           ),
         );
         return;
@@ -1797,7 +1865,7 @@ const server = createServer(async (req, res) => {
         res.end(
           envelope(
             "invalid_request_error",
-            `api key ${keyId} has expired; an expired key can only be archived, not renamed or re-activated`,
+            "Expired API keys can only be deleted, not renamed or reactivated.",
           ),
         );
         return;
@@ -1811,7 +1879,7 @@ const server = createServer(async (req, res) => {
     }
 
     res.writeHead(405);
-    res.end(envelope("invalid_request_error", "method not allowed"));
+    res.end(envelope("invalid_request_error", "Method Not Allowed"));
     return;
   }
 
@@ -1831,7 +1899,7 @@ const server = createServer(async (req, res) => {
     const env = environmentsStore.find((e) => e.id === envId);
     if (!env) {
       res.writeHead(404);
-      res.end(envelope("not_found_error", `environment ${envId} not found`));
+      res.end(envelope("not_found_error", `Environment ${envId} not found.`));
       return;
     }
     envKeysStore[envId] ??= [];
@@ -1917,7 +1985,7 @@ const server = createServer(async (req, res) => {
       // issued reaches the 404 — verified against a live platform 2026-08-14.
       if (!key) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "environment key not found"));
+        res.end(envelope("not_found_error", "Token not found"));
         return;
       }
       key.revoked_at ??= now();
@@ -1928,7 +1996,7 @@ const server = createServer(async (req, res) => {
     }
 
     res.writeHead(405);
-    res.end(envelope("invalid_request_error", "method not allowed"));
+    res.end(envelope("invalid_request_error", "Method Not Allowed"));
     return;
   }
 
@@ -2033,12 +2101,25 @@ const server = createServer(async (req, res) => {
     const archiveMatch = url.pathname.match(
       /^\/v1\/environments\/([^/]+)\/archive$/,
     );
+    // environments.go errEnvironmentNotFound, every environment lookup's 404.
+    const notFound = (id) => {
+      res.writeHead(404);
+      res.end(envelope("not_found_error", `Environment ${id} not found.`));
+    };
+    // environments.go normalizeEnvConfig: a string tag it does not know in the
+    // reference's words (#540); an absent or non-string type in its own.
+    const configTypeRefusal = (kind) =>
+      typeof kind === "string"
+        ? `config: Input tag '${kind}' found using 'type' does not match any of the expected tags: 'cloud', 'self_hosted'`
+        : 'config.type must be "cloud" or "self_hosted"';
+    // environments.go environmentTypeName: a kind as the kind-change refusal
+    // names it.
+    const typeName = (kind) => (kind === "self_hosted" ? "BYOC" : "Cloud");
     if (req.method === "DELETE" && idMatch) {
       res.setHeader("content-type", "application/json");
       const env = environmentsStore.find((e) => e.id === idMatch[1]);
       if (!env) {
-        res.writeHead(404);
-        res.end(envelope("not_found_error", "no such environment"));
+        notFound(idMatch[1]);
         return;
       }
       const inUse = [...store.values()].some(
@@ -2060,8 +2141,7 @@ const server = createServer(async (req, res) => {
       res.setHeader("content-type", "application/json");
       const env = environmentsStore.find((e) => e.id === archiveMatch[1]);
       if (!env) {
-        res.writeHead(404);
-        res.end(envelope("not_found_error", "no such environment"));
+        notFound(archiveMatch[1]);
         return;
       }
       env.archived_at ??= now();
@@ -2089,12 +2169,17 @@ const server = createServer(async (req, res) => {
         "scope",
         "metadata",
       ]);
-      for (const key of Object.keys(body)) {
-        if (!allowed.has(key)) {
-          res.writeHead(400);
-          res.end(envelope("invalid_request_error", `unknown field "${key}"`));
-          return;
-        }
+      const unknownKey = leastUnknownKey(body, allowed);
+      if (unknownKey !== undefined) {
+        res.writeHead(400);
+        // environments.go rejectExtraEnvironmentKeys: pydantic's words.
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `${unknownKey}: Extra inputs are not permitted`,
+          ),
+        );
+        return;
       }
       if (body.metadata != null) {
         const create = url.pathname === "/v1/environments";
@@ -2117,18 +2202,21 @@ const server = createServer(async (req, res) => {
       if (url.pathname === "/v1/environments") {
         if (typeof body.name !== "string" || !body.name) {
           res.writeHead(400);
-          res.end(envelope("invalid_request_error", "name is required"));
+          res.end(
+            envelope(
+              "invalid_request_error",
+              // An absent name in the reference's words (#540).
+              body.name === undefined
+                ? "name: Field required"
+                : "name is required",
+            ),
+          );
           return;
         }
         const kind = body.config?.type;
         if (kind !== "cloud" && kind !== "self_hosted") {
           res.writeHead(400);
-          res.end(
-            envelope(
-              "invalid_request_error",
-              'config.type must be "cloud" or "self_hosted"',
-            ),
-          );
+          res.end(envelope("invalid_request_error", configTypeRefusal(kind)));
           return;
         }
         const timestamp = now();
@@ -2168,14 +2256,19 @@ const server = createServer(async (req, res) => {
       }
       const env = environmentsStore.find((e) => e.id === idMatch[1]);
       if (!env) {
-        res.writeHead(404);
-        res.end(envelope("not_found_error", "no such environment"));
+        notFound(idMatch[1]);
         return;
       }
-      if (body.config?.type && body.config.type !== env.config.type) {
+      const kind = body.config?.type;
+      if (kind && kind !== env.config.type) {
         res.writeHead(400);
         res.end(
-          envelope("invalid_request_error", "environment kind is immutable"),
+          envelope(
+            "invalid_request_error",
+            kind === "cloud" || kind === "self_hosted"
+              ? `Cannot change environment type from ${typeName(env.config.type)} to ${typeName(kind)}`
+              : configTypeRefusal(kind),
+          ),
         );
         return;
       }
@@ -2295,9 +2388,12 @@ const server = createServer(async (req, res) => {
       (archiving || req.method === "DELETE") &&
       session.status === "running"
     ) {
+      // sessions.go requireNotRunning: each route's recorded sentence (#540).
       fail(
         400,
-        "session is running; send user.interrupt before archiving or deleting",
+        archiving
+          ? `Session ${session.id} cannot be archived while its status is "running". Only pending or idle sessions may be archived.`
+          : "Cannot delete session while it is running. Send an interrupt event or wait for the session to complete.",
       );
       return;
     }
@@ -2337,6 +2433,18 @@ const server = createServer(async (req, res) => {
       }
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         fail(400, "expected object");
+        return;
+      }
+      // sessions.go updateSession: an unknown key is the strict decoder's
+      // refusal; agent and vault_ids are fields the mock does not support.
+      const unknownKey = leastUnknownKey(body, [
+        "title",
+        "metadata",
+        "agent",
+        "vault_ids",
+      ]);
+      if (unknownKey !== undefined) {
+        fail(400, unknownField(unknownKey));
         return;
       }
       if (
@@ -2407,7 +2515,12 @@ const server = createServer(async (req, res) => {
       const action = actionMatch[2];
       if (deployment.archived_at && action !== "archive") {
         res.writeHead(400);
-        res.end(envelope("invalid_request_error", "deployment is archived"));
+        res.end(
+          envelope(
+            "invalid_request_error",
+            "Cannot modify archived deployment",
+          ),
+        );
         return;
       }
       if (action === "archive") {
@@ -2555,7 +2668,9 @@ const server = createServer(async (req, res) => {
     }
     if (existing?.archived_at) {
       res.writeHead(400);
-      res.end(envelope("invalid_request_error", "deployment is archived"));
+      res.end(
+        envelope("invalid_request_error", "Cannot modify archived deployment"),
+      );
       return;
     }
     const allowed = new Set([
@@ -2569,12 +2684,11 @@ const server = createServer(async (req, res) => {
       "metadata",
       "schedule",
     ]);
-    for (const key of Object.keys(body)) {
-      if (!allowed.has(key)) {
-        res.writeHead(400);
-        res.end(envelope("invalid_request_error", `unknown field "${key}"`));
-        return;
-      }
+    const unknownKey = leastUnknownKey(body, allowed);
+    if (unknownKey !== undefined) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", unknownField(unknownKey)));
+      return;
     }
     const required = ["name", "agent", "environment_id", "initial_events"];
     if (!existing && required.some((key) => !(key in body))) {
@@ -2621,7 +2735,9 @@ const server = createServer(async (req, res) => {
       res.end(
         envelope(
           environment ? "invalid_request_error" : "not_found_error",
-          environment ? "environment is archived" : "no such environment",
+          environment
+            ? "environment is archived"
+            : `Environment ${environmentId} not found.`,
         ),
       );
       return;
@@ -2820,8 +2936,8 @@ const server = createServer(async (req, res) => {
         "instructions",
         "output_behavior",
       ]);
-      for (const key of Object.keys(body))
-        if (!allowed.has(key)) return fail(400, `unknown field "${key}"`);
+      const unknownKey = leastUnknownKey(body, allowed);
+      if (unknownKey !== undefined) return fail(400, unknownField(unknownKey));
       if (!Array.isArray(body.inputs)) return fail(400, "inputs is required");
       const storeInputs = body.inputs.filter(
         (item) => item?.type === "memory_store",
@@ -2942,7 +3058,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method !== "GET" && (itemMatch || cancelMatch || archiveMatch))
-      return fail(405, "method not allowed");
+      return fail(405, "Method Not Allowed");
   }
 
   // Session create — exact top-level keys; initial_events is NOT accepted.
@@ -2964,12 +3080,11 @@ const server = createServer(async (req, res) => {
       "resources",
       "vault_ids",
     ]);
-    for (const key of Object.keys(body)) {
-      if (!allowed.has(key)) {
-        res.writeHead(400);
-        res.end(envelope("invalid_request_error", `unknown field "${key}"`));
-        return;
-      }
+    const unknownKey = leastUnknownKey(body, allowed);
+    if (unknownKey !== undefined) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", unknownField(unknownKey)));
+      return;
     }
     const agentId =
       typeof body.agent === "string" ? body.agent : body.agent?.id;
@@ -2985,7 +3100,9 @@ const server = createServer(async (req, res) => {
       res.end(
         envelope(
           env ? "invalid_request_error" : "not_found_error",
-          env ? "environment is archived" : "no such environment",
+          env
+            ? "environment is archived"
+            : `Environment ${body.environment_id} not found.`,
         ),
       );
       return;
@@ -3083,7 +3200,13 @@ const server = createServer(async (req, res) => {
       }
       if (!filesStore.some((f) => f.id === resource.file_id)) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such file"));
+        // sessions.go requestWording: the reference's words (#540).
+        res.end(
+          envelope(
+            "not_found_error",
+            `One or more files not found. Check that each \`file_id\` exists and is accessible: ${resource.file_id}`,
+          ),
+        );
         return;
       }
       const timestamp = now();
@@ -3181,7 +3304,12 @@ const server = createServer(async (req, res) => {
         return null;
       }
       if (item.archived_at) {
-        fail(400, "invalid_request_error", `memory store ${id} is archived`);
+        // memories.go errMemoryStoreArchived: the reference's words (#540).
+        fail(
+          400,
+          "invalid_request_error",
+          `cannot modify archived resource: memory store ${id}`,
+        );
         return null;
       }
       return item;
@@ -3217,7 +3345,17 @@ const server = createServer(async (req, res) => {
       const body = await readJSON();
       if (!body) return;
       if (typeof body.name !== "string" || body.name.length === 0) {
-        fail(400, "invalid_request_error", "name is required");
+        // memorystores.go createMemoryStore: an absent or empty name in the
+        // reference's words (#540).
+        fail(
+          400,
+          "invalid_request_error",
+          body.name === undefined
+            ? "name: Field required"
+            : body.name === ""
+              ? "name: minimum string length is 1"
+              : "name is required",
+        );
         return;
       }
       if (
@@ -3336,14 +3474,18 @@ const server = createServer(async (req, res) => {
         fail(400, "invalid_request_error", "path and content are required");
         return;
       }
-      if (
-        memoriesStore.some(
-          (memory) =>
-            memory.memory_store_id === memoryCollection[1] &&
-            memory.path === body.path,
-        )
-      ) {
-        fail(409, "memory_path_conflict_error", "memory path is occupied");
+      const occupant = memoriesStore.find(
+        (memory) =>
+          memory.memory_store_id === memoryCollection[1] &&
+          memory.path === body.path,
+      );
+      if (occupant) {
+        // memories.go errMemoryPathOccupied, its exact-path arm (#540).
+        fail(
+          409,
+          "memory_path_conflict_error",
+          `path \`${body.path}\` is already used by \`${occupant.id}\`; use update to modify it`,
+        );
         return;
       }
       const timestamp = now();
@@ -3410,19 +3552,30 @@ const server = createServer(async (req, res) => {
         body.precondition.content_sha256 !== memory.content_sha256 &&
         !unchanged
       ) {
-        fail(409, "memory_precondition_failed_error", "memory content changed");
+        // memories.go errStaleContent: the reference's words, naming neither
+        // digest (#540).
+        fail(
+          409,
+          "memory_precondition_failed_error",
+          "precondition content_sha256 failed: content has changed",
+        );
         return;
       }
-      if (
+      const occupant =
         path !== memory.path &&
-        memoriesStore.some(
+        memoriesStore.find(
           (item) =>
             item.memory_store_id === memoryItem[1] &&
             item.id !== memory.id &&
             item.path === path,
-        )
-      ) {
-        fail(409, "memory_path_conflict_error", "memory path is occupied");
+        );
+      if (occupant) {
+        // memories.go errMemoryPathOccupied, its exact-path arm (#540).
+        fail(
+          409,
+          "memory_path_conflict_error",
+          `path \`${path}\` is already used by \`${occupant.id}\`; delete it first to rename-and-replace`,
+        );
         return;
       }
       if (!unchanged) {
@@ -3470,7 +3623,13 @@ const server = createServer(async (req, res) => {
       const memory = memoriesStore[index];
       const expected = url.searchParams.get("expected_content_sha256");
       if (expected && expected !== memory.content_sha256) {
-        fail(409, "memory_precondition_failed_error", "memory content changed");
+        // memories.go errStaleContent: the reference's words, naming neither
+        // digest (#540).
+        fail(
+          409,
+          "memory_precondition_failed_error",
+          "precondition content_sha256 failed: content has changed",
+        );
         return;
       }
       const timestamp = now();
@@ -3522,7 +3681,7 @@ const server = createServer(async (req, res) => {
         fail(
           400,
           "invalid_request_error",
-          "current memory head cannot be redacted",
+          `version is the current content of ${head.id}; write a new version first`,
         );
         return;
       }
@@ -3778,7 +3937,7 @@ const server = createServer(async (req, res) => {
       );
       if (!cred) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such credential"));
+        res.end(envelope("not_found_error", "Credential not found."));
         return;
       }
       cred.archived_at ??= now();
@@ -3793,12 +3952,23 @@ const server = createServer(async (req, res) => {
       );
       if (!cred) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such credential"));
+        res.end(envelope("not_found_error", "Credential not found."));
         return;
       }
       if (cred.archived_at) {
         res.writeHead(400);
-        res.end(envelope("invalid_request_error", "credential is archived"));
+        // vaultcredentials.go archivedCredentialRefusal: the vault first, in
+        // the reference's words (#540); a credential archived on its own in
+        // the platform's.
+        const vault = vaultsStore.find((v) => v.id === credItemMatch[1]);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            vault?.archived_at
+              ? "Vault is archived."
+              : "credential is archived",
+          ),
+        );
         return;
       }
       let body;
@@ -3811,7 +3981,12 @@ const server = createServer(async (req, res) => {
       }
       if (body.auth && body.auth.type !== cred.auth.type) {
         res.writeHead(400);
-        res.end(envelope("invalid_request_error", "auth.type cannot change"));
+        res.end(
+          envelope(
+            "invalid_request_error",
+            "auth.type: does not match this credential's stored type",
+          ),
+        );
         return;
       }
       if (body.display_name !== undefined)
@@ -3852,7 +4027,7 @@ const server = createServer(async (req, res) => {
       const cred = creds.find((c) => c.id === credItemMatch[2]);
       if (!cred) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such credential"));
+        res.end(envelope("not_found_error", "Credential not found."));
         return;
       }
       vaultCredsStore[credItemMatch[1]] = creds.filter((c) => c.id !== cred.id);
@@ -3897,7 +4072,8 @@ const server = createServer(async (req, res) => {
         resourceId,
     );
     if (resourceId && !resource) {
-      fail(404, "no such resource");
+      // sessionresources.go errResourceNotFound: the reference's words (#540).
+      fail(404, `Resource not found: ${resourceId}`);
       return;
     }
     if (req.method === "DELETE") {
@@ -3945,7 +4121,17 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (body.type !== "file") {
-      fail(400, "only file resources can be added to an existing session");
+      // sessionresources.go addSessionResourceTx: requiredString first —
+      // absent, null or "" is required, any other non-string must be a
+      // string — then any type but "file" in the reference's words (#540).
+      fail(
+        400,
+        body.type === undefined || body.type === null || body.type === ""
+          ? "type is required"
+          : typeof body.type !== "string"
+            ? "type must be a string"
+            : `Failed to parse request: type: ${JSON.stringify(body.type)} is not a valid value`,
+      );
       return;
     }
     if (!filesStore.some((file) => file.id === body.file_id)) {
@@ -3983,6 +4169,18 @@ const server = createServer(async (req, res) => {
       /^\/v1\/skills\/([^/]+)\/versions\/([^/]+)\/content$/,
     );
     const skillItemMatch = url.pathname.match(/^\/v1\/skills\/([^/]+)$/);
+    // skills.go errSkillNotFound and skillVersionNotFound, the reference's
+    // words (#540): a version miss names the slot as addressed while its skill
+    // exists, and is the skill's own 404 once it does not.
+    const skillNotFound = (skillId) =>
+      envelope("not_found_error", `Skill not found: ${skillId}`);
+    const versionNotFound = (skillId, slot) =>
+      skillsStore.some((s) => s.id === skillId)
+        ? envelope(
+            "not_found_error",
+            `Skill version not found: ${skillId} version ${slot}`,
+          )
+        : skillNotFound(skillId);
 
     const mintVersion = (skillId, name) => {
       const entry = {
@@ -4029,13 +4227,18 @@ const server = createServer(async (req, res) => {
       const skill = skillsStore.find((s) => s.id === versionsPostMatch[1]);
       if (!skill) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such skill"));
+        res.end(skillNotFound(versionsPostMatch[1]));
         return;
       }
       if (skill.source.type !== "custom") {
         res.writeHead(400);
+        // skills.go createSkillVersion: an imported skill's id refused as the
+        // wrong shape for a custom one, in the reference's words (#540).
         res.end(
-          envelope("invalid_request_error", "anthropic skills are read-only"),
+          envelope(
+            "invalid_request_error",
+            `Invalid skill_id format: ${versionsPostMatch[1]}`,
+          ),
         );
         return;
       }
@@ -4061,7 +4264,7 @@ const server = createServer(async (req, res) => {
       res.end(
         version
           ? JSON.stringify(version)
-          : envelope("not_found_error", "no such version"),
+          : versionNotFound(versionItemMatch[1], versionItemMatch[2]),
       );
       return;
     }
@@ -4071,7 +4274,9 @@ const server = createServer(async (req, res) => {
       );
       if (!exists) {
         res.writeHead(404, { "content-type": "application/json" });
-        res.end(envelope("not_found_error", "no such version"));
+        // skills.go downloadSkillVersion: every version miss is the skill's
+        // 404 here, as the reference answers it (#540).
+        res.end(skillNotFound(contentMatch[1]));
         return;
       }
       const zip = Buffer.from("PK\x03\x04mock-zip");
@@ -4089,7 +4294,7 @@ const server = createServer(async (req, res) => {
       const entry = versions.find((v) => v.id === versionItemMatch[2]);
       if (!entry) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such version"));
+        res.end(versionNotFound(versionItemMatch[1], versionItemMatch[2]));
         return;
       }
       if (versions.length === 1) {
@@ -4119,7 +4324,7 @@ const server = createServer(async (req, res) => {
       const skill = skillsStore.find((s) => s.id === skillItemMatch[1]);
       if (!skill) {
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such skill"));
+        res.end(skillNotFound(skillItemMatch[1]));
         return;
       }
       if (skill.source.type !== "custom") {
@@ -4189,7 +4394,9 @@ const server = createServer(async (req, res) => {
       }
       if (agent.archived_at) {
         res.writeHead(400);
-        res.end(envelope("invalid_request_error", "agent is archived"));
+        res.end(
+          envelope("invalid_request_error", "Cannot modify archived agent"),
+        );
         return;
       }
       const outcome = updateAgent(agent, body);

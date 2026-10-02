@@ -168,7 +168,7 @@ describe("AgentsPage", () => {
           type: "error",
           error: {
             type: "not_found_error",
-            message: "no such endpoint: /v1/agents",
+            message: "Not found",
           },
         },
         404,
