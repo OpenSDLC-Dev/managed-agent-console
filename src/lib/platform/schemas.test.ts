@@ -799,6 +799,84 @@ describe("the mock's constructed write-path responses conform too", () => {
     },
   );
 
+  // The platform's #540 wording (managed-agent-platform c1347766). Each
+  // refusal is asserted whole, so a drift in either the sentence or the key
+  // it names reddens here rather than in an e2e that reads it off the page.
+  const refusal = async (path: string, body: unknown) => {
+    const response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": API_KEY },
+      body: JSON.stringify(body),
+    });
+    expect(response.status, `POST ${path}`).toBe(400);
+    const { error } = (await response.json()) as {
+      error: { type: string; message: string };
+    };
+    expect(error.type).toBe("invalid_request_error");
+    return error.message;
+  };
+
+  // internal/unknownkey.Least: the key named is the least in byte order, not
+  // the first the body lists — so the body lists the greater one first.
+  it.each([
+    ["/v1/agents", 'Failed to parse request body: unknown field "a"'],
+    ["/v1/deployments", 'Failed to parse request body: unknown field "a"'],
+    ["/v1/dreams", 'Failed to parse request body: unknown field "a"'],
+    ["/v1/sessions", 'Failed to parse request body: unknown field "a"'],
+    [
+      `/v1/sessions/${fixtures.sessions[0].id}`,
+      'Failed to parse request body: unknown field "a"',
+    ],
+    ["/v1/environments", "a: Extra inputs are not permitted"],
+  ])("%s names the least unknown key", async (path, message) => {
+    expect(await refusal(path, { z: 1, a: 2 })).toBe(message);
+  });
+
+  it("a roster self entry names the least unknown key too", async () => {
+    expect(
+      await refusal("/v1/agents", {
+        name: "coordinator",
+        model: "claude-sonnet-4-8",
+        multiagent: {
+          type: "coordinator",
+          agents: [{ type: "self", z: 1, a: 2 }],
+        },
+      }),
+    ).toBe('Failed to parse request body: unknown field "a"');
+  });
+
+  it("byte order is UTF-8's, as Go compares strings, not UTF-16's", async () => {
+    // U+FF5E is EF BD 9E in UTF-8 and U+1F600 is F0 9F 98 80, so the former
+    // is less; in UTF-16 the emoji's high surrogate (D83D) sorts first.
+    expect(await refusal("/v1/agents", { "\u{1F600}": 1, "～": 2 })).toBe(
+      'Failed to parse request body: unknown field "～"',
+    );
+  });
+
+  // sessionresources.go addSessionResourceTx → requiredString, then the
+  // reference's sentence for a type that is not "file".
+  it.each([
+    [{}, "type is required"],
+    [{ type: null }, "type is required"],
+    [{ type: "" }, "type is required"],
+    [{ type: 1 }, "type must be a string"],
+    [{ type: { name: "file" } }, "type must be a string"],
+    [
+      { type: "memory_store" },
+      'Failed to parse request: type: "memory_store" is not a valid value',
+    ],
+  ])(
+    "adding a resource %j is refused in the platform's words",
+    async (body, message) => {
+      expect(
+        await refusal(
+          `/v1/sessions/${fixtures.sessions[0].id}/resources`,
+          body,
+        ),
+      ).toBe(message);
+    },
+  );
+
   it("events: the posted echoes and the events the mock then appends", async () => {
     const id = "sesn_gatedbash00000000001"; // parked on requires_action
     const posted = (await postJSON(`/v1/sessions/${id}/events`, {

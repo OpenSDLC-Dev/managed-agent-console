@@ -273,13 +273,32 @@ const AGENT_KEYS = new Set([
   "version",
 ]);
 
+// internal/unknownkey.Least: of obj's keys outside allowed, the one a refusal
+// names — the least in byte order, as Go compares strings (UTF-8 bytes, not
+// UTF-16 units), so a body with several names the same one every time.
+function leastUnknownKey(obj, allowed) {
+  const permitted = new Set(allowed);
+  let least;
+  for (const key of Object.keys(obj)) {
+    if (permitted.has(key)) continue;
+    if (
+      least === undefined ||
+      Buffer.compare(Buffer.from(key), Buffer.from(least)) < 0
+    )
+      least = key;
+  }
+  return least;
+}
+
+// wire.go rejectUnknownKeys: the reference's strict decoder's sentence (#540).
+const unknownField = (key) =>
+  `Failed to parse request body: unknown field ${JSON.stringify(key)}`;
+
 function validateAgentBody(body, { requireCore, self }) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     return "agent body must be an object";
-  for (const key of Object.keys(body)) {
-    if (!AGENT_KEYS.has(key))
-      return `Failed to parse request body: unknown field "${key}"`;
-  }
+  const unknownKey = leastUnknownKey(body, AGENT_KEYS);
+  if (unknownKey !== undefined) return unknownField(unknownKey);
   if (body.multiagent != null) {
     if (
       typeof body.multiagent !== "object" ||
@@ -301,13 +320,9 @@ function validateAgentBody(body, { requireCore, self }) {
         id = entry;
       } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
         if (entry.type === "self") {
-          // roster.go names the least unknown key, bare, as its strict
-          // decoder does.
-          const unknown = Object.keys(entry)
-            .filter((key) => key !== "type")
-            .sort()[0];
-          if (unknown !== undefined)
-            return `Failed to parse request body: unknown field "${unknown}"`;
+          // roster.go names the bare key, as its strict decoder does.
+          const unknown = leastUnknownKey(entry, ["type"]);
+          if (unknown !== undefined) return unknownField(unknown);
           isSelf = true;
           id = self?.id ?? "__self";
         } else if (
@@ -2154,18 +2169,17 @@ const server = createServer(async (req, res) => {
         "scope",
         "metadata",
       ]);
-      for (const key of Object.keys(body)) {
-        if (!allowed.has(key)) {
-          res.writeHead(400);
-          // environments.go rejectExtraEnvironmentKeys: pydantic's words.
-          res.end(
-            envelope(
-              "invalid_request_error",
-              `${key}: Extra inputs are not permitted`,
-            ),
-          );
-          return;
-        }
+      const unknownKey = leastUnknownKey(body, allowed);
+      if (unknownKey !== undefined) {
+        res.writeHead(400);
+        // environments.go rejectExtraEnvironmentKeys: pydantic's words.
+        res.end(
+          envelope(
+            "invalid_request_error",
+            `${unknownKey}: Extra inputs are not permitted`,
+          ),
+        );
+        return;
       }
       if (body.metadata != null) {
         const create = url.pathname === "/v1/environments";
@@ -2421,6 +2435,18 @@ const server = createServer(async (req, res) => {
         fail(400, "expected object");
         return;
       }
+      // sessions.go updateSession: an unknown key is the strict decoder's
+      // refusal; agent and vault_ids are fields the mock does not support.
+      const unknownKey = leastUnknownKey(body, [
+        "title",
+        "metadata",
+        "agent",
+        "vault_ids",
+      ]);
+      if (unknownKey !== undefined) {
+        fail(400, unknownField(unknownKey));
+        return;
+      }
       if (
         Object.keys(body).some((key) => !["title", "metadata"].includes(key))
       ) {
@@ -2658,17 +2684,11 @@ const server = createServer(async (req, res) => {
       "metadata",
       "schedule",
     ]);
-    for (const key of Object.keys(body)) {
-      if (!allowed.has(key)) {
-        res.writeHead(400);
-        res.end(
-          envelope(
-            "invalid_request_error",
-            `Failed to parse request body: unknown field "${key}"`,
-          ),
-        );
-        return;
-      }
+    const unknownKey = leastUnknownKey(body, allowed);
+    if (unknownKey !== undefined) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", unknownField(unknownKey)));
+      return;
     }
     const required = ["name", "agent", "environment_id", "initial_events"];
     if (!existing && required.some((key) => !(key in body))) {
@@ -2916,12 +2936,8 @@ const server = createServer(async (req, res) => {
         "instructions",
         "output_behavior",
       ]);
-      for (const key of Object.keys(body))
-        if (!allowed.has(key))
-          return fail(
-            400,
-            `Failed to parse request body: unknown field "${key}"`,
-          );
+      const unknownKey = leastUnknownKey(body, allowed);
+      if (unknownKey !== undefined) return fail(400, unknownField(unknownKey));
       if (!Array.isArray(body.inputs)) return fail(400, "inputs is required");
       const storeInputs = body.inputs.filter(
         (item) => item?.type === "memory_store",
@@ -3064,17 +3080,11 @@ const server = createServer(async (req, res) => {
       "resources",
       "vault_ids",
     ]);
-    for (const key of Object.keys(body)) {
-      if (!allowed.has(key)) {
-        res.writeHead(400);
-        res.end(
-          envelope(
-            "invalid_request_error",
-            `Failed to parse request body: unknown field "${key}"`,
-          ),
-        );
-        return;
-      }
+    const unknownKey = leastUnknownKey(body, allowed);
+    if (unknownKey !== undefined) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", unknownField(unknownKey)));
+      return;
     }
     const agentId =
       typeof body.agent === "string" ? body.agent : body.agent?.id;
@@ -4111,13 +4121,16 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (body.type !== "file") {
-      // sessionresources.go addSessionResourceTx: the type is required, and
-      // any but "file" is refused in the reference's words (#540).
+      // sessionresources.go addSessionResourceTx: requiredString first —
+      // absent, null or "" is required, any other non-string must be a
+      // string — then any type but "file" in the reference's words (#540).
       fail(
         400,
-        typeof body.type === "string" && body.type !== ""
-          ? `Failed to parse request: type: ${JSON.stringify(body.type)} is not a valid value`
-          : "type is required",
+        body.type === undefined || body.type === null || body.type === ""
+          ? "type is required"
+          : typeof body.type !== "string"
+            ? "type must be a string"
+            : `Failed to parse request: type: ${JSON.stringify(body.type)} is not a valid value`,
       );
       return;
     }
