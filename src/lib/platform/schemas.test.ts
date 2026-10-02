@@ -991,21 +991,45 @@ describe("the mock's constructed write-path responses conform too", () => {
     resetStore();
   });
 
+  // route.go RouteInbound: an interrupt naming a thread of the session that is
+  // archived is refused at its index in the batch.
+  it("an interrupt naming an archived thread is refused in the platform's words", async () => {
+    resetStore();
+    const id = "sesn_research0000000000001";
+    const child = "sthr_taskrunnerresearch0001";
+    await postJSON(`/v1/sessions/${id}/threads/${child}/archive`, {});
+    const response = await fetch(`${base}/v1/sessions/${id}/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": API_KEY },
+      body: JSON.stringify({
+        events: [{ type: "user.interrupt", session_thread_id: child }],
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toEqual({
+      type: "invalid_request_error",
+      message: `events[0]: thread ${child} is archived`,
+    });
+    resetStore();
+  });
+
   // environments.go environmentStillReferenced: sessions alone holding an
   // environment refuse its delete with the reference's 409, every session
   // counted, under a header that keeps the SDK from retrying it.
-  it("an environment its sessions hold refuses its delete with the 409", async () => {
+  const deleteHeldEnvironment = async (query = "") => {
     resetStore();
-    const del = () =>
-      fetch(`${base}/v1/environments/env_cloudlimited000000001`, {
-        method: "DELETE",
-        headers: { "x-api-key": API_KEY },
-      });
     // The fixture deployment there is the platform's own 400, unmodelled.
     await postJSON("/v1/deployments/depl_weeklyresearch000001", {
       environment_id: "env_byoc0000000000000001",
     });
-    const refused = await del();
+    return fetch(`${base}/v1/environments/env_cloudlimited000000001${query}`, {
+      method: "DELETE",
+      headers: { "x-api-key": API_KEY },
+    });
+  };
+
+  it("an environment its sessions hold refuses its delete with the 409", async () => {
+    const refused = await deleteHeldEnvironment();
     expect(refused.status).toBe(409);
     expect(refused.headers.get("x-should-retry")).toBe("false");
     expect((await refused.json()).error).toEqual({
@@ -1015,11 +1039,51 @@ describe("the mock's constructed write-path responses conform too", () => {
     });
     // The count is the template's, "1 active sessions" too.
     await call("/v1/sessions/sesn_gatedbash00000000001", { method: "DELETE" });
-    expect((await (await del()).json()).error.message).toBe(
+    const again = await fetch(
+      `${base}/v1/environments/env_cloudlimited000000001`,
+      { method: "DELETE", headers: { "x-api-key": API_KEY } },
+    );
+    expect((await again.json()).error.message).toBe(
       "Environment has 1 active sessions. Use force=true to delete anyway.",
     );
     resetStore();
   });
+
+  // page.go parseBoolParam, then the forced arm: force deletes no session
+  // there, so the sessions refuse it under the same 409 and header in the
+  // platform's own words. A value ParseBool does not take is the 400.
+  it.each([
+    [
+      "true",
+      409,
+      "environment env_cloudlimited000000001 still has sessions; delete them first",
+    ],
+    [
+      "1",
+      409,
+      "environment env_cloudlimited000000001 still has sessions; delete them first",
+    ],
+    [
+      "false",
+      409,
+      "Environment has 2 active sessions. Use force=true to delete anyway.",
+    ],
+    ["maybe", 400, "force must be true or false"],
+  ])(
+    "a delete with force=%s is answered in the platform's words",
+    async (force, status, message) => {
+      const response = await deleteHeldEnvironment(`?force=${force}`);
+      expect(response.status).toBe(status);
+      expect(response.headers.get("x-should-retry")).toBe(
+        status === 409 ? "false" : null,
+      );
+      expect((await response.json()).error).toEqual({
+        type: "invalid_request_error",
+        message,
+      });
+      resetStore();
+    },
+  );
 
   it("vaults: create, and a credential of each auth type", async () => {
     const vault = await postJSON("/v1/vaults", {

@@ -801,8 +801,11 @@ function handleInbound(state, incoming) {
         return WELL_FORMED_THREAD_ID.test(claim)
           ? { error: `Thread not found: ${claim}`, status: 404 }
           : { error: `Invalid session_thread_id: ${claim}` };
-      if (thread.archived_at || thread.status === "terminated")
-        return { error: `thread "${claim}" is terminated` };
+      // route.go RouteInbound: archived first, then terminated.
+      if (thread.archived_at)
+        return { error: `events[${index}]: thread ${claim} is archived` };
+      if (thread.status === "terminated")
+        return { error: `events[${index}]: thread ${claim} is terminated` };
     }
   }
 
@@ -2139,6 +2142,22 @@ const server = createServer(async (req, res) => {
     const typeName = (kind) => (kind === "self_hosted" ? "BYOC" : "Cloud");
     if (req.method === "DELETE" && idMatch) {
       res.setHeader("content-type", "application/json");
+      // page.go parseBoolParam, read before the lookup: strconv.ParseBool's
+      // spellings, absent or empty being false.
+      const forceParam = url.searchParams.get("force") ?? "";
+      const force = ["1", "t", "T", "TRUE", "true", "True"].includes(
+        forceParam,
+      );
+      if (
+        !force &&
+        !["", "0", "f", "F", "FALSE", "false", "False"].includes(forceParam)
+      ) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "force must be true or false"),
+        );
+        return;
+      }
       const env = environmentsStore.find((e) => e.id === idMatch[1]);
       if (!env) {
         notFound(idMatch[1]);
@@ -2147,8 +2166,10 @@ const server = createServer(async (req, res) => {
       // environments.go environmentStillReferenced: sessions holding the
       // environment are the reference's 409 in its sentence, every session
       // counted, archived ones included, with `x-should-retry: false` (#841).
-      // Not modelled: a deployment holding it, which keeps the platform's own
-      // 400 naming the deployments, and ?force, which the console never sends.
+      // Forced, the same 409 in the platform's own words: force deletes no
+      // session there. Not modelled: a deployment holding it, which keeps the
+      // platform's own 400 naming the deployments, and the self-hosted queue
+      // refusal force lifts.
       const sessions = [...store.values()].filter(
         (s) => s.session.environment_id === env.id,
       ).length;
@@ -2158,7 +2179,9 @@ const server = createServer(async (req, res) => {
         res.end(
           envelope(
             "invalid_request_error",
-            `Environment has ${sessions} active sessions. Use force=true to delete anyway.`,
+            force
+              ? `environment ${env.id} still has sessions; delete them first`
+              : `Environment has ${sessions} active sessions. Use force=true to delete anyway.`,
           ),
         );
         return;
