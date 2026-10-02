@@ -137,6 +137,10 @@ test("environment batch deletion keeps only failures selected and allows retry",
   await signIn(page);
   await page.goto("/environments");
   const pattern = "**/api/platform/v1/environments/" + target.id;
+  // The platform's answer to a delete its sessions refuse (environments.go
+  // environmentStillReferenced, #841), here made to fail one delete of two.
+  const refusal =
+    "Environment has 1 active sessions. Use force=true to delete anyway.";
   await page.route(pattern, async (route) => {
     if (route.request().method() !== "DELETE") return route.continue();
     await route.fulfill({
@@ -144,10 +148,7 @@ test("environment batch deletion keeps only failures selected and allows retry",
       contentType: "application/json",
       body: JSON.stringify({
         type: "error",
-        error: {
-          type: "conflict_error",
-          message: "Environment is referenced by sessions",
-        },
+        error: { type: "invalid_request_error", message: refusal },
       }),
     });
   });
@@ -165,24 +166,18 @@ test("environment batch deletion keeps only failures selected and allows retry",
     "data-selected-count",
     "1",
   );
-  await expect(
-    page.getByText("Environment is referenced by sessions"),
-  ).toBeVisible();
+  await expect(page.getByText(refusal)).toBeVisible();
   await expect(
     page.getByRole("checkbox", { name: "Select Retry target", exact: true }),
   ).toBeChecked();
   await page
     .getByRole("checkbox", { name: "Select Retry target", exact: true })
     .uncheck();
-  await expect(
-    page.getByText("Environment is referenced by sessions"),
-  ).toHaveCount(0);
+  await expect(page.getByText(refusal)).toHaveCount(0);
   await page
     .getByRole("checkbox", { name: "Select Retry target", exact: true })
     .check();
-  await expect(
-    page.getByText("Environment is referenced by sessions"),
-  ).toHaveCount(0);
+  await expect(page.getByText(refusal)).toHaveCount(0);
   await page.unroute(pattern);
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page
@@ -192,9 +187,7 @@ test("environment batch deletion keeps only failures selected and allows retry",
     "data-selected-count",
     "0",
   );
-  await expect(
-    page.getByText("Environment is referenced by sessions"),
-  ).toHaveCount(0);
+  await expect(page.getByText(refusal)).toHaveCount(0);
 });
 
 test("deleting an inspected environment restores focus before a delayed list refresh", async ({

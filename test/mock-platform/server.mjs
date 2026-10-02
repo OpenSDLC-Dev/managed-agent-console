@@ -695,6 +695,11 @@ function streamReply(state, text, threadId) {
   });
 }
 
+// domain.WellFormedID for a thread id (#841): sthr_, then ASCII letters and
+// digits other than I, O and l — how the platform tells a malformed id from an
+// absent one where the reference was recorded telling them apart.
+const WELL_FORMED_THREAD_ID = /^sthr_[0-9A-HJ-NP-Za-km-z]+$/;
+
 function handleInbound(state, incoming) {
   const batchInterrupts = incoming.some(
     (candidate) => candidate?.type === "user.interrupt",
@@ -704,7 +709,7 @@ function handleInbound(state, incoming) {
       .length > 1
   )
     return { error: "only one outcome is supported at a time" };
-  for (const raw of incoming) {
+  for (const [index, raw] of incoming.entries()) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw))
       return { error: "event must be an object" };
     if (
@@ -777,26 +782,43 @@ function handleInbound(state, incoming) {
       if (active && !batchInterrupts)
         return { error: "only one outcome is supported at a time" };
     }
-    const threadId = raw.session_thread_id;
-    if (threadId !== undefined && threadId !== null) {
-      const thread = state.threads.find(
-        (candidate) => candidate.id === threadId,
-      );
-      if (!thread) return { error: `no such thread "${threadId}"` };
-      if (thread.archived_at || thread.status === "terminated")
-        return { error: `thread "${threadId}" is terminated` };
+    // inbound.go readClaim: a session_thread_id is a string or null.
+    const claim = raw.session_thread_id;
+    if (claim !== undefined && claim !== null && typeof claim !== "string")
+      return {
+        error: `events[${index}]: session_thread_id must be a string or null`,
+      };
+    // An interrupt's claim names the one thread it ends: one that is no thread
+    // id at all is the reference's 400, one naming no thread of this session
+    // its 404 (route.go ThreadNotFoundError, #841). The session's own threads
+    // are matched before the shape is read, because the mock's sthr_deploy…
+    // and sthr_multiagent… carry an l the platform never mints; for every id it
+    // does mint, the order answers alike. A confirmation's claim decides
+    // nothing — it lands on its call's thread below.
+    if (raw.type === "user.interrupt" && typeof claim === "string") {
+      const thread = state.threads.find((candidate) => candidate.id === claim);
+      if (!thread)
+        return WELL_FORMED_THREAD_ID.test(claim)
+          ? { error: `Thread not found: ${claim}`, status: 404 }
+          : { error: `Invalid session_thread_id: ${claim}` };
+      // route.go RouteInbound: archived first, then terminated.
+      if (thread.archived_at)
+        return { error: `events[${index}]: thread ${claim} is archived` };
+      if (thread.status === "terminated")
+        return { error: `events[${index}]: thread ${claim} is terminated` };
     }
   }
 
   const posted = [];
   const definitions = [];
   for (const raw of incoming) {
+    // route.go RouteInbound: a confirmation is written on the thread of the
+    // call it answers, whatever thread it names (inbound.go answerClaim, #841).
     const threadId =
-      raw.session_thread_id ??
-      (raw.type === "user.tool_confirmation"
+      raw.type === "user.tool_confirmation"
         ? state.events.find((event) => event.id === raw.tool_use_id)
             ?.session_thread_id
-        : undefined);
+        : raw.session_thread_id;
     const event = { id: nextEventId(), type: raw.type, processed_at: now() };
     switch (raw.type) {
       case "user.message":
@@ -905,10 +927,9 @@ function handleInbound(state, incoming) {
   }
 
   for (const confirmation of confirmations) {
-    const threadId =
-      confirmation.session_thread_id ??
-      state.events.find((event) => event.id === confirmation.tool_use_id)
-        ?.session_thread_id;
+    const threadId = state.events.find(
+      (event) => event.id === confirmation.tool_use_id,
+    )?.session_thread_id;
     const denied = confirmation.result === "deny";
     appendEvent(
       state,
@@ -1099,9 +1120,13 @@ function authenticate(req, res) {
   }
 
   // Neither credential — including a Bearer that is not JWT-shaped, which the
-  // platform leaves for the environment-key lane and which then falls through
-  // to exactly this message (auth.go requireAPIKey, the reference's words
-  // since #540).
+  // platform looks up as an environment key and, for one no environment
+  // issued, answers with exactly this message (auth.go requireAPIKey, the
+  // reference's words since #540). A minted key that was revoked, or a live
+  // one on GET /v1/agents, /v1/skills or /v1/skills/{id}, is refused in the
+  // reference's words instead (envauth.go answerEnvironmentKey, #840); the
+  // mock keeps no issued key's secret, so every key is one no environment
+  // issued here.
   return deny("x-api-key header is required");
 }
 
@@ -2117,18 +2142,47 @@ const server = createServer(async (req, res) => {
     const typeName = (kind) => (kind === "self_hosted" ? "BYOC" : "Cloud");
     if (req.method === "DELETE" && idMatch) {
       res.setHeader("content-type", "application/json");
+      // page.go parseBoolParam, read before the lookup: strconv.ParseBool's
+      // spellings, absent or empty being false.
+      const forceParam = url.searchParams.get("force") ?? "";
+      const force = ["1", "t", "T", "TRUE", "true", "True"].includes(
+        forceParam,
+      );
+      if (
+        !force &&
+        !["", "0", "f", "F", "FALSE", "false", "False"].includes(forceParam)
+      ) {
+        res.writeHead(400);
+        res.end(
+          envelope("invalid_request_error", "force must be true or false"),
+        );
+        return;
+      }
       const env = environmentsStore.find((e) => e.id === idMatch[1]);
       if (!env) {
         notFound(idMatch[1]);
         return;
       }
-      const inUse = [...store.values()].some(
+      // environments.go environmentStillReferenced: sessions holding the
+      // environment are the reference's 409 in its sentence, every session
+      // counted, archived ones included, with `x-should-retry: false` (#841).
+      // Forced, the same 409 in the platform's own words: force deletes no
+      // session there. Not modelled: a deployment holding it, which keeps the
+      // platform's own 400 naming the deployments, and the self-hosted queue
+      // refusal force lifts.
+      const sessions = [...store.values()].filter(
         (s) => s.session.environment_id === env.id,
-      );
-      if (inUse) {
-        res.writeHead(400);
+      ).length;
+      if (sessions > 0) {
+        res.setHeader("x-should-retry", "false");
+        res.writeHead(409);
         res.end(
-          envelope("invalid_request_error", "environment still has sessions"),
+          envelope(
+            "invalid_request_error",
+            force
+              ? `environment ${env.id} still has sessions; delete them first`
+              : `Environment has ${sessions} active sessions. Use force=true to delete anyway.`,
+          ),
         );
         return;
       }
@@ -4436,8 +4490,16 @@ const server = createServer(async (req, res) => {
     }
     const outcome = handleInbound(state, parsed.events);
     if (outcome.error) {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", outcome.error));
+      // events.go sendCheckError: an interrupt naming no thread of the session
+      // is the 404; every other refusal of the batch a 400.
+      const notFound = outcome.status === 404;
+      res.writeHead(notFound ? 404 : 400);
+      res.end(
+        envelope(
+          notFound ? "not_found_error" : "invalid_request_error",
+          outcome.error,
+        ),
+      );
       return;
     }
     res.writeHead(200);
