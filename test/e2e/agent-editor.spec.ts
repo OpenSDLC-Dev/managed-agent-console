@@ -130,7 +130,9 @@ test("platform validation errors surface inline from the raw tab", async ({
     JSON.stringify({ name: "X", model: "claude-sonnet-4-8", bogus: 1 }),
   );
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
-  await expect(page.getByText('unknown field "bogus"')).toBeVisible();
+  await expect(
+    page.getByText('Failed to parse request body: unknown field "bogus"'),
+  ).toBeVisible();
 });
 
 test("archive an agent from its detail page", async ({ page }) => {

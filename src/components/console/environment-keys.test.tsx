@@ -257,8 +257,7 @@ describe("EnvironmentKeysSection", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), "http://console.test");
-        if (url.pathname === TOKENS)
-          return notFound("no such endpoint: /api/oauth/organizations/…");
+        if (url.pathname === TOKENS) return notFound("Not found");
         if (url.pathname === "/api/platform/v1/environments/env_1") {
           if (environmentExists === "unreachable")
             return json(
@@ -267,7 +266,7 @@ describe("EnvironmentKeysSection", () => {
             );
           return environmentExists
             ? json(environment())
-            : notFound("environment env_1 not found");
+            : notFound("Environment env_1 not found.");
         }
         throw new Error(`unmatched fetch: ${url.pathname}`);
       }),

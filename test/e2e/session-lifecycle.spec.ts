@@ -57,7 +57,7 @@ test("a running session's deletion refusal is visible", async ({ page }) => {
   await page.getByRole("button", { name: "Delete session" }).click();
   await expect(
     page.getByText(
-      "session is running; send user.interrupt before archiving or deleting",
+      "Cannot delete session while it is running. Send an interrupt event or wait for the session to complete.",
     ),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/sessions\/sesn_research0000000000001$/);
@@ -121,7 +121,7 @@ test("archive refusal stays on the Session and never interrupts it implicitly", 
   await expect(page.getByText("Archive failed", { exact: true })).toBeVisible();
   await expect(
     page.getByText(
-      "session is running; send user.interrupt before archiving or deleting",
+      `Session ${id} cannot be archived while its status is "running". Only pending or idle sessions may be archived.`,
     ),
   ).toBeVisible();
   await expect(page).toHaveURL(`/sessions/${id}`);

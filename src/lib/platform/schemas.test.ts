@@ -988,7 +988,9 @@ describe("the mock's constructed write-path responses conform too", () => {
     it("does not read a non-JWT Bearer as a human credential", async () => {
       const key = await get({ authorization: "Bearer sk-map-env01-abc" });
       expect(key.status).toBe(401);
-      expect((await key.json()).error.message).toBe("missing x-api-key header");
+      expect((await key.json()).error.message).toBe(
+        "x-api-key header is required",
+      );
     });
 
     it("refuses an expired token, and one this platform has stopped accepting", async () => {

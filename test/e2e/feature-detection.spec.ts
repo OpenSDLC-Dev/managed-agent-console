@@ -55,7 +55,7 @@ test("its page says so instead of rendering the platform's error", async ({
   await expect(standIn).toHaveAttribute("data-surface", "skills");
   await expect(page.getByTestId("error-state")).toHaveCount(0);
   // The platform's envelope must not leak through as the page's message.
-  await expect(page.getByText(/no such endpoint/)).toHaveCount(0);
+  await expect(page.getByText("Not found", { exact: true })).toHaveCount(0);
 });
 
 test("its nested routes stand down too, not just its list page", async ({

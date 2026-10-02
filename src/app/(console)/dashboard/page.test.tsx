@@ -37,7 +37,7 @@ function renderDashboard(unimplemented?: string[]) {
                   type: "error",
                   error: {
                     type: "not_found_error",
-                    message: "no such endpoint",
+                    message: "Not found",
                   },
                 }
               : { data: [] },

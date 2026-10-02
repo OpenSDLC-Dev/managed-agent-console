@@ -28,7 +28,7 @@ function renderGuard(pathname: string, unimplemented: string[]) {
                   type: "error",
                   error: {
                     type: "not_found_error",
-                    message: `no such endpoint: ${input}`,
+                    message: "Not found",
                   },
                 }
               : { data: [] },
