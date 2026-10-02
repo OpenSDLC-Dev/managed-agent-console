@@ -1087,6 +1087,21 @@ describe("the mock's constructed write-path responses conform too", () => {
       await answer(method, path, method === "POST" ? {} : undefined),
     ).toEqual(invalid(`Invalid thread ID: ${thread}`));
   });
+  it("a malformed thread id is refused before the preview's simulated stream outage", async () => {
+    const preview = (step: string) =>
+      fetch(`${base}/__live-preview?step=${step}`, { method: "POST" });
+    await preview("drop");
+    try {
+      expect(
+        await answer(
+          "GET",
+          "/v1/sessions/sesn_gatedbash00000000001/threads/sthr_bad_id/stream",
+        ),
+      ).toEqual(invalid("Invalid thread ID: sthr_bad_id"));
+    } finally {
+      await preview("resume");
+    }
+  });
   it("a well-formed agent id the mock does not hold is the agent's 404, and an update reads its body's keys first", async () => {
     expect(
       await answer("GET", "/v1/agents/agent_0000000000000000000000000"),

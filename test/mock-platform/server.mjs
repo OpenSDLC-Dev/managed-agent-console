@@ -2413,12 +2413,9 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && (streamMatch || threadStreamMatch)) {
     const match = streamMatch ?? threadStreamMatch;
     const state = store.get(match[1]);
-    if (state?.streamOffline) {
-      res.writeHead(503);
-      res.end();
-      return;
-    }
-    // threads.go threadIDs: the thread id's shape before any lookup.
+    // threads.go threadIDs: the thread id's shape before any lookup, and before the
+    // preview's simulated outage, which stands in for a connection the
+    // platform would only open for a well-formed id.
     if (threadStreamMatch && !wellFormedId(threadStreamMatch[2], "sthr")) {
       res.setHeader("content-type", "application/json");
       res.writeHead(400);
@@ -2428,6 +2425,11 @@ const server = createServer(async (req, res) => {
           `Invalid thread ID: ${threadStreamMatch[2]}`,
         ),
       );
+      return;
+    }
+    if (state?.streamOffline) {
+      res.writeHead(503);
+      res.end();
       return;
     }
     // events.go sessionView and threads.go loadThread: the session's 404,
