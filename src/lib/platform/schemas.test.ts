@@ -748,38 +748,427 @@ describe("the mock's constructed write-path responses conform too", () => {
     );
   });
 
-  it.each([
-    {
-      type: "github_repository",
-      url: "https://github.com/example/project",
-      authorization_token: "test-only-token",
-      checkout: { type: "commit", sha: "short" },
-    },
-    {
-      type: "memory_store",
-      memory_store_id: "memstore_projectnotes000001",
-      access: "admin",
-    },
-    {
-      type: "memory_store",
-      memory_store_id: "memstore_projectnotes000001",
-      instructions: 42,
-    },
-  ])("sessions: reject invalid resource variant %#", async (resource) => {
-    const response = await fetch(`${base}/v1/sessions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": API_KEY,
-      },
-      body: JSON.stringify({
-        agent: fixtures.agents[0].id,
-        environment_id: fixtures.environments[0].id,
-        resources: [resource],
-      }),
+  // One request's status, refusal and retry header, for the refusals asserted
+  // whole below.
+  const answer = async (method: string, path: string, body?: unknown) => {
+    const response = await fetch(`${base}${path}`, {
+      method,
+      headers: { "content-type": "application/json", "x-api-key": API_KEY },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
-    expect(response.status).toBe(400);
+    const { error } = (await response.json()) as {
+      error: { type: string; message: string };
+    };
+    return {
+      status: response.status,
+      retry: response.headers.get("x-should-retry"),
+      error,
+    };
+  };
+  const invalid = (message: string) => ({
+    status: 400,
+    retry: null,
+    error: { type: "invalid_request_error", message },
   });
+  const notFound = (message: string) => ({
+    status: 404,
+    retry: null,
+    error: { type: "not_found_error", message },
+  });
+
+  // sessionresources.go parseSessionResourceInputs: every element's shape in
+  // session create's words, before anything is looked up (#540).
+  const repo = {
+    type: "github_repository",
+    url: "https://github.com/example/project",
+    authorization_token: "test-only-token",
+  };
+  const store = "memstore_projectnotes000001";
+  const createSessionWith = (resources: unknown) =>
+    answer("POST", "/v1/sessions", {
+      agent: fixtures.agents[0].id,
+      environment_id: fixtures.environments[0].id,
+      resources,
+    });
+  it.each([
+    [{}, "type is required"],
+    [{ type: "volume" }, 'resource type "volume" is not supported'],
+    [{ ...repo, url: undefined }, "url is required"],
+    [
+      { ...repo, url: "https://github.com/example/project/tree/main" },
+      "Invalid `github_repository` resource: invalid github_repository url: must be https://github.com/{owner}/{repo} with no .git suffix",
+    ],
+    [
+      { ...repo, url: "https://github.com/example/.git" },
+      "Invalid `github_repository` resource: invalid github_repository url: must be https://github.com/{owner}/{repo} with no .git suffix",
+    ],
+    [
+      { ...repo, authorization_token: undefined },
+      "resources.0.github_repository.authorization_token: value is required",
+    ],
+    [
+      { ...repo, authorization_token: "" },
+      "resources.0.github_repository.authorization_token: value is required",
+    ],
+    [{ ...repo, authorization_token: null }, "authorization_token is required"],
+    [
+      { ...repo, authorization_token: 7 },
+      "authorization_token must be a string",
+    ],
+    [{ ...repo, checkout: "main" }, "checkout must be an object"],
+    [{ ...repo, checkout: {} }, "checkout.type is required"],
+    [
+      { ...repo, checkout: { type: "tag", name: "v1" } },
+      'checkout.type must be "branch" or "commit"',
+    ],
+    [
+      { ...repo, checkout: { type: "branch", name: "main", sha: "x" } },
+      'Failed to parse request body: unknown field "sha"',
+    ],
+    [
+      { ...repo, checkout: { type: "branch" } },
+      "checkout.name is required for a branch checkout",
+    ],
+    [
+      { ...repo, checkout: { type: "commit", sha: "short" } },
+      "checkout.sha must be a full 40-character commit SHA",
+    ],
+    [
+      { ...repo, branch: "main" },
+      'Failed to parse request body: unknown field "branch"',
+    ],
+    [{ type: "memory_store" }, "memory_store_id is required"],
+    [
+      { type: "memory_store", memory_store_id: "mem_x" },
+      "memory_store_id must be a valid memory store id",
+    ],
+    [
+      { type: "memory_store", memory_store_id: store, mount_path: "/x" },
+      'Failed to parse request body: unknown field "mount_path"',
+    ],
+    [
+      { type: "memory_store", memory_store_id: store, access: "admin" },
+      'Failed to parse request: resources[0].access: "admin" is not a valid value; expected one of read_only, read_write',
+    ],
+    [
+      { type: "memory_store", memory_store_id: store, instructions: 42 },
+      "instructions must be a string",
+    ],
+    [
+      {
+        type: "memory_store",
+        memory_store_id: store,
+        instructions: "x".repeat(4097),
+      },
+      "resources.0.memory_store.instructions: must be at most 4096 characters",
+    ],
+  ])(
+    "sessions: a resource %j is refused in the platform's words",
+    async (resource, message) => {
+      expect(await createSessionWith([resource])).toEqual(invalid(message));
+    },
+  );
+
+  it("sessions: the memory stores' own rules, then the lookups", async () => {
+    resetStore();
+    const element = (id: string) => ({
+      type: "memory_store",
+      memory_store_id: id,
+    });
+    expect(await createSessionWith([element(store), element(store)])).toEqual(
+      invalid(`resources contains duplicate memory_store_id: ${store}`),
+    );
+    // A shape refusal at any index outranks a lookup at an earlier one.
+    expect(
+      await createSessionWith([
+        element("memstore_absent"),
+        { ...element(store), access: "write_only" },
+      ]),
+    ).toEqual(
+      invalid(
+        'Failed to parse request: resources[1].access: "write_only" is not a valid value; expected one of read_only, read_write',
+      ),
+    );
+    // sessions.go requestWording: the reference's 404 and 400 (#540, #841).
+    expect(await createSessionWith([element("memstore_absent")])).toEqual(
+      notFound("Memory store `memstore_absent` not found."),
+    );
+    expect(
+      await createSessionWith([element("memstore_archivednotes0001")]),
+    ).toEqual(invalid("Memory store memstore_archivednotes0001 is archived."));
+    // Any live store attaches, snapshotted from its row and mounted at the
+    // slug of its name (memsync.Slug).
+    const session = (await postJSON("/v1/sessions", {
+      agent: fixtures.agents[0].id,
+      environment_id: fixtures.environments[0].id,
+      resources: [element("memstore_dreamoutput000001")],
+    })) as { resources: unknown[] };
+    expect(session.resources).toEqual([
+      expect.objectContaining({
+        memory_store_id: "memstore_dreamoutput000001",
+        name: "Consolidated research",
+        mount_path: "/mnt/memory/consolidated-research",
+      }),
+    ]);
+    resetStore();
+  });
+
+  // The resource's own 404 for a GET of an id the mock does not hold, in the
+  // platform's words for that route (#540).
+  it.each([
+    ["/v1/environments/env_absent", "Environment env_absent not found."],
+    ["/v1/sessions/sesn_absent", "Session not found: sesn_absent"],
+    // sessions.go normalizeSessionID, before the lookup and the message.
+    ["/v1/sessions/session_absent", "Session not found: sesn_absent"],
+    [
+      "/v1/memory_stores/memstore_absent",
+      "memory store not found: memstore_absent",
+    ],
+    ["/v1/files/file_absent", "File `file_absent` not found."],
+    ["/v1/skills/skill_absent", "Skill not found: skill_absent"],
+    ["/v1/skills/skill_absent/versions", "Skill not found: skill_absent"],
+  ])("GET %s answers the resource's own 404", async (path, message) => {
+    expect(await answer("GET", path)).toEqual(notFound(message));
+  });
+
+  // wire.go checkAgentPathID and threads.go threadIDs: a path id that is no
+  // id of the resource (domain.WellFormedID) is the reference's 400, before
+  // anything is looked up (#841).
+  const research = "sesn_research0000000000001";
+  it.each([
+    ["GET", "/v1/agents/undefined"],
+    ["GET", "/v1/agents/agent_01UnknownAgentIdXXXXXXXX?version=x"],
+    ["GET", "/v1/agents/agent_cloud/versions"],
+    ["POST", "/v1/agents/agent_01UnknownAgentIdXXXXXXXX"],
+    ["POST", "/v1/agents/undefined/archive"],
+  ])("%s %s refuses a malformed agent id", async (method, path) => {
+    expect(
+      await answer(method, path, method === "POST" ? {} : undefined),
+    ).toEqual(invalid("Invalid agent ID."));
+  });
+  it.each([
+    ["GET", `/v1/sessions/${research}/threads/sth_01HbamSkv49mRn4JHt9ryS6T`],
+    [
+      "GET",
+      `/v1/sessions/${research}/threads/sthr_01UnknownThreadIdXXXXXXXXX/events`,
+    ],
+    ["GET", `/v1/sessions/${research}/threads/sthr_bad_id/stream`],
+    ["POST", `/v1/sessions/${research}/threads/sthr_lost/archive`],
+    ["GET", "/v1/sessions/sesn_absent/threads/sthr_lost"],
+  ])("%s %s refuses a malformed thread id", async (method, path) => {
+    const thread = path.split("/threads/")[1].split("/")[0];
+    expect(
+      await answer(method, path, method === "POST" ? {} : undefined),
+    ).toEqual(invalid(`Invalid thread ID: ${thread}`));
+  });
+  it("a well-formed agent id the mock does not hold is still a 404, and an update reads its body's keys first", async () => {
+    expect(
+      (await answer("GET", "/v1/agents/agent_0000000000000000000000000"))
+        .status,
+    ).toBe(404);
+    expect(
+      await answer("POST", "/v1/agents/undefined", { z: 1, a: 2 }),
+    ).toEqual(invalid('Failed to parse request body: unknown field "a"'));
+  });
+
+  // roster.go resolveRoster: the roster's shape and each entry's, all of them
+  // before any member is looked up (#540).
+  const member = fixtures.agents[1].id;
+  const roster = (agents: unknown) => ({ type: "coordinator", agents });
+  it.each([
+    [[member], "multiagent must be an object"],
+    [
+      { type: "advisor", agents: [member] },
+      'multiagent.type must be "coordinator"',
+    ],
+    [
+      { type: "coordinator", agents: [member], max: 3 },
+      'Failed to parse request body: unknown field "max"',
+    ],
+    [{ type: "coordinator" }, "multiagent.agents must be an array"],
+    [roster("x"), "multiagent.agents must be an array"],
+    [roster([]), "multiagent.coordinator.agents: must contain at least 1 item"],
+    [roster(null), "multiagent.agents must have between 1 and 20 entries"],
+    [
+      roster(Array.from({ length: 21 }, () => member)),
+      "multiagent.agents must have between 1 and 20 entries",
+    ],
+    [
+      roster([null]),
+      "Failed to parse request: multiagent.agents[0]: must be a string or an object (got null)",
+    ],
+    [
+      roster([7]),
+      'multiagent.agents[0]: entry must be an agent id string, {"type":"agent","id",…} or {"type":"self"}',
+    ],
+    [roster([""]), "multiagent.agents[0]: agent id must not be empty"],
+    [
+      roster(["agent_01UnknownAgentIdXXXXXXXX"]),
+      "Agent has invalid configuration: subagent agent_01UnknownAgentIdXXXXXXXX is not a valid agent ID",
+    ],
+    [
+      roster([{ type: "agent", id: "bogus" }]),
+      "Agent has invalid configuration: subagent bogus is not a valid agent ID",
+    ],
+    [
+      roster([{ type: "advisor" }]),
+      'multiagent.agents[0]: entry type must be "agent" or "self"',
+    ],
+    [roster([{ type: "agent" }]), "multiagent.agents[0]: id is required"],
+    [
+      roster([{ type: "agent", id: 7 }]),
+      "multiagent.agents[0]: id must be a string",
+    ],
+    [
+      roster([{ type: "agent", id: member, version: 0 }]),
+      "multiagent.agents[0]: version must be a positive integer",
+    ],
+    [
+      roster([member, { type: "self" }, { type: "self" }]),
+      'multiagent.agents.2: at most one {"type":"self"} entry is allowed',
+    ],
+    [
+      roster([member, member]),
+      `Agent has invalid configuration: subagent ${member} referenced multiple times`,
+    ],
+    [
+      roster(["agent_0000000000000000000000000"]),
+      "multiagent.agents[0]: agent agent_0000000000000000000000000 not found",
+    ],
+    // An entry refused on shape outranks a member no row holds.
+    [
+      roster(["agent_0000000000000000000000000", member, member]),
+      `Agent has invalid configuration: subagent ${member} referenced multiple times`,
+    ],
+  ])(
+    "agents: a roster %j is refused in the platform's words",
+    async (multiagent, message) => {
+      expect(
+        await answer("POST", "/v1/agents", {
+          name: "coordinator",
+          model: "claude-sonnet-4-8",
+          multiagent,
+        }),
+      ).toEqual(invalid(message));
+    },
+  );
+  // agents.go agentUpdatePath: the same refusals on update open their path
+  // with "agent.".
+  it.each([
+    [
+      roster([]),
+      "agent.multiagent.coordinator.agents: must contain at least 1 item",
+    ],
+    [
+      roster([null]),
+      "Failed to parse request: agent.multiagent.agents[0]: must be a string or an object (got null)",
+    ],
+    [
+      roster([{ type: "self" }, { type: "self" }]),
+      'agent.multiagent.agents.1: at most one {"type":"self"} entry is allowed',
+    ],
+    [
+      roster([{ type: "self" }, member]),
+      "multiagent.agents[1]: at most one self entry",
+    ],
+  ])(
+    "agents: an update's roster %j is refused in the platform's words",
+    async (multiagent, message) => {
+      expect(
+        await answer("POST", `/v1/agents/${member}`, { multiagent }),
+      ).toEqual(invalid(message));
+    },
+  );
+
+  // deployments.go createDeployment and deploymentparse.go
+  // parseDeploymentSchedule: each field and schedule refusal on its own.
+  const deployment = {
+    name: "conformance",
+    agent: fixtures.agents[0].id,
+    environment_id: fixtures.environments[0].id,
+    initial_events: [{ type: "user.message", content: "Go." }],
+  };
+  const schedule = { type: "cron", expression: "0 9 * * 1", timezone: "UTC" };
+  it.each([
+    [{ ...deployment, name: undefined }, "name is required"],
+    [{ ...deployment, name: 7 }, "name must be a string"],
+    [
+      { ...deployment, environment_id: undefined },
+      "environment_id is required",
+    ],
+    [{ ...deployment, agent: null }, "agent is required"],
+    [
+      { ...deployment, initial_events: undefined },
+      "initial_events: Field required",
+    ],
+    [
+      { ...deployment, initial_events: {} },
+      "initial_events must be an array of events",
+    ],
+    [
+      { ...deployment, initial_events: [] },
+      "initial_events must contain at least 1 event",
+    ],
+    [
+      { ...deployment, initial_events: null },
+      "initial_events must contain at least 1 event",
+    ],
+    [{ ...deployment, schedule: "daily" }, "schedule must be an object"],
+    [
+      { ...deployment, schedule: { ...schedule, expression: 5 } },
+      "schedule must be an object",
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, timezome: "UTC" } },
+      'Failed to parse request body: unknown field "timezome"',
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, type: undefined } },
+      "schedule.type is required",
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, type: "interval" } },
+      'schedule.type "interval" is not supported; the only schedule type is "cron"',
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, expression: "" } },
+      "schedule.expression is required",
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, timezone: undefined } },
+      "schedule.timezone: Field required",
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, timezone: null } },
+      "schedule.timezone is required",
+    ],
+    [
+      { ...deployment, schedule: { ...schedule, expression: "0".repeat(257) } },
+      "schedule.expression cannot exceed 256 characters",
+    ],
+  ])(
+    "deployments: a create %# is refused in the platform's words",
+    async (body, message) => {
+      expect(await answer("POST", "/v1/deployments", body)).toEqual(
+        invalid(message),
+      );
+    },
+  );
+  it.each([
+    [{ initial_events: null }, "initial_events cannot be cleared"],
+    [{ initial_events: [] }, "initial_events must contain at least 1 event"],
+    [
+      { schedule: { ...schedule, type: "interval" } },
+      'schedule.type "interval" is not supported; the only schedule type is "cron"',
+    ],
+  ])(
+    "deployments: an update %j is refused in the platform's words",
+    async (body, message) => {
+      expect(
+        await answer("POST", "/v1/deployments/depl_weekresearch00000001", body),
+      ).toEqual(invalid(message));
+    },
+  );
 
   it.each(["null", "[]"])(
     "sessions: reject non-object resource mutation body %s",
@@ -962,22 +1351,111 @@ describe("the mock's constructed write-path responses conform too", () => {
     },
   );
 
+  // internal/events inbound.go threadClaim, then route.go RouteInbound: every
+  // claim is read for its shape before any thread is looked up, so a
+  // malformed claim later in the batch outranks an unknown one before it.
+  it("an interrupt's claim is read for its shape before any thread is looked up", async () => {
+    expect(
+      await answer("POST", "/v1/sessions/sesn_gatedbash00000000001/events", {
+        events: [
+          {
+            type: "user.interrupt",
+            session_thread_id: "sthr_01DdMGc4KudV1Z22t2L7Y9QH",
+          },
+          { type: "user.interrupt", session_thread_id: "sth_x" },
+        ],
+      }),
+    ).toEqual(invalid("Invalid session_thread_id: sth_x"));
+  });
+
+  it("an interrupt naming a fixture child thread is routed to it", async () => {
+    resetStore();
+    await fetch(`${base}/__multiagent`, { method: "POST" });
+    const posted = (await postJSON(
+      "/v1/sessions/sesn_research0000000000001/events",
+      {
+        events: [
+          {
+            type: "user.interrupt",
+            session_thread_id: "sthr_membera0000000000001",
+          },
+        ],
+      },
+    )) as { data: { session_thread_id: string | null }[] };
+    expect(posted.data[0].session_thread_id).toBe("sthr_membera0000000000001");
+    resetStore();
+  });
+
+  // events.go sendSessionEvents and internal/events normalizeBatch: each
+  // sub-case of a batch's shape in its own words, the reference's where it
+  // was recorded (#540), and a management credential's user.tool_result its
+  // 403 (#662).
+  const userMessage = {
+    type: "user.message",
+    content: [{ type: "text", text: "Hello." }],
+  };
+  it.each([
+    [{ events: [] }, invalid("events: must contain at least 1 item")],
+    [{ events: null }, invalid("events: must contain at least 1 item")],
+    [{}, invalid("events must be an array")],
+    [{ events: {} }, invalid("events must be an array")],
+    [[], invalid("request body must be a JSON object")],
+    [{ events: [7] }, invalid("events[0]: event must be a JSON object")],
+    [{ events: [{}] }, invalid("events[0]: type is required")],
+    [{ events: [{ type: 7 }] }, invalid("events[0]: type must be a string")],
+    [
+      { events: [{ type: "agent.message", content: [] }] },
+      invalid(
+        'Failed to parse request: events[0].type: "agent.message" is not a valid value',
+      ),
+    ],
+    [
+      { events: [userMessage, { type: "user.bogus" }] },
+      invalid(
+        'Failed to parse request: events[1].type: "user.bogus" is not a valid value',
+      ),
+    ],
+    [
+      { events: [{ type: "user.tool_result", tool_use_id: "sevt_x" }] },
+      {
+        status: 403,
+        retry: null,
+        error: {
+          type: "permission_error",
+          message:
+            "events[0]: `user.tool_result` may only be sent with environment credentials (the self-hosted runner's Session-Instance JWT); an API key or Console session cannot post this event type",
+        },
+      },
+    ],
+  ])(
+    "events: a batch %j is refused in the platform's words",
+    async (body, refused) => {
+      expect(
+        await answer(
+          "POST",
+          "/v1/sessions/sesn_gatedbash00000000001/events",
+          body,
+        ),
+      ).toEqual(refused);
+    },
+  );
+
   // inbound.go answerClaim: a confirmation is written, and echoed, on the
   // thread of the call it answers, whatever thread it names.
   it.each([
-    "sthr_multiagentbeta00001", // another thread of the session
+    "sthr_memberb0000000000001", // another thread of the session
     "sthr_01DdMGc4KudV1Z22t2L7Y9QH", // no thread at all
     "sth_01HbamSkv49mRn4JHt9ryS6T", // no thread id at all
   ])("a confirmation naming %s lands on its call's thread", async (claim) => {
     resetStore();
     await fetch(`${base}/__multiagent`, { method: "POST" });
     const id = "sesn_research0000000000001";
-    const alpha = "sthr_multiagentalpha00001";
+    const alpha = "sthr_membera0000000000001";
     const posted = (await postJSON(`/v1/sessions/${id}/events`, {
       events: [
         {
           type: "user.tool_confirmation",
-          tool_use_id: `sevt_${alpha}tool`,
+          tool_use_id: "sevt_membera0000000000001ask",
           result: "allow",
           session_thread_id: claim,
         },
@@ -1018,11 +1496,12 @@ describe("the mock's constructed write-path responses conform too", () => {
   // counted, under a header that keeps the SDK from retrying it.
   const deleteHeldEnvironment = async (query = "") => {
     resetStore();
-    // The fixture deployment there is the platform's own 400, unmodelled.
-    await postJSON("/v1/deployments/depl_weeklyresearch000001", {
+    // The fixture deployment there is the platform's own 400 (below); moved
+    // off, the sessions alone hold the environment.
+    await postJSON("/v1/deployments/depl_weekresearch00000001", {
       environment_id: "env_byoc0000000000000001",
     });
-    return fetch(`${base}/v1/environments/env_cloudlimited000000001${query}`, {
+    return fetch(`${base}/v1/environments/env_egress000000000000001${query}`, {
       method: "DELETE",
       headers: { "x-api-key": API_KEY },
     });
@@ -1040,7 +1519,7 @@ describe("the mock's constructed write-path responses conform too", () => {
     // The count is the template's, "1 active sessions" too.
     await call("/v1/sessions/sesn_gatedbash00000000001", { method: "DELETE" });
     const again = await fetch(
-      `${base}/v1/environments/env_cloudlimited000000001`,
+      `${base}/v1/environments/env_egress000000000000001`,
       { method: "DELETE", headers: { "x-api-key": API_KEY } },
     );
     expect((await again.json()).error.message).toBe(
@@ -1056,12 +1535,12 @@ describe("the mock's constructed write-path responses conform too", () => {
     [
       "true",
       409,
-      "environment env_cloudlimited000000001 still has sessions; delete them first",
+      "environment env_egress000000000000001 still has sessions; delete them first",
     ],
     [
       "1",
       409,
-      "environment env_cloudlimited000000001 still has sessions; delete them first",
+      "environment env_egress000000000000001 still has sessions; delete them first",
     ],
     [
       "false",
@@ -1084,6 +1563,83 @@ describe("the mock's constructed write-path responses conform too", () => {
       resetStore();
     },
   );
+
+  // environments.go environmentStillReferenced: any deployment in the way,
+  // archived ones included, is the platform's own 400, forced or not, naming
+  // up to five (archived first, then oldest) and counting the sessions
+  // beside them; the remedy it names is the one that works.
+  it("an environment a deployment holds refuses its delete with the platform's 400", async () => {
+    resetStore();
+    const byoc = "env_byoc0000000000000001";
+    const cloud = "env_egress000000000000001";
+    for (const query of ["", "?force=true"])
+      expect(
+        await answer("DELETE", `/v1/environments/${byoc}${query}`),
+      ).toEqual(
+        invalid(
+          `environment ${byoc} is referenced by 1 deployment (depl_handtask00000000001); point each at another environment and the delete will go through`,
+        ),
+      );
+    expect(await answer("DELETE", `/v1/environments/${cloud}`)).toEqual(
+      invalid(
+        `environment ${cloud} is referenced by 1 deployment (depl_weekresearch00000001) and 2 sessions; point each deployment at another environment and delete the sessions and the delete will go through`,
+      ),
+    );
+
+    // Archived, a deployment can never move, and the advice is the archive
+    // only until it is taken.
+    await postJSON("/v1/deployments/depl_handtask00000000001/archive", {});
+    const created: string[] = [];
+    for (let i = 0; i < 6; i++)
+      created.push(
+        (
+          (await postJSON("/v1/deployments", {
+            ...deployment,
+            environment_id: byoc,
+          })) as { id: string }
+        ).id,
+      );
+    const stuck = `environment ${byoc} is referenced by 7 deployments (depl_handtask00000000001, ${created.slice(0, 4).join(", ")} and 2 more), 1 of them archived and so unmovable; it can no longer be deleted`;
+    expect(await answer("DELETE", `/v1/environments/${byoc}`)).toEqual(
+      invalid(`${stuck} — archive it instead`),
+    );
+    await postJSON(`/v1/environments/${byoc}/archive`, {});
+    expect(await answer("DELETE", `/v1/environments/${byoc}`)).toEqual(
+      invalid(stuck),
+    );
+    resetStore();
+
+    // Moved off, nothing holds it, and the delete goes through.
+    await postJSON("/v1/deployments/depl_handtask00000000001", {
+      environment_id: cloud,
+    });
+    expect(
+      await call(`/v1/environments/${byoc}`, { method: "DELETE" }),
+    ).toEqual({ id: byoc, type: "environment_deleted" });
+    resetStore();
+  });
+
+  // Every fixture id is one the platform could have minted, so none of them
+  // reads as malformed where the mock answers domain.WellFormedID's 400.
+  it("every fixture id is well-formed", () => {
+    const ids: string[] = [];
+    const walk = (value: unknown, key: string) => {
+      if (typeof value === "string") {
+        if (/(^id|_ids?)$/.test(key) && /^[a-z]+_/.test(value)) ids.push(value);
+      } else if (Array.isArray(value)) {
+        for (const item of value) walk(item, key);
+      } else if (value && typeof value === "object") {
+        for (const [k, v] of Object.entries(value)) walk(v, k);
+      }
+    };
+    for (const [name, value] of Object.entries(fixtures)) walk(value, name);
+    walk(fixtures.multiagentScenario(false), "");
+    walk(fixtures.multiagentScenario(true), "");
+    expect(ids.length).toBeGreaterThan(50);
+    expect(
+      ids.filter((id) => !/^[a-z]+_[0-9A-HJ-NP-Za-km-z]+$/.test(id)),
+    ).toEqual([]);
+  });
 
   it("vaults: create, and a credential of each auth type", async () => {
     const vault = await postJSON("/v1/vaults", {

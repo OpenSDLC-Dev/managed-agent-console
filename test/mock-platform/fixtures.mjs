@@ -1,6 +1,12 @@
 // Fixture data for the mock platform. Shapes mirror the platform's rendered
 // wire objects exactly (see src/lib/platform/types.ts and the file:line
 // citations there); the e2e suite asserts against these.
+//
+// Every id is well-formed by domain.WellFormedID — the prefix, then ASCII
+// letters and digits other than I, O and l — which the mock enforces where the
+// platform does (schemas.test.ts checks each one). A new id is best minted in
+// the platform's own alphabet, domain.NewID's lowercase Crockford: no i, l, o
+// or u.
 
 const T0 = "2026-08-01T09:00:00Z";
 const T1 = "2026-08-01T10:30:00Z";
@@ -227,7 +233,7 @@ export const agentVersions = {
 
 export const environments = [
   {
-    id: "env_cloudlimited000000001",
+    id: "env_egress000000000000001",
     type: "environment",
     name: "cloud-limited",
     description: "Cloud sandbox, restricted egress.",
@@ -302,7 +308,7 @@ export const sessions = [
     id: "sesn_gatedbash00000000001",
     type: "session",
     agent: snapshotOf(agents[1]),
-    environment_id: "env_cloudlimited000000001",
+    environment_id: "env_egress000000000000001",
     status: "idle",
     title: "Install deps and run tests",
     metadata: {},
@@ -328,7 +334,7 @@ export const sessions = [
     id: "sesn_research0000000000001",
     type: "session",
     agent: researcherSnapshot,
-    environment_id: "env_cloudlimited000000001",
+    environment_id: "env_egress000000000000001",
     status: "running",
     title: "Survey agent frameworks",
     metadata: {},
@@ -356,7 +362,7 @@ export const sessions = [
     ],
     resources: [
       {
-        id: "sesrsc_upload000000000001",
+        id: "sesrsc_attach000000000001",
         type: "file",
         file_id: "file_notes0000000000001",
         mount_path: "/mnt/session/uploads/file_notes0000000000001",
@@ -374,7 +380,7 @@ export const sessions = [
 
 export const deployments = [
   {
-    id: "depl_weeklyresearch000001",
+    id: "depl_weekresearch00000001",
     type: "deployment",
     name: "Weekly research digest",
     description: "Collect and summarize the week's agent-platform changes.",
@@ -417,7 +423,7 @@ export const deployments = [
     archived_at: null,
   },
   {
-    id: "depl_manualtask000000001",
+    id: "depl_handtask00000000001",
     type: "deployment",
     name: "Manual task runner",
     description: null,
@@ -442,7 +448,7 @@ export const deployments = [
 
 export const deploymentRuns = [
   {
-    id: "drun_deleted00000000001",
+    id: "drun_erased000000000001",
     type: "deployment_run",
     deployment_id: deployments[0].id,
     trigger_context: { type: "schedule", scheduled_at: T1 },
@@ -452,7 +458,7 @@ export const deploymentRuns = [
     created_at: T1,
   },
   {
-    id: "drun_failed000000000001",
+    id: "drun_crashed00000000001",
     type: "deployment_run",
     deployment_id: deployments[0].id,
     trigger_context: { type: "schedule", scheduled_at: T2 },
@@ -469,7 +475,7 @@ export const deploymentRuns = [
 // dreams.go:dreamJSON — every one of the fourteen fields is always rendered.
 export const dreams = [
   {
-    id: "drm_completedresearch000001",
+    id: "drm_endedresearch0000000001",
     type: "dream",
     status: "completed",
     inputs: [
@@ -528,7 +534,7 @@ export const dreams = [
     error: null,
   },
   {
-    id: "drm_failedarchived0000001",
+    id: "drm_crashedparked00000001",
     type: "dream",
     status: "failed",
     inputs: [
@@ -799,7 +805,7 @@ export const vaults = [
     archived_at: null,
   },
   {
-    id: "vlt_retiredvault00000001",
+    id: "vlt_pastsafe000000000001",
     type: "vault",
     display_name: "Old Jira vault",
     metadata: {},
@@ -852,7 +858,7 @@ export const vaultCredentials = {
       archived_at: null,
     },
   ],
-  vlt_retiredvault00000001: [],
+  vlt_pastsafe000000000001: [],
 };
 
 export const skills = [
@@ -860,7 +866,7 @@ export const skills = [
     id: "xlsx",
     type: "skill",
     display_name: "Excel spreadsheets",
-    latest_version_id: "skillver_xlsx00000000001",
+    latest_version_id: "skillver_sheet0000000001",
     source: { type: "anthropic" },
     created_at: T0,
     updated_at: T0,
@@ -897,7 +903,7 @@ export const skillVersions = {
   ],
   xlsx: [
     {
-      id: "skillver_xlsx00000000001",
+      id: "skillver_sheet0000000001",
       type: "skill_version",
       skill_id: "xlsx",
       name: "xlsx",
@@ -965,7 +971,7 @@ export const environmentKeys = {
       expires_at: oneYearOut,
     },
     {
-      id: "envkey_stale0000000000001",
+      id: "envkey_spent0000000000001",
       name: "retired-laptop",
       created_at: "2025-01-01T09:00:00Z",
       expires_at: "2026-01-01T09:00:00Z",
@@ -979,10 +985,10 @@ export function multiagentScenario(running = false) {
   const primary = structuredClone(sessionThreads[base.id][0]);
   const children = ["Alpha", "Beta"].map((name, index) => ({
     ...structuredClone(sessionThreads[base.id][1]),
-    id: `sthr_multiagent${name.toLowerCase()}00001`,
+    id: `sthr_member${name[0].toLowerCase()}0000000000001`,
     agent: {
       ...threadAgentOf(agents[1]),
-      id: `agent_${name.toLowerCase()}00000000000001`,
+      id: `agent_member${name[0].toLowerCase()}000000000001`,
       name,
       version: index + 1,
     },
@@ -998,7 +1004,7 @@ export function multiagentScenario(running = false) {
   };
   const events = [
     {
-      id: "sevt_multiagentstart00001",
+      id: "sevt_teamstart00000000001",
       type: running ? "session.status_running" : "session.status_idle",
       processed_at: T1,
     },
@@ -1006,8 +1012,11 @@ export function multiagentScenario(running = false) {
   /** @type {Record<string, any[]>} */
   const threadEvents = {};
   for (const child of children) {
+    // An event id carries its thread's token, not its whole id: an underscore
+    // in the token is outside every id alphabet.
+    const token = child.id.slice("sthr_".length);
     const status = {
-      id: `sevt_${child.id}status`,
+      id: `sevt_${token}state`,
       type: running
         ? "session.thread_status_running"
         : "session.thread_status_idle",
@@ -1018,13 +1027,13 @@ export function multiagentScenario(running = false) {
         ? {
             stop_reason: {
               type: "requires_action",
-              event_ids: [`sevt_${child.id}tool`],
+              event_ids: [`sevt_${token}ask`],
             },
           }
         : {}),
     };
     const sent = {
-      id: `sevt_${child.id}sent`,
+      id: `sevt_${token}sent`,
       type: "agent.thread_message_sent",
       processed_at: T1,
       to_session_thread_id: child.id,
@@ -1034,7 +1043,7 @@ export function multiagentScenario(running = false) {
       ],
     };
     const tool = {
-      id: `sevt_${child.id}tool`,
+      id: `sevt_${token}ask`,
       type: "agent.tool_use",
       processed_at: T2,
       name: "bash",
@@ -1045,7 +1054,7 @@ export function multiagentScenario(running = false) {
     events.push(sent, ...(!running ? [tool] : []), status);
     threadEvents[child.id] = [
       {
-        id: `sevt_${child.id}received`,
+        id: `sevt_${token}recv`,
         type: "agent.thread_message_received",
         processed_at: T1,
         from_session_thread_id: primary.id,

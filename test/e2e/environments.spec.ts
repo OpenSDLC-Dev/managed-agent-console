@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
 
-const CLOUD = "env_cloudlimited000000001";
+const CLOUD = "env_egress000000000000001";
 const BYOC = "env_byoc0000000000000001";
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -128,11 +128,17 @@ test("environment batch deletion keeps only failures selected and allows retry",
   page,
   request,
 }) => {
-  const created = await request.post("http://127.0.0.1:18080/v1/environments", {
-    headers: { "x-api-key": "test-key" },
-    data: { name: "Retry target", config: { type: "self_hosted" } },
-  });
+  // Two environments nothing holds, so the platform would delete either: a
+  // fixture one is held by a fixture deployment, which is its own refusal
+  // (environments.go environmentStillReferenced).
+  const create = (name: string) =>
+    request.post("http://127.0.0.1:18080/v1/environments", {
+      headers: { "x-api-key": "test-key" },
+      data: { name, config: { type: "self_hosted" } },
+    });
+  const created = await create("Retry target");
   expect(created.ok()).toBe(true);
+  expect((await create("Delete target")).ok()).toBe(true);
   const target = await created.json();
   await signIn(page);
   await page.goto("/environments");
@@ -156,7 +162,7 @@ test("environment batch deletion keeps only failures selected and allows retry",
     .getByRole("checkbox", { name: "Select Retry target", exact: true })
     .check();
   await page
-    .getByRole("checkbox", { name: "Select byoc-workers", exact: true })
+    .getByRole("checkbox", { name: "Select Delete target", exact: true })
     .check();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page

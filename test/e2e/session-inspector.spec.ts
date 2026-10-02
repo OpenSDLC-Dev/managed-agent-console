@@ -52,7 +52,7 @@ test("inspecting a row on page two retains its cursor when selecting and closing
       headers: { "x-api-key": "test-key" },
       data: {
         agent: "agent_taskrunner0000000001",
-        environment_id: "env_cloudlimited000000001",
+        environment_id: "env_egress000000000000001",
         title: "Inspector pagination " + index,
       },
     });

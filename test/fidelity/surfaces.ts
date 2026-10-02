@@ -62,12 +62,12 @@ const AGENT = "agent_researcher00000000001";
 const ENV = "env_byoc0000000000000001";
 const SESSION = "sesn_research0000000000001";
 const GATED = "sesn_gatedbash00000000001";
-const DEPLOYMENT = "depl_weeklyresearch000001";
-const DEPLOYMENT_RUN = "drun_failed000000000001";
+const DEPLOYMENT = "depl_weekresearch00000001";
+const DEPLOYMENT_RUN = "drun_crashed00000000001";
 const MEMORY_STORE = "memstore_projectnotes000001";
 const MEMORY = "mem_projectbrief000000001";
 const MEMORY_VERSION = "memver_briefmodified000001";
-const DREAM = "drm_completedresearch000001";
+const DREAM = "drm_endedresearch0000000001";
 const PENDING_DREAM = "drm_pendingresearch0000001";
 const VAULT = "vlt_github00000000000001";
 const CREDENTIAL = "vcred_ghtoken000000000001";
@@ -143,7 +143,7 @@ export const SURFACES: Surface[] = [
     route:
       "/deployments?deployment=" +
       (view === "manual"
-        ? "depl_manualtask000000001"
+        ? "depl_handtask00000000001"
         : view === "missing"
           ? "depl_missing"
           : DEPLOYMENT),
@@ -202,7 +202,7 @@ export const SURFACES: Surface[] = [
           (view === "run-error"
             ? `&run=${DEPLOYMENT_RUN}`
             : view === "run-deleted"
-              ? "&run=drun_deleted00000000001"
+              ? "&run=drun_erased000000000001"
               : "")
         : ""),
     fixture: DEPLOYMENT,
@@ -955,13 +955,13 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-inspector",
-    route: "/environments?environment=env_cloudlimited000000001",
+    route: "/environments?environment=env_egress000000000000001",
     fixture: "cloud limited environment",
     description: "Non-modal structured environment inspector.",
   },
   {
     id: "environment-inspector-api",
-    route: "/environments?environment=env_cloudlimited000000001",
+    route: "/environments?environment=env_egress000000000000001",
     fixture: "cloud limited environment API",
     description: "Environment response in API view.",
     setup: async (page) => {
@@ -973,7 +973,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-inspector-narrow",
-    route: "/environments?environment=env_cloudlimited000000001",
+    route: "/environments?environment=env_egress000000000000001",
     fixture: "cloud environment at 390px",
     description: "Narrow environment inspector.",
     setup: async (page) => {
@@ -1007,13 +1007,13 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-cloud-detail",
-    route: "/environments/env_cloudlimited000000001",
+    route: "/environments/env_egress000000000000001",
     fixture: "cloud environment",
     description: "Structured networking, packages and metadata.",
   },
   {
     id: "environment-edit-inline",
-    route: "/environments/env_cloudlimited000000001",
+    route: "/environments/env_egress000000000000001",
     fixture: "cloud environment edit",
     description: "Cancel and save without leaving the environment detail.",
     setup: async (page) => {
@@ -1022,7 +1022,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-edit-rows",
-    route: "/environments/env_cloudlimited000000001",
+    route: "/environments/env_egress000000000000001",
     fixture: "cloud environment with package and metadata drafts",
     description: "Structured package manager and metadata row editing.",
     setup: async (page) => {
@@ -1037,7 +1037,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-edit-narrow",
-    route: "/environments/env_cloudlimited000000001",
+    route: "/environments/env_egress000000000000001",
     fixture: "cloud environment editor at 390px",
     description: "Narrow structured editor and switches.",
     setup: async (page) => {
@@ -1393,11 +1393,11 @@ export const SURFACES: Surface[] = [
         if (view === "child-narrow")
           await page.setViewportSize({ width: 480, height: 900 });
         await page.goto(
-          `/sessions/${SESSION}?inspector=thread${view !== "parent" ? "&thread=sthr_multiagentalpha00001" : ""}`,
+          `/sessions/${SESSION}?inspector=thread${view !== "parent" ? "&thread=sthr_membera0000000000001" : ""}`,
         );
         await traceLive(page);
         await page
-          .locator('[data-thread-id="sthr_multiagentbeta00001"]')
+          .locator('[data-thread-id="sthr_memberb0000000000001"]')
           .waitFor();
       },
     }),

@@ -116,27 +116,35 @@ test("create, edit, archive, and delete an environment", async ({ page }) => {
   await expect(page.getByText("staging-sandbox-2")).toBeHidden();
 });
 
-test("deleting an environment its sessions hold surfaces the platform 409", async ({
+test("deleting an environment a deployment and its sessions hold surfaces each refusal", async ({
   page,
   request,
 }) => {
-  // The fixture deployment holds this environment too, and on the platform a
-  // deployment in the way is its own 400 (environments.go
-  // environmentStillReferenced), which the mock does not model. Moved off, the
-  // sessions alone hold it: the case the 409 answers.
+  // environments.go environmentStillReferenced: a deployment in the way is the
+  // platform's own 400, naming it and counting the sessions beside it. Moved
+  // off, the sessions alone hold the environment: the reference's 409.
+  await signIn(page);
+  await page.goto("/environments/env_egress000000000000001");
+  const remove = async () => {
+    await page.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("button", { name: "Delete environment" }).click();
+  };
+  await remove();
+  await expect(
+    page.getByText(
+      "environment env_egress000000000000001 is referenced by 1 deployment (depl_weekresearch00000001) and 2 sessions; point each deployment at another environment and delete the sessions and the delete will go through",
+    ),
+  ).toBeVisible();
   const moved = await request.post(
-    "http://127.0.0.1:18080/v1/deployments/depl_weeklyresearch000001",
+    "http://127.0.0.1:18080/v1/deployments/depl_weekresearch00000001",
     {
       headers: { "x-api-key": "test-key" },
       data: { environment_id: "env_byoc0000000000000001" },
     },
   );
   expect(moved.ok()).toBe(true);
-  await signIn(page);
-  await page.goto("/environments/env_cloudlimited000000001");
-  await page.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete environment" }).click();
+  await remove();
   await expect(
     page.getByText(
       "Environment has 2 active sessions. Use force=true to delete anyway.",
@@ -445,7 +453,7 @@ test("a cloud environment offers no keys and no setup guide", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments/env_cloudlimited000000001");
+  await page.goto("/environments/env_egress000000000000001");
   await expect(page.getByTestId("environment-keys")).toHaveCount(0);
   await expect(page.getByTestId("environment-key-setup")).toHaveCount(0);
 });

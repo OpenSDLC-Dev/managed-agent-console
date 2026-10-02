@@ -11,13 +11,13 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
   request,
 }) => {
   const runResponse = await request.post(
-    MOCK + "/v1/deployments/depl_weeklyresearch000001/run",
+    MOCK + "/v1/deployments/depl_weekresearch00000001/run",
     { headers: { "x-api-key": "test-key" }, data: {} },
   );
   expect(runResponse.ok()).toBe(true);
   const run = await runResponse.json();
   await request.post(
-    MOCK + "/v1/deployments/depl_weeklyresearch000001/archive",
+    MOCK + "/v1/deployments/depl_weekresearch00000001/archive",
     { headers: { "x-api-key": "test-key" }, data: {} },
   );
   await signIn(page, "/sessions");
@@ -25,7 +25,7 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
   const filtered = page.waitForRequest(
     (r) =>
       new URL(r.url()).searchParams.get("deployment_id") ===
-      "depl_weeklyresearch000001",
+      "depl_weekresearch00000001",
   );
   await page
     .getByRole("option", { name: /Weekly research digest.*archived/ })

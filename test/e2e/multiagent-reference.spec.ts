@@ -3,8 +3,10 @@ import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
 
 const session = "sesn_research0000000000001";
-const alpha = "sthr_multiagentalpha00001";
-const beta = "sthr_multiagentbeta00001";
+const alpha = "sthr_membera0000000000001";
+const beta = "sthr_memberb0000000000001";
+// Each child's ask-gated tool use, named by its thread's token (fixtures.mjs).
+const ask = (thread: string) => `sevt_${thread.slice("sthr_".length)}ask`;
 const route = `/sessions/${session}?inspector=thread`;
 test.beforeEach(async ({ request }) => {
   expect((await request.post("http://127.0.0.1:18080/__reset")).ok()).toBe(
@@ -58,7 +60,7 @@ test("child selection survives reload and browser history while approval stays i
   ]) {
     await expect(
       page.locator(
-        `[data-testid="event-row"][data-event-id="sevt_${id}tool"] [data-event-actor]`,
+        `[data-testid="event-row"][data-event-id="${ask(id)}"] [data-event-actor]`,
       ),
     ).toHaveAttribute("data-event-actor", name);
   }
@@ -74,7 +76,7 @@ test("child selection survives reload and browser history while approval stays i
   ).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Thread details" }).getByRole("link"),
-  ).toHaveAttribute("href", "/agents/agent_alpha00000000000001?version=1");
+  ).toHaveAttribute("href", "/agents/agent_membera000000000001?version=1");
   await page.reload();
   await expect(page.locator("[data-viewing-thread-id]")).toHaveAttribute(
     "data-viewing-thread-id",
@@ -106,11 +108,11 @@ test("child selection survives reload and browser history while approval stays i
     .click();
   await expect(page).not.toHaveURL(/thread=sthr/);
   await page
-    .locator(`[data-event-id="sevt_${alpha}tool"][data-testid="event-row"]`)
+    .locator(`[data-event-id="${ask(alpha)}"][data-testid="event-row"]`)
     .getByRole("button", { name: "Approve", exact: true })
     .click();
   await page
-    .locator(`[data-event-id="sevt_${beta}tool"][data-testid="event-row"]`)
+    .locator(`[data-event-id="${ask(beta)}"][data-testid="event-row"]`)
     .getByRole("button", { name: "Deny", exact: true })
     .click();
   await expect
@@ -120,7 +122,7 @@ test("child selection survives reload and browser history while approval stays i
         events: [
           {
             type: "user.tool_confirmation",
-            tool_use_id: `sevt_${alpha}tool`,
+            tool_use_id: ask(alpha),
             result: "allow",
           },
         ],
@@ -129,7 +131,7 @@ test("child selection survives reload and browser history while approval stays i
         events: [
           {
             type: "user.tool_confirmation",
-            tool_use_id: `sevt_${beta}tool`,
+            tool_use_id: ask(beta),
             result: "deny",
           },
         ],

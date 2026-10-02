@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
-const COMPLETED = "drm_completedresearch000001";
+const COMPLETED = "drm_endedresearch0000000001";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");

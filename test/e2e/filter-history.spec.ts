@@ -36,7 +36,7 @@ test("session choices restore after visiting a detail and returning", async ({
 }) => {
   await signIn(
     page,
-    "/sessions?status=idle&agent=agent_general000000000001&order=asc",
+    "/sessions?status=idle&agent=agent_absent0000000000001&order=asc",
   );
   await expect(page.getByLabel("Status filter")).toHaveAttribute(
     "data-value",

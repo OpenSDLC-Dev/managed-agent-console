@@ -31,7 +31,7 @@ function setup({
       ? {
           resources: structuredClone(memoryResources),
           vault_ids: [vaults[0].id],
-          deployment_id: "depl_weeklyresearch000001",
+          deployment_id: "depl_weekresearch00000001",
         }
       : {}),
   } as Session;

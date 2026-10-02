@@ -46,7 +46,7 @@ test("repository tokens stay write-only and memory references can be removed", a
   const created = await page.request.post("/api/platform/v1/sessions", {
     data: {
       agent: "agent_taskrunner0000000001",
-      environment_id: "env_cloudlimited000000001",
+      environment_id: "env_egress000000000000001",
       resources: [
         {
           type: "github_repository",
