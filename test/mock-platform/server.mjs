@@ -294,85 +294,128 @@ function leastUnknownKey(obj, allowed) {
 const unknownField = (key) =>
   `Failed to parse request body: unknown field ${JSON.stringify(key)}`;
 
+// roster.go parseRosterEntry: one roster entry's shape, as an entry naming an
+// agent ({id, version}), the coordinator ({isSelf}) or a refusal.
+function rosterEntry(entry, index, prefix) {
+  const at = (reason) => ({
+    refusal: `multiagent.agents[${index}]: ${reason}`,
+  });
+  // checkAgentID: by domain.WellFormedID, the refusal in the reference's
+  // words (#540).
+  const malformed = (id) =>
+    wellFormedId(id, "agent")
+      ? null
+      : {
+          refusal: `Agent has invalid configuration: subagent ${id} is not a valid agent ID`,
+        };
+  if (entry === null)
+    return {
+      refusal: `Failed to parse request: ${prefix}multiagent.agents[${index}]: must be a string or an object (got null)`,
+    };
+  if (typeof entry === "string")
+    return entry === ""
+      ? at("agent id must not be empty")
+      : (malformed(entry) ?? { id: entry });
+  if (typeof entry !== "object" || Array.isArray(entry))
+    return at(
+      'entry must be an agent id string, {"type":"agent","id",…} or {"type":"self"}',
+    );
+  if (entry.type !== "self" && entry.type !== "agent")
+    return at('entry type must be "agent" or "self"');
+  const unknown = leastUnknownKey(
+    entry,
+    entry.type === "self" ? ["type"] : ["type", "id", "version"],
+  );
+  if (unknown !== undefined) return { refusal: unknownField(unknown) };
+  if (entry.type === "self") return { isSelf: true };
+  const idRefusal = requiredStringRefusal(entry, "id");
+  if (idRefusal) return at(idRefusal);
+  const bad = malformed(entry.id);
+  if (bad) return bad;
+  // An explicit null version reads as omitted.
+  const version = entry.version ?? undefined;
+  if (version !== undefined && (!Number.isInteger(version) || version < 1))
+    return at("version must be a positive integer");
+  return { id: entry.id, version };
+}
+
+// roster.go resolveRoster: the roster's shape and every entry's first, then
+// whether each member exists and is live, then each pinned version and its
+// depth. self is the coordinator on update; prefix opens a path there
+// ("agent.", agents.go agentUpdatePath) and is empty on create.
+function rosterRefusal(raw, self, prefix) {
+  if (typeof raw !== "object" || Array.isArray(raw))
+    return "multiagent must be an object";
+  const unknown = leastUnknownKey(raw, ["type", "agents"]);
+  if (unknown !== undefined) return unknownField(unknown);
+  if (raw.type !== "coordinator")
+    return 'multiagent.type must be "coordinator"';
+  // wire.go rawList: null reads as no entries, anything else not a list is
+  // refused.
+  if (raw.agents !== null && !Array.isArray(raw.agents))
+    return "multiagent.agents must be an array";
+  const entries = raw.agents ?? [];
+  if (entries.length === 0 && raw.agents !== null)
+    return `${prefix}multiagent.coordinator.agents: must contain at least 1 item`;
+  if (entries.length === 0 || entries.length > 20)
+    return "multiagent.agents must have between 1 and 20 entries";
+  // The version this write produces: 1 on create, the next one on update.
+  const selfVersion = (self?.version ?? 0) + 1;
+  const members = [];
+  const seen = new Set();
+  let selfSeen = false;
+  let typedSelfSeen = false;
+  for (const [index, entry] of entries.entries()) {
+    const parsed = rosterEntry(entry, index, prefix);
+    if (parsed.refusal) return parsed.refusal;
+    let id = parsed.id;
+    const isSelf = parsed.isSelf || (self !== undefined && id === self.id);
+    if (isSelf) {
+      if (selfSeen)
+        return parsed.isSelf && typedSelfSeen
+          ? `${prefix}multiagent.agents.${index}: at most one {"type":"self"} entry is allowed`
+          : `multiagent.agents[${index}]: at most one self entry`;
+      selfSeen = true;
+      typedSelfSeen = !!parsed.isSelf;
+      if (
+        parsed.version !== undefined &&
+        parsed.version !== selfVersion &&
+        parsed.version !== selfVersion - 1
+      )
+        return `multiagent.agents[${index}]: agent ${id} version ${parsed.version} is not this coordinator's current version; use {"type":"self"}`;
+      id = self?.id ?? "__self";
+    } else {
+      members.push({ index, id, version: parsed.version });
+    }
+    if (seen.has(id))
+      return `Agent has invalid configuration: subagent ${id} referenced multiple times`;
+    seen.add(id);
+  }
+  for (const member of members) {
+    const target = agentsStore.find((agent) => agent.id === member.id);
+    if (!target)
+      return `multiagent.agents[${member.index}]: agent ${member.id} not found`;
+    if (target.archived_at)
+      return `Agent has invalid configuration: subagent ${member.id} is archived`;
+    member.version ??= target.version;
+  }
+  for (const member of members) {
+    const snapshot = agentVersionsStore[member.id]?.find(
+      (candidate) => candidate.version === member.version,
+    );
+    if (!snapshot)
+      return `Agent has invalid configuration: subagent ${member.id} version ${member.version} not found`;
+    if (snapshot.multiagent)
+      return `Agent has invalid configuration: subagent ${member.id} has its own subagents; maximum depth is 1`;
+  }
+  return null;
+}
+
 function validateAgentBody(body, { requireCore, self }) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     return "agent body must be an object";
   const unknownKey = leastUnknownKey(body, AGENT_KEYS);
   if (unknownKey !== undefined) return unknownField(unknownKey);
-  if (body.multiagent != null) {
-    if (
-      typeof body.multiagent !== "object" ||
-      Array.isArray(body.multiagent) ||
-      body.multiagent.type !== "coordinator" ||
-      !Array.isArray(body.multiagent.agents) ||
-      body.multiagent.agents.length < 1 ||
-      body.multiagent.agents.length > 20
-    ) {
-      return "multiagent must be a coordinator with 1–20 agents";
-    }
-    const seen = new Set();
-    let selfSeen = false;
-    for (const [index, entry] of body.multiagent.agents.entries()) {
-      let id;
-      let version;
-      let isSelf = false;
-      if (typeof entry === "string") {
-        id = entry;
-      } else if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        if (entry.type === "self") {
-          // roster.go names the bare key, as its strict decoder does.
-          const unknown = leastUnknownKey(entry, ["type"]);
-          if (unknown !== undefined) return unknownField(unknown);
-          isSelf = true;
-          id = self?.id ?? "__self";
-        } else if (
-          entry.type === "agent" &&
-          typeof entry.id === "string" &&
-          Object.keys(entry).every((key) =>
-            ["type", "id", "version"].includes(key),
-          )
-        ) {
-          id = entry.id;
-          version = entry.version;
-          isSelf = self?.id === id;
-        } else {
-          return `multiagent.agents[${index}] must be an agent id, agent reference, or self`;
-        }
-      } else {
-        return `multiagent.agents[${index}] must be an agent id, agent reference, or self`;
-      }
-      if (!id) return `multiagent.agents[${index}] id must not be empty`;
-      if (version !== undefined && (!Number.isInteger(version) || version < 1))
-        return `multiagent.agents[${index}] version must be a positive integer`;
-      if (isSelf) {
-        if (selfSeen)
-          return `multiagent.agents[${index}] references self more than once`;
-        selfSeen = true;
-        if (
-          version !== undefined &&
-          version !== self.version &&
-          version !== self.version + 1
-        )
-          return `multiagent.agents[${index}] does not reference the current self version`;
-      } else {
-        const target = agentsStore.find((agent) => agent.id === id);
-        if (!target) return `multiagent.agents[${index}] agent ${id} not found`;
-        if (target.archived_at)
-          return `Agent has invalid configuration: subagent ${id} is archived`;
-        const pinned = version ?? target.version;
-        const snapshot = agentVersionsStore[id]?.find(
-          (candidate) => candidate.version === pinned,
-        );
-        if (!snapshot)
-          return `Agent has invalid configuration: subagent ${id} version ${pinned} not found`;
-        if (snapshot.multiagent)
-          return `Agent has invalid configuration: subagent ${id} has its own subagents; maximum depth is 1`;
-      }
-      if (seen.has(id))
-        return `Agent has invalid configuration: subagent ${id} referenced multiple times`;
-      seen.add(id);
-    }
-  }
   if (requireCore) {
     if (typeof body.name !== "string" || body.name.length === 0)
       return "name is required";
@@ -386,6 +429,9 @@ function validateAgentBody(body, { requireCore, self }) {
         typeof body.model.id === "string");
     if (!ok) return "model must be a string or {id, speed}";
   }
+  // agents.go: the roster resolves once every other field has parsed.
+  if (body.multiagent != null)
+    return rosterRefusal(body.multiagent, self, requireCore ? "" : "agent.");
   return null;
 }
 
@@ -509,6 +555,209 @@ function mockSessionAgent(agent) {
       : null,
   };
 }
+
+// ---- session create's resources (internal/api/sessionresources.go) -------
+
+// wire.go requiredString: absent, null or "" is required, and any other value
+// that is not a string must be one.
+function requiredStringRefusal(obj, key) {
+  const value = obj[key];
+  if (value !== undefined && value !== null && typeof value !== "string")
+    return `${key} must be a string`;
+  return value ? null : `${key} is required`;
+}
+
+// parseGitHubRepoURL: https://github.com/{owner}/{repo} and nothing else, the
+// name a ".git" suffix leaves neither empty, "." nor "..".
+function githubRepoName(url) {
+  const name = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/([A-Za-z0-9_.-]+)$/
+    .exec(url)?.[1]
+    .replace(/\.git$/, "");
+  return name && name !== "." && name !== ".." ? name : null;
+}
+
+// parseCheckout: absent or null is the default branch.
+function checkoutRefusal(checkout) {
+  if (checkout === undefined || checkout === null) return null;
+  if (typeof checkout !== "object" || Array.isArray(checkout))
+    return "checkout must be an object";
+  if (requiredStringRefusal(checkout, "type"))
+    return "checkout.type is required";
+  const field =
+    checkout.type === "branch"
+      ? "name"
+      : checkout.type === "commit"
+        ? "sha"
+        : null;
+  if (!field) return 'checkout.type must be "branch" or "commit"';
+  const unknown = leastUnknownKey(checkout, ["type", field]);
+  if (unknown !== undefined) return unknownField(unknown);
+  if (requiredStringRefusal(checkout, field))
+    return `checkout.${field} is required for a ${checkout.type} checkout`;
+  if (field === "sha" && !/^[0-9a-fA-F]{40}$/.test(checkout.sha))
+    return "checkout.sha must be a full 40-character commit SHA";
+  return null;
+}
+
+// parseSessionResourceInputs: each element's shape, in session create's
+// words (#540), and the memory stores' own two rules. Nothing is looked up
+// here. Not modelled: a file's id shape and mount path, a repository's mount
+// path, and the rules between mounts.
+function sessionResourceRefusal(resources) {
+  if (resources === undefined || resources === null) return null;
+  if (!Array.isArray(resources)) return "resources must be an array";
+  const stores = new Set();
+  for (const [index, resource] of resources.entries()) {
+    if (!resource || typeof resource !== "object" || Array.isArray(resource))
+      return "each resource must be an object";
+    const typeRefusal = requiredStringRefusal(resource, "type");
+    if (typeRefusal) return typeRefusal;
+    if (resource.type === "github_repository") {
+      const unknown = leastUnknownKey(resource, [
+        "type",
+        "url",
+        "authorization_token",
+        "mount_path",
+        "checkout",
+      ]);
+      if (unknown !== undefined) return unknownField(unknown);
+      const urlRefusal = requiredStringRefusal(resource, "url");
+      if (urlRefusal) return urlRefusal;
+      if (!githubRepoName(resource.url))
+        return "Invalid `github_repository` resource: invalid github_repository url: must be https://github.com/{owner}/{repo} with no .git suffix";
+      // An absent or empty token in the reference's words; a null or
+      // non-string one in requiredString's.
+      const token = resource.authorization_token;
+      if (token === undefined || token === "")
+        return `resources.${index}.github_repository.authorization_token: value is required`;
+      const tokenRefusal = requiredStringRefusal(
+        resource,
+        "authorization_token",
+      );
+      if (tokenRefusal) return tokenRefusal;
+      if (Buffer.byteLength(token) > 8192)
+        return "authorization_token must be at most 8192 bytes";
+      const checkout = checkoutRefusal(resource.checkout);
+      if (checkout) return checkout;
+      continue;
+    }
+    if (resource.type === "memory_store") {
+      const unknown = leastUnknownKey(resource, [
+        "type",
+        "memory_store_id",
+        "access",
+        "instructions",
+      ]);
+      if (unknown !== undefined) return unknownField(unknown);
+      const idRefusal = requiredStringRefusal(resource, "memory_store_id");
+      if (idRefusal) return idRefusal;
+      const id = resource.memory_store_id;
+      // consoleapi.go consoleIDShape: the prefix and a token; the store
+      // lookup answers every other id.
+      if (!id.startsWith("memstore_") || id === "memstore_")
+        return "memory_store_id must be a valid memory store id";
+      const access = resource.access ?? "read_write";
+      if (typeof access !== "string") return "access must be a string";
+      if (access !== "read_only" && access !== "read_write")
+        return `Failed to parse request: resources[${index}].access: ${JSON.stringify(access)} is not a valid value; expected one of read_only, read_write`;
+      const instructions = resource.instructions ?? null;
+      if (instructions !== null && typeof instructions !== "string")
+        return "instructions must be a string";
+      if (instructions !== null && [...instructions].length > 4096)
+        return `resources.${index}.memory_store.instructions: must be at most 4096 characters`;
+      if (stores.has(id))
+        return `resources contains duplicate memory_store_id: ${id}`;
+      stores.add(id);
+      if (stores.size > 8)
+        return "a session can attach at most 8 memory stores";
+      continue;
+    }
+    if (resource.type !== "file")
+      return `resource type ${JSON.stringify(resource.type)} is not supported`;
+  }
+  return null;
+}
+
+// deploymentparse.go parseDeploymentSchedule: a field that is not a string
+// fails the decode as a whole. Not modelled: the cron grammar, the IANA zone,
+// and an expression with no occurrence in the next year.
+function scheduleRefusal(schedule) {
+  if (schedule === undefined || schedule === null) return null;
+  const keys = ["type", "expression", "timezone"];
+  if (
+    typeof schedule !== "object" ||
+    Array.isArray(schedule) ||
+    keys.some(
+      (key) => schedule[key] != null && typeof schedule[key] !== "string",
+    )
+  )
+    return "schedule must be an object";
+  const unknown = leastUnknownKey(schedule, keys);
+  if (unknown !== undefined) return unknownField(unknown);
+  if (schedule.type == null) return "schedule.type is required";
+  if (schedule.type !== "cron")
+    return `schedule.type ${JSON.stringify(schedule.type)} is not supported; the only schedule type is "cron"`;
+  if (!schedule.expression) return "schedule.expression is required";
+  // An absent timezone in the reference's words (#540); a null or empty one
+  // in the platform's.
+  if (!schedule.timezone)
+    return "timezone" in schedule
+      ? "schedule.timezone is required"
+      : "schedule.timezone: Field required";
+  if ([...schedule.expression].length > 256)
+    return "schedule.expression cannot exceed 256 characters";
+  return null;
+}
+
+// sessions.go parseVaultIDs: absent or null is none, and every entry has to
+// carry the vault prefix (a null entry decodes as "").
+function vaultIdsRefusal(ids) {
+  if (ids === undefined || ids === null) return null;
+  if (
+    !Array.isArray(ids) ||
+    ids.some((id) => id !== null && typeof id !== "string")
+  )
+    return "vault_ids must be an array of vault ids";
+  const bad = ids.map((id) => id ?? "").find((id) => !id.startsWith("vlt_"));
+  return bad === undefined
+    ? null
+    : `vault_ids entry ${JSON.stringify(bad)} is not a vault id`;
+}
+
+// A deployment's resources[], in the mock's own words: not split by #190, and
+// it still looks files and stores up, which the platform does not until a
+// run. Judged where the platform parses resources (parseResourceInputs).
+function deploymentResourceRefusal(resources) {
+  if (resources === undefined || resources === null) return null;
+  if (!Array.isArray(resources)) return "resources must be an array";
+  for (const resource of resources) {
+    const valid =
+      (resource.type === "file" &&
+        filesStore.some((file) => file.id === resource.file_id)) ||
+      (resource.type === "memory_store" &&
+        memoryResources.some(
+          (memory) => memory.memory_store_id === resource.memory_store_id,
+        ) &&
+        [undefined, "read_only", "read_write"].includes(resource.access)) ||
+      (resource.type === "github_repository" &&
+        typeof resource.authorization_token === "string" &&
+        resource.authorization_token.length > 0 &&
+        /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
+          resource.url ?? "",
+        ));
+    if (!valid) return "invalid deployment resource";
+  }
+  return null;
+}
+
+// memsync.Slug: lowercased, every run of anything but an ASCII letter or
+// digit one hyphen, none at either end. A store whose name leaves nothing
+// mounts under the slug of its id (snapshotMemoryStore).
+const memorySlug = (name) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 
 function frame(res, name, payload) {
   res.write(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`);
@@ -695,10 +944,23 @@ function streamReply(state, text, threadId) {
   });
 }
 
-// domain.WellFormedID for a thread id (#841): sthr_, then ASCII letters and
-// digits other than I, O and l — how the platform tells a malformed id from an
-// absent one where the reference was recorded telling them apart.
-const WELL_FORMED_THREAD_ID = /^sthr_[0-9A-HJ-NP-Za-km-z]+$/;
+// domain.WellFormedID (#841): the prefix, then ASCII letters and digits other
+// than I, O and l — how the platform tells a malformed id from an absent one
+// on agent and thread paths, where the reference was recorded telling them
+// apart. No id the mock serves reads as malformed here: schemas.test.ts holds
+// every fixture id to this rule.
+const wellFormedId = (id, prefix) =>
+  typeof id === "string" &&
+  id.startsWith(`${prefix}_`) &&
+  /^[0-9A-HJ-NP-Za-km-z]+$/.test(id.slice(prefix.length + 1));
+
+// events.go: a management credential's user.tool_result is the reference's
+// 403, in its words, the index prefix included (internal/events inbound.go
+// ErrEnvironmentCredentialRequired, #662). The console never sends one.
+const toolResultRefusal = (index) =>
+  `events[${index}]: \`user.tool_result\` may only be sent with environment credentials ` +
+  "(the self-hosted runner's Session-Instance JWT); " +
+  "an API key or Console session cannot post this event type";
 
 function handleInbound(state, incoming) {
   const batchInterrupts = incoming.some(
@@ -709,9 +971,20 @@ function handleInbound(state, incoming) {
       .length > 1
   )
     return { error: "only one outcome is supported at a time" };
+  // internal/events inbound.go normalizeBatch: every event is read for its
+  // shape, in order, before any is routed against the session's threads.
   for (const [index, raw] of incoming.entries()) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw))
-      return { error: "event must be an object" };
+      return { error: `events[${index}]: event must be a JSON object` };
+    if (!("type" in raw))
+      return { error: `events[${index}]: type is required` };
+    if (typeof raw.type !== "string")
+      return { error: `events[${index}]: type must be a string` };
+    if (raw.type === "user.tool_result")
+      return { error: toolResultRefusal(index), status: 403 };
+    // Inbound types the platform takes and the mock does not model.
+    if (["user.custom_tool_result", "system.message"].includes(raw.type))
+      return { error: `unsupported inbound event type "${raw.type}"` };
     if (
       ![
         "user.message",
@@ -720,7 +993,11 @@ function handleInbound(state, incoming) {
         "user.define_outcome",
       ].includes(raw.type)
     )
-      return { error: `unsupported inbound event type "${raw.type}"` };
+      // Any other type, platform-emitted or unknown, in the reference's words
+      // (normalizeOne, #540).
+      return {
+        error: `Failed to parse request: events[${index}].type: ${JSON.stringify(raw.type)} is not a valid value`,
+      };
     if (
       raw.type === "user.message" &&
       Object.prototype.hasOwnProperty.call(raw, "session_thread_id")
@@ -788,25 +1065,29 @@ function handleInbound(state, incoming) {
       return {
         error: `events[${index}]: session_thread_id must be a string or null`,
       };
-    // An interrupt's claim names the one thread it ends: one that is no thread
-    // id at all is the reference's 400, one naming no thread of this session
-    // its 404 (route.go ThreadNotFoundError, #841). The session's own threads
-    // are matched before the shape is read, because the mock's sthr_deploy…
-    // and sthr_multiagent… carry an l the platform never mints; for every id it
-    // does mint, the order answers alike. A confirmation's claim decides
-    // nothing — it lands on its call's thread below.
-    if (raw.type === "user.interrupt" && typeof claim === "string") {
-      const thread = state.threads.find((candidate) => candidate.id === claim);
-      if (!thread)
-        return WELL_FORMED_THREAD_ID.test(claim)
-          ? { error: `Thread not found: ${claim}`, status: 404 }
-          : { error: `Invalid session_thread_id: ${claim}` };
-      // route.go RouteInbound: archived first, then terminated.
-      if (thread.archived_at)
-        return { error: `events[${index}]: thread ${claim} is archived` };
-      if (thread.status === "terminated")
-        return { error: `events[${index}]: thread ${claim} is terminated` };
-    }
+    // inbound.go threadClaim: an interrupt's claim that is no thread id at all
+    // is the reference's 400, read before any thread is looked up (#841). A
+    // confirmation's claim decides nothing — it lands on its call's thread
+    // below.
+    if (
+      raw.type === "user.interrupt" &&
+      typeof claim === "string" &&
+      !wellFormedId(claim, "sthr")
+    )
+      return { error: `Invalid session_thread_id: ${claim}` };
+  }
+  // route.go RouteInbound: a well-formed claim naming no thread of this
+  // session is the reference's 404 (ThreadNotFoundError, #841); one naming an
+  // archived thread, then a terminated one, is refused at its index.
+  for (const [index, raw] of incoming.entries()) {
+    const claim = raw.session_thread_id;
+    if (raw.type !== "user.interrupt" || typeof claim !== "string") continue;
+    const thread = state.threads.find((candidate) => candidate.id === claim);
+    if (!thread) return { error: `Thread not found: ${claim}`, status: 404 };
+    if (thread.archived_at)
+      return { error: `events[${index}]: thread ${claim} is archived` };
+    if (thread.status === "terminated")
+      return { error: `events[${index}]: thread ${claim} is terminated` };
   }
 
   const posted = [];
@@ -1141,7 +1422,8 @@ const parseCursor = (token) => {
 function keysetPage(rows, url, { bi = false } = {}) {
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 20), 1000);
   const start = parseCursor(url.searchParams.get("page"));
-  if (Number.isNaN(start)) return null;
+  // page.go: a cursor the list did not mint.
+  if (Number.isNaN(start)) return refuse(400, "invalid page cursor");
   const data = rows.slice(start, start + limit);
   const page = {
     data,
@@ -1154,6 +1436,15 @@ function keysetPage(rows, url, { bi = false } = {}) {
 
 // `== null`: an unarchived memory store omits the key (fixtures.mjs).
 const notArchived = (row) => row.archived_at == null;
+
+// What route() answers for a GET it refuses in the platform's words for that
+// resource, rather than the catch-all's.
+const REFUSED = Symbol("refused");
+const refuse = (status, message) => ({ [REFUSED]: { status, message } });
+// wire.go checkAgentPathID and threads.go threadIDs: a path id that is no id
+// of the resource at all is the reference's 400 (domain.WellFormedID, #841).
+const invalidAgentId = () => refuse(400, "Invalid agent ID.");
+const invalidThreadId = (id) => refuse(400, `Invalid thread ID: ${id}`);
 
 function route(req, url) {
   const path = url.pathname;
@@ -1177,9 +1468,26 @@ function route(req, url) {
   }
   const agentMatch = path.match(/^\/v1\/agents\/([^/]+)$/);
   if (agentMatch) {
+    if (!wellFormedId(agentMatch[1], "agent")) return invalidAgentId();
     const agent = agentsStore.find((a) => a.id === agentMatch[1]);
-    if (!agent) return null;
     const version = url.searchParams.get("version");
+    // agents.go getAgent: the version parameter is read before the lookup.
+    if (
+      version &&
+      (!/^[+]?\d+$/.test(version) ||
+        BigInt(version) < 1n ||
+        BigInt(version) > 9223372036854775807n)
+    )
+      return refuse(400, "version must be a positive integer");
+    // agents.go getAgent, and getAgentVersion for a version, which misses an
+    // absent agent and an absent version alike.
+    const missing = refuse(
+      404,
+      version
+        ? `agent ${agentMatch[1]} version ${BigInt(version)} not found`
+        : `agent ${agentMatch[1]} not found`,
+    );
+    if (!agent) return missing;
     if (!version) return agent;
     // agents.go:getAgentVersion combines versioned config with parent metadata/state.
     const snapshot = agentVersionsStore[agent.id]?.find(
@@ -1192,12 +1500,16 @@ function route(req, url) {
           created_at: agent.created_at,
           archived_at: agent.archived_at,
         }
-      : null;
+      : missing;
   }
   const versionsMatch = path.match(/^\/v1\/agents\/([^/]+)\/versions$/);
   if (versionsMatch) {
+    if (!wellFormedId(versionsMatch[1], "agent")) return invalidAgentId();
+    // agents.go listAgentVersions.
     const versions = agentVersionsStore[versionsMatch[1]];
-    return versions ? keysetPage(versions, url) : null;
+    return versions
+      ? keysetPage(versions, url)
+      : refuse(404, `agent ${versionsMatch[1]} not found`);
   }
 
   if (path === "/v1/environments") {
@@ -1210,7 +1522,11 @@ function route(req, url) {
   }
   const envMatch = path.match(/^\/v1\/environments\/([^/]+)$/);
   if (envMatch)
-    return environmentsStore.find((e) => e.id === envMatch[1]) ?? null;
+    return (
+      environmentsStore.find((e) => e.id === envMatch[1]) ??
+      // environments.go errEnvironmentNotFound (#540).
+      refuse(404, `Environment ${envMatch[1]} not found.`)
+    );
 
   if (path === "/v1/sessions") {
     let rows = [...store.values()].map((s) => s.session);
@@ -1247,7 +1563,12 @@ function route(req, url) {
     return keysetPage(rows, url, { bi: true });
   }
   const sessionMatch = path.match(/^\/v1\/sessions\/([^/]+)$/);
-  if (sessionMatch) return store.get(sessionMatch[1])?.session ?? null;
+  if (sessionMatch) {
+    // sessions.go getSession, the id normalized as normalizeSessionID does:
+    // the reference's words for this route (#540).
+    const id = sessionMatch[1].replace(/^session_/, "sesn_");
+    return store.get(id)?.session ?? refuse(404, `Session not found: ${id}`);
+  }
 
   if (path === "/v1/deployments") {
     let rows = includeArchived
@@ -1266,7 +1587,9 @@ function route(req, url) {
   const deploymentMatch = path.match(/^\/v1\/deployments\/([^/]+)$/);
   if (deploymentMatch)
     return (
-      deploymentsStore.find((row) => row.id === deploymentMatch[1]) ?? null
+      deploymentsStore.find((row) => row.id === deploymentMatch[1]) ??
+      // deployments.go getDeployment.
+      refuse(404, `deployment ${deploymentMatch[1]} not found`)
     );
 
   if (path === "/v1/deployment_runs") {
@@ -1286,7 +1609,8 @@ function route(req, url) {
   if (deploymentRunMatch)
     return (
       deploymentRunsStore.find((row) => row.id === deploymentRunMatch[1]) ??
-      null
+      // deploymentruns.go getDeploymentRun.
+      refuse(404, `deployment run ${deploymentRunMatch[1]} not found`)
     );
 
   if (path === "/v1/dreams") {
@@ -1308,7 +1632,11 @@ function route(req, url) {
   }
   const dreamMatch = path.match(/^\/v1\/dreams\/([^/]+)$/);
   if (dreamMatch)
-    return dreamsStore.find((row) => row.id === dreamMatch[1]) ?? null;
+    return (
+      dreamsStore.find((row) => row.id === dreamMatch[1]) ??
+      // dreams.go getDream.
+      refuse(404, `dream ${dreamMatch[1]} not found`)
+    );
 
   if (path === "/v1/memory_stores") {
     let rows = includeArchived
@@ -1329,12 +1657,15 @@ function route(req, url) {
   const memoryStoreMatch = path.match(/^\/v1\/memory_stores\/([^/]+)$/);
   if (memoryStoreMatch)
     return (
-      memoryStoresStore.find((row) => row.id === memoryStoreMatch[1]) ?? null
+      memoryStoresStore.find((row) => row.id === memoryStoreMatch[1]) ??
+      // memorystores.go getMemoryStore: the reference's words (#540).
+      refuse(404, `memory store not found: ${memoryStoreMatch[1]}`)
     );
   const memoriesMatch = path.match(/^\/v1\/memory_stores\/([^/]+)\/memories$/);
   if (memoriesMatch) {
+    // memories.go checkMemoryStore.
     if (!memoryStoresStore.some((row) => row.id === memoriesMatch[1]))
-      return null;
+      return refuse(404, `memory store ${memoriesMatch[1]} not found`);
     const prefix = url.searchParams.get("path_prefix") ?? "/";
     const depth = Number(url.searchParams.get("depth") ?? 0);
     const full = url.searchParams.get("view") === "full";
@@ -1375,7 +1706,12 @@ function route(req, url) {
       (row) =>
         row.memory_store_id === memoryMatch[1] && row.id === memoryMatch[2],
     );
-    if (!memory) return null;
+    // memories.go getMemory: the store is read only on a miss, so an absent
+    // store is named; the memory's 404 is the reference's words (#540).
+    if (!memory)
+      return memoryStoresStore.some((row) => row.id === memoryMatch[1])
+        ? refuse(404, `memory \`${memoryMatch[2]}\` not found`)
+        : refuse(404, `memory store ${memoryMatch[1]} not found`);
     return url.searchParams.get("view") === "basic"
       ? { ...memory, content: null }
       : memory;
@@ -1384,8 +1720,9 @@ function route(req, url) {
     /^\/v1\/memory_stores\/([^/]+)\/memory_versions$/,
   );
   if (memoryVersionsMatch) {
+    // memoryversions.go listMemoryVersions, by checkMemoryStore.
     if (!memoryStoresStore.some((row) => row.id === memoryVersionsMatch[1]))
-      return null;
+      return refuse(404, `memory store ${memoryVersionsMatch[1]} not found`);
     let rows = memoryVersionsStore.filter(
       (version) => version.memory_store_id === memoryVersionsMatch[1],
     );
@@ -1420,38 +1757,58 @@ function route(req, url) {
       (row) =>
         row.memory_store_id === versionMatch[1] && row.id === versionMatch[2],
     );
-    if (!version) return null;
+    // memoryversions.go getMemoryVersion: the store is not read apart.
+    if (!version)
+      return refuse(404, `memory version ${versionMatch[2]} not found`);
     return url.searchParams.get("view") === "basic"
       ? { ...version, content: null }
       : version;
   }
 
   const threadsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads$/);
+  // The session ids normalized as normalizeSessionID does; a missing session
+  // and a missing thread of it are each their own 404 (threads.go
+  // sessionExists and loadThread, events.go sessionView).
+  const sessionNotFound = (id) => refuse(404, `session ${id} not found`);
+  const threadOf = (sessionId, threadId) => {
+    const id = sessionId.replace(/^session_/, "sesn_");
+    const state = store.get(id);
+    if (!state) return { refused: sessionNotFound(id) };
+    const thread = state.threads.find((candidate) => candidate.id === threadId);
+    return thread
+      ? { state, thread }
+      : { refused: refuse(404, `thread ${threadId} not found`) };
+  };
   if (threadsMatch) {
-    const state = store.get(threadsMatch[1]);
-    return state ? keysetPage(state.threads, url) : null;
+    const id = threadsMatch[1].replace(/^session_/, "sesn_");
+    const state = store.get(id);
+    return state ? keysetPage(state.threads, url) : sessionNotFound(id);
   }
   const threadEventsMatch = path.match(
     /^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)\/events$/,
   );
   if (threadEventsMatch) {
-    const state = store.get(threadEventsMatch[1]);
-    const rows = state?.threadEvents[threadEventsMatch[2]];
-    return rows ? keysetPage(rows, url) : null;
+    if (!wellFormedId(threadEventsMatch[2], "sthr"))
+      return invalidThreadId(threadEventsMatch[2]);
+    const { state, thread, refused } = threadOf(
+      threadEventsMatch[1],
+      threadEventsMatch[2],
+    );
+    return refused ?? keysetPage(state.threadEvents[thread.id] ?? [], url);
   }
   const threadMatch = path.match(/^\/v1\/sessions\/([^/]+)\/threads\/([^/]+)$/);
   if (threadMatch) {
-    return (
-      store
-        .get(threadMatch[1])
-        ?.threads.find((thread) => thread.id === threadMatch[2]) ?? null
-    );
+    if (!wellFormedId(threadMatch[2], "sthr"))
+      return invalidThreadId(threadMatch[2]);
+    const { thread, refused } = threadOf(threadMatch[1], threadMatch[2]);
+    return refused ?? thread;
   }
 
   const eventsMatch = path.match(/^\/v1\/sessions\/([^/]+)\/events$/);
   if (eventsMatch) {
-    const state = store.get(eventsMatch[1]);
-    if (!state) return null;
+    const id = eventsMatch[1].replace(/^session_/, "sesn_");
+    const state = store.get(id);
+    if (!state) return sessionNotFound(id);
     let rows = state.events;
     if (url.searchParams.get("order") === "desc") rows = [...rows].reverse();
     const types = url.searchParams.getAll("types[]");
@@ -1468,11 +1825,17 @@ function route(req, url) {
   }
   const vaultMatch = path.match(/^\/v1\/vaults\/([^/]+)$/);
   if (vaultMatch)
-    return vaultsStore.find((v) => v.id === vaultMatch[1]) ?? null;
+    return (
+      vaultsStore.find((v) => v.id === vaultMatch[1]) ??
+      // vaults.go getVault.
+      refuse(404, `vault ${vaultMatch[1]} not found`)
+    );
   const credsMatch = path.match(/^\/v1\/vaults\/([^/]+)\/credentials$/);
   if (credsMatch) {
     const creds = vaultCredsStore[credsMatch[1]];
-    if (!creds) return null; // missing vault → 404, not an empty page
+    // vaultcredentials.go listVaultCredentials: a missing vault is its 404,
+    // not an empty page.
+    if (!creds) return refuse(404, `vault ${credsMatch[1]} not found`);
     return keysetPage(includeArchived ? creds : creds.filter(notArchived), url);
   }
   const credMatch = path.match(/^\/v1\/vaults\/([^/]+)\/credentials\/([^/]+)$/);
@@ -1480,7 +1843,10 @@ function route(req, url) {
     return (
       (vaultCredsStore[credMatch[1]] ?? []).find(
         (credential) => credential.id === credMatch[2],
-      ) ?? null
+      ) ??
+      // vaultcredentials.go errCredentialNotFound, a wrong vault included
+      // (#540).
+      refuse(404, "Credential not found.")
     );
 
   if (path === "/v1/skills") {
@@ -1489,14 +1855,21 @@ function route(req, url) {
     if (source) rows = rows.filter((s) => s.source.type === source);
     return keysetPage(rows, url);
   }
+  // skills.go errSkillNotFound: the reference's words (#540), on the skill's
+  // get and its versions list alike.
   const skillVersionsMatch = path.match(/^\/v1\/skills\/([^/]+)\/versions$/);
   if (skillVersionsMatch) {
     const versions = skillVersionsStore[skillVersionsMatch[1]];
-    return versions ? keysetPage(versions, url) : null;
+    return versions
+      ? keysetPage(versions, url)
+      : refuse(404, `Skill not found: ${skillVersionsMatch[1]}`);
   }
   const skillMatch = path.match(/^\/v1\/skills\/([^/]+)$/);
   if (skillMatch)
-    return skillsStore.find((s) => s.id === skillMatch[1]) ?? null;
+    return (
+      skillsStore.find((s) => s.id === skillMatch[1]) ??
+      refuse(404, `Skill not found: ${skillMatch[1]}`)
+    );
 
   if (path === "/v1/files") {
     // files.go:listFiles carries both dialects; the console uses the position
@@ -1530,7 +1903,12 @@ function route(req, url) {
     };
   }
   const fileMatch = path.match(/^\/v1\/files\/([^/]+)$/);
-  if (fileMatch) return filesStore.find((f) => f.id === fileMatch[1]) ?? null;
+  if (fileMatch)
+    return (
+      filesStore.find((f) => f.id === fileMatch[1]) ??
+      // files.go errFileNotFound: the reference's words (#540).
+      refuse(404, `File \`${fileMatch[1]}\` not found.`)
+    );
 
   return null;
 }
@@ -2035,15 +2413,31 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && (streamMatch || threadStreamMatch)) {
     const match = streamMatch ?? threadStreamMatch;
     const state = store.get(match[1]);
+    // threads.go threadIDs: the thread id's shape before any lookup, and before the
+    // preview's simulated outage, which stands in for a connection the
+    // platform would only open for a well-formed id.
+    if (threadStreamMatch && !wellFormedId(threadStreamMatch[2], "sthr")) {
+      res.setHeader("content-type", "application/json");
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          `Invalid thread ID: ${threadStreamMatch[2]}`,
+        ),
+      );
+      return;
+    }
     if (state?.streamOffline) {
       res.writeHead(503);
       res.end();
       return;
     }
+    // events.go sessionView and threads.go loadThread: the session's 404,
+    // then the thread's.
     if (!state) {
       res.setHeader("content-type", "application/json");
       res.writeHead(404);
-      res.end(envelope("not_found_error", "no such session"));
+      res.end(envelope("not_found_error", `session ${match[1]} not found`));
       return;
     }
     if (
@@ -2052,7 +2446,9 @@ const server = createServer(async (req, res) => {
     ) {
       res.setHeader("content-type", "application/json");
       res.writeHead(404);
-      res.end(envelope("not_found_error", "no such thread"));
+      res.end(
+        envelope("not_found_error", `thread ${threadStreamMatch[2]} not found`),
+      );
       return;
     }
     res.writeHead(200, {
@@ -2082,13 +2478,32 @@ const server = createServer(async (req, res) => {
   );
   if (req.method === "POST" && archiveThreadMatch) {
     res.setHeader("content-type", "application/json");
+    // threads.go threadIDs: the thread id's shape before any lookup.
+    if (!wellFormedId(archiveThreadMatch[2], "sthr")) {
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          `Invalid thread ID: ${archiveThreadMatch[2]}`,
+        ),
+      );
+      return;
+    }
     const state = store.get(archiveThreadMatch[1]);
     const thread = state?.threads.find(
       (candidate) => candidate.id === archiveThreadMatch[2],
     );
+    // threads.go lockSession, then loadThread.
     if (!thread) {
       res.writeHead(404);
-      res.end(envelope("not_found_error", "no such thread"));
+      res.end(
+        envelope(
+          "not_found_error",
+          state
+            ? `thread ${archiveThreadMatch[2]} not found`
+            : `session ${archiveThreadMatch[1]} not found`,
+        ),
+      );
       return;
     }
     if (thread.parent_thread_id === null || thread.status !== "idle") {
@@ -2163,16 +2578,50 @@ const server = createServer(async (req, res) => {
         notFound(idMatch[1]);
         return;
       }
-      // environments.go environmentStillReferenced: sessions holding the
-      // environment are the reference's 409 in its sentence, every session
-      // counted, archived ones included, with `x-should-retry: false` (#841).
-      // Forced, the same 409 in the platform's own words: force deletes no
-      // session there. Not modelled: a deployment holding it, which keeps the
-      // platform's own 400 naming the deployments, and the self-hosted queue
-      // refusal force lifts.
+      // environments.go deleteEnvironment refuses a self_hosted environment
+      // with undrained work in its queue (selfHostedQueueRefusal, the
+      // reference's 409, lifted by force). Not modelled: the mock keeps no
+      // work queue.
+      //
+      // environments.go environmentStillReferenced: any deployment holding the
+      // environment, archived ones included, is the platform's own 400, forced
+      // or not, naming up to five of them (archived first, then oldest) and
+      // counting the sessions beside them. Sessions alone are the reference's
+      // 409 in its sentence, every session counted, archived ones included,
+      // with `x-should-retry: false` (#841); forced, the same 409 in the
+      // platform's own words, since force deletes no session there.
       const sessions = [...store.values()].filter(
         (s) => s.session.environment_id === env.id,
       ).length;
+      const holding = deploymentsStore
+        .filter((d) => d.environment_id === env.id)
+        .sort(
+          (a, b) =>
+            (a.archived_at == null) - (b.archived_at == null) ||
+            Date.parse(a.created_at) - Date.parse(b.created_at) ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        );
+      if (holding.length > 0) {
+        const plural = (n, noun) => (n === 1 ? noun : `${noun}s`);
+        const named = holding.slice(0, 5).map((d) => d.id);
+        let list = named.join(", ");
+        if (holding.length > named.length)
+          list += ` and ${holding.length - named.length} more`;
+        let blockers = `${holding.length} ${plural(holding.length, "deployment")} (${list})`;
+        if (sessions > 0)
+          blockers += ` and ${sessions} ${plural(sessions, "session")}`;
+        const stuck = holding.filter((d) => d.archived_at).length;
+        res.writeHead(400);
+        res.end(
+          envelope(
+            "invalid_request_error",
+            stuck > 0
+              ? `environment ${env.id} is referenced by ${blockers}, ${stuck} of them archived and so unmovable; it can no longer be deleted${env.archived_at ? "" : " — archive it instead"}`
+              : `environment ${env.id} is referenced by ${blockers}; ${sessions > 0 ? "point each deployment at another environment and delete the sessions" : "point each at another environment"} and the delete will go through`,
+          ),
+        );
+        return;
+      }
       if (sessions > 0) {
         res.setHeader("x-should-retry", "false");
         res.writeHead(409);
@@ -2562,8 +3011,11 @@ const server = createServer(async (req, res) => {
         (candidate) => candidate.id === actionMatch[1],
       );
       if (!deployment) {
+        // deployments.go loadDeployment.
         res.writeHead(404);
-        res.end(envelope("not_found_error", "no such deployment"));
+        res.end(
+          envelope("not_found_error", `deployment ${actionMatch[1]} not found`),
+        );
         return;
       }
       const action = actionMatch[2];
@@ -2643,7 +3095,7 @@ const server = createServer(async (req, res) => {
         };
       });
       const session = {
-        id: `sesn_deploy${String(sessionCounter++).padStart(6, "0")}`,
+        id: `sesn_dep${String(sessionCounter++).padStart(6, "0")}`,
         type: "session",
         agent: mockSessionAgent(sourceAgent),
         environment_id: deployment.environment_id,
@@ -2669,7 +3121,7 @@ const server = createServer(async (req, res) => {
         archived_at: null,
       };
       const thread = {
-        id: `sthr_deploy${String(threadCounter++).padStart(6, "0")}`,
+        id: `sthr_dep${String(threadCounter++).padStart(6, "0")}`,
         type: "session_thread",
         session_id: session.id,
         parent_thread_id: null,
@@ -2711,23 +3163,22 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // deployments.go createDeployment and updateDeployment judge all the body
+    // says before their transaction (unknown keys, create's required fields,
+    // initial_events, create's vault_ids, resources, the bounds and the
+    // schedule), then the row an update names, then the environment, the
+    // vaults and the agent: a lookup never outranks a malformed body.
     const itemMatch = url.pathname.match(/^\/v1\/deployments\/([^/]+)$/);
-    const existing = itemMatch
-      ? deploymentsStore.find((candidate) => candidate.id === itemMatch[1])
-      : null;
-    if (itemMatch && !existing) {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", "no such deployment"));
-      return;
-    }
-    if (existing?.archived_at) {
-      res.writeHead(400);
+    const fail = (status, message) => {
+      res.writeHead(status);
       res.end(
-        envelope("invalid_request_error", "Cannot modify archived deployment"),
+        envelope(
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
+        ),
       );
-      return;
-    }
-    const allowed = new Set([
+    };
+    const unknownKey = leastUnknownKey(body, [
       "name",
       "description",
       "agent",
@@ -2738,126 +3189,99 @@ const server = createServer(async (req, res) => {
       "metadata",
       "schedule",
     ]);
-    const unknownKey = leastUnknownKey(body, allowed);
-    if (unknownKey !== undefined) {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", unknownField(unknownKey)));
-      return;
-    }
-    const required = ["name", "agent", "environment_id", "initial_events"];
-    if (!existing && required.some((key) => !(key in body))) {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", "missing required field"));
-      return;
-    }
-    if (
-      "initial_events" in body &&
-      (!Array.isArray(body.initial_events) || body.initial_events.length === 0)
-    ) {
-      res.writeHead(400);
-      res.end(
-        envelope("invalid_request_error", "initial_events must be non-empty"),
+    if (unknownKey !== undefined) return fail(400, unknownField(unknownKey));
+    const initialEvents = body.initial_events;
+    const parseRefusal =
+      // name, environment_id and agent, then an absent initial_events in the
+      // reference's words (#540).
+      (itemMatch
+        ? null
+        : (requiredStringRefusal(body, "name") ??
+          requiredStringRefusal(body, "environment_id") ??
+          (body.agent == null ? "agent is required" : null) ??
+          ("initial_events" in body
+            ? null
+            : "initial_events: Field required"))) ??
+      (initialEvents != null && !Array.isArray(initialEvents)
+        ? "initial_events must be an array of events"
+        : null) ??
+      (itemMatch ? null : vaultIdsRefusal(body.vault_ids)) ??
+      deploymentResourceRefusal(body.resources) ??
+      // validateDeploymentBounds' floor; an update's comes once it merges.
+      (!itemMatch && (initialEvents ?? []).length === 0
+        ? "initial_events must contain at least 1 event"
+        : null) ??
+      scheduleRefusal(body.schedule);
+    if (parseRefusal) return fail(400, parseRefusal);
+
+    const existing = itemMatch
+      ? deploymentsStore.find((candidate) => candidate.id === itemMatch[1])
+      : null;
+    // deployments.go loadDeployment.
+    if (itemMatch && !existing)
+      return fail(404, `deployment ${itemMatch[1]} not found`);
+    if (existing?.archived_at)
+      return fail(400, "Cannot modify archived deployment");
+    // An update reads only the fields it sets, and refuses to clear the ones
+    // that cannot be.
+    let environmentId = existing?.environment_id;
+    if (!existing || "environment_id" in body) {
+      if (body.environment_id === null)
+        return fail(400, "environment_id cannot be cleared");
+      environmentId = body.environment_id;
+      // deployments.go requireLiveEnvironment.
+      const environment = environmentsStore.find(
+        (candidate) => candidate.id === environmentId,
       );
-      return;
+      if (!environment)
+        return fail(404, `Environment ${environmentId} not found.`);
+      if (environment.archived_at)
+        return fail(400, `environment ${environmentId} is archived`);
     }
-    const currentAgent = body.agent ?? existing?.agent;
-    const agentId =
-      typeof currentAgent === "string" ? currentAgent : currentAgent?.id;
-    const requestedVersion =
-      typeof currentAgent === "object" ? currentAgent?.version : undefined;
-    const agent = requestedVersion
-      ? agentVersionsStore[agentId]?.find(
-          (candidate) => candidate.version === requestedVersion,
+    if (!existing || "vault_ids" in body) {
+      const refusal = existing ? vaultIdsRefusal(body.vault_ids) : null;
+      if (refusal) return fail(400, refusal);
+      // sessions.go validateAttachedVaults: both refusals are 400s.
+      for (const id of body.vault_ids ?? []) {
+        const vault = vaultsStore.find((candidate) => candidate.id === id);
+        if (!vault) return fail(400, `vault ${id} not found`);
+        if (vault.archived_at) return fail(400, `vault ${id} is archived`);
+      }
+    }
+    let agentRef = existing?.agent;
+    if (!existing || "agent" in body) {
+      if (body.agent === null) return fail(400, "agent cannot be cleared");
+      // deploymentparse.go resolveDeploymentAgent: the version's floor, then
+      // the agent's row and its archive state, then the pinned version.
+      const agentId =
+        typeof body.agent === "string" ? body.agent : body.agent?.id;
+      const version =
+        typeof body.agent === "object"
+          ? (body.agent.version ?? undefined)
+          : undefined;
+      if (version !== undefined && (!Number.isInteger(version) || version < 1))
+        return fail(400, "agent.version must be a positive integer");
+      const agent = agentsStore.find((candidate) => candidate.id === agentId);
+      if (!agent) return fail(404, `agent ${agentId} not found`);
+      if (agent.archived_at) return fail(400, `agent ${agentId} is archived`);
+      if (
+        version !== undefined &&
+        !agentVersionsStore[agentId]?.some(
+          (candidate) => candidate.version === version,
         )
-      : agentsStore.find((candidate) => candidate.id === agentId);
-    if (!agent || agent.archived_at) {
-      res.writeHead(agent ? 400 : 404);
-      res.end(
-        envelope(
-          agent ? "invalid_request_error" : "not_found_error",
-          agent ? "agent is archived" : "no such agent",
-        ),
-      );
-      return;
-    }
-    const environmentId = body.environment_id ?? existing?.environment_id;
-    const environment = environmentsStore.find(
-      (candidate) => candidate.id === environmentId,
-    );
-    if (!environment || environment.archived_at) {
-      res.writeHead(environment ? 400 : 404);
-      res.end(
-        envelope(
-          environment ? "invalid_request_error" : "not_found_error",
-          environment
-            ? "environment is archived"
-            : `Environment ${environmentId} not found.`,
-        ),
-      );
-      return;
-    }
-    const vaultIds = body.vault_ids ?? existing?.vault_ids ?? [];
-    if (!Array.isArray(vaultIds)) {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", "vault_ids must be an array"));
-      return;
-    }
-    if (
-      vaultIds.some(
-        (id) =>
-          !vaultsStore.some((vault) => vault.id === id && !vault.archived_at),
       )
-    ) {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", "no such live vault"));
-      return;
+        return fail(404, `agent ${agentId} version ${version} not found`);
+      agentRef = {
+        type: "agent",
+        id: agentId,
+        version: version ?? agent.version,
+      };
     }
-    if ("resources" in body && body.resources !== null) {
-      if (!Array.isArray(body.resources)) {
-        res.writeHead(400);
-        res.end(
-          envelope("invalid_request_error", "resources must be an array"),
-        );
-        return;
-      }
-      for (const resource of body.resources) {
-        const valid =
-          (resource.type === "file" &&
-            filesStore.some((file) => file.id === resource.file_id)) ||
-          (resource.type === "memory_store" &&
-            memoryResources.some(
-              (memory) => memory.memory_store_id === resource.memory_store_id,
-            ) &&
-            [undefined, "read_only", "read_write"].includes(resource.access)) ||
-          (resource.type === "github_repository" &&
-            typeof resource.authorization_token === "string" &&
-            resource.authorization_token.length > 0 &&
-            /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
-              resource.url ?? "",
-            ));
-        if (!valid) {
-          res.writeHead(400);
-          res.end(
-            envelope("invalid_request_error", "invalid deployment resource"),
-          );
-          return;
-        }
-      }
-    }
-    if (
-      body.schedule != null &&
-      (body.schedule.type !== "cron" ||
-        typeof body.schedule.expression !== "string" ||
-        typeof body.schedule.timezone !== "string")
-    ) {
-      res.writeHead(400);
-      res.end(
-        envelope(
-          "invalid_request_error",
-          'schedule requires type "cron", expression, and timezone',
-        ),
-      );
-      return;
+    if (existing && "initial_events" in body) {
+      if (initialEvents === null)
+        return fail(400, "initial_events cannot be cleared");
+      if (initialEvents.length === 0)
+        return fail(400, "initial_events must contain at least 1 event");
     }
     const timestamp = now();
     const cleanResources = (body.resources ?? existing?.resources ?? []).map(
@@ -2886,8 +3310,8 @@ const server = createServer(async (req, res) => {
     if (existing) {
       if ("name" in body) existing.name = body.name;
       if ("description" in body) existing.description = body.description;
-      existing.agent = { type: "agent", id: agent.id, version: agent.version };
-      existing.environment_id = environment.id;
+      existing.agent = agentRef;
+      existing.environment_id = environmentId;
       if ("vault_ids" in body) existing.vault_ids = body.vault_ids ?? [];
       if ("initial_events" in body)
         existing.initial_events = body.initial_events;
@@ -2910,8 +3334,8 @@ const server = createServer(async (req, res) => {
       type: "deployment",
       name: body.name,
       description: body.description ?? null,
-      agent: { type: "agent", id: agent.id, version: agent.version },
-      environment_id: environment.id,
+      agent: agentRef,
+      environment_id: environmentId,
       vault_ids: body.vault_ids ?? [],
       initial_events: body.initial_events,
       resources: cleanResources,
@@ -3140,63 +3564,72 @@ const server = createServer(async (req, res) => {
       res.end(envelope("invalid_request_error", unknownField(unknownKey)));
       return;
     }
-    const agentId =
-      typeof body.agent === "string" ? body.agent : body.agent?.id;
-    const agent = agentsStore.find((a) => a.id === agentId);
-    if (!agent) {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", "no such agent"));
+    // sessions.go createSession judges the body before it looks anything up:
+    // environment_id and agent present, then every resource's shape
+    // (parseSessionResourceInputs). Inside the create it then reads the
+    // environment, the agent, and last the stores and files
+    // (materializeResourceInputs). initial_events, which the mock does not
+    // model, stays an unknown key here.
+    const bodyRefusal =
+      requiredStringRefusal(body, "environment_id") ??
+      (body.agent == null ? "agent: value is required" : null) ??
+      sessionResourceRefusal(body.resources);
+    if (bodyRefusal) {
+      res.writeHead(400);
+      res.end(envelope("invalid_request_error", bodyRefusal));
       return;
     }
-    const env = environmentsStore.find((e) => e.id === body.environment_id);
-    if (!env || env.archived_at) {
-      res.writeHead(env ? 400 : 404);
+    const lookupRefusal = (status, message) => {
+      res.writeHead(status);
       res.end(
         envelope(
-          env ? "invalid_request_error" : "not_found_error",
-          env
-            ? "environment is archived"
-            : `Environment ${body.environment_id} not found.`,
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
         ),
       );
-      return;
+    };
+    // createSessionInTx, worded by requestWording where the reference was
+    // recorded (#540).
+    const env = environmentsStore.find((e) => e.id === body.environment_id);
+    if (!env)
+      return lookupRefusal(
+        404,
+        `Environment ${body.environment_id} not found.`,
+      );
+    if (env.archived_at)
+      return lookupRefusal(400, `environment ${env.id} is archived`);
+    // sessions.go resolveAgent: the union's shape, then the row. A pinned
+    // version and the overrides are not modelled: the session carries the
+    // agent's current spec.
+    if (typeof body.agent !== "string") {
+      if (typeof body.agent !== "object" || Array.isArray(body.agent))
+        return lookupRefusal(
+          400,
+          "agent must be an agent id string or an agent reference object",
+        );
+      if (body.agent.type == null)
+        return lookupRefusal(
+          400,
+          "Failed to parse request: agent.selector.type: Field required",
+        );
+      if (!["agent", "agent_with_overrides"].includes(body.agent.type))
+        return lookupRefusal(
+          400,
+          `Failed to parse request: agent.selector.type: ${JSON.stringify(body.agent.type)} is not a valid value`,
+        );
+      if (!body.agent.id) return lookupRefusal(400, "agent.id is required");
     }
+    const agentId = typeof body.agent === "string" ? body.agent : body.agent.id;
+    const agent = agentsStore.find((a) => a.id === agentId);
+    if (!agent) return lookupRefusal(404, `agent ${agentId} not found`);
+    if (agent.archived_at)
+      return lookupRefusal(
+        400,
+        `agent ${agentId} is archived and cannot be used to create a session`,
+      );
     const resources = [];
     for (const resource of body.resources ?? []) {
       if (resource.type === "github_repository") {
-        const checkout = resource.checkout ?? null;
-        const checkoutValid =
-          checkout === null ||
-          (checkout &&
-            !Array.isArray(checkout) &&
-            ((checkout.type === "branch" &&
-              typeof checkout.name === "string" &&
-              checkout.name.length > 0 &&
-              Object.keys(checkout).every((key) =>
-                ["type", "name"].includes(key),
-              )) ||
-              (checkout.type === "commit" &&
-                typeof checkout.sha === "string" &&
-                /^[0-9a-fA-F]{40}$/.test(checkout.sha) &&
-                Object.keys(checkout).every((key) =>
-                  ["type", "sha"].includes(key),
-                ))));
-        if (
-          !resource.authorization_token ||
-          !/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
-            resource.url ?? "",
-          ) ||
-          !checkoutValid
-        ) {
-          res.writeHead(400);
-          res.end(
-            envelope(
-              "invalid_request_error",
-              "repository URL and authorization token are required",
-            ),
-          );
-          return;
-        }
         resources.push({
           id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
           type: "github_repository",
@@ -3207,50 +3640,40 @@ const server = createServer(async (req, res) => {
               .split("/")
               .at(-1)
               .replace(/\.git$/, "")}`,
-          checkout,
+          checkout: resource.checkout ?? null,
           created_at: now(),
           updated_at: now(),
         });
         continue;
       }
       if (resource.type === "memory_store") {
-        const access = resource.access ?? "read_write";
-        const instructions = resource.instructions ?? null;
-        const memory = memoryResources.find(
-          (item) => item.memory_store_id === resource.memory_store_id,
+        // sessionresources.go snapshotMemoryStore, worded by sessions.go
+        // requestWording in the reference's sentences (#540, #841).
+        const item = memoryStoresStore.find(
+          (candidate) => candidate.id === resource.memory_store_id,
         );
-        if (
-          !memory ||
-          !["read_only", "read_write"].includes(access) ||
-          (instructions !== null &&
-            (typeof instructions !== "string" ||
-              [...instructions].length > 4096))
-        ) {
-          res.writeHead(400);
+        if (!item || item.archived_at) {
+          res.writeHead(item ? 400 : 404);
           res.end(
             envelope(
-              "session_resource_not_found_error",
-              "memory store not found",
+              item ? "invalid_request_error" : "not_found_error",
+              item
+                ? `Memory store ${item.id} is archived.`
+                : `Memory store \`${resource.memory_store_id}\` not found.`,
             ),
           );
           return;
         }
         resources.push({
-          ...memory,
-          access,
-          instructions,
+          type: "memory_store",
+          memory_store_id: item.id,
+          access: resource.access ?? "read_write",
+          instructions: resource.instructions ?? null,
+          description: item.description,
+          name: item.name,
+          mount_path: `/mnt/memory/${memorySlug(item.name) || memorySlug(item.id)}`,
         });
         continue;
-      }
-      if (resource.type !== "file") {
-        res.writeHead(400);
-        res.end(
-          envelope(
-            "invalid_request_error",
-            `'${resource.type}' resources are not supported yet`,
-          ),
-        );
-        return;
       }
       if (!filesStore.some((f) => f.id === resource.file_id)) {
         res.writeHead(404);
@@ -4401,6 +4824,12 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     const archiveMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)\/archive$/);
     if (archiveMatch) {
+      // wire.go checkAgentPathID, before the lookup (#841).
+      if (!wellFormedId(archiveMatch[1], "agent")) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "Invalid agent ID."));
+        return;
+      }
       const agent = agentsStore.find((a) => a.id === archiveMatch[1]);
       if (!agent) {
         res.writeHead(404);
@@ -4423,6 +4852,22 @@ const server = createServer(async (req, res) => {
     }
 
     const updateMatch = url.pathname.match(/^\/v1\/agents\/([^/]+)$/);
+    if (updateMatch && !wellFormedId(updateMatch[1], "agent")) {
+      // agents.go updateAgent: the body's unknown keys, then the path id's
+      // shape (checkAgentPathID, #841), then the lookup.
+      const unknown =
+        body && typeof body === "object" && !Array.isArray(body)
+          ? leastUnknownKey(body, AGENT_KEYS)
+          : undefined;
+      res.writeHead(400);
+      res.end(
+        envelope(
+          "invalid_request_error",
+          unknown === undefined ? "Invalid agent ID." : unknownField(unknown),
+        ),
+      );
+      return;
+    }
     if (url.pathname === "/v1/agents" || updateMatch) {
       const agent = updateMatch
         ? agentsStore.find((candidate) => candidate.id === updateMatch[1])
@@ -4468,35 +4913,55 @@ const server = createServer(async (req, res) => {
   // Inbound events — drives the mock state machine.
   const postMatch = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/events$/);
   if (req.method === "POST" && postMatch) {
-    const state = store.get(postMatch[1]);
     res.setHeader("content-type", "application/json");
-    if (!state) {
-      res.writeHead(404);
-      res.end(envelope("not_found_error", "no such session"));
-      return;
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(await readBody(req));
-    } catch {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", "invalid JSON body"));
-      return;
-    }
-    if (!Array.isArray(parsed?.events) || parsed.events.length === 0) {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", "events must be non-empty"));
-      return;
-    }
-    const outcome = handleInbound(state, parsed.events);
-    if (outcome.error) {
-      // events.go sendCheckError: an interrupt naming no thread of the session
-      // is the 404; every other refusal of the batch a 400.
-      const notFound = outcome.status === 404;
-      res.writeHead(notFound ? 404 : 400);
+    const refuse = (status, message) => {
+      res.writeHead(status);
       res.end(
         envelope(
-          notFound ? "not_found_error" : "invalid_request_error",
+          status === 404 ? "not_found_error" : "invalid_request_error",
+          message,
+        ),
+      );
+    };
+    // events.go sendSessionEvents reads the body before the session:
+    // decodeObject (an empty body or null reads as {}), the unknown keys,
+    // then wire.go rawList (null reads as []).
+    const raw = (await readBody(req)).toString("utf8");
+    let body;
+    try {
+      body = raw.trim() === "" ? {} : (JSON.parse(raw) ?? {});
+    } catch {
+      body = undefined;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      return refuse(400, "request body must be a JSON object");
+    const unknownKey = leastUnknownKey(body, ["events"]);
+    if (unknownKey !== undefined) return refuse(400, unknownField(unknownKey));
+    if (body.events !== null && !Array.isArray(body.events))
+      return refuse(400, "events must be an array");
+    // Then the session, its id normalized as normalizeSessionID does.
+    const id = postMatch[1].replace(/^session_/, "sesn_");
+    const state = store.get(id);
+    if (!state) return refuse(404, `session ${id} not found`);
+    if (state.session.archived_at)
+      return refuse(400, `session ${id} is archived and read-only`);
+    // internal/events normalizeBatch's floor, in the reference's words (#540).
+    if ((body.events ?? []).length === 0)
+      return refuse(400, "events: must contain at least 1 item");
+    const outcome = handleInbound(state, body.events);
+    if (outcome.error) {
+      // events.go: an interrupt naming no thread of the session is the 404 and
+      // a management credential's user.tool_result the 403; every other
+      // refusal of the batch a 400.
+      const status = outcome.status ?? 400;
+      res.writeHead(status);
+      res.end(
+        envelope(
+          status === 404
+            ? "not_found_error"
+            : status === 403
+              ? "permission_error"
+              : "invalid_request_error",
           outcome.error,
         ),
       );
@@ -4508,25 +4973,23 @@ const server = createServer(async (req, res) => {
   }
 
   res.setHeader("content-type", "application/json");
-  const requestedVersion = url.searchParams.get("version");
-  if (
-    req.method === "GET" &&
-    /^\/v1\/agents\/[^/]+$/.test(url.pathname) &&
-    requestedVersion &&
-    (!/^[+]?\d+$/.test(requestedVersion) ||
-      BigInt(requestedVersion) < 1n ||
-      BigInt(requestedVersion) > 9223372036854775807n)
-  ) {
-    res.writeHead(400);
+  const result = route(req, url);
+  if (result?.[REFUSED]) {
+    const { status, message } = result[REFUSED];
+    res.writeHead(status);
     res.end(
-      envelope("invalid_request_error", "version must be a positive integer"),
+      envelope(
+        status === 404 ? "not_found_error" : "invalid_request_error",
+        message,
+      ),
     );
     return;
   }
-  const result = route(req, url);
+  // Every resource route answers its own 404 above, so what is left is a
+  // path no route matches: server.go errUnknownPath, the reference's words.
   if (result === null) {
     res.writeHead(404);
-    res.end(envelope("not_found_error", `not found: ${url.pathname}`));
+    res.end(envelope("not_found_error", unknownPath(url.pathname)));
     return;
   }
   res.writeHead(200);

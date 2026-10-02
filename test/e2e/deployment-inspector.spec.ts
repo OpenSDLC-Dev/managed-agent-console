@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
-const DEPLOYMENT = "depl_weeklyresearch000001";
+const DEPLOYMENT = "depl_weekresearch00000001";
 const MOCK = "http://127.0.0.1:18080";
 test.beforeEach(async ({ request }) => {
   expect((await request.post(MOCK + "/__reset")).ok()).toBe(true);
@@ -93,7 +93,7 @@ test("opening and closing a Deployment on page two retains the server cursor", a
       data: {
         name: "Inspector paging " + index,
         agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
-        environment_id: "env_cloudlimited000000001",
+        environment_id: "env_egress000000000000001",
         initial_events: [{ type: "user.message", content: "Fixture only" }],
       },
     });

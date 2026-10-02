@@ -42,7 +42,7 @@ test("deployment list, detail, run error and create form pass axe", async ({
   ).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/deployments/depl_weeklyresearch000001");
+  await page.goto("/deployments/depl_weekresearch00000001");
   await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
   await expectNoViolations(page);
   await page.getByRole("button", { name: "Runs", exact: true }).click();
@@ -50,7 +50,7 @@ test("deployment list, detail, run error and create form pass axe", async ({
   await expectNoViolations(page);
 
   await page.goto(
-    "/deployments/depl_weeklyresearch000001/runs/drun_failed000000000001",
+    "/deployments/depl_weekresearch00000001/runs/drun_crashed00000000001",
   );
   await expect(page.getByTestId("deployment-run-error")).toBeVisible();
   await expectNoViolations(page);
@@ -91,7 +91,7 @@ test("dream list, detail, creation and cancellation dialog pass axe", async ({
   await expect(page.getByRole("heading", { name: "Dreams" })).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/dreams/drm_completedresearch000001");
+  await page.goto("/dreams/drm_endedresearch0000000001");
   await expect(page.getByTestId("dream-usage")).toBeVisible();
   await expectNoViolations(page);
 

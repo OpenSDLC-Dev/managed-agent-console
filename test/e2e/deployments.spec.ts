@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
-const DEPLOYMENT = "depl_weeklyresearch000001";
+const DEPLOYMENT = "depl_weekresearch00000001";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");

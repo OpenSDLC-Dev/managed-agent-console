@@ -98,7 +98,7 @@ test("deployment Agent filter submits the server predicate and lookup encodes pa
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page
     .getByRole("textbox", { name: "Find deployment by ID" })
-    .fill("depl_weeklyresearch000001");
+    .fill("depl_weekresearch00000001");
   await page.getByRole("button", { name: "Open", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Weekly research digest", exact: true }),

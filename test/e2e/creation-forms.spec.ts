@@ -173,7 +173,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
 test("timezone search can cancel, select by keyboard and preserve aliases on edit", async ({
   page,
 }) => {
-  await signIn(page, "/deployments/depl_weeklyresearch000001/edit");
+  await signIn(page, "/deployments/depl_weekresearch00000001/edit");
   const trigger = page.getByRole("combobox", {
     name: "IANA timezone",
     exact: true,
@@ -192,11 +192,11 @@ test("timezone search can cancel, select by keyboard and preserve aliases on edi
   const submitted = page.waitForRequest(
     (req) =>
       req.method() === "POST" &&
-      req.url().endsWith("/v1/deployments/depl_weeklyresearch000001"),
+      req.url().endsWith("/v1/deployments/depl_weekresearch00000001"),
   );
   await page.getByRole("button", { name: "Save changes" }).click();
   expect((await submitted).postDataJSON().schedule.timezone).toBe("US/Eastern");
-  await expect(page).toHaveURL(/deployments\/depl_weeklyresearch000001$/);
+  await expect(page).toHaveURL(/deployments\/depl_weekresearch00000001$/);
   await page.reload();
   await expect(trigger).toContainText("US/Eastern");
 });
@@ -204,7 +204,7 @@ test("timezone search can cancel, select by keyboard and preserve aliases on edi
 test("schedule clock supports AM/PM keyboard changes and preserves midnight on edit", async ({
   page,
 }) => {
-  await signIn(page, "/deployments/depl_weeklyresearch000001/edit");
+  await signIn(page, "/deployments/depl_weekresearch00000001/edit");
   await page.getByLabel("Frequency", { exact: true }).selectOption("Daily");
   const time = page.getByLabel("At", { exact: true });
   await time.fill("12:00");
@@ -220,7 +220,7 @@ test("schedule clock supports AM/PM keyboard changes and preserves midnight on e
   ).toBeChecked();
   await time.fill("13:00");
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page).toHaveURL(/\/deployments\/depl_weeklyresearch000001$/);
+  await expect(page).toHaveURL(/\/deployments\/depl_weekresearch00000001$/);
   expect(
     await time.evaluate((el: HTMLInputElement) => el.validity.patternMismatch),
   ).toBe(true);
@@ -230,7 +230,7 @@ test("schedule clock supports AM/PM keyboard changes and preserves midnight on e
   const submitted = page.waitForRequest(
     (req) =>
       req.method() === "POST" &&
-      req.url().endsWith("/v1/deployments/depl_weeklyresearch000001"),
+      req.url().endsWith("/v1/deployments/depl_weekresearch00000001"),
   );
   await page.getByRole("button", { name: "Save changes" }).click();
   expect((await submitted).postDataJSON().schedule.expression).toBe(

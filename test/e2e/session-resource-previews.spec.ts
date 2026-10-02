@@ -7,7 +7,7 @@ async function createSession(page: Page) {
   const response = await page.request.post("/api/platform/v1/sessions", {
     data: {
       agent: "agent_taskrunner0000000001",
-      environment_id: "env_cloudlimited000000001",
+      environment_id: "env_egress000000000000001",
       title: "Resource inspection",
       resources: [
         {
