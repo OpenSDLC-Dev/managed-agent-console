@@ -43,8 +43,9 @@ The previous inspection established the compact session detail pattern. On
 this slice does not claim a fresh populated-detail comparison. The console uses that
 existing detail-section pattern for resource rows and dialogs. Its lifecycle is
 forced by the platform: files can be added after creation and removed; repository
-and memory-store attachments are creation-time inputs; repositories remain for a
-session's lifetime and expose only write-only token rotation. The `session-resources`
+and memory-store attachments are creation-time inputs and remain for a session's
+lifetime ([memory stores](#memory-store-rows--checked-2026-10-03-193)); repositories
+expose only write-only token rotation. The `session-resources`
 fidelity surface records the mounted-file state until reference access is restored.
 
 ## Deployments — checked 2026-09-08
@@ -638,6 +639,15 @@ Platform #578 (`d339a1c9`) mints a session-scoped copy for every file mount and 
 - **Inferred (unrecorded):** each of those rows offers Delete, confirmed first. No recorded Resources row has a delete (frames 49, 50, 63), but `files.go:deleteFile` takes an output or a copy as it takes an upload, whatever the session's archive state, and before #578 the Files page offered Delete on outputs; without it they could only go with their Session. A mounted copy's row keeps Remove resource instead. The dialog stays open until the delete settles, the platform's refusal shown in it; one closed while the delete is out has the refusal toasted. An expired output shows `Expired` where Download was, its content being gone.
 - **Ours, no client-side refusal:** which rows offer Delete is how the current data reads them — listed, and no mount in the Session as read — not a check on confirm. `files.go:deleteFile` deletes a mounted copy with a 200 like any other row, so refusing one in the console would be validation stricter than the wire's (CLAUDE.md principle 4). Rejected: re-reading the Session on confirm and refusing a copy a mount had just named. The list and the Session poll apart, so a copy can list for a moment before the Session names its mount; Attach file reads the Session before the list to keep that window short, and a delete inside it is the platform's to answer.
 - **Divergence:** the Sessions-list inspector links a mounted file to the Session's Resources. The reference links it to Files with `?file=<copy>` (frame 47 DOM); ours has no file inspector there, and the copy is not in its list. The Files page drops its Scope column, since no scoped row reaches it.
+
+## Memory-store rows — checked 2026-10-03 ([#193](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/193))
+
+Read from recordings `2026-09-12-console-141` and `2026-09-02` batch2; no live reference pass.
+
+- **Recorded:** a memory-store row in the reference's Resources tab carries no action: its DOM holds the Expand/Collapse toggle and the Inspect button, its Size cell empty (frames 30–32, 61, 63–64), and its preview offers Copy, Find in transcript and Clear selection (frame 31). The Resource menu offers a memory store only "when the session is created" (frame 61).
+- **Recorded:** the reference answers `DELETE …/resources/memstore_…` with 404 `not_found_error` "Resource not found: memstore_…", and its next list still carries the element (batch2 `session.resources.delete.by-memory_store_id`, `list.after-delete-attempt`). The platform does the same: `sessionresources.go:checkResourceID` admits only the `sesrsc_` ids a memory element does not carry, before it reads the session.
+- **Ours:** a memory-store row offers no Remove, matching both. A file row keeps Remove resource and a repository row Rotate token alone (`session-resources.tsx`).
+- **Inferred (unrecorded):** no recorded Resources row has a remove at all, file rows included (frames 49, 50, 63). The file row's Remove stays ours, since `deleteSessionResourceTx` serves it and nothing else in the tab detaches a file.
 
 ## Session timeline and Thread details — checked 2026-09-12
 

@@ -894,24 +894,45 @@ it("attaches an existing file and refreshes the platform session", async () => {
   await waitFor(() => expect(lists()).toBe(2));
 });
 
-it("removes memory using its store id and offers no repository removal", async () => {
-  const { writes, session } = setup();
+it("offers Remove on a file resource alone: a memory store has no id to remove, a repository rotates its token", async () => {
+  const { writes, session } = setup(false, {
+    resources: [repository, memoryResources[0], fileResource],
+  });
+  // The memory store's row keeps its other controls, and no Remove: the
+  // platform answers its store id 404 (#193).
+  expect(
+    screen.getByRole("button", { name: "Expand /mnt/memory/project-notes" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", {
+      name: "Inspect resource /mnt/memory/project-notes",
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", {
+      name: `Remove resource ${memoryResources[0].memory_store_id}`,
+    }),
+  ).toBeNull();
   expect(
     screen.queryByRole("button", { name: "Remove resource sesrsc_repo" }),
   ).toBeNull();
+  expect(screen.getByRole("button", { name: "Rotate token" })).toBeEnabled();
+  expect(
+    screen.getAllByRole("button", { name: /^Remove resource / }),
+  ).toHaveLength(1);
+
   await userEvent.click(
-    screen.getByRole("button", {
-      name: `Remove resource ${memoryResources[0].memory_store_id}`,
-    }),
+    screen.getByRole("button", { name: `Remove resource ${fileResource.id}` }),
   );
   expect(writes()).toEqual([]);
   await userEvent.click(
     screen.getByRole("button", { name: "Remove resource" }),
   );
   await waitFor(() => expect(writes()).toHaveLength(1));
-  expect(writes()[0][0]).toBe(
-    `/api/platform/v1/sessions/${session.id}/resources/${memoryResources[0].memory_store_id}`,
-  );
+  expect(writes()[0]).toEqual([
+    `/api/platform/v1/sessions/${session.id}/resources/${fileResource.id}`,
+    expect.objectContaining({ method: "DELETE" }),
+  ]);
 });
 
 it("submits replacement tokens only in the write request and clears the input", async () => {

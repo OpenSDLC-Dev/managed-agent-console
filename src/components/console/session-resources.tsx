@@ -374,6 +374,12 @@ export function SessionResources({ session }: { session: Session }) {
                       </p>
                     )}
                 </div>
+                {/* A file alone is removable. The delete takes a sesrsc_ id
+                    (sessionresources.go checkResourceID), which a memory
+                    element does not carry: its store id is a 404, as the
+                    reference answers it, and no recorded memory-store row
+                    offers a remove (docs/design-reference.md). A repository
+                    stays for the session's lifetime. */}
                 {editable &&
                   (resource.type === "github_repository" ? (
                     <Button
@@ -387,7 +393,7 @@ export function SessionResources({ session }: { session: Session }) {
                     >
                       Rotate token
                     </Button>
-                  ) : (
+                  ) : resource.type === "file" ? (
                     <ConfirmIconButton
                       label={`Remove resource ${id}`}
                       title="Remove resource"
@@ -397,7 +403,7 @@ export function SessionResources({ session }: { session: Session }) {
                     >
                       <Trash2 className="size-3.5" />
                     </ConfirmIconButton>
-                  ))}
+                  ) : null)}
               </div>
               {resource.type === "memory_store" && expanded[id] && (
                 <div className="ml-3 min-w-0 border-l pl-2">

@@ -686,7 +686,7 @@ test("a deployment judges a repository as session create does, in the deployment
   ]);
 });
 
-test("a repository's token rotation judges the body, then the session, the resource and its type, in the platform's words", async ({
+test("a repository's token rotation judges the body, then the ids' shapes, the session, the resource and its type, in the platform's words", async ({
   page,
 }) => {
   await signIn(page);
@@ -741,6 +741,27 @@ test("a repository's token rotation judges the body, then the session, the resou
   expect(
     await rotate({ authorization_token: "x".repeat(8193) }, absent),
   ).toEqual([400, "authorization_token must be at most 8192 bytes"]);
+  // Then the ids' shapes, before the session is read: checkID's 404 for a
+  // malformed session id, then checkResourceID's for any id but a sesrsc_
+  // one, in the platform's envelope and words.
+  const shaped = async (target: string, resource: string) => {
+    const response = await page.request.post(
+      `/api/platform/v1/sessions/${target}/resources/${resource}`,
+      { data: token },
+    );
+    return [response.status(), (await response.json()).error];
+  };
+  expect(await shaped("undefined", "memstore_projectnotes000001")).toEqual([
+    404,
+    { type: "not_found_error", message: "session undefined not found" },
+  ]);
+  expect(await shaped(absent, "memstore_projectnotes000001")).toEqual([
+    404,
+    {
+      type: "not_found_error",
+      message: "Resource not found: memstore_projectnotes000001",
+    },
+  ]);
   // Then the session as the add reads it, the resource, and its type.
   expect(await rotate(token, absent)).toEqual([
     404,
@@ -780,6 +801,11 @@ test("a repository's token rotation judges the body, then the session, the resou
   expect(await rotate(token, archived, "sesrsc_absent0000000000001")).toEqual([
     400,
     `session ${archived} is archived`,
+  ]);
+  // A resource id's shape outranks the archive.
+  expect(await rotate(token, archived, "memstore_projectnotes000001")).toEqual([
+    404,
+    "Resource not found: memstore_projectnotes000001",
   ]);
 });
 
@@ -1068,7 +1094,7 @@ test("a deployment echoes a file's mount path as given, judged resolved, and its
   ]);
 });
 
-test("resources remove reads the session as the add does, then the resource, in the platform's words", async ({
+test("resources remove refuses any id but a sesrsc_ one first, then reads the session as the add does, then the resource, in the platform's words", async ({
   page,
 }) => {
   await signIn(page);
@@ -1080,6 +1106,52 @@ test("resources remove reads the session as the add does, then the resource, in 
     return [response.status(), body.error?.message ?? body.type];
   };
   const absent = "sesn_absent00000000000001";
+  // checkResourceID: a memory element carries no id, and its store id is the
+  // reference's 404, envelope and words, whatever the session (2026-09-02
+  // batch2 `session.resources.delete.by-memory_store_id`, #193). So is any
+  // other id but a sesrsc_ one, the mounted file's own included.
+  const store = "memstore_projectnotes000001";
+  const withStore = await freshSession(page, undefined, [
+    { type: "memory_store", memory_store_id: store },
+  ]);
+  const refused = await page.request.delete(
+    `/api/platform/v1/sessions/${withStore}/resources/${store}`,
+  );
+  expect(refused.status()).toBe(404);
+  expect((await refused.json()).error).toEqual({
+    type: "not_found_error",
+    message: `Resource not found: ${store}`,
+  });
+  // The element stays, as the recording's next read
+  // (`session.resources.list.after-delete-attempt`) has it.
+  const kept = (await (
+    await page.request.get(`/api/platform/v1/sessions/${withStore}`)
+  ).json()) as { resources: { type: string; memory_store_id?: string }[] };
+  expect(kept.resources).toEqual([
+    expect.objectContaining({ type: "memory_store", memory_store_id: store }),
+  ]);
+  expect(await remove(absent, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
+  ]);
+  // checkID comes first: a malformed session id is the session's 404. It
+  // reads the shape alone, so any known prefix passes it, an agent's too.
+  const malformed = await page.request.delete(
+    `/api/platform/v1/sessions/undefined/resources/${store}`,
+  );
+  expect(malformed.status()).toBe(404);
+  expect((await malformed.json()).error).toEqual({
+    type: "not_found_error",
+    message: "session undefined not found",
+  });
+  expect(await remove("agent_researcher00000000001", store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
+  ]);
+  expect(await remove(RESEARCH, "file_researchcopy0000001")).toEqual([
+    404,
+    "Resource not found: file_researchcopy0000001",
+  ]);
   expect(await remove(absent, "sesrsc_absent0000000000001")).toEqual([
     404,
     `session ${absent} not found`,
@@ -1126,6 +1198,10 @@ test("resources remove reads the session as the add does, then the resource, in 
     400,
     "session is owned by dream drm_pendingresearch0000001",
   ]);
+  expect(await remove(held, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
+  ]);
   const archived = await freshSession(page);
   expect(
     (
@@ -1137,6 +1213,10 @@ test("resources remove reads the session as the add does, then the resource, in 
   expect(await remove(archived, "sesrsc_absent0000000000001")).toEqual([
     400,
     `session ${archived} is archived`,
+  ]);
+  expect(await remove(archived, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
   ]);
 });
 

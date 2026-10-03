@@ -1630,6 +1630,56 @@ function handleInbound(state, incoming) {
   return { posted };
 }
 
+// domain.ID.Valid's prefixes (knownPrefixes), session_ and skillver_ among
+// them: every prefix a /v1 path id may carry, whatever resource it names.
+const KNOWN_ID_PREFIXES = new Set([
+  "agent",
+  "env",
+  "sesn",
+  "sevt",
+  "work",
+  "vlt",
+  "vcrd",
+  "sesrsc",
+  "depl",
+  "drun",
+  "file",
+  "skver",
+  "skill",
+  "outc",
+  "sthr",
+  "memstore",
+  "mem",
+  "memver",
+  "drm",
+  "session",
+  "skillver",
+]);
+
+// domain.ID.Valid: a known prefix, cut at the first underscore, then a
+// non-empty token. The token is read by wellFormedId's characters, not the
+// platform's minting alphabet, which the mock's own ids are not in
+// (`sesn_mock…`, `sesn_neverrun…`).
+const validId = (id) => {
+  const prefix = id.split("_")[0];
+  return KNOWN_ID_PREFIXES.has(prefix) && wellFormedId(id, prefix);
+};
+
+// sessionresources.go's {rid} routes, before the session is read: checkID on
+// the session id, normalized, then checkResourceID, which admits only a
+// sesrsc_ id. A memory element carries none, so its store id is the second
+// 404 whatever the session, as recorded (2026-09-02 batch2
+// `session.resources.delete.by-memory_store_id`, #193). Both 404s are the
+// routes' own words: checkID's, and errResourceNotFound's, the reference's
+// (#540). Answers a refusal and its status, or null.
+function resourcePathRefusal(sessionId, resourceId) {
+  const id = sessionId.replace(/^session_/, "sesn_");
+  if (!validId(id)) return { status: 404, refusal: `session ${id} not found` };
+  if (!resourceId.startsWith("sesrsc_") || !validId(resourceId))
+    return { status: 404, refusal: `Resource not found: ${resourceId}` };
+  return null;
+}
+
 // The session a resource route changes, as the add and the remove read it:
 // its id normalized (normalizeSessionID), its row (sessionResourceRows), then
 // refused if archived, or while a live dream holds it (runnerguard.go
@@ -5146,8 +5196,8 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // Resource mutations: sessionresources.go (add files, remove files/memory,
-  // rotate repository tokens). Tokens are deliberately never stored or echoed.
+  // Resource mutations: sessionresources.go (add files, remove files, rotate
+  // repository tokens). Tokens are deliberately never stored or echoed.
   const resourceMatch = url.pathname.match(
     /^\/v1\/sessions\/([^/]+)\/resources(?:\/([^/]+))?$/,
   );
@@ -5172,13 +5222,17 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "DELETE") {
-      // sessionresources.go deleteSessionResourceTx: the session as the add
-      // reads it, then the resource, in the reference's words (#540), and a
-      // repository refused. The platform finds a resource by its sesrsc_ id
-      // alone (checkResourceID), so a memory element, which carries none,
-      // answers 404 there; the mock still finds one by its store id.
+      // sessionresources.go deleteSessionResourceTx: the ids' shapes, then
+      // the session as the add reads it, the resource by its id
+      // (errResourceNotFound), and a repository refused.
       if (!resourceMatch[2]) {
         fail(405, "Method Not Allowed");
+        return;
+      }
+      const resourceId = resourceMatch[2];
+      const shape = resourcePathRefusal(resourceMatch[1], resourceId);
+      if (shape) {
+        fail(shape.status, shape.refusal);
         return;
       }
       const held = resourceSession(resourceMatch[1]);
@@ -5186,13 +5240,8 @@ const server = createServer(async (req, res) => {
         fail(held.status, held.refusal);
         return;
       }
-      const resourceId = resourceMatch[2];
       const { session } = held.state;
-      const resource = session.resources.find(
-        (item) =>
-          (item.type === "memory_store" ? item.memory_store_id : item.id) ===
-          resourceId,
-      );
+      const resource = session.resources.find((item) => item.id === resourceId);
       if (!resource) {
         fail(404, `Resource not found: ${resourceId}`);
         return;
@@ -5212,10 +5261,9 @@ const server = createServer(async (req, res) => {
       return;
     }
     // sessionresources.go rotateResourceTokenTx: the body judged first —
-    // decoded (decodeObject), its one key, the token — then the session as
-    // the add reads it, the resource by its id (a memory element carries
-    // none, so it answers 404, as checkResourceID has it there), and last its
-    // type.
+    // decoded (decodeObject), its one key, the token — then the ids' shapes,
+    // the session as the add reads it, the resource by its id
+    // (errResourceNotFound), and last its type.
     const decoded = decodeBodyObject(await readBody(req));
     if (decoded.refusal) return fail(400, decoded.refusal);
     const { body } = decoded;
@@ -5225,13 +5273,14 @@ const server = createServer(async (req, res) => {
     if (tokenRefusal) return fail(400, tokenRefusal);
     if (Buffer.byteLength(body.authorization_token) > 8192)
       return fail(400, "authorization_token must be at most 8192 bytes");
+    const resourceId = resourceMatch[2];
+    const shape = resourcePathRefusal(resourceMatch[1], resourceId);
+    if (shape) return fail(shape.status, shape.refusal);
     const held = resourceSession(resourceMatch[1]);
     if (held.refusal) return fail(held.status, held.refusal);
-    const resourceId = resourceMatch[2];
     const resource = held.state.session.resources.find(
       (item) => item.id === resourceId,
     );
-    // sessionresources.go errResourceNotFound: the reference's words (#540).
     if (!resource) return fail(404, `Resource not found: ${resourceId}`);
     if (resource.type !== "github_repository")
       return fail(
