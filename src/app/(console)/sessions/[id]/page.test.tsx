@@ -1158,6 +1158,30 @@ it("reads any address without the sesn_ prefix before the workspace, and moves t
   expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
 });
 
+it("mounts the workspace where it stands when an alias answers with an id that is not sesn_", async () => {
+  // Only a sesn_ id is moved to, so aliases answering each other cannot
+  // bounce the page between them.
+  setTrace("live");
+  window.history.replaceState(null, "", "/sessions/sess_a");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sess_a")
+      return json(session({ id: "sess_b" }));
+    if (url.pathname === "/api/platform/v1/sessions/sess_b")
+      return json(session({ id: "sess_a" }));
+    if (url.pathname.endsWith("/threads"))
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sess_a");
+
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
+  expect(router.replace).not.toHaveBeenCalled();
+  expect([...traceMock.sessionIds]).toEqual(["sess_b"]);
+});
+
 it("starts a canonical session's trace and threads beside its read, not after it", async () => {
   setTrace("connecting");
   const read = Promise.withResolvers<Response>();

@@ -267,14 +267,21 @@ export default function SessionDetailPage({
  * legacy `session_` address so), and the page then moves to the id the
  * session answers with, the query and hash kept, and mounts the workspace
  * only for that id: its trace, threads and writes key one id, and an alias
- * neither reads the event history nor opens a stream.
+ * neither reads the event history nor opens a stream. The page moves only to a
+ * `sesn_` id, which mounts the workspace at once, so two endpoints' aliases
+ * answering each other cannot bounce it; any other answer mounts the workspace
+ * on the answered id where it stands.
  */
 function CanonicalSession({ id }: { id: string }) {
   const session = useSession(id);
   const router = useRouter();
   const queryClient = useQueryClient();
   const canonicalId =
-    session.data && session.data.id !== id ? session.data.id : null;
+    session.data &&
+    session.data.id !== id &&
+    session.data.id.startsWith("sesn_")
+      ? session.data.id
+      : null;
   const movedTo = useRef<string | null>(null);
   useEffect(() => {
     if (!canonicalId || movedTo.current === canonicalId) return;
@@ -284,7 +291,8 @@ function CanonicalSession({ id }: { id: string }) {
       `/sessions/${encodeURIComponent(canonicalId)}${window.location.search}${window.location.hash}`,
     );
   }, [canonicalId, queryClient, router, session.data]);
-  if (session.data?.id === id) return <SessionWorkspace id={id} />;
+  if (session.data && !canonicalId)
+    return <SessionWorkspace id={session.data.id} />;
   if (session.error) return <ErrorState error={session.error} />;
   return <DetailSkeleton />;
 }
