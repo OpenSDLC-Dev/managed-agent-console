@@ -30,11 +30,32 @@ export function useAddSessionFile(sessionId: string) {
       platformPost<SessionResource>(`v1/sessions/${sessionId}/resources`, body),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["session", sessionId] });
-      // The mount mints the session's own copy (sessionresources.go mountFileCopy).
+      // The mount mints the session's own copy (sessionresources.go
+      // mountFileCopy); the rubric picker reads the same list.
       void client.invalidateQueries({
         queryKey: ["session-files", sessionId],
       });
-      void client.invalidateQueries({ queryKey: ["file-options", sessionId] });
+    },
+  });
+}
+
+/**
+ * Deletes one of the session's own files: an output, or a copy no resource
+ * mounts any more. files.go deleteFile takes either as it takes an upload; a
+ * copy's upload keeps its bytes. Only the session's list ever carried them.
+ */
+export function useDeleteSessionFile(sessionId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: (fileId: string) =>
+      platformDelete<{ id: string; type: string }>(
+        `v1/files/${encodeURIComponent(fileId)}`,
+      ),
+    onSuccess: () => {
+      void client.invalidateQueries({
+        queryKey: ["session-files", sessionId],
+      });
     },
   });
 }

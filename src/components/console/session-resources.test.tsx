@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -75,25 +76,27 @@ function setup(
     resources,
     archived_at: archived ? "2026-09-01T00:00:00Z" : null,
   } as unknown as Session;
+  // Mutable, so a test can change what the next poll answers.
+  const list = { files, status: filesStatus };
   const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(
     async (input) =>
       new Response(
         JSON.stringify(
           !input.startsWith("/api/platform/v1/files?")
             ? repository
-            : filesStatus === 200
-              ? { data: files, next_page: null }
+            : list.status === 200
+              ? { data: list.files, next_page: null }
               : {
                   type: "error",
                   error: {
-                    type: filesStatus === 404 ? "not_found_error" : "api_error",
+                    type: list.status === 404 ? "not_found_error" : "api_error",
                     message: "Gone.",
                   },
                 },
         ),
         {
           status: input.startsWith("/api/platform/v1/files?")
-            ? filesStatus
+            ? list.status
             : 200,
           headers: { "content-type": "application/json" },
         },
@@ -111,7 +114,11 @@ function setup(
   );
   // Writes only: the session's file list is read on mount.
   const writes = () => fetch.mock.calls.filter(([, init]) => init?.method);
-  return { fetch, writes, client, session };
+  const lists = () =>
+    fetch.mock.calls.filter(([url]) =>
+      url.startsWith("/api/platform/v1/files?scope_id="),
+    ).length;
+  return { fetch, writes, client, session, list, lists };
 }
 
 const panel = () => screen.getByTestId("session-resources");
@@ -180,7 +187,7 @@ it("lists the session's own files: a mount's size from its copy, then outputs an
   expect(screen.queryByText("reports/summary.csv")).toBeNull();
 });
 
-it("keeps an archived session's files listed, still downloadable, without mutation controls", async () => {
+it("keeps an archived session's files listed, still downloadable and deletable, without resource controls", async () => {
   setup(true, { resources: [fileResource], files: [copy, output] });
   await waitFor(() =>
     expect(panel()).toHaveAttribute("data-session-file-count", "2"),
@@ -188,7 +195,14 @@ it("keeps an archived session's files listed, still downloadable, without mutati
   expect(
     screen.getByRole("link", { name: "Download reports/summary.csv" }),
   ).toBeInTheDocument();
+  // files.go deleteFile does not ask about the session's archive.
+  expect(
+    screen.getByRole("button", { name: "Delete reports/summary.csv" }),
+  ).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /^Remove resource / }),
+  ).toBeNull();
 });
 
 it.each([
@@ -210,13 +224,118 @@ it.each([
         name: `Inspect resource ${fileResource.mount_path}`,
       }),
     ).toBeEnabled();
-    expect(screen.queryByText("88 B")).toBeNull();
+    expect(panel().querySelector("[data-size-bytes]")).toBeNull();
+  },
+);
+
+it("hides the last listed files once a later poll answers 404", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  const { list, lists } = setup(false, {
+    resources: [fileResource],
+    files: [copy, output],
+  });
+  await waitFor(() =>
+    expect(panel()).toHaveAttribute("data-session-file-count", "2"),
+  );
+  expect(panel().querySelectorAll("[data-size-bytes]")).toHaveLength(2);
+
+  list.status = 404;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+  await waitFor(() =>
+    expect(panel()).toHaveAttribute("data-session-files", "unavailable"),
+  );
+  // The cache still holds the last list; none of it shows.
+  expect(panel()).toHaveAttribute("data-session-file-count", "0");
+  expect(panel().querySelector("[data-session-file-id]")).toBeNull();
+  expect(panel().querySelector("[data-size-bytes]")).toBeNull();
+  expect(screen.getByText(fileResource.mount_path)).toBeInTheDocument();
+  // Nor is it polled any more.
+  const polled = lists();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(45_000);
+  });
+  expect(lists()).toBe(polled);
+});
+
+it("counts the session's own files as rows: no empty state beside an output", async () => {
+  setup(false, { resources: [], files: [output] });
+  await waitFor(() =>
+    expect(panel()).toHaveAttribute("data-session-file-count", "1"),
+  );
+  expect(
+    panel().querySelector('[data-session-file-id="file_output"]'),
+  ).not.toBeNull();
+  expect(screen.queryByText("No resources attached.")).toBeNull();
+  expect(screen.queryByText("No matching resources.")).toBeNull();
+
+  // A filter that leaves no row says so, though no resource is attached.
+  fireEvent.change(screen.getByLabelText("Filter resources"), {
+    target: { value: "nothing-matches" },
+  });
+  expect(panel().querySelector("[data-session-file-id]")).toBeNull();
+  expect(screen.getByText("No matching resources.")).toBeInTheDocument();
+  expect(screen.queryByText("No resources attached.")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Filter resources"), {
+    target: { value: "summary" },
+  });
+  expect(screen.queryByText("No matching resources.")).toBeNull();
+});
+
+it("says no resources are attached only when the session has no files either", async () => {
+  setup(false, { resources: [], files: [] });
+  await waitFor(() =>
+    expect(panel()).toHaveAttribute("data-session-files", "ready"),
+  );
+  expect(screen.getByText("No resources attached.")).toBeInTheDocument();
+});
+
+it.each([
+  ["an output", output, "Permanently delete this output."],
+  ["an unmounted copy", leftover, "The upload it was copied from is kept."],
+])(
+  "deletes %s after confirming, then reads the session's list again",
+  async (_, file, warning) => {
+    const { writes, lists } = setup(false, {
+      resources: [fileResource],
+      files: [copy, file],
+    });
+    await waitFor(() =>
+      expect(panel()).toHaveAttribute("data-session-file-count", "2"),
+    );
+    const row = panel().querySelector(
+      `[data-session-file-id="${file.id}"]`,
+    ) as HTMLElement;
+    await userEvent.click(
+      within(row).getByRole("button", { name: `Delete ${file.filename}` }),
+    );
+    // Nothing is sent before the confirmation.
+    expect(writes()).toEqual([]);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(warning);
+    const before = lists();
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Delete file" }),
+    );
+    await waitFor(() => expect(writes()).toHaveLength(1));
+    expect(writes()[0]).toEqual([
+      `/api/platform/v1/files/${file.id}`,
+      { method: "DELETE" },
+    ]);
+    await waitFor(() => expect(lists()).toBe(before + 1));
+    // A mounted copy is the resource's row: removed as a resource, not here.
+    expect(
+      screen.queryByRole("button", { name: `Delete ${copy.filename}` }),
+    ).toBeNull();
   },
 );
 
 it("attaches an existing file and refreshes the platform session", async () => {
-  const { fetch, writes, client, session } = setup();
-  client.setQueryData(["file-options", session.id], { uploads: [] });
+  const { writes, client, session, lists } = setup();
   await userEvent.click(screen.getByRole("button", { name: "Attach file" }));
   fireEvent.change(screen.getByLabelText("File ID"), {
     target: { value: "file_1" },
@@ -245,16 +364,7 @@ it("attaches an existing file and refreshes the platform session", async () => {
     true,
   );
   // The mount minted the session's own copy, so its file list is read again.
-  await waitFor(() =>
-    expect(
-      fetch.mock.calls.filter(([url]) =>
-        url.startsWith("/api/platform/v1/files?scope_id="),
-      ),
-    ).toHaveLength(2),
-  );
-  expect(
-    client.getQueryState(["file-options", session.id])?.isInvalidated,
-  ).toBe(true);
+  await waitFor(() => expect(lists()).toBe(2));
 });
 
 it("removes memory using its store id and offers no repository removal", async () => {

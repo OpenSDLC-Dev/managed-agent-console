@@ -238,4 +238,156 @@ describe("SessionOutcomes", () => {
       screen.getByText("Choose a suggestion by filename or paste a file ID."),
     ).toHaveAttribute("data-file-options-state", "ready");
   });
+
+  describe("rubric file suggestions", () => {
+    const file = (id: string, over = {}) => ({
+      id,
+      type: "file",
+      filename: `${id}.md`,
+      mime_type: "text/markdown",
+      size_bytes: 42,
+      downloadable: false,
+      expires_at: null,
+      created_at: "2026-09-09T08:00:00Z",
+      ...over,
+    });
+    const scope = { id: "sesn_1", type: "session" };
+    const failure = (status: number) =>
+      new Response(
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: status === 404 ? "not_found_error" : "api_error",
+            message: "down",
+          },
+        }),
+        { status, headers: { "content-type": "application/json" } },
+      );
+    async function openPicker(
+      uploads: Response | object,
+      scoped: Response | object,
+    ) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string) => {
+          const answer = input.includes("scope_id=") ? scoped : uploads;
+          return answer instanceof Response ? answer : json(answer);
+        }),
+      );
+      const user = userEvent.setup();
+      renderOutcomes();
+      await user.click(screen.getByRole("button", { name: "Define outcome" }));
+      await user.click(screen.getByLabelText("Rubric type"));
+      await user.click(await screen.findByRole("option", { name: "File" }));
+      const hint = () =>
+        document.querySelector("[data-file-options-state]") as HTMLElement;
+      await waitFor(() =>
+        expect(hint()).not.toHaveAttribute(
+          "data-file-options-state",
+          "loading",
+        ),
+      );
+      return hint();
+    }
+    const options = () =>
+      [
+        ...document.querySelectorAll("datalist#outcome-rubric-files option"),
+      ].map((option) => [
+        option.getAttribute("value"),
+        option.getAttribute("data-file-origin"),
+      ]);
+
+    it("offers a file both lists carry once, as the session's own", async () => {
+      // A platform before #578 lists the session's outputs unfiltered too.
+      const output = file("file_output", { scope, downloadable: true });
+      const hint = await openPicker(
+        { data: [file("file_upload"), output] },
+        { data: [output] },
+      );
+      expect(hint).toHaveAttribute("data-file-options-state", "ready");
+      expect(options()).toEqual([
+        ["file_upload", "upload"],
+        ["file_output", "session file"],
+      ]);
+    });
+
+    it("keeps the uploads when the session's own files fail, and says which list failed", async () => {
+      const hint = await openPicker(
+        { data: [file("file_upload")] },
+        failure(500),
+      );
+      expect(hint).toHaveAttribute("data-file-options-state", "ready");
+      expect(options()).toEqual([["file_upload", "upload"]]);
+      expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
+        "data-file-list",
+        "session",
+      );
+      expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
+        "data-file-list-state",
+        "error",
+      );
+    });
+
+    it("leaves out a list that is not served, as an absent surface", async () => {
+      const hint = await openPicker(
+        { data: [file("file_upload")] },
+        failure(404),
+      );
+      expect(options()).toEqual([["file_upload", "upload"]]);
+      expect(hint.querySelector("[data-file-list]")).toBeNull();
+    });
+
+    it("keeps the session's own files when the uploads fail", async () => {
+      const hint = await openPicker(failure(500), {
+        data: [file("file_copy", { scope })],
+      });
+      expect(options()).toEqual([["file_copy", "session file"]]);
+      expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
+        "data-file-list",
+        "uploads",
+      );
+    });
+
+    it("falls back to raw ID entry when neither list loads", async () => {
+      const hint = await openPicker(failure(500), failure(500));
+      expect(hint).toHaveAttribute("data-file-options-state", "error");
+      expect(options()).toEqual([]);
+    });
+
+    it("names the list that was cut, at the count it returned", async () => {
+      const hint = await openPicker(
+        {
+          data: [file("file_a"), file("file_b")],
+          next_page: "more-uploads",
+        },
+        { data: [file("file_copy", { scope })], next_page: null },
+      );
+      expect(hint).toHaveAttribute("data-file-options-state", "truncated");
+      const cut = hint.querySelectorAll("[data-file-list]");
+      expect(cut).toHaveLength(1);
+      expect(cut[0]).toHaveAttribute("data-file-list", "uploads");
+      expect(cut[0]).toHaveAttribute("data-file-list-state", "truncated");
+      expect(cut[0]).toHaveAttribute("data-file-list-count", "2");
+      // The one assertion on the sentence.
+      expect(hint).toHaveTextContent(
+        "Showing the first 2 uploads. Choose a suggestion by filename or paste a file ID.",
+      );
+    });
+
+    it("says when the session's own files were cut", async () => {
+      const hint = await openPicker(
+        { data: [file("file_a")], next_page: null },
+        { data: [file("file_copy", { scope })], next_page: "more" },
+      );
+      expect(hint).toHaveAttribute("data-file-options-state", "truncated");
+      expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
+        "data-file-list",
+        "session",
+      );
+      expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
+        "data-file-list-count",
+        "1",
+      );
+    });
+  });
 });

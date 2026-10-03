@@ -967,7 +967,8 @@ export const SURFACES: Surface[] = [
   {
     id: "files-list",
     route: "/files",
-    fixture: "2 files",
+    // The session's output and mount copy list under its scope_id only (#578).
+    fixture: "1 upload",
     description: "Resource list with byte sizes and an upload action.",
   },
 

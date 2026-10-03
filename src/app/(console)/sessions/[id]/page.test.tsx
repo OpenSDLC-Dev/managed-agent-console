@@ -1025,3 +1025,34 @@ it("shows pinned tool permissions and links calls from the loaded trace", async 
     "agent.tool_use",
   );
 });
+
+it("lists a legacy-addressed session's own files under its canonical id", async () => {
+  // sessions.go normalizeSessionID: `session_` addresses the `sesn_` row, but
+  // the files it owns are scoped to the id the session answers with.
+  setTrace("live");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/session_1")
+      return json(session({ id: "sesn_1" }));
+    if (url.pathname === "/api/platform/v1/sessions/session_1/threads")
+      return json({ data: [], next_page: null });
+    if (url.pathname === "/api/platform/v1/files")
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  renderPage("session_1");
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Define outcome" }),
+  );
+  await userEvent.click(screen.getByLabelText("Rubric type"));
+  await userEvent.click(await screen.findByRole("option", { name: "File" }));
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls
+        .map(([input]) => new URL(String(input), "http://console.test"))
+        .filter((url) => url.searchParams.has("scope_id"))
+        .map((url) => url.searchParams.get("scope_id")),
+    ).toEqual(["sesn_1"]),
+  );
+});

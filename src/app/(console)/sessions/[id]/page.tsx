@@ -672,7 +672,7 @@ function SessionWorkspace({ id }: { id: string }) {
                 <SessionOverview session={data} status={status} />{" "}
                 {!selectedThreadId && outcomesSupported && (
                   <SessionOutcomes
-                    sessionId={id}
+                    sessionId={data.id}
                     outcomes={outcomeEvaluations}
                     disabled={!!data.archived_at || trace.deleted}
                   />

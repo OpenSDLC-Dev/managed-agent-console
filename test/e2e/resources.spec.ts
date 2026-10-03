@@ -209,7 +209,7 @@ test("files list renders uploads, and no session's own files", async ({
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),
   ).toHaveCount(1);
-  await expect(page.getByRole("cell", { name: "47.1 KB" })).toBeVisible();
+  await expect(page.locator('[data-size-bytes="48213"]')).toBeVisible();
   // The research session's output and its mount's copy list only under its
   // scope_id (platform #578), so neither row is here, nor a Scope column.
   const row = (id: string) =>

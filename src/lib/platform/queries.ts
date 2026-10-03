@@ -628,39 +628,46 @@ function listSessionFiles(sessionId: string) {
  * A session's own files: the copy each file mount minted (`downloadable`
  * false) and the outputs harvested from its sandbox (`downloadable` true) —
  * the only signal that tells them apart. They outlive an archive and go with
- * a delete. Polled like the session, so outputs appear as they are harvested,
- * until the list answers that it is not served: the platform lists an unknown
- * scope as empty, so a 404 here means the collection route is absent.
+ * a delete. Polled like the session from load until archive, as the reference
+ * polls it (console-141 ui-network idx 36–303), so outputs appear as they are
+ * harvested: an archived session's list is read once, and `useArchiveSession`
+ * reads it once more as the archive lands. Polling also stops once the list
+ * answers that it is not served: the platform lists an unknown scope as
+ * empty, so a 404 here means the collection route is absent.
  */
-export function useSessionFiles(sessionId: string) {
+export function useSessionFiles(
+  sessionId: string,
+  archived: boolean,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["session-files", sessionId],
     queryFn: () => listSessionFiles(sessionId),
+    enabled,
     refetchInterval: (query) =>
-      isUnimplemented(query.state.error) ? false : 15_000,
+      archived || isUnimplemented(query.state.error) ? false : 15_000,
   });
 }
 
 /**
- * Rubric suggestions: the first 1,000 uploads and the first 1,000 of this
- * session's own files, which a rubric may name too. Callers keep raw ID input.
+ * Rubric suggestions: the first 1,000 uploads, and this session's own files
+ * from the list its Resources tab reads (`useSessionFiles`), which a rubric
+ * may name too. Two queries, so either list failing keeps the other's
+ * suggestions. Callers keep raw ID input.
  */
-export function useFileOptions(sessionId: string, enabled = true) {
-  return useQuery({
-    queryKey: ["file-options", sessionId],
+export function useFileOptions(
+  sessionId: string,
+  archived: boolean,
+  enabled = true,
+) {
+  const uploads = useQuery({
+    queryKey: ["file-options"],
     enabled,
-    queryFn: async () => {
-      const [uploads, own] = await Promise.all([
-        platformGet<Page<PlatformFile>>("v1/files", { limit: FILE_LIST_LIMIT }),
-        listSessionFiles(sessionId),
-      ]);
-      return {
-        uploads: uploads.data,
-        sessionFiles: own.data,
-        truncated: !!uploads.next_page || !!own.next_page,
-      };
-    },
+    queryFn: () =>
+      platformGet<Page<PlatformFile>>("v1/files", { limit: FILE_LIST_LIMIT }),
   });
+  const sessionFiles = useSessionFiles(sessionId, archived, enabled);
+  return { uploads, sessionFiles };
 }
 
 export interface AgentWriteBody {
@@ -833,6 +840,9 @@ export function useArchiveSession(id: string) {
     onSuccess: (session) => {
       client.setQueryData(["session", id], session);
       void client.invalidateQueries({ queryKey: ["sessions"] });
+      // The archived session's files stop polling (useSessionFiles), so they
+      // are read once more as the archive lands.
+      void client.invalidateQueries({ queryKey: ["session-files", id] });
     },
   });
 }
@@ -848,7 +858,6 @@ export function useDeleteSession(id: string) {
       // internal/api/sessions.go:deleteSession also removes the session's own
       // files, which only its scoped list ever carried.
       client.removeQueries({ queryKey: ["session-files", id] });
-      client.removeQueries({ queryKey: ["file-options", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
     },
   });

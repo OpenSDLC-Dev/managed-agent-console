@@ -30,7 +30,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   session-scoped row, so the session's Resources tab lists them from `GET /v1/files?scope_id=`, as
   the reference console does. A mounted file shows its copy's size, and harvested outputs follow it.
   Only an output offers Download, since `downloadable` is the one signal that tells the two apart.
-  The rubric picker also suggests the session's own files, labelled apart from uploads. The Files
+  An output, or a copy no resource mounts any more, can be deleted there, as outputs could from the
+  Files page before. The rubric picker also suggests the session's own files, labelled apart from uploads. The Files
   page drops its Scope column. In the Sessions inspector, a mounted file now opens the session's
   Resources. Deploy this console with platform #578 or later: before it, outputs list on the Files
   page too and a mounted file shows no size.

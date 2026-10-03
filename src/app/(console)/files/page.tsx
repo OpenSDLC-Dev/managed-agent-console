@@ -41,7 +41,13 @@ const COLUMNS: Column<PlatformFile>[] = [
       </span>
     ),
   },
-  { key: "size", header: "Size", cell: (f) => formatBytes(f.size_bytes) },
+  {
+    key: "size",
+    header: "Size",
+    cell: (f) => (
+      <span data-size-bytes={f.size_bytes}>{formatBytes(f.size_bytes)}</span>
+    ),
+  },
   // No Scope column: this unfiltered list never carries a session-scoped row
   // (files.go listFiles, platform #578, as on the reference). A session's
   // copies and outputs are listed in its Resources (useSessionFiles).

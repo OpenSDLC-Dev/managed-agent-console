@@ -21,6 +21,7 @@ import { useSessionFiles, useUploadFile } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import {
   useAddSessionFile,
+  useDeleteSessionFile,
   useRemoveSessionResource,
   useRotateRepositoryToken,
 } from "@/lib/platform/session-resources";
@@ -40,7 +41,7 @@ export function SessionResources({ session }: { session: Session }) {
   // resources (console-141 frames 49 and 63): a mounted file's row is its
   // copy, the size coming from this list. Rows no resource names — harvested
   // outputs, and copies whose resource was removed — follow the resources.
-  const files = useSessionFiles(session.id);
+  const files = useSessionFiles(session.id, !!session.archived_at);
   // A deployment that does not serve the list hides it, as any surface does.
   const filesState = files.isPending
     ? "loading"
@@ -49,10 +50,14 @@ export function SessionResources({ session }: { session: Session }) {
       : isUnimplemented(files.error)
         ? "unavailable"
         : "error";
-  const sessionFiles = files.data?.data ?? [];
+  // A 404 after a successful poll leaves the last list in the cache; an
+  // absent surface shows none of it.
+  const sessionFiles =
+    filesState === "unavailable" ? [] : (files.data?.data ?? []);
   const fileById = new Map(sessionFiles.map((file) => [file.id, file]));
   const add = useAddSessionFile(session.id);
   const remove = useRemoveSessionResource(session.id);
+  const removeFile = useDeleteSessionFile(session.id);
   const rotate = useRotateRepositoryToken(session.id);
   const upload = useUploadFile();
   const [dialog, setDialog] = useState<"file" | string | null>(null);
@@ -106,6 +111,9 @@ export function SessionResources({ session }: { session: Session }) {
   const visibleFiles = unmountedFiles.filter((file) =>
     matches(file.id, file.filename),
   );
+  // The session's own files are rows of this tab too.
+  const rowCount = session.resources.length + unmountedFiles.length;
+  const visibleRowCount = visibleResources.length + visibleFiles.length;
   const editable = !session.archived_at;
   const close = () => {
     setDialog(null);
@@ -129,18 +137,16 @@ export function SessionResources({ session }: { session: Session }) {
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
         />
-        {session.resources.length === 0 && (
+        {rowCount === 0 && (
           <p className="text-sm text-muted-foreground">
             No resources attached.
           </p>
         )}
-        {session.resources.length > 0 &&
-          visibleResources.length === 0 &&
-          visibleFiles.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No matching resources.
-            </p>
-          )}
+        {rowCount > 0 && visibleRowCount === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No matching resources.
+          </p>
+        )}
         {visibleResources.map((resource) => {
           const id =
             resource.type === "memory_store"
@@ -261,16 +267,33 @@ export function SessionResources({ session }: { session: Session }) {
                 <FileSize file={file} />
               </p>
             </div>
-            {file.downloadable && (
-              <a
-                className="text-xs underline"
-                href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
-                download={file.filename}
-                aria-label={`Download ${file.filename}`}
+            <div className="flex shrink-0 items-center gap-1">
+              {file.downloadable && (
+                <a
+                  className="text-xs underline"
+                  href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
+                  download={file.filename}
+                  aria-label={`Download ${file.filename}`}
+                >
+                  Download
+                </a>
+              )}
+              {/* files.go deleteFile takes an output or a copy as it takes an
+                  upload, archived session or not, as the Files page did. */}
+              <ConfirmIconButton
+                label={`Delete ${file.filename}`}
+                title="Delete file"
+                description={
+                  file.downloadable
+                    ? "Permanently delete this output. Its content cannot be recovered."
+                    : "Permanently delete the session's copy of this file. The upload it was copied from is kept."
+                }
+                pending={removeFile.isPending}
+                onConfirm={() => removeFile.mutate(file.id)}
               >
-                Download
-              </a>
-            )}
+                <Trash2 className="size-3.5" />
+              </ConfirmIconButton>
+            </div>
           </div>
         ))}
         {filesState === "error" && (
