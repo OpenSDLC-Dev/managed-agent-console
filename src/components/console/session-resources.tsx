@@ -13,23 +13,26 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { DetailSection } from "./detail";
 import { ConfirmIconButton } from "./archive-button";
 import { MemoryTree } from "./memory-tree";
 import { SessionResourcePreview } from "./session-resource-preview";
 import {
   useDeleteFile,
-  useRereadSession,
+  useReadSession,
   useSessionFiles,
   useUploadFile,
 } from "@/lib/platform/queries";
+import { hasExpired } from "@/lib/platform/expiry";
+import type { Page } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import {
-  fileExpired,
   useAddSessionFile,
   useRemoveSessionResource,
   useRotateRepositoryToken,
 } from "@/lib/platform/session-resources";
+import { toastPlatformError } from "@/lib/platform/toast-error";
 import { useNow } from "@/lib/session-trace/use-now";
 import type { PlatformFile, Session } from "@/lib/platform/types";
 
@@ -40,6 +43,26 @@ function FileSize({ file }: { file: PlatformFile }) {
       {file.size_bytes.toLocaleString()} B
     </span>
   );
+}
+
+/**
+ * Why a session file's delete did not go: the session mounts the copy now,
+ * or the read that checks it, or the delete itself, failed.
+ */
+type DeleteRefusal =
+  | { kind: "mounted"; mountPath: string }
+  | { kind: "read" | "delete"; error: unknown };
+
+function refusalMessage(refusal: DeleteRefusal) {
+  if (refusal.kind === "mounted")
+    return `The session now mounts this copy at ${refusal.mountPath}. Remove that resource instead.`;
+  const message =
+    refusal.error instanceof Error
+      ? refusal.error.message
+      : String(refusal.error);
+  return refusal.kind === "read"
+    ? `The session could not be read to check that it no longer mounts this copy. ${message}`
+    : message;
 }
 
 export function SessionResources({ session }: { session: Session }) {
@@ -63,8 +86,12 @@ export function SessionResources({ session }: { session: Session }) {
   const fileById = new Map(sessionFiles.map((file) => [file.id, file]));
   const add = useAddSessionFile(session.id);
   const remove = useRemoveSessionResource(session.id);
-  const removeFile = useDeleteFile(session.id);
-  const rereadSession = useRereadSession(session.id);
+  const removeFile = useDeleteFile({
+    sessionId: session.id,
+    errorToast: false,
+  });
+  const readSession = useReadSession(session.id);
+  const queryClient = useQueryClient();
   const now = useNow();
   const rotate = useRotateRepositoryToken(session.id);
   const upload = useUploadFile();
@@ -119,73 +146,142 @@ export function SessionResources({ session }: { session: Session }) {
   const visibleFiles = unmountedFiles.filter((file) =>
     matches(file.id, file.filename),
   );
-  // The session's own files are rows of this tab too, so neither empty state
-  // is claimed before their list has answered.
+  // The session's own files are rows of this tab too, so it is not called
+  // empty before their list has answered, nor while it has failed. A filter
+  // that leaves none of the rows it has matches nothing whatever the list's
+  // own note says, once the list has answered.
   const rowCount = session.resources.length + unmountedFiles.length;
   const visibleRowCount = visibleResources.length + visibleFiles.length;
   const listState =
     visibleRowCount > 0
       ? "rows"
-      : filesState === "loading" || filesState === "error"
-        ? filesState
-        : rowCount === 0
-          ? "empty"
-          : "no-match";
-  // A copy the list carries and the session does not mount may be a mount
-  // added since the session was read (Attach file here, or another client),
-  // whose copy lists before the session names it. It offers Delete only once
-  // a read of the session begun after it was listed (cancelling any already
-  // out) leaves it unmounted — for good, since a copy is never mounted again
-  // (mountFileCopy mints a fresh one per mount). A read that fails leaves it
-  // without Delete until the next copy appears, rather than reading again in
-  // a loop.
-  const [leftovers, setLeftovers] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const unconfirmed = unmountedFiles
-    .filter((file) => !file.downloadable && !leftovers.has(file.id))
-    .map((file) => file.id)
-    .join(" ");
-  useEffect(() => {
-    if (!unconfirmed) return;
-    let current = true;
-    void rereadSession().then((read) => {
-      if (!current || !read.isSuccess) return;
-      const mountedNow = new Set(
-        read.data.resources.flatMap((resource) =>
-          resource.type === "file" ? [resource.file_id] : [],
-        ),
-      );
-      const confirmed = unconfirmed
-        .split(" ")
-        .filter((id) => !mountedNow.has(id));
-      if (confirmed.length > 0)
-        setLeftovers((known) => new Set([...known, ...confirmed]));
-    });
-    return () => {
-      current = false;
-    };
-  }, [unconfirmed, rereadSession]);
-  // A deleted row takes its Delete, where the dialog would return focus,
-  // with it: focus moves to the row that took its place, else the one before
-  // it, else the filter, as clearSelection falls back to it. Set before the
-  // delete is sent, cleared if it is refused.
+      : filesState === "loading"
+        ? "loading"
+        : rowCount > 0
+          ? "no-match"
+          : filesState === "error"
+            ? "error"
+            : "empty";
+  const filesNote =
+    filesState === "loading"
+      ? "Loading the session's files…"
+      : filesState === "error"
+        ? `The session's files could not be listed. ${files.error?.message}`
+        : null;
+
+  // One delete dialog for the session's own files, outside their rows: a row
+  // can leave the list while its dialog is open, and the dialog outlives it to
+  // say why. Every row the list carries and no resource mounts offers it —
+  // an output, or a copy whose resource was removed.
   const panel = useRef<HTMLDivElement>(null);
-  const focusAfterDelete = useRef<{ gone: string; next?: string } | null>(null);
-  useEffect(() => {
-    const handoff = focusAfterDelete.current;
-    if (!handoff || sessionFiles.some((file) => file.id === handoff.gone))
-      return;
-    focusAfterDelete.current = null;
-    const row = [
+  const [deleting, setDeleting] = useState<{
+    file: PlatformFile;
+    near: string[];
+  } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
+  // Read when a delete settles, after renders that may have closed the
+  // dialog or left the tab: an answer nobody is shown is toasted instead.
+  const deleteShown = useRef(false);
+  useEffect(
+    () => () => {
+      deleteShown.current = false;
+    },
+    [],
+  );
+  const deleteTrigger = useRef<HTMLElement | null>(null);
+  const deleteGone = useRef(false);
+  const rowOf = (id: string) =>
+    [
       ...(panel.current?.querySelectorAll<HTMLElement>(
         "[data-session-file-id]",
       ) ?? []),
-    ].find((element) => element.dataset.sessionFileId === handoff.next);
-    (
-      row?.querySelector<HTMLElement>("a, button") ?? filterInput.current
-    )?.focus();
-  });
+    ].find((row) => row.dataset.sessionFileId === id);
+  // Where focus goes from a row that has gone: the row that took its place,
+  // else the one before it, else the filter, as clearSelection falls back to.
+  const neighbour = (near: string[]) =>
+    near
+      .map((id) => rowOf(id)?.querySelector<HTMLElement>("a, button"))
+      .find(Boolean) ?? filterInput.current;
+  const openDelete = (
+    file: PlatformFile,
+    near: string[],
+    trigger: HTMLElement,
+  ) => {
+    deleteTrigger.current = trigger;
+    deleteGone.current = false;
+    deleteShown.current = true;
+    setRefusal(null);
+    setDeleting({ file, near });
+    setDeleteOpen(true);
+  };
+  const closeDelete = () => {
+    deleteShown.current = false;
+    setDeleteOpen(false);
+  };
+  // A copy the list carries and the session does not mount may be a mount
+  // added since the session was read (Attach file here, or another client),
+  // whose copy lists before the session names it. So a copy's delete reads
+  // the session again first — outside the page's query, so a failed read is
+  // this dialog's to show — and is refused if the session mounts it now. One
+  // read settles it: a copy is never mounted again once unmounted
+  // (mountFileCopy mints a fresh one per mount).
+  const attemptDelete = async (
+    file: PlatformFile,
+  ): Promise<DeleteRefusal | null> => {
+    if (!file.downloadable) {
+      let read: Session;
+      try {
+        read = await readSession();
+      } catch (error) {
+        return { kind: "read", error };
+      }
+      const mount = read.resources.find(
+        (resource) => resource.type === "file" && resource.file_id === file.id,
+      );
+      if (mount) return { kind: "mounted", mountPath: mount.mount_path };
+    }
+    try {
+      await removeFile.mutateAsync(file.id);
+      return null;
+    } catch (error) {
+      return { kind: "delete", error };
+    }
+  };
+  const confirmDelete = async () => {
+    if (!deleting || deleteBusy) return;
+    const { file, near } = deleting;
+    setDeleteBusy(true);
+    setRefusal(null);
+    const refused = await attemptDelete(file);
+    setDeleteBusy(false);
+    if (refused) {
+      if (deleteShown.current) setRefusal(refused);
+      else
+        toastPlatformError(
+          refused.kind === "delete"
+            ? refused.error
+            : new Error(refusalMessage(refused)),
+          "Delete failed",
+        );
+      return;
+    }
+    // The list was read again before the delete settled, and its rows are
+    // rendered after this runs. A row it no longer carries takes its Delete
+    // with it, so focus moves to a neighbour: when the dialog closes, or at
+    // once from the row, its dialog closed while the delete was out. A row
+    // the list still carries leaves focus where it is, then and later.
+    deleteGone.current = !queryClient
+      .getQueryData<Page<PlatformFile>>(["session-files", session.id])
+      ?.data.some((row) => row.id === file.id);
+    if (deleteShown.current) closeDelete();
+    else if (
+      deleteGone.current &&
+      rowOf(file.id)?.contains(document.activeElement)
+    )
+      neighbour(near)?.focus();
+  };
   const editable = !session.archived_at;
   const close = () => {
     setDialog(null);
@@ -327,11 +423,12 @@ export function SessionResources({ session }: { session: Session }) {
           );
         })}
         {visibleFiles.map((file, index) => {
-          const expired = fileExpired(file, now);
+          const expired = hasExpired(file.expires_at, now);
           // The id tells apart two rows of one name, as outputs can be.
           const named = `${file.filename} (${file.id})`;
-          const next =
-            visibleFiles[index + 1]?.id ?? visibleFiles[index - 1]?.id;
+          const near = [index + 1, index - 1].flatMap(
+            (at) => visibleFiles[at]?.id ?? [],
+          );
           return (
             <div
               key={file.id}
@@ -367,41 +464,34 @@ export function SessionResources({ session }: { session: Session }) {
                     </a>
                   ))}
                 {/* files.go deleteFile takes an output or a copy as it takes
-                    an upload, archived session or not, as the Files page did. */}
-                {(file.downloadable || leftovers.has(file.id)) && (
-                  <ConfirmIconButton
-                    label={`Delete ${named}`}
-                    title="Delete file"
-                    description={
-                      <span
-                        data-delete-kind={file.downloadable ? "output" : "copy"}
-                      >
-                        {file.downloadable
-                          ? "Permanently delete this output. Its content cannot be recovered."
-                          : "Permanently delete the session's copy of this file. The upload it was copied from is kept."}
-                      </span>
-                    }
-                    pending={removeFile.isPending}
-                    onConfirm={() => {
-                      focusAfterDelete.current = { gone: file.id, next };
-                      return removeFile.mutateAsync(file.id).catch((cause) => {
-                        focusAfterDelete.current = null;
-                        throw cause;
-                      });
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </ConfirmIconButton>
-                )}
+                    an upload, archived session or not, as the Files page did.
+                    Focusable while a delete is out, so focus returned to it
+                    is not dropped. */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-muted-foreground data-disabled:opacity-50"
+                  aria-label={`Delete ${named}`}
+                  disabled={deleteBusy}
+                  focusableWhenDisabled
+                  onClick={(event) =>
+                    openDelete(file, near, event.currentTarget)
+                  }
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
               </div>
             </div>
           );
         })}
-        {filesState === "error" && (
-          <p className="text-xs text-muted-foreground">
-            The session&apos;s files could not be listed. {files.error?.message}
-          </p>
-        )}
+        {/* The list's progress, announced where its rows appear. */}
+        <p
+          role="status"
+          className={filesNote ? "text-xs text-muted-foreground" : "sr-only"}
+          data-session-files-note={filesNote ? filesState : undefined}
+        >
+          {filesNote}
+        </p>
         {editable && (
           <Button
             variant="outline"
@@ -425,6 +515,62 @@ export function SessionResources({ session }: { session: Session }) {
           onClose={clearSelection}
         />
       )}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          // Closable while the delete is out: its answer is then toasted.
+          if (!open) closeDelete();
+        }}
+      >
+        <DialogContent
+          finalFocus={() =>
+            !deleteGone.current && deleteTrigger.current?.isConnected
+              ? deleteTrigger.current
+              : neighbour(deleting?.near ?? [])
+          }
+        >
+          <DialogHeader>
+            <DialogTitle>Delete file</DialogTitle>
+            <DialogDescription>
+              <span
+                data-delete-kind={
+                  deleting?.file.downloadable ? "output" : "copy"
+                }
+              >
+                {deleting?.file.downloadable
+                  ? "Permanently delete this output. Its content cannot be recovered."
+                  : "Permanently delete the session's copy of this file. The upload it was copied from is kept."}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          {refusal && (
+            <p
+              role="alert"
+              className="text-sm text-destructive"
+              data-delete-refusal={refusal.kind}
+            >
+              {refusalMessage(refusal)}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeDelete}>
+              Cancel
+            </Button>
+            {/* Focusable while busy, so a click's focus stays in the dialog
+                for the refusal or a retry. */}
+            <Button
+              variant="destructive"
+              className="data-disabled:opacity-50"
+              disabled={deleteBusy}
+              focusableWhenDisabled
+              aria-busy={deleteBusy || undefined}
+              onClick={() => void confirmDelete()}
+            >
+              Delete file
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {

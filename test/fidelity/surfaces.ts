@@ -1494,6 +1494,22 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   },
+  {
+    id: "session-file-delete",
+    route: `/sessions/${SESSION}?inspector=resources`,
+    fixture: `${SESSION}: its harvested output`,
+    description:
+      "Confirming a session file's delete: the dialog names what the delete takes.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page
+        .getByRole("button", {
+          name: "Delete summary.xlsx (file_output000000000001)",
+        })
+        .click();
+      await page.getByRole("dialog", { name: "Delete file" }).waitFor();
+    },
+  },
 
   // ---- create / edit forms ---------------------------------------------
   {

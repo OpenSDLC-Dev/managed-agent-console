@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useCallback } from "react";
 import {
   useMutation,
   useInfiniteQuery,
@@ -203,17 +204,19 @@ export function useSession(id: string, refetchInterval?: number) {
 }
 
 /**
- * Reads the page's session again on demand, from a view inside the page: the
- * read begins at the call, cancelling any already out, and resolves with what
- * it read. The observer neither fetches on mount nor polls — the page's
- * `useSession` does both (SessionResources).
+ * Reads the page's session again on demand, outside the page's query, so a
+ * read that fails is the caller's to answer and never the page's error state.
+ * A read that answers lands in the cache the page renders from, replacing any
+ * read already out (SessionResources, before a copy's delete).
  */
-export function useRereadSession(id: string) {
-  return useQuery({
-    queryKey: ["session", id],
-    queryFn: () => readSession(id),
-    enabled: false,
-  }).refetch;
+export function useReadSession(id: string) {
+  const queryClient = useQueryClient();
+  return useCallback(async () => {
+    const session = await readSession(id);
+    await queryClient.cancelQueries({ queryKey: ["session", id] });
+    queryClient.setQueryData(["session", id], session);
+    return session;
+  }, [id, queryClient]);
 }
 
 /** events.go:listEvents supports a bounded descending page, independently of SSE. */
@@ -1615,13 +1618,16 @@ export function useDeleteSkill(skillId: string) {
  * an output, or a copy no resource mounts any more. files.go deleteFile takes
  * either as it takes an upload, and a copy's upload keeps its bytes. The lists
  * are read again before the mutation settles, so a caller's pending state
- * covers the refetch. A session's Resources answer a refusal in their confirm
- * dialog, so there it raises no toast.
+ * covers the refetch. `errorToast: false` is for a caller that answers a
+ * refusal itself (a session's Resources, in their confirm dialog).
  */
-export function useDeleteFile(sessionId?: string) {
+export function useDeleteFile({
+  sessionId,
+  errorToast = true,
+}: { sessionId?: string; errorToast?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: sessionId ? { errorToast: false } : { errorTitle: "Delete failed" },
+    meta: errorToast ? { errorTitle: "Delete failed" } : { errorToast: false },
     mutationFn: (fileId: string) =>
       platformDelete<{ id: string; type: string }>(
         `v1/files/${encodeURIComponent(fileId)}`,

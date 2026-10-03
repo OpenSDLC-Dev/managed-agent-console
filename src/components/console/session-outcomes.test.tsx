@@ -332,7 +332,7 @@ describe("SessionOutcomes", () => {
 
     it("keeps the uploads when the session's own files fail, and says which list failed", async () => {
       const hint = await openPicker({ data: [file("file_upload")] }, 500);
-      expect(hint).toHaveAttribute("data-file-options-state", "ready");
+      expect(hint).toHaveAttribute("data-file-options-state", "error");
       expect(options()).toEqual([["file_upload", "upload"]]);
       expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
         "data-file-list",
@@ -397,10 +397,51 @@ describe("SessionOutcomes", () => {
           note.getAttribute("data-file-list-state"),
         ),
       ).toEqual(["error", "error"]);
-      expect(hint()).toHaveAttribute("data-file-options-state", "ready");
+      expect(hint()).toHaveAttribute("data-file-options-state", "error");
       expect(options()).toEqual([
         ["file_upload", "upload"],
         ["file_copy", "session file"],
+      ]);
+    });
+
+    it("says a cut list failed, not that it was cut, once a later read fails", async () => {
+      let uploads: number | object = {
+        data: [file("file_a"), file("file_b")],
+        next_page: "more-uploads",
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string) => {
+          if (input.includes("scope_id=")) return json({ data: [] });
+          return typeof uploads === "number" ? failure(uploads) : json(uploads);
+        }),
+      );
+      const user = userEvent.setup();
+      renderOutcomes();
+      await user.click(screen.getByRole("button", { name: "Define outcome" }));
+      await user.click(screen.getByLabelText("Rubric type"));
+      await user.click(await screen.findByRole("option", { name: "File" }));
+      const hint = () =>
+        document.querySelector("[data-file-options-state]") as HTMLElement;
+      await waitFor(() =>
+        expect(hint()).toHaveAttribute("data-file-options-state", "truncated"),
+      );
+
+      // Reopened, the uploads refuse: their last rows stay offered, and the
+      // list and the picker both say it failed.
+      uploads = 500;
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await user.click(screen.getByRole("button", { name: "Define outcome" }));
+      await waitFor(() =>
+        expect(hint()).toHaveAttribute("data-file-options-state", "error"),
+      );
+      const notes = hint().querySelectorAll("[data-file-list]");
+      expect(notes).toHaveLength(1);
+      expect(notes[0]).toHaveAttribute("data-file-list", "uploads");
+      expect(notes[0]).toHaveAttribute("data-file-list-state", "error");
+      expect(options()).toEqual([
+        ["file_a", "upload"],
+        ["file_b", "upload"],
       ]);
     });
 

@@ -168,7 +168,10 @@ it("opens a bound store and its memory inline without leaving the Session", asyn
 it("filters attached resources while retaining read-only inspection for an archived Session", async () => {
   setup({ archived: true, memoryContent: null });
   await userEvent.type(screen.getByLabelText("Filter resources"), "unmatched");
-  expect(screen.getByText("No matching resources.")).toBeVisible();
+  expect(screen.getByTestId("session-resources")).toHaveAttribute(
+    "data-resources-state",
+    "no-match",
+  );
   await userEvent.clear(screen.getByLabelText("Filter resources"));
   await userEvent.click(
     screen.getByRole("button", { name: "Expand /mnt/memory/project-notes" }),

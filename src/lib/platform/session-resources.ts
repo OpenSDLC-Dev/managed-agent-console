@@ -2,22 +2,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { platformDelete, platformPost } from "./http";
-import type { PlatformFile, SessionResource } from "./types";
-
-/**
- * Whether a file's content is gone: store.FileLiveSQL holds a row whose
- * `expires_at` has passed to have none, so nothing downloads, mounts or
- * grades it, though its metadata still lists. A rendering derivation against
- * a caller-supplied clock (environmentKeyState's precedent); a null or
- * unparseable expiry is not evidence of one.
- */
-export function fileExpired(
-  file: Pick<PlatformFile, "expires_at">,
-  now: number,
-): boolean {
-  const at = file.expires_at ? Date.parse(file.expires_at) : NaN;
-  return !Number.isNaN(at) && at <= now;
-}
+import type { SessionResource } from "./types";
 
 // internal/api/sessionresources.go:parseResourceObject, addSessionResourceTx.
 export type ResourceInput =

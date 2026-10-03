@@ -37,11 +37,17 @@ vi.mock("next/link", () => ({
 }));
 
 // Inject trace states directly — the SSE loop is covered by its own tests.
+// Each session id a trace was asked for is kept: its history and stream are
+// read under that id.
 const traceMock = vi.hoisted(() => ({
   value: undefined as unknown,
+  sessionIds: new Set<string>(),
 }));
 vi.mock("@/lib/session-trace/use-session-trace", () => ({
-  useSessionTrace: () => traceMock.value,
+  useSessionTrace: (sessionId: string) => {
+    traceMock.sessionIds.add(sessionId);
+    return traceMock.value;
+  },
 }));
 
 function setTrace(
@@ -1075,6 +1081,7 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
     },
   );
   vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
   const view = renderPage("session_1");
   // The router navigates after the effect that asked, as Next's does.
   router.replace.mockImplementation((href: string) => {
@@ -1110,13 +1117,16 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
       "1",
     ),
   );
+  // The legacy address was read once, to learn its id; nothing else keyed
+  // it, in its path or its query.
   expect(
     fetchMock.mock.calls
-      .map(([input]) => new URL(String(input), "http://console.test").pathname)
-      .filter((path) => path.includes("session_1"))
-      .sort(),
-  ).toEqual([
-    "/api/platform/v1/sessions/session_1",
-    "/api/platform/v1/sessions/session_1/threads",
-  ]);
+      .map(([input]) => {
+        const url = new URL(String(input), "http://console.test");
+        return url.pathname + url.search;
+      })
+      .filter((request) => request.includes("session_1")),
+  ).toEqual(["/api/platform/v1/sessions/session_1"]);
+  // Its event history and stream were never asked for.
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
 });

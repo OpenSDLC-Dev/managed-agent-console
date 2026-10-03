@@ -26,7 +26,7 @@ import { IdCode, Time } from "@/components/console/bits";
 import { cn } from "@/lib/utils";
 import { useFileOptions, useSendEvents } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
-import { fileExpired } from "@/lib/platform/session-resources";
+import { hasExpired } from "@/lib/platform/expiry";
 import { useNow } from "@/lib/session-trace/use-now";
 import type { OutcomeEvaluation } from "@/lib/platform/types";
 import {
@@ -87,7 +87,8 @@ export function SessionOutcomes({
   // Each list stands alone: one failing keeps the other's suggestions, and
   // one not served (404) is left out, as an absent surface is. A later read
   // that fails otherwise keeps the rows the last good one listed, as the
-  // Resources tab does.
+  // Resources tab does — and the list then says it failed, not that those
+  // rows were cut: the latest read is the list's state.
   const lists = (
     [
       ["uploads", files.uploads],
@@ -99,9 +100,13 @@ export function SessionOutcomes({
       name,
       rows,
       pending: query.isPending,
-      failed: query.isError && !isUnimplemented(query.error),
       loaded: rows.length > 0 || (!query.isPending && !query.isError),
-      cut: rows.length > 0 && !!query.data?.next_page,
+      state:
+        query.isError && !isUnimplemented(query.error)
+          ? ("error" as const)
+          : rows.length > 0 && query.data?.next_page
+            ? ("truncated" as const)
+            : null,
     };
   });
   const [uploadList, sessionList] = lists;
@@ -116,13 +121,16 @@ export function SessionOutcomes({
       .map((file) => ({ file, origin: "upload" })),
     ...sessionList.rows.map((file) => ({ file, origin: "session file" })),
   ].filter(
-    ({ file }) => file.size_bytes <= 256 * 1024 && !fileExpired(file, now),
+    ({ file }) =>
+      file.size_bytes <= 256 * 1024 && !hasExpired(file.expires_at, now),
   );
+  // A list that failed outranks one that was cut, as within a list.
+  const loaded = lists.some((list) => list.loaded);
   const optionsState = lists.some((list) => list.pending)
     ? "loading"
-    : !lists.some((list) => list.loaded)
+    : !loaded || lists.some((list) => list.state === "error")
       ? "error"
-      : lists.some((list) => list.cut)
+      : lists.some((list) => list.state === "truncated")
         ? "truncated"
         : rubricFiles.length === 0
           ? "empty"
@@ -302,22 +310,20 @@ export function SessionOutcomes({
                 >
                   {optionsState === "loading" ? (
                     "Loading files…"
-                  ) : optionsState === "error" ? (
+                  ) : !loaded ? (
                     "Files could not be loaded. Paste an ID to continue."
                   ) : (
                     <>
                       {lists.map(
                         (list) =>
-                          (list.failed || list.cut) && (
+                          list.state && (
                             <span
                               key={list.name}
                               data-file-list={list.name}
-                              data-file-list-state={
-                                list.failed ? "error" : "truncated"
-                              }
+                              data-file-list-state={list.state}
                               data-file-list-count={list.rows.length}
                             >
-                              {list.failed
+                              {list.state === "error"
                                 ? LIST_NOTES[list.name].failed
                                 : LIST_NOTES[list.name].cut(
                                     list.rows.length.toLocaleString(),

@@ -333,60 +333,169 @@ test("a deployment fire is refused by its first resource gone, in its order", as
   });
 });
 
-test("resources add judges the file id, then the agent's read tool, before minting a copy", async ({
+/** Answers a resources add with its status and, refused, the platform's words. */
+async function addResource(page: Page, session: string, data: unknown) {
+  const response = await page.request.post(
+    `/api/platform/v1/sessions/${session}/resources`,
+    { data: data as object },
+  );
+  const body = await response.json();
+  return {
+    status: response.status(),
+    message: (body.error?.message as string | undefined) ?? null,
+    resource: body as { file_id: string; mount_path: string },
+  };
+}
+
+/** A fresh idle session of an agent with the given tools. */
+async function freshSession(
+  page: Page,
+  tools?: object[],
+  resources: object[] = [],
+) {
+  const agent = tools
+    ? (
+        (await (
+          await page.request.post("/api/platform/v1/agents", {
+            data: { name: "Fixture agent", model: "claude-sonnet-4-8", tools },
+          })
+        ).json()) as { id: string }
+      ).id
+    : "agent_researcher00000000001";
+  const created = await page.request.post("/api/platform/v1/sessions", {
+    data: {
+      agent,
+      environment_id: "env_egress000000000000001",
+      resources,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  return ((await created.json()) as { id: string }).id;
+}
+
+test("resources add judges the body before the session, in the platform's order and words", async ({
   page,
 }) => {
   await signIn(page);
-  const add = (session: string, data: object) =>
-    page.request.post(`/api/platform/v1/sessions/${session}/resources`, {
-      data,
-    });
-  const refusal = async (
-    response: Awaited<ReturnType<typeof add>>,
-  ): Promise<[number, string]> => [
-    response.status(),
-    (await response.json()).error.message,
-  ];
   const gated = "sesn_gatedbash00000000001";
-
-  // parseFileResource: the file id before any mount path is built.
-  expect(await refusal(await add(gated, { type: "file" }))).toEqual([
+  const refused = async (data: unknown, session = gated) => {
+    const { status, message } = await addResource(page, session, data);
+    return [status, message];
+  };
+  // addSessionResourceTx: the body, then its type.
+  expect(await refused([])).toEqual([
     400,
-    "file_id is required",
+    "request body must be a JSON object",
+  ]);
+  expect(await refused({})).toEqual([400, "type is required"]);
+  expect(await refused({ type: 7 })).toEqual([400, "type must be a string"]);
+  expect(await refused({ type: "memory_store" })).toEqual([
+    400,
+    'Failed to parse request: type: "memory_store" is not a valid value',
+  ]);
+  // parseFileResource: the keys, the file id, then the mount path.
+  expect(
+    await refused({ type: "file", file_id: UPLOAD, path: "/x", mode: 1 }),
+  ).toEqual([400, 'Failed to parse request body: unknown field "mode"']);
+  expect(await refused({ type: "file" })).toEqual([400, "file_id is required"]);
+  expect(await refused({ type: "file", file_id: "notes.md" })).toEqual([
+    400,
+    "file_id must be a valid file id",
   ]);
   expect(
-    await refusal(await add(gated, { type: "file", file_id: "notes.md" })),
-  ).toEqual([400, "file_id must be a valid file id"]);
+    await refused({ type: "file", file_id: UPLOAD, mount_path: 42 }),
+  ).toEqual([400, "mount_path must be a string"]);
+  // resolveMountPath: the uploads directory itself, and anything a relative
+  // ".." takes out of it, name no mount target; the bound is the resolved
+  // path's.
+  for (const mountPath of ["/mnt/session/uploads", "../notes.md", "."])
+    expect(
+      await refused({ type: "file", file_id: UPLOAD, mount_path: mountPath }),
+    ).toEqual([
+      400,
+      "mount_path must resolve to a path under /mnt/session/uploads",
+    ]);
   expect(
-    await refusal(
-      await add(gated, { type: "file", file_id: UPLOAD, path: "/x" }),
-    ),
-  ).toEqual([400, 'Failed to parse request body: unknown field "path"']);
+    await refused({
+      type: "file",
+      file_id: UPLOAD,
+      mount_path: "x".repeat(1024),
+    }),
+  ).toEqual([400, "mount_path must be at most 1024 bytes"]);
+
+  // checkID and the session's row come only after: a body refused names no
+  // session, however absent.
+  const absent = "sesn_absent00000000000001";
+  expect(await refused({ type: "file", file_id: "notes.md" }, absent)).toEqual([
+    400,
+    "file_id must be a valid file id",
+  ]);
+  expect(await refused({ type: "file", file_id: UPLOAD }, absent)).toEqual([
+    404,
+    `session ${absent} not found`,
+  ]);
+  // Nothing was minted along the way.
+  expect(
+    (
+      await (
+        await page.request.get(`/api/platform/v1/files?scope_id=${gated}`)
+      ).json()
+    ).data,
+  ).toEqual([]);
+});
+
+test("resources add then refuses an archived session, one a dream holds, and an agent without read", async ({
+  page,
+}) => {
+  await signIn(page);
+  const mount = { type: "file", file_id: UPLOAD };
+  const refused = async (session: string, data: unknown = mount) => {
+    const { status, message } = await addResource(page, session, data);
+    return [status, message];
+  };
+
+  // The archive, after the body: a bad mount path is still the body's.
+  const archived = await freshSession(page);
+  expect(
+    (
+      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
+        data: {},
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(await refused(archived, { ...mount, mount_path: 42 })).toEqual([
+    400,
+    "mount_path must be a string",
+  ]);
+  expect(await refused(archived)).toEqual([
+    400,
+    `session ${archived} is archived`,
+  ]);
+
+  // runnerguard.go requireNotDreamOwned: a live dream's pipeline session.
+  const held = await freshSession(page);
+  expect(
+    (
+      await page.request.post(
+        `http://127.0.0.1:18080/__start-dream?id=drm_pendingresearch0000001&session=${held}`,
+      )
+    ).ok(),
+  ).toBe(true);
+  expect(await refused(held)).toEqual([
+    400,
+    "session is owned by dream drm_pendingresearch0000001",
+  ]);
 
   // requireReadTool: an agent whose toolset leaves read off is refused in
   // the reference's words, and nothing is minted.
-  const session = async (tools: object[]) => {
-    const agent = await page.request.post("/api/platform/v1/agents", {
-      data: { name: "Bash only", model: "claude-sonnet-4-8", tools },
-    });
-    const created = await page.request.post("/api/platform/v1/sessions", {
-      data: {
-        agent: ((await agent.json()) as { id: string }).id,
-        environment_id: "env_egress000000000000001",
-      },
-    });
-    return ((await created.json()) as { id: string }).id;
-  };
-  const bashOnly = await session([
+  const bashOnly = await freshSession(page, [
     {
       type: "agent_toolset_20260401",
       default_config: { enabled: false },
       configs: [{ name: "bash", enabled: true }],
     },
   ]);
-  expect(
-    await refusal(await add(bashOnly, { type: "file", file_id: UPLOAD })),
-  ).toEqual([
+  expect(await refused(bashOnly)).toEqual([
     400,
     "Missing required tool: file resources require the read tool to be usable (enabled and not always_deny) on the session's `agent_toolset`",
   ]);
@@ -398,16 +507,135 @@ test("resources add judges the file id, then the agent's read tool, before minti
     ).data,
   ).toEqual([]);
   // Read enabled by its own config, the default off: the add goes through.
-  const readOnly = await session([
+  const readOnly = await freshSession(page, [
     {
       type: "agent_toolset_20260401",
       default_config: { enabled: false },
       configs: [{ name: "read", enabled: true }],
     },
   ]);
-  expect((await add(readOnly, { type: "file", file_id: UPLOAD })).ok()).toBe(
-    true,
+  expect((await addResource(page, readOnly, mount)).status).toBe(200);
+});
+
+test("resources add stores the resolved mount path, and refuses one taken or above a repository", async ({
+  page,
+}) => {
+  await signIn(page);
+  const session = await freshSession(page, undefined, [
+    {
+      type: "github_repository",
+      url: "https://github.com/example/project",
+      authorization_token: "test-only-token",
+      mount_path: "/mnt/session/uploads/repo/src",
+    },
+  ]);
+  const resolved = async (mountPath?: string) => {
+    const added = await addResource(page, session, {
+      type: "file",
+      file_id: UPLOAD,
+      ...(mountPath === undefined ? {} : { mount_path: mountPath }),
+    });
+    expect(added.status).toBe(200);
+    return added.resource.mount_path;
+  };
+  // resolveMountPath: a relative path is rooted, "/uploads/…" is the
+  // directory's short name, and alone it is the default.
+  expect(await resolved("notes.md")).toBe("/mnt/session/uploads/notes.md");
+  expect(await resolved("/uploads/x")).toBe("/mnt/session/uploads/x");
+  expect(await resolved("/uploads")).toBe(`/mnt/session/uploads/${UPLOAD}`);
+  expect(await resolved("/data/../more/./y.csv")).toBe(
+    "/mnt/session/uploads/more/y.csv",
   );
+  // The session stores what the add answered.
+  const stored = (
+    (await (
+      await page.request.get(`/api/platform/v1/sessions/${session}`)
+    ).json()) as { resources: { mount_path: string }[] }
+  ).resources.map((resource) => resource.mount_path);
+  expect(stored).toEqual(
+    expect.arrayContaining([
+      "/mnt/session/uploads/notes.md",
+      "/mnt/session/uploads/x",
+    ]),
+  );
+
+  // mountPathTaken, on the resolved path: another spelling of one taken.
+  const taken = await addResource(page, session, {
+    type: "file",
+    file_id: UPLOAD,
+    mount_path: "/notes.md",
+  });
+  expect([taken.status, taken.message]).toEqual([
+    400,
+    'mount_path "/mnt/session/uploads/notes.md" is already in use by this session',
+  ]);
+  // repoMountBelow: a file above a repository's mount.
+  const above = await addResource(page, session, {
+    type: "file",
+    file_id: UPLOAD,
+    mount_path: "repo",
+  });
+  expect([above.status, above.message]).toEqual([
+    400,
+    'mount_path "/mnt/session/uploads/repo" is an ancestor of repository mount_path "/mnt/session/uploads/repo/src"',
+  ]);
+});
+
+test("a session create and a deployment's fire suffix the mounts of stores that slug alike", async ({
+  page,
+}) => {
+  await signIn(page);
+  const store = async (name: string) =>
+    (
+      (await (
+        await page.request.post("/api/platform/v1/memory_stores", {
+          data: { name },
+        })
+      ).json()) as { id: string }
+    ).id;
+  // The fixture's "Project notes" claims project-notes first; "Project
+  // Notes!" slugs to it too, and "project-notes-2" keeps its own slug, so
+  // the store that lost takes -3.
+  const stores = [
+    "memstore_projectnotes000001",
+    await store("Project Notes!"),
+    await store("project-notes-2"),
+  ];
+  const memory = stores.map((id) => ({
+    type: "memory_store",
+    memory_store_id: id,
+  }));
+  const expected = [
+    "/mnt/memory/project-notes",
+    "/mnt/memory/project-notes-3",
+    "/mnt/memory/project-notes-2",
+  ];
+  const mounts = async (session: string) =>
+    (
+      (await (
+        await page.request.get(`/api/platform/v1/sessions/${session}`)
+      ).json()) as { resources: { mount_path: string }[] }
+    ).resources.map((resource) => resource.mount_path);
+
+  expect(await mounts(await freshSession(page, undefined, memory))).toEqual(
+    expected,
+  );
+  const deployment = await page.request.post("/api/platform/v1/deployments", {
+    data: {
+      name: "Slugs alike",
+      agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
+      environment_id: "env_egress000000000000001",
+      initial_events: [{ type: "user.message", content: "Fixture only" }],
+      resources: memory,
+    },
+  });
+  expect(deployment.ok()).toBe(true);
+  const fired = await page.request.post(
+    `/api/platform/v1/deployments/${((await deployment.json()) as { id: string }).id}/run`,
+    { data: {} },
+  );
+  const run = (await fired.json()) as { session_id: string };
+  expect(await mounts(run.session_id)).toEqual(expected);
 });
 
 test("a file's delete and a file rubric answer a missing or expired file in the platform's words", async ({
@@ -432,22 +660,51 @@ test("a file's delete and a file rubric answer a missing or expired file in the 
       )
     ).ok(),
   ).toBe(true);
-  const define = await page.request.post(
-    `/api/platform/v1/sessions/sesn_gatedbash00000000001/events`,
-    {
-      data: {
-        events: [
-          {
-            type: "user.define_outcome",
-            description: "Summarize the notes",
-            rubric: { type: "file", file_id: UPLOAD },
-          },
-        ],
+  const define = {
+    type: "user.define_outcome",
+    description: "Summarize the notes",
+    rubric: { type: "file", file_id: UPLOAD },
+  };
+  const send = async (events: object[]) => {
+    const response = await page.request.post(
+      "/api/platform/v1/sessions/sesn_gatedbash00000000001/events",
+      { data: { events } },
+    );
+    return [response.status(), (await response.json()).error?.message];
+  };
+  // It runs last of the batch's checks: routing answers first, then
+  // CheckWhileAwaiting, the session resting idle on an ask nothing answers.
+  expect(
+    await send([
+      {
+        type: "user.interrupt",
+        session_thread_id: "sthr_absent00000000000001",
       },
-    },
-  );
-  expect(define.status()).toBe(400);
-  expect((await define.json()).error.message).toBe(
+      define,
+    ]),
+  ).toEqual([404, "Thread not found: sthr_absent00000000000001"]);
+  expect(await send([define])).toEqual([
+    400,
+    "Invalid user.define_outcome event at events[0]: waiting on responses to events [sevt_000000000000000005]; only `user.tool_confirmation`, `user.custom_tool_result`, `user.tool_result`, or `user.interrupt` may be sent (a `system.message` may trail a tool result)",
+  ]);
+  // A batch that answers the ask reaches the rubric, and lands nothing.
+  const answer = {
+    type: "user.tool_confirmation",
+    tool_use_id: "sevt_000000000000000005",
+    result: "allow",
+  };
+  expect(await send([answer, define])).toEqual([
+    400,
     `rubric file ${UPLOAD} not found`,
+  ]);
+  const events = (
+    await (
+      await page.request.get(
+        "/api/platform/v1/sessions/sesn_gatedbash00000000001/events?limit=100",
+      )
+    ).json()
+  ).data as { type: string }[];
+  expect(events.map((event) => event.type)).not.toContain(
+    "user.tool_confirmation",
   );
 });

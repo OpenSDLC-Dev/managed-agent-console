@@ -251,9 +251,36 @@ export default function SessionDetailPage({
   const { id } = use(params);
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      <SessionWorkspace key={id} id={id} />
+      <CanonicalSession key={id} id={id} />
     </Suspense>
   );
+}
+
+/**
+ * sessions.go normalizeSessionID answers a legacy `session_` address with its
+ * `sesn_` row. The page moves to the id the session answers with, the query
+ * and hash kept, and mounts the workspace only for that id: its trace,
+ * threads and writes key one id, and a legacy address neither reads the
+ * event history nor opens a stream.
+ */
+function CanonicalSession({ id }: { id: string }) {
+  const session = useSession(id);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const canonicalId =
+    session.data && session.data.id !== id ? session.data.id : null;
+  const movedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canonicalId || movedTo.current === canonicalId) return;
+    movedTo.current = canonicalId;
+    queryClient.setQueryData(["session", canonicalId], session.data);
+    router.replace(
+      `/sessions/${encodeURIComponent(canonicalId)}${window.location.search}${window.location.hash}`,
+    );
+  }, [canonicalId, queryClient, router, session.data]);
+  if (session.data?.id === id) return <SessionWorkspace id={id} />;
+  if (session.error) return <ErrorState error={session.error} />;
+  return <DetailSkeleton />;
 }
 
 function SessionWorkspace({ id }: { id: string }) {
@@ -305,22 +332,6 @@ function SessionWorkspace({ id }: { id: string }) {
     });
   };
   const session = useSession(id, 15_000);
-  // sessions.go normalizeSessionID answers a legacy `session_` address with
-  // its `sesn_` row. The page moves to the id the session answers with, the
-  // query and hash kept, so every query and mutation on it keys one id.
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const canonicalId =
-    session.data && session.data.id !== id ? session.data.id : null;
-  const movedTo = useRef<string | null>(null);
-  useEffect(() => {
-    if (!canonicalId || movedTo.current === canonicalId) return;
-    movedTo.current = canonicalId;
-    queryClient.setQueryData(["session", canonicalId], session.data);
-    router.replace(
-      `/sessions/${encodeURIComponent(canonicalId)}${window.location.search}${window.location.hash}`,
-    );
-  }, [canonicalId, queryClient, router, session.data]);
   // Keep the shared timeline and Session controls live while viewing a child.
   const sessionTrace = useSessionTrace(id);
   const childTrace = useSessionTrace(
@@ -399,7 +410,7 @@ function SessionWorkspace({ id }: { id: string }) {
       : [];
 
   if (session.error) return <ErrorState error={session.error} />;
-  if (session.isPending || !session.data || canonicalId) {
+  if (session.isPending || !session.data) {
     return <DetailSkeleton />;
   }
   const data = session.data;
