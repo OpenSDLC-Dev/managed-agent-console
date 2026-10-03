@@ -382,12 +382,24 @@ test("resources add judges the body before the session, in the platform's order 
     const { status, message } = await addResource(page, session, data);
     return [status, message];
   };
-  // addSessionResourceTx: the body, then its type.
+  // addSessionResourceTx: the body (decodeBodyObject), then its type.
   expect(await refused([])).toEqual([
     400,
     "request body must be a JSON object",
   ]);
   expect(await refused({})).toEqual([400, "type is required"]);
+  // A JSON null is an empty object, as a blank body is.
+  expect(await refused(Buffer.from("null"))).toEqual([400, "type is required"]);
+  // Bytes no string can hold, refused before anything reads the body.
+  expect(
+    await refused(Buffer.from('{"type":"file","file_id":"\xff"}', "latin1")),
+  ).toEqual([400, "request body must be valid UTF-8"]);
+  expect(
+    await refused({ type: "file", file_id: UPLOAD, mount_path: "a\u0000b" }),
+  ).toEqual([
+    400,
+    "mount_path must not contain U+0000 (the \\u0000 escape): it cannot be stored",
+  ]);
   expect(await refused({ type: 7 })).toEqual([400, "type must be a string"]);
   expect(await refused({ type: "memory_store" })).toEqual([
     400,
@@ -405,10 +417,18 @@ test("resources add judges the body before the session, in the platform's order 
   expect(
     await refused({ type: "file", file_id: UPLOAD, mount_path: 42 }),
   ).toEqual([400, "mount_path must be a string"]);
-  // resolveMountPath: the uploads directory itself, and anything a relative
-  // ".." takes out of it, name no mount target; the bound is the resolved
-  // path's.
-  for (const mountPath of ["/mnt/session/uploads", "../notes.md", "."])
+  // resolveMountPath: the uploads directory itself, however spelled, and
+  // anything a relative ".." takes out of it, name no mount target; the
+  // bound is the resolved path's.
+  for (const mountPath of [
+    "/mnt/session/uploads",
+    "../notes.md",
+    ".",
+    "/",
+    "//",
+    "/x/..",
+    "/uploads/..",
+  ])
     expect(
       await refused({ type: "file", file_id: UPLOAD, mount_path: mountPath }),
     ).toEqual([
@@ -578,6 +598,226 @@ test("resources add stores the resolved mount path, and refuses one taken or abo
   expect([above.status, above.message]).toEqual([
     400,
     'mount_path "/mnt/session/uploads/repo" is an ancestor of repository mount_path "/mnt/session/uploads/repo/src"',
+  ]);
+});
+
+test("session create resolves and judges each mount as resources add does, in its own words", async ({
+  page,
+}) => {
+  await signIn(page);
+  const create = async (resources: object[]) => {
+    const response = await page.request.post("/api/platform/v1/sessions", {
+      data: {
+        agent: "agent_researcher00000000001",
+        environment_id: "env_egress000000000000001",
+        resources,
+      },
+    });
+    const body = await response.json();
+    return {
+      status: response.status(),
+      message: (body.error?.message as string | undefined) ?? null,
+      mounts: (body.resources as { mount_path: string }[] | undefined)?.map(
+        (resource) => resource.mount_path,
+      ),
+    };
+  };
+  const refused = async (resources: object[]) => {
+    const { status, message } = await create(resources);
+    return [status, message];
+  };
+  const file = (mountPath?: unknown) => ({
+    type: "file",
+    file_id: UPLOAD,
+    ...(mountPath === undefined ? {} : { mount_path: mountPath }),
+  });
+  const repo = (mountPath?: string) => ({
+    type: "github_repository",
+    url: "https://github.com/example/project",
+    authorization_token: "test-only-token",
+    ...(mountPath === undefined ? {} : { mount_path: mountPath }),
+  });
+  const sessionsBefore = (
+    await (await page.request.get("/api/platform/v1/sessions?limit=100")).json()
+  ).data.length;
+
+  // parseFileResource, in session create's words where the reference was
+  // recorded (#540).
+  expect(await refused([{ type: "file", file_id: "notes.md" }])).toEqual([
+    400,
+    'Invalid file resource: invalid file_id: "notes.md"',
+  ]);
+  expect(await refused([file(42)])).toEqual([
+    400,
+    "mount_path must be a string",
+  ]);
+  expect(await refused([file("/")])).toEqual([
+    400,
+    "mount_path must resolve to a path under /mnt/session/uploads",
+  ]);
+  // Two spellings of one path, judged resolved.
+  expect(await refused([file("notes.md"), file("/notes.md")])).toEqual([
+    400,
+    'mount_path "/mnt/session/uploads/notes.md" is used by more than one resource',
+  ]);
+  // validateRepoMountPath: a repository's path is literal.
+  expect(await refused([repo("/tmp")])).toEqual([
+    400,
+    'mount_path "/tmp" is reserved',
+  ]);
+  expect(await refused([repo("/workspace/./project")])).toEqual([
+    400,
+    'mount_path must be a clean absolute path (no ".", "..", doubled separators, or trailing slash)',
+  ]);
+  // errRepoMountOverlap: a repository below an earlier mount, in the
+  // reference's words.
+  expect(
+    await refused([file("repo"), repo("/mnt/session/uploads/repo/src")]),
+  ).toEqual([
+    400,
+    "Invalid `github_repository` resource: `mount_path` overlaps another resource: /mnt/session/uploads/repo and /mnt/session/uploads/repo/src; set distinct `mount_path` values",
+  ]);
+  // Nothing was made along the way.
+  expect(
+    (
+      await (
+        await page.request.get("/api/platform/v1/sessions?limit=100")
+      ).json()
+    ).data.length,
+  ).toBe(sessionsBefore);
+
+  // A session stores the path resolved, a repository's as given or its
+  // default.
+  const created = await create([file("notes.md"), file(), repo()]);
+  expect(created.status).toBe(200);
+  expect(created.mounts).toEqual([
+    "/mnt/session/uploads/notes.md",
+    `/mnt/session/uploads/${UPLOAD}`,
+    "/workspace/project",
+  ]);
+});
+
+test("a deployment echoes a file's mount path as given, judged resolved, and its fire mounts it resolved", async ({
+  page,
+}) => {
+  await signIn(page);
+  const deploy = (resources: object[]) =>
+    page.request.post("/api/platform/v1/deployments", {
+      data: {
+        name: "Mounts",
+        agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
+        environment_id: "env_egress000000000000001",
+        initial_events: [{ type: "user.message", content: "Fixture only" }],
+        resources,
+      },
+    });
+  const file = (mountPath: string) => ({
+    type: "file",
+    file_id: UPLOAD,
+    mount_path: mountPath,
+  });
+  // parseResources: judged on the resolved paths, named as sent (#849).
+  const clash = await deploy([file("notes.md"), file("/uploads/notes.md")]);
+  expect(clash.status()).toBe(400);
+  expect((await clash.json()).error.message).toBe(
+    'mount_path "notes.md" and mount_path "/uploads/notes.md" both resolve to "/mnt/session/uploads/notes.md"',
+  );
+  const outside = await deploy([file("/x/..")]);
+  expect(outside.status()).toBe(400);
+  expect((await outside.json()).error.message).toBe(
+    "mount_path must resolve to a path under /mnt/session/uploads",
+  );
+
+  const created = await deploy([file("/uploads/notes.md")]);
+  expect(created.ok()).toBe(true);
+  const deployment = (await created.json()) as {
+    id: string;
+    resources: { mount_path: string }[];
+  };
+  expect(deployment.resources[0].mount_path).toBe("/uploads/notes.md");
+  const run = (await (
+    await page.request.post(
+      `/api/platform/v1/deployments/${deployment.id}/run`,
+      { data: {} },
+    )
+  ).json()) as { session_id: string };
+  const session = (await (
+    await page.request.get(`/api/platform/v1/sessions/${run.session_id}`)
+  ).json()) as { resources: { mount_path: string }[] };
+  expect(session.resources.map((resource) => resource.mount_path)).toEqual([
+    "/mnt/session/uploads/notes.md",
+  ]);
+});
+
+test("resources remove reads the session as the add does, then the resource, in the platform's words", async ({
+  page,
+}) => {
+  await signIn(page);
+  const remove = async (session: string, resource: string) => {
+    const response = await page.request.delete(
+      `/api/platform/v1/sessions/${session}/resources/${resource}`,
+    );
+    const body = await response.json();
+    return [response.status(), body.error?.message ?? body.type];
+  };
+  const absent = "sesn_absent00000000000001";
+  expect(await remove(absent, "sesrsc_absent0000000000001")).toEqual([
+    404,
+    `session ${absent} not found`,
+  ]);
+  // normalizeSessionID: the legacy spelling names the same session.
+  const legacy = RESEARCH.replace(/^sesn_/, "session_");
+  expect(await remove(legacy, "sesrsc_absent0000000000001")).toEqual([
+    404,
+    "Resource not found: sesrsc_absent0000000000001",
+  ]);
+  expect(await remove(legacy, "sesrsc_attach000000000001")).toEqual([
+    200,
+    "session_resource_deleted",
+  ]);
+
+  // A repository stays for the session's lifetime.
+  const withRepo = await freshSession(page, undefined, [
+    {
+      type: "github_repository",
+      url: "https://github.com/example/project",
+      authorization_token: "test-only-token",
+    },
+  ]);
+  const repoId = (
+    (await (
+      await page.request.get(`/api/platform/v1/sessions/${withRepo}`)
+    ).json()) as { resources: { id: string }[] }
+  ).resources[0].id;
+  expect(await remove(withRepo, repoId)).toEqual([
+    400,
+    "github_repository resources cannot be removed; repositories are attached for the lifetime of the session",
+  ]);
+
+  // The archive, and a live dream's hold, before the resource is looked up.
+  const held = await freshSession(page);
+  expect(
+    (
+      await page.request.post(
+        `http://127.0.0.1:18080/__start-dream?id=drm_pendingresearch0000001&session=${held}`,
+      )
+    ).ok(),
+  ).toBe(true);
+  expect(await remove(held, "sesrsc_absent0000000000001")).toEqual([
+    400,
+    "session is owned by dream drm_pendingresearch0000001",
+  ]);
+  const archived = await freshSession(page);
+  expect(
+    (
+      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
+        data: {},
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(await remove(archived, "sesrsc_absent0000000000001")).toEqual([
+    400,
+    `session ${archived} is archived`,
   ]);
 });
 

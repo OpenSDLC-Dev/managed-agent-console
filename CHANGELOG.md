@@ -31,9 +31,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   the reference console does. A mounted file shows its copy's size, and harvested outputs follow it.
   Only an output offers Download, since `downloadable` is the one signal that tells the two apart,
   and an expired one says so instead. An output, or a copy no resource mounts any more, can be
-  deleted there, as outputs could from the Files page before; a copy's delete reads the session
-  first and is refused in its dialog if a mount just added names it, so a mount's copy is never
-  deleted from under it. The rubric picker also suggests the session's own files, labelled apart
+  deleted there, as outputs could from the Files page before; the platform judges each delete, as
+  it deletes a mounted copy too. The rubric picker also suggests the session's own files, labelled apart
   from uploads, and leaves out expired files. The Files page drops its Scope column. In the
   Sessions inspector, a mounted file now opens the session's Resources. Deploy this console with
   platform #578 or later: before it, outputs list on the Files page too and a mounted file shows no

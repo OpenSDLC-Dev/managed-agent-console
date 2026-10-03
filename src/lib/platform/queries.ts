@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import { useCallback } from "react";
 import {
   useMutation,
   useInfiniteQuery,
@@ -192,31 +191,13 @@ export function useSessions(params: {
   });
 }
 
-const readSession = (id: string) =>
-  platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`);
-
 export function useSession(id: string, refetchInterval?: number) {
   return useQuery({
     queryKey: ["session", id],
-    queryFn: () => readSession(id),
+    queryFn: () =>
+      platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`),
     refetchInterval,
   });
-}
-
-/**
- * Reads the page's session again on demand, outside the page's query, so a
- * read that fails is the caller's to answer and never the page's error state.
- * A read that answers lands in the cache the page renders from, replacing any
- * read already out (SessionResources, before a copy's delete).
- */
-export function useReadSession(id: string) {
-  const queryClient = useQueryClient();
-  return useCallback(async () => {
-    const session = await readSession(id);
-    await queryClient.cancelQueries({ queryKey: ["session", id] });
-    queryClient.setQueryData(["session", id], session);
-    return session;
-  }, [id, queryClient]);
 }
 
 /** events.go:listEvents supports a bounded descending page, independently of SSE. */

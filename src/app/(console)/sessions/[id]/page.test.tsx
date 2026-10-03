@@ -1130,3 +1130,39 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
   // Its event history and stream were never asked for.
   expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
 });
+
+it("starts a canonical session's trace and threads beside its read, not after it", async () => {
+  setTrace("connecting");
+  const read = Promise.withResolvers<Response>();
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sesn_1")
+      return read.promise;
+    if (url.pathname === "/api/platform/v1/sessions/sesn_1/threads")
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sesn_1");
+
+  // The session is still being read, and the rest is already under way.
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.map(
+        ([input]) => new URL(String(input), "http://console.test").pathname,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "/api/platform/v1/sessions/sesn_1",
+        "/api/platform/v1/sessions/sesn_1/threads",
+      ]),
+    ),
+  );
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(router.replace).not.toHaveBeenCalled();
+
+  read.resolve(json(session({ id: "sesn_1" })));
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
+});

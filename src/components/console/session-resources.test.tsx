@@ -84,6 +84,7 @@ const refusal = (status: number, message: string) =>
         type: status === 404 ? "not_found_error" : "invalid_request_error",
         message,
       },
+      request_id: "req_refused",
     },
     status,
   );
@@ -383,6 +384,10 @@ it("claims no empty tab while the session's files are loading or failed, and ann
     defaultOptions: { queries: { retry: false } },
   });
   client.setQueryData(["session", session.id], session);
+  // Every change made to the document, from the mount on.
+  const observer = new MutationObserver(() => {});
+  observer.observe(document.body, { childList: true, subtree: true });
+  onTestFinished(() => observer.disconnect());
   render(
     <QueryClientProvider client={client}>
       <SessionResources session={session} />
@@ -393,6 +398,16 @@ it("claims no empty tab while the session's files are loading or failed, and ann
   expect(status).toHaveAttribute("data-session-files-note", "loading");
   // The one assertion on that sentence.
   expect(status).toHaveTextContent("Loading the session's files…");
+  // Written into the region once it was in the document, as a change a
+  // screen reader announces; a region mounted holding it is announced by
+  // none.
+  expect(
+    observer
+      .takeRecords()
+      .some(
+        (record) => record.target === status && record.addedNodes.length > 0,
+      ),
+  ).toBe(true);
 
   pending.resolve(refusal(500, "Down."));
   await waitFor(() =>
@@ -429,7 +444,7 @@ it.each([
 ])(
   "deletes %s after confirming, the dialog open until its list is read again",
   async (_, file, kind, warning) => {
-    const { fetch, writes, lists } = setup(false, {
+    const { writes, lists, sessionReads } = setup(false, {
       resources: [fileResource],
       files: [copy, file],
     });
@@ -462,16 +477,8 @@ it.each([
       `/api/platform/v1/files/${file.id}`,
       { method: "DELETE" },
     ]);
-    // A copy's delete is sent only after a read of the session finds it
-    // unmounted; an output's reads nothing first.
-    const deleteAt = fetch.mock.calls.findIndex(([, init]) => init?.method);
-    expect(
-      fetch.mock.calls
-        .slice(0, deleteAt)
-        .filter(
-          ([url]) => url === `/api/platform/v1/sessions/${sessions[0].id}`,
-        ),
-    ).toHaveLength(kind === "copy" ? 1 : 0);
+    // Nothing is checked first: the platform judges the delete.
+    expect(sessionReads()).toBe(0);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     // The dialog closed only once the list was read again, the row gone.
     expect(lists()).toBe(before + 1);
@@ -503,10 +510,6 @@ it("keeps the confirm dialog open on a refusal and says why in it", async () => 
     "file file_output is owned by dream drm_1",
   );
   expect(screen.getByRole("dialog")).toBe(dialog);
-  expect(within(dialog).getByRole("alert")).toHaveAttribute(
-    "data-delete-refusal",
-    "delete",
-  );
   expect(
     within(dialog).getByRole("button", { name: "Delete file" }),
   ).not.toHaveAttribute("aria-disabled", "true");
@@ -606,10 +609,15 @@ it("toasts a refusal that lands after its dialog was closed", async () => {
 
   gate.resolve();
   await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+  // The platform's error whole: its type and request id go to the toast.
   const [error, title] = toast.mock.calls[0];
   expect(title).toBe("Delete failed");
   expect(error).toBeInstanceOf(PlatformError);
-  expect((error as PlatformError).status).toBe(400);
+  expect(error).toMatchObject({
+    status: 400,
+    errorType: "invalid_request_error",
+    requestId: "req_refused",
+  });
   // Reopened, the dialog carries no stale refusal.
   await userEvent.click(trigger);
   expect(within(screen.getByRole("dialog")).queryByRole("alert")).toBeNull();
@@ -642,7 +650,7 @@ it("moves focus off a deleted row whose dialog was closed while the delete was o
   expect(toast).not.toHaveBeenCalled();
 });
 
-it("returns focus to a row's Delete when the list read after the delete still carries it, and moves it no later", async () => {
+it("returns focus to a row's Delete when the list read after the delete still carries it, and to a neighbour once a later read drops it", async () => {
   const { replies, list, client, session } = setup(false, {
     resources: [fileResource],
     files: [copy, output, leftover],
@@ -663,7 +671,7 @@ it("returns focus to a row's Delete when the list read after the delete still ca
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 
-  // A later read drops the row: focus is not moved for it then.
+  // A later read drops the row: focus goes to the row that took its place.
   list.status = 200;
   await act(() =>
     client.refetchQueries({ queryKey: ["session-files", session.id] }),
@@ -673,12 +681,42 @@ it("returns focus to a row's Delete when the list read after the delete still ca
       panel().querySelector('[data-session-file-id="file_output"]'),
     ).toBeNull(),
   );
-  expect(document.activeElement).not.toBe(
+  expect(document.activeElement).toBe(
     screen.getByRole("button", { name: "Delete old.txt (file_leftover)" }),
   );
-  expect(document.activeElement).not.toBe(
-    screen.getByLabelText("Filter resources"),
+});
+
+it("moves focus from a row any read drops to its neighbour, and leaves focus that left the row alone", async () => {
+  const { list, client, session } = setup(false, {
+    resources: [fileResource],
+    files: [copy, leftover, output],
+  });
+  const refetch = () =>
+    act(() =>
+      client.refetchQueries({ queryKey: ["session-files", session.id] }),
+    );
+  // An output's Download, the last row: the row before it takes focus.
+  const download = await screen.findByRole("link", {
+    name: "Download reports/summary.csv (file_output)",
+  });
+  act(() => download.focus());
+  list.files = [copy, leftover];
+  await refetch();
+  await waitFor(() => expect(download.isConnected).toBe(false));
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Delete old.txt (file_leftover)" }),
   );
+
+  // Focus that left the row first, to the page, is not taken back when the
+  // row goes.
+  act(() => (document.activeElement as HTMLElement).blur());
+  await act(() => Promise.resolve());
+  list.files = [copy];
+  await refetch();
+  await waitFor(() =>
+    expect(panel()).toHaveAttribute("data-session-file-count", "1"),
+  );
+  expect(document.activeElement).toBe(document.body);
 });
 
 it("offers no download of an expired output, and says why", async () => {
@@ -720,7 +758,7 @@ describe("a copy listed before the session that mounts it", () => {
     mount_path: "/mnt/session/uploads/fresh.txt",
   };
 
-  it("offers Delete at once, and refuses in the dialog once the session read on confirm mounts it", async () => {
+  it("offers Delete at once, and leaves the delete to the platform, reading no session", async () => {
     const { session, writes, replies, sessionReads } = setup(false, {
       resources: [],
       files: [fresh],
@@ -733,80 +771,21 @@ describe("a copy listed before the session that mounts it", () => {
         name: "Delete fresh.txt (file_fresh)",
       }),
     );
-    expect(sessionReads()).toBe(0);
-    // A mount landed since that read (here, or from another client).
+    // A mount landed since that read (here, or from another client). The
+    // platform deletes a mounted copy as it deletes any other, so the console
+    // checks nothing first (CLAUDE.md principle 4).
     replies.session = async () =>
       reply({ ...session, resources: [freshMount] });
-    const dialog = screen.getByRole("dialog");
     await userEvent.click(
-      within(dialog).getByRole("button", { name: "Delete file" }),
-    );
-    const alert = await within(dialog).findByRole("alert");
-    expect(alert).toHaveAttribute("data-delete-refusal", "mounted");
-    // The one assertion on that sentence.
-    expect(alert).toHaveTextContent(
-      "The session now mounts this copy at /mnt/session/uploads/fresh.txt. Remove that resource instead.",
-    );
-    expect(sessionReads()).toBe(1);
-    expect(writes()).toEqual([]);
-    // The read reached the page: the copy is the mount's row now, and the
-    // dialog outlived the row it was opened from.
-    await waitFor(() =>
-      expect(
-        panel().querySelector('[data-session-file-id="file_fresh"]'),
-      ).toBeNull(),
-    );
-    expect(screen.getByText(freshMount.mount_path)).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBe(dialog);
-
-    // Closed, focus goes to the filter rather than the page.
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Cancel" }),
-    );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByLabelText("Filter resources"),
-      ),
-    );
-  });
-
-  it("says in the dialog when the session cannot be read, and deletes on a retry that reads it", async () => {
-    const { client, session, writes, replies } = setup(false, {
-      resources: [],
-      files: [leftover],
-      live: true,
-    });
-    replies.session = async () => refusal(500, "Down.");
-    await userEvent.click(
-      await screen.findByRole("button", {
-        name: "Delete old.txt (file_leftover)",
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete file",
       }),
     );
-    const dialog = screen.getByRole("dialog");
-    const confirm = within(dialog).getByRole("button", { name: "Delete file" });
-    await userEvent.click(confirm);
-    const alert = await within(dialog).findByRole("alert");
-    expect(alert).toHaveAttribute("data-delete-refusal", "read");
-    // The one assertion on that sentence.
-    expect(alert).toHaveTextContent(
-      "The session could not be read to check that it no longer mounts this copy. Down.",
-    );
-    expect(writes()).toEqual([]);
-    // The page's own read is untouched, so the page shows no error for it.
-    expect(client.getQueryState(["session", session.id])).toMatchObject({
-      status: "success",
-      error: null,
-    });
-    // Focus stayed on the confirm button, for the retry.
-    expect(document.activeElement).toBe(confirm);
-
-    replies.session = undefined;
-    await userEvent.click(confirm);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(writes()).toEqual([
-      ["/api/platform/v1/files/file_leftover", { method: "DELETE" }],
+      ["/api/platform/v1/files/file_fresh", { method: "DELETE" }],
     ]);
+    expect(sessionReads()).toBe(0);
   });
 
   it("is not even listed after Attach file: the session is read before the list", async () => {

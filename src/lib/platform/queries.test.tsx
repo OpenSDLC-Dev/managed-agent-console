@@ -47,7 +47,6 @@ import {
   useMemoryStores,
   useMemoryVersion,
   useMemoryVersions,
-  useReadSession,
   useRedactMemoryVersion,
   useSendEvents,
   useSession,
@@ -611,50 +610,6 @@ describe("useMemoryStoreOptions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(10);
     expect(result.current.data?.truncated).toBe(true);
     expect(result.current.data?.memoryStores).toHaveLength(10);
-  });
-});
-
-describe("useReadSession", () => {
-  it("writes a read that answers into the page's cache", async () => {
-    stubFetch({ id: "sesn_1", resources: [{ type: "file" }] });
-    const { client, wrapper } = createClient();
-    client.setQueryData(["session", "sesn_1"], { id: "sesn_1", resources: [] });
-    const { result } = renderHook(() => useReadSession("sesn_1"), { wrapper });
-
-    await expect(result.current()).resolves.toEqual({
-      id: "sesn_1",
-      resources: [{ type: "file" }],
-    });
-    expect(client.getQueryData(["session", "sesn_1"])).toEqual({
-      id: "sesn_1",
-      resources: [{ type: "file" }],
-    });
-  });
-
-  it("leaves a read that fails to its caller, never the page's query", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: { type: "api_error", message: "Down." },
-            }),
-            { status: 500, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
-    const { client, wrapper } = createClient();
-    client.setQueryData(["session", "sesn_1"], { id: "sesn_1" });
-    const { result } = renderHook(() => useReadSession("sesn_1"), { wrapper });
-
-    await expect(result.current()).rejects.toThrow("Down.");
-    expect(client.getQueryState(["session", "sesn_1"])).toMatchObject({
-      status: "success",
-      error: null,
-      data: { id: "sesn_1" },
-    });
   });
 });
 

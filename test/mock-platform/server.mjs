@@ -4,6 +4,7 @@
 // request-id header) as documented in docs/plan/01_v1-console.md § Ground
 // truth. Sessions carry a tiny state machine so e2e can exercise the HITL
 // approval round trip and streamed replies.
+import { isUtf8 } from "node:buffer";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -581,9 +582,12 @@ function readToolUsable(agent) {
   });
 }
 
-// sessionresources.go defaultMountRoot and maxMountPathBytes.
+// sessionresources.go defaultMountRoot, maxMountPathBytes,
+// defaultRepoMountRoot and maxReposPerSession.
 const UPLOADS_ROOT = "/mnt/session/uploads";
 const MAX_MOUNT_PATH_BYTES = 1024;
+const REPO_MOUNT_ROOT = "/workspace";
+const MAX_REPOS = 8;
 
 // Go's path.Clean, which a trailing slash does not survive.
 const cleanPath = (p) => {
@@ -599,7 +603,7 @@ const cleanPath = (p) => {
 // leading "/", is that directory's short name, alone placing the file where an
 // omitted mount_path does. The resolved path must name something under the
 // root, within the byte bound. Not modelled: storableText, whose U+0000 the
-// platform's body decoder refuses first.
+// platform's body decoder refuses first (decodeBodyObject).
 function resolveMountPath(p, fileId) {
   let resolved = cleanPath(p);
   const short = resolved.replace(/^\//, "");
@@ -608,7 +612,8 @@ function resolveMountPath(p, fileId) {
   } else if (short === "uploads") resolved = `${UPLOADS_ROOT}/${fileId}`;
   else if (short.startsWith("uploads/"))
     resolved = UPLOADS_ROOT + short.slice("uploads".length);
-  else resolved = posix.join(UPLOADS_ROOT, resolved);
+  // Go's path.Join cleans what it joins, so "/" roots to the directory itself.
+  else resolved = cleanPath(posix.join(UPLOADS_ROOT, resolved));
   if (!resolved.startsWith(`${UPLOADS_ROOT}/`))
     return {
       refusal: `mount_path must resolve to a path under ${UPLOADS_ROOT}`,
@@ -620,29 +625,131 @@ function resolveMountPath(p, fileId) {
   return { path: resolved };
 }
 
-// sessionresources.go parseFileResource for the resources add: the keys, the
-// file id's presence and shape, then the mount path's type and resolution.
-// The shape is the mock's wellFormedId, which its own ids meet; the
-// platform's domain.ID Valid holds a token to lowercase Crockford base32.
-function fileResourceInput(body) {
+// sessionresources.go parseFileResource: the keys, the file id's presence and
+// shape, then the mount path's type and resolution, each route in its own
+// words (resourceFlavor): "session" for session create, "deployment" for a
+// deployment's create and update, "add" for the resources add. The shape is
+// the mock's wellFormedId, which its own ids meet; the platform's domain.ID
+// Valid holds a token to lowercase Crockford base32. Answers the resolved
+// mount path, and the path as given ("" for none), which a deployment echoes
+// (#849).
+function fileResourceInput(body, flavor) {
   const unknown = leastUnknownKey(body, ["type", "file_id", "mount_path"]);
   if (unknown !== undefined) return { refusal: unknownField(unknown) };
   const fileIdRefusal = requiredStringRefusal(body, "file_id");
   if (fileIdRefusal) return { refusal: fileIdRefusal };
   if (!wellFormedId(body.file_id, "file"))
-    return { refusal: "file_id must be a valid file id" };
+    return {
+      refusal:
+        flavor === "session"
+          ? `Invalid file resource: invalid file_id: ${JSON.stringify(body.file_id)}`
+          : "file_id must be a valid file id",
+    };
   const given = body.mount_path ?? "";
   if (typeof given !== "string")
     return { refusal: "mount_path must be a string" };
-  if (!given)
+  // A deployment stores the spelling to echo it, so it is bounded as sent.
+  if (
+    flavor === "deployment" &&
+    Buffer.byteLength(given) > MAX_MOUNT_PATH_BYTES
+  )
     return {
-      fileId: body.file_id,
-      mountPath: `${UPLOADS_ROOT}/${body.file_id}`,
+      refusal: `mount_path must be at most ${MAX_MOUNT_PATH_BYTES} bytes as sent`,
     };
+  const input = { kind: "file", fileId: body.file_id, given };
+  if (!given) return { ...input, mountPath: `${UPLOADS_ROOT}/${body.file_id}` };
   const resolved = resolveMountPath(given, body.file_id);
-  return resolved.refusal
-    ? resolved
-    : { fileId: body.file_id, mountPath: resolved.path };
+  return resolved.refusal ? resolved : { ...input, mountPath: resolved.path };
+}
+
+// parseRepoResource's mount path, after its url, token and checkout: the
+// path given, else /workspace/<repo name>, either held by
+// validateRepoMountPath to a literal, clean, absolute container path off the
+// reserved ones. Not modelled: storableText, which the body decoder answers
+// first.
+function repoMountInput(resource) {
+  const given = resource.mount_path ?? "";
+  if (typeof given !== "string")
+    return { refusal: "mount_path must be a string" };
+  const mountPath =
+    given || `${REPO_MOUNT_ROOT}/${githubRepoName(resource.url)}`;
+  const quoted = JSON.stringify(mountPath);
+  const refusal = !mountPath.startsWith("/")
+    ? "mount_path must be an absolute path"
+    : Buffer.byteLength(mountPath) > MAX_MOUNT_PATH_BYTES
+      ? `mount_path must be at most ${MAX_MOUNT_PATH_BYTES} bytes`
+      : cleanPath(mountPath) !== mountPath
+        ? 'mount_path must be a clean absolute path (no ".", "..", doubled separators, or trailing slash)'
+        : ["/", "/tmp", MEMORY_MOUNT_PARENT].includes(mountPath)
+          ? `mount_path ${quoted} is reserved`
+          : mountPath.startsWith(`${MEMORY_MOUNT_PARENT}/`)
+            ? `mount_path ${quoted} is reserved for memory stores`
+            : null;
+  return refusal ? { refusal } : { kind: "repo", mountPath, given };
+}
+
+// sessionresources.go parseResources' rules between mounts, judged on the
+// resolved paths cleaned, in each route's words: a path another resource
+// already takes, refused as each resource is parsed (take), then once all are
+// (finish), at most 8 repositories and no mount at a proper ancestor of a
+// repository's.
+function mountRules(flavor) {
+  const quote = JSON.stringify;
+  const seen = new Map();
+  const mounts = [];
+  // mountWords: a deployment names a mount as the caller spelled it (#849).
+  const words = (input, resolved) =>
+    !input.given
+      ? resolved
+        ? `the default mount_path ${quote(input.mountPath)}`
+        : "the default mount_path"
+      : resolved && input.given !== input.mountPath
+        ? `mount_path ${quote(input.given)} (resolves to ${quote(input.mountPath)})`
+        : `mount_path ${quote(input.given)}`;
+  // errRepoMountOverlap: session create's sentence for a repository, the
+  // reference's (#540).
+  const overlap = (first, second) =>
+    `Invalid \`github_repository\` resource: \`mount_path\` overlaps another resource: ${first} and ${second}; set distinct \`mount_path\` values`;
+  return {
+    take(input) {
+      const clean = cleanPath(input.mountPath);
+      const prev = seen.get(clean);
+      if (prev) {
+        if (flavor === "session" && input.kind === "repo")
+          return overlap(prev.mountPath, input.mountPath);
+        if (flavor === "deployment")
+          return `${words(prev, false)} and ${words(input, false)} both resolve to ${quote(input.mountPath)}`;
+        return `mount_path ${quote(input.mountPath)} is used by more than one resource`;
+      }
+      seen.set(clean, input);
+      mounts.push(input);
+      return null;
+    },
+    finish() {
+      if (mounts.filter((input) => input.kind === "repo").length > MAX_REPOS)
+        return `a session can mount at most ${MAX_REPOS} github_repository resources`;
+      for (const [ri, repo] of mounts.entries()) {
+        if (repo.kind !== "repo") continue;
+        for (const [pi, other] of mounts.entries()) {
+          if (
+            !properPathAncestor(
+              cleanPath(other.mountPath),
+              cleanPath(repo.mountPath),
+            )
+          )
+            continue;
+          // The later of the pair is the one the reference's sentence is
+          // about.
+          if (flavor === "session" && mounts[Math.max(pi, ri)].kind === "repo")
+            return overlap(other.mountPath, repo.mountPath);
+          if (flavor === "deployment")
+            return `${words(other, true)} is an ancestor of ${repo.given ? "repository mount_path" : "the repository's default mount_path"} ${quote(repo.mountPath)}`;
+          return `mount_path ${quote(other.mountPath)} is an ancestor of repository mount_path ${quote(repo.mountPath)}`;
+        }
+      }
+      return null;
+    },
+  };
 }
 
 // properPathAncestor: clean path a a proper ancestor directory of clean b.
@@ -681,13 +788,14 @@ function checkoutRefusal(checkout) {
   return null;
 }
 
-// parseSessionResourceInputs: each element's shape, in session create's
-// words (#540), and the memory stores' own two rules. Nothing is looked up
-// here. Not modelled: a file's id shape and mount path, a repository's mount
-// path, and the rules between mounts.
-function sessionResourceRefusal(resources) {
+// parseSessionResourceInputs: each element's shape and mount path, in session
+// create's words (#540), the memory stores' own two rules, and the rules
+// between mounts. Nothing is looked up here. Each element's input, its
+// resolved mount path included, is pushed onto inputs.
+function sessionResourceRefusal(resources, inputs) {
   if (resources === undefined || resources === null) return null;
   if (!Array.isArray(resources)) return "resources must be an array";
+  const rules = mountRules("session");
   const stores = new Set();
   for (const [index, resource] of resources.entries()) {
     if (!resource || typeof resource !== "object" || Array.isArray(resource))
@@ -721,6 +829,10 @@ function sessionResourceRefusal(resources) {
         return "authorization_token must be at most 8192 bytes";
       const checkout = checkoutRefusal(resource.checkout);
       if (checkout) return checkout;
+      const mount = repoMountInput(resource);
+      const mountRefusal = mount.refusal ?? rules.take(mount);
+      if (mountRefusal) return mountRefusal;
+      inputs.push(mount);
       continue;
     }
     if (resource.type === "memory_store") {
@@ -752,12 +864,17 @@ function sessionResourceRefusal(resources) {
       stores.add(id);
       if (stores.size > 8)
         return "a session can attach at most 8 memory stores";
+      inputs.push({ kind: "memory" });
       continue;
     }
     if (resource.type !== "file")
       return `resource type ${JSON.stringify(resource.type)} is not supported`;
+    const file = fileResourceInput(resource, "session");
+    const fileRefusal = file.refusal ?? rules.take(file);
+    if (fileRefusal) return fileRefusal;
+    inputs.push(file);
   }
-  return null;
+  return rules.finish();
 }
 
 // deploymentparse.go parseDeploymentSchedule: a field that is not a string
@@ -808,10 +925,13 @@ function vaultIdsRefusal(ids) {
 
 // A deployment's resources[], in the mock's own words: not split by #190, and
 // it still looks files and stores up, which the platform does not until a
-// run. Judged where the platform parses resources (parseResourceInputs).
+// run. Judged where the platform parses resources (parseResourceInputs),
+// each mount path as the platform resolves and judges it, in its words: the
+// deployment echoes the paths as given, and a fire mounts them resolved.
 function deploymentResourceRefusal(resources) {
   if (resources === undefined || resources === null) return null;
   if (!Array.isArray(resources)) return "resources must be an array";
+  const rules = mountRules("deployment");
   for (const resource of resources) {
     const valid =
       (resource.type === "file" &&
@@ -824,12 +944,17 @@ function deploymentResourceRefusal(resources) {
       (resource.type === "github_repository" &&
         typeof resource.authorization_token === "string" &&
         resource.authorization_token.length > 0 &&
-        /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(
-          resource.url ?? "",
-        ));
+        githubRepoName(resource.url ?? ""));
     if (!valid) return "invalid deployment resource";
+    if (resource.type === "memory_store") continue;
+    const mount =
+      resource.type === "file"
+        ? fileResourceInput(resource, "deployment")
+        : repoMountInput(resource);
+    const refusal = mount.refusal ?? rules.take(mount);
+    if (refusal) return refusal;
   }
-  return null;
+  return rules.finish();
 }
 
 // store.FileLiveSQL: a row whose expiry has passed has no content, so nothing
@@ -1478,6 +1603,72 @@ function handleInbound(state, incoming) {
   return { posted };
 }
 
+// The session a resource route changes, as the add and the remove read it:
+// its id normalized (normalizeSessionID), its row (sessionResourceRows), then
+// refused if archived, or while a live dream holds it (runnerguard.go
+// requireNotDreamOwned; the mock's dreams close as they end). Answers the
+// session's state, or a refusal and its status.
+function resourceSession(sessionId) {
+  const id = sessionId.replace(/^session_/, "sesn_");
+  const state = store.get(id);
+  if (!state) return { status: 404, refusal: `session ${id} not found` };
+  if (state.session.archived_at)
+    return { status: 400, refusal: `session ${id} is archived` };
+  const dream = dreamsStore.find(
+    (item) => item.session_id === id && item.ended_at == null,
+  );
+  if (dream)
+    return { status: 400, refusal: `session is owned by dream ${dream.id}` };
+  return { id, state };
+}
+
+// wire.go decodeBodyObject, which every JSON object body passes: a blank body,
+// or a JSON null, is an empty object; then the bytes must be UTF-8 and the
+// body an object, and no string in it, key or value, may hold U+0000
+// (rejectNULBody), the refusal naming where it found one. Answers the object
+// or a refusal.
+function decodeBodyObject(raw) {
+  const text = raw.toString("utf8");
+  if (text.trim() === "") return { body: {} };
+  if (!isUtf8(raw)) return { refusal: "request body must be valid UTF-8" };
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = undefined;
+  }
+  if (body === null) return { body: {} };
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return { refusal: "request body must be a JSON object" };
+  // Only the six-byte escape can carry one: a raw NUL is not valid JSON.
+  const nul = text.includes("\\u0000") ? nulRefusal(body, "") : null;
+  return nul ? { refusal: nul } : { body };
+}
+
+// rejectNUL: the first decoded string holding U+0000, named by its path; a
+// key holding one is named by its parent, so the byte is never echoed.
+function nulRefusal(value, path) {
+  const where = path || "the request body";
+  const rule =
+    "must not contain U+0000 (the \\u0000 escape): it cannot be stored";
+  if (typeof value === "string")
+    return value.includes("\0") ? `${where} ${rule}` : null;
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [`${path}[${index}]`, item])
+    : value && typeof value === "object"
+      ? Object.entries(value).map(([key, item]) => [
+          key.includes("\0") ? null : path ? `${path}.${key}` : key,
+          item,
+        ])
+      : [];
+  for (const [child, item] of entries) {
+    if (child === null) return `${where} keys ${rule}`;
+    const refusal = nulRefusal(item, child);
+    if (refusal) return refusal;
+  }
+  return null;
+}
+
 // sessionresources.go addSessionResourceTx: the body judged whole — decoded,
 // then its type, then parseFileResource — before the session is looked up
 // (checkID, which a malformed id and an absent one share), then the session's
@@ -1487,14 +1678,9 @@ function handleInbound(state, incoming) {
 // refusal and its status.
 function addSessionResource(sessionId, raw) {
   const fail = (status, refusal) => ({ status, refusal });
-  let body;
-  try {
-    body = raw.trim() === "" ? {} : JSON.parse(raw);
-  } catch {
-    body = undefined;
-  }
-  if (!body || typeof body !== "object" || Array.isArray(body))
-    return fail(400, "request body must be a JSON object");
+  const decoded = decodeBodyObject(raw);
+  if (decoded.refusal) return fail(400, decoded.refusal);
+  const { body } = decoded;
   // requiredString first — absent, null or "" is required, any other
   // non-string must be a string — then any type but "file" in the
   // reference's words (#540).
@@ -1505,19 +1691,11 @@ function addSessionResource(sessionId, raw) {
       400,
       `Failed to parse request: type: ${JSON.stringify(body.type)} is not a valid value`,
     );
-  const input = fileResourceInput(body);
+  const input = fileResourceInput(body, "add");
   if (input.refusal) return fail(400, input.refusal);
-  // normalizeSessionID, then the session row.
-  const id = sessionId.replace(/^session_/, "sesn_");
-  const state = store.get(id);
-  if (!state) return fail(404, `session ${id} not found`);
-  if (state.session.archived_at) return fail(400, `session ${id} is archived`);
-  // runnerguard.go requireNotDreamOwned: the hold lasts until the dream
-  // closes, which the mock's dreams do as they end.
-  const dream = dreamsStore.find(
-    (item) => item.session_id === id && item.ended_at == null,
-  );
-  if (dream) return fail(400, `session is owned by dream ${dream.id}`);
+  const held = resourceSession(sessionId);
+  if (held.refusal) return held;
+  const { id, state } = held;
   // requireReadTool: a file is added only for an agent whose
   // agent_toolset_20260401 leaves read enabled, in the reference's words
   // (console-141 #92). MCP and custom tools do not count.
@@ -1526,7 +1704,8 @@ function addSessionResource(sessionId, raw) {
       400,
       "Missing required tool: file resources require the read tool to be usable (enabled and not always_deny) on the session's `agent_toolset`",
     );
-  // mountPathTaken and repoMountBelow, the stored side cleaned.
+  // mountPathTaken and repoMountBelow, the stored side cleaned, as
+  // resolveMountPath has cleaned the added one.
   const resources = state.session.resources;
   if (resources.some((item) => cleanPath(item.mount_path) === input.mountPath))
     return fail(
@@ -3474,6 +3653,11 @@ const server = createServer(async (req, res) => {
         return;
       }
       const sessionId = `sesn_dep${String(sessionCounter++).padStart(6, "0")}`;
+      // The platform stores each resolved mount path beside the spelling the
+      // deployment echoes, and a fire mounts the resolved one (#849). The
+      // mock keeps the spelling alone and resolves it again here: resolution
+      // depends on nothing else, and the spelling was judged resolvable when
+      // the deployment took it.
       const sessionResources = deployment.resources.map((resource) => {
         if (resource.type === "memory_store")
           return memoryStoreResource(
@@ -3487,12 +3671,7 @@ const server = createServer(async (req, res) => {
             id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
             type: "github_repository",
             url: resource.url,
-            mount_path:
-              resource.mount_path ??
-              `/workspace/${resource.url
-                .split("/")
-                .at(-1)
-                .replace(/\.git$/, "")}`,
+            mount_path: repoMountInput(resource).mountPath,
             checkout: resource.checkout ?? null,
             created_at: timestamp,
             updated_at: timestamp,
@@ -3504,8 +3683,7 @@ const server = createServer(async (req, res) => {
           id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
           type: "file",
           file_id: mintFileCopy(sessionId, resource.file_id),
-          mount_path:
-            resource.mount_path ?? `/mnt/session/uploads/${resource.file_id}`,
+          mount_path: fileResourceInput(resource, "deployment").mountPath,
           created_at: timestamp,
           updated_at: timestamp,
         };
@@ -3978,10 +4156,11 @@ const server = createServer(async (req, res) => {
     // environment, the agent, and last the stores and files
     // (materializeResourceInputs). initial_events, which the mock does not
     // model, stays an unknown key here.
+    const resourceInputs = [];
     const bodyRefusal =
       requiredStringRefusal(body, "environment_id") ??
       (body.agent == null ? "agent: value is required" : null) ??
-      sessionResourceRefusal(body.resources);
+      sessionResourceRefusal(body.resources, resourceInputs);
     if (bodyRefusal) {
       res.writeHead(400);
       res.end(envelope("invalid_request_error", bodyRefusal));
@@ -4035,19 +4214,17 @@ const server = createServer(async (req, res) => {
         400,
         `agent ${agentId} is archived and cannot be used to create a session`,
       );
+    // Each mount at the path parseSessionResourceInputs resolved, the only
+    // one a session stores.
     const resources = [];
-    for (const resource of body.resources ?? []) {
+    for (const [index, resource] of (body.resources ?? []).entries()) {
+      const { mountPath } = resourceInputs[index];
       if (resource.type === "github_repository") {
         resources.push({
           id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
           type: "github_repository",
           url: resource.url,
-          mount_path:
-            resource.mount_path ||
-            `/workspace/${resource.url
-              .split("/")
-              .at(-1)
-              .replace(/\.git$/, "")}`,
+          mount_path: mountPath,
           checkout: resource.checkout ?? null,
           created_at: now(),
           updated_at: now(),
@@ -4092,8 +4269,7 @@ const server = createServer(async (req, res) => {
         id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
         type: "file",
         file_id: resource.file_id,
-        mount_path:
-          resource.mount_path ?? `/mnt/session/uploads/${resource.file_id}`,
+        mount_path: mountPath,
         created_at: timestamp,
         updated_at: timestamp,
       });
@@ -4941,15 +5117,52 @@ const server = createServer(async (req, res) => {
       );
     };
     if (req.method === "POST" && !resourceMatch[2]) {
-      const added = addSessionResource(
-        resourceMatch[1],
-        String(await readBody(req)),
-      );
+      const added = addSessionResource(resourceMatch[1], await readBody(req));
       if (added.refusal) fail(added.status, added.refusal);
       else {
         res.writeHead(200);
         res.end(JSON.stringify(added.resource));
       }
+      return;
+    }
+    if (req.method === "DELETE") {
+      // sessionresources.go deleteSessionResourceTx: the session as the add
+      // reads it, then the resource, in the reference's words (#540), and a
+      // repository refused. The platform finds a resource by its sesrsc_ id
+      // alone (checkResourceID), so a memory element, which carries none,
+      // answers 404 there; the mock still finds one by its store id.
+      if (!resourceMatch[2]) {
+        fail(405, "Method Not Allowed");
+        return;
+      }
+      const held = resourceSession(resourceMatch[1]);
+      if (held.refusal) {
+        fail(held.status, held.refusal);
+        return;
+      }
+      const resourceId = resourceMatch[2];
+      const { session } = held.state;
+      const resource = session.resources.find(
+        (item) =>
+          (item.type === "memory_store" ? item.memory_store_id : item.id) ===
+          resourceId,
+      );
+      if (!resource) {
+        fail(404, `Resource not found: ${resourceId}`);
+        return;
+      }
+      if (resource.type === "github_repository") {
+        fail(
+          400,
+          "github_repository resources cannot be removed; repositories are attached for the lifetime of the session",
+        );
+        return;
+      }
+      session.resources = session.resources.filter((item) => item !== resource);
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({ id: resourceId, type: "session_resource_deleted" }),
+      );
       return;
     }
     const state = store.get(resourceMatch[1]);
@@ -4971,22 +5184,6 @@ const server = createServer(async (req, res) => {
     if (resourceId && !resource) {
       // sessionresources.go errResourceNotFound: the reference's words (#540).
       fail(404, `Resource not found: ${resourceId}`);
-      return;
-    }
-    if (req.method === "DELETE") {
-      if (!resource) {
-        fail(404, "no such resource");
-        return;
-      }
-      if (resource.type === "github_repository") {
-        fail(400, "repositories are attached for the lifetime of the session");
-        return;
-      }
-      state.session.resources = resources.filter((item) => item !== resource);
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({ id: resourceId, type: "session_resource_deleted" }),
-      );
       return;
     }
     let body;
