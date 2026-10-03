@@ -750,6 +750,32 @@ function deploymentResourceRefusal(resources) {
   return null;
 }
 
+// sessionresources.go mountFileCopy (platform #578): every path that mounts a
+// file — session create, resources add, a deployment's fire — mints the
+// session's own copy, and the resource echoes the copy's id. A fresh id,
+// scoped to the session, never downloadable, the source's filename, size, type
+// and expiry, a created_at of its own. The default mount path still names the
+// requested id, so callers resolve it before minting. A source gone by a
+// deployment's fire is the platform's failed run, which the mock does not
+// model: the requested id is kept.
+function mintFileCopy(sessionId, fileId) {
+  const source = filesStore.find((file) => file.id === fileId);
+  if (!source) return fileId;
+  const copy = {
+    id: `file_mock${String(fileCounter++).padStart(6, "0")}`,
+    type: "file",
+    filename: source.filename,
+    mime_type: source.mime_type,
+    size_bytes: source.size_bytes,
+    downloadable: false,
+    expires_at: source.expires_at,
+    scope: { id: sessionId, type: "session" },
+    created_at: now(),
+  };
+  filesStore.unshift(copy);
+  return copy.id;
+}
+
 // memsync.Slug: lowercased, every run of anything but an ASCII letter or
 // digit one hyphen, none at either end. A store whose name leaves nothing
 // mounts under the slug of its id (snapshotMemoryStore).
@@ -1888,8 +1914,13 @@ function route(req, url) {
       const at = rows.findIndex((file) => file.id === afterId);
       rows = at === -1 ? [] : rows.slice(at + 1);
     }
+    // A session's files list under its scope_id and nowhere else (#578): the
+    // unfiltered list leaves out every scoped row, mount copies and harvested
+    // outputs alike. An unknown scope_id matches nothing.
     const scopeId = url.searchParams.get("scope_id");
-    if (scopeId) rows = rows.filter((file) => file.scope?.id === scopeId);
+    rows = scopeId
+      ? rows.filter((file) => file.scope?.id === scopeId)
+      : rows.filter((file) => !file.scope);
     const data = rows.slice(0, limit);
     const hasMore = rows.length > limit;
     return {
@@ -3056,6 +3087,7 @@ const server = createServer(async (req, res) => {
         ) ??
         agentsStore.find((candidate) => candidate.id === deployment.agent.id);
       const timestamp = now();
+      const sessionId = `sesn_dep${String(sessionCounter++).padStart(6, "0")}`;
       const sessionResources = deployment.resources.map((resource) => {
         if (resource.type === "memory_store") {
           const memory = memoryResources.find(
@@ -3084,10 +3116,12 @@ const server = createServer(async (req, res) => {
             updated_at: timestamp,
           };
         }
+        // The fire mints the session's own copy; the deployment keeps
+        // naming the upload (mintFileCopy).
         return {
           id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
           type: "file",
-          file_id: resource.file_id,
+          file_id: mintFileCopy(sessionId, resource.file_id),
           mount_path:
             resource.mount_path ?? `/mnt/session/uploads/${resource.file_id}`,
           created_at: timestamp,
@@ -3095,7 +3129,7 @@ const server = createServer(async (req, res) => {
         };
       });
       const session = {
-        id: `sesn_dep${String(sessionCounter++).padStart(6, "0")}`,
+        id: sessionId,
         type: "session",
         agent: mockSessionAgent(sourceAgent),
         environment_id: deployment.environment_id,
@@ -3698,8 +3732,14 @@ const server = createServer(async (req, res) => {
       });
     }
     const timestamp = now();
+    const sessionId = `sesn_mock${String(sessionCounter++).padStart(6, "0")}`;
+    // Only once every resource has been judged and looked up, as the
+    // platform mints inside the create's transaction (mintFileCopy).
+    for (const resource of resources)
+      if (resource.type === "file")
+        resource.file_id = mintFileCopy(sessionId, resource.file_id);
     const session = {
-      id: `sesn_mock${String(sessionCounter++).padStart(6, "0")}`,
+      id: sessionId,
       type: "session",
       agent: mockSessionAgent(agent),
       environment_id: env.id,
@@ -4623,7 +4663,7 @@ const server = createServer(async (req, res) => {
     const added = {
       id: `sesrsc_mock${String(resourceCounter++).padStart(4, "0")}`,
       type: "file",
-      file_id: body.file_id,
+      file_id: mintFileCopy(state.session.id, body.file_id),
       mount_path: mount,
       created_at: now(),
       updated_at: now(),

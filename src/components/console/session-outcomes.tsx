@@ -60,9 +60,16 @@ export function SessionOutcomes({
   const [rubricText, setRubricText] = useState("");
   const [fileId, setFileId] = useState("");
   const [maxIterations, setMaxIterations] = useState("3");
-  const files = useFileOptions(open && rubricType === "file");
-  const rubricFiles =
-    files.data?.files.filter((file) => file.size_bytes <= 256 * 1024) ?? [];
+  const files = useFileOptions(sessionId, open && rubricType === "file");
+  // A rubric may name an upload or one of this session's own files (a mount's
+  // copy or a harvested output); the label says which.
+  const rubricFiles = [
+    ...(files.data?.uploads ?? []).map((file) => ({ file, origin: "upload" })),
+    ...(files.data?.sessionFiles ?? []).map((file) => ({
+      file,
+      origin: "session file",
+    })),
+  ].filter(({ file }) => file.size_bytes <= 256 * 1024);
   const active = outcomes.some((outcome) => !isTerminalOutcome(outcome.result));
   const valid =
     description.length > 0 &&
@@ -247,7 +254,7 @@ export function SessionOutcomes({
                   }
                 >
                   {files.isPending
-                    ? "Loading uploaded files…"
+                    ? "Loading files…"
                     : files.isError
                       ? "Files could not be loaded. Paste an ID to continue."
                       : files.data?.truncated
@@ -257,9 +264,13 @@ export function SessionOutcomes({
                           : "Choose a suggestion by filename or paste a file ID."}
                 </p>
                 <datalist id="outcome-rubric-files">
-                  {rubricFiles.map((file) => (
-                    <option key={file.id} value={file.id}>
-                      {file.filename}
+                  {rubricFiles.map(({ file, origin }) => (
+                    <option
+                      key={file.id}
+                      value={file.id}
+                      data-file-origin={origin}
+                    >
+                      {`${file.filename} · ${origin}`}
                     </option>
                   ))}
                 </datalist>

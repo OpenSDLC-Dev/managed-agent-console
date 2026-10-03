@@ -83,10 +83,12 @@ export async function platformGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
   signal?: AbortSignal,
+  // Only the `anthropic-*` headers the BFF forwards (platform-proxy.ts).
+  headers?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(
     `/api/platform/${path}${queryString(params)}`,
-    signal ? { signal } : undefined,
+    signal || headers ? { signal, headers } : undefined,
   );
   await assertOk(response);
   return (await response.json()) as T;

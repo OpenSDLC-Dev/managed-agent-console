@@ -86,7 +86,13 @@ function setup(
     }
     throw new Error(`Unexpected request: ${url.pathname}`);
   });
-  vi.stubGlobal("fetch", fetch);
+  // The tab also lists the session's own files on mount; `fetch` counts only
+  // what a preview reads.
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) =>
+    String(input).startsWith("/api/platform/v1/files?scope_id=")
+      ? json({ data: [], next_page: null })
+      : fetch(input),
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

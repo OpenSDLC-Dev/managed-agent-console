@@ -166,23 +166,36 @@ describe("SessionOutcomes", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("suggests uploaded rubric files while preserving raw ID entry", async () => {
+  it("suggests uploads and the session's own files, labelled apart, while preserving raw ID entry", async () => {
+    const file = (id: string, filename: string, over = {}) => ({
+      id,
+      type: "file",
+      filename,
+      mime_type: "text/markdown",
+      size_bytes: 42,
+      downloadable: false,
+      expires_at: null,
+      created_at: "2026-09-09T08:00:00Z",
+      ...over,
+    });
+    const scope = { id: "sesn_1", type: "session" };
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) =>
       init?.method === "POST"
         ? json({ data: [] })
         : json({
-            data: [
-              {
-                id: "file_rubric1",
-                type: "file",
-                filename: "rubric.md",
-                mime_type: "text/markdown",
-                size_bytes: 42,
-                downloadable: false,
-                expires_at: null,
-                created_at: "2026-09-09T08:00:00Z",
-              },
-            ],
+            data: input.includes("scope_id=sesn_1")
+              ? [
+                  file("file_copy1", "rubric.md", { scope }),
+                  file("file_output1", "criteria.md", {
+                    scope,
+                    downloadable: true,
+                  }),
+                  file("file_bigoutput", "huge.md", {
+                    scope,
+                    size_bytes: 256 * 1024 + 1,
+                  }),
+                ]
+              : [file("file_rubric1", "rubric.md")],
             next_page: null,
           }),
     );
@@ -193,13 +206,34 @@ describe("SessionOutcomes", () => {
     await user.click(screen.getByRole("button", { name: "Define outcome" }));
     await user.click(screen.getByLabelText("Rubric type"));
     await user.click(await screen.findByRole("option", { name: "File" }));
-    await waitFor(() =>
-      expect(
-        document.querySelector(
-          'datalist#outcome-rubric-files option[value="file_rubric1"]',
-        ),
-      ).toHaveTextContent("rubric.md"),
+    const option = (id: string) =>
+      document.querySelector(
+        `datalist#outcome-rubric-files option[value="${id}"]`,
+      );
+    await waitFor(() => expect(option("file_copy1")).not.toBeNull());
+    expect(option("file_rubric1")).toHaveTextContent("rubric.md · upload");
+    expect(option("file_rubric1")).toHaveAttribute(
+      "data-file-origin",
+      "upload",
     );
+    expect(option("file_copy1")).toHaveAttribute(
+      "data-file-origin",
+      "session file",
+    );
+    expect(option("file_output1")).toHaveAttribute(
+      "data-file-origin",
+      "session file",
+    );
+    // The platform's 256 KiB rubric limit applies to a session's files too.
+    expect(option("file_bigoutput")).toBeNull();
+    expect(
+      fetchMock.mock.calls
+        .map(([url]) => String(url))
+        .filter((url) => url.startsWith("/api/platform/v1/files")),
+    ).toEqual([
+      "/api/platform/v1/files?limit=1000",
+      "/api/platform/v1/files?scope_id=sesn_1&limit=1000",
+    ]);
     expect(
       screen.getByText("Choose a suggestion by filename or paste a file ID."),
     ).toHaveAttribute("data-file-options-state", "ready");

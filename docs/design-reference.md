@@ -626,6 +626,16 @@ Frames 49–50 inspect a mounted upload's type, size, attachment time and both F
 
 Memory trees use the existing server prefix/depth paging. File metadata and bytes come from `files.go:getFile/downloadFile`: uploads have `downloadable=false`, and expired content returns 404 while metadata remains. The console does not borrow environment credentials to read uploads. Downloadable text can be previewed up to 1 MiB; other outputs retain Download. File bodies render as escaped text and Memory Markdown never automatically fetches remote images.
 
+## Session files — checked 2026-10-03 ([#192](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/192))
+
+Platform #578 (`d339a1c9`) mints a session-scoped copy for every file mount and drops scoped rows from the unfiltered `GET /v1/files`. Read from recordings `2026-09-12-console-141` and `2026-09-12-child-lifecycle`; no live reference pass.
+
+- **Recorded:** an open Session polls `GET /v1/files?beta=true&scope_id=<session>&limit=1000` under `anthropic-beta: managed-agents-2026-04-01`, about every 10s, from load until archive (`ui-network` idx 36–303). Copies come back `downloadable: false`, scoped, with the upload's name, size and type, the name kept when the mount renames the file (idx 243, 274, 292).
+- **Recorded:** the Resources tab shows a mounted file as a `Path`/`Size` row whose size is its copy's (88B in frames 49 and 63; nothing else was fetched after idx 288's attach). Details show Type, Size, Attached, the copy's File ID and the Resource ID (frames 50, 63).
+- **Ours:** the same request and header, polled at the Session's 15s cadence while Resources is open. The platform lists an unknown scope as empty, so a 404 means the list is not served: polling stops and the list hides, as any absent surface does. A mounted file's row adds its copy's size in this tab's `88 B` memory-size format.
+- **Inferred (unrecorded):** no recorded list carries an output (`downloadable: true`), so their placement is ours. Rows no resource names follow the resources: an output labelled `Output` with the only Download, and a copy whose resource was removed labelled `Upload`, the reference's word for a mounted copy. The rubric picker suggests the session's files beside uploads, labelled `session file`.
+- **Divergence:** the Sessions-list inspector links a mounted file to the Session's Resources. The reference links it to Files with `?file=<copy>` (frame 47 DOM); ours has no file inspector there, and the copy is not in its list. The Files page drops its Scope column, since no scoped row reaches it.
+
 ## Session timeline and Thread details — checked 2026-09-12
 
 Records ec8c4c6 frames 39–43 show the event strip, 1.00× zoom controls, Copy/Download and a selected Thread's Agent, model, context chart and usage. No zoom action or resulting scale was recorded. Local zoom uses a bounded horizontal 1×–8× viewport; this is an interaction choice, not a verified reference zoom factor.

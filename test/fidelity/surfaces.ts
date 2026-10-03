@@ -337,7 +337,7 @@ export const SURFACES: Surface[] = [
       const fileView = ["file", "text", "download", "missing-file"].includes(
         view,
       );
-      const fileId =
+      const sourceId =
         view === "text" || view === "download"
           ? "file_output000000000001"
           : "file_notes0000000000001";
@@ -350,7 +350,7 @@ export const SURFACES: Surface[] = [
             ? [
                 {
                   type: "file",
-                  file_id: fileId,
+                  file_id: sourceId,
                   mount_path: "/mnt/session/uploads/notes.md",
                 },
               ]
@@ -374,7 +374,33 @@ export const SURFACES: Surface[] = [
       });
       if (!response.ok())
         throw new Error("Resource preview fixture creation failed");
-      const session = (await response.json()) as { id: string };
+      const session = (await response.json()) as {
+        id: string;
+        resources: { type: string; file_id?: string }[];
+      };
+      // The mount names the session's own copy (platform #578), which is never
+      // downloadable; the text and download views stand in a downloadable file
+      // for it, the preview branch a session mounting an output before #578
+      // still reaches.
+      const fileId =
+        session.resources.find((resource) => resource.type === "file")
+          ?.file_id ?? sourceId;
+      if (view === "download")
+        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
+          route.fulfill({
+            json: {
+              id: fileId,
+              type: "file",
+              filename: "summary.xlsx",
+              mime_type:
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              size_bytes: 120400,
+              downloadable: true,
+              created_at: "2026-09-01T10:00:00Z",
+              expires_at: null,
+            },
+          }),
+        );
       if (view === "archived") {
         const archived = await page.request.post(
           `/api/platform/v1/sessions/${session.id}/archive`,
@@ -1263,7 +1289,7 @@ export const SURFACES: Surface[] = [
     route: `/sessions/${GATED}`,
     fixture: GATED,
     description:
-      "Deletion confirmation names session outputs and retained uploads.",
+      "Deletion confirmation names the session's own files and retained uploads.",
     setup: async (page) => {
       await traceLive(page);
       await page.getByRole("button", { name: "More actions" }).click();
@@ -1344,9 +1370,9 @@ export const SURFACES: Surface[] = [
   {
     id: "session-outcome-file-rubric",
     route: `/sessions/${SESSION}`,
-    fixture: `${SESSION} with uploaded rubric suggestions`,
+    fixture: `${SESSION} with upload and session-file rubric suggestions`,
     description:
-      "Define-outcome dialog using a file rubric with catalog-backed ID suggestions.",
+      "Define-outcome dialog using a file rubric with ID suggestions from uploads and the session's own files.",
     setup: async (page) => {
       await page.getByTestId("outcome-evaluation").waitFor();
       await page.getByRole("button", { name: "Define outcome" }).click();
@@ -1432,7 +1458,7 @@ export const SURFACES: Surface[] = [
     route: `/sessions/${GATED}?inspector=resources`,
     fixture: `${GATED} with an attached file`,
     description:
-      "Session resources: mounted-file row, its mount path, and the attach affordance.",
+      "Session resources: mounted-file row, its mount path and copy's size, and the attach affordance.",
     setup: async (page) => {
       await traceLive(page);
       const add = await page.request.post(
@@ -1448,8 +1474,19 @@ export const SURFACES: Surface[] = [
       await page.reload();
       await traceLive(page);
       await page
-        .getByText("file_notes0000000000001", { exact: true })
+        .locator('[data-testid="session-resources"] [data-size-bytes="48213"]')
         .waitFor();
+    },
+  },
+  {
+    id: "session-files",
+    route: `/sessions/${SESSION}?inspector=resources`,
+    fixture: `${SESSION}: its mount's copy and a harvested output`,
+    description:
+      "A session's own files in Resources: the mounted copy's size, then the output with its download.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByRole("link", { name: "Download summary.xlsx" }).waitFor();
     },
   },
 

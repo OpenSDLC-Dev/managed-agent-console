@@ -85,7 +85,7 @@ export function SessionActions({
         interruptPending={interrupt.isPending}
         archived={!!session.archived_at}
         confirmArchive={false}
-        deleteDescription="Permanently delete this session, its event history, and the files it produced. Files uploaded through the Files API are retained. Interrupt a running session before deleting it."
+        deleteDescription="Permanently delete this session, its event history, and its own files (outputs and mounted copies). Files uploaded through the Files API are retained. Interrupt a running session before deleting it."
         onArchive={() =>
           archive.mutate(undefined, {
             onSuccess: () => {

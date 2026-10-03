@@ -28,12 +28,31 @@ function setup({
   missingSession = false,
   foreign = false,
   missingRun = false,
+  mountedFile = false,
 } = {}) {
   const run = {
     ...structuredClone(deploymentRuns[failed ? 1 : 0]),
     session_id: failed ? null : sessions[0].id,
   } as DeploymentRun;
-  const session = { ...sessions[0], deployment_id: run.deployment_id };
+  const session = {
+    ...sessions[0],
+    deployment_id: run.deployment_id,
+    // A fire mints the session's own copy of each file it mounts (#578).
+    ...(mountedFile
+      ? {
+          resources: [
+            {
+              id: "sesrsc_firedcopy",
+              type: "file",
+              file_id: "file_firedcopy",
+              mount_path: "/mnt/session/uploads/file_notes0000000000001",
+              created_at: "2026-09-12T04:22:01Z",
+              updated_at: "2026-09-12T04:22:01Z",
+            },
+          ],
+        }
+      : {}),
+  };
   const fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/deployment_runs/"))
@@ -134,3 +153,13 @@ it.each([{ foreign: true }, { missingRun: true }])(
     ).toBe(true);
   },
 );
+
+it("links a fired session's mounted copy to that session's Resources, run context kept", async () => {
+  const { run, session } = setup({ mountedFile: true });
+  const pane = await screen.findByRole("region", { name: "Session details" });
+  await within(pane).findByRole("heading", { name: session.title });
+  expect(pane.querySelector('a[href*="inspector=resources"]')).toHaveAttribute(
+    "href",
+    `/sessions/${session.id}?from_deployment=${run.deployment_id}&from_run=${run.id}&inspector=resources`,
+  );
+});

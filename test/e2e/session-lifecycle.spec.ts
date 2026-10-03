@@ -131,11 +131,16 @@ test("archive refusal stays on the Session and never interrupts it implicitly", 
   ).toBeEnabled();
 });
 
-test("session deletion removes outputs and keeps uploaded files", async ({
+test("archiving keeps a session's own files; deleting takes them and keeps the upload", async ({
   page,
 }) => {
+  const id = "sesn_research0000000000001";
+  const output = "file_output000000000001";
+  const copy = "file_researchcopy0000001";
+  const status = async (path: string) =>
+    (await page.request.get(`/api/platform/v1/${path}`)).status();
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto(`/sessions/${id}`);
   await page.getByRole("button", { name: "Interrupt", exact: true }).click();
   await expect(
     page.locator('[data-testid="session-effective-status"]'),
@@ -143,28 +148,42 @@ test("session deletion removes outputs and keeps uploaded files", async ({
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(page).toHaveURL(/\/sessions$/);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto(`/sessions/${id}?inspector=resources`);
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
-  // Archiving preserves the deliverables. Deleting is the destructive boundary.
-  expect(
-    (
-      await page.request.get("/api/platform/v1/files/file_output000000000001")
-    ).status(),
-  ).toBe(200);
+  // Archiving preserves the copy and the deliverable, still downloadable.
+  const panel = page.getByTestId("session-resources");
+  await expect(panel).toHaveAttribute("data-session-file-count", "2");
+  await expect(panel.locator('[data-size-bytes="48213"]')).toBeVisible();
+  await expect(
+    panel.getByRole("link", { name: "Download summary.xlsx" }),
+  ).toHaveAttribute("href", `/api/platform/v1/files/${output}/content`);
+  expect(await status(`files/${output}`)).toBe(200);
+  expect(await status(`files/${copy}`)).toBe(200);
+
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete session" }).click();
   await expect(page).toHaveURL(/\/sessions$/);
+  // Deleting is the destructive boundary: the session's own files go with
+  // it, and the upload its mount copied stays.
+  expect(await status(`files/${output}`)).toBe(404);
+  expect(await status(`files/${copy}`)).toBe(404);
+  expect(
+    (
+      await (
+        await page.request.get(`/api/platform/v1/files?scope_id=${id}`)
+      ).json()
+    ).data,
+  ).toEqual([]);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("cell", { name: "summary.xlsx", exact: true }),
-  ).toBeHidden();
-  expect(
-    (
-      await page.request.get("/api/platform/v1/files/file_output000000000001")
-    ).status(),
-  ).toBe(404);
+
+  // A link to the deleted session answers with its 404, not a broken page.
+  await page.goto(`/sessions/${id}?inspector=resources`);
+  await expect(page.getByTestId("error-state")).toHaveAttribute(
+    "data-error-status",
+    "404",
+  );
 });

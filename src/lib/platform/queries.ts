@@ -22,6 +22,7 @@ import {
   type Page,
 } from "./http";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
+import { isUnimplemented } from "./surfaces";
 import type { ResourceInput } from "./session-resources";
 import type {
   Agent,
@@ -69,7 +70,8 @@ const AGENT_OPTIONS_PAGE_LIMIT = 100;
 const AGENT_OPTIONS_PAGE_CAP = 10;
 const MEMORY_STORE_OPTIONS_PAGE_LIMIT = 100;
 const MEMORY_STORE_OPTIONS_PAGE_CAP = 10;
-const FILE_OPTIONS_PAGE_LIMIT = 1000;
+/** files.go maxFileListLimit, which the reference console's session list asks for too. */
+const FILE_LIST_LIMIT = 1000;
 
 /**
  * Every agent, for filter options: pages `v1/agents` to exhaustion
@@ -589,6 +591,11 @@ export function useFileText(id: string, enabled: boolean) {
   });
 }
 
+/**
+ * The unfiltered list: uploads only. Since platform #578 it leaves out every
+ * session-scoped row, as the reference does (files.go listFiles), so a
+ * session's copies and outputs are read through `useSessionFiles`.
+ */
 export function useFiles(page?: string) {
   return useQuery({
     queryKey: ["files", page],
@@ -601,16 +608,57 @@ export function useFiles(page?: string) {
   });
 }
 
-/** First 1,000 files for rubric suggestions; callers keep raw ID input. */
-export function useFileOptions(enabled = true) {
+/**
+ * The reference console's own request for a session's files (console-141
+ * ui-network idx 243), header included: the docs say filtering by `scope_id`
+ * requires it. The platform accepts and ignores it.
+ */
+const MANAGED_AGENTS_BETA = { "anthropic-beta": "managed-agents-2026-04-01" };
+
+function listSessionFiles(sessionId: string) {
+  return platformGet<Page<PlatformFile>>(
+    "v1/files",
+    { scope_id: sessionId, limit: FILE_LIST_LIMIT },
+    undefined,
+    MANAGED_AGENTS_BETA,
+  );
+}
+
+/**
+ * A session's own files: the copy each file mount minted (`downloadable`
+ * false) and the outputs harvested from its sandbox (`downloadable` true) —
+ * the only signal that tells them apart. They outlive an archive and go with
+ * a delete. Polled like the session, so outputs appear as they are harvested,
+ * until the list answers that it is not served: the platform lists an unknown
+ * scope as empty, so a 404 here means the collection route is absent.
+ */
+export function useSessionFiles(sessionId: string) {
   return useQuery({
-    queryKey: ["file-options"],
+    queryKey: ["session-files", sessionId],
+    queryFn: () => listSessionFiles(sessionId),
+    refetchInterval: (query) =>
+      isUnimplemented(query.state.error) ? false : 15_000,
+  });
+}
+
+/**
+ * Rubric suggestions: the first 1,000 uploads and the first 1,000 of this
+ * session's own files, which a rubric may name too. Callers keep raw ID input.
+ */
+export function useFileOptions(sessionId: string, enabled = true) {
+  return useQuery({
+    queryKey: ["file-options", sessionId],
     enabled,
     queryFn: async () => {
-      const res = await platformGet<Page<PlatformFile>>("v1/files", {
-        limit: FILE_OPTIONS_PAGE_LIMIT,
-      });
-      return { files: res.data, truncated: !!res.next_page };
+      const [uploads, own] = await Promise.all([
+        platformGet<Page<PlatformFile>>("v1/files", { limit: FILE_LIST_LIMIT }),
+        listSessionFiles(sessionId),
+      ]);
+      return {
+        uploads: uploads.data,
+        sessionFiles: own.data,
+        truncated: !!uploads.next_page || !!own.next_page,
+      };
     },
   });
 }
@@ -797,10 +845,11 @@ export function useDeleteSession(id: string) {
       platformDelete<{ id: string; type: string }>(`v1/sessions/${id}`),
     onSuccess: () => {
       client.removeQueries({ queryKey: ["session", id] });
+      // internal/api/sessions.go:deleteSession also removes the session's own
+      // files, which only its scoped list ever carried.
+      client.removeQueries({ queryKey: ["session-files", id] });
+      client.removeQueries({ queryKey: ["file-options", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
-      // internal/api/sessions.go:deleteSession also removes session-produced files.
-      void client.invalidateQueries({ queryKey: ["files"] });
-      void client.invalidateQueries({ queryKey: ["file-options"] });
     },
   });
 }

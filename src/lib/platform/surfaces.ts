@@ -76,7 +76,8 @@ export const SURFACES = {
   files: {
     path: "v1/files",
     label: "Files",
-    blurb: "Uploads and session outputs available as session mounts.",
+    blurb:
+      "Uploads available as session mounts. A session lists its own files.",
   },
   // The one surface that is not on the wire: management keys live in the
   // platform's off-wire console namespace (plan 07), so its probe goes through

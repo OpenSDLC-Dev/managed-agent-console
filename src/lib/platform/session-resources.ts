@@ -30,6 +30,11 @@ export function useAddSessionFile(sessionId: string) {
       platformPost<SessionResource>(`v1/sessions/${sessionId}/resources`, body),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["session", sessionId] });
+      // The mount mints the session's own copy (sessionresources.go mountFileCopy).
+      void client.invalidateQueries({
+        queryKey: ["session-files", sessionId],
+      });
+      void client.invalidateQueries({ queryKey: ["file-options", sessionId] });
     },
   });
 }

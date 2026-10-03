@@ -17,15 +17,40 @@ import { DetailSection } from "./detail";
 import { ConfirmIconButton } from "./archive-button";
 import { MemoryTree } from "./memory-tree";
 import { SessionResourcePreview } from "./session-resource-preview";
-import { useUploadFile } from "@/lib/platform/queries";
+import { useSessionFiles, useUploadFile } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import {
   useAddSessionFile,
   useRemoveSessionResource,
   useRotateRepositoryToken,
 } from "@/lib/platform/session-resources";
-import type { Session } from "@/lib/platform/types";
+import type { PlatformFile, Session } from "@/lib/platform/types";
+
+/** The memory tree's size format, so every size in this tab reads alike. */
+function FileSize({ file }: { file: PlatformFile }) {
+  return (
+    <span className="shrink-0 font-sans" data-size-bytes={file.size_bytes}>
+      {file.size_bytes.toLocaleString()} B
+    </span>
+  );
+}
 
 export function SessionResources({ session }: { session: Session }) {
+  // The session's own files, which the reference lists in this tab beside the
+  // resources (console-141 frames 49 and 63): a mounted file's row is its
+  // copy, the size coming from this list. Rows no resource names — harvested
+  // outputs, and copies whose resource was removed — follow the resources.
+  const files = useSessionFiles(session.id);
+  // A deployment that does not serve the list hides it, as any surface does.
+  const filesState = files.isPending
+    ? "loading"
+    : !files.isError
+      ? "ready"
+      : isUnimplemented(files.error)
+        ? "unavailable"
+        : "error";
+  const sessionFiles = files.data?.data ?? [];
+  const fileById = new Map(sessionFiles.map((file) => [file.id, file]));
   const add = useAddSessionFile(session.id);
   const remove = useRemoveSessionResource(session.id);
   const rotate = useRotateRepositoryToken(session.id);
@@ -60,18 +85,26 @@ export function SessionResources({ session }: { session: Session }) {
         ? resource.memory_store_id
         : resource.id) === selection?.resourceId,
   );
+  const matches = (...fields: (string | undefined)[]) =>
+    fields.join(" ").toLowerCase().includes(filter.toLowerCase());
   const visibleResources = session.resources.filter((resource) =>
-    [
+    matches(
       resource.mount_path,
       resource.type === "memory_store"
         ? resource.name
         : resource.type === "file"
-          ? resource.file_id
+          ? `${resource.file_id} ${fileById.get(resource.file_id)?.filename ?? ""}`
           : resource.url,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(filter.toLowerCase()),
+    ),
+  );
+  const mounted = new Set(
+    session.resources.flatMap((resource) =>
+      resource.type === "file" ? [resource.file_id] : [],
+    ),
+  );
+  const unmountedFiles = sessionFiles.filter((file) => !mounted.has(file.id));
+  const visibleFiles = unmountedFiles.filter((file) =>
+    matches(file.id, file.filename),
   );
   const editable = !session.archived_at;
   const close = () => {
@@ -82,7 +115,12 @@ export function SessionResources({ session }: { session: Session }) {
   const error = dialog === "file" ? (add.error ?? upload.error) : rotate.error;
   return (
     <DetailSection title="Resources">
-      <div className="space-y-3">
+      <div
+        className="space-y-3"
+        data-testid="session-resources"
+        data-session-files={filesState}
+        data-session-file-count={sessionFiles.length}
+      >
         <Input
           ref={filterInput}
           className="h-8"
@@ -96,16 +134,22 @@ export function SessionResources({ session }: { session: Session }) {
             No resources attached.
           </p>
         )}
-        {session.resources.length > 0 && visibleResources.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No matching resources.
-          </p>
-        )}
+        {session.resources.length > 0 &&
+          visibleResources.length === 0 &&
+          visibleFiles.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No matching resources.
+            </p>
+          )}
         {visibleResources.map((resource) => {
           const id =
             resource.type === "memory_store"
               ? resource.memory_store_id
               : resource.id;
+          const copy =
+            resource.type === "file"
+              ? fileById.get(resource.file_id)
+              : undefined;
           return (
             <Fragment key={id}>
               <div className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm">
@@ -138,8 +182,11 @@ export function SessionResources({ session }: { session: Session }) {
                         ? resource.url
                         : resource.name}
                   </button>
-                  <p className="break-all font-mono text-xs text-muted-foreground">
-                    {resource.mount_path}
+                  <p className="flex justify-between gap-2 font-mono text-xs text-muted-foreground">
+                    <span className="min-w-0 break-all">
+                      {resource.mount_path}
+                    </span>
+                    {copy && <FileSize file={copy} />}
                   </p>
                   {resource.type === "memory_store" && (
                     <p className="text-xs" data-access={resource.access}>
@@ -199,6 +246,38 @@ export function SessionResources({ session }: { session: Session }) {
             </Fragment>
           );
         })}
+        {visibleFiles.map((file) => (
+          <div
+            key={file.id}
+            className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
+            data-session-file-id={file.id}
+            data-downloadable={String(file.downloadable)}
+          >
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="break-all font-medium">{file.filename}</p>
+              <p className="flex justify-between gap-2 text-xs text-muted-foreground">
+                {/* `downloadable` is the one signal the wire gives. */}
+                <span>{file.downloadable ? "Output" : "Upload"}</span>
+                <FileSize file={file} />
+              </p>
+            </div>
+            {file.downloadable && (
+              <a
+                className="text-xs underline"
+                href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
+                download={file.filename}
+                aria-label={`Download ${file.filename}`}
+              >
+                Download
+              </a>
+            )}
+          </div>
+        ))}
+        {filesState === "error" && (
+          <p className="text-xs text-muted-foreground">
+            The session&apos;s files could not be listed. {files.error?.message}
+          </p>
+        )}
         {editable && (
           <Button
             variant="outline"

@@ -22,6 +22,19 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   401, and a link from another site could sign the operator out the same way. The console never
   calls it (#187).
 
+### Changed
+
+- A session's own files are listed with the session, following the platform's per-mount copies
+  ([platform #578](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/578), #192). Every
+  file mount now mints a session-scoped copy, and the unfiltered Files list leaves out every
+  session-scoped row, so the session's Resources tab lists them from `GET /v1/files?scope_id=`, as
+  the reference console does. A mounted file shows its copy's size, and harvested outputs follow it.
+  Only an output offers Download, since `downloadable` is the one signal that tells the two apart.
+  The rubric picker also suggests the session's own files, labelled apart from uploads. The Files
+  page drops its Scope column. In the Sessions inspector, a mounted file now opens the session's
+  Resources. Deploy this console with platform #578 or later: before it, outputs list on the Files
+  page too and a mounted file shows no size.
+
 ### Fixed
 
 - A memory store may omit `archived_at`, as the reference does until the store is archived. The
