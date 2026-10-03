@@ -12,6 +12,7 @@ import {
   useArchiveAgent,
   useArchiveCredential,
   useArchiveEnvironment,
+  useArchiveSession,
   useArchiveSessionThread,
   useArchiveVault,
   useCreateAgent,
@@ -49,6 +50,7 @@ import {
   useRedactMemoryVersion,
   useSendEvents,
   useSession,
+  useSessionFiles,
   useSessionThreads,
   useSessions,
   useSkill,
@@ -611,64 +613,242 @@ describe("useMemoryStoreOptions", () => {
   });
 });
 
-describe("useFileOptions", () => {
-  it("loads the platform's maximum first page and reports truncation", async () => {
-    const fetchMock = stubFetch({
-      data: [{ id: "file_1", filename: "rubric.md" }],
-      next_page: "more-files",
-    });
+const BETA = { "anthropic-beta": "managed-agents-2026-04-01" };
+
+describe("useSessionFiles", () => {
+  it("lists the session's scope with the reference's limit and beta header", async () => {
+    const fetchMock = stubFetch({ data: [{ id: "file_copy" }] });
     const { wrapper } = createClient();
-    const { result } = renderHook(() => useFileOptions(), { wrapper });
+    const { result } = renderHook(() => useSessionFiles("sesn_1", false), {
+      wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toEqual({
-      files: [{ id: "file_1", filename: "rubric.md" }],
-      truncated: true,
+    expect(result.current.data?.data).toEqual([{ id: "file_copy" }]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(new URL(url, "http://console.test").pathname).toBe(
+      "/api/platform/v1/files",
+    );
+    expect(searchOf(url)).toEqual({ scope_id: "sesn_1", limit: "1000" });
+    expect(init?.headers).toEqual(BETA);
+  });
+
+  it("polls like the session, and stops once the list answers that it is not served", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let status = 200;
+    const fetchMock = vi.fn(async () =>
+      status === 200
+        ? jsonResponse({ data: [] })
+        : new Response(
+            JSON.stringify({
+              type: "error",
+              error: { type: "not_found_error", message: "gone" },
+            }),
+            { status, headers: { "content-type": "application/json" } },
+          ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useSessionFiles("sesn_1", false), {
+      wrapper,
     });
-    expect(searchOf(fetchMock.mock.calls[0][0])).toEqual({ limit: "1000" });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    status = 404;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it("polls from load until archive, and reads the list once more as the archive lands", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const live = { id: "sesn_1", type: "session", archived_at: null };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) =>
+      jsonResponse(
+        input.startsWith("/api/platform/v1/files")
+          ? { data: [] }
+          : init?.method === "POST"
+            ? { ...live, archived_at: "2026-10-03T00:00:00Z" }
+            : live,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const lists = () =>
+      fetchMock.mock.calls.filter(([url]) =>
+        url.startsWith("/api/platform/v1/files?scope_id=sesn_1"),
+      ).length;
+    const { wrapper } = createClient();
+    // The Resources tab's own wiring: the session's archive state, read from
+    // the session the archive writes back.
+    const { result } = renderHook(
+      () => {
+        const session = useSession("sesn_1");
+        return {
+          files: useSessionFiles(
+            "sesn_1",
+            !!session.data?.archived_at,
+            !!session.data,
+          ),
+          archive: useArchiveSession("sesn_1"),
+        };
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.files.isSuccess).toBe(true));
+    expect(lists()).toBe(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(lists()).toBe(2);
+
+    await act(async () => {
+      await result.current.archive.mutateAsync();
+    });
+    await waitFor(() => expect(lists()).toBe(3));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(lists()).toBe(3);
+  });
+
+  it("reads an archived session's list once, without polling", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = stubFetch({ data: [] });
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useSessionFiles("sesn_1", true), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
-it("refreshes cached file rows and rubric suggestions after deleting their session", async () => {
-  let deleted = false;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (_input: string, init?: RequestInit) => {
-      if (init?.method === "DELETE") {
-        deleted = true;
-        return jsonResponse({ id: "sesn_1", type: "session_deleted" });
-      }
-      return jsonResponse({
-        data: deleted
-          ? [{ id: "upload" }]
-          : [{ id: "output" }, { id: "upload" }],
-        next_page: null,
-      });
-    }),
-  );
-  const { client, wrapper } = createClient();
-  client.setDefaultOptions({ queries: { staleTime: Infinity, retry: false } });
-  const { result } = renderHook(
-    () => ({
-      list: useFiles(),
-      options: useFileOptions(),
-      remove: useDeleteSession("sesn_1"),
-    }),
-    { wrapper },
-  );
-  await waitFor(() =>
-    expect(result.current.options.data?.files).toHaveLength(2),
-  );
-  await waitFor(() => expect(result.current.list.data?.data).toHaveLength(2));
-  await act(async () => {
-    await result.current.remove.mutateAsync();
+describe("useFileOptions", () => {
+  const listing = (scoped: unknown, uploads: unknown) =>
+    vi.fn(async (input: string) =>
+      input.includes("scope_id=")
+        ? typeof scoped === "number"
+          ? new Response(
+              JSON.stringify({
+                type: "error",
+                error: { type: "api_error", message: "down" },
+              }),
+              {
+                status: scoped,
+                headers: { "content-type": "application/json" },
+              },
+            )
+          : jsonResponse(scoped)
+        : jsonResponse(uploads),
+    );
+
+  it("lists the uploads at the platform's maximum page, and the session's files from their own query", async () => {
+    const fetchMock = listing(
+      { data: [{ id: "file_copy" }] },
+      { data: [{ id: "file_1" }], next_page: "more-files" },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { client, wrapper } = createClient();
+    const { result } = renderHook(() => useFileOptions("sesn_1", false), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.uploads.isSuccess).toBe(true));
+    await waitFor(() =>
+      expect(result.current.sessionFiles.isSuccess).toBe(true),
+    );
+    expect(result.current.uploads.data).toEqual({
+      data: [{ id: "file_1" }],
+      next_page: "more-files",
+    });
+    expect(result.current.sessionFiles.data?.data).toEqual([
+      { id: "file_copy" },
+    ]);
+    expect(fetchMock.mock.calls.map(([url]) => searchOf(url))).toEqual([
+      { limit: "1000" },
+      { scope_id: "sesn_1", limit: "1000" },
+    ]);
+    // One cache entry per list: the session's is the Resources tab's.
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey),
+    ).toEqual([["file-options"], ["session-files", "sesn_1"]]);
   });
-  await waitFor(() =>
-    expect(result.current.list.data?.data).toEqual([{ id: "upload" }]),
-  );
-  await waitFor(() =>
-    expect(result.current.options.data?.files).toEqual([{ id: "upload" }]),
-  );
+
+  it("reuses the session's list its Resources tab already read", async () => {
+    const fetchMock = listing({ data: [] }, { data: [] });
+    vi.stubGlobal("fetch", fetchMock);
+    const { client, wrapper } = createClient();
+    client.setQueryData(["session-files", "sesn_1"], {
+      data: [{ id: "file_copy" }],
+    });
+    const { result } = renderHook(() => useFileOptions("sesn_1", false), {
+      wrapper,
+    });
+    expect(result.current.sessionFiles.data?.data).toEqual([
+      { id: "file_copy" },
+    ]);
+    await waitFor(() => expect(result.current.uploads.isSuccess).toBe(true));
+  });
+
+  it("keeps the uploads when the session's list fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      listing(500, { data: [{ id: "file_1" }], next_page: null }),
+    );
+    const { wrapper } = createClient();
+    const { result } = renderHook(() => useFileOptions("sesn_1", false), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.sessionFiles.isError).toBe(true));
+    expect(result.current.uploads.data?.data).toEqual([{ id: "file_1" }]);
+  });
+
+  it("reads nothing until the picker asks", () => {
+    const fetchMock = stubFetch({ data: [] });
+    const { wrapper } = createClient();
+    renderHook(() => useFileOptions("sesn_1", false, false), { wrapper });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+it("drops a deleted session's own files and leaves the uploads list alone", async () => {
+  stubFetch({ id: "sesn_1", type: "session_deleted" });
+  const { client, wrapper } = createClient();
+  const uploads = { data: [{ id: "upload" }], next_page: null };
+  client.setQueryData(["files", undefined], uploads);
+  client.setQueryData(["session-files", "sesn_1"], {
+    data: [{ id: "output" }],
+  });
+  client.setQueryData(["session-files", "sesn_2"], { data: [{ id: "kept" }] });
+  const invalidate = vi.spyOn(client, "invalidateQueries");
+  const { result } = renderHook(() => useDeleteSession("sesn_1"), {
+    wrapper,
+  });
+  await act(async () => {
+    await result.current.mutateAsync();
+  });
+  // The unfiltered list never carried the session's files, so nothing about
+  // it changes; the session's own list goes with the session.
+  expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+    ["sessions"],
+  ]);
+  expect(client.getQueryData(["files", undefined])).toEqual(uploads);
+  expect(client.getQueryData(["session-files", "sesn_1"])).toBeUndefined();
+  expect(client.getQueryData(["session-files", "sesn_2"])).toEqual({
+    data: [{ id: "kept" }],
+  });
 });
 
 interface MutationCase {
@@ -965,13 +1145,37 @@ const mutationCases: MutationCase[] = [
     invalidates: [["sessions"]],
   },
   {
+    name: "useArchiveSession",
+    useHook: () => useArchiveSession("sesn_1"),
+    path: "/api/platform/v1/sessions/sesn_1/archive",
+    method: "POST",
+    jsonBody: {},
+    meta: { errorTitle: "Archive failed" },
+    invalidates: [["sessions"], ["session-files", "sesn_1"]],
+    setsData: ["session", "sesn_1"],
+  },
+  {
+    // A session's own file, its refusal answered by the caller (its Resources'
+    // dialog) rather than a toast.
+    name: "useDeleteFile (a session's own file)",
+    useHook: () => useDeleteFile({ sessionId: "sesn_1", errorToast: false }),
+    variables: "file_output",
+    path: "/api/platform/v1/files/file_output",
+    method: "DELETE",
+    meta: { errorToast: false },
+    invalidates: [["files"], ["file-options"], ["session-files", "sesn_1"]],
+  },
+  {
     name: "useDeleteSession",
     useHook: () => useDeleteSession("sesn_1"),
     path: "/api/platform/v1/sessions/sesn_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
-    invalidates: [["sessions"], ["files"], ["file-options"]],
-    removes: [["session", "sesn_1"]],
+    invalidates: [["sessions"]],
+    removes: [
+      ["session", "sesn_1"],
+      ["session-files", "sesn_1"],
+    ],
   },
   {
     name: "useUploadFile",

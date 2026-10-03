@@ -1,7 +1,17 @@
 "use client";
 
-import { Fragment, Suspense, use, useMemo, useState } from "react";
+import {
+  Fragment,
+  Suspense,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, PanelRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useListFilters } from "@/lib/use-list-filters";
@@ -241,9 +251,50 @@ export default function SessionDetailPage({
   const { id } = use(params);
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      <SessionWorkspace key={id} id={id} />
+      {id.startsWith("sesn_") ? (
+        <SessionWorkspace key={id} id={id} />
+      ) : (
+        <CanonicalSession key={id} id={id} />
+      )}
     </Suspense>
   );
+}
+
+/**
+ * A session's id carries the `sesn_` prefix, so only such an address mounts
+ * the workspace at once. Any other waits for its session: an endpoint may
+ * answer an alias with its row (sessions.go normalizeSessionID answers a
+ * legacy `session_` address so), and the page then moves to the id the
+ * session answers with, the query and hash kept, and mounts the workspace
+ * only for that id: its trace, threads and writes key one id, and an alias
+ * neither reads the event history nor opens a stream. The page moves only to a
+ * `sesn_` id, which mounts the workspace at once, so two endpoints' aliases
+ * answering each other cannot bounce it; any other answer mounts the workspace
+ * on the answered id where it stands.
+ */
+function CanonicalSession({ id }: { id: string }) {
+  const session = useSession(id);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const canonicalId =
+    session.data &&
+    session.data.id !== id &&
+    session.data.id.startsWith("sesn_")
+      ? session.data.id
+      : null;
+  const movedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canonicalId || movedTo.current === canonicalId) return;
+    movedTo.current = canonicalId;
+    queryClient.setQueryData(["session", canonicalId], session.data);
+    router.replace(
+      `/sessions/${encodeURIComponent(canonicalId)}${window.location.search}${window.location.hash}`,
+    );
+  }, [canonicalId, queryClient, router, session.data]);
+  if (session.data && !canonicalId)
+    return <SessionWorkspace id={session.data.id} />;
+  if (session.error) return <ErrorState error={session.error} />;
+  return <DetailSkeleton />;
 }
 
 function SessionWorkspace({ id }: { id: string }) {

@@ -130,8 +130,8 @@ describe("FilesPage", () => {
     expect(await screen.findByText("No files yet")).toBeInTheDocument();
   });
 
-  it("renders file rows with size, scope, and downloadable flags", async () => {
-    stubFetch(() =>
+  it("renders file rows with size and downloadable flags", async () => {
+    const fetchMock = stubFetch(() =>
       json(
         filePage([
           file({ id: "file_1", filename: "notes.txt" }),
@@ -147,7 +147,6 @@ describe("FilesPage", () => {
             mime_type: "application/octet-stream",
             size_bytes: 2.5 * 1024 * 1024,
             downloadable: true,
-            scope: { id: "sess_1", type: "session" },
           }),
         ]),
       ),
@@ -158,10 +157,20 @@ describe("FilesPage", () => {
     expect(screen.getByText("512 B")).toBeInTheDocument();
     expect(screen.getByText("10.0 KB")).toBeInTheDocument();
     expect(screen.getByText("2.5 MB")).toBeInTheDocument();
-    expect(screen.getByText("session output")).toBeInTheDocument();
-    expect(screen.getAllByText("upload")).toHaveLength(2);
     expect(screen.getByText("yes")).toBeInTheDocument();
     expect(screen.getAllByText("no")).toHaveLength(2);
+    // The unfiltered list carries uploads only (platform #578): no scope is
+    // asked for and none is shown.
+    expect(
+      new URL(
+        String(fetchMock.mock.calls[0][0]),
+        "http://console.test",
+      ).searchParams.has("scope_id"),
+    ).toBe(false);
+    expect(
+      screen.queryByRole("columnheader", { name: "Scope" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("session output")).not.toBeInTheDocument();
   });
 
   it("uploads a picked file as multipart form data", async () => {

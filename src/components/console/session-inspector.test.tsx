@@ -14,6 +14,15 @@ import type { Session, SessionEvent } from "@/lib/platform/types";
 import { SessionInspector } from "./session-inspector";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// A file mount names the session's own copy (platform #578).
+const mountedCopy = {
+  id: "sesrsc_mounted",
+  type: "file",
+  file_id: "file_sessioncopy",
+  mount_path: "/mnt/session/uploads/rec141-input.txt",
+  created_at: "2026-09-12T04:13:13Z",
+  updated_at: "2026-09-12T04:13:13Z",
+} as const;
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -23,10 +32,12 @@ function setup({
   eventsError = false,
   empty = false,
   resources = false,
+  file = false,
 } = {}) {
   const base = structuredClone(sessions[0]) as Session;
   let session = {
     ...base,
+    ...(file ? { resources: [mountedCopy] } : {}),
     ...(resources
       ? {
           resources: structuredClone(memoryResources),
@@ -63,6 +74,18 @@ function setup({
     if (url.pathname.includes("/environments/"))
       return Response.json(environments[1]);
     if (url.pathname.includes("/vaults/")) return Response.json(vaults[0]);
+    if (url.pathname === `/api/platform/v1/files/${mountedCopy.file_id}`)
+      return Response.json({
+        id: mountedCopy.file_id,
+        type: "file",
+        filename: "rec141-input.txt",
+        mime_type: "text/plain",
+        size_bytes: 88,
+        downloadable: false,
+        expires_at: null,
+        scope: { id: base.id, type: "session" },
+        created_at: "2026-09-12T04:13:13Z",
+      });
     if (init?.method === "DELETE")
       return Response.json({ id: base.id, type: "session_deleted" });
     if (missing)
@@ -181,4 +204,14 @@ it("archives in place and closes after deletion without resetting list filters",
   await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
   await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+});
+
+it("links a mounted file to the session's Resources, where its copy is listed", async () => {
+  const { session } = setup({ file: true });
+  // The copy keeps the upload's name; the Files list never carries it.
+  const link = await screen.findByRole("link", { name: "rec141-input.txt" });
+  expect(link).toHaveAttribute(
+    "href",
+    "/sessions/" + session.id + "?inspector=resources",
+  );
 });

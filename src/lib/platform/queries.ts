@@ -22,6 +22,7 @@ import {
   type Page,
 } from "./http";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
+import { isUnimplemented } from "./surfaces";
 import type { ResourceInput } from "./session-resources";
 import type {
   Agent,
@@ -69,7 +70,8 @@ const AGENT_OPTIONS_PAGE_LIMIT = 100;
 const AGENT_OPTIONS_PAGE_CAP = 10;
 const MEMORY_STORE_OPTIONS_PAGE_LIMIT = 100;
 const MEMORY_STORE_OPTIONS_PAGE_CAP = 10;
-const FILE_OPTIONS_PAGE_LIMIT = 1000;
+/** files.go maxFileListLimit, which the reference console's session list asks for too. */
+const FILE_LIST_LIMIT = 1000;
 
 /**
  * Every agent, for filter options: pages `v1/agents` to exhaustion
@@ -589,6 +591,11 @@ export function useFileText(id: string, enabled: boolean) {
   });
 }
 
+/**
+ * The unfiltered list: uploads only. Since platform #578 it leaves out every
+ * session-scoped row, as the reference does (files.go listFiles), so a
+ * session's copies and outputs are read through `useSessionFiles`.
+ */
 export function useFiles(page?: string) {
   return useQuery({
     queryKey: ["files", page],
@@ -601,18 +608,66 @@ export function useFiles(page?: string) {
   });
 }
 
-/** First 1,000 files for rubric suggestions; callers keep raw ID input. */
-export function useFileOptions(enabled = true) {
+/**
+ * The reference console's own request for a session's files (console-141
+ * ui-network idx 243), header included: the docs say filtering by `scope_id`
+ * requires it. The platform accepts and ignores it.
+ */
+const MANAGED_AGENTS_BETA = { "anthropic-beta": "managed-agents-2026-04-01" };
+
+function listSessionFiles(sessionId: string) {
+  return platformGet<Page<PlatformFile>>(
+    "v1/files",
+    { scope_id: sessionId, limit: FILE_LIST_LIMIT },
+    undefined,
+    MANAGED_AGENTS_BETA,
+  );
+}
+
+/**
+ * A session's own files: the copy each file mount minted (`downloadable`
+ * false) and the outputs harvested from its sandbox (`downloadable` true) —
+ * the only signal that tells them apart. They outlive an archive and go with
+ * a delete. Polled like the session from load until archive, as the reference
+ * polls it (console-141 ui-network idx 36–303), so outputs appear as they are
+ * harvested: an archived session's list is read once, and `useArchiveSession`
+ * reads it once more as the archive lands. Polling also stops once the list
+ * answers that it is not served: the platform lists an unknown scope as
+ * empty, so a 404 here means the collection route is absent.
+ */
+export function useSessionFiles(
+  sessionId: string,
+  archived: boolean,
+  enabled = true,
+) {
   return useQuery({
+    queryKey: ["session-files", sessionId],
+    queryFn: () => listSessionFiles(sessionId),
+    enabled,
+    refetchInterval: (query) =>
+      archived || isUnimplemented(query.state.error) ? false : 15_000,
+  });
+}
+
+/**
+ * Rubric suggestions: the first 1,000 uploads, and this session's own files
+ * from the list its Resources tab reads (`useSessionFiles`), which a rubric
+ * may name too. Two queries, so either list failing keeps the other's
+ * suggestions. Callers keep raw ID input.
+ */
+export function useFileOptions(
+  sessionId: string,
+  archived: boolean,
+  enabled = true,
+) {
+  const uploads = useQuery({
     queryKey: ["file-options"],
     enabled,
-    queryFn: async () => {
-      const res = await platformGet<Page<PlatformFile>>("v1/files", {
-        limit: FILE_OPTIONS_PAGE_LIMIT,
-      });
-      return { files: res.data, truncated: !!res.next_page };
-    },
+    queryFn: () =>
+      platformGet<Page<PlatformFile>>("v1/files", { limit: FILE_LIST_LIMIT }),
   });
+  const sessionFiles = useSessionFiles(sessionId, archived, enabled);
+  return { uploads, sessionFiles };
 }
 
 export interface AgentWriteBody {
@@ -785,6 +840,9 @@ export function useArchiveSession(id: string) {
     onSuccess: (session) => {
       client.setQueryData(["session", id], session);
       void client.invalidateQueries({ queryKey: ["sessions"] });
+      // The archived session's files stop polling (useSessionFiles), so they
+      // are read once more as the archive lands.
+      void client.invalidateQueries({ queryKey: ["session-files", id] });
     },
   });
 }
@@ -797,10 +855,10 @@ export function useDeleteSession(id: string) {
       platformDelete<{ id: string; type: string }>(`v1/sessions/${id}`),
     onSuccess: () => {
       client.removeQueries({ queryKey: ["session", id] });
+      // internal/api/sessions.go:deleteSession also removes the session's own
+      // files, which only its scoped list ever carried.
+      client.removeQueries({ queryKey: ["session-files", id] });
       void client.invalidateQueries({ queryKey: ["sessions"] });
-      // internal/api/sessions.go:deleteSession also removes session-produced files.
-      void client.invalidateQueries({ queryKey: ["files"] });
-      void client.invalidateQueries({ queryKey: ["file-options"] });
     },
   });
 }
@@ -1536,16 +1594,33 @@ export function useDeleteSkill(skillId: string) {
   });
 }
 
-export function useDeleteFile() {
+/**
+ * Deletes an upload, or — given the session — one of a session's own files:
+ * an output, or a copy no resource mounts any more. files.go deleteFile takes
+ * either as it takes an upload, and a copy's upload keeps its bytes. The lists
+ * are read again before the mutation settles, so a caller's pending state
+ * covers the refetch. `errorToast: false` is for a caller that answers a
+ * refusal itself (a session's Resources, in their confirm dialog).
+ */
+export function useDeleteFile({
+  sessionId,
+  errorToast = true,
+}: { sessionId?: string; errorToast?: boolean } = {}) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorTitle: "Delete failed" },
+    meta: errorToast ? { errorTitle: "Delete failed" } : { errorToast: false },
     mutationFn: (fileId: string) =>
-      platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["files"] });
-      void queryClient.invalidateQueries({ queryKey: ["file-options"] });
-    },
+      platformDelete<{ id: string; type: string }>(
+        `v1/files/${encodeURIComponent(fileId)}`,
+      ),
+    onSuccess: () =>
+      Promise.all(
+        [
+          ["files"],
+          ["file-options"],
+          ...(sessionId ? [["session-files", sessionId]] : []),
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ),
   });
 }
 /** Apply the existing single-resource routes; retain each failure for retry. */

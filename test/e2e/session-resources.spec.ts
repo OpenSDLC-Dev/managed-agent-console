@@ -14,29 +14,70 @@ test("attach a file to an existing session and remove its reference", async ({
   await page
     .getByLabel("File ID", { exact: true })
     .fill("file_notes0000000000001");
+  const added = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/sessions/sesn_gatedbash00000000001/resources"),
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Attach file" })
     .click();
+  // The mount names the session's own copy (platform #578), and its default
+  // path still names the upload.
+  const { file_id: copy } = (await (await added).json()) as {
+    file_id: string;
+  };
+  expect(copy).not.toBe("file_notes0000000000001");
+  await expect(page.getByText(copy, { exact: true })).toBeVisible();
   await expect(
-    page.getByText("file_notes0000000000001", { exact: true }),
+    page.getByText("/mnt/session/uploads/file_notes0000000000001"),
   ).toBeVisible();
   await expect(page.locator("[data-resource-count]")).toHaveAttribute(
     "data-resource-count",
     "1",
   );
+  const panel = page.getByTestId("session-resources");
+  await expect(panel).toHaveAttribute("data-session-file-count", "1");
+  await expect(panel.locator('[data-size-bytes="48213"]')).toBeVisible();
   await page.getByRole("button", { name: /^Remove resource / }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Remove resource", exact: true })
     .click();
-  await expect(page.getByText("No resources attached.")).toBeVisible();
+  // The header's resource chip goes with the last resource.
+  await expect(page.locator("[data-resource-count]")).toHaveCount(0);
+  // Removing the reference leaves the copy, still the session's own file and
+  // a row of the tab, so the tab is not empty.
+  const leftover = panel.locator(`[data-session-file-id="${copy}"]`);
+  await expect(leftover).toHaveAttribute("data-downloadable", "false");
+  await expect(leftover).toContainText("research-notes.md");
+  await expect(leftover.getByRole("link")).toHaveCount(0);
+  await expect(panel).toHaveAttribute("data-resources-state", "rows");
   const files = await (await page.request.get("/api/platform/v1/files")).json();
+  expect(files.data.map((file: { id: string }) => file.id)).toContain(
+    "file_notes0000000000001",
+  );
+  expect(files.data.map((file: { id: string }) => file.id)).not.toContain(copy);
+
+  // Deleting the copy empties the tab and keeps the upload it was copied from.
+  await leftover
+    .getByRole("button", { name: `Delete research-notes.md (${copy})` })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete file", exact: true })
+    .click();
+  await expect(panel).toHaveAttribute("data-session-file-count", "0");
+  await expect(panel).toHaveAttribute("data-resources-state", "empty");
   expect(
-    files.data.some(
-      (file: { id: string }) => file.id === "file_notes0000000000001",
-    ),
-  ).toBe(true);
+    (await page.request.get(`/api/platform/v1/files/${copy}`)).status(),
+  ).toBe(404);
+  expect(
+    (
+      await page.request.get("/api/platform/v1/files/file_notes0000000000001")
+    ).status(),
+  ).toBe(200);
 });
 
 test("repository tokens stay write-only and memory references can be removed", async ({

@@ -65,10 +65,19 @@ function VaultLink({ id }: { id: string }) {
   );
 }
 
-function FileLink({ id }: { id: string }) {
+/**
+ * A mounted file names the session's own copy (platform #578), which the Files
+ * list never carries, so the link opens the session's Resources, where it is.
+ * The reference links to its Files page with the copy preselected
+ * (console-141 frame 47); ours has no such file inspector.
+ */
+function FileLink({ id, sessionHref }: { id: string; sessionHref: string }) {
   const query = useFile(id);
   return (
-    <Link href="/files" className="break-all hover:underline">
+    <Link
+      href={`${sessionHref}${sessionHref.includes("?") ? "&" : "?"}inspector=resources`}
+      className="break-all hover:underline"
+    >
       {query.data?.filename ?? <IdCode id={id} />}
     </Link>
   );
@@ -206,7 +215,7 @@ export function SessionSummary({
                         ) : resource.type === "github_repository" ? (
                           <span className="break-all">{resource.url}</span>
                         ) : (
-                          <FileLink id={resource.file_id} />
+                          <FileLink id={resource.file_id} sessionHref={href} />
                         )}
                         <div className="break-all font-mono text-xs text-muted-foreground">
                           {resource.mount_path}

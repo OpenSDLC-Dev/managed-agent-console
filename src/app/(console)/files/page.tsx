@@ -12,7 +12,6 @@ import {
   UnavailableSurface,
 } from "@/components/console/bits";
 import { IdCell } from "@/components/console/copy-id";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
@@ -42,19 +41,16 @@ const COLUMNS: Column<PlatformFile>[] = [
       </span>
     ),
   },
-  { key: "size", header: "Size", cell: (f) => formatBytes(f.size_bytes) },
   {
-    key: "scope",
-    header: "Scope",
-    cell: (f) =>
-      f.scope ? (
-        <Badge variant="outline" className="font-normal">
-          session output
-        </Badge>
-      ) : (
-        <span className="text-muted-foreground">upload</span>
-      ),
+    key: "size",
+    header: "Size",
+    cell: (f) => (
+      <span data-size-bytes={f.size_bytes}>{formatBytes(f.size_bytes)}</span>
+    ),
   },
+  // No Scope column: this unfiltered list never carries a session-scoped row
+  // (files.go listFiles, platform #578, as on the reference). A session's
+  // copies and outputs are listed in its Resources (useSessionFiles).
   {
     key: "downloadable",
     header: "Downloadable",

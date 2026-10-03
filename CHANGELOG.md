@@ -22,8 +22,29 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   401, and a link from another site could sign the operator out the same way. The console never
   calls it (#187).
 
+### Changed
+
+- A session's own files are listed with the session, following the platform's per-mount copies
+  ([platform #578](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/578), #192). Every
+  file mount now mints a session-scoped copy, and the unfiltered Files list leaves out every
+  session-scoped row, so the session's Resources tab lists them from `GET /v1/files?scope_id=`, as
+  the reference console does. A mounted file shows its copy's size, and harvested outputs follow it.
+  Only an output offers Download, since `downloadable` is the one signal that tells the two apart,
+  and an expired one says so instead. An output, or a copy no resource mounts any more, can be
+  deleted there, as outputs could from the Files page before; the platform judges each delete, as
+  it deletes a mounted copy too. The rubric picker also suggests the session's own files, labelled apart
+  from uploads, and leaves out expired files. The Files page drops its Scope column. In the
+  Sessions inspector, a mounted file now opens the session's Resources. Deploy this console with
+  platform #578 or later: before it, outputs list on the Files page too and a mounted file shows no
+  size.
+
 ### Fixed
 
+- A session opened by any address but its `sesn_…` id, such as a legacy `session_…` one, is read
+  first and moves to the id it answers with, query and hash kept, before its workspace loads. Every
+  query and write on the page now keys that one id, so a file attached there, or an outcome
+  defined, shows at once rather than at the next poll, and the event history is read and the stream
+  opened once rather than under both ids (#192).
 - A memory store may omit `archived_at`, as the reference does until the store is archived. The
   console reads a store without the key as live, and the mock platform now serves that recorded
   shape. Deploy this console before any platform release that omits the key

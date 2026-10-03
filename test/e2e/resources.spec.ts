@@ -201,17 +201,38 @@ test("skills list filters by source; detail shows versions", async ({
   await expect(page.getByText("Initial version.")).toBeVisible();
 });
 
-test("files list renders uploads and session outputs", async ({ page }) => {
+test("files list renders uploads, and no session's own files", async ({
+  page,
+}) => {
   await signIn(page);
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(1);
+  await expect(page.locator('[data-size-bytes="48213"]')).toBeVisible();
+  // The research session's output and its mount's copy list only under its
+  // scope_id (platform #578), so neither row is here, nor a Scope column.
+  const row = (id: string) =>
+    page.locator(`[data-testid="id-cell"][data-id="${id}"]`);
+  await expect(row("file_notes0000000000001")).toBeVisible();
+  await expect(row("file_researchcopy0000001")).toHaveCount(0);
+  await expect(row("file_output000000000001")).toHaveCount(0);
   await expect(
     page.getByRole("cell", { name: "summary.xlsx", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("cell", { name: "47.1 KB" })).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Scope" })).toHaveCount(
+    0,
+  );
+
+  // Nor does the palette, which searches the same list.
+  await page.keyboard.press("Control+k");
+  const input = page.getByPlaceholder("Search agents, sessions, environments…");
+  await input.fill("research-notes");
   await expect(
-    page.getByRole("cell", { name: "session output" }),
-  ).toBeVisible();
+    page.getByRole("option", { name: /research-notes\.md/ }),
+  ).toHaveCount(1);
+  await input.fill("summary.xlsx");
+  await expect(page.getByRole("option", { name: /summary\.xlsx/ })).toHaveCount(
+    0,
+  );
 });

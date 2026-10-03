@@ -79,6 +79,8 @@ function useSearchItems(query: string): Item[] {
   const sessions = useSessions({});
   const vaults = useVaults({ limit });
   const skills = useSkills({ limit });
+  // Uploads only, each listed on /files: since platform #578 the unfiltered
+  // list leaves out a session's copies and outputs, found from their session.
   const files = useFiles();
   // The resource groups below need no gating — an unimplemented surface's
   // query errors, so its list is simply empty. Only the "Go to" entries would

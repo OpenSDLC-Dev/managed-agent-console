@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 
 const GATED = "/sessions/sesn_gatedbash00000000001";
@@ -173,9 +173,24 @@ test("outcome evaluations and their trace events have dedicated rendering", asyn
   await expect(end).toContainText("Satisfied · Iteration 1");
 });
 
+/**
+ * A session at rest on nothing: GATED rests on an ask, where the platform
+ * refuses an outcome until the ask is answered (CheckWhileAwaiting).
+ */
+async function idleSession(page: Page) {
+  const created = await page.request.post("/api/platform/v1/sessions", {
+    data: {
+      agent: "agent_researcher00000000001",
+      environment_id: "env_egress000000000000001",
+    },
+  });
+  expect(created.ok()).toBe(true);
+  return ((await created.json()) as { id: string }).id;
+}
+
 test("defines an outcome on an idle session", async ({ page }) => {
   await signIn(page);
-  await page.goto(GATED);
+  await page.goto(`/sessions/${await idleSession(page)}`);
   await expect(page.getByTestId("session-outcomes")).toHaveAttribute(
     "data-active-outcome",
     "false",
@@ -221,41 +236,34 @@ test("file rubric size limit counts content bytes", async ({ page }) => {
     return (await response.json()) as { id: string; size_bytes: number };
   };
 
-  const acceptedFile = await upload("rubric-256k.txt", 256 * 1024);
-  expect(acceptedFile.size_bytes).toBe(256 * 1024);
-  const accepted = await page.request.post(
-    `/api/platform/v1/sessions/${GATED.slice("/sessions/".length)}/events`,
-    {
+  const session = await idleSession(page);
+  const define = (description: string, fileId: string) =>
+    page.request.post(`/api/platform/v1/sessions/${session}/events`, {
       data: {
         events: [
           {
             type: "user.define_outcome",
-            description: "Accept the boundary file",
-            rubric: { type: "file", file_id: acceptedFile.id },
+            description,
+            rubric: { type: "file", file_id: fileId },
           },
         ],
       },
-    },
-  );
-  expect(accepted.status()).toBe(200);
-
+    });
+  // The oversized file first: once one outcome is accepted, the next is
+  // refused for that, whatever its rubric.
   const rejectedFile = await upload("rubric-over-256k.txt", 256 * 1024 + 1);
   expect(rejectedFile.size_bytes).toBe(256 * 1024 + 1);
-  const rejected = await page.request.post(
-    `/api/platform/v1/sessions/${GATED.slice("/sessions/".length)}/events`,
-    {
-      data: {
-        events: [
-          {
-            type: "user.define_outcome",
-            description: "Reject the oversized file",
-            rubric: { type: "file", file_id: rejectedFile.id },
-          },
-        ],
-      },
-    },
-  );
+  const rejected = await define("Reject the oversized file", rejectedFile.id);
   expect(rejected.status()).toBe(400);
+  expect((await rejected.json()).error.message).toBe(
+    `rubric file ${rejectedFile.id} is ${256 * 1024 + 1} bytes; the rubric cap is ${256 * 1024} bytes`,
+  );
+
+  const acceptedFile = await upload("rubric-256k.txt", 256 * 1024);
+  expect(acceptedFile.size_bytes).toBe(256 * 1024);
+  expect(
+    (await define("Accept the boundary file", acceptedFile.id)).status(),
+  ).toBe(200);
 });
 
 test("the trace goes live over SSE and approving a tool call completes the turn", async ({

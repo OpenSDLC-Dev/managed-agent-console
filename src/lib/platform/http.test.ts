@@ -76,6 +76,21 @@ describe("platformGet", () => {
     );
   });
 
+  it("sends the request headers it is given", async () => {
+    const fetchMock = vi.fn(async () => json({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await platformGet("v1/files", { scope_id: "sesn_1" }, undefined, {
+      "anthropic-beta": "managed-agents-2026-04-01",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/platform/v1/files?scope_id=sesn_1",
+      {
+        signal: undefined,
+        headers: { "anthropic-beta": "managed-agents-2026-04-01" },
+      },
+    );
+  });
+
   it("throws a PlatformError carrying the error envelope", async () => {
     vi.stubGlobal(
       "fetch",

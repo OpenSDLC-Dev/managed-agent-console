@@ -25,6 +25,9 @@ import { DetailSection } from "@/components/console/detail";
 import { IdCode, Time } from "@/components/console/bits";
 import { cn } from "@/lib/utils";
 import { useFileOptions, useSendEvents } from "@/lib/platform/queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
+import { hasExpired } from "@/lib/platform/expiry";
+import { useNow } from "@/lib/session-trace/use-now";
 import type { OutcomeEvaluation } from "@/lib/platform/types";
 import {
   isTerminalOutcome,
@@ -44,6 +47,19 @@ const RESULT_STYLES: Partial<Record<OutcomeEvaluation["result"], string>> = {
   failed: "border-destructive/30 text-destructive",
 };
 
+/** Each list of rubric suggestions in its own words, when it failed or was cut. */
+const LIST_NOTES = {
+  uploads: {
+    failed: "Uploads could not be loaded.",
+    cut: (count: string) => `Showing the first ${count} uploads.`,
+  },
+  session: {
+    failed: "This session's files could not be loaded.",
+    cut: (count: string) =>
+      `Showing the first ${count} of this session's files.`,
+  },
+};
+
 export function SessionOutcomes({
   sessionId,
   outcomes,
@@ -60,9 +76,65 @@ export function SessionOutcomes({
   const [rubricText, setRubricText] = useState("");
   const [fileId, setFileId] = useState("");
   const [maxIterations, setMaxIterations] = useState("3");
-  const files = useFileOptions(open && rubricType === "file");
-  const rubricFiles =
-    files.data?.files.filter((file) => file.size_bytes <= 256 * 1024) ?? [];
+  // `disabled` is the archive (or the deletion), which ends the polling of
+  // the session's files as it ends the reference's.
+  const files = useFileOptions(
+    sessionId,
+    !!disabled,
+    open && rubricType === "file",
+  );
+  const now = useNow();
+  // Each list stands alone: one failing keeps the other's suggestions, and
+  // one not served (404) is left out, as an absent surface is. A later read
+  // that fails otherwise keeps the rows the last good one listed, as the
+  // Resources tab does — and the list then says it failed, not that those
+  // rows were cut: the latest read is the list's state.
+  const lists = (
+    [
+      ["uploads", files.uploads],
+      ["session", files.sessionFiles],
+    ] as const
+  ).map(([name, query]) => {
+    const rows = isUnimplemented(query.error) ? [] : (query.data?.data ?? []);
+    return {
+      name,
+      rows,
+      pending: query.isPending,
+      loaded: rows.length > 0 || (!query.isPending && !query.isError),
+      state:
+        query.isError && !isUnimplemented(query.error)
+          ? ("error" as const)
+          : rows.length > 0 && query.data?.next_page
+            ? ("truncated" as const)
+            : null,
+    };
+  });
+  const [uploadList, sessionList] = lists;
+  // A rubric may name an upload or one of this session's own files (a mount's
+  // copy or a harvested output); the label says which. A platform before #578
+  // lists outputs in both, so the session's own entry wins. An expired file
+  // is no rubric (events ValidateDefineOutcomes reads live rows only).
+  const ownIds = new Set(sessionList.rows.map((file) => file.id));
+  const rubricFiles = [
+    ...uploadList.rows
+      .filter((file) => !ownIds.has(file.id))
+      .map((file) => ({ file, origin: "upload" })),
+    ...sessionList.rows.map((file) => ({ file, origin: "session file" })),
+  ].filter(
+    ({ file }) =>
+      file.size_bytes <= 256 * 1024 && !hasExpired(file.expires_at, now),
+  );
+  // A list that failed outranks one that was cut, as within a list.
+  const loaded = lists.some((list) => list.loaded);
+  const optionsState = lists.some((list) => list.pending)
+    ? "loading"
+    : !loaded || lists.some((list) => list.state === "error")
+      ? "error"
+      : lists.some((list) => list.state === "truncated")
+        ? "truncated"
+        : rubricFiles.length === 0
+          ? "empty"
+          : "ready";
   const active = outcomes.some((outcome) => !isTerminalOutcome(outcome.result));
   const valid =
     description.length > 0 &&
@@ -234,32 +306,45 @@ export function SessionOutcomes({
                 />
                 <p
                   className="text-xs text-muted-foreground"
-                  data-file-options-state={
-                    files.isPending
-                      ? "loading"
-                      : files.isError
-                        ? "error"
-                        : files.data?.truncated
-                          ? "truncated"
-                          : rubricFiles.length === 0
-                            ? "empty"
-                            : "ready"
-                  }
+                  data-file-options-state={optionsState}
                 >
-                  {files.isPending
-                    ? "Loading uploaded files…"
-                    : files.isError
-                      ? "Files could not be loaded. Paste an ID to continue."
-                      : files.data?.truncated
-                        ? "Showing the first 1,000 files. Choose a suggestion or paste an ID."
-                        : rubricFiles.length === 0
-                          ? "No compatible rubric files found. Paste a file ID to continue."
-                          : "Choose a suggestion by filename or paste a file ID."}
+                  {optionsState === "loading" ? (
+                    "Loading files…"
+                  ) : !loaded ? (
+                    "Files could not be loaded. Paste an ID to continue."
+                  ) : (
+                    <>
+                      {lists.map(
+                        (list) =>
+                          list.state && (
+                            <span
+                              key={list.name}
+                              data-file-list={list.name}
+                              data-file-list-state={list.state}
+                              data-file-list-count={list.rows.length}
+                            >
+                              {list.state === "error"
+                                ? LIST_NOTES[list.name].failed
+                                : LIST_NOTES[list.name].cut(
+                                    list.rows.length.toLocaleString(),
+                                  )}{" "}
+                            </span>
+                          ),
+                      )}
+                      {rubricFiles.length === 0
+                        ? "No compatible rubric files found. Paste a file ID to continue."
+                        : "Choose a suggestion by filename or paste a file ID."}
+                    </>
+                  )}
                 </p>
                 <datalist id="outcome-rubric-files">
-                  {rubricFiles.map((file) => (
-                    <option key={file.id} value={file.id}>
-                      {file.filename}
+                  {rubricFiles.map(({ file, origin }) => (
+                    <option
+                      key={file.id}
+                      value={file.id}
+                      data-file-origin={origin}
+                    >
+                      {`${file.filename} · ${origin}`}
                     </option>
                   ))}
                 </datalist>

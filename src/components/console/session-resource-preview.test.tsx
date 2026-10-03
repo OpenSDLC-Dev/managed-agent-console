@@ -86,7 +86,13 @@ function setup(
     }
     throw new Error(`Unexpected request: ${url.pathname}`);
   });
-  vi.stubGlobal("fetch", fetch);
+  // The tab also lists the session's own files on mount; `fetch` counts only
+  // what a preview reads.
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) =>
+    String(input).startsWith("/api/platform/v1/files?scope_id=")
+      ? json({ data: [], next_page: null })
+      : fetch(input),
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -162,7 +168,10 @@ it("opens a bound store and its memory inline without leaving the Session", asyn
 it("filters attached resources while retaining read-only inspection for an archived Session", async () => {
   setup({ archived: true, memoryContent: null });
   await userEvent.type(screen.getByLabelText("Filter resources"), "unmatched");
-  expect(screen.getByText("No matching resources.")).toBeVisible();
+  expect(screen.getByTestId("session-resources")).toHaveAttribute(
+    "data-resources-state",
+    "no-match",
+  );
   await userEvent.clear(screen.getByLabelText("Filter resources"));
   await userEvent.click(
     screen.getByRole("button", { name: "Expand /mnt/memory/project-notes" }),

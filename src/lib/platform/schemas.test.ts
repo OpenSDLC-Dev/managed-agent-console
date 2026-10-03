@@ -701,6 +701,136 @@ describe("the mock's constructed write-path responses conform too", () => {
     expect(await call(path, { method: "GET" })).toEqual(before);
   });
 
+  // sessionresources.go mountFileCopy and files.go listFiles at platform
+  // d339a1c9 (#578): every mount mints the session's own copy, and the
+  // unfiltered list leaves every session-scoped row out.
+  it("files: every mount mints a session copy, listed only under its scope_id", async () => {
+    const list = async (query = "") =>
+      (
+        (await call(`/v1/files?limit=1000${query}`, { method: "GET" })) as {
+          data: { id: string; scope?: { id: string } }[];
+        }
+      ).data;
+    const upload = (await postMultipart(
+      "/v1/files",
+      '----x\r\nContent-Disposition: form-data; name="file"; filename="brief.txt"\r\n' +
+        "Content-Type: text/plain\r\n\r\nbrief\r\n----x--\r\n",
+    )) as { id: string };
+    const uploads = (await list()).map((file) => file.id);
+    expect(uploads).toContain(upload.id);
+    // The fixture's harvested output and mount copy are scoped, so absent.
+    expect(uploads).toContain("file_notes0000000000001");
+    expect(uploads).not.toContain("file_output000000000001");
+    expect(uploads).not.toContain("file_researchcopy0000001");
+
+    // Two resources naming one upload get two copies.
+    const session = (await postJSON("/v1/sessions", {
+      agent: fixtures.agents[0].id,
+      environment_id: fixtures.environments[0].id,
+      resources: [
+        { type: "file", file_id: upload.id },
+        {
+          type: "file",
+          file_id: upload.id,
+          mount_path: "/mnt/session/uploads/again.txt",
+        },
+      ],
+    })) as {
+      id: string;
+      resources: { file_id: string; mount_path: string }[];
+    };
+    expectConforms(SessionSchema, session, "POST /v1/sessions");
+    const [first, second] = session.resources;
+    expect(first.file_id).not.toBe(upload.id);
+    expect(second.file_id).not.toBe(first.file_id);
+    // The default mount path still names the upload.
+    expect(first.mount_path).toBe(`/mnt/session/uploads/${upload.id}`);
+    const copy = await call(`/v1/files/${first.file_id}`, { method: "GET" });
+    expectConforms(PlatformFileSchema, copy, "GET a session copy");
+    expect(copy).toEqual({
+      id: first.file_id,
+      type: "file",
+      filename: "brief.txt",
+      mime_type: "text/plain",
+      size_bytes: 5,
+      downloadable: false,
+      expires_at: null,
+      scope: { id: session.id, type: "session" },
+      created_at: expect.any(String),
+    });
+
+    // Resources add mints one too.
+    const added = (await postJSON(`/v1/sessions/${session.id}/resources`, {
+      type: "file",
+      file_id: upload.id,
+      mount_path: "/mnt/session/uploads/third.txt",
+    })) as { file_id: string };
+    expectConforms(SessionResourceSchema, added, "POST resources");
+    const copies = [first.file_id, second.file_id, added.file_id];
+    expect(new Set([...copies, upload.id]).size).toBe(4);
+    expect(
+      (await list(`&scope_id=${session.id}`)).map((file) => file.id).sort(),
+    ).toEqual([...copies].sort());
+    const unfiltered = (await list()).map((file) => file.id);
+    for (const id of copies) expect(unfiltered).not.toContain(id);
+    expect(await list("&scope_id=sesn_unknown0000000000001")).toEqual([]);
+
+    // Archive keeps them; delete takes them and leaves the upload.
+    await postJSON(`/v1/sessions/${session.id}/archive`, {});
+    expect(await list(`&scope_id=${session.id}`)).toHaveLength(3);
+    await call(`/v1/sessions/${session.id}`, { method: "DELETE" });
+    expect(await list(`&scope_id=${session.id}`)).toEqual([]);
+    for (const id of copies)
+      expect(await answer("GET", `/v1/files/${id}`)).toEqual(
+        notFound(`File \`${id}\` not found.`),
+      );
+    expect(
+      await call(`/v1/files/${upload.id}`, { method: "GET" }),
+    ).toMatchObject({ id: upload.id, downloadable: false });
+    resetStore();
+  });
+
+  it("files: a deployment fire mints its session's copies and keeps naming the upload", async () => {
+    const deployment = fixtures.deployments[0];
+    const named = deployment.resources.find(
+      (resource) => resource.type === "file",
+    ) as { file_id: string };
+    const run = (await postJSON(
+      `/v1/deployments/${deployment.id}/run`,
+      {},
+    )) as { session_id: string };
+    const session = (await call(`/v1/sessions/${run.session_id}`, {
+      method: "GET",
+    })) as {
+      resources: { type: string; file_id?: string; mount_path: string }[];
+    };
+    const mount = session.resources.find(
+      (resource) => resource.type === "file",
+    )!;
+    expect(mount.file_id).not.toBe(named.file_id);
+    expect(mount.mount_path).toBe(`/mnt/session/uploads/${named.file_id}`);
+    expect(
+      await call(`/v1/files?scope_id=${run.session_id}`, { method: "GET" }),
+    ).toMatchObject({
+      data: [
+        {
+          id: mount.file_id,
+          filename: "research-notes.md",
+          downloadable: false,
+          scope: { id: run.session_id, type: "session" },
+        },
+      ],
+    });
+    expect(
+      await call(`/v1/deployments/${deployment.id}`, { method: "GET" }),
+    ).toMatchObject({
+      resources: expect.arrayContaining([
+        expect.objectContaining({ type: "file", file_id: named.file_id }),
+      ]),
+    });
+    resetStore();
+  });
+
   it("sessions: create, with a mounted file resource", async () => {
     const agent = (await postJSON("/v1/agents", {
       name: "conformance-session-agent",

@@ -28,8 +28,16 @@ export function useAddSessionFile(sessionId: string) {
     meta: { errorToast: false },
     mutationFn: (body: Extract<ResourceInput, { type: "file" }>) =>
       platformPost<SessionResource>(`v1/sessions/${sessionId}/resources`, body),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ["session", sessionId] });
+    // The mount mints the session's own copy (sessionresources.go
+    // mountFileCopy), which the session's file list (and the rubric picker,
+    // reading the same list) then carries. The session is read first: until
+    // it names the new mount, its copy would list as a leftover
+    // (SessionResources). Both reads settle before the mutation does.
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["session", sessionId] });
+      await client.invalidateQueries({
+        queryKey: ["session-files", sessionId],
+      });
     },
   });
 }

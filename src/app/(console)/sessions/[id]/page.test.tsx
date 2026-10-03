@@ -16,11 +16,12 @@ import type { Session, SessionEvent } from "@/lib/platform/types";
 import type { PreviewState, TraceState } from "@/lib/session-trace/store";
 import type { ConnectionState } from "@/lib/session-trace/use-session-trace";
 
+const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
     back: vi.fn(),
-    replace: vi.fn(),
+    replace: router.replace,
     refresh: vi.fn(),
   }),
   usePathname: () => "/sessions/sess_1",
@@ -36,11 +37,17 @@ vi.mock("next/link", () => ({
 }));
 
 // Inject trace states directly — the SSE loop is covered by its own tests.
+// Each session id a trace was asked for is kept: its history and stream are
+// read under that id.
 const traceMock = vi.hoisted(() => ({
   value: undefined as unknown,
+  sessionIds: new Set<string>(),
 }));
 vi.mock("@/lib/session-trace/use-session-trace", () => ({
-  useSessionTrace: () => traceMock.value,
+  useSessionTrace: (sessionId: string) => {
+    traceMock.sessionIds.add(sessionId);
+    return traceMock.value;
+  },
 }));
 
 function setTrace(
@@ -172,13 +179,19 @@ function renderPage(id = "sess_1") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const page = (routeId: string) => (
     <QueryClientProvider client={client}>
       <Suspense fallback={null}>
-        <SessionDetailPage params={asParams(id)} />
+        <SessionDetailPage params={asParams(routeId)} />
       </Suspense>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(page(id));
+  // What a navigation does to the route: new params, the same client.
+  return {
+    ...view,
+    navigate: (routeId: string) => view.rerender(page(routeId)),
+  };
 }
 
 afterEach(() => {
@@ -1024,4 +1037,183 @@ it("shows pinned tool permissions and links calls from the loaded trace", async 
     "data-event-type",
     "agent.tool_use",
   );
+});
+
+it("moves a legacy-addressed session to its canonical id, query kept, so a defined outcome shows at once", async () => {
+  // sessions.go normalizeSessionID: `session_` addresses the `sesn_` row,
+  // which answers with its own id.
+  setTrace("live");
+  window.history.replaceState(
+    null,
+    "",
+    "/sessions/session_1?inspector=session#outcomes",
+  );
+  let outcomes: Session["outcome_evaluations"] = [];
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://console.test");
+      if (
+        url.pathname === "/api/platform/v1/sessions/sesn_1/events" &&
+        init?.method === "POST"
+      ) {
+        outcomes = [
+          {
+            type: "outcome_evaluation",
+            outcome_id: "outc_1",
+            description: "Ship it",
+            explanation: "",
+            iteration: 0,
+            result: "pending",
+            completed_at: null,
+          },
+        ];
+        return json({ data: [] });
+      }
+      if (
+        ["session_1", "sesn_1"].some(
+          (id) => url.pathname === `/api/platform/v1/sessions/${id}`,
+        )
+      )
+        return json(session({ id: "sesn_1", outcome_evaluations: outcomes }));
+      if (url.pathname.endsWith("/threads"))
+        return json({ data: [], next_page: null });
+      throw new Error(`unmatched fetch: ${url.pathname}`);
+    },
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  const view = renderPage("session_1");
+  // The router navigates after the effect that asked, as Next's does.
+  router.replace.mockImplementation((href: string) => {
+    const routeId = decodeURIComponent(
+      new URL(href, "http://console.test").pathname.split("/").at(-1)!,
+    );
+    setTimeout(() => view.navigate(routeId));
+  });
+  onTestFinished(() => {
+    router.replace.mockReset();
+  });
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+      "/sessions/sesn_1?inspector=session#outcomes",
+    ),
+  );
+  // The canonical page opens on the session already read, and every
+  // write and refresh keys its id.
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Define outcome" }),
+  );
+  const dialog = screen.getByRole("dialog");
+  await userEvent.type(within(dialog).getByLabelText("Description"), "Ship it");
+  await userEvent.type(within(dialog).getByLabelText("Rubric"), "Done.");
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: "Define outcome" }),
+  );
+  // At once: the send's refresh, not the 15-second poll.
+  await waitFor(() =>
+    expect(screen.getByTestId("session-outcomes")).toHaveAttribute(
+      "data-outcome-count",
+      "1",
+    ),
+  );
+  // The legacy address was read once, to learn its id; nothing else keyed
+  // it, in its path or its query.
+  expect(
+    fetchMock.mock.calls
+      .map(([input]) => {
+        const url = new URL(String(input), "http://console.test");
+        return url.pathname + url.search;
+      })
+      .filter((request) => request.includes("session_1")),
+  ).toEqual(["/api/platform/v1/sessions/session_1"]);
+  // Its event history and stream were never asked for.
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
+});
+
+it("reads any address without the sesn_ prefix before the workspace, and moves to the id it answers with", async () => {
+  // An alias some endpoint answers with another session's row: only the read
+  // keys it, and nothing else starts until the page has moved.
+  setTrace("live");
+  window.history.replaceState(null, "", "/sessions/sess_alias");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sess_alias")
+      return json(session({ id: "sesn_1" }));
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sess_alias");
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith("/sessions/sesn_1"),
+  );
+  expect(
+    fetchMock.mock.calls.map(
+      ([input]) => new URL(String(input), "http://console.test").pathname,
+    ),
+  ).toEqual(["/api/platform/v1/sessions/sess_alias"]);
+  expect([...traceMock.sessionIds]).toEqual([]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+});
+
+it("mounts the workspace where it stands when an alias answers with an id that is not sesn_", async () => {
+  // Only a sesn_ id is moved to, so aliases answering each other cannot
+  // bounce the page between them.
+  setTrace("live");
+  window.history.replaceState(null, "", "/sessions/sess_a");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sess_a")
+      return json(session({ id: "sess_b" }));
+    if (url.pathname === "/api/platform/v1/sessions/sess_b")
+      return json(session({ id: "sess_a" }));
+    if (url.pathname.endsWith("/threads"))
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sess_a");
+
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
+  expect(router.replace).not.toHaveBeenCalled();
+  expect([...traceMock.sessionIds]).toEqual(["sess_b"]);
+});
+
+it("starts a canonical session's trace and threads beside its read, not after it", async () => {
+  setTrace("connecting");
+  const read = Promise.withResolvers<Response>();
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sesn_1")
+      return read.promise;
+    if (url.pathname === "/api/platform/v1/sessions/sesn_1/threads")
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sesn_1");
+
+  // The session is still being read, and the rest is already under way.
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.map(
+        ([input]) => new URL(String(input), "http://console.test").pathname,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "/api/platform/v1/sessions/sesn_1",
+        "/api/platform/v1/sessions/sesn_1/threads",
+      ]),
+    ),
+  );
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(router.replace).not.toHaveBeenCalled();
+
+  read.resolve(json(session({ id: "sesn_1" })));
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
 });

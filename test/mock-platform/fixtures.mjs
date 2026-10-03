@@ -364,7 +364,9 @@ export const sessions = [
       {
         id: "sesrsc_attach000000000001",
         type: "file",
-        file_id: "file_notes0000000000001",
+        // The session's own copy of research-notes.md (#578); the default
+        // mount path still names the upload.
+        file_id: "file_researchcopy0000001",
         mount_path: "/mnt/session/uploads/file_notes0000000000001",
         created_at: T1,
         updated_at: T1,
@@ -935,6 +937,19 @@ export const files = [
     expires_at: null,
     scope: { id: "sesn_research0000000000001", type: "session" },
     created_at: T2,
+  },
+  {
+    // The copy sesn_research's file mount minted (#578): the upload's name,
+    // size, type and expiry, scoped to the session, never downloadable.
+    id: "file_researchcopy0000001",
+    type: "file",
+    filename: "research-notes.md",
+    mime_type: "text/markdown",
+    size_bytes: 48213,
+    downloadable: false,
+    expires_at: null,
+    scope: { id: "sesn_research0000000000001", type: "session" },
+    created_at: T1,
   },
 ];
 

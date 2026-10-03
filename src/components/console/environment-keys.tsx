@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { copyText } from "@/lib/copy-text";
+import { hasExpired } from "@/lib/platform/expiry";
 import { PlatformError } from "@/lib/platform/http";
 import {
   useCreateEnvironmentKey,
@@ -38,29 +39,18 @@ import { isUnimplemented } from "@/lib/platform/surfaces";
 import type { Environment, EnvironmentKey } from "@/lib/platform/types";
 
 /**
- * Active or expired, derived from `expires_at` against a caller-supplied clock.
- *
- * The platform lists expired keys deliberately — "an operator whose worker has
- * stopped connecting needs to see the credential it is failing on"
- * (`internal/api/envkeys.go:102-106`) — so the console has to say which is
- * which. That is a rendering derivation, not domain logic (principle 4), but it
- * owns a clock, so `now` is a parameter rather than a `Date.now()` buried in a
- * branch.
- *
- * A null `expires_at` is a key that does not expire. Our platform assigns every
- * key a one-year lifetime today, so this arm is unreachable through issuance —
- * it exists because the column is nullable on the wire and a row that says
- * "never" must not read as "expired".
+ * Active or expired, by the shared expiry rule (`hasExpired`). The platform
+ * lists expired keys deliberately — "an operator whose worker has stopped
+ * connecting needs to see the credential it is failing on"
+ * (`internal/api/envkeys.go:102-106`). It assigns every key a one-year
+ * lifetime today, so a null `expires_at` is unreachable through issuance; the
+ * column is nullable on the wire all the same.
  */
 export function environmentKeyState(
   expiresAt: string | null | undefined,
   now: number,
 ): "active" | "expired" {
-  if (!expiresAt) return "active";
-  const parsed = Date.parse(expiresAt);
-  // An unparseable timestamp is not evidence of expiry.
-  if (Number.isNaN(parsed)) return "active";
-  return parsed <= now ? "expired" : "active";
+  return hasExpired(expiresAt, now) ? "expired" : "active";
 }
 
 /**
