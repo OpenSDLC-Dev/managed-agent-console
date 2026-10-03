@@ -11,7 +11,9 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Profiler } from "react";
 import { SessionResources } from "./session-resources";
+import { Announcer } from "@/components/shell/announcer";
 import { useSession } from "@/lib/platform/queries";
 import { PlatformError } from "@/lib/platform/http";
 import {
@@ -373,7 +375,7 @@ it("says no resources are attached only when the session has no files either", a
   expect(panel()).toHaveTextContent("No resources attached.");
 });
 
-it("claims no empty tab while the session's files are loading or failed, and announces the loading", async () => {
+it("claims no empty tab while the session's files are loading or failed, and announces each through the shell's region", async () => {
   const pending = held<Response>();
   vi.stubGlobal(
     "fetch",
@@ -384,37 +386,69 @@ it("claims no empty tab while the session's files are loading or failed, and ann
     defaultOptions: { queries: { retry: false } },
   });
   client.setQueryData(["session", session.id], session);
-  // Every change made to the document, from the mount on.
-  const observer = new MutationObserver(() => {});
-  observer.observe(document.body, { childList: true, subtree: true });
-  onTestFinished(() => observer.disconnect());
-  render(
+  // The note's state and its sentence, as each commit left them.
+  const commits: [string | null, string | null][] = [];
+  const recordCommit = () => {
+    const note = document.querySelector("[data-session-files-note]");
+    commits.push([
+      note?.getAttribute("data-session-files-note") ?? null,
+      note?.textContent ?? null,
+    ]);
+  };
+  const page = (open: boolean) => (
     <QueryClientProvider client={client}>
-      <SessionResources session={session} />
-    </QueryClientProvider>,
+      <Announcer>
+        <Profiler id="resources" onRender={recordCommit}>
+          {open && <SessionResources session={session} />}
+        </Profiler>
+      </Announcer>
+    </QueryClientProvider>
   );
+  const view = render(page(false));
+  // The shell's region is in the document, empty, before the tab opens.
+  const region = screen.getByRole("status");
+  expect(region).toBeEmptyDOMElement();
+  const observer = new MutationObserver(() => {});
+  observer.observe(region, {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  onTestFinished(() => observer.disconnect());
+
+  view.rerender(page(true));
   expect(panel()).toHaveAttribute("data-resources-state", "loading");
-  const status = within(panel()).getByRole("status");
-  expect(status).toHaveAttribute("data-session-files-note", "loading");
+  const note = () => panel().querySelector("[data-session-files-note]");
+  expect(note()).toHaveAttribute("data-session-files-note", "loading");
   // The one assertion on that sentence.
-  expect(status).toHaveTextContent("Loading the session's files…");
-  // Written into the region once it was in the document, as a change a
-  // screen reader announces; a region mounted holding it is announced by
-  // none.
-  expect(
-    observer
-      .takeRecords()
-      .some(
-        (record) => record.target === status && record.addedNodes.length > 0,
-      ),
-  ).toBe(true);
+  expect(note()).toHaveTextContent("Loading the session's files…");
+  // Written into the region that was already there, as a change a screen
+  // reader announces; the tab holds no region of its own.
+  expect(observer.takeRecords().length).toBeGreaterThan(0);
+  expect(screen.getByRole("status")).toBe(region);
+  expect(region).toHaveTextContent(note()!.textContent!);
 
   pending.resolve(refusal(500, "Down."));
   await waitFor(() =>
     expect(panel()).toHaveAttribute("data-resources-state", "error"),
   );
-  // The same live region says the list failed.
-  expect(status).toHaveAttribute("data-session-files-note", "error");
+  // The same region says the list failed.
+  expect(note()).toHaveAttribute("data-session-files-note", "error");
+  expect(region).toHaveTextContent(note()!.textContent!);
+  // A closed tab takes its note back.
+  view.rerender(page(false));
+  expect(region).toBeEmptyDOMElement();
+
+  // No commit left a state without its sentence, or a sentence beside
+  // another state's.
+  const states = new Map<string | null, Set<string | null>>();
+  for (const [state, text] of commits)
+    states.set(state, (states.get(state) ?? new Set()).add(text));
+  expect([...states.keys()]).toEqual([null, "loading", "error"]);
+  for (const [state, texts] of states) {
+    expect(texts.size).toBe(1);
+    expect(texts.has(null)).toBe(state === null);
+  }
 });
 
 it("says a filter matches none of the resources while the files note says their list failed", async () => {
@@ -444,7 +478,7 @@ it.each([
 ])(
   "deletes %s after confirming, the dialog open until its list is read again",
   async (_, file, kind, warning) => {
-    const { writes, lists, sessionReads } = setup(false, {
+    const { writes, lists } = setup(false, {
       resources: [fileResource],
       files: [copy, file],
     });
@@ -477,8 +511,6 @@ it.each([
       `/api/platform/v1/files/${file.id}`,
       { method: "DELETE" },
     ]);
-    // Nothing is checked first: the platform judges the delete.
-    expect(sessionReads()).toBe(0);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     // The dialog closed only once the list was read again, the row gone.
     expect(lists()).toBe(before + 1);
@@ -758,34 +790,37 @@ describe("a copy listed before the session that mounts it", () => {
     mount_path: "/mnt/session/uploads/fresh.txt",
   };
 
-  it("offers Delete at once, and leaves the delete to the platform, reading no session", async () => {
-    const { session, writes, replies, sessionReads } = setup(false, {
+  it("offers Delete from the session the page holds, and none once that session mounts the copy", async () => {
+    const { session, client } = setup(false, {
       resources: [],
       files: [fresh],
       live: true,
     });
-    // The session the page holds mounts no such copy: Delete is offered from
-    // it, with no read of its own.
-    await userEvent.click(
+    // The session the page holds mounts no such copy: its row offers Delete.
+    expect(
       await screen.findByRole("button", {
         name: "Delete fresh.txt (file_fresh)",
       }),
-    );
-    // A mount landed since that read (here, or from another client). The
-    // platform deletes a mounted copy as it deletes any other, so the console
-    // checks nothing first (CLAUDE.md principle 4).
-    replies.session = async () =>
-      reply({ ...session, resources: [freshMount] });
-    await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Delete file",
+    ).toBeEnabled();
+    // Once a read of the session names the mount, the copy is that
+    // resource's row, removed as a resource. Nothing is checked on a confirm
+    // instead: the platform deletes a mounted copy as it deletes any other
+    // (CLAUDE.md principle 4).
+    act(() =>
+      client.setQueryData(["session", session.id], {
+        ...session,
+        resources: [freshMount],
       }),
     );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(writes()).toEqual([
-      ["/api/platform/v1/files/file_fresh", { method: "DELETE" }],
-    ]);
-    expect(sessionReads()).toBe(0);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Delete fresh.txt (file_fresh)" }),
+      ).toBeNull(),
+    );
+    expect(screen.getByText(freshMount.mount_path)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: `Remove resource ${freshMount.id}` }),
+    ).toBeInTheDocument();
   });
 
   it("is not even listed after Attach file: the session is read before the list", async () => {

@@ -251,23 +251,23 @@ export default function SessionDetailPage({
   const { id } = use(params);
   return (
     <Suspense fallback={<DetailSkeleton />}>
-      {id.startsWith("session_") ? (
-        <CanonicalSession key={id} id={id} />
-      ) : (
+      {id.startsWith("sesn_") ? (
         <SessionWorkspace key={id} id={id} />
+      ) : (
+        <CanonicalSession key={id} id={id} />
       )}
     </Suspense>
   );
 }
 
 /**
- * sessions.go normalizeSessionID answers a legacy `session_` address with its
- * `sesn_` row, and only that prefix: any other id is read as given. So only a
- * legacy address waits for its session before the workspace mounts. The page
- * moves to the id the session answers with, the query and hash kept, and
- * mounts the workspace only for that id: its trace, threads and writes key
- * one id, and a legacy address neither reads the event history nor opens a
- * stream.
+ * A session's id carries the `sesn_` prefix, so only such an address mounts
+ * the workspace at once. Any other waits for its session: an endpoint may
+ * answer an alias with its row (sessions.go normalizeSessionID answers a
+ * legacy `session_` address so), and the page then moves to the id the
+ * session answers with, the query and hash kept, and mounts the workspace
+ * only for that id: its trace, threads and writes key one id, and an alias
+ * neither reads the event history nor opens a stream.
  */
 function CanonicalSession({ id }: { id: string }) {
   const session = useSession(id);

@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAnnouncement } from "@/components/shell/announcer";
 import { DetailSection } from "./detail";
 import { ConfirmIconButton } from "./archive-button";
 import { MemoryTree } from "./memory-tree";
@@ -147,14 +148,9 @@ export function SessionResources({ session }: { session: Session }) {
         ? `The session's files could not be listed. ${files.error?.message}`
         : null;
 
-  // A live region announces a change to what it holds, not what it mounted
-  // holding, so it mounts empty and the note is written into it after each
-  // commit: a tab opened on a list still loading says so.
-  const filesNoteRegion = useRef<HTMLParagraphElement>(null);
-  useEffect(() => {
-    if (filesNoteRegion.current)
-      filesNoteRegion.current.textContent = filesNote ?? "";
-  }, [filesNote]);
+  // Announced through the shell's live region, which outlives this tab: one
+  // mounted with the tab, holding the note, would be announced by none.
+  useAnnouncement(filesNote);
 
   // One delete dialog for the session's own files, outside their rows: a row
   // can leave the list while its dialog is open, and the dialog outlives it.
@@ -476,13 +472,15 @@ export function SessionResources({ session }: { session: Session }) {
             </div>
           );
         })}
-        {/* The list's progress, announced where its rows appear. */}
-        <p
-          ref={filesNoteRegion}
-          role="status"
-          className={filesNote ? "text-xs text-muted-foreground" : "sr-only"}
-          data-session-files-note={filesNote ? filesState : undefined}
-        />
+        {/* The list's progress, where its rows appear. */}
+        {filesNote && (
+          <p
+            className="text-xs text-muted-foreground"
+            data-session-files-note={filesState}
+          >
+            {filesNote}
+          </p>
+        )}
         {editable && (
           <Button
             variant="outline"

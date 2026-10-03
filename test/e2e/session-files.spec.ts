@@ -68,6 +68,43 @@ test("Resources lists the session's own files with the reference's request, offe
   ).toEqual([]);
 });
 
+test("the files note is announced through the shell's region, in the document before the tab opens", async ({
+  page,
+}) => {
+  await signIn(page);
+  // The session's list held until released, so its note stays up.
+  let release = () => {};
+  await page.route(
+    (url) =>
+      url.pathname === "/api/platform/v1/files" &&
+      url.searchParams.has("scope_id"),
+    async (route) => {
+      await new Promise<void>((resolve) => (release = resolve));
+      await route.continue();
+    },
+  );
+  await page.goto(`/sessions/${RESEARCH}`);
+  const region = page.getByRole("status").and(page.getByTestId("announcer"));
+  await expect(region).toBeAttached();
+  await expect(region).toBeEmpty();
+
+  await page.getByRole("tab", { name: "Resources", exact: true }).click();
+  const note = page.locator("[data-session-files-note]");
+  await expect(note).toHaveAttribute("data-session-files-note", "loading");
+  await expect(region).toHaveText((await note.textContent())!);
+  // The tab holds no region of its own.
+  await expect(
+    page.getByTestId("session-resources").getByRole("status"),
+  ).toHaveCount(0);
+  release();
+  await expect(page.getByTestId("session-resources")).toHaveAttribute(
+    "data-session-files",
+    "ready",
+  );
+  await expect(note).toHaveCount(0);
+  await expect(region).toBeEmpty();
+});
+
 test("a deployment fire mints its session's copy, shown in that session's Resources", async ({
   page,
 }) => {
@@ -390,6 +427,16 @@ test("resources add judges the body before the session, in the platform's order 
   expect(await refused({})).toEqual([400, "type is required"]);
   // A JSON null is an empty object, as a blank body is.
   expect(await refused(Buffer.from("null"))).toEqual([400, "type is required"]);
+  // Blank as bytes.TrimSpace reads it: Unicode spaces, U+0085 among them,
+  // but not a byte order mark, which no JSON value may start with.
+  expect(await refused(Buffer.from(" \u0085\u00a0\u3000\n"))).toEqual([
+    400,
+    "type is required",
+  ]);
+  expect(await refused(Buffer.from("\ufeff"))).toEqual([
+    400,
+    "request body must be a JSON object",
+  ]);
   // Bytes no string can hold, refused before anything reads the body.
   expect(
     await refused(Buffer.from('{"type":"file","file_id":"\xff"}', "latin1")),
@@ -462,6 +509,278 @@ test("resources add judges the body before the session, in the platform's order 
       ).json()
     ).data,
   ).toEqual([]);
+});
+
+test("session create and a deployment's create and update decode the body as resources add does", async ({
+  page,
+}) => {
+  await signIn(page);
+  const deployment = "depl_handtask00000000001";
+  const routes = [
+    ["sessions", "environment_id is required"],
+    ["deployments", "name is required"],
+  ] as const;
+  const refused = async (path: string, data: unknown) => {
+    const response = await page.request.post(`/api/platform/v1/${path}`, {
+      data: data as object,
+    });
+    return [response.status(), (await response.json()).error?.message];
+  };
+  for (const [path, first] of routes) {
+    // decodeObject: a null or blank body is an empty object, judged as one.
+    expect(await refused(path, Buffer.from("null"))).toEqual([400, first]);
+    expect(await refused(path, Buffer.from(" \u0085"))).toEqual([400, first]);
+    expect(await refused(path, Buffer.from("\ufeff"))).toEqual([
+      400,
+      "request body must be a JSON object",
+    ]);
+    expect(await refused(path, [])).toEqual([
+      400,
+      "request body must be a JSON object",
+    ]);
+    expect(
+      await refused(path, Buffer.from('{"name":"\xff"}', "latin1")),
+    ).toEqual([400, "request body must be valid UTF-8"]);
+    // rejectNULBody names where it found the byte, before any key is read.
+    expect(
+      await refused(path, {
+        unknown: true,
+        resources: [{ type: "file", file_id: UPLOAD, mount_path: "a\u0000" }],
+      }),
+    ).toEqual([
+      400,
+      "resources[0].mount_path must not contain U+0000 (the \\u0000 escape): it cannot be stored",
+    ]);
+  }
+  // An update decodes its body alike: a null one sets nothing.
+  const update = `deployments/${deployment}`;
+  expect(await refused(update, { name: "x\u0000" })).toEqual([
+    400,
+    "name must not contain U+0000 (the \\u0000 escape): it cannot be stored",
+  ]);
+  expect(
+    await refused(update, Buffer.from('{"name":"\xff"}', "latin1")),
+  ).toEqual([400, "request body must be valid UTF-8"]);
+  const unchanged = await page.request.post(`/api/platform/v1/${update}`, {
+    data: Buffer.from("null"),
+  });
+  expect(unchanged.status()).toBe(200);
+  expect((await unchanged.json()).name).toBe("Manual task runner");
+});
+
+test("a deployment judges a repository as session create does, in the deployment routes' words", async ({
+  page,
+}) => {
+  await signIn(page);
+  const repo = {
+    type: "github_repository",
+    url: "https://github.com/example/project",
+    authorization_token: "test-only-token",
+  };
+  const deploy = (resources: unknown[], id?: string) =>
+    page.request.post(`/api/platform/v1/deployments${id ? `/${id}` : ""}`, {
+      data: {
+        ...(id
+          ? {}
+          : {
+              name: "Repositories",
+              agent: {
+                type: "agent",
+                id: "agent_taskrunner0000000001",
+                version: 1,
+              },
+              environment_id: "env_egress000000000000001",
+              initial_events: [
+                { type: "user.message", content: "Fixture only" },
+              ],
+            }),
+        resources,
+      },
+    });
+  const refused = async (resources: unknown[], id?: string) => {
+    const response = await deploy(resources, id);
+    return [response.status(), (await response.json()).error?.message];
+  };
+  const without = (key: string) =>
+    Object.fromEntries(Object.entries(repo).filter(([name]) => name !== key));
+  // parseResources: each element an object of a supported type.
+  expect(await refused([null])).toEqual([
+    400,
+    "each resource must be an object",
+  ]);
+  expect(await refused([{ type: "bucket" }])).toEqual([
+    400,
+    'resource type "bucket" is not supported',
+  ]);
+  // parseRepoResource: the keys, the url, the token, then the checkout.
+  expect(await refused([{ ...repo, branch: "main" }])).toEqual([
+    400,
+    'Failed to parse request body: unknown field "branch"',
+  ]);
+  expect(await refused([repo, without("url")])).toEqual([
+    400,
+    "resources.1.url: Field required",
+  ]);
+  expect(await refused([{ ...repo, url: null }])).toEqual([
+    400,
+    "url is required",
+  ]);
+  expect(
+    await refused([{ ...repo, url: "https://github.com/example" }]),
+  ).toEqual([
+    400,
+    "validate deployment resources: invalid GitHub repository URL: repo URL must be https://github.com/{owner}/{repo}",
+  ]);
+  expect(await refused([without("authorization_token")])).toEqual([
+    400,
+    "resources.0.authorization_token: Field required",
+  ]);
+  expect(await refused([{ ...repo, authorization_token: "" }])).toEqual([
+    400,
+    "authorization_token is required",
+  ]);
+  expect(
+    await refused([{ ...repo, authorization_token: "x".repeat(8193) }]),
+  ).toEqual([400, "authorization_token must be at most 8192 bytes"]);
+  expect(await refused([{ ...repo, checkout: "main" }])).toEqual([
+    400,
+    "checkout must be an object",
+  ]);
+  expect(await refused([{ ...repo, checkout: { type: "tag" } }])).toEqual([
+    400,
+    'checkout.type must be "branch" or "commit"',
+  ]);
+  expect(
+    await refused([
+      { ...repo, checkout: { type: "branch", name: "main", sha: "x" } },
+    ]),
+  ).toEqual([400, 'Failed to parse request body: unknown field "sha"']);
+  expect(await refused([{ ...repo, checkout: { type: "commit" } }])).toEqual([
+    400,
+    "checkout.sha is required for a commit checkout",
+  ]);
+  expect(
+    await refused([
+      { ...repo, checkout: { type: "commit", sha: "g".repeat(40) } },
+    ]),
+  ).toEqual([400, "checkout.sha must be a full 40-character commit SHA"]);
+  // An update parses its resources alike.
+  expect(
+    await refused(
+      [{ ...repo, checkout: { type: "commit", sha: "abc123" } }],
+      "depl_handtask00000000001",
+    ),
+  ).toEqual([400, "checkout.sha must be a full 40-character commit SHA"]);
+
+  const sha = "0123456789abcdefABCDEF0123456789abcdef01";
+  const created = await deploy([
+    { ...repo, checkout: { type: "commit", sha } },
+  ]);
+  expect(created.status()).toBe(200);
+  expect((await created.json()).resources).toEqual([
+    {
+      type: "github_repository",
+      url: repo.url,
+      checkout: { type: "commit", sha },
+    },
+  ]);
+});
+
+test("a repository's token rotation judges the body, then the session, the resource and its type, in the platform's words", async ({
+  page,
+}) => {
+  await signIn(page);
+  const repo = {
+    type: "github_repository",
+    url: "https://github.com/example/project",
+    authorization_token: "test-only-token",
+  };
+  const session = await freshSession(page, undefined, [
+    repo,
+    { type: "file", file_id: UPLOAD },
+  ]);
+  const [repoId, fileId] = (
+    (await (
+      await page.request.get(`/api/platform/v1/sessions/${session}`)
+    ).json()) as { resources: { id: string }[] }
+  ).resources.map((resource) => resource.id);
+  const rotate = async (data: unknown, target = session, resource = repoId) => {
+    const response = await page.request.post(
+      `/api/platform/v1/sessions/${target}/resources/${resource}`,
+      { data: data as object },
+    );
+    const body = await response.json();
+    return [response.status(), body.error?.message ?? body.id];
+  };
+  const token = { authorization_token: "test-only-rotated" };
+  // rotateResourceTokenTx: the body (decodeObject), its one key and the
+  // token, before any session is read.
+  const absent = "sesn_absent00000000000001";
+  expect(await rotate(Buffer.from("null"), absent)).toEqual([
+    400,
+    "authorization_token is required",
+  ]);
+  expect(
+    await rotate(
+      Buffer.from('{"authorization_token":"\xff"}', "latin1"),
+      absent,
+    ),
+  ).toEqual([400, "request body must be valid UTF-8"]);
+  expect(await rotate({ authorization_token: "a\u0000" }, absent)).toEqual([
+    400,
+    "authorization_token must not contain U+0000 (the \\u0000 escape): it cannot be stored",
+  ]);
+  expect(await rotate({ ...token, scope: "repo" }, absent)).toEqual([
+    400,
+    'Failed to parse request body: unknown field "scope"',
+  ]);
+  expect(await rotate({ authorization_token: 7 }, absent)).toEqual([
+    400,
+    "authorization_token must be a string",
+  ]);
+  expect(
+    await rotate({ authorization_token: "x".repeat(8193) }, absent),
+  ).toEqual([400, "authorization_token must be at most 8192 bytes"]);
+  // Then the session as the add reads it, the resource, and its type.
+  expect(await rotate(token, absent)).toEqual([
+    404,
+    `session ${absent} not found`,
+  ]);
+  const legacy = session.replace(/^sesn_/, "session_");
+  expect(await rotate(token, legacy)).toEqual([200, repoId]);
+  expect(await rotate(token, session, "sesrsc_absent0000000000001")).toEqual([
+    404,
+    "Resource not found: sesrsc_absent0000000000001",
+  ]);
+  expect(await rotate(token, session, fileId)).toEqual([
+    400,
+    "only github_repository resources support token rotation",
+  ]);
+
+  // A live dream's hold, and the archive, before the resource is looked up.
+  expect(
+    (
+      await page.request.post(
+        `http://127.0.0.1:18080/__start-dream?id=drm_pendingresearch0000001&session=${session}`,
+      )
+    ).ok(),
+  ).toBe(true);
+  expect(await rotate(token, session, "sesrsc_absent0000000000001")).toEqual([
+    400,
+    "session is owned by dream drm_pendingresearch0000001",
+  ]);
+  const archived = await freshSession(page, undefined, [repo]);
+  expect(
+    (
+      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
+        data: {},
+      })
+    ).ok(),
+  ).toBe(true);
+  expect(await rotate(token, archived, "sesrsc_absent0000000000001")).toEqual([
+    400,
+    `session ${archived} is archived`,
+  ]);
 });
 
 test("resources add then refuses an archived session, one a dream holds, and an agent without read", async ({

@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { Announcer } from "./announcer";
 import { PlatformError } from "@/lib/platform/http";
 import { toastPlatformError } from "@/lib/platform/toast-error";
 
@@ -72,7 +73,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
-      {children}
+      <Announcer>{children}</Announcer>
       <Toaster position="bottom-right" />
     </QueryClientProvider>
   );

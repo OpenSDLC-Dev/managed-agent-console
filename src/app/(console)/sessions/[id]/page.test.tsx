@@ -1131,6 +1131,33 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
   expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
 });
 
+it("reads any address without the sesn_ prefix before the workspace, and moves to the id it answers with", async () => {
+  // An alias some endpoint answers with another session's row: only the read
+  // keys it, and nothing else starts until the page has moved.
+  setTrace("live");
+  window.history.replaceState(null, "", "/sessions/sess_alias");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/platform/v1/sessions/sess_alias")
+      return json(session({ id: "sesn_1" }));
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  traceMock.sessionIds.clear();
+  renderPage("sess_alias");
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith("/sessions/sesn_1"),
+  );
+  expect(
+    fetchMock.mock.calls.map(
+      ([input]) => new URL(String(input), "http://console.test").pathname,
+    ),
+  ).toEqual(["/api/platform/v1/sessions/sess_alias"]);
+  expect([...traceMock.sessionIds]).toEqual([]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+});
+
 it("starts a canonical session's trace and threads beside its read, not after it", async () => {
   setTrace("connecting");
   const read = Promise.withResolvers<Response>();

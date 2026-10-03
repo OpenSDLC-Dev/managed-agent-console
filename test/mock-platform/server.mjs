@@ -788,6 +788,52 @@ function checkoutRefusal(checkout) {
   return null;
 }
 
+// sessionresources.go parseRepoResource, element index of a session create's
+// ("session") or a deployment's ("deployment") resources, each in the route's
+// words where the reference was recorded (#540): the keys, the url and its
+// grammar, the token, the checkout, then the mount path (repoMountInput).
+// Answers the mount input or a refusal.
+function repoResourceInput(resource, flavor, index) {
+  const refuse = (refusal) => ({ refusal });
+  const unknown = leastUnknownKey(resource, [
+    "type",
+    "url",
+    "authorization_token",
+    "mount_path",
+    "checkout",
+  ]);
+  if (unknown !== undefined) return refuse(unknownField(unknown));
+  // fieldRequired: an absent url only; a null or empty one is
+  // requiredString's.
+  if (flavor === "deployment" && !("url" in resource))
+    return refuse(`resources.${index}.url: Field required`);
+  const urlRefusal = requiredStringRefusal(resource, "url");
+  if (urlRefusal) return refuse(urlRefusal);
+  if (!githubRepoName(resource.url))
+    return refuse(
+      flavor === "session"
+        ? "Invalid `github_repository` resource: invalid github_repository url: must be https://github.com/{owner}/{repo} with no .git suffix"
+        : "validate deployment resources: invalid GitHub repository URL: repo URL must be https://github.com/{owner}/{repo}",
+    );
+  // An absent token on either route, and an empty one on session create, in
+  // the reference's words; a null or non-string one, and an empty one on a
+  // deployment, in requiredString's.
+  const token = resource.authorization_token;
+  if (flavor === "session" && (token === undefined || token === ""))
+    return refuse(
+      `resources.${index}.github_repository.authorization_token: value is required`,
+    );
+  if (flavor === "deployment" && token === undefined)
+    return refuse(`resources.${index}.authorization_token: Field required`);
+  const tokenRefusal = requiredStringRefusal(resource, "authorization_token");
+  if (tokenRefusal) return refuse(tokenRefusal);
+  if (Buffer.byteLength(token) > 8192)
+    return refuse("authorization_token must be at most 8192 bytes");
+  const checkout = checkoutRefusal(resource.checkout);
+  if (checkout) return refuse(checkout);
+  return repoMountInput(resource);
+}
+
 // parseSessionResourceInputs: each element's shape and mount path, in session
 // create's words (#540), the memory stores' own two rules, and the rules
 // between mounts. Nothing is looked up here. Each element's input, its
@@ -803,33 +849,7 @@ function sessionResourceRefusal(resources, inputs) {
     const typeRefusal = requiredStringRefusal(resource, "type");
     if (typeRefusal) return typeRefusal;
     if (resource.type === "github_repository") {
-      const unknown = leastUnknownKey(resource, [
-        "type",
-        "url",
-        "authorization_token",
-        "mount_path",
-        "checkout",
-      ]);
-      if (unknown !== undefined) return unknownField(unknown);
-      const urlRefusal = requiredStringRefusal(resource, "url");
-      if (urlRefusal) return urlRefusal;
-      if (!githubRepoName(resource.url))
-        return "Invalid `github_repository` resource: invalid github_repository url: must be https://github.com/{owner}/{repo} with no .git suffix";
-      // An absent or empty token in the reference's words; a null or
-      // non-string one in requiredString's.
-      const token = resource.authorization_token;
-      if (token === undefined || token === "")
-        return `resources.${index}.github_repository.authorization_token: value is required`;
-      const tokenRefusal = requiredStringRefusal(
-        resource,
-        "authorization_token",
-      );
-      if (tokenRefusal) return tokenRefusal;
-      if (Buffer.byteLength(token) > 8192)
-        return "authorization_token must be at most 8192 bytes";
-      const checkout = checkoutRefusal(resource.checkout);
-      if (checkout) return checkout;
-      const mount = repoMountInput(resource);
+      const mount = repoResourceInput(resource, "session", index);
       const mountRefusal = mount.refusal ?? rules.take(mount);
       if (mountRefusal) return mountRefusal;
       inputs.push(mount);
@@ -923,16 +943,30 @@ function vaultIdsRefusal(ids) {
     : `vault_ids entry ${JSON.stringify(bad)} is not a vault id`;
 }
 
-// A deployment's resources[], in the mock's own words: not split by #190, and
-// it still looks files and stores up, which the platform does not until a
-// run. Judged where the platform parses resources (parseResourceInputs),
-// each mount path as the platform resolves and judges it, in its words: the
-// deployment echoes the paths as given, and a fire mounts them resolved.
+// A deployment's resources[], judged where the platform parses them
+// (parseResourceInputs): each element an object of a supported type, a
+// repository as parseRepoResource judges it in the deployment routes' words,
+// and each mount path as the platform resolves and judges it: the deployment
+// echoes the paths as given, and a fire mounts them resolved. A file or a
+// store is still the mock's own: not split by #190, and looked up, which the
+// platform does not do until a run.
 function deploymentResourceRefusal(resources) {
   if (resources === undefined || resources === null) return null;
   if (!Array.isArray(resources)) return "resources must be an array";
   const rules = mountRules("deployment");
-  for (const resource of resources) {
+  for (const [index, resource] of resources.entries()) {
+    if (!resource || typeof resource !== "object" || Array.isArray(resource))
+      return "each resource must be an object";
+    const typeRefusal = requiredStringRefusal(resource, "type");
+    if (typeRefusal) return typeRefusal;
+    if (resource.type === "github_repository") {
+      const mount = repoResourceInput(resource, "deployment", index);
+      const refusal = mount.refusal ?? rules.take(mount);
+      if (refusal) return refusal;
+      continue;
+    }
+    if (resource.type !== "file" && resource.type !== "memory_store")
+      return `resource type ${JSON.stringify(resource.type)} is not supported`;
     const valid =
       (resource.type === "file" &&
         filesStore.some((file) => file.id === resource.file_id)) ||
@@ -940,17 +974,10 @@ function deploymentResourceRefusal(resources) {
         memoryStoresStore.some(
           (store) => store.id === resource.memory_store_id,
         ) &&
-        [undefined, "read_only", "read_write"].includes(resource.access)) ||
-      (resource.type === "github_repository" &&
-        typeof resource.authorization_token === "string" &&
-        resource.authorization_token.length > 0 &&
-        githubRepoName(resource.url ?? ""));
+        [undefined, "read_only", "read_write"].includes(resource.access));
     if (!valid) return "invalid deployment resource";
     if (resource.type === "memory_store") continue;
-    const mount =
-      resource.type === "file"
-        ? fileResourceInput(resource, "deployment")
-        : repoMountInput(resource);
+    const mount = fileResourceInput(resource, "deployment");
     const refusal = mount.refusal ?? rules.take(mount);
     if (refusal) return refusal;
   }
@@ -1622,14 +1649,21 @@ function resourceSession(sessionId) {
   return { id, state };
 }
 
-// wire.go decodeBodyObject, which every JSON object body passes: a blank body,
-// or a JSON null, is an empty object; then the bytes must be UTF-8 and the
-// body an object, and no string in it, key or value, may hold U+0000
-// (rejectNULBody), the refusal naming where it found one. Answers the object
-// or a refusal.
+// Go's unicode.IsSpace, which bytes.TrimSpace trims by: JavaScript's trim
+// differs both ways, taking U+FEFF and leaving U+0085.
+const GO_SPACE =
+  /^[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/;
+
+// wire.go decodeBodyObject, which every JSON object body passes: a blank body
+// (bytes.TrimSpace: a byte order mark is not blank, U+0085 is), or a JSON
+// null, is an empty object; then the bytes must be UTF-8 and the body an
+// object, and no string in it, key or value, may hold U+0000 (rejectNULBody),
+// the refusal naming where it found one. Answers the object or a refusal.
+// Bytes that are not UTF-8 decode to U+FFFD here, which is not a space, as
+// bytes.TrimSpace stops at them too.
 function decodeBodyObject(raw) {
   const text = raw.toString("utf8");
-  if (text.trim() === "") return { body: {} };
+  if (GO_SPACE.test(text)) return { body: {} };
   if (!isUtf8(raw)) return { refusal: "request body must be valid UTF-8" };
   let body;
   try {
@@ -3545,13 +3579,25 @@ const server = createServer(async (req, res) => {
       /^\/v1\/deployments\/([^/]+)\/(archive|pause|unpause|run)$/,
     );
     let body;
-    try {
-      const rawBody = (await readBody(req)).toString("utf8");
-      body = actionMatch && rawBody.trim() === "" ? {} : JSON.parse(rawBody);
-    } catch {
-      res.writeHead(400);
-      res.end(envelope("invalid_request_error", "invalid JSON body"));
-      return;
+    if (actionMatch) {
+      try {
+        const rawBody = (await readBody(req)).toString("utf8");
+        body = rawBody.trim() === "" ? {} : JSON.parse(rawBody);
+      } catch {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", "invalid JSON body"));
+        return;
+      }
+    } else {
+      // deployments.go createDeployment and updateDeployment read the body
+      // through decodeObject first.
+      const decoded = decodeBodyObject(await readBody(req));
+      if (decoded.refusal) {
+        res.writeHead(400);
+        res.end(envelope("invalid_request_error", decoded.refusal));
+        return;
+      }
+      body = decoded.body;
     }
     if (actionMatch) {
       const deployment = deploymentsStore.find(
@@ -4128,14 +4174,14 @@ const server = createServer(async (req, res) => {
   // Session create — exact top-level keys; initial_events is NOT accepted.
   if (req.method === "POST" && url.pathname === "/v1/sessions") {
     res.setHeader("content-type", "application/json");
-    let body;
-    try {
-      body = JSON.parse(await readBody(req));
-    } catch {
+    // sessions.go createSession reads the body through decodeObject first.
+    const decoded = decodeBodyObject(await readBody(req));
+    if (decoded.refusal) {
       res.writeHead(400);
-      res.end(envelope("invalid_request_error", "invalid JSON body"));
+      res.end(envelope("invalid_request_error", decoded.refusal));
       return;
     }
+    const { body } = decoded;
     const allowed = new Set([
       "agent",
       "environment_id",
@@ -5165,49 +5211,33 @@ const server = createServer(async (req, res) => {
       );
       return;
     }
-    const state = store.get(resourceMatch[1]);
-    if (!state) {
-      fail(404, "no such session");
-      return;
-    }
-    if (state.session.archived_at) {
-      fail(400, "session is archived");
-      return;
-    }
-    const resources = state.session.resources;
+    // sessionresources.go rotateResourceTokenTx: the body judged first —
+    // decoded (decodeObject), its one key, the token — then the session as
+    // the add reads it, the resource by its id (a memory element carries
+    // none, so it answers 404, as checkResourceID has it there), and last its
+    // type.
+    const decoded = decodeBodyObject(await readBody(req));
+    if (decoded.refusal) return fail(400, decoded.refusal);
+    const { body } = decoded;
+    const unknown = leastUnknownKey(body, ["authorization_token"]);
+    if (unknown !== undefined) return fail(400, unknownField(unknown));
+    const tokenRefusal = requiredStringRefusal(body, "authorization_token");
+    if (tokenRefusal) return fail(400, tokenRefusal);
+    if (Buffer.byteLength(body.authorization_token) > 8192)
+      return fail(400, "authorization_token must be at most 8192 bytes");
+    const held = resourceSession(resourceMatch[1]);
+    if (held.refusal) return fail(held.status, held.refusal);
     const resourceId = resourceMatch[2];
-    const resource = resources.find(
-      (item) =>
-        (item.type === "memory_store" ? item.memory_store_id : item.id) ===
-        resourceId,
+    const resource = held.state.session.resources.find(
+      (item) => item.id === resourceId,
     );
-    if (resourceId && !resource) {
-      // sessionresources.go errResourceNotFound: the reference's words (#540).
-      fail(404, `Resource not found: ${resourceId}`);
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(await readBody(req));
-    } catch {
-      fail(400, "invalid JSON");
-      return;
-    }
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      fail(400, "expected object");
-      return;
-    }
-    if (resource.type !== "github_repository") {
-      fail(400, "only repository tokens can be updated");
-      return;
-    }
-    if (
-      typeof body.authorization_token !== "string" ||
-      !body.authorization_token
-    ) {
-      fail(400, "authorization_token is required");
-      return;
-    }
+    // sessionresources.go errResourceNotFound: the reference's words (#540).
+    if (!resource) return fail(404, `Resource not found: ${resourceId}`);
+    if (resource.type !== "github_repository")
+      return fail(
+        400,
+        "only github_repository resources support token rotation",
+      );
     resource.updated_at = now();
     res.writeHead(200);
     res.end(JSON.stringify(resource));

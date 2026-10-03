@@ -40,10 +40,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
-- A session opened by its legacy `session_…` address moves to its `sesn_…` id, query and hash
-  kept, before its workspace loads. Every query and write on the page now keys that one id, so a
-  file attached there, or an outcome defined, shows at once rather than at the next poll, and the
-  event history is read and the stream opened once rather than under both ids (#192).
+- A session opened by any address but its `sesn_…` id, such as a legacy `session_…` one, is read
+  first and moves to the id it answers with, query and hash kept, before its workspace loads. Every
+  query and write on the page now keys that one id, so a file attached there, or an outcome
+  defined, shows at once rather than at the next poll, and the event history is read and the stream
+  opened once rather than under both ids (#192).
 - A memory store may omit `archived_at`, as the reference does until the store is archived. The
   console reads a store without the key as live, and the mock platform now serves that recorded
   shape. Deploy this console before any platform release that omits the key
