@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,20 @@ import { DetailSection } from "./detail";
 import { ConfirmIconButton } from "./archive-button";
 import { MemoryTree } from "./memory-tree";
 import { SessionResourcePreview } from "./session-resource-preview";
-import { useSessionFiles, useUploadFile } from "@/lib/platform/queries";
+import {
+  useDeleteFile,
+  useRereadSession,
+  useSessionFiles,
+  useUploadFile,
+} from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import {
+  fileExpired,
   useAddSessionFile,
-  useDeleteSessionFile,
   useRemoveSessionResource,
   useRotateRepositoryToken,
 } from "@/lib/platform/session-resources";
+import { useNow } from "@/lib/session-trace/use-now";
 import type { PlatformFile, Session } from "@/lib/platform/types";
 
 /** The memory tree's size format, so every size in this tab reads alike. */
@@ -57,7 +63,9 @@ export function SessionResources({ session }: { session: Session }) {
   const fileById = new Map(sessionFiles.map((file) => [file.id, file]));
   const add = useAddSessionFile(session.id);
   const remove = useRemoveSessionResource(session.id);
-  const removeFile = useDeleteSessionFile(session.id);
+  const removeFile = useDeleteFile(session.id);
+  const rereadSession = useRereadSession(session.id);
+  const now = useNow();
   const rotate = useRotateRepositoryToken(session.id);
   const upload = useUploadFile();
   const [dialog, setDialog] = useState<"file" | string | null>(null);
@@ -111,9 +119,73 @@ export function SessionResources({ session }: { session: Session }) {
   const visibleFiles = unmountedFiles.filter((file) =>
     matches(file.id, file.filename),
   );
-  // The session's own files are rows of this tab too.
+  // The session's own files are rows of this tab too, so neither empty state
+  // is claimed before their list has answered.
   const rowCount = session.resources.length + unmountedFiles.length;
   const visibleRowCount = visibleResources.length + visibleFiles.length;
+  const listState =
+    visibleRowCount > 0
+      ? "rows"
+      : filesState === "loading" || filesState === "error"
+        ? filesState
+        : rowCount === 0
+          ? "empty"
+          : "no-match";
+  // A copy the list carries and the session does not mount may be a mount
+  // added since the session was read (Attach file here, or another client),
+  // whose copy lists before the session names it. It offers Delete only once
+  // a read of the session begun after it was listed (cancelling any already
+  // out) leaves it unmounted — for good, since a copy is never mounted again
+  // (mountFileCopy mints a fresh one per mount). A read that fails leaves it
+  // without Delete until the next copy appears, rather than reading again in
+  // a loop.
+  const [leftovers, setLeftovers] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const unconfirmed = unmountedFiles
+    .filter((file) => !file.downloadable && !leftovers.has(file.id))
+    .map((file) => file.id)
+    .join(" ");
+  useEffect(() => {
+    if (!unconfirmed) return;
+    let current = true;
+    void rereadSession().then((read) => {
+      if (!current || !read.isSuccess) return;
+      const mountedNow = new Set(
+        read.data.resources.flatMap((resource) =>
+          resource.type === "file" ? [resource.file_id] : [],
+        ),
+      );
+      const confirmed = unconfirmed
+        .split(" ")
+        .filter((id) => !mountedNow.has(id));
+      if (confirmed.length > 0)
+        setLeftovers((known) => new Set([...known, ...confirmed]));
+    });
+    return () => {
+      current = false;
+    };
+  }, [unconfirmed, rereadSession]);
+  // A deleted row takes its Delete, where the dialog would return focus,
+  // with it: focus moves to the row that took its place, else the one before
+  // it, else the filter, as clearSelection falls back to it. Set before the
+  // delete is sent, cleared if it is refused.
+  const panel = useRef<HTMLDivElement>(null);
+  const focusAfterDelete = useRef<{ gone: string; next?: string } | null>(null);
+  useEffect(() => {
+    const handoff = focusAfterDelete.current;
+    if (!handoff || sessionFiles.some((file) => file.id === handoff.gone))
+      return;
+    focusAfterDelete.current = null;
+    const row = [
+      ...(panel.current?.querySelectorAll<HTMLElement>(
+        "[data-session-file-id]",
+      ) ?? []),
+    ].find((element) => element.dataset.sessionFileId === handoff.next);
+    (
+      row?.querySelector<HTMLElement>("a, button") ?? filterInput.current
+    )?.focus();
+  });
   const editable = !session.archived_at;
   const close = () => {
     setDialog(null);
@@ -124,10 +196,12 @@ export function SessionResources({ session }: { session: Session }) {
   return (
     <DetailSection title="Resources">
       <div
+        ref={panel}
         className="space-y-3"
         data-testid="session-resources"
         data-session-files={filesState}
         data-session-file-count={sessionFiles.length}
+        data-resources-state={listState}
       >
         <Input
           ref={filterInput}
@@ -137,12 +211,12 @@ export function SessionResources({ session }: { session: Session }) {
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
         />
-        {rowCount === 0 && (
+        {listState === "empty" && (
           <p className="text-sm text-muted-foreground">
             No resources attached.
           </p>
         )}
-        {rowCount > 0 && visibleRowCount === 0 && (
+        {listState === "no-match" && (
           <p className="text-sm text-muted-foreground">
             No matching resources.
           </p>
@@ -252,50 +326,77 @@ export function SessionResources({ session }: { session: Session }) {
             </Fragment>
           );
         })}
-        {visibleFiles.map((file) => (
-          <div
-            key={file.id}
-            className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
-            data-session-file-id={file.id}
-            data-downloadable={String(file.downloadable)}
-          >
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="break-all font-medium">{file.filename}</p>
-              <p className="flex justify-between gap-2 text-xs text-muted-foreground">
-                {/* `downloadable` is the one signal the wire gives. */}
-                <span>{file.downloadable ? "Output" : "Upload"}</span>
-                <FileSize file={file} />
-              </p>
+        {visibleFiles.map((file, index) => {
+          const expired = fileExpired(file, now);
+          // The id tells apart two rows of one name, as outputs can be.
+          const named = `${file.filename} (${file.id})`;
+          const next =
+            visibleFiles[index + 1]?.id ?? visibleFiles[index - 1]?.id;
+          return (
+            <div
+              key={file.id}
+              className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm"
+              data-session-file-id={file.id}
+              data-downloadable={String(file.downloadable)}
+              data-expired={String(expired)}
+            >
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="break-all font-medium">{file.filename}</p>
+                <p className="flex justify-between gap-2 text-xs text-muted-foreground">
+                  {/* `downloadable` is the one signal the wire gives. */}
+                  <span>{file.downloadable ? "Output" : "Upload"}</span>
+                  <FileSize file={file} />
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {/* Expired content is gone (store.FileLiveSQL): the download
+                    would 404, so the row says why it offers none. */}
+                {file.downloadable &&
+                  (expired ? (
+                    <span className="text-xs text-muted-foreground">
+                      Expired
+                    </span>
+                  ) : (
+                    <a
+                      className="text-xs underline"
+                      href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
+                      download={file.filename}
+                      aria-label={`Download ${named}`}
+                    >
+                      Download
+                    </a>
+                  ))}
+                {/* files.go deleteFile takes an output or a copy as it takes
+                    an upload, archived session or not, as the Files page did. */}
+                {(file.downloadable || leftovers.has(file.id)) && (
+                  <ConfirmIconButton
+                    label={`Delete ${named}`}
+                    title="Delete file"
+                    description={
+                      <span
+                        data-delete-kind={file.downloadable ? "output" : "copy"}
+                      >
+                        {file.downloadable
+                          ? "Permanently delete this output. Its content cannot be recovered."
+                          : "Permanently delete the session's copy of this file. The upload it was copied from is kept."}
+                      </span>
+                    }
+                    pending={removeFile.isPending}
+                    onConfirm={() => {
+                      focusAfterDelete.current = { gone: file.id, next };
+                      return removeFile.mutateAsync(file.id).catch((cause) => {
+                        focusAfterDelete.current = null;
+                        throw cause;
+                      });
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </ConfirmIconButton>
+                )}
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {file.downloadable && (
-                <a
-                  className="text-xs underline"
-                  href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
-                  download={file.filename}
-                  aria-label={`Download ${file.filename}`}
-                >
-                  Download
-                </a>
-              )}
-              {/* files.go deleteFile takes an output or a copy as it takes an
-                  upload, archived session or not, as the Files page did. */}
-              <ConfirmIconButton
-                label={`Delete ${file.filename}`}
-                title="Delete file"
-                description={
-                  file.downloadable
-                    ? "Permanently delete this output. Its content cannot be recovered."
-                    : "Permanently delete the session's copy of this file. The upload it was copied from is kept."
-                }
-                pending={removeFile.isPending}
-                onConfirm={() => removeFile.mutate(file.id)}
-              >
-                <Trash2 className="size-3.5" />
-              </ConfirmIconButton>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {filesState === "error" && (
           <p className="text-xs text-muted-foreground">
             The session&apos;s files could not be listed. {files.error?.message}

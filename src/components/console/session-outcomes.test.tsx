@@ -194,8 +194,20 @@ describe("SessionOutcomes", () => {
                     scope,
                     size_bytes: 256 * 1024 + 1,
                   }),
+                  file("file_expiredcopy", "stale.md", {
+                    scope,
+                    expires_at: "2026-01-01T00:00:00Z",
+                  }),
                 ]
-              : [file("file_rubric1", "rubric.md")],
+              : [
+                  file("file_rubric1", "rubric.md"),
+                  file("file_expiredupload", "old.md", {
+                    expires_at: "2026-01-01T00:00:00Z",
+                  }),
+                  file("file_later", "later.md", {
+                    expires_at: "2999-01-01T00:00:00Z",
+                  }),
+                ],
             next_page: null,
           }),
     );
@@ -226,6 +238,11 @@ describe("SessionOutcomes", () => {
     );
     // The platform's 256 KiB rubric limit applies to a session's files too.
     expect(option("file_bigoutput")).toBeNull();
+    // An expired file is no rubric (ValidateDefineOutcomes reads live rows);
+    // one that expires later still is.
+    expect(option("file_expiredcopy")).toBeNull();
+    expect(option("file_expiredupload")).toBeNull();
+    expect(option("file_later")).not.toBeNull();
     expect(
       fetchMock.mock.calls
         .map(([url]) => String(url))
@@ -263,15 +280,17 @@ describe("SessionOutcomes", () => {
         }),
         { status, headers: { "content-type": "application/json" } },
       );
+    // Each list's answer: a page, or the status of a refusal. A fresh
+    // Response per read, since a body reads once.
     async function openPicker(
-      uploads: Response | object,
-      scoped: Response | object,
+      uploads: number | object,
+      scoped: number | object,
     ) {
       vi.stubGlobal(
         "fetch",
         vi.fn(async (input: string) => {
           const answer = input.includes("scope_id=") ? scoped : uploads;
-          return answer instanceof Response ? answer : json(answer);
+          return typeof answer === "number" ? failure(answer) : json(answer);
         }),
       );
       const user = userEvent.setup();
@@ -312,10 +331,7 @@ describe("SessionOutcomes", () => {
     });
 
     it("keeps the uploads when the session's own files fail, and says which list failed", async () => {
-      const hint = await openPicker(
-        { data: [file("file_upload")] },
-        failure(500),
-      );
+      const hint = await openPicker({ data: [file("file_upload")] }, 500);
       expect(hint).toHaveAttribute("data-file-options-state", "ready");
       expect(options()).toEqual([["file_upload", "upload"]]);
       expect(hint.querySelector("[data-file-list]")).toHaveAttribute(
@@ -329,16 +345,13 @@ describe("SessionOutcomes", () => {
     });
 
     it("leaves out a list that is not served, as an absent surface", async () => {
-      const hint = await openPicker(
-        { data: [file("file_upload")] },
-        failure(404),
-      );
+      const hint = await openPicker({ data: [file("file_upload")] }, 404);
       expect(options()).toEqual([["file_upload", "upload"]]);
       expect(hint.querySelector("[data-file-list]")).toBeNull();
     });
 
     it("keeps the session's own files when the uploads fail", async () => {
-      const hint = await openPicker(failure(500), {
+      const hint = await openPicker(500, {
         data: [file("file_copy", { scope })],
       });
       expect(options()).toEqual([["file_copy", "session file"]]);
@@ -348,8 +361,51 @@ describe("SessionOutcomes", () => {
       );
     });
 
+    it("keeps the rows each list last read when a later read fails", async () => {
+      const answers: Record<"uploads" | "scoped", number | object> = {
+        uploads: { data: [file("file_upload")] },
+        scoped: { data: [file("file_copy", { scope })] },
+      };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string) => {
+          const answer = input.includes("scope_id=")
+            ? answers.scoped
+            : answers.uploads;
+          return typeof answer === "number" ? failure(answer) : json(answer);
+        }),
+      );
+      const user = userEvent.setup();
+      renderOutcomes();
+      await user.click(screen.getByRole("button", { name: "Define outcome" }));
+      await user.click(screen.getByLabelText("Rubric type"));
+      await user.click(await screen.findByRole("option", { name: "File" }));
+      await waitFor(() => expect(options()).toHaveLength(2));
+
+      // Reopened, the picker reads both lists again, and both refuse.
+      answers.uploads = 500;
+      answers.scoped = 500;
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await user.click(screen.getByRole("button", { name: "Define outcome" }));
+      const hint = () =>
+        document.querySelector("[data-file-options-state]") as HTMLElement;
+      await waitFor(() =>
+        expect(hint().querySelectorAll("[data-file-list]")).toHaveLength(2),
+      );
+      expect(
+        [...hint().querySelectorAll("[data-file-list]")].map((note) =>
+          note.getAttribute("data-file-list-state"),
+        ),
+      ).toEqual(["error", "error"]);
+      expect(hint()).toHaveAttribute("data-file-options-state", "ready");
+      expect(options()).toEqual([
+        ["file_upload", "upload"],
+        ["file_copy", "session file"],
+      ]);
+    });
+
     it("falls back to raw ID entry when neither list loads", async () => {
-      const hint = await openPicker(failure(500), failure(500));
+      const hint = await openPicker(500, 500);
       expect(hint).toHaveAttribute("data-file-options-state", "error");
       expect(options()).toEqual([]);
     });

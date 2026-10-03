@@ -43,7 +43,10 @@ test("Resources lists the session's own files with the reference's request, offe
   await expect(output).toHaveAttribute("data-downloadable", "true");
   await expect(output).toContainText("summary.xlsx");
   await expect(output.locator('[data-size-bytes="120400"]')).toBeVisible();
-  const download = output.getByRole("link", { name: "Download summary.xlsx" });
+  // Named with the id, since two outputs can share a filename.
+  const download = output.getByRole("link", {
+    name: "Download summary.xlsx (file_output000000000001)",
+  });
   await expect(download).toHaveAttribute(
     "href",
     "/api/platform/v1/files/file_output000000000001/content",
@@ -158,9 +161,16 @@ test("an output is deleted from its session's Resources after confirming", async
   const output = panel.locator(
     '[data-session-file-id="file_output000000000001"]',
   );
-  await output.getByRole("button", { name: "Delete summary.xlsx" }).click();
+  await output
+    .getByRole("button", {
+      name: "Delete summary.xlsx (file_output000000000001)",
+    })
+    .click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText("Permanently delete this output.");
+  await expect(dialog.locator("[data-delete-kind]")).toHaveAttribute(
+    "data-delete-kind",
+    "output",
+  );
   const deleted = page.waitForResponse(
     (response) =>
       response.request().method() === "DELETE" &&
@@ -172,6 +182,10 @@ test("an output is deleted from its session's Resources after confirming", async
   expect((await deleted).status()).toBe(200);
   await expect(panel).toHaveAttribute("data-session-file-count", "1");
   await expect(output).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+  // The row took its Delete with it; no row follows, so focus goes to the
+  // filter rather than the page.
+  await expect(panel.getByLabel("Filter resources")).toBeFocused();
   // The mounted copy stays, its row the resource's.
   await expect(panel.locator('[data-size-bytes="48213"]')).toBeVisible();
 });
@@ -249,4 +263,191 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
       expect(await list(`files?scope_id=${gated}`)).toEqual([]);
     });
   }
+});
+
+test("a deployment fire is refused by its first resource gone, in its order", async ({
+  page,
+}) => {
+  await signIn(page);
+  const store = "memstore_projectnotes000001";
+  const memory = { type: "memory_store", memory_store_id: store };
+  const deploy = async (name: string, resources: object[]) => {
+    const created = await page.request.post("/api/platform/v1/deployments", {
+      data: {
+        name,
+        agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
+        environment_id: "env_egress000000000000001",
+        initial_events: [{ type: "user.message", content: "Fixture only" }],
+        resources,
+      },
+    });
+    expect(created.ok()).toBe(true);
+    return ((await created.json()) as { id: string }).id;
+  };
+  const fire = async (id: string) => {
+    const fired = await page.request.post(
+      `/api/platform/v1/deployments/${id}/run`,
+      { data: {} },
+    );
+    expect(fired.status()).toBe(200);
+    const run = await fired.json();
+    expect(run.session_id).toBeNull();
+    return run.error;
+  };
+  const storeFirst = await deploy("Store first", [
+    memory,
+    { type: "file", file_id: UPLOAD },
+  ]);
+  const fileFirst = await deploy("File first", [
+    { type: "file", file_id: UPLOAD },
+    memory,
+  ]);
+
+  // Both gone: each fire answers with the resource it reaches first
+  // (materializeResourceInputs), the store in runWording's sentence.
+  expect(
+    (
+      await page.request.post(`/api/platform/v1/memory_stores/${store}/archive`)
+    ).ok(),
+  ).toBe(true);
+  expect(
+    (await page.request.delete(`/api/platform/v1/files/${UPLOAD}`)).ok(),
+  ).toBe(true);
+  expect(await fire(storeFirst)).toEqual({
+    type: "memory_store_archived_error",
+    message:
+      "session creation rejected: a referenced memory store is archived; check deployment resources",
+  });
+  expect(await fire(fileFirst)).toEqual({
+    type: "file_not_found_error",
+    message: `file ${UPLOAD} not found`,
+  });
+  // A store deleted outright is a resource not found.
+  expect(
+    (await page.request.delete(`/api/platform/v1/memory_stores/${store}`)).ok(),
+  ).toBe(true);
+  expect(await fire(storeFirst)).toEqual({
+    type: "session_resource_not_found_error",
+    message:
+      "session creation rejected: a referenced resource was not found; check deployment configuration",
+  });
+});
+
+test("resources add judges the file id, then the agent's read tool, before minting a copy", async ({
+  page,
+}) => {
+  await signIn(page);
+  const add = (session: string, data: object) =>
+    page.request.post(`/api/platform/v1/sessions/${session}/resources`, {
+      data,
+    });
+  const refusal = async (
+    response: Awaited<ReturnType<typeof add>>,
+  ): Promise<[number, string]> => [
+    response.status(),
+    (await response.json()).error.message,
+  ];
+  const gated = "sesn_gatedbash00000000001";
+
+  // parseFileResource: the file id before any mount path is built.
+  expect(await refusal(await add(gated, { type: "file" }))).toEqual([
+    400,
+    "file_id is required",
+  ]);
+  expect(
+    await refusal(await add(gated, { type: "file", file_id: "notes.md" })),
+  ).toEqual([400, "file_id must be a valid file id"]);
+  expect(
+    await refusal(
+      await add(gated, { type: "file", file_id: UPLOAD, path: "/x" }),
+    ),
+  ).toEqual([400, 'Failed to parse request body: unknown field "path"']);
+
+  // requireReadTool: an agent whose toolset leaves read off is refused in
+  // the reference's words, and nothing is minted.
+  const session = async (tools: object[]) => {
+    const agent = await page.request.post("/api/platform/v1/agents", {
+      data: { name: "Bash only", model: "claude-sonnet-4-8", tools },
+    });
+    const created = await page.request.post("/api/platform/v1/sessions", {
+      data: {
+        agent: ((await agent.json()) as { id: string }).id,
+        environment_id: "env_egress000000000000001",
+      },
+    });
+    return ((await created.json()) as { id: string }).id;
+  };
+  const bashOnly = await session([
+    {
+      type: "agent_toolset_20260401",
+      default_config: { enabled: false },
+      configs: [{ name: "bash", enabled: true }],
+    },
+  ]);
+  expect(
+    await refusal(await add(bashOnly, { type: "file", file_id: UPLOAD })),
+  ).toEqual([
+    400,
+    "Missing required tool: file resources require the read tool to be usable (enabled and not always_deny) on the session's `agent_toolset`",
+  ]);
+  expect(
+    (
+      await (
+        await page.request.get(`/api/platform/v1/files?scope_id=${bashOnly}`)
+      ).json()
+    ).data,
+  ).toEqual([]);
+  // Read enabled by its own config, the default off: the add goes through.
+  const readOnly = await session([
+    {
+      type: "agent_toolset_20260401",
+      default_config: { enabled: false },
+      configs: [{ name: "read", enabled: true }],
+    },
+  ]);
+  expect((await add(readOnly, { type: "file", file_id: UPLOAD })).ok()).toBe(
+    true,
+  );
+});
+
+test("a file's delete and a file rubric answer a missing or expired file in the platform's words", async ({
+  page,
+}) => {
+  await signIn(page);
+  // files.go deleteFile: checkFileID's words.
+  const gone = await page.request.delete(
+    "/api/platform/v1/files/file_absent000000000001",
+  );
+  expect(gone.status()).toBe(404);
+  expect((await gone.json()).error).toEqual({
+    type: "not_found_error",
+    message: "file file_absent000000000001 not found",
+  });
+
+  // outcomes.go ValidateDefineOutcomes reads live rows only.
+  expect(
+    (
+      await page.request.post(
+        `http://127.0.0.1:18080/__expire-file?id=${UPLOAD}`,
+      )
+    ).ok(),
+  ).toBe(true);
+  const define = await page.request.post(
+    `/api/platform/v1/sessions/sesn_gatedbash00000000001/events`,
+    {
+      data: {
+        events: [
+          {
+            type: "user.define_outcome",
+            description: "Summarize the notes",
+            rubric: { type: "file", file_id: UPLOAD },
+          },
+        ],
+      },
+    },
+  );
+  expect(define.status()).toBe(400);
+  expect((await define.json()).error.message).toBe(
+    `rubric file ${UPLOAD} not found`,
+  );
 });

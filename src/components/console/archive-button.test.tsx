@@ -216,4 +216,66 @@ describe("ConfirmIconButton", () => {
     );
     expect(screen.getByRole("button", { name: "Delete file" })).toBeDisabled();
   });
+
+  it("stays open while a returned promise is out, closing once it resolves", async () => {
+    let settle!: () => void;
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ConfirmIconButton
+        label="Delete file"
+        title="Delete file"
+        description="d"
+        onConfirm={onConfirm}
+      >
+        <Trash2 />
+      </ConfirmIconButton>,
+    );
+    await user.click(screen.getByRole("button", { name: "Delete file" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete file" }),
+    );
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("dialog")).toBe(dialog);
+
+    settle();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("shows a rejected promise's message in the dialog, and clears it when reopened", async () => {
+    const onConfirm = vi.fn(() => Promise.reject(new Error("Refused.")));
+    const user = userEvent.setup();
+    render(
+      <ConfirmIconButton
+        label="Delete file"
+        title="Delete file"
+        description="d"
+        onConfirm={onConfirm}
+      >
+        <Trash2 />
+      </ConfirmIconButton>,
+    );
+    await user.click(screen.getByRole("button", { name: "Delete file" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete file" }),
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Refused.",
+    );
+    expect(screen.getByRole("dialog")).toBe(dialog);
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.click(screen.getByRole("button", { name: "Delete file" }));
+    expect(
+      within(await screen.findByRole("dialog")).queryByRole("alert"),
+    ).toBeNull();
+  });
 });

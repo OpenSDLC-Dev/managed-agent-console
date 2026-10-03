@@ -29,15 +29,21 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   file mount now mints a session-scoped copy, and the unfiltered Files list leaves out every
   session-scoped row, so the session's Resources tab lists them from `GET /v1/files?scope_id=`, as
   the reference console does. A mounted file shows its copy's size, and harvested outputs follow it.
-  Only an output offers Download, since `downloadable` is the one signal that tells the two apart.
-  An output, or a copy no resource mounts any more, can be deleted there, as outputs could from the
-  Files page before. The rubric picker also suggests the session's own files, labelled apart from uploads. The Files
-  page drops its Scope column. In the Sessions inspector, a mounted file now opens the session's
-  Resources. Deploy this console with platform #578 or later: before it, outputs list on the Files
-  page too and a mounted file shows no size.
+  Only an output offers Download, since `downloadable` is the one signal that tells the two apart,
+  and an expired one says so instead. An output, or a copy no resource mounts any more, can be
+  deleted there, as outputs could from the Files page before; a copy offers it only once the
+  session, read after the copy was listed, does not mount it, so a mount just added is never
+  offered for deletion. The rubric picker also suggests the session's own files, labelled apart
+  from uploads, and leaves out expired files. The Files page drops its Scope column. In the
+  Sessions inspector, a mounted file now opens the session's Resources. Deploy this console with
+  platform #578 or later: before it, outputs list on the Files page too and a mounted file shows no
+  size.
 
 ### Fixed
 
+- A session opened by its legacy `session_…` address moves to its `sesn_…` id, query and hash
+  kept. Every query and write on the page now keys that one id, so a file attached there, or an
+  outcome defined, shows at once rather than at the next poll (#192).
 - A memory store may omit `archived_at`, as the reference does until the store is archived. The
   console reads a store without the key as live, and the mock platform now serves that recorded
   shape. Deploy this console before any platform release that omits the key

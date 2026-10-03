@@ -1487,7 +1487,11 @@ export const SURFACES: Surface[] = [
       "A session's own files in Resources: the mounted copy's size, then the output with its download.",
     setup: async (page) => {
       await traceLive(page);
-      await page.getByRole("link", { name: "Download summary.xlsx" }).waitFor();
+      await page
+        .getByRole("link", {
+          name: "Download summary.xlsx (file_output000000000001)",
+        })
+        .waitFor();
     },
   },
 

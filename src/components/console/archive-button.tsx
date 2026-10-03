@@ -117,7 +117,11 @@ export function DeleteButton({
   );
 }
 
-/** Icon-only confirm-then-act control for table-row deletes. */
+/**
+ * Icon-only confirm-then-act control for table-row deletes. An `onConfirm`
+ * that returns a promise keeps the dialog open until it settles: closed once
+ * it resolves, its refusal shown in the dialog if it rejects.
+ */
 export function ConfirmIconButton({
   label,
   title,
@@ -128,12 +132,13 @@ export function ConfirmIconButton({
 }: {
   label: string;
   title: string;
-  description: string;
-  onConfirm: () => void;
+  description: React.ReactNode;
+  onConfirm: () => void | Promise<unknown>;
   pending?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <>
       <Button
@@ -142,7 +147,10 @@ export function ConfirmIconButton({
         className="h-7 text-muted-foreground"
         aria-label={label}
         disabled={pending}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
       >
         {children}
       </Button>
@@ -152,6 +160,11 @@ export function ConfirmIconButton({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
@@ -160,8 +173,19 @@ export function ConfirmIconButton({
               variant="destructive"
               disabled={pending}
               onClick={() => {
-                onConfirm();
-                setOpen(false);
+                const settled = onConfirm();
+                if (!(settled instanceof Promise)) {
+                  setOpen(false);
+                  return;
+                }
+                setError(null);
+                settled.then(
+                  () => setOpen(false),
+                  (cause: unknown) =>
+                    setError(
+                      cause instanceof Error ? cause.message : String(cause),
+                    ),
+                );
               }}
             >
               {title}

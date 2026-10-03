@@ -53,7 +53,7 @@ test("attach a file to an existing session and remove its reference", async ({
   await expect(leftover).toHaveAttribute("data-downloadable", "false");
   await expect(leftover).toContainText("research-notes.md");
   await expect(leftover.getByRole("link")).toHaveCount(0);
-  await expect(page.getByText("No resources attached.")).toHaveCount(0);
+  await expect(panel).toHaveAttribute("data-resources-state", "rows");
   const files = await (await page.request.get("/api/platform/v1/files")).json();
   expect(files.data.map((file: { id: string }) => file.id)).toContain(
     "file_notes0000000000001",
@@ -62,14 +62,14 @@ test("attach a file to an existing session and remove its reference", async ({
 
   // Deleting the copy empties the tab and keeps the upload it was copied from.
   await leftover
-    .getByRole("button", { name: "Delete research-notes.md" })
+    .getByRole("button", { name: `Delete research-notes.md (${copy})` })
     .click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Delete file", exact: true })
     .click();
   await expect(panel).toHaveAttribute("data-session-file-count", "0");
-  await expect(page.getByText("No resources attached.")).toBeVisible();
+  await expect(panel).toHaveAttribute("data-resources-state", "empty");
   expect(
     (await page.request.get(`/api/platform/v1/files/${copy}`)).status(),
   ).toBe(404);

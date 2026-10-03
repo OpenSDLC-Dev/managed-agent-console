@@ -567,6 +567,20 @@ function requiredStringRefusal(obj, key) {
   return value ? null : `${key} is required`;
 }
 
+// toolset.Policies' enable resolution for read: a per-tool config's
+// `enabled` over default_config's, which defaults to on. An entry whose
+// policies do not resolve is skipped by the platform; the mock's agents carry
+// none such.
+function readToolUsable(agent) {
+  return (agent.tools ?? []).some((tool) => {
+    if (tool?.type !== "agent_toolset_20260401") return false;
+    const read = (tool.configs ?? []).findLast(
+      (config) => config.name === "read" && config.enabled != null,
+    );
+    return read?.enabled ?? tool.default_config?.enabled ?? true;
+  });
+}
+
 // parseGitHubRepoURL: https://github.com/{owner}/{repo} and nothing else, the
 // name a ".git" suffix leaves neither empty, "." nor "..".
 function githubRepoName(url) {
@@ -1067,16 +1081,10 @@ function handleInbound(state, incoming) {
               rubric.file_id.length === 0 ||
               Object.keys(rubric).some(
                 (key) => !["type", "file_id"].includes(key),
-              ) ||
-              !filesStore.some(
-                (file) =>
-                  file.id === rubric.file_id && file.size_bytes <= 256 * 1024,
               )
             : true
       )
-        return {
-          error: "rubric must be valid text or a file of at most 256 KiB",
-        };
+        return { error: "rubric must be valid text or a file" };
       if (
         raw.max_iterations !== undefined &&
         (!Number.isInteger(raw.max_iterations) ||
@@ -1095,6 +1103,16 @@ function handleInbound(state, incoming) {
       );
       if (active && !batchInterrupts)
         return { error: "only one outcome is supported at a time" };
+      // outcomes.go ValidateDefineOutcomes: a file rubric names a live row
+      // (store.FileLiveSQL, so an expired one is absent) within the cap.
+      if (rubric.type === "file") {
+        const file = liveFile(rubric.file_id);
+        if (!file) return { error: `rubric file ${rubric.file_id} not found` };
+        if (file.size_bytes > 256 * 1024)
+          return {
+            error: `rubric file ${file.id} is ${file.size_bytes} bytes; the rubric cap is ${256 * 1024} bytes`,
+          };
+      }
     }
     // inbound.go readClaim: a session_thread_id is a string or null.
     const claim = raw.session_thread_id;
@@ -2939,8 +2957,12 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     const file = filesStore.find((f) => f.id === fileDeleteMatch[1]);
     if (!file) {
+      // files.go deleteFile: checkFileID's words, which a malformed id and
+      // an absent one share.
       res.writeHead(404);
-      res.end(envelope("not_found_error", "no such file"));
+      res.end(
+        envelope("not_found_error", `file ${fileDeleteMatch[1]} not found`),
+      );
       return;
     }
     filesStore = filesStore.filter((f) => f.id !== file.id);
@@ -3154,18 +3176,40 @@ const server = createServer(async (req, res) => {
         agent: structuredClone(deployment.agent),
         created_at: timestamp,
       };
-      // A mount whose source is gone by the fire (deleted, or expired) is
-      // errFileGone, classified file_not_found_error: no session is made and
-      // the run settles on its error arm, still a 200 — the run object is the
-      // endpoint's only success shape (deploymentruns.go runDeployment).
-      const gone = deployment.resources.find(
-        (resource) => resource.type === "file" && !liveFile(resource.file_id),
-      );
-      if (gone) {
-        run.error = {
-          type: "file_not_found_error",
-          message: `file ${gone.file_id} not found`,
-        };
+      // deploymentruns.go runDeployment: the fire creates its session as a
+      // create would, and a classified refusal settles the run on its error
+      // arm instead — no session made, still a 200, the run object being the
+      // endpoint's only success shape. materializeResourceInputs walks the
+      // resources in order, so the first one gone is the error: a memory
+      // store missing or archived (snapshotMemoryStore, in runWording's
+      // sentences), a file's source deleted or expired (errFileGone).
+      let refusal = null;
+      for (const resource of deployment.resources) {
+        if (resource.type === "memory_store") {
+          const item = memoryStoresStore.find(
+            (candidate) => candidate.id === resource.memory_store_id,
+          );
+          if (!item)
+            refusal = {
+              type: "session_resource_not_found_error",
+              message:
+                "session creation rejected: a referenced resource was not found; check deployment configuration",
+            };
+          else if (item.archived_at)
+            refusal = {
+              type: "memory_store_archived_error",
+              message:
+                "session creation rejected: a referenced memory store is archived; check deployment resources",
+            };
+        } else if (resource.type === "file" && !liveFile(resource.file_id))
+          refusal = {
+            type: "file_not_found_error",
+            message: `file ${resource.file_id} not found`,
+          };
+        if (refusal) break;
+      }
+      if (refusal) {
+        run.error = refusal;
         deploymentRunsStore.unshift(run);
         res.writeHead(200);
         res.end(JSON.stringify(run));
@@ -3174,14 +3218,19 @@ const server = createServer(async (req, res) => {
       const sessionId = `sesn_dep${String(sessionCounter++).padStart(6, "0")}`;
       const sessionResources = deployment.resources.map((resource) => {
         if (resource.type === "memory_store") {
-          const memory = memoryResources.find(
-            (candidate) =>
-              candidate.memory_store_id === resource.memory_store_id,
+          // snapshotMemoryStore: the store's name and description as they
+          // stand at the fire.
+          const item = memoryStoresStore.find(
+            (candidate) => candidate.id === resource.memory_store_id,
           );
           return {
-            ...structuredClone(memory),
+            type: "memory_store",
+            memory_store_id: item.id,
             access: resource.access ?? "read_write",
             instructions: resource.instructions ?? null,
+            description: item.description,
+            name: item.name,
+            mount_path: `/mnt/memory/${memorySlug(item.name) || memorySlug(item.id)}`,
           };
         }
         if (resource.type === "github_repository") {
@@ -4724,6 +4773,32 @@ const server = createServer(async (req, res) => {
           : typeof body.type !== "string"
             ? "type must be a string"
             : `Failed to parse request: type: ${JSON.stringify(body.type)} is not a valid value`,
+      );
+      return;
+    }
+    // sessionresources.go parseFileResource, before any mount path is
+    // built: the keys, then the file id's presence and shape. The shape is
+    // the mock's wellFormedId, which its own ids meet; the platform's
+    // domain.ID Valid holds a token to lowercase Crockford base32.
+    const unknown = leastUnknownKey(body, ["type", "file_id", "mount_path"]);
+    const fileIdRefusal =
+      unknown !== undefined
+        ? unknownField(unknown)
+        : (requiredStringRefusal(body, "file_id") ??
+          (wellFormedId(body.file_id, "file")
+            ? null
+            : "file_id must be a valid file id"));
+    if (fileIdRefusal) {
+      fail(400, fileIdRefusal);
+      return;
+    }
+    // requireReadTool: a file is added only for an agent whose
+    // agent_toolset_20260401 leaves read enabled, in the reference's words
+    // (console-141 #92). MCP and custom tools do not count.
+    if (!readToolUsable(state.session.agent)) {
+      fail(
+        400,
+        "Missing required tool: file resources require the read tool to be usable (enabled and not always_deny) on the session's `agent_toolset`",
       );
       return;
     }

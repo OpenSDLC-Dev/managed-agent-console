@@ -78,7 +78,6 @@ import {
   useRunDeployment,
   useUnpauseDeployment,
 } from "./queries";
-import { useDeleteSessionFile } from "./session-resources";
 
 const jsonResponse = (payload: unknown) =>
   new Response(JSON.stringify(payload), {
@@ -1156,13 +1155,14 @@ const mutationCases: MutationCase[] = [
     setsData: ["session", "sesn_1"],
   },
   {
-    name: "useDeleteSessionFile",
-    useHook: () => useDeleteSessionFile("sesn_1"),
+    // A session's own file: its Resources answer a refusal in their dialog.
+    name: "useDeleteFile (a session's own file)",
+    useHook: () => useDeleteFile("sesn_1"),
     variables: "file_output",
     path: "/api/platform/v1/files/file_output",
     method: "DELETE",
-    meta: { errorTitle: "Delete failed" },
-    invalidates: [["session-files", "sesn_1"]],
+    meta: { errorToast: false },
+    invalidates: [["files"], ["file-options"], ["session-files", "sesn_1"]],
   },
   {
     name: "useDeleteSession",

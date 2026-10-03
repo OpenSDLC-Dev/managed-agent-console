@@ -155,7 +155,9 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
   await expect(panel).toHaveAttribute("data-session-file-count", "2");
   await expect(panel.locator('[data-size-bytes="48213"]')).toBeVisible();
   await expect(
-    panel.getByRole("link", { name: "Download summary.xlsx" }),
+    panel.getByRole("link", {
+      name: "Download summary.xlsx (file_output000000000001)",
+    }),
   ).toHaveAttribute("href", `/api/platform/v1/files/${output}/content`);
   expect(await status(`files/${output}`)).toBe(200);
   expect(await status(`files/${copy}`)).toBe(200);

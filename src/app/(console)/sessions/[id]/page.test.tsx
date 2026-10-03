@@ -16,11 +16,12 @@ import type { Session, SessionEvent } from "@/lib/platform/types";
 import type { PreviewState, TraceState } from "@/lib/session-trace/store";
 import type { ConnectionState } from "@/lib/session-trace/use-session-trace";
 
+const router = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
     back: vi.fn(),
-    replace: vi.fn(),
+    replace: router.replace,
     refresh: vi.fn(),
   }),
   usePathname: () => "/sessions/sess_1",
@@ -172,13 +173,19 @@ function renderPage(id = "sess_1") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const page = (routeId: string) => (
     <QueryClientProvider client={client}>
       <Suspense fallback={null}>
-        <SessionDetailPage params={asParams(id)} />
+        <SessionDetailPage params={asParams(routeId)} />
       </Suspense>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(page(id));
+  // What a navigation does to the route: new params, the same client.
+  return {
+    ...view,
+    navigate: (routeId: string) => view.rerender(page(routeId)),
+  };
 }
 
 afterEach(() => {
@@ -1026,33 +1033,90 @@ it("shows pinned tool permissions and links calls from the loaded trace", async 
   );
 });
 
-it("lists a legacy-addressed session's own files under its canonical id", async () => {
-  // sessions.go normalizeSessionID: `session_` addresses the `sesn_` row, but
-  // the files it owns are scoped to the id the session answers with.
+it("moves a legacy-addressed session to its canonical id, query kept, so a defined outcome shows at once", async () => {
+  // sessions.go normalizeSessionID: `session_` addresses the `sesn_` row,
+  // which answers with its own id.
   setTrace("live");
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), "http://console.test");
-    if (url.pathname === "/api/platform/v1/sessions/session_1")
-      return json(session({ id: "sesn_1" }));
-    if (url.pathname === "/api/platform/v1/sessions/session_1/threads")
-      return json({ data: [], next_page: null });
-    if (url.pathname === "/api/platform/v1/files")
-      return json({ data: [], next_page: null });
-    throw new Error(`unmatched fetch: ${url.pathname}`);
-  });
+  window.history.replaceState(
+    null,
+    "",
+    "/sessions/session_1?inspector=session#outcomes",
+  );
+  let outcomes: Session["outcome_evaluations"] = [];
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://console.test");
+      if (
+        url.pathname === "/api/platform/v1/sessions/sesn_1/events" &&
+        init?.method === "POST"
+      ) {
+        outcomes = [
+          {
+            type: "outcome_evaluation",
+            outcome_id: "outc_1",
+            description: "Ship it",
+            explanation: "",
+            iteration: 0,
+            result: "pending",
+            completed_at: null,
+          },
+        ];
+        return json({ data: [] });
+      }
+      if (
+        ["session_1", "sesn_1"].some(
+          (id) => url.pathname === `/api/platform/v1/sessions/${id}`,
+        )
+      )
+        return json(session({ id: "sesn_1", outcome_evaluations: outcomes }));
+      if (url.pathname.endsWith("/threads"))
+        return json({ data: [], next_page: null });
+      throw new Error(`unmatched fetch: ${url.pathname}`);
+    },
+  );
   vi.stubGlobal("fetch", fetchMock);
-  renderPage("session_1");
+  const view = renderPage("session_1");
+  // The router navigates after the effect that asked, as Next's does.
+  router.replace.mockImplementation((href: string) => {
+    const routeId = decodeURIComponent(
+      new URL(href, "http://console.test").pathname.split("/").at(-1)!,
+    );
+    setTimeout(() => view.navigate(routeId));
+  });
+  onTestFinished(() => {
+    router.replace.mockReset();
+  });
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+      "/sessions/sesn_1?inspector=session#outcomes",
+    ),
+  );
+  // The canonical page opens on the session already read, and every
+  // write and refresh keys its id.
   await userEvent.click(
     await screen.findByRole("button", { name: "Define outcome" }),
   );
-  await userEvent.click(screen.getByLabelText("Rubric type"));
-  await userEvent.click(await screen.findByRole("option", { name: "File" }));
-  await waitFor(() =>
-    expect(
-      fetchMock.mock.calls
-        .map(([input]) => new URL(String(input), "http://console.test"))
-        .filter((url) => url.searchParams.has("scope_id"))
-        .map((url) => url.searchParams.get("scope_id")),
-    ).toEqual(["sesn_1"]),
+  const dialog = screen.getByRole("dialog");
+  await userEvent.type(within(dialog).getByLabelText("Description"), "Ship it");
+  await userEvent.type(within(dialog).getByLabelText("Rubric"), "Done.");
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: "Define outcome" }),
   );
+  // At once: the send's refresh, not the 15-second poll.
+  await waitFor(() =>
+    expect(screen.getByTestId("session-outcomes")).toHaveAttribute(
+      "data-outcome-count",
+      "1",
+    ),
+  );
+  expect(
+    fetchMock.mock.calls
+      .map(([input]) => new URL(String(input), "http://console.test").pathname)
+      .filter((path) => path.includes("session_1"))
+      .sort(),
+  ).toEqual([
+    "/api/platform/v1/sessions/session_1",
+    "/api/platform/v1/sessions/session_1/threads",
+  ]);
 });

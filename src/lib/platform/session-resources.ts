@@ -2,7 +2,22 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { platformDelete, platformPost } from "./http";
-import type { SessionResource } from "./types";
+import type { PlatformFile, SessionResource } from "./types";
+
+/**
+ * Whether a file's content is gone: store.FileLiveSQL holds a row whose
+ * `expires_at` has passed to have none, so nothing downloads, mounts or
+ * grades it, though its metadata still lists. A rendering derivation against
+ * a caller-supplied clock (environmentKeyState's precedent); a null or
+ * unparseable expiry is not evidence of one.
+ */
+export function fileExpired(
+  file: Pick<PlatformFile, "expires_at">,
+  now: number,
+): boolean {
+  const at = file.expires_at ? Date.parse(file.expires_at) : NaN;
+  return !Number.isNaN(at) && at <= now;
+}
 
 // internal/api/sessionresources.go:parseResourceObject, addSessionResourceTx.
 export type ResourceInput =
@@ -28,32 +43,14 @@ export function useAddSessionFile(sessionId: string) {
     meta: { errorToast: false },
     mutationFn: (body: Extract<ResourceInput, { type: "file" }>) =>
       platformPost<SessionResource>(`v1/sessions/${sessionId}/resources`, body),
-    onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ["session", sessionId] });
-      // The mount mints the session's own copy (sessionresources.go
-      // mountFileCopy); the rubric picker reads the same list.
-      void client.invalidateQueries({
-        queryKey: ["session-files", sessionId],
-      });
-    },
-  });
-}
-
-/**
- * Deletes one of the session's own files: an output, or a copy no resource
- * mounts any more. files.go deleteFile takes either as it takes an upload; a
- * copy's upload keeps its bytes. Only the session's list ever carried them.
- */
-export function useDeleteSessionFile(sessionId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    meta: { errorTitle: "Delete failed" },
-    mutationFn: (fileId: string) =>
-      platformDelete<{ id: string; type: string }>(
-        `v1/files/${encodeURIComponent(fileId)}`,
-      ),
-    onSuccess: () => {
-      void client.invalidateQueries({
+    // The mount mints the session's own copy (sessionresources.go
+    // mountFileCopy), which the session's file list (and the rubric picker,
+    // reading the same list) then carries. The session is read first: until
+    // it names the new mount, its copy would list as a leftover
+    // (SessionResources). Both reads settle before the mutation does.
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["session", sessionId] });
+      await client.invalidateQueries({
         queryKey: ["session-files", sessionId],
       });
     },

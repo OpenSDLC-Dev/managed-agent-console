@@ -26,6 +26,8 @@ import { IdCode, Time } from "@/components/console/bits";
 import { cn } from "@/lib/utils";
 import { useFileOptions, useSendEvents } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
+import { fileExpired } from "@/lib/platform/session-resources";
+import { useNow } from "@/lib/session-trace/use-now";
 import type { OutcomeEvaluation } from "@/lib/platform/types";
 import {
   isTerminalOutcome,
@@ -81,32 +83,41 @@ export function SessionOutcomes({
     !!disabled,
     open && rubricType === "file",
   );
+  const now = useNow();
   // Each list stands alone: one failing keeps the other's suggestions, and
-  // one not served (404) is left out, as an absent surface is.
+  // one not served (404) is left out, as an absent surface is. A later read
+  // that fails otherwise keeps the rows the last good one listed, as the
+  // Resources tab does.
   const lists = (
     [
       ["uploads", files.uploads],
       ["session", files.sessionFiles],
     ] as const
-  ).map(([name, query]) => ({
-    name,
-    rows: query.isError ? [] : (query.data?.data ?? []),
-    pending: query.isPending,
-    failed: query.isError && !isUnimplemented(query.error),
-    loaded: !query.isPending && !query.isError,
-    cut: !query.isError && !!query.data?.next_page,
-  }));
+  ).map(([name, query]) => {
+    const rows = isUnimplemented(query.error) ? [] : (query.data?.data ?? []);
+    return {
+      name,
+      rows,
+      pending: query.isPending,
+      failed: query.isError && !isUnimplemented(query.error),
+      loaded: rows.length > 0 || (!query.isPending && !query.isError),
+      cut: rows.length > 0 && !!query.data?.next_page,
+    };
+  });
   const [uploadList, sessionList] = lists;
   // A rubric may name an upload or one of this session's own files (a mount's
   // copy or a harvested output); the label says which. A platform before #578
-  // lists outputs in both, so the session's own entry wins.
+  // lists outputs in both, so the session's own entry wins. An expired file
+  // is no rubric (events ValidateDefineOutcomes reads live rows only).
   const ownIds = new Set(sessionList.rows.map((file) => file.id));
   const rubricFiles = [
     ...uploadList.rows
       .filter((file) => !ownIds.has(file.id))
       .map((file) => ({ file, origin: "upload" })),
     ...sessionList.rows.map((file) => ({ file, origin: "session file" })),
-  ].filter(({ file }) => file.size_bytes <= 256 * 1024);
+  ].filter(
+    ({ file }) => file.size_bytes <= 256 * 1024 && !fileExpired(file, now),
+  );
   const optionsState = lists.some((list) => list.pending)
     ? "loading"
     : !lists.some((list) => list.loaded)

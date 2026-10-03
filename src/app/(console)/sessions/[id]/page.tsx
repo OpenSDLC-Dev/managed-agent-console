@@ -1,7 +1,17 @@
 "use client";
 
-import { Fragment, Suspense, use, useMemo, useState } from "react";
+import {
+  Fragment,
+  Suspense,
+  use,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, PanelRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useListFilters } from "@/lib/use-list-filters";
@@ -295,6 +305,22 @@ function SessionWorkspace({ id }: { id: string }) {
     });
   };
   const session = useSession(id, 15_000);
+  // sessions.go normalizeSessionID answers a legacy `session_` address with
+  // its `sesn_` row. The page moves to the id the session answers with, the
+  // query and hash kept, so every query and mutation on it keys one id.
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const canonicalId =
+    session.data && session.data.id !== id ? session.data.id : null;
+  const movedTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canonicalId || movedTo.current === canonicalId) return;
+    movedTo.current = canonicalId;
+    queryClient.setQueryData(["session", canonicalId], session.data);
+    router.replace(
+      `/sessions/${encodeURIComponent(canonicalId)}${window.location.search}${window.location.hash}`,
+    );
+  }, [canonicalId, queryClient, router, session.data]);
   // Keep the shared timeline and Session controls live while viewing a child.
   const sessionTrace = useSessionTrace(id);
   const childTrace = useSessionTrace(
@@ -373,7 +399,7 @@ function SessionWorkspace({ id }: { id: string }) {
       : [];
 
   if (session.error) return <ErrorState error={session.error} />;
-  if (session.isPending || !session.data) {
+  if (session.isPending || !session.data || canonicalId) {
     return <DetailSkeleton />;
   }
   const data = session.data;
@@ -672,7 +698,7 @@ function SessionWorkspace({ id }: { id: string }) {
                 <SessionOverview session={data} status={status} />{" "}
                 {!selectedThreadId && outcomesSupported && (
                   <SessionOutcomes
-                    sessionId={data.id}
+                    sessionId={id}
                     outcomes={outcomeEvaluations}
                     disabled={!!data.archived_at || trace.deleted}
                   />

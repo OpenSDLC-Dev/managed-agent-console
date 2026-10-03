@@ -191,13 +191,29 @@ export function useSessions(params: {
   });
 }
 
+const readSession = (id: string) =>
+  platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`);
+
 export function useSession(id: string, refetchInterval?: number) {
   return useQuery({
     queryKey: ["session", id],
-    queryFn: () =>
-      platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`),
+    queryFn: () => readSession(id),
     refetchInterval,
   });
+}
+
+/**
+ * Reads the page's session again on demand, from a view inside the page: the
+ * read begins at the call, cancelling any already out, and resolves with what
+ * it read. The observer neither fetches on mount nor polls — the page's
+ * `useSession` does both (SessionResources).
+ */
+export function useRereadSession(id: string) {
+  return useQuery({
+    queryKey: ["session", id],
+    queryFn: () => readSession(id),
+    enabled: false,
+  }).refetch;
 }
 
 /** events.go:listEvents supports a bounded descending page, independently of SSE. */
@@ -1594,16 +1610,30 @@ export function useDeleteSkill(skillId: string) {
   });
 }
 
-export function useDeleteFile() {
+/**
+ * Deletes an upload, or — given the session — one of a session's own files:
+ * an output, or a copy no resource mounts any more. files.go deleteFile takes
+ * either as it takes an upload, and a copy's upload keeps its bytes. The lists
+ * are read again before the mutation settles, so a caller's pending state
+ * covers the refetch. A session's Resources answer a refusal in their confirm
+ * dialog, so there it raises no toast.
+ */
+export function useDeleteFile(sessionId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorTitle: "Delete failed" },
+    meta: sessionId ? { errorToast: false } : { errorTitle: "Delete failed" },
     mutationFn: (fileId: string) =>
-      platformDelete<{ id: string; type: string }>(`v1/files/${fileId}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["files"] });
-      void queryClient.invalidateQueries({ queryKey: ["file-options"] });
-    },
+      platformDelete<{ id: string; type: string }>(
+        `v1/files/${encodeURIComponent(fileId)}`,
+      ),
+    onSuccess: () =>
+      Promise.all(
+        [
+          ["files"],
+          ["file-options"],
+          ...(sessionId ? [["session-files", sessionId]] : []),
+        ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ),
   });
 }
 /** Apply the existing single-resource routes; retain each failure for retry. */
