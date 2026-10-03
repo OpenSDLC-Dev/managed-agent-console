@@ -1068,7 +1068,7 @@ test("a deployment echoes a file's mount path as given, judged resolved, and its
   ]);
 });
 
-test("resources remove reads the session as the add does, then the resource, in the platform's words", async ({
+test("resources remove refuses any id but a sesrsc_ one first, then reads the session as the add does, then the resource, in the platform's words", async ({
   page,
 }) => {
   await signIn(page);
@@ -1080,6 +1080,38 @@ test("resources remove reads the session as the add does, then the resource, in 
     return [response.status(), body.error?.message ?? body.type];
   };
   const absent = "sesn_absent00000000000001";
+  // checkResourceID: a memory element carries no id, and its store id is the
+  // reference's 404, envelope and words, whatever the session (2026-09-02
+  // batch2 `session.resources.delete.by-memory_store_id`, #193). So is any
+  // other id but a sesrsc_ one, the mounted file's own included.
+  const store = "memstore_projectnotes000001";
+  const withStore = await freshSession(page, undefined, [
+    { type: "memory_store", memory_store_id: store },
+  ]);
+  const refused = await page.request.delete(
+    `/api/platform/v1/sessions/${withStore}/resources/${store}`,
+  );
+  expect(refused.status()).toBe(404);
+  expect((await refused.json()).error).toEqual({
+    type: "not_found_error",
+    message: `Resource not found: ${store}`,
+  });
+  // The element stays, as the recording's next read
+  // (`session.resources.list.after-delete-attempt`) has it.
+  const kept = (await (
+    await page.request.get(`/api/platform/v1/sessions/${withStore}`)
+  ).json()) as { resources: { type: string; memory_store_id?: string }[] };
+  expect(kept.resources).toEqual([
+    expect.objectContaining({ type: "memory_store", memory_store_id: store }),
+  ]);
+  expect(await remove(absent, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
+  ]);
+  expect(await remove(RESEARCH, "file_researchcopy0000001")).toEqual([
+    404,
+    "Resource not found: file_researchcopy0000001",
+  ]);
   expect(await remove(absent, "sesrsc_absent0000000000001")).toEqual([
     404,
     `session ${absent} not found`,
@@ -1126,6 +1158,10 @@ test("resources remove reads the session as the add does, then the resource, in 
     400,
     "session is owned by dream drm_pendingresearch0000001",
   ]);
+  expect(await remove(held, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
+  ]);
   const archived = await freshSession(page);
   expect(
     (
@@ -1137,6 +1173,10 @@ test("resources remove reads the session as the add does, then the resource, in 
   expect(await remove(archived, "sesrsc_absent0000000000001")).toEqual([
     400,
     `session ${archived} is archived`,
+  ]);
+  expect(await remove(archived, store)).toEqual([
+    404,
+    `Resource not found: ${store}`,
   ]);
 });
 

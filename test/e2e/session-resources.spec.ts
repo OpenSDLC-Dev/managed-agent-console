@@ -80,7 +80,7 @@ test("attach a file to an existing session and remove its reference", async ({
   ).toBe(200);
 });
 
-test("repository tokens stay write-only and memory references can be removed", async ({
+test("repository tokens stay write-only and a memory store offers no Remove", async ({
   page,
 }) => {
   await signIn(page);
@@ -125,17 +125,13 @@ test("repository tokens stay write-only and memory references can be removed", a
     await page.request.get(`/api/platform/v1/sessions/${session.id}`)
   ).json();
   expect(JSON.stringify(refreshed)).not.toContain("test-only-rotated");
-  await page
-    .getByRole("button", {
-      name: "Remove resource memstore_projectnotes000001",
-    })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Remove resource", exact: true })
-    .click();
-  await expect(page.getByText("Project notes", { exact: true })).toBeHidden();
+  // Neither row offers Remove: the platform keeps a repository for the
+  // session's lifetime, and answers a memory store's id 404, a memory element
+  // carrying no sesrsc_ id (#193). The store's row keeps its own controls.
+  await expect(
+    page.getByRole("button", { name: "Expand /mnt/memory/project-notes" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^Remove resource / }),
-  ).toBeHidden();
+  ).toHaveCount(0);
 });

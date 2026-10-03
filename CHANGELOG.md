@@ -40,6 +40,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- A memory store's row in a session's Resources tab no longer offers Remove resource. The platform
+  removes a resource only by its `sesrsc_` id, which a memory store does not have, so the request
+  always failed with 404 `Resource not found`. The reference answers the same way and shows no
+  Remove on that row. A memory store stays attached for the session's lifetime, as a repository
+  does. The mock platform now returns that 404 for any id that is not a `sesrsc_` id (#193).
 - A session opened by any address but its `sesn_…` id, such as a legacy `session_…` one, is read
   first and moves to the id it answers with, query and hash kept, before its workspace loads. Every
   query and write on the page now keys that one id, so a file attached there, or an outcome

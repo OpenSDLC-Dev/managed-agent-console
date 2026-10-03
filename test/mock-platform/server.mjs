@@ -5146,8 +5146,8 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // Resource mutations: sessionresources.go (add files, remove files/memory,
-  // rotate repository tokens). Tokens are deliberately never stored or echoed.
+  // Resource mutations: sessionresources.go (add files, remove files, rotate
+  // repository tokens). Tokens are deliberately never stored or echoed.
   const resourceMatch = url.pathname.match(
     /^\/v1\/sessions\/([^/]+)\/resources(?:\/([^/]+))?$/,
   );
@@ -5172,13 +5172,24 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "DELETE") {
-      // sessionresources.go deleteSessionResourceTx: the session as the add
-      // reads it, then the resource, in the reference's words (#540), and a
-      // repository refused. The platform finds a resource by its sesrsc_ id
-      // alone (checkResourceID), so a memory element, which carries none,
-      // answers 404 there; the mock still finds one by its store id.
+      // sessionresources.go deleteSessionResourceTx: checkResourceID's
+      // refusal of any id but a sesrsc_ one, before the session is read; then
+      // the session as the add reads it, the resource by its id, and a
+      // repository refused. Both 404s are errResourceNotFound, in the
+      // reference's words (#540). A memory element carries no id, so its
+      // store id is that first 404 whatever the session, as recorded
+      // (2026-09-02 batch2 `session.resources.delete.by-memory_store_id`,
+      // #193). The token is read by wellFormedId, not domain.Valid's
+      // alphabet, which the mock's own ids are not in; and the session id's
+      // shape (checkID) is not checked ahead of it, so a malformed session
+      // with such an id answers this 404 where the platform names the session.
       if (!resourceMatch[2]) {
         fail(405, "Method Not Allowed");
+        return;
+      }
+      const resourceId = resourceMatch[2];
+      if (!wellFormedId(resourceId, "sesrsc")) {
+        fail(404, `Resource not found: ${resourceId}`);
         return;
       }
       const held = resourceSession(resourceMatch[1]);
@@ -5186,13 +5197,8 @@ const server = createServer(async (req, res) => {
         fail(held.status, held.refusal);
         return;
       }
-      const resourceId = resourceMatch[2];
       const { session } = held.state;
-      const resource = session.resources.find(
-        (item) =>
-          (item.type === "memory_store" ? item.memory_store_id : item.id) ===
-          resourceId,
-      );
+      const resource = session.resources.find((item) => item.id === resourceId);
       if (!resource) {
         fail(404, `Resource not found: ${resourceId}`);
         return;
