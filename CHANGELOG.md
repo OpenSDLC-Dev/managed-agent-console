@@ -63,6 +63,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   spend opt-in (#176).
 - Deployment workflow header now describes the single platform API key payload and clarifies that
   IAP is specific to this GKE deployment; self-hosters can still use `CONSOLE_PASSWORD` (#177).
+- The staging deploy skips a parked cluster instead of failing on it. The platform's
+  `make gcp-env-stop` parks staging at zero nodes, so every push since 2026-09-02 left the new pod
+  Pending until the rollout and its rollback timed out. The workflow now reads the platform's
+  `power-saved-*` cluster labels, as the platform's own deploy does, and finishes green with a
+  notice saying nothing was deployed (#PR).
 
 ## Released
 

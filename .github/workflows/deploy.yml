@@ -119,7 +119,41 @@ jobs:
           # opt in during the client-go transition is now ignored.
           install_components: gke-gcloud-auth-plugin
 
+      # The platform's `make gcp-env-stop` parks staging by resizing its node
+      # pools to zero, a deliberate cost saving. Deploying into it anyway leaves
+      # every pod Pending, so `rollout status` and then the rollback both time
+      # out: every push from 2026-09-02 went red exactly that way, for a month,
+      # with nothing broken but the environment's power.
+      #
+      # What counts as parked is the platform's definition, not ours: a cluster
+      # label KEY beginning `power-saved-`, written by its env-power.sh and read
+      # by its .github/scripts/parked.sh, which its own deploy.yml skips on. The
+      # LABEL rather than the node count, so a cluster at zero nodes that nobody
+      # parked still fails loudly here. The leading `;` anchors the match at a
+      # key: `value(resourceLabels)` renders `k=v;k=v`, and a label VALUE can
+      # never follow a `;`.
+      #
+      # Assigned before it is tested: a failed `describe` inside a condition
+      # would be exempt from `-e`, read as "not parked" and deploy anyway.
+      - name: A parked cluster is skipped rather than failed
+        run: |
+          labels="$(gcloud container clusters describe "$CLUSTER" \
+            --zone "$ZONE" --project "$PROJECT_ID" \
+            --format='value(resourceLabels)')"
+          case ";$labels" in
+            *";power-saved-"*)
+              echo "POWERED_OFF=true" >> "$GITHUB_ENV"
+              echo "::notice::staging is parked ($labels) — nothing was deployed. Revive it with the platform's make gcp-env-start, then re-run this workflow to catch staging up to main."
+              {
+                echo "### staging is parked — nothing was deployed"
+                echo ""
+                echo "Labels: \`$labels\`. Revive it with the platform's \`make gcp-env-start\`, then re-run this workflow to catch staging up to \`main\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
       - name: Configure Docker for Artifact Registry
+        if: env.POWERED_OFF != 'true'
         run: gcloud auth configure-docker "$REGISTRY_HOST" --quiet
 
       # Built on the runner and pushed, not submitted to Cloud Build: the runner
@@ -132,6 +166,7 @@ jobs:
       # e2 machines (x86-64). The release workflow builds multi-arch because it
       # publishes for whoever pulls; this one builds for a known host.
       - name: Build and push the image
+        if: env.POWERED_OFF != 'true'
         run: |
           version="$(node -p "require('./package.json').version")"
           docker build \
@@ -141,6 +176,7 @@ jobs:
           docker push "$IMAGE:$GITHUB_SHA"
 
       - name: Get cluster credentials
+        if: env.POWERED_OFF != 'true'
         # --project explicitly, even though setup-gcloud configured it: reading
         # the wrong project here would be a silent deploy into someone else's
         # cluster.
@@ -149,6 +185,7 @@ jobs:
             --zone "$ZONE" --project "$PROJECT_ID"
 
       - name: Sync console-secrets from Secret Manager
+        if: env.POWERED_OFF != 'true'
         run: |
           umask 077
           dir="$RUNNER_TEMP/console-secrets"
@@ -239,6 +276,7 @@ jobs:
 
       - name: Apply the manifests
         id: apply
+        if: env.POWERED_OFF != 'true'
         run: |
           # Set by the sync step. An empty value would apply an empty annotation
           # — a deployment that silently stops rolling on rotation.
@@ -415,6 +453,7 @@ jobs:
           echo "applied=true" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the rollout
+        if: env.POWERED_OFF != 'true'
         run: kubectl rollout status deployment/console -n "$NAMESPACE" --timeout=5m
 
       # The gate. `rollout status` only proves the container starts and answers
@@ -437,6 +476,7 @@ jobs:
       # The health body carries no URL and no key by construction, which is why
       # it is safe to print into a public log.
       - name: Smoke test the deployed revision
+        if: env.POWERED_OFF != 'true'
         run: |
           # By name, not `deploy/console`: `kubectl exec deploy/...` resolves the
           # selector and prefers the pod that has been ready longest, which right
@@ -483,6 +523,7 @@ jobs:
       # answering on the internet is gated", and only the second is worth
       # anything.
       - name: Assert the public address is gated
+        if: env.POWERED_OFF != 'true'
         run: |
           # First, and separately from the assertions: is there a certificate to
           # answer with at all? First issuance takes 15-60 minutes and the load
