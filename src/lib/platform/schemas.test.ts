@@ -564,6 +564,7 @@ describe("the mock's constructed write-path responses conform too", () => {
     const id = (created as { id: string }).id;
 
     const updated = await postJSON(`/v1/deployments/${id}`, {
+      name: "renamed deployment",
       description: "updated",
       metadata: { owner: "console" },
     });
@@ -587,7 +588,13 @@ describe("the mock's constructed write-path responses conform too", () => {
       { method: "GET" },
     );
     expectConforms(SessionSchema, session, "deployment-created session");
-    expect(session).toMatchObject({ deployment_id: id });
+    // A fire titles its session with the deployment's name as it stands at
+    // the fire, the rename included (platform #678).
+    expect(session).toMatchObject({
+      deployment_id: id,
+      title: "renamed deployment",
+      metadata: {},
+    });
     const persisted = (await call(
       `/v1/sessions/${(run as { session_id: string }).session_id}/events`,
       { method: "GET" },

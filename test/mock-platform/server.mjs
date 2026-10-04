@@ -3791,7 +3791,9 @@ const server = createServer(async (req, res) => {
         agent: mockSessionAgent(sourceAgent),
         environment_id: deployment.environment_id,
         status: "idle",
-        title: "",
+        // deploymentSessionIn: the deployment's name as it stands at the fire
+        // (platform #678), the metadata empty.
+        title: deployment.name,
         metadata: {},
         usage: {
           input_tokens: 0,
