@@ -43,6 +43,11 @@ Push to `main` plus `workflow_dispatch`. With one environment, "merged" and "dep
 event; a manual promotion step would only be a button somebody forgets. Runs are serialized and
 **never cancelled** — killing one mid-rollout leaves the cluster holding half of each revision.
 
+**A parked cluster is skipped, not failed.** While the platform's `make gcp-env-stop` holds staging at
+zero nodes, its `power-saved-*` cluster labels make the run finish green, deploying nothing and saying so
+in a notice and the run summary. To catch staging up to `main`, revive it with the platform's
+`make gcp-env-start`, then dispatch this workflow by hand.
+
 **No secrets in this repository.** The job asks GitHub for a short-lived OIDC token, WIF exchanges it
 for an impersonation of `DEPLOY_SERVICE_ACCOUNT`, and the one credential the deployment needs —
 Secret Manager's `controlplane-api-key`, the same value the platform chart installs as
