@@ -6,7 +6,12 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Security
+
+- Upgrade Next.js to 16.3.8 to address server-side request forgery in Image Optimization
+  ([GHSA-cjq9-62q9-8jv4](https://github.com/vercel/next.js/security/advisories/GHSA-cjq9-62q9-8jv4))
+  and six medium/low cache-poisoning and information-disclosure advisories
+  ([v16.3.8](https://github.com/vercel/next.js/releases/tag/v16.3.8), #199).
 
 ## Released
 
