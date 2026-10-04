@@ -4,12 +4,10 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-Console 0.8.0 with managed-agent-platform 0.5.0: merge
-[release #181](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/181) once the
-platform's 0.5.0 images are out, and deploy the console before the platform (#187,
-[platform #820](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/820)). Staging is
-parked ([platform #527](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/527)), so
-deploys skip it until it is revived (#197). Follow-up: the mock's fired-session title (#196).
+Console 0.8.1 with managed-agent-platform 0.5.1, a Next.js security patch: merge
+release-please's 0.8.1 PR, then confirm the image publishes as `0.8.1`, `0.8` and `latest`.
+Staging is parked ([platform #527](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/527)),
+so deploys skip it until it is revived (#197).
 
 Owner verification of the live Session / child SSE alignment from
 [recordings #8](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/8):
