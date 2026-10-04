@@ -212,13 +212,20 @@ test.afterAll(async () => {
 test("the console connects to the real platform and lists real agents", async ({
   page,
 }) => {
+  // Its own agent: with LIVE_MODEL_ID set, a fresh stack has none to list.
+  const name = `live-e2e-listed-${RUN}`;
+  const created = await platformPost("v1/agents", {
+    name,
+    model: { id: modelId },
+  });
+  createdAgentIds.push(created.id as string);
+
   await signIn(page);
   await page.goto("/agents");
   await expect(page.getByText("Platform connected")).toBeVisible();
-  // The stack has at least one real agent (the model-discovery precondition).
-  await expect
-    .poll(async () => page.locator("tbody tr").count())
-    .toBeGreaterThan(0);
+  await expect(
+    page.locator("tbody tr").filter({ hasText: name }),
+  ).toBeVisible();
 });
 
 test("an externally-authored compact default_config survives a console save", async ({
@@ -575,7 +582,13 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
           .join("\n"),
     );
   });
-  expect(copied[0].type).toBe("user.message");
+  // The copy starts where the platform's log does. Which event that is, is the
+  // platform's to say: since its #674 the running pair precedes the message.
+  const [first] = (
+    await platformGet(`v1/sessions/${session.id as string}/events?limit=1`)
+  ).data as { id: string }[];
+  expect((copied[0] as { id?: string }).id).toBe(first.id);
+  expect(copied.some((event) => event.type === "user.message")).toBe(true);
   expect(copied.some((event) => event.type === "agent.tool_use")).toBe(true);
   expect(copied.some((event) => event.type === "span.model_request_end")).toBe(
     true,

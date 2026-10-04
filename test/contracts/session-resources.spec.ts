@@ -15,9 +15,15 @@ test("session file resource add and removal", async ({ request }) => {
     );
     return response.json();
   };
+  // A file resource needs the read tool usable (platform #842); the default
+  // toolset leaves it on.
   const agent = await ok(
     await request.post("/v1/agents", {
-      data: { name, model: "claude-sonnet-4-8" },
+      data: {
+        name,
+        model: "claude-sonnet-4-8",
+        tools: [{ type: "agent_toolset_20260401" }],
+      },
     }),
   );
   let environmentId: string | undefined;
