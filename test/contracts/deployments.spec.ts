@@ -136,9 +136,10 @@ test("deployment lifecycle and persistent run history", async ({ request }) => {
     const session = SessionSchema.parse(
       await ok(await request.get(`/v1/sessions/${sessionId}`)),
     );
+    // A fire titles its session with the deployment's name (platform #678).
     expect(session).toMatchObject({
       deployment_id: created.id,
-      title: "",
+      title: created.name,
       metadata: {},
     });
 
@@ -151,12 +152,15 @@ test("deployment lifecycle and persistent run history", async ({ request }) => {
       runs.data.map((candidate: { id: string }) => candidate.id),
     ).toContain(run.id);
 
+    const firedSessionId = sessionId;
     await removeSession(sessionId);
     sessionId = undefined;
+    // The run keeps the deleted session's id, as the reference's does
+    // (platform #663).
     const retainedRun = DeploymentRunSchema.parse(
       await ok(await request.get(`/v1/deployment_runs/${run.id}`)),
     );
-    expect(retainedRun.session_id).toBeNull();
+    expect(retainedRun.session_id).toBe(firedSessionId);
     expect(retainedRun.error).toBeNull();
 
     const resumed = DeploymentSchema.parse(
