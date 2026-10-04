@@ -67,7 +67,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   `make gcp-env-stop` parks staging at zero nodes, so every push since 2026-09-02 left the new pod
   Pending until the rollout and its rollback timed out. The workflow now reads the platform's
   `power-saved-*` cluster labels, as the platform's own deploy does, and finishes green with a
-  notice saying nothing was deployed (#PR).
+  notice saying nothing was deployed (#197).
 
 ## Released
 
