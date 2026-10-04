@@ -6,15 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-### Security
-
-- Upgrade Next.js to 16.3.8 to address server-side request forgery in Image Optimization
-  ([GHSA-cjq9-62q9-8jv4](https://github.com/vercel/next.js/security/advisories/GHSA-cjq9-62q9-8jv4))
-  and six medium/low cache-poisoning and information-disclosure advisories
-  ([v16.3.8](https://github.com/vercel/next.js/releases/tag/v16.3.8), #199).
+Nothing yet.
 
 ## Released
 
+- [0.8.1](docs/changelog/0.8.1.md) — 2026-10-04 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.0...v0.8.1)
 - [0.8.0](docs/changelog/0.8.0.md) — 2026-10-04 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.7.0...v0.8.0)
 - [0.7.0](docs/changelog/0.7.0.md) — 2026-09-17 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.6.0...v0.7.0)
 - [0.6.0](docs/changelog/0.6.0.md) — 2026-08-16 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.5.0...v0.6.0)
@@ -24,4 +20,4 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - [0.2.0](docs/changelog/0.2.0.md) — 2026-08-08 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.1.0...v0.2.0)
 - [0.1.0](docs/changelog/0.1.0.md) — 2026-08-07 · [tag](https://github.com/OpenSDLC-Dev/managed-agent-console/releases/tag/v0.1.0)
 
-[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.1...HEAD
