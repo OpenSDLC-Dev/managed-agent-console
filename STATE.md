@@ -4,9 +4,8 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-Console 0.8.2 with managed-agent-platform 0.5.1, a sharp security patch: merge
-release-please's 0.8.2 PR, then confirm the image publishes as `0.8.2`, `0.8` and `latest`.
-Staging is parked ([platform #527](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/527)),
+Console 0.8.2 with managed-agent-platform 0.5.1 shipped 2026-10-12; `0.8.2`, `0.8` and `latest`
+are one image. Staging is parked ([platform #527](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/527)),
 so deploys skip it until it is revived (#197).
 
 Owner verification of the live Session / child SSE alignment from
