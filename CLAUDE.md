@@ -55,19 +55,29 @@ Every change lands through a PR; **never commit directly to `main`**.
 
 1. Branch off fresh `main`: `git checkout -b <type>/<short-name>` (`feat/`, `fix/`, `chore/`, `docs/`).
 2. Develop there. **Docs move with code, in the same PR**: a CHANGELOG entry under `## [Unreleased]` for every notable change; STATE.md whenever the change starts, advances or finishes tracked work; the active plan's `status:` flipped by the PR that changes its lifecycle.
-3. Push, open the PR (`gh pr create`), wait for CI green (`gh pr checks --watch`), settle every review thread. **The PR title is a Conventional Commit** — squash merge makes it the commit subject and release-please reads those subjects to decide the next version, so a prose title is not a style slip but a release that silently does not happen. Enforced by the `pr-title` check.
+3. Commit, and for anything past a typo run the [`review-branch`](./.claude/skills/review-branch/SKILL.md) skill: reproduce each finding before acting on it, fix what fails, refute the rest with evidence, and say in the PR what it found. Push, open the PR (`gh pr create`), wait for CI green (`gh pr checks --watch`), settle every review thread. **The PR title is a Conventional Commit** — squash merge makes it the commit subject and release-please reads those subjects to decide the next version, so a prose title is not a style slip but a release that silently does not happen. Enforced by the `pr-title` check.
 4. **Squash merge** (`gh pr merge --squash --delete-branch`), then sync local `main`.
 
 Releases are their own flow: [docs/releasing.md](./docs/releasing.md).
 
 ## How to work here
 
-- **Think before coding; state assumptions.** This repo's failure mode is inherited from the platform: guessing at wire shapes or platform behavior. Verify per principle 1 instead.
+- **State assumptions, and verify them before coding.** This repo's failure mode is inherited from the platform: guessing at wire shapes or platform behavior. Verify per principle 1 instead.
 - **Simplicity first.** Minimum code that solves the problem; no speculative abstractions; no configurability nobody asked for. Would a senior frontend engineer call this overcomplicated?
 - **Surgical changes.** Every changed line traces to the request; match existing style; clean up only orphans your change created.
-- **Report only what you can evidence.** Progress claims cite a test run, a diff, or a screenshot from this session; failures are reported with output.
+- **Report only what you can evidence.** Progress claims cite a test run, a diff, or a screenshot from this session; failures are reported with output. Mark anything you could not confirm, and say where you looked. A task's final report ends with three headings, in this order: **Blocked on me**, **Changed**, **Found**.
+- **Show what is easier to see than to read.** A human checks the result, so give it the form that is fastest to check: a Mermaid diagram (GitHub renders it) for a flow that a plan or PR changes across browser, BFF and platform; a throwaway HTML page, never committed, for a result judged by eye, such as each surface's fidelity shot beside the reference's.
 - **UI work reads the design reference first, and fidelity is verified in Chrome — walking the manifest.** Before building UI, extract the current reference's design facts from platform.claude.com in Chrome; after building, compare screenshots side by side. The surfaces are enumerated in [test/fidelity/surfaces.ts](./test/fidelity/surfaces.ts) — `pnpm fidelity:shots` writes one shot per surface per theme. **The PR names which surfaces it re-shot**, so the pass reports coverage rather than effort; a UI change touching a surface the manifest lacks adds it. Diverge only where self-hosting demands it, and record the divergence and its reason in [docs/design-reference.md](./docs/design-reference.md).
 - **Derived state carries a `data-*` attribute; e2e reads the attribute, not the sentence.** A surface that renders state through a formatter (`5,412 in · 890 out`, `3s`, `2 of 7`) also exposes it machine-readably. **Exactly one** test per formatter asserts the human string, so a copy edit reddens that one assertion instead of a whole suite.
+
+## Long runs
+
+Most work here runs on Claude Opus 5.5, long and mostly unattended. It sometimes stops to report while work is still owed, and it follows rules that name those stops ([Anthropic's guidance](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/)).
+
+- **Keep going until the work is done.** A change is done at step 4 of the iteration workflow — merged, local `main` synced — not when its PR opens. When a step needs nothing from the user, take it, and put any status note in the same message as that action. A turn does not end on a summary that announces the next step, an offer to continue, a list of choices that block nothing, or a milestone reached.
+- **Stop and ask only when nothing can move without the user**, or before anything destructive or outside this repository: deleting data, force-pushing, changing a deployment, another repository or an account. When a decision blocks only part of the work, state it with your recommendation and carry on with the rest.
+- **The checklist lives in a file, not in context.** Tracked work ticks its items in STATE.md as they land, and adds what the run finds inside its scope — anything outside it is an issue, the only backlog. Claude Code summarizes a long run's older turns; the file survives that.
+- **Split wide audits and migrations across subagents** — one route handler, surface or seam each — and check each report's evidence before accepting it. Work that fits in a handful of tool calls stays inline.
 
 ## Writing it down
 
@@ -75,6 +85,7 @@ Releases are their own flow: [docs/releasing.md](./docs/releasing.md).
 
 - **One fact, one home.** A fact stated in two files is a fact that will disagree with itself. Link instead of repeating.
 - **Put the "why" next to the thing.** A field's rationale belongs in a comment beside the field, not in a README describing the file.
+- **Plain, controlled language.** Write docs, PR descriptions and reports about 80% of the way to ASD-STE100, the controlled English of aircraft maintenance manuals: one statement per sentence, active voice, common words, no idioms. Most of what an agent writes here is read by a human checking its work, and controlled language is faster to check.
 - **Prefer bullets and tables to paragraphs**, and the shortest form that survives review: a decision is a sentence and its reason, not an essay. A CHANGELOG entry is what changed and why it matters — not how it was built.
 - **Size is a signal.** A doc past ~200 lines has usually absorbed narrative that belongs in the code. Move it back rather than reorganizing it.
 - **Write down what running it found.** The empirical residue — what a live run proved, what a default broke, what an observer got wrong — is the one thing no diff records, and it is worth more than a description of the change.
