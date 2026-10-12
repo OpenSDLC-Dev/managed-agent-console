@@ -4,9 +4,9 @@ allowBuilds:
 
 # Security floors for transitive deps flagged by the trivy image gate
 # (CVE-2026-59873/-59874, CVE-2026-13149/-14257, GHSA-f88m-g3jw-g9cj,
-# CVE-2026-12151). Scoped to the affected majors only.
+# CVE-2026-12151, GHSA-wq5f-xc86-pv6w). Scoped to the affected majors only.
 overrides:
   brace-expansion@5: ^5.0.8
-  sharp: ^0.35.0
+  sharp: ^0.35.5
   tar@7: ^7.5.19
   undici@6: ^6.27.0

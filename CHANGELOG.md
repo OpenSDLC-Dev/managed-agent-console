@@ -6,7 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Security
+
+- Raise the `sharp` floor to 0.35.5 for a librsvg vulnerability in the image's bundled libvips
+  ([GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w)).
 
 ## Released
 
