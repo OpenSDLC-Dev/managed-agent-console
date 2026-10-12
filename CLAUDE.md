@@ -72,7 +72,7 @@ Releases are their own flow: [docs/releasing.md](./docs/releasing.md).
 
 ## Long runs
 
-Most work here runs on Claude Opus 5.5, long and mostly unattended. It sometimes stops to report while work is still owed, and it follows rules that name those stops ([Anthropic's guidance](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/)).
+Work here runs long and mostly unattended, so these rules name the stops that cost a run.
 
 - **Keep going until the work is done.** A change is done at step 4 of the iteration workflow — merged, local `main` synced — not when its PR opens. When a step needs nothing from the user, take it, and put any status note in the same message as that action. A turn does not end on a summary that announces the next step, an offer to continue, a list of choices that block nothing, or a milestone reached.
 - **Stop and ask only when nothing can move without the user**, or before anything destructive or outside this repository: deleting data, force-pushing, changing a deployment, another repository or an account. When a decision blocks only part of the work, state it with your recommendation and carry on with the rest.

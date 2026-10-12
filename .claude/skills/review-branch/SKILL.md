@@ -3,8 +3,7 @@ name: review-branch
 description: Review this branch's committed diff against main for merge-blocking problems, in a fresh subagent that did not write the change. Use at step 3 of CLAUDE.md's iteration workflow, before `gh pr create`, or when asked to review the branch or its diff.
 context: fork
 background: false
-# Opus 5.5's default. At medium it matched Opus 5 at high on Anthropic's coding evals, and
-# its lowest effort out-reviewed Opus 5 at high. Raise it only for a measured gain.
+# Pinned so a review does not inherit a higher session setting. Raise it only for a measured gain.
 effort: medium
 ---
 
