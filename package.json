@@ -1,6 +1,6 @@
 {
   "name": "managed-agent-console",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "scripts": {
     "test:contract:live": "playwright test --config playwright.contract.config.ts",
