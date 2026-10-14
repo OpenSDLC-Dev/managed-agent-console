@@ -67,6 +67,26 @@ describe("UpstreamModels", () => {
     expect(screen.queryByText("MiniMax-M3")).toBeNull();
   });
 
+  it("says the users are unknown, not none, when the models cannot be read", async () => {
+    stubGatewayFetch((method, rest) =>
+      method === "GET" && rest === "aliases"
+        ? Response.json(
+            { type: "error", error: { type: "api_error", message: "down" } },
+            { status: 500 },
+          )
+        : undefined,
+    );
+    renderModels();
+    const pro = await row("deepseek-v4-pro");
+    await waitFor(() =>
+      expect(pro.querySelector("[data-used-by]")).toHaveTextContent("Unknown"),
+    );
+    expect(pro.querySelector("[data-used-by]")).toHaveAttribute(
+      "data-used-by",
+      "unknown",
+    );
+  });
+
   it("adds an upstream model, leaving blank prices out", async () => {
     const fetchMock = stubGatewayFetch();
     renderModels();

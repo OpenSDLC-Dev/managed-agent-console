@@ -142,9 +142,19 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       key: "used",
       header: "Used by",
       cell: (d) => {
+        // Unread is not unused: a dash here would invite a delete the
+        // gateway refuses.
+        if (!aliases.data)
+          return (
+            <span className="text-muted-foreground" data-used-by="unknown">
+              {aliases.isError ? "Unknown" : "…"}
+            </span>
+          );
         const names = usedBy(d.id);
         return names.length === 0 ? (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground" data-used-by={0}>
+            —
+          </span>
         ) : (
           <span className="font-mono text-[13px]" data-used-by={names.length}>
             {names.join(", ")}

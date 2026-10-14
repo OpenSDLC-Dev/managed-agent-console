@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { EnabledBadge, vendorLabel } from "./gateway-bits";
+import { EnabledBadge, isPlainHttp, vendorLabel } from "./gateway-bits";
 import { gatewayFixtures } from "../../../test/mock-platform/gateway.mjs";
 import type { GatewayProfile, GatewayProvider } from "@/lib/platform/types";
 
@@ -34,8 +34,35 @@ describe("vendorLabel", () => {
     expect(vendorLabel(custom, profiles)).toBe("MiniMax");
   });
 
+  // The add dialog edits each endpoint on its own, so one provider can call
+  // both sites. A single site would misname half its routing.
+  it("names no site when the endpoints call both", () => {
+    const mixed = {
+      ...provider("gwprov_minimaxcn1"),
+      endpoints: {
+        anthropic: "https://api.minimax.cn/anthropic",
+        openai: "https://api.minimax.io/v1",
+      },
+    };
+    expect(vendorLabel(mixed, profiles)).toBe("MiniMax");
+  });
+
   it("falls back to the wire name while the profiles are unread", () => {
     expect(vendorLabel(provider("gwprov_giteeai001"), undefined)).toBe("gitee");
+  });
+});
+
+describe("isPlainHttp", () => {
+  // validate.go checkEndpoint parses the scheme case-insensitively but stores
+  // the endpoint as typed, so an upper-case scheme reaches the console.
+  it.each([
+    ["http://vllm.models.svc:8000/v1", true],
+    ["HTTP://vllm.models.svc:8000/v1", true],
+    ["Http://vllm.models.svc:8000/v1", true],
+    ["https://api.deepseek.com", false],
+    ["HTTPS://api.deepseek.com", false],
+  ])("%s → %s", (url, plain) => {
+    expect(isPlainHttp(url)).toBe(plain);
   });
 });
 
