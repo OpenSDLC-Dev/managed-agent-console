@@ -12,7 +12,7 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 - [x] 3a. Models: list, inspector, routing editor
 - [x] 3b. First-run setup for a gateway with no models
 - [x] 4. API Keys: model access column and dialog
-- [ ] 5. Analytics → Usage: overview and request ledger
+- [x] 5. Analytics → Usage: overview and request ledger
 - [ ] 6. Agent and Dream model select; deploy manifests; fidelity surfaces; live contract
 
 Open: the Analytics label (needs Chrome signed in to the reference); whether staging's console key

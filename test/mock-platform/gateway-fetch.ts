@@ -9,14 +9,14 @@ import { gatewayRoute, resetGateway } from "./gateway.mjs";
  * refusals and failures a seed cannot produce.
  */
 export function stubGatewayFetch(
-  override?: (method: string, rest: string) => Response | undefined,
+  override?: (method: string, rest: string, url: URL) => Response | undefined,
 ) {
   resetGateway();
   const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
     const url = new URL(String(input), "http://console");
     const rest = url.pathname.replace("/api/gateway/admin/v1/", "");
     const method = init?.method ?? "GET";
-    const custom = override?.(method, rest);
+    const custom = override?.(method, rest, url);
     if (custom) return custom;
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     const answer = gatewayRoute(method, rest, url.searchParams, body) ?? {

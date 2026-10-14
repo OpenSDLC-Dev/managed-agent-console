@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQueries,
   useQuery,
@@ -11,12 +12,14 @@ import { gatewayDelete, gatewayGet, gatewayPost } from "./http";
 import type {
   GatewayAlias,
   GatewayCredential,
+  GatewayDailyUsage,
   GatewayDeployment,
   GatewayKeyPolicy,
   GatewayKind,
   GatewayProfile,
   GatewayProtocol,
   GatewayProvider,
+  GatewayUsagePage,
 } from "./types";
 
 /**
@@ -389,5 +392,53 @@ export function useDeleteGatewayKeyPolicy(
       ),
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["gateway", "key_policies"] }),
+  });
+}
+
+/** The filters both usage reads take (usage.go usageFilter). */
+export interface GatewayUsageFilter {
+  api_key_id?: string;
+  alias?: string;
+  deployment_id?: string;
+}
+
+/**
+ * The gateway refuses an empty query parameter as a filter it cannot read
+ * (usage.go query), so an unset one is left out rather than sent blank.
+ */
+const present = <T extends object>(params: T) =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== ""),
+  ) as Record<string, string | number>;
+
+/** UTC days from through to, both included, as YYYY-MM-DD. */
+export function useGatewayDailyUsage(
+  range: { from: string; to: string },
+  filter: GatewayUsageFilter,
+) {
+  return useQuery({
+    queryKey: ["gateway", "usage", "daily", range, present(filter)],
+    queryFn: () =>
+      gatewayGet<List<GatewayDailyUsage>>(
+        "usage/daily",
+        present({ ...range, ...filter }),
+      ),
+  });
+}
+
+/** The ledger, newest first; each older page is `before` the last row's id. */
+export function useGatewayUsageRequests(
+  filter: GatewayUsageFilter & { session_id?: string },
+) {
+  return useInfiniteQuery({
+    queryKey: ["gateway", "usage", "requests", present(filter)],
+    queryFn: ({ pageParam }) =>
+      gatewayGet<GatewayUsagePage>(
+        "usage/requests",
+        present({ ...filter, before: pageParam }),
+      ),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (last) =>
+      last.has_more ? last.data.at(-1)?.id : undefined,
   });
 }
