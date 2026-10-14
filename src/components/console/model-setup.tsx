@@ -39,7 +39,8 @@ type Step = "provider" | "key" | "deployment" | "model";
 const STEPS: Step[] = ["provider", "key", "deployment", "model"];
 
 /** What each step made: its id, and what the list shows for it. */
-type Made = Partial<Record<Step, { id: string; label: string }>>;
+type Row = { id: string; label: string };
+type Made = Partial<Record<Step, Row>>;
 
 /**
  * Shown on Models while the gateway has none. Until one exists, every
@@ -140,7 +141,12 @@ export function ModelSetupDialog({
   const modelName = (name ?? upstream).trim();
   const [made, setMade] = useState<Made>({});
   const [running, setRunning] = useState<Step>();
-  const [failure, setFailure] = useState<{ step: Step; message: string }>();
+  const [failure, setFailure] = useState<{
+    step: Step;
+    message: string;
+    /** Looks for what the failed attempt sent, whatever the form says now. */
+    find?: () => Promise<Row | undefined>;
+  }>();
 
   const label: Record<Step, string> = {
     provider: "Provider",
@@ -158,13 +164,14 @@ export function ModelSetupDialog({
   const run = async () => {
     if (!profile) return;
     // None of these writes is idempotent, and a lost answer can hide one that
-    // landed. So the step that failed is looked up before it is tried again,
-    // and a failed lookup fails the step again rather than repeat the write.
-    const retry = failure?.step;
+    // landed. So the step that failed is looked up, by what it sent, before
+    // it is tried again; a failed lookup fails the step again rather than
+    // repeat the write.
+    const retry = failure;
     setFailure(undefined);
     const ids: Made = { ...made };
     let current: Step = "provider";
-    type Row = { id: string; label: string };
+    let inDoubt: (() => Promise<Row | undefined>) | undefined;
     const step = async (
       id: Step,
       call: () => Promise<Row>,
@@ -173,7 +180,17 @@ export function ModelSetupDialog({
       current = id;
       if (ids[id]) return;
       setRunning(id);
-      ids[id] = (id === retry && (await find())) || (await call());
+      if (id === retry?.step && retry.find) {
+        inDoubt = retry.find;
+        const found = await retry.find();
+        if (found) {
+          ids[id] = found;
+          setMade({ ...ids });
+          return;
+        }
+      }
+      inDoubt = find;
+      ids[id] = await call();
       setMade({ ...ids });
     };
     const list = async <T,>(path: string, match: (row: T) => boolean) =>
@@ -208,12 +225,21 @@ export function ModelSetupDialog({
       await step(
         "key",
         async () => {
-          const created = await gatewayPost<GatewayCredential>(
-            `providers/${ids.provider!.id}/credentials`,
-            { key },
-          );
-          setKey("");
-          return { id: created.id, label: `••••${created.last_four}` };
+          // A failed attempt clears the key too, so only a lookup that finds
+          // no key asks for it again.
+          if (!key.trim())
+            throw new Error(
+              "The gateway has no key from this provider yet. Enter the API key again.",
+            );
+          try {
+            const created = await gatewayPost<GatewayCredential>(
+              `providers/${ids.provider!.id}/credentials`,
+              { key },
+            );
+            return { id: created.id, label: `••••${created.last_four}` };
+          } finally {
+            setKey("");
+          }
         },
         // The provider is this run's, so any key on it is too.
         async () => {
@@ -279,6 +305,7 @@ export function ModelSetupDialog({
       setFailure({
         step: current,
         message: error instanceof Error ? error.message : String(error),
+        find: inDoubt,
       });
       void client.invalidateQueries({ queryKey: ["gateway"] });
     } finally {
@@ -302,7 +329,7 @@ export function ModelSetupDialog({
   };
   const ready =
     !!profile &&
-    (!!made.key || !!key.trim()) &&
+    (!!made.key || !!key.trim() || failure?.step === "key") &&
     (!!made.deployment || !!upstream.trim()) &&
     !!modelName;
 

@@ -175,6 +175,65 @@ describe("ModelSetupDialog", () => {
     expect(writes(fetchMock).filter((w) => w === "providers")).toHaveLength(1);
   });
 
+  it("probe: looks up what a lost write sent, not what the form says since", async () => {
+    const fetchMock = loseAnswers("deployments");
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await userEvent.type(screen.getByLabelText("Upstream model ID"), "-v2");
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "deployments")).toHaveLength(
+      1,
+    );
+  });
+
+  it("probe: drops the vendor key when its write fails, and asks again only if the gateway has none", async () => {
+    // Landed, answer lost: Continue finds the key without asking for it.
+    let fetchMock = loseAnswers("credentials");
+    const first = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    await resume();
+    await waitFor(() => expect(first.onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "credentials")).toHaveLength(
+      1,
+    );
+    cleanup();
+
+    // Refused: nothing landed, so Continue asks for the key again.
+    let refuse = true;
+    fetchMock = stubGatewayFetch((method, rest) => {
+      if (refuse && method === "POST" && rest.endsWith("/credentials")) {
+        refuse = false;
+        return Response.json(
+          { type: "error", error: { type: "api_error", message: "down" } },
+          { status: 500 },
+        );
+      }
+    });
+    emptyGateway();
+    const second = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+    await resume();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter the API key again",
+    );
+    await userEvent.type(screen.getByLabelText("API key"), SECRET);
+    await resume();
+    await waitFor(() => expect(second.onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "credentials")).toHaveLength(
+      2,
+    );
+  });
+
   it("offers only vendors whose hosts are published", async () => {
     stubGatewayFetch();
     renderSetup();
