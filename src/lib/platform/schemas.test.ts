@@ -20,11 +20,14 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import * as fixtures from "../../../test/mock-platform/fixtures.mjs";
+import { gatewayFixtures } from "../../../test/mock-platform/gateway.mjs";
 import {
   API_KEY,
+  gatewayServer,
   resetStore,
   server,
 } from "../../../test/mock-platform/server.mjs";
+import type { ErrorEnvelope } from "./http";
 import {
   AgentSchema,
   ApiKeyIssuedSchema,
@@ -37,6 +40,15 @@ import {
   EnvironmentKeyPageSchema,
   EnvironmentKeySchema,
   EnvironmentSchema,
+  GatewayAliasSchema,
+  GatewayCredentialSchema,
+  GatewayDailyUsageSchema,
+  GatewayDeploymentSchema,
+  GatewayKeyPolicySchema,
+  GatewayProfileSchema,
+  GatewayProviderSchema,
+  GatewayUsagePageSchema,
+  GatewayUsageRowSchema,
   MemorySchema,
   MemoryStoreSchema,
   MemoryVersionSchema,
@@ -2233,5 +2245,182 @@ describe("the mock's constructed write-path responses conform too", () => {
         200,
       );
     });
+  });
+});
+
+// The model gateway double (plan 10) on its own server, as the real gateway is
+// one. Its seeds and the shapes it constructs on writes are checked here for
+// the reason the platform's are above.
+describe("the mock model gateway conforms to the admin API's views", () => {
+  let base: string;
+
+  const send = (method: string, path: string, body?: unknown) =>
+    fetch(`${base}/admin/v1/${path}`, {
+      method,
+      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await send(method, path, body);
+    expect(res.ok, `${method} ${path} -> ${res.status}`).toBe(true);
+    return (await res.json()) as unknown;
+  };
+
+  const data = async (path: string) =>
+    ((await call("GET", path)) as { data: unknown[] }).data;
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) =>
+      gatewayServer.listen(0, "127.0.0.1", resolve),
+    );
+    base = `http://127.0.0.1:${(gatewayServer.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    resetStore();
+    await new Promise<void>((resolve, reject) =>
+      gatewayServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+
+  it("the seeds", () => {
+    const seed = gatewayFixtures();
+    each(GatewayProfileSchema, seed.profiles, "profiles");
+    each(GatewayProviderSchema, seed.providers, "providers");
+    each(GatewayCredentialSchema, seed.credentials, "credentials");
+    each(GatewayDeploymentSchema, seed.deployments, "deployments");
+    each(GatewayAliasSchema, seed.aliases, "aliases");
+    each(GatewayKeyPolicySchema, seed.keyPolicies, "keyPolicies");
+    each(GatewayDailyUsageSchema, seed.daily, "daily");
+    each(GatewayUsageRowSchema, seed.ledger, "ledger");
+  });
+
+  it("the reads, enveloped as the admin API renders them", async () => {
+    each(GatewayProfileSchema, await data("profiles"), "GET profiles");
+    each(GatewayProviderSchema, await data("providers"), "GET providers");
+    each(GatewayDeploymentSchema, await data("deployments"), "GET deployments");
+    each(GatewayAliasSchema, await data("aliases"), "GET aliases");
+    each(
+      GatewayKeyPolicySchema,
+      await data("key_policies"),
+      "GET key_policies",
+    );
+    each(GatewayDailyUsageSchema, await data("usage/daily"), "GET usage/daily");
+    expectConforms(
+      GatewayUsagePageSchema,
+      await call("GET", "usage/requests?limit=2"),
+      "GET usage/requests",
+    );
+  });
+
+  it("a provider through to a key policy, then torn down in reverse", async () => {
+    const provider = (await call("POST", "providers", {
+      name: "Conformance",
+      profile: "openai-generic",
+      endpoints: { openai: "https://models.example.com/v1" },
+    })) as { id: string };
+    expectConforms(GatewayProviderSchema, provider, "POST providers");
+
+    const credential = (await call(
+      "POST",
+      `providers/${provider.id}/credentials`,
+      { key: "sk-conformance-0123456789" },
+    )) as { id: string; last_four: string };
+    expectConforms(GatewayCredentialSchema, credential, "POST credentials");
+    expect(credential.last_four).toBe("6789");
+
+    const deployment = (await call("POST", "deployments", {
+      provider_id: provider.id,
+      upstream_model: "org/model-x",
+      kind: "chat",
+      prices: { input: 1 },
+    })) as { id: string };
+    expectConforms(GatewayDeploymentSchema, deployment, "POST deployments");
+
+    const alias = await call("POST", "aliases", {
+      name: "conformance/model",
+      targets: [{ deployment_id: deployment.id }],
+    });
+    expectConforms(GatewayAliasSchema, alias, "POST aliases");
+    expect(alias).toMatchObject({
+      kind: "chat",
+      targets: [{ deployment_id: deployment.id, priority: 0, weight: 1 }],
+    });
+    expectConforms(
+      GatewayAliasSchema,
+      await call("GET", "aliases/conformance/model"),
+      "GET aliases/{name}",
+    );
+
+    const policy = await call("POST", "key_policies/apikey_new", {
+      aliases: ["conformance/model"],
+      rpm: null,
+      tpm: 1000,
+    });
+    expectConforms(GatewayKeyPolicySchema, policy, "POST key_policies/{id}");
+
+    // The store's rules: each delete is refused while something names it.
+    for (const [path, named] of [
+      ["aliases/conformance/model", "is granted to api keys"],
+      [`deployments/${deployment.id}`, "is a target of aliases"],
+      [`providers/${provider.id}`, "has deployments"],
+    ]) {
+      const refused = await send("DELETE", path);
+      expect(refused.status, path).toBe(409);
+      expect(((await refused.json()) as ErrorEnvelope).error.message).toContain(
+        named,
+      );
+    }
+
+    expect(await call("DELETE", "key_policies/apikey_new")).toEqual({
+      type: "key_policy_deleted",
+      api_key_id: "apikey_new",
+    });
+    expect(await call("DELETE", "aliases/conformance/model")).toEqual({
+      type: "alias_deleted",
+      name: "conformance/model",
+    });
+    expect(await call("DELETE", `deployments/${deployment.id}`)).toEqual({
+      type: "deployment_deleted",
+      id: deployment.id,
+    });
+    expect(
+      await call(
+        "DELETE",
+        `providers/${provider.id}/credentials/${credential.id}`,
+      ),
+    ).toEqual({ type: "credential_deleted", id: credential.id });
+    expect(await call("DELETE", `providers/${provider.id}`)).toEqual({
+      type: "provider_deleted",
+      id: provider.id,
+    });
+  });
+
+  it("refuses a field fixed at creation by name", async () => {
+    const refused = await send("POST", "deployments/gwdep_dsflash01", {
+      upstream_model: "other",
+    });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as ErrorEnvelope).error.message).toBe(
+      "upstream_model is fixed at creation",
+    );
+  });
+
+  it("probe: answers only on its own port, never the platform's", async () => {
+    // The platform double serves no /admin/v1 route, so a console that sent
+    // its gateway calls to PLATFORM_BASE_URL fails e2e instead of passing.
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await fetch(`http://127.0.0.1:${port}/admin/v1/aliases`, {
+        headers: { "x-api-key": API_KEY },
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

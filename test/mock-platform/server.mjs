@@ -33,10 +33,13 @@ import {
   vaultCredentials,
   vaults,
 } from "./fixtures.mjs";
+import { gatewayRoute, resetGateway } from "./gateway.mjs";
 import { PORT as OIDC_PORT, oidcServer, resetOidc } from "./oidc.mjs";
 
 const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
+/** The model gateway double (gateway.mjs) — its own port, see gatewayServer. */
+const GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 18070);
 /** Surfaces this run pretends not to implement, e.g. "skills,files". */
 const UNIMPLEMENTED = (process.env.MOCK_PLATFORM_UNIMPLEMENTED ?? "")
   .split(",")
@@ -203,6 +206,7 @@ function resetStore() {
   // rotating that mid-run would leave the console verifying against a key set
   // jose refuses to refetch for thirty seconds (see oidc.mjs).
   resetOidc();
+  resetGateway();
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
     for (const res of state.subscribers) res.end();
@@ -5657,6 +5661,78 @@ const server = createServer(async (req, res) => {
   res.end(JSON.stringify(result));
 });
 
+// ---- the model gateway's admin API (gateway.mjs), plan 10 ----------------
+//
+// Its own port, for the reason the identity provider has one: the gateway is a
+// server of its own (cmd/modelgateway), and a console that sent its admin calls
+// to PLATFORM_BASE_URL would keep passing against a shared origin. The state
+// and the test hooks stay in this process, so /__reset, /__forbid and
+// /__unimplemented on the platform's port reach the gateway too.
+const gatewayServer = createServer(async (req, res) => {
+  requestCounter += 1;
+  res.setHeader("request-id", `req_mock${requestCounter}`);
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  if (!authenticate(req, res)) return;
+  res.setHeader("content-type", "application/json");
+  const answer = (status, body) => {
+    res.writeHead(status);
+    res.end(typeof body === "string" ? body : JSON.stringify(body));
+  };
+  if (forbidden.some((p) => url.pathname.startsWith(`/${p}`))) {
+    return answer(
+      403,
+      envelope(
+        "permission_error",
+        "this request needs the admin role; yours is viewer",
+      ),
+    );
+  }
+  const prefix = "/admin/v1/";
+  let rest;
+  try {
+    rest = url.pathname.startsWith(prefix)
+      ? url.pathname
+          .slice(prefix.length)
+          .split("/")
+          .map(decodeURIComponent)
+          .join("/")
+      : undefined;
+  } catch {
+    rest = undefined;
+  }
+  // `model-gateway` stands for a gateway that serves no admin API: every path
+  // falls through to admin.go's catch-all, which the console's probe reads as
+  // "not implemented here".
+  if (rest === undefined || unimplemented.includes("model-gateway")) {
+    return answer(
+      404,
+      envelope("not_found_error", `no such path: ${url.pathname}`),
+    );
+  }
+  let body = {};
+  if (req.method === "POST") {
+    try {
+      body = JSON.parse((await readBody(req)).toString() || "{}");
+    } catch {
+      return answer(
+        400,
+        envelope(
+          "invalid_request_error",
+          "Failed to parse request body as JSON",
+        ),
+      );
+    }
+  }
+  const result = gatewayRoute(req.method, rest, url.searchParams, body);
+  if (result === undefined) {
+    return answer(
+      404,
+      envelope("not_found_error", `no such path: ${url.pathname}`),
+    );
+  }
+  answer(result.status, result.body);
+});
+
 // Playwright's webServer runs this file directly (`node …/server.mjs`); the
 // conformance suite imports it instead and drives it on an ephemeral port, so
 // the listen has to be conditional or the import would bind 18080.
@@ -5672,10 +5748,13 @@ if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {
   // confused the two keep passing (#99).
   oidcServer.listen(OIDC_PORT, "127.0.0.1", () => {
     console.log(`mock oidc listening on http://127.0.0.1:${OIDC_PORT}`);
-    server.listen(PORT, "127.0.0.1", () => {
-      console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
+    gatewayServer.listen(GATEWAY_PORT, "127.0.0.1", () => {
+      console.log(`mock gateway listening on http://127.0.0.1:${GATEWAY_PORT}`);
+      server.listen(PORT, "127.0.0.1", () => {
+        console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
+      });
     });
   });
 }
 
-export { API_KEY, resetStore, server };
+export { API_KEY, gatewayServer, resetStore, server };

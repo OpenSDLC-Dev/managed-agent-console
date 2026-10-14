@@ -761,6 +761,185 @@ export const ApiKeyIssuedSchema = ApiKeySchema.extend({
  */
 export const ApiKeyListSchema = z.array(ApiKeySchema);
 
+// ---- the model gateway's admin API (internal/modelgateway/admin/), plan 10
+//
+// A server of its own (`cmd/modelgateway`), reached through `/api/gateway/`.
+// Lists render `{data}` (admin.go listView) with `[]`, never null; the ledger
+// adds `has_more`. Ids are `gwprov_`/`gwcred_`/`gwdep_`; an alias is keyed by
+// its name. Usage rows name an alias and a deployment by value, so a row
+// outlives the configuration it was routed by.
+
+/** profile/profile.go Protocol — the wire protocols a vendor speaks. */
+export const GatewayProtocolSchema = z.enum(["anthropic", "openai", "gemini"]);
+
+/** store/store.go Kind — fixed on a deployment and on an alias at creation. */
+export const GatewayKindSchema = z.enum(["chat", "embedding", "rerank"]);
+
+/** profile/profile.go Host — `region` is omitted for a single-region vendor. */
+export const GatewayHostSchema = z.object({
+  protocol: GatewayProtocolSchema,
+  region: z.enum(["cn", "international"]).optional(),
+  base_url: z.string(),
+});
+
+/** providers.go profileView — a vendor the gateway knows, compiled in. */
+export const GatewayProfileSchema = z.object({
+  type: z.literal("profile"),
+  name: z.string(),
+  display_name: z.string(),
+  protocols: z.array(GatewayProtocolSchema),
+  hosts: z.array(GatewayHostSchema),
+});
+
+/**
+ * providers.go providerView — `endpoints` holds one base URL per protocol the
+ * provider serves, fixed at creation. `stall_timeout_ms` null is the default.
+ */
+export const GatewayProviderSchema = z.object({
+  type: z.literal("provider"),
+  id: z.string(),
+  name: z.string(),
+  profile: z.string(),
+  endpoints: z.partialRecord(GatewayProtocolSchema, z.string()),
+  headers: z.record(z.string(), z.string()),
+  stall_timeout_ms: z.number().nullable(),
+  propagate_trace: z.boolean(),
+  enabled: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/**
+ * providers.go credentialView — everything but the key. `last_four` is empty
+ * for a key shorter than 12 characters; `protocols` null is every protocol
+ * the provider serves.
+ */
+export const GatewayCredentialSchema = z.object({
+  type: z.literal("credential"),
+  id: z.string(),
+  provider_id: z.string(),
+  kind: z.string(),
+  last_four: z.string(),
+  protocols: z.array(GatewayProtocolSchema).nullable(),
+  weight: z.number(),
+  enabled: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/** store/store.go Capabilities — the token limits are omitted when zero. */
+export const GatewayCapabilitiesSchema = z.object({
+  tools: z.boolean(),
+  thinking: z.boolean(),
+  vision: z.boolean(),
+  max_input_tokens: z.number().optional(),
+  max_tokens: z.number().optional(),
+});
+
+/** deployments.go pricesJSON — per million tokens; null is unpriced. */
+export const GatewayPricesSchema = z.object({
+  input: z.number().nullable(),
+  output: z.number().nullable(),
+  cache_write: z.number().nullable(),
+  cache_read: z.number().nullable(),
+});
+
+/** deployments.go deploymentView — the console calls it an "upstream model". */
+export const GatewayDeploymentSchema = z.object({
+  type: z.literal("deployment"),
+  id: z.string(),
+  provider_id: z.string(),
+  upstream_model: z.string(),
+  kind: GatewayKindSchema,
+  display_name: z.string(),
+  capabilities: GatewayCapabilitiesSchema,
+  prices: GatewayPricesSchema,
+  enabled: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/** aliases.go targetView — a lower priority is tried first. */
+export const GatewayTargetSchema = z.object({
+  deployment_id: z.string(),
+  priority: z.number(),
+  weight: z.number(),
+});
+
+/** aliases.go aliasView — the console calls it a "model". */
+export const GatewayAliasSchema = z.object({
+  type: z.literal("alias"),
+  name: z.string(),
+  display_name: z.string(),
+  kind: GatewayKindSchema,
+  targets: z.array(GatewayTargetSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/**
+ * keypolicies.go keyPolicyView — `aliases` null grants every alias; `rpm` or
+ * `tpm` null sets no limit. A key without a policy has no row.
+ */
+export const GatewayKeyPolicySchema = z.object({
+  type: z.literal("key_policy"),
+  api_key_id: z.string(),
+  aliases: z.array(z.string()).nullable(),
+  rpm: z.number().nullable(),
+  tpm: z.number().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+/** usage.go dailyUsageView — one UTC day (`YYYY-MM-DD`) per key, alias and deployment. */
+export const GatewayDailyUsageSchema = z.object({
+  day: z.string(),
+  api_key_id: z.string(),
+  alias: z.string(),
+  deployment_id: z.string(),
+  requests: z.number(),
+  errors: z.number(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cost: z.number(),
+});
+
+/**
+ * usage.go usageView — one request. A count is null when the upstream
+ * reported none; a session, error or time to first token the request did not
+ * have is null. `endpoint` is the route's (store/usage.go).
+ */
+export const GatewayUsageRowSchema = z.object({
+  id: z.number(),
+  request_id: z.string(),
+  created_at: z.string(),
+  api_key_id: z.string(),
+  model: z.string(),
+  alias: z.string(),
+  deployment_id: z.string(),
+  credential_id: z.string(),
+  session_id: z.string().nullable(),
+  protocol: z.string(),
+  endpoint: z.string(),
+  status: z.number(),
+  error_type: z.string().nullable(),
+  input_tokens: z.number().nullable(),
+  output_tokens: z.number().nullable(),
+  cache_write_tokens: z.number().nullable(),
+  cache_read_tokens: z.number().nullable(),
+  cost: z.number().nullable(),
+  latency_ms: z.number(),
+  ttft_ms: z.number().nullable(),
+});
+
+/** usage.go usagePage — newest first; the next page is `before` the last id. */
+export const GatewayUsagePageSchema = z.object({
+  data: z.array(GatewayUsageRowSchema),
+  has_more: z.boolean(),
+});
+
 // ---- inferred types (re-exported by ./types, which is what consumers import)
 
 export type ModelRef = z.infer<typeof ModelRefSchema>;
@@ -816,3 +995,14 @@ export type EnvironmentKeyIssued = z.infer<typeof EnvironmentKeyIssuedSchema>;
 export type KeyActor = z.infer<typeof KeyActorSchema>;
 export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyIssued = z.infer<typeof ApiKeyIssuedSchema>;
+export type GatewayProtocol = z.infer<typeof GatewayProtocolSchema>;
+export type GatewayKind = z.infer<typeof GatewayKindSchema>;
+export type GatewayProfile = z.infer<typeof GatewayProfileSchema>;
+export type GatewayProvider = z.infer<typeof GatewayProviderSchema>;
+export type GatewayCredential = z.infer<typeof GatewayCredentialSchema>;
+export type GatewayDeployment = z.infer<typeof GatewayDeploymentSchema>;
+export type GatewayAlias = z.infer<typeof GatewayAliasSchema>;
+export type GatewayKeyPolicy = z.infer<typeof GatewayKeyPolicySchema>;
+export type GatewayDailyUsage = z.infer<typeof GatewayDailyUsageSchema>;
+export type GatewayUsageRow = z.infer<typeof GatewayUsageRowSchema>;
+export type GatewayUsagePage = z.infer<typeof GatewayUsagePageSchema>;

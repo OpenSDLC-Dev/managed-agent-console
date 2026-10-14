@@ -12,12 +12,13 @@ import {
 import { SIGNED_OUT_HEADER } from "@/lib/identity/signed-out";
 
 /**
- * The BFF's forwarding core, shared by the two proxy routes.
+ * The BFF's forwarding core, shared by the proxy routes.
  *
- * The console reaches the platform over two namespaces that differ in nothing
- * but their path: `/v1/...` (the wire surface) and `/api/oauth/...` (the
- * off-wire console API plan 30 mirrored from the reference console). Both are
- * management-authenticated and both must inject the key server-side, so the
+ * The console reaches the platform over namespaces that differ in nothing
+ * but their path: `/v1/...` (the wire surface), `/api/oauth/...` (the
+ * off-wire console API plan 30 mirrored from the reference console), and the
+ * model gateway's `/admin/v1/...` on a server of its own ({@link Upstream}).
+ * All are management-authenticated and all must inject the key server-side, so the
  * injection, the header allowlists, the streaming and the failure envelopes
  * live here once — a second copy is a second place to forget that an inbound
  * `x-api-key` must never be forwarded.
@@ -94,13 +95,42 @@ function escapesItsPath(upstreamPath: string): boolean {
 }
 
 /**
- * Forward `request` to `<PLATFORM_BASE_URL>/<upstreamPath>` with the management
- * key attached. `upstreamPath` is built by the calling route from its own
+ * A server the BFF forwards to. The control plane is the default; the model
+ * gateway's admin API is the other (plan 10). Both take the same credential —
+ * the operator's token in identity mode, the management key otherwise — so the
+ * credential logic below is shared, and only these facts differ.
+ */
+export interface Upstream {
+  /** Throws, as `platformBaseUrl` does, when the deployment did not configure it. */
+  baseUrl: () => string;
+  /** What the 502 calls it, and the variable that points at it. */
+  name: string;
+  variable: string;
+  /**
+   * Whether a 401 from it means the operator's token is dead. The control
+   * plane verifies that token and nothing else; the gateway also answers 401
+   * when it runs without `IDENTITY_*`, a configuration fault that ending the
+   * session would turn into signing every operator out (plan 10 decision 4).
+   */
+  endsSessionOn401: boolean;
+}
+
+const PLATFORM: Upstream = {
+  baseUrl: platformBaseUrl,
+  name: "platform",
+  variable: "PLATFORM_BASE_URL",
+  endsSessionOn401: true,
+};
+
+/**
+ * Forward `request` to `<base URL>/<upstreamPath>` with the credential
+ * attached. `upstreamPath` is built by the calling route from its own
  * validated path — never from raw user input.
  */
 export async function forward(
   request: NextRequest,
   upstreamPath: string,
+  target: Upstream = PLATFORM,
 ): Promise<Response> {
   if (escapesItsPath(upstreamPath)) {
     return envelope(
@@ -133,7 +163,7 @@ export async function forward(
   let baseUrl: string;
   let apiKey: string | undefined;
   try {
-    baseUrl = platformBaseUrl();
+    baseUrl = target.baseUrl();
     // The management key is not read at all in identity mode. It stays in the
     // pod as the deep health check's own credential, and this is what keeps the
     // two apart: a request the operator made never touches it.
@@ -181,7 +211,7 @@ export async function forward(
     return envelope(
       502,
       "api_error",
-      "platform unreachable — check PLATFORM_BASE_URL",
+      `${target.name} unreachable — check ${target.variable}`,
     );
   }
 
@@ -204,7 +234,11 @@ export async function forward(
   // any site can make this request. So where the platform answers 401 for a
   // value the browser chose — a foreign organization on the console
   // namespaces — the route refuses that path before it reaches here.
-  if (upstream.status === 401 && session !== undefined) {
+  if (
+    upstream.status === 401 &&
+    session !== undefined &&
+    target.endsSessionOn401
+  ) {
     deleteSession(handle);
     responseHeaders.set(SIGNED_OUT_HEADER, "1");
     return clearIdentityCookie(
