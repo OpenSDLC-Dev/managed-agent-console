@@ -221,20 +221,27 @@ export async function consolePostNoContent(
 // only prefix the gateway route forwards. Every route, deletes included,
 // answers a JSON body (`internal/modelgateway/admin/admin.go` route), so no
 // 204 variant is needed.
+//
+// A model name may hold any character but whitespace (`checkAliasName`), so
+// each `/`-delimited part of a path is encoded here, before the browser parses
+// the URL: a raw `?` or `#` would otherwise end the path, and a delete for
+// `aliases/a?b` would reach `aliases/a` (PR #215 review). Slashes stay
+// separators; a name's own slashes are the gateway's separators too.
+
+const gatewayUrl = (path: string) =>
+  `/api/gateway/admin/v1/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 export async function gatewayGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
 ): Promise<T> {
-  const response = await fetch(
-    `/api/gateway/admin/v1/${path}${queryString(params)}`,
-  );
+  const response = await fetch(`${gatewayUrl(path)}${queryString(params)}`);
   await assertOk(response);
   return (await response.json()) as T;
 }
 
 export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api/gateway/admin/v1/${path}`, {
+  const response = await fetch(gatewayUrl(path), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -244,7 +251,7 @@ export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function gatewayDelete<T>(path: string): Promise<T> {
-  const response = await fetch(`/api/gateway/admin/v1/${path}`, {
+  const response = await fetch(gatewayUrl(path), {
     method: "DELETE",
   });
   await assertOk(response);

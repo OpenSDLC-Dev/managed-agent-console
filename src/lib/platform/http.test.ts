@@ -337,6 +337,31 @@ describe("model gateway helpers", () => {
     );
   });
 
+  // A model name may hold `?`, `#` or `%` (checkAliasName). Raw, the browser
+  // would read `?b` as a query and delete `aliases/a` (PR #215 review, P1).
+  it("probe: encodes a model name's parts before the browser parses the URL", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({ type: "alias_deleted", name: "x" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await gatewayDelete("aliases/Qwen/a?b#c%d");
+    const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
+    expect(url).toBe("/api/gateway/admin/v1/aliases/Qwen/a%3Fb%23c%25d");
+    const parsed = new URL(url, "http://console");
+    expect(parsed.search).toBe("");
+    expect(parsed.hash).toBe("");
+    expect(parsed.pathname.split("/").map(decodeURIComponent)).toEqual([
+      "",
+      "api",
+      "gateway",
+      "admin",
+      "v1",
+      "aliases",
+      "Qwen",
+      "a?b#c%d",
+    ]);
+  });
+
   it("throws a PlatformError with the gateway's envelope", async () => {
     vi.stubGlobal(
       "fetch",
