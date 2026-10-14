@@ -1002,7 +1002,10 @@ export const SURFACES: Surface[] = [
     route: "/models?model=agent-default",
     fixture: "agent-default: a 3:1 primary tier and one fallback",
     description:
-      "Non-modal model inspector: kind, actions, and the routing tiers with each target's provider and share.",
+      "Non-modal model inspector: kind, actions, the routing tiers with each target's provider and share, and the keys that can call it.",
+    setup: async (page) => {
+      await page.locator("[data-callers]").waitFor();
+    },
   },
   {
     id: "environment-inspector",
@@ -2096,9 +2099,25 @@ export const SURFACES: Surface[] = [
     route: "/api-keys",
     fixture: "2 keys, one control-plane managed",
     description:
-      "The management-key listing: a two-line Key cell, and the one row whose controls are absent because the platform refuses to mutate it.",
+      "The management-key listing: a two-line Key cell, each key's model access, and the one row whose controls are absent because the platform refuses to mutate it.",
     setup: async (page) => {
       await page.getByText("ci-deploy").waitFor();
+      await page.locator("[data-models='2']").waitFor();
+    },
+  },
+  {
+    id: "api-key-model-access",
+    route: "/api-keys",
+    fixture: "ci-deploy: two models at 60 RPM",
+    description:
+      "Model access: no access, every model, or selected models, with the per-minute limits.",
+    setup: async (page) => {
+      await page
+        .getByRole("row")
+        .filter({ hasText: "ci-deploy" })
+        .getByRole("button", { name: "Model access" })
+        .click();
+      await page.locator("[role=dialog] [data-alias]").first().waitFor();
     },
   },
   {

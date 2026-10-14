@@ -11,6 +11,7 @@ import {
   useGatewayProviders,
 } from "@/lib/platform/gateway-queries";
 import type { GatewayAlias } from "@/lib/platform/types";
+import { ModelKeys } from "./model-access";
 import { ModelDialog } from "./model-dialog";
 import { RoutingTiers } from "./model-routing";
 
@@ -90,6 +91,12 @@ function Model({
           deployments={deployments.data?.data}
           providers={providers.data?.data}
         />
+      </section>
+      <section className="pt-5">
+        <h4 className="pb-1.5 text-[15px] font-medium">
+          Keys that can call it
+        </h4>
+        <ModelKeys alias={alias.name} />
       </section>
       {editing && (
         <ModelDialog alias={alias} onClose={() => setEditing(false)} />

@@ -121,3 +121,36 @@ test("a fresh gateway's first model, set up in one form", async ({
   const provider = page.getByRole("row").filter({ hasText: "DeepSeek" });
   await expect(provider.locator("[data-count]")).toHaveText(["1", "1"]);
 });
+
+test("grant a key one model, and see it among the model's callers", async ({
+  page,
+}) => {
+  await signIn(page, "/api-keys");
+  const ci = page.getByRole("row").filter({ hasText: "ci-deploy" });
+  await expect(ci.locator("[data-models]")).toHaveAttribute("data-models", "2");
+  // The control plane's own key is built in and offers no control.
+  const control = page.getByRole("row").filter({ hasText: "control-plane" });
+  await expect(control.locator("[data-built-in]")).toBeVisible();
+  await expect(
+    control.getByRole("button", { name: "Model access" }),
+  ).toHaveCount(0);
+
+  await ci.getByRole("button", { name: "Model access" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("[data-alias=minimax-m3] input").uncheck();
+  await dialog.locator("[data-alias=agent-default] input").check();
+  await dialog.locator("[data-alias=deepseek-flash] input").uncheck();
+  await dialog.getByLabel("Tokens per minute").fill("400000");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(ci.locator("[data-models]")).toHaveAttribute("data-models", "1");
+  await expect(ci.locator("[data-models]")).toHaveAttribute(
+    "data-tpm",
+    "400000",
+  );
+
+  await page.goto("/models?model=agent-default");
+  const panel = page.getByRole("region", { name: "Model details" });
+  await expect(panel.locator("[data-key-id=apikey_ci01]")).toBeVisible();
+  await expect(panel.locator("[data-key-id=apikey_bootstrap01]")).toBeVisible();
+});

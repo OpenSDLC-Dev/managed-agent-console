@@ -22,11 +22,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmIconButton } from "@/components/console/archive-button";
+import {
+  ModelAccessButton,
+  ModelAccessCell,
+} from "@/components/console/model-access";
 import { Trash2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
 import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
+import { useGatewayKeyPolicies } from "@/lib/platform/gateway-queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import type { ApiKey } from "@/lib/platform/types";
 
@@ -399,6 +405,11 @@ export function ApiKeysTable({
   error: unknown;
 }) {
   const update = useUpdateApiKey();
+  // Model access is the model gateway's (plan 10); a console without one
+  // answers 404 and the column goes. While unknown, it shows.
+  const policies = useGatewayKeyPolicies();
+  const gateway = !isUnimplemented(policies.error);
+  const policyList = policies.data?.data;
 
   const columns: Column<ApiKey>[] = [
     {
@@ -429,6 +440,21 @@ export function ApiKeysTable({
         </span>
       ),
     },
+    ...(gateway
+      ? [
+          {
+            key: "model_access",
+            header: "Model access",
+            cell: (k: ApiKey) => (
+              <ModelAccessCell
+                apiKey={k}
+                policies={policyList}
+                loading={policies.isPending}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       key: "created",
       header: "Created",
@@ -473,6 +499,12 @@ export function ApiKeysTable({
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
+            {gateway && policyList && (
+              <ModelAccessButton
+                apiKey={k}
+                policy={policyList.find((p) => p.api_key_id === k.id)}
+              />
+            )}
             {!expired && (
               <Button
                 variant="ghost"
