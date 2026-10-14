@@ -72,6 +72,9 @@ const PENDING_DREAM = "drm_pendingresearch0000001";
 const VAULT = "vlt_github00000000000001";
 const CREDENTIAL = "vcred_ghtoken000000000001";
 const SKILL = "skill_reportwriter0000001";
+/** Model gateway ids from `test/mock-platform/gateway.mjs`. */
+const PROVIDER = "gwprov_deepseek01";
+const PLAIN_HTTP_PROVIDER = "gwprov_vllmlocal1";
 
 export const SURFACES: Surface[] = [
   ...["thinking", "growing", "final", "reconnecting", "narrow"].map(
@@ -971,6 +974,13 @@ export const SURFACES: Surface[] = [
     fixture: "1 upload",
     description: "Resource list with byte sizes and an upload action.",
   },
+  {
+    id: "providers-list",
+    route: "/providers",
+    fixture: "4 gateway providers, one disabled on plain HTTP",
+    description:
+      "Model gateway providers: vendor and site, endpoint protocols, key and upstream model counts, enabled state.",
+  },
 
   // ---- detail pages ----------------------------------------------------
   {
@@ -1086,6 +1096,20 @@ export const SURFACES: Surface[] = [
     route: `/vaults/${VAULT}`,
     fixture: VAULT,
     description: "Credential rows — the surface that must never show a secret.",
+  },
+  {
+    id: "provider-detail",
+    route: `/providers/${PROVIDER}`,
+    fixture: PROVIDER,
+    description:
+      "A gateway provider's overview: endpoints fixed at creation, headers, stall timeout, trace context.",
+  },
+  {
+    id: "provider-detail-plain-http",
+    route: `/providers/${PLAIN_HTTP_PROVIDER}`,
+    fixture: PLAIN_HTTP_PROVIDER,
+    description:
+      "The same page for a disabled provider whose endpoint is plain HTTP: the warning badge and the Enable action.",
   },
   {
     id: "credential-detail",
@@ -1931,7 +1955,47 @@ export const SURFACES: Surface[] = [
   // finding, PR #38). One representative per distinct layout, not one per
   // instance: the four resource dialogs share a shell, so `vault-create`
   // stands for its shape and `credential-add` earns its own entry only
-  // because it is the write-only-secret form.
+  // because it is the write-only-secret form. `provider-add` earns one for
+  // its vendor grid, a layout no other dialog has; `provider-key-add` for
+  // the gateway's write-only key, and `upstream-model-edit` for its price
+  // grid.
+  {
+    id: "provider-add",
+    route: "/providers",
+    fixture: "the mock gateway's profiles",
+    description:
+      "Add provider: the vendor grid, the region switch a two-site vendor shows, and its prefilled endpoints.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Add provider", exact: true })
+        .first()
+        .click();
+      await page.locator("[role=dialog] [data-profile=minimax]").click();
+    },
+  },
+  {
+    id: "provider-key-add",
+    route: `/providers/${PROVIDER}`,
+    fixture: PROVIDER,
+    description:
+      "Add key: a write-only vendor key, its protocols and weight. The gateway seals it.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add key", exact: true }).click();
+      await page.getByLabel("API key").fill("sk-fidelity-0123456789");
+    },
+  },
+  {
+    id: "upstream-model-edit",
+    route: `/providers/${PROVIDER}`,
+    fixture: "gwdep_dspro0001",
+    description:
+      "Edit upstream model: the id and kind fixed at creation, capabilities, and the four prices.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit deepseek-v4-pro", exact: true })
+        .click();
+    },
+  },
   {
     id: "command-palette",
     route: "/agents",

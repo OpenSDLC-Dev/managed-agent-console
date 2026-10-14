@@ -811,8 +811,9 @@ export const GatewayProviderSchema = z.object({
 
 /**
  * providers.go credentialView — everything but the key. `last_four` is empty
- * for a key shorter than 12 characters; `protocols` null is every protocol
- * the provider serves.
+ * for a key shorter than 12 characters. `protocols` is never empty: a key
+ * created without it is stored with every protocol the provider has an
+ * endpoint for (store/credentials.go credentialProtocols).
  */
 export const GatewayCredentialSchema = z.object({
   type: z.literal("credential"),
@@ -820,7 +821,7 @@ export const GatewayCredentialSchema = z.object({
   provider_id: z.string(),
   kind: z.string(),
   last_four: z.string(),
-  protocols: z.array(GatewayProtocolSchema).nullable(),
+  protocols: z.array(GatewayProtocolSchema),
   weight: z.number(),
   enabled: z.boolean(),
   created_at: z.string(),

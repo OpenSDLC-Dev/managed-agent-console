@@ -11,6 +11,8 @@ import {
   KeySquare,
   MessagesSquare,
   Moon,
+  Network,
+  Plug,
   Rocket,
   Sparkles,
   Waypoints,
@@ -30,6 +32,9 @@ import { LANDING_ROUTE } from "./routes";
  * Shape and order are the reference console's, measured in Chrome on
  * 2026-08-17: `Dashboard`, `API keys`, then the `Build` group, then
  * `Managed Agents`, with the reference's own order inside each group.
+ * `Model Gateway` has no counterpart there (plan 10): it sits before
+ * `Managed Agents` because an agent cannot run until the gateway routes its
+ * model.
  *
  * An icon here is **data, not a decision to draw one**. The reference puts an
  * icon on top-level rows and on group headers and none on the rows inside a
@@ -85,6 +90,12 @@ export const NAV: NavEntry[] = [
     label: "Build",
     icon: Hammer,
     items: [surfaceEntry("files", FileText), surfaceEntry("skills", Sparkles)],
+  },
+  {
+    kind: "group",
+    label: "Model Gateway",
+    icon: Network,
+    items: [surfaceEntry("providers", Plug)],
   },
   {
     kind: "group",

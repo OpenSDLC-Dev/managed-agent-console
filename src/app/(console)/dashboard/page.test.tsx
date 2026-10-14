@@ -27,7 +27,9 @@ function renderDashboard(unimplemented?: string[]) {
       const absent = unimplemented.some((s) =>
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : String(input).includes(`/v1/${s}?`),
+          : s === "providers"
+            ? String(input).includes("/api/gateway/")
+            : String(input).includes(`/v1/${s}?`),
       );
       return Promise.resolve(
         new Response(
@@ -89,7 +91,12 @@ describe("DashboardPage", () => {
 
   it("groups the cards under the nav's own headings, in the nav's order", () => {
     renderDashboard();
-    expect(headings()).toEqual(["Manage", "Build", "Managed Agents"]);
+    expect(headings()).toEqual([
+      "Manage",
+      "Build",
+      "Model Gateway",
+      "Managed Agents",
+    ]);
   });
 
   it("gives every surface a card pointing at it", () => {
@@ -98,6 +105,7 @@ describe("DashboardPage", () => {
       ["api-keys", "/api-keys"],
       ["files", "/files"],
       ["skills", "/skills"],
+      ["providers", "/providers"],
       ["agents", "/agents"],
       ["sessions", "/sessions"],
       ["deployments", "/deployments"],
@@ -128,12 +136,18 @@ describe("DashboardPage", () => {
   it("drops a whole section when the deployment serves none of it", async () => {
     renderDashboard(["files", "skills"]);
     await waitFor(() => expect(headings()).not.toContain("Build"));
-    expect(headings()).toEqual(["Manage", "Managed Agents"]);
+    expect(headings()).toEqual(["Manage", "Model Gateway", "Managed Agents"]);
+  });
+
+  it("drops the Model Gateway section on a console that runs without one", async () => {
+    renderDashboard(["providers"]);
+    await waitFor(() => expect(headings()).not.toContain("Model Gateway"));
+    expect(card("agents")).not.toBeNull();
   });
 
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(10);
+    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(11);
   });
 
   it("hides shortcuts whose platform surfaces are unavailable", async () => {

@@ -174,6 +174,11 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   surface it shows; a self-hosted console can be pointed at a deployment serving only part of the
   wire, so the shell probes each collection route once per session and drops what answers 404. Only a
   confirmed 404 hides anything, so an unreachable platform still shows every item.
+- **`Model Gateway` is a group the reference does not have** (plan 10, added 2026-10-14). The
+  reference calls only Anthropic's models. A self-hosted platform routes every agent through its own
+  gateway, so the gateway's screens sit in a group between `Build` and `Managed Agents`. They have no
+  reference counterpart: they reuse this console's list, detail and dialog patterns and follow the
+  prototype the owner approved. Vendor names are the gateway profiles' own `display_name`.
 - **API keys is a top-level item**, not filed under a Settings area (added 2026-08-14). A self-hosted
   console's whole settings story is its environment file, so a Settings section holding exactly one
   page would be a menu built to hold a menu. Since 2026-08-17 it also sits **second, directly under

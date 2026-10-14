@@ -29,6 +29,12 @@ const EXPECTED = [
   { label: "Files", href: "/files", surface: "files", group: "Build" },
   { label: "Skills", href: "/skills", surface: "skills", group: "Build" },
   {
+    label: "Providers",
+    href: "/providers",
+    surface: "providers",
+    group: "Model Gateway",
+  },
+  {
     label: "Agents",
     href: "/agents",
     surface: "agents",
@@ -75,6 +81,7 @@ const EXPECTED = [
 /** The groups, in nav order, and what each holds. */
 const GROUPS = [
   { label: "Build", surfaces: ["files", "skills"] },
+  { label: "Model Gateway", surfaces: ["providers"] },
   {
     label: "Managed Agents",
     surfaces: [
@@ -106,14 +113,17 @@ function renderNav(
     vi.fn((input: string) => {
       if (unimplemented === undefined) return new Promise<Response>(() => {});
       const absent = unimplemented.some((s) =>
-        // Two namespaces: the wire surfaces are probed at `/v1/<name>?limit=1`,
-        // and the one console-namespace surface at its own path — which carries
-        // no query string and no name that matches the pattern above.
+        // Three namespaces: the wire surfaces are probed at
+        // `/v1/<name>?limit=1`, the console-namespace surface and the gateway's
+        // at their own BFF paths — which carry no query string and no name that
+        // matches the pattern above.
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : String(input).includes(
-              `/api/platform/${SURFACES[s as keyof typeof SURFACES].path}?`,
-            ),
+          : s === "providers"
+            ? String(input).includes("/api/gateway/")
+            : String(input).includes(
+                `/api/platform/${SURFACES[s as keyof typeof SURFACES].path}?`,
+              ),
       );
       return Promise.resolve(
         new Response(
@@ -175,7 +185,7 @@ describe("Nav", () => {
   // The order is the point of the grouping, and the assertion the flat nav did
   // not have: every routing test below passed against the ungrouped list too,
   // so without this one a regrouping could be undone and the suite stay green.
-  it("draws the reference's order: two top-level rows, then Build, then Managed Agents", () => {
+  it("draws the reference's order: two top-level rows, then Build, Model Gateway and Managed Agents", () => {
     navState.pathname = "/";
     renderNav();
     expect(rowOrder()).toEqual([
@@ -184,6 +194,8 @@ describe("Nav", () => {
       "Build",
       "Files",
       "Skills",
+      "Model Gateway",
+      "Providers",
       "Managed Agents",
       "Agents",
       "Sessions",

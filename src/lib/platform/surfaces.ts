@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PlatformError, consoleKeysGet, platformGet } from "./http";
+import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 
 /**
@@ -98,6 +98,19 @@ export const SURFACES = {
     // read standing on the page and the wrong thing to fit in a card.
     blurb: "Management credentials for this deployment.",
   },
+  // The model gateway's admin API (plan 10), a server of its own reached
+  // through the `/api/gateway` BFF. The rule above holds there too: the BFF
+  // answers every path `404 not_found_error` while MODEL_GATEWAY_BASE_URL is
+  // unset, and the gateway's own catch-all answers the same for a path it does
+  // not serve (`internal/modelgateway/admin/admin.go` routes). A collection
+  // route carries no id, so its 404 means the surface is absent.
+  providers: {
+    path: "providers",
+    label: "Providers",
+    api: "gateway",
+    blurb:
+      "Vendor accounts the gateway calls, with their keys and upstream models.",
+  },
 } as const;
 
 export type Surface = keyof typeof SURFACES;
@@ -149,9 +162,12 @@ export function useSurfaces(): Record<Surface, boolean> | undefined {
         try {
           // The console namespace serves a bare array and reads no query
           // params, so it is asked for the whole (short) list rather than for
-          // a page of one.
-          if ("api" in entry) await consoleKeysGet<unknown>(entry.path);
-          else await platformGet<unknown>(entry.path, { limit: 1 });
+          // a page of one. The gateway's lists are unpaged too.
+          if (!("api" in entry))
+            await platformGet<unknown>(entry.path, { limit: 1 });
+          else if (entry.api === "gateway")
+            await gatewayGet<unknown>(entry.path);
+          else await consoleKeysGet<unknown>(entry.path);
           return [surface, true] as const;
         } catch (error) {
           return [surface, !isUnimplemented(error)] as const;

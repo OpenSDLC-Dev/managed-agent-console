@@ -118,13 +118,15 @@ const credential = (id, providerId, lastFour, protocols, weight) => ({
   updated_at: "2026-10-08T09:05:00Z",
 });
 
+const BOTH = ["anthropic", "openai"];
+
 const CREDENTIALS = [
-  credential("gwcred_ds000001", "gwprov_deepseek01", "a1f3", null, 3),
+  credential("gwcred_ds000001", "gwprov_deepseek01", "a1f3", BOTH, 3),
   credential("gwcred_ds000002", "gwprov_deepseek01", "77d0", ["anthropic"], 1),
-  credential("gwcred_mm000001", "gwprov_minimaxcn1", "8f2c", null, 1),
-  credential("gwcred_gt000001", "gwprov_giteeai001", "c4e9", null, 1),
+  credential("gwcred_mm000001", "gwprov_minimaxcn1", "8f2c", BOTH, 1),
+  credential("gwcred_gt000001", "gwprov_giteeai001", "c4e9", ["openai"], 1),
   // Shorter than 12 characters: the platform publishes no tail at all.
-  credential("gwcred_vl000001", "gwprov_vllmlocal1", "", null, 1),
+  credential("gwcred_vl000001", "gwprov_vllmlocal1", "", ["anthropic"], 1),
 ];
 
 const deployment = (id, providerId, upstream, kind, extra = {}) => ({
@@ -599,13 +601,31 @@ export function gatewayRoute(method, rest, params, body = {}) {
       if (method === "POST") {
         if (!body.key) return invalid("key is required");
         const key = String(body.key);
+        // store/credentials.go credentialProtocols: left out is every protocol
+        // the provider has an endpoint for, written out; empty is refused.
+        const provider = providers.find((p) => p.id === id);
+        if (Array.isArray(body.protocols) && body.protocols.length === 0) {
+          return invalid(
+            "protocols: an empty list names no protocol; leave it out for every protocol the provider has an endpoint for",
+          );
+        }
+        const missing = (body.protocols ?? []).find(
+          (p) => !provider.endpoints[p],
+        );
+        if (missing) {
+          return invalid(
+            `provider "${id}" has no ${missing} endpoint, so its keys cannot be used on ${missing}`,
+          );
+        }
         const created = {
           type: "credential",
           id: nextId("gwcred_"),
           provider_id: id,
           kind: "api_key",
           last_four: key.length < 12 ? "" : key.slice(-4),
-          protocols: body.protocols ?? null,
+          protocols: ["anthropic", "openai", "gemini"].filter((p) =>
+            (body.protocols ?? Object.keys(provider.endpoints)).includes(p),
+          ),
           weight: body.weight ?? 1,
           enabled: body.enabled ?? true,
           created_at: nowIso(),
@@ -630,7 +650,17 @@ export function gatewayRoute(method, rest, params, body = {}) {
           ["protocols", "weight", "enabled"],
         );
         if (refused) return refused;
-        return ok(apply(found, body));
+        if (!("protocols" in body)) return ok(apply(found, body));
+        // A null puts back every protocol the provider serves, as on create.
+        const provider = providers.find((p) => p.id === id);
+        return ok(
+          apply(found, {
+            ...body,
+            protocols: ["anthropic", "openai", "gemini"].filter((p) =>
+              (body.protocols ?? Object.keys(provider.endpoints)).includes(p),
+            ),
+          }),
+        );
       }
       if (method === "DELETE") {
         credentials = credentials.filter((c) => c.id !== subId);
