@@ -39,8 +39,9 @@ catalogue fails every agent turn. Today an operator configures it with `curl`
    `*`. A saved value the list lacks shows empty, and Save needs a choice. This is a **deliberate
    exception to principle 4**: the wire still takes any string, so API and CLI callers are unaffected.
 7. **Model access lives on the API Keys page** (platform plan 59): a column and a dialog that writes or
-   deletes the key policy. Env-managed keys (`bootstrap`, `brain`) get no control: a policy written
-   for the brain's key would limit every agent's model calls.
+   deletes the key policy. Env-managed keys (`bootstrap`, `brain`) get no grant control: a policy
+   written for the brain's key would limit every agent's model calls. One written through the API
+   can only be removed, which restores the built-in grant (PR #218 review).
 8. **Usage sums daily rollups in the browser** for its tiles, chart and grouped table. That is
    presentation of rows the platform serves, not recomputed state. Cost shows **no currency**: the
    gateway stores prices without one.

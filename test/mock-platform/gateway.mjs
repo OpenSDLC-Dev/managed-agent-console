@@ -450,6 +450,12 @@ const fail = (status, type, message) => ({
   body: { type: "error", error: { type, message } },
 });
 const invalid = (message) => fail(400, "invalid_request_error", message);
+
+/** providers.go stallTimeout: null is the default; else 1 to MaxInt32 ms. */
+const stallRefusal = (ms) =>
+  ms == null || (Number.isInteger(ms) && ms >= 1 && ms <= 2147483647)
+    ? undefined
+    : invalid("stall_timeout_ms must be between 1 and 2147483647");
 const notFound = (message) => fail(404, "not_found_error", message);
 const conflict = (message) => fail(409, "invalid_request_error", message);
 const list = (data) => ok({ data });
@@ -547,6 +553,8 @@ export function gatewayRoute(method, rest, params, body = {}) {
           "endpoints needs at least one endpoint, keyed by protocol",
         );
       }
+      const stall = stallRefusal(body.stall_timeout_ms);
+      if (stall) return stall;
       const created = {
         type: "provider",
         id: nextId("gwprov_"),
@@ -578,6 +586,8 @@ export function gatewayRoute(method, rest, params, body = {}) {
         "enabled",
       ]);
       if (refused) return refused;
+      const stall = stallRefusal(body.stall_timeout_ms);
+      if (stall) return stall;
       // A null clears the headers, as the platform renders a nil map: {}.
       return ok(
         apply(

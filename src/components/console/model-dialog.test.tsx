@@ -193,4 +193,28 @@ describe("ModelDialog", () => {
     );
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  // JSON writes Infinity as null, and a null weight is the gateway's default
+  // of 1: "1e309" would quietly change the split.
+  it("probe: sends nothing for a weight past what JSON holds", async () => {
+    const fetchMock = stubGatewayFetch();
+    const onClose = renderDialog();
+    await userEvent.type(screen.getByLabelText("Name"), "coder");
+    await waitFor(() =>
+      expect(offered(target("Primary upstream model 1"))).not.toEqual([]),
+    );
+    await userEvent.selectOptions(
+      target("Primary upstream model 1"),
+      "gwdep_dsflash01",
+    );
+    const weight = screen.getByLabelText("Primary upstream model 1 weight");
+    await userEvent.clear(weight);
+    await userEvent.type(weight, "1e309");
+    await userEvent.click(screen.getByRole("button", { name: "Add model" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("weight");
+    expect(
+      fetchMock.mock.calls.filter(([, i]) => i?.method === "POST"),
+    ).toHaveLength(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
