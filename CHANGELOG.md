@@ -17,8 +17,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   The detail page shows its overview and can disable or delete it. A console without a gateway hides
   the group.
 - **A provider's keys and upstream models.** The provider page adds write-only vendor keys, with
-  each key's share of the weight, and upstream models with limits, prices and the models that route
-  to them. An Edit dialog changes the name, extra headers, stall timeout and trace context. The
+  their protocols and weights, and upstream models with limits, prices and the models that route to
+  them. An Edit dialog changes the name, extra headers, stall timeout and trace context. The
   console keeps no copy of a vendor key once the gateway has it.
 
 ### Security

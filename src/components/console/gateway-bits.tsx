@@ -36,8 +36,10 @@ export function ProtocolBadge({ protocol }: { protocol: GatewayProtocol }) {
 /**
  * Plain `http` sends the vendor key unencrypted. The gateway allows it, for an
  * in-cluster model server (`validate.go` checkEndpoint), and the console marks it.
+ * The gateway stores an endpoint as typed, and a scheme is case-insensitive,
+ * so `HTTP://` is plain HTTP too.
  */
-export const isPlainHttp = (url: string) => url.startsWith("http://");
+export const isPlainHttp = (url: string) => /^http:\/\//i.test(url);
 
 export function PlainHttpBadge() {
   return (

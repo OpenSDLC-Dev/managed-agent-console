@@ -53,9 +53,6 @@ export function ProviderKeys({
   const update = useUpdateGatewayCredential(provider.id);
   const remove = useDeleteGatewayCredential(provider.id);
   const keys = data?.data ?? [];
-  // The gateway picks among enabled keys by weight; the share is what that
-  // means for each, shown beside the number the operator sets.
-  const total = keys.filter((k) => k.enabled).reduce((n, k) => n + k.weight, 0);
 
   const columns: Column<GatewayCredential>[] = [
     { key: "id", header: "ID", cell: (k) => <IdCell id={k.id} /> },
@@ -84,17 +81,14 @@ export function ProviderKeys({
       key: "weight",
       header: "Weight",
       className: "text-right whitespace-nowrap",
-      cell: (k) => {
-        const share = k.enabled && total > 0 ? k.weight / total : 0;
-        return (
-          <span className="tabular-nums">
-            {k.weight}{" "}
-            <span className="text-muted-foreground" data-share={share}>
-              ({Math.round(share * 100)}%)
-            </span>
-          </span>
-        );
-      },
+      // The weight alone, not a share of the total: which keys share a
+      // request depends on its protocol and each key's (catalog/route.go
+      // upstreamProtocol), so one percentage would be wrong for some callers.
+      cell: (k) => (
+        <span className="tabular-nums" data-weight={k.weight}>
+          {k.weight}
+        </span>
+      ),
     },
     {
       key: "enabled",
@@ -278,8 +272,8 @@ function AddKeyDialog({
               onChange={(e) => setWeight(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              The gateway spreads requests across enabled keys in proportion to
-              their weights.
+              The gateway spreads requests across the enabled keys that can
+              serve them, in proportion to their weights.
             </p>
           </div>
         </div>

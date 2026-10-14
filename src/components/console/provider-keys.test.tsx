@@ -47,16 +47,17 @@ afterEach(() => {
 });
 
 describe("ProviderKeys", () => {
-  it("lists each key by its last four, with its share of the weight", async () => {
+  it("lists each key by its last four, with its weight and no derived share", async () => {
     stubGatewayFetch();
     renderKeys();
     expect(await screen.findByText("••••a1f3")).toBeInTheDocument();
-    const shares = [...document.querySelectorAll("[data-share]")].map((s) =>
-      s.getAttribute("data-share"),
+    const weights = [...document.querySelectorAll("[data-weight]")].map((s) =>
+      s.getAttribute("data-weight"),
     );
-    expect(shares).toEqual(["0.75", "0.25"]);
-    // The human string, asserted once (CLAUDE.md).
-    expect(screen.getByText("(75%)")).toBeInTheDocument();
+    expect(weights).toEqual(["3", "1"]);
+    // The weight-3 key serves both protocols and the other only Anthropic:
+    // 75% of Anthropic requests but every OpenAI one. No single share is right.
+    expect(document.body.textContent).not.toMatch(/\d+%/);
   });
 
   it("sends the key alone when every default is kept", async () => {
