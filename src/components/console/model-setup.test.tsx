@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ModelSetupDialog, NoModelsCallout } from "./model-setup";
 import { stubGatewayFetch } from "../../../test/mock-platform/gateway-fetch";
+import { emptyGateway } from "../../../test/mock-platform/gateway.mjs";
 
 const SECRET = "sk-setup-0123456789abcdef";
 
@@ -196,8 +197,10 @@ describe("ModelSetupDialog", () => {
         </QueryClientProvider>,
       );
     }
-    const open = () =>
-      userEvent.click(screen.getByRole("button", { name: "Set up a model" }));
+    const open = async () =>
+      userEvent.click(
+        await screen.findByRole("button", { name: "Set up a model" }),
+      );
     const cancel = () =>
       userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -213,6 +216,7 @@ describe("ModelSetupDialog", () => {
             )
           : undefined,
       );
+      emptyGateway();
       renderCallout();
       await open();
       await fill();
@@ -237,8 +241,23 @@ describe("ModelSetupDialog", () => {
       ).toHaveLength(1);
     });
 
+    // A reload forgets what an earlier run made, and a gateway with no models
+    // can still hold its provider; a second run would add another. So the
+    // form is offered only before any provider exists.
+    it("probe: offers no setup on a gateway that already has a provider", async () => {
+      stubGatewayFetch();
+      renderCallout();
+      expect(
+        await screen.findByRole("link", { name: "Providers" }),
+      ).toHaveAttribute("href", "/providers");
+      expect(
+        screen.queryByRole("button", { name: "Set up a model" }),
+      ).toBeNull();
+    });
+
     it("probe: closing drops a key the gateway has not sealed", async () => {
       stubGatewayFetch();
+      emptyGateway();
       renderCallout();
       await open();
       await fill();

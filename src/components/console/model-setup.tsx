@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Circle, LoaderCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { IdCode, WARNING_BOX } from "@/components/console/bits";
 import { gatewayPost } from "@/lib/platform/http";
-import { useGatewayProfiles } from "@/lib/platform/gateway-queries";
+import {
+  useGatewayProfiles,
+  useGatewayProviders,
+} from "@/lib/platform/gateway-queries";
 import type {
   GatewayAlias,
   GatewayCredential,
@@ -43,7 +47,9 @@ type Made = Partial<Record<Step, { id: string; label: string }>>;
  *
  * The dialog stays mounted once opened, so closing it partway and opening it
  * again resumes where it stopped. Starting over would make a second provider:
- * the gateway does not refuse a duplicate name.
+ * the gateway does not refuse a duplicate name. For the same reason the form
+ * is offered only while the gateway has no provider: a reload forgets what an
+ * earlier run made, and the gateway can hold it without a model.
  */
 export function NoModelsCallout({
   onDone,
@@ -52,6 +58,8 @@ export function NoModelsCallout({
 }) {
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState(false);
+  const providers = useGatewayProviders();
+  const fresh = providers.data?.data.length === 0;
   return (
     <div
       className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${WARNING_BOX}`}
@@ -60,17 +68,29 @@ export function NoModelsCallout({
       <span>
         The gateway has no models yet. Every agent&apos;s model call fails until
         one exists.
+        {providers.data && !fresh && !opened && (
+          <>
+            {" "}
+            Add one with Add model. Its upstream model is set up under{" "}
+            <Link href="/providers" className="underline underline-offset-2">
+              Providers
+            </Link>
+            .
+          </>
+        )}
       </span>
-      <Button
-        size="sm"
-        className="h-8"
-        onClick={() => {
-          setOpen(true);
-          setOpened(true);
-        }}
-      >
-        Set up a model
-      </Button>
+      {(fresh || opened) && (
+        <Button
+          size="sm"
+          className="h-8"
+          onClick={() => {
+            setOpen(true);
+            setOpened(true);
+          }}
+        >
+          Set up a model
+        </Button>
+      )}
       {opened && (
         <ModelSetupDialog
           open={open}

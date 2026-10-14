@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ModelsPage from "./page";
 import { stubGatewayFetch } from "../../../../test/mock-platform/gateway-fetch";
+import { emptyGateway } from "../../../../test/mock-platform/gateway.mjs";
 
 const pushSpy = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -170,15 +171,12 @@ describe("ModelsPage", () => {
   });
 
   it("offers the first-run setup while the gateway has no models", async () => {
-    stubGatewayFetch((method, rest) =>
-      method === "GET" && rest === "aliases"
-        ? Response.json({ data: [] })
-        : undefined,
-    );
+    stubGatewayFetch();
+    emptyGateway();
     renderPage();
     const callout = await screen.findByTestId("no-models");
     await userEvent.click(
-      within(callout).getByRole("button", { name: "Set up a model" }),
+      await within(callout).findByRole("button", { name: "Set up a model" }),
     );
     expect(
       screen.getByRole("dialog", { name: "Set up a model" }),
