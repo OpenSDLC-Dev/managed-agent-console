@@ -15,7 +15,7 @@ test("issue a key, see it once, then disable and archive it", async ({
   page,
 }) => {
   await signIn(page, "/agents");
-  await page.getByRole("link", { name: "API keys" }).click();
+  await page.getByRole("link", { name: "API Keys" }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
   // The seeded rows: one issued by a person, one the control plane manages.

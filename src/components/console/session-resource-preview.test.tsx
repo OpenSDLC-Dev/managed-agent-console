@@ -134,7 +134,7 @@ it("opens a bound store and its memory inline without leaving the Session", asyn
     within(preview).getByRole("heading", { name: "Inline notes" }),
   ).toBeVisible();
   expect(
-    within(preview).getByRole("link", { name: /Open in Memory stores/ }),
+    within(preview).getByRole("link", { name: /Open in Memory Stores/ }),
   ).toHaveAttribute(
     "href",
     `/memory-stores/${memoryResources[0].memory_store_id}?memory=${memories[0].id}`,

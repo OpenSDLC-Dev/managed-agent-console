@@ -24,7 +24,7 @@ export default function ApiKeysPage() {
   return (
     <div>
       <PageHeader
-        title="API keys"
+        title="API Keys"
         subtitle="API keys carry full management authority and stay active after the person who created them is gone."
         actions={<CreateKeyButton />}
       />

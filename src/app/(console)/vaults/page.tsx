@@ -81,7 +81,7 @@ export default function VaultsPage() {
   return (
     <div>
       <PageHeader
-        title="Credential vaults"
+        title="Credential Vaults"
         subtitle={SURFACES.vaults.blurb}
         actions={<CreateVaultButton />}
       />

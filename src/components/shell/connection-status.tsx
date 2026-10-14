@@ -59,9 +59,9 @@ export function ConnectionStatus() {
           )}
         />
         <span className="text-sidebar-foreground">
-          {state === "up" && "Platform connected"}
-          {state === "down" && "Platform unreachable"}
-          {state === "checking" && "Checking platform…"}
+          {state === "up" && "Platform Connected"}
+          {state === "down" && "Platform Unreachable"}
+          {state === "checking" && "Checking Platform…"}
         </span>
       </div>
       {data && !data.ok && (

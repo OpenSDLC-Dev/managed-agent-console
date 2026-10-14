@@ -156,7 +156,7 @@ function useSearchItems(query: string): Item[] {
           label: store.name,
           detail: store.id,
           href: `/memory-stores/${store.id}`,
-          group: "Memory stores",
+          group: "Memory Stores",
           icon: Database,
         });
     }

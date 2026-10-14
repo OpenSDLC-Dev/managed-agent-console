@@ -135,3 +135,21 @@ it("updates the sidebar when another tab changes its preference", () => {
     screen.getByRole("button", { name: "Expand sidebar" }),
   ).toBeInTheDocument();
 });
+
+it("puts the version under the wordmark, and hides both when collapsed", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("matchMedia", () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+  render(
+    <ConsoleShell footer={<span>Account</span>} version={<span>v9.9.9</span>}>
+      <h1>Dashboard</h1>
+    </ConsoleShell>,
+  );
+  const wordmark = screen.getByRole("link", { name: "Agent Console" });
+  expect(wordmark.parentElement).toContainElement(screen.getByText("v9.9.9"));
+  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+  expect(screen.queryByText("v9.9.9")).toBeNull();
+});

@@ -85,7 +85,7 @@ for (const surface of SURFACES) {
       else await signInWithPassword(page, base);
       await page.goto(`${base}${surface.route}`);
       // The shell's platform probe resolves independently of the page's own
-      // data; without this the sidebar is caught mid-"Checking platform…".
+      // data; without this the sidebar is caught mid-"Checking Platform…".
       await page
         .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
         .waitFor({ state: "attached" });

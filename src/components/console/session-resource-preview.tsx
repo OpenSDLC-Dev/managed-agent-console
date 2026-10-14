@@ -40,7 +40,7 @@ function MemoryPreview({
           className="hover:underline"
           href={`/memory-stores/${storeId}?memory=${memory.id}`}
         >
-          Open in Memory stores ↗
+          Open in Memory Stores ↗
         </Link>
       </div>
       <dl className="grid grid-cols-[80px_minmax(0,1fr)] gap-y-2 text-xs">

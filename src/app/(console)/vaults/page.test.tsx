@@ -132,7 +132,7 @@ describe("VaultsPage", () => {
       vi.fn(() => new Promise<Response>(() => {})),
     );
     const { container } = renderPage();
-    expect(screen.getByText("Credential vaults")).toBeInTheDocument();
+    expect(screen.getByText("Credential Vaults")).toBeInTheDocument();
     expect(container.querySelectorAll("tbody tr")).toHaveLength(3);
   });
 

@@ -6,7 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the
+  connection state, and navigation labels are title case: `API Keys`, `Credential Vaults`,
+  `Memory Stores`, and `Platform Connected` / `Platform Unreachable` / `Checking Platform…`.
 
 ## Released
 

@@ -158,10 +158,9 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
 ## Deliberate divergences
 
 - **Font** — `anthropicSans` is proprietary and cannot be shipped; we use its own fallback stack.
-  **Branding** — our own wordmark, never Anthropic marks. Since 2026-08-17 it reads `Agent Console`
-  and carries no second line; the reference's block names an organization, and ours had used that slot
-  to say `self-hosted console`, which the grouped nav below now says better by naming what the
-  deployment serves.
+  **Branding** — our own wordmark, never Anthropic marks. Since 2026-08-17 it reads `Agent Console`.
+  Since 2026-10-14 its second line is the console's version (below); the reference's block names an
+  organization there.
 - **Nav icons are the nearest lucide equivalents**, because the reference's are a pictogram font we
   cannot ship — the same constraint as the typeface, one layer down. `House`, `Hammer` and `Waypoints`
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
@@ -230,7 +229,12 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   product mostly shows this week's.
 - **The sidebar states the console's version.** The reference shows none, correctly — nobody wonders
   which build of a hosted product they are looking at. A self-hosted operator has no other way to
-  tell, so it sits in the same muted register as the connection state.
+  tell. Since 2026-10-14 it sits under the wordmark, in the muted register, rather than above the
+  connection state.
+- **Navigation labels and the connection state are title case** (`API Keys`, `Credential Vaults`,
+  `Memory Stores`, `Platform Connected`), where the reference writes `API keys`. The owner's call on
+  2026-10-14, so that two-word labels match the group headers (`Managed Agents`). Form field labels
+  stay sentence case.
 - **Danger is two colours, not one** ([#90](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/90)).
   A destructive control puts a label on a wash of the danger colour and paints both from one token,
   which caps their contrast at how far a colour can differ from a tint of itself — in dark mode that

@@ -11,6 +11,7 @@ export default function ConsoleLayout({
   return (
     <Providers>
       <ConsoleShell
+        version={<ConsoleVersion />}
         footer={
           <>
             <div className="px-4 pb-3">
@@ -26,7 +27,6 @@ export default function ConsoleLayout({
                 Platform documentation ↗
               </a>
             </div>
-            <ConsoleVersion />
             <SidebarFooter />
           </>
         }

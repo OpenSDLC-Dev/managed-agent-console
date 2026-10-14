@@ -82,9 +82,9 @@ test("the shell shows all resources and a live platform connection", async ({
     "Agents",
     "Sessions",
     "Deployments",
-    "Memory stores",
+    "Memory Stores",
     "Environments",
-    "Credential vaults",
+    "Credential Vaults",
     "Skills",
     "Files",
   ]) {

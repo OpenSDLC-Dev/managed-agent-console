@@ -26,7 +26,7 @@ describe("ConnectionStatus (remaining branches)", () => {
       vi.fn(() => new Promise<Response>(() => {})),
     );
     renderWidget();
-    expect(screen.getByText("Checking platform…")).toBeDefined();
+    expect(screen.getByText("Checking Platform…")).toBeDefined();
     expect(
       screen.getByTestId("connection-dot").getAttribute("data-state"),
     ).toBe("checking");
@@ -55,7 +55,7 @@ describe("ConnectionStatus (remaining branches)", () => {
     );
     renderWidget();
     await waitFor(() =>
-      expect(screen.getByText("Platform unreachable")).toBeDefined(),
+      expect(screen.getByText("Platform Unreachable")).toBeDefined(),
     );
     expect(screen.getByText("console server unreachable")).toBeDefined();
     expect(screen.queryByText(/request-id/)).toBeNull();

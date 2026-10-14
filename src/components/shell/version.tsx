@@ -1,7 +1,7 @@
 import pkg from "../../../package.json";
 
 /**
- * Which console this is.
+ * Which console this is, on the wordmark's second line.
  *
  * A deliberate divergence from the reference console, recorded in
  * docs/design-reference.md: a hosted product's operator never wonders what
@@ -12,7 +12,7 @@ import pkg from "../../../package.json";
 export function ConsoleVersion() {
   return (
     <div
-      className="px-4 pb-2 text-[13px] text-muted-foreground"
+      className="text-xs text-muted-foreground"
       data-console-version={pkg.version}
     >
       v{pkg.version}

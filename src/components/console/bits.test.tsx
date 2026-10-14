@@ -300,7 +300,7 @@ describe("UnavailableSurface", () => {
     const standIn = screen.getByTestId("unavailable-surface");
     expect(standIn.getAttribute("data-surface")).toBe("vaults");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Credential vaults",
+      "Credential Vaults",
     );
     expect(
       screen.getByText(/does not implement credential vaults/),

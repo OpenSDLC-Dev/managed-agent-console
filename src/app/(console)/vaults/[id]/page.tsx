@@ -167,7 +167,7 @@ export default function VaultDetailPage({
   return (
     <div>
       <Breadcrumb
-        parent={{ href: "/vaults", label: "Credential vaults" }}
+        parent={{ href: "/vaults", label: "Credential Vaults" }}
         current={vault.display_name}
       />
       <PageHeader
