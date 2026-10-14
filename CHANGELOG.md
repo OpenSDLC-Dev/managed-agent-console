@@ -12,6 +12,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   ([plan 10](docs/plan/10_model-gateway.md)). The console proxies the gateway's admin API under
   `/api/gateway/`, with the same credential rules as the control plane. No screen uses it yet. When
   the variable is unset, every gateway path answers 404.
+- **Model Gateway → Providers.** The list shows each vendor account's site, endpoint protocols, key
+  and upstream-model counts, and state. A dialog adds a provider from the vendor's published hosts.
+  The detail page shows its overview and can disable or delete it. A console without a gateway hides
+  the group.
 
 ### Security
 

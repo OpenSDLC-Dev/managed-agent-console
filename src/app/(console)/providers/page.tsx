@@ -68,7 +68,7 @@ export default function ProvidersPage() {
       cell: (p) => {
         const entries = endpointEntries(p);
         return (
-          <span className="flex flex-wrap gap-1">
+          <span className="flex gap-1 whitespace-nowrap">
             {entries.map((e) => (
               <ProtocolBadge key={e.protocol} protocol={e.protocol} />
             ))}

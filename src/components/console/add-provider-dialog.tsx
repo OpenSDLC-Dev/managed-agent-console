@@ -199,6 +199,7 @@ function ProviderForm({
               {(Object.keys(REGION_LABEL) as Region[]).map((r) => (
                 <label
                   key={r}
+                  data-region={r}
                   className="cursor-pointer rounded-md px-2.5 py-0.5 text-[13px] has-[:checked]:bg-secondary has-[:checked]:font-medium has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring"
                 >
                   <input

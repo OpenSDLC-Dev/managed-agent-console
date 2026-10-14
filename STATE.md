@@ -7,7 +7,8 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 ### Model Gateway management — [plan 10](./docs/plan/10_model-gateway.md)
 
 - [x] 1. BFF namespace `/api/gateway`, browser helpers, admin-view transcription, mock gateway
-- [ ] 2. Surface probe and query hooks; Providers: list, detail, add; keys; upstream models
+- [x] 2a. Surface probe and query hooks; Providers: list, add, detail with enable and delete
+- [ ] 2b. Provider keys and upstream models; edit a provider
 - [ ] 3. Models: list, inspector, routing editor; first-run setup
 - [ ] 4. API Keys: model access column and dialog
 - [ ] 5. Analytics → Usage: overview and request ledger

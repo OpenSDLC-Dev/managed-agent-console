@@ -1968,7 +1968,7 @@ export const SURFACES: Surface[] = [
         .getByRole("button", { name: "Add provider", exact: true })
         .first()
         .click();
-      await page.getByRole("radio", { name: /MiniMax/ }).check();
+      await page.locator("[role=dialog] [data-profile=minimax]").click();
     },
   },
   {
