@@ -1956,7 +1956,9 @@ export const SURFACES: Surface[] = [
   // instance: the four resource dialogs share a shell, so `vault-create`
   // stands for its shape and `credential-add` earns its own entry only
   // because it is the write-only-secret form. `provider-add` earns one for
-  // its vendor grid, a layout no other dialog has.
+  // its vendor grid, a layout no other dialog has; `provider-key-add` for
+  // the gateway's write-only key, and `upstream-model-edit` for its price
+  // grid.
   {
     id: "provider-add",
     route: "/providers",
@@ -1969,6 +1971,29 @@ export const SURFACES: Surface[] = [
         .first()
         .click();
       await page.locator("[role=dialog] [data-profile=minimax]").click();
+    },
+  },
+  {
+    id: "provider-key-add",
+    route: `/providers/${PROVIDER}`,
+    fixture: PROVIDER,
+    description:
+      "Add key: a write-only vendor key, its protocols and weight. The gateway seals it.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add key", exact: true }).click();
+      await page.getByLabel("API key").fill("sk-fidelity-0123456789");
+    },
+  },
+  {
+    id: "upstream-model-edit",
+    route: `/providers/${PROVIDER}`,
+    fixture: "gwdep_dspro0001",
+    description:
+      "Edit upstream model: the id and kind fixed at creation, capabilities, and the four prices.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit deepseek-v4-pro", exact: true })
+        .click();
     },
   },
   {

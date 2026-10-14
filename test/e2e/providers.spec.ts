@@ -78,3 +78,52 @@ test("a gateway that serves no admin API takes the screens with it", async ({
     "providers",
   );
 });
+
+test("add a key and an upstream model, then rename the provider", async ({
+  page,
+}) => {
+  await signIn(page, "/providers/gwprov_giteeai001");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Gitee AI" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Add key" }).click();
+  await page.getByLabel("API key").fill("sk-e2e-gitee-0123456789wxyz");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add key" })
+    .click();
+  await expect(page.locator("[data-last-four=wxyz]")).toBeVisible();
+  // The gateway renders the tail and nothing else; neither does the page.
+  expect(await page.content()).not.toContain("sk-e2e-gitee-0123456789wxyz");
+
+  await page.getByRole("button", { name: "Add upstream model" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Upstream model ID").fill("Qwen3-Coder-480B");
+  await dialog.getByLabel("Input").fill("2");
+  await dialog.getByRole("button", { name: "Add upstream model" }).click();
+  await expect(page.getByText("Qwen3-Coder-480B")).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Name").fill("Gitee AI (team)");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Gitee AI (team)" }),
+  ).toBeVisible();
+});
+
+test("an upstream model a model routes to cannot be deleted", async ({
+  page,
+}) => {
+  await signIn(page, "/providers/gwprov_deepseek01");
+  await page
+    .getByRole("button", { name: "Delete deepseek-v4-flash", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete upstream model" })
+    .click();
+  // The store's own words, naming the models in the way.
+  await expect(page.getByText(/is a target of aliases/)).toBeVisible();
+  await expect(page.getByText("deepseek-v4-flash")).toBeVisible();
+});

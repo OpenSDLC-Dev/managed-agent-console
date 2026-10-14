@@ -66,7 +66,9 @@ const SEAMS = [
     // attribute or the query cache — which is exactly what a probe is for.
     // `api-keys` is the same seam and a sharper case: an environment key admits
     // a worker to one environment, a management key is root on the platform.
-    modules: ["environment-keys", "api-keys"],
+    // `provider-keys` is the inbound twin: a vendor key the operator types
+    // once, which the gateway seals and the console must not keep (plan 10).
+    modules: ["environment-keys", "api-keys", "provider-keys"],
   },
   {
     dir: "src/lib/identity",

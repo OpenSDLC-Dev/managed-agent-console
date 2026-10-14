@@ -16,6 +16,9 @@ import {
   isPlainHttp,
   vendorLabel,
 } from "@/components/console/gateway-bits";
+import { EditProviderButton } from "@/components/console/edit-provider-dialog";
+import { ProviderKeys } from "@/components/console/provider-keys";
+import { UpstreamModels } from "@/components/console/upstream-models";
 import { Button } from "@/components/ui/button";
 import {
   useDeleteGatewayProvider,
@@ -40,6 +43,7 @@ export default function ProviderDetailPage({
   if (isPending || !provider) return <DetailSkeleton />;
 
   const headers = Object.entries(provider.headers);
+  const vendor = vendorLabel(provider, profiles.data?.data);
   return (
     <div>
       <Breadcrumb
@@ -60,6 +64,7 @@ export default function ProviderDetailPage({
             >
               {provider.enabled ? "Disable" : "Enable"}
             </Button>
+            <EditProviderButton provider={provider} />
             <ResourceActions
               resource="provider"
               deleteDescription="Deleting removes the provider and its keys. The gateway refuses while the provider has upstream models."
@@ -79,7 +84,7 @@ export default function ProviderDetailPage({
             <IdCell id={provider.id} />
           </Field>
           <Field label="Vendor">
-            {vendorLabel(provider, profiles.data?.data)}{" "}
+            {vendor}{" "}
             <span className="font-mono text-[13px] text-muted-foreground">
               {provider.profile}
             </span>
@@ -129,6 +134,8 @@ export default function ProviderDetailPage({
           </Field>
         </FieldList>
       </DetailSection>
+      <ProviderKeys provider={provider} vendor={vendor} />
+      <UpstreamModels provider={provider} />
     </div>
   );
 }

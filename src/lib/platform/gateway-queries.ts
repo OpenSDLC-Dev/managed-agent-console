@@ -9,8 +9,10 @@ import {
 } from "@tanstack/react-query";
 import { gatewayDelete, gatewayGet, gatewayPost } from "./http";
 import type {
+  GatewayAlias,
   GatewayCredential,
   GatewayDeployment,
+  GatewayKind,
   GatewayProfile,
   GatewayProtocol,
   GatewayProvider,
@@ -141,5 +143,137 @@ export function useDeleteGatewayProvider(id: string) {
       client.removeQueries({ queryKey: ["gateway", "credentials", id] });
       void client.invalidateQueries({ queryKey: ["gateway", "providers"] });
     },
+  });
+}
+
+export function useGatewayAliases() {
+  return useQuery({
+    queryKey: ["gateway", "aliases"],
+    queryFn: () => gatewayGet<List<GatewayAlias>>("aliases"),
+  });
+}
+
+/**
+ * providers.go createCredential. `protocols` left out is every protocol the
+ * provider has an endpoint for (store/credentials.go).
+ */
+export interface GatewayCredentialCreate {
+  key: string;
+  protocols?: GatewayProtocol[];
+  weight?: number;
+}
+
+export type GatewayCredentialUpdate = Partial<
+  Pick<GatewayCredential, "protocols" | "weight" | "enabled">
+>;
+
+/**
+ * Add a vendor key. Its variables **are** the key, so the mutation keeps
+ * nothing once it settles (`gcTime: 0`), as the management-key issuance does:
+ * the gateway seals the key and no one can read it back, and the console must
+ * not be the place it survives.
+ */
+export function useCreateGatewayCredential(providerId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    gcTime: 0,
+    mutationFn: (body: GatewayCredentialCreate) =>
+      gatewayPost<GatewayCredential>(
+        `providers/${providerId}/credentials`,
+        body,
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({
+        queryKey: ["gateway", "credentials", providerId],
+      }),
+  });
+}
+
+export function useUpdateGatewayCredential(providerId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Update failed" },
+    mutationFn: ({ id, ...body }: GatewayCredentialUpdate & { id: string }) =>
+      gatewayPost<GatewayCredential>(
+        `providers/${providerId}/credentials/${id}`,
+        body,
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({
+        queryKey: ["gateway", "credentials", providerId],
+      }),
+  });
+}
+
+export function useDeleteGatewayCredential(providerId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: (id: string) =>
+      gatewayDelete<{ type: "credential_deleted"; id: string }>(
+        `providers/${providerId}/credentials/${id}`,
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({
+        queryKey: ["gateway", "credentials", providerId],
+      }),
+  });
+}
+
+/** deployments.go createDeployment. A price left out is unpriced. */
+export interface GatewayDeploymentCreate {
+  provider_id: string;
+  upstream_model: string;
+  kind: GatewayKind;
+  display_name?: string;
+  capabilities: GatewayDeployment["capabilities"];
+  prices: Partial<GatewayDeployment["prices"]>;
+}
+
+/** deployments.go updateDeployment: capabilities and prices are replaced whole. */
+export type GatewayDeploymentUpdate = Partial<
+  Pick<
+    GatewayDeployment,
+    "display_name" | "capabilities" | "prices" | "enabled"
+  >
+>;
+
+export function useCreateGatewayDeployment() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: GatewayDeploymentCreate) =>
+      gatewayPost<GatewayDeployment>("deployments", body),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+  });
+}
+
+export function useUpdateGatewayDeployment() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: ({ id, ...body }: GatewayDeploymentUpdate & { id: string }) =>
+      gatewayPost<GatewayDeployment>(`deployments/${id}`, body),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+  });
+}
+
+/**
+ * Refused with a 409 while a model routes to it (store/deployments.go); the
+ * toast carries the gateway's message, which names the models.
+ */
+export function useDeleteGatewayDeployment() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: (id: string) =>
+      gatewayDelete<{ type: "deployment_deleted"; id: string }>(
+        `deployments/${id}`,
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
   });
 }
