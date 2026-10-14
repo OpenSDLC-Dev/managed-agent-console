@@ -15,10 +15,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Security
 
-- **The BFF refuses a path segment that holds a control character.** The URL parser deletes tabs,
-  LFs and CRs before it resolves dot segments. A segment such as `..%09` passed the dot-segment
-  check and was sent as `..`, so a crafted link could take the management credential outside
-  `/v1`.
+- **The BFF percent-encodes each path segment it forwards, and refuses one that holds a control
+  character.** The URL parser deletes tabs, LFs and CRs before it resolves dot segments. A segment
+  such as `..%09` passed the dot-segment check and was sent as `..`, so a crafted link could take
+  the management credential outside `/v1`.
 
 ### Changed
 

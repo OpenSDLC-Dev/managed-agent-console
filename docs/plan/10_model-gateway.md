@@ -23,10 +23,11 @@ catalogue fails every agent turn. Today an operator configures it with `curl`
    `admin/v1/…` shapes and methods to `MODEL_GATEWAY_BASE_URL`. Credentials follow the control plane's
    rules: the operator's Bearer in SSO mode, `PLATFORM_API_KEY` otherwise, never both. In password and
    open mode that key **must be the bootstrap key**: the admin API refuses every other platform key
-   (`internal/modelgateway/admin/admin.go` `authenticate`). The shared proxy core refuses a path
-   segment with `%` or `\`, and the route refuses `?` and `#`. So a Model whose name holds one of
-   these is listed but cannot be opened, edited or deleted from the console. The wire allows such
-   names (`checkAliasName`), but no vendor model name seen so far uses them.
+   (`internal/modelgateway/admin/admin.go` `authenticate`). The shared proxy core percent-encodes
+   every path segment, so a Model name with any character the wire allows (`checkAliasName`),
+   `?`, `#` and `%` included, reaches the gateway intact. Rejected alternative: refusing those
+   characters, which made such a Model impossible to edit or delete from the console (PR #215
+   review).
 4. **A gateway 401 never ends the console session.** The control-plane proxy reads a 401 as the
    operator's token refused. The gateway also answers 401 when it runs without `IDENTITY_*` while the
    console runs SSO, and reading that as a dead session would sign every operator out on the Models

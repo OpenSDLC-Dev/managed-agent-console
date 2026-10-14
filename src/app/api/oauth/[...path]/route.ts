@@ -79,7 +79,7 @@ async function proxy(
       `unsupported console path "/api/oauth/${joined}"`,
     );
   }
-  return forward(request, `api/oauth/${joined}`);
+  return forward(request, ["api", "oauth", ...path]);
 }
 
 export { proxy as GET, proxy as POST };

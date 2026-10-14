@@ -126,10 +126,9 @@ describe("model gateway BFF", () => {
 
   it.each([
     ["a dot segment", ["admin", "v1", "aliases", ".."]],
-    ["a decoded query", ["admin", "v1", "aliases", "a?b=c"]],
-    ["a decoded fragment", ["admin", "v1", "aliases", "a#b"]],
-    ["a percent", ["admin", "v1", "aliases", "%2e%2e"]],
-    ["a backslash", ["admin", "v1", "providers", "a\\b"]],
+    // A decoded `%2F`: the shapes would read two segments, the wire one.
+    ["a slash inside a segment", ["admin", "v1", "providers", "x/credentials"]],
+    ["a backslash in an id", ["admin", "v1", "providers", "a\\b"]],
     // The URL parser deletes tabs, LFs and CRs before resolving dot segments,
     // so `..%09` would be sent as `..` (PR #215 review, P1).
     ["a tab-hidden climb", ["admin", "v1", "aliases", "..\t", "profiles", "x"]],
@@ -144,6 +143,30 @@ describe("model gateway BFF", () => {
       );
       expect(response.status).toBe(404);
       expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  // The wire takes any name without whitespace or control characters
+  // (checkAliasName), so the console must reach every one of them — encoded,
+  // so no character can end the path or select another (PR #215 review, P1).
+  it.each([
+    ["a query delimiter", "a?b=c", "a%3Fb%3Dc"],
+    ["a fragment delimiter", "a#b", "a%23b"],
+    ["a literal encoded climb", "%2e%2e", "%252e%252e"],
+    ["a backslash", "a\\b", "a%5Cb"],
+  ])(
+    "probe: sends a model name holding %s encoded, inside its own path",
+    async (_, name, wire) => {
+      const response = await DELETE(
+        new NextRequest("http://localhost:3000/api/gateway/x", {
+          method: "DELETE",
+        }),
+        { params: Promise.resolve({ path: ["admin", "v1", "aliases", name] }) },
+      );
+      expect(response.status).toBe(200);
+      expect(upstreamCall()[0]).toBe(
+        `http://gateway.local:8090/admin/v1/aliases/${wire}`,
+      );
     },
   );
 

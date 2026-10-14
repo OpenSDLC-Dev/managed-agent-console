@@ -68,13 +68,11 @@ describe("platform BFF proxy", () => {
   // (PR #86 review, P1).
   it.each([
     ["climbing out of /v1", ["v1", "..", "..", "admin", "keys"]],
-    ["a double-encoded climb", ["v1", "%2e%2e", "%2e%2e", "admin", "keys"]],
     ["a single-dot segment", ["v1", ".", "agents"]],
     ["an empty segment", ["v1", "", "agents"]],
     ["an encoded slash in an ID", ["v1", "agents", "agent_id/versions"]],
     ["a query delimiter in an ID", ["v1", "agents", "agent_id?limit=1"]],
     ["a fragment delimiter in an ID", ["v1", "agents", "agent_id#versions"]],
-    ["a backslash segment", ["v1", "..\\..", "agents"]],
   ])("refuses %s without contacting the platform", async (_label, path) => {
     const response = await GET(
       new NextRequest(`http://localhost:3000/api/platform/${path.join("/")}`),
@@ -86,6 +84,25 @@ describe("platform BFF proxy", () => {
       error: { type: "invalid_request_error" },
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  // What survives Next's one decoding pass as `%2e%2e` or `..\..` is not a dot
+  // segment, and `forward` encodes every segment, so the URL parser cannot
+  // resolve it into one: it reaches the platform as a literal, inside /v1.
+  it.each([
+    [
+      "a double-encoded climb",
+      ["v1", "%2e%2e", "%2e%2e", "admin", "keys"],
+      "/v1/%252e%252e/%252e%252e/admin/keys",
+    ],
+    ["a backslash segment", ["v1", "..\\..", "agents"], "/v1/..%5C../agents"],
+  ])("probe: sends %s encoded, inside /v1", async (_label, path, wire) => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 404 }));
+    await GET(
+      new NextRequest("http://localhost:3000/api/platform/v1/x"),
+      ctx(...path),
+    );
+    expect(new URL(String(fetchMock.mock.calls[0][0])).pathname).toBe(wire);
   });
 
   // The URL parser deletes every tab, LF and CR before it resolves dot

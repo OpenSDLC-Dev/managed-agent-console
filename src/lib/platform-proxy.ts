@@ -65,40 +65,32 @@ export function envelope(
  * Whether a segment would make the request we *send* differ from the path a
  * route's gate approved.
  *
- * Each gate checks a string; `fetch` then reparses the URL we build from it,
- * and WHATWG URL resolution collapses dot segments. So
- * `organizations/../environments/e/tokens` satisfies a shape check and is sent
- * as `environments/e/tokens` — the gate asserts one path and the management
- * credential travels to another. The `/v1` gate is the sharper case: it only
- * inspects the first segment, so `v1/../../x` leaves the wire surface entirely.
+ * Each gate checks decoded segments, and `forward` percent-encodes every one
+ * before it builds the URL. So no character inside a segment — `/`, `?`, `#`,
+ * `%`, `\` — can select another path or start a query on the wire, and a
+ * gateway model name holding one reaches the gateway intact (PR #215 review).
  *
- * `%` is refused with them. Next decodes the catch-all once per segment, so a
- * surviving `%` is double-encoded input — and the URL standard resolves
- * `%2e%2e` as `..` too, which means one decoding pass is not enough to see it.
- * No path this console builds carries anything but platform ids, none of which
- * contain a percent sign, so refusing the character costs nothing.
+ * Encoding leaves dots alone, and WHATWG URL resolution collapses dot
+ * segments. So `organizations/../environments/e/tokens` would satisfy a shape
+ * check and be sent as `environments/e/tokens` — the gate asserts one path and
+ * the management credential travels to another. The `/v1` gate is the sharper
+ * case: it only inspects the first segment, so `v1/../../x` would leave the
+ * wire surface entirely. Those segments are refused here, with the empty one.
  *
- * Control characters are refused for the same reason. The URL parser deletes
- * every tab, LF and CR in its input before it resolves dot segments, so a
- * decoded `..%09` is not `..` here and is `..` on the wire (PR #215 review).
- * Neither an id nor a gateway model name can hold one (`checkToken` refuses
- * control characters), so the whole C0 range and DEL go.
+ * Control characters go too. Encoded they are harmless, but no id and no
+ * gateway model name can hold one (`checkToken` refuses them), so refusing
+ * them costs nothing and keeps a raw one from ever reaching a URL.
  *
- * Belt-and-braces by design: it lives in the shared core rather than in either
- * gate, so a third route added later inherits it without having to know.
+ * Belt-and-braces by design: it lives in the shared core rather than in any
+ * gate, so a route added later inherits it without having to know.
  */
-function escapesItsPath(upstreamPath: string): boolean {
-  return upstreamPath
-    .split("/")
-    .some(
-      (segment) =>
-        segment === "" ||
-        segment === "." ||
-        segment === ".." ||
-        segment.includes("%") ||
-        segment.includes("\\") ||
-        CONTROL.test(segment),
-    );
+function unsafeSegment(segment: string): boolean {
+  return (
+    segment === "" ||
+    segment === "." ||
+    segment === ".." ||
+    CONTROL.test(segment)
+  );
 }
 
 const CONTROL = /[\u0000-\u001f\u007f]/;
@@ -132,16 +124,17 @@ const PLATFORM: Upstream = {
 };
 
 /**
- * Forward `request` to `<base URL>/<upstreamPath>` with the credential
- * attached. `upstreamPath` is built by the calling route from its own
- * validated path — never from raw user input.
+ * Forward `request` to `<base URL>/<segments>` with the credential attached.
+ * `segments` are decoded, as Next hands a catch-all over, and built by the
+ * calling route from its own validated path — never from raw user input.
  */
 export async function forward(
   request: NextRequest,
-  upstreamPath: string,
+  segments: string[],
   target: Upstream = PLATFORM,
 ): Promise<Response> {
-  if (escapesItsPath(upstreamPath)) {
+  const upstreamPath = segments.join("/");
+  if (segments.some(unsafeSegment)) {
     return envelope(
       404,
       "invalid_request_error",
@@ -185,7 +178,7 @@ export async function forward(
     );
   }
 
-  const url = `${baseUrl}/${upstreamPath}${request.nextUrl.search}`;
+  const url = `${baseUrl}/${segments.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
   const headers = new Headers();
   for (const name of FORWARD_REQUEST_HEADERS) {
     const value = request.headers.get(name);

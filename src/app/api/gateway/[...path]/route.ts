@@ -26,12 +26,13 @@ import { envelope, forward, type Upstream } from "@/lib/platform-proxy";
 const ID = "[A-Za-z0-9_-]+";
 
 /**
- * A model name, which may hold slashes (`Qwen/Qwen3-Coder`). Segments arrive
- * decoded, so one that would select another path or carry a query — `?`, `#`,
- * `%`, `\` — is refused, as are the dot segments `fetch` would resolve away.
- * The gateway refuses empty and dot segments itself (`checkAliasName`).
+ * A model name: one segment or more, since a name may hold slashes
+ * (`Qwen/Qwen3-Coder`), and any other character the wire allows
+ * (`checkAliasName`). `forward` encodes each segment, so a `?`, `#` or `%` in
+ * a name stays in the name; it refuses the empty and dot segments the gateway
+ * refuses too.
  */
-const NAME = "[^/?#%\\\\]+(?:/[^/?#%\\\\]+)*";
+const NAME = "[^/]+(?:/[^/]+)*";
 
 const READ = ["GET"];
 const COLLECTION = ["GET", "POST"];
@@ -87,9 +88,12 @@ async function proxy(
   const rest = joined.startsWith("admin/v1/")
     ? joined.slice("admin/v1/".length)
     : undefined;
+  // A decoded `%2F` puts a slash inside one segment: the shapes would read it
+  // as two while `forward` sends one, so the gate and the wire would disagree.
+  // The console sends a name's slashes as separators, never encoded.
   if (
     rest === undefined ||
-    path.some((segment) => segment === "." || segment === "..") ||
+    path.some((segment) => segment.includes("/")) ||
     !allowed(request.method, rest)
   ) {
     return envelope(
@@ -98,7 +102,7 @@ async function proxy(
       `unsupported gateway path "/${joined}"`,
     );
   }
-  return forward(request, joined, GATEWAY);
+  return forward(request, path, GATEWAY);
 }
 
 export { proxy as GET, proxy as POST, proxy as DELETE };
