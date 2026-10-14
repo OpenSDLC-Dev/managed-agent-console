@@ -350,6 +350,28 @@ describe("Model access on API keys", () => {
     ).toBeNull();
   });
 
+  // An expired key can only be archived, so a new grant on one would only
+  // block deleting the models it names; an existing one stays removable.
+  it.each(["archived", "expired"] as const)(
+    "probe: offers no new grant on an %s key, only the removal of one it has",
+    async (status) => {
+      stubGatewayFetch();
+      const held = { ...CI, status };
+      const bare = { ...FRESH, status };
+      renderTable([held, bare]);
+      const row = (key: ApiKey) => screen.getByText(key.name).closest("tr")!;
+      expect(
+        await within(row(held)).findByRole("button", { name: "Model access" }),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(access(bare)).toHaveAttribute("data-models", "none"),
+      );
+      expect(
+        within(row(bare)).queryByRole("button", { name: "Model access" }),
+      ).toBeNull();
+    },
+  );
+
   it("probe: drops the column on a console that runs without a gateway", async () => {
     // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
     stubGatewayFetch(() =>

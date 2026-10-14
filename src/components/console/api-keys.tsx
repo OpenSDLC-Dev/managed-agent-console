@@ -503,7 +503,8 @@ export function ApiKeysTable({
         // Archived is terminal on this surface, and an expired key admits
         // exactly one operation — archiving it. Both are the platform's rules,
         // stated in its refusals. Archiving leaves the gateway's policy, which
-        // blocks deleting any model it names, so its removal stays offered.
+        // blocks deleting any model it names, so its removal stays offered;
+        // neither key is offered a new grant, which could only block that.
         if (k.status === "archived")
           return gateway && policy ? (
             <span className="flex justify-end">
@@ -513,7 +514,7 @@ export function ApiKeysTable({
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
-            {gateway && policyList && (
+            {gateway && policyList && (!expired || policy) && (
               <ModelAccessButton apiKey={k} policy={policy} />
             )}
             {!expired && (
