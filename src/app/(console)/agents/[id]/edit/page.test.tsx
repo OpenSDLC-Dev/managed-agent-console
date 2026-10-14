@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Suspense } from "react";
 import EditAgentPage from "./page";
 import type { Agent } from "@/lib/platform/types";
+import { noGateway } from "../../../../../../test/mock-platform/gateway-fetch";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -194,6 +195,8 @@ it("preserves the draft and optimistic version until an explicit reload", async 
   let current = agent;
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
+      const gateway = noGateway(input);
+      if (gateway) return gateway;
       if (init?.method === "POST")
         return json(
           {

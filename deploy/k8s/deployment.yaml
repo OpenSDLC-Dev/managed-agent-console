@@ -93,6 +93,15 @@ spec:
                 secretKeyRef:
                   name: console-secrets
                   key: platform-api-key
+            # Optional, unlike the two above: the platform's model gateway
+            # (plan 10), over the Service its chart creates beside the control
+            # plane. The workflow writes an empty value when its repository
+            # variable is unset, and the console reads empty as no gateway, so
+            # the gateway screens stay hidden. The gateway's admin API takes
+            # only the bootstrap key: with this set, platform-api-key must be
+            # the platform's CONTROLPLANE_API_KEY itself.
+            - name: MODEL_GATEWAY_BASE_URL
+              value: MODELGATEWAY_URL
             # There is deliberately no CONSOLE_PASSWORD here. Authentication for
             # this deployment is IAP, at the load balancer, and the container
             # therefore has no gate of its own: src/proxy.ts returns next()

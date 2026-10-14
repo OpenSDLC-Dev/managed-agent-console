@@ -8,6 +8,11 @@ import {
   type MCPBindings,
 } from "./additional-tools-editor";
 import { RequestId } from "@/components/console/bits";
+import {
+  ModelField,
+  modelChosen,
+  useModelChoices,
+} from "@/components/console/model-field";
 import { useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
@@ -362,6 +367,11 @@ export function AgentEditor({
   const skillOptions =
     skillsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const agentsQuery = useAgentOptions();
+  const models = useModelChoices();
+  // The raw tab writes the config as the API takes it, so only the form
+  // waits for a listed model.
+  const modelMissing =
+    tab === "rendered" && !readOnly && !modelChosen(models, form.modelId);
   const schemaError = schemaDraftError(form.toolSchemas ?? {});
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -410,7 +420,12 @@ export function AgentEditor({
   };
 
   const save = () => {
-    if (readOnly || mutation.isPending || (tab === "rendered" && schemaError))
+    if (
+      readOnly ||
+      mutation.isPending ||
+      modelMissing ||
+      (tab === "rendered" && schemaError)
+    )
       return;
     setConflict(false);
     let body: AgentWriteBody;
@@ -450,7 +465,9 @@ export function AgentEditor({
     <Button
       onClick={save}
       disabled={
-        mutation.isPending || (tab === "rendered" && Boolean(schemaError))
+        mutation.isPending ||
+        modelMissing ||
+        (tab === "rendered" && Boolean(schemaError))
       }
     >
       {mode === "create"
@@ -599,11 +616,13 @@ export function AgentEditor({
                 <div className="grid grid-cols-[1fr_130px] gap-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="agent-model">Model</Label>
-                    <Input
+                    <ModelField
                       id="agent-model"
                       className="font-mono"
                       value={form.modelId}
-                      onChange={(e) => set("modelId", e.target.value)}
+                      onChange={(value) => set("modelId", value)}
+                      choices={models}
+                      readOnly={readOnly}
                     />
                   </div>
                   <div className="space-y-1.5">

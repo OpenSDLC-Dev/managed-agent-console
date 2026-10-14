@@ -10,7 +10,12 @@ const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
  * way `next dev`/`next start` read it (quotes, export prefixes, comments,
  * expansion), and an already-set process environment wins.
  */
-export function resolveLiveEnv(): { baseUrl: string; apiKey: string } {
+export function resolveLiveEnv(): {
+  baseUrl: string;
+  apiKey: string;
+  /** Optional for the tier; gateway.spec.ts fails without it. */
+  gatewayUrl?: string;
+} {
   if (process.env.RUN_LIVE_CONSOLE_TESTS !== "1") {
     throw new Error(
       "The live tier drives a real platform stack and spends real model tokens. " +
@@ -28,13 +33,20 @@ export function resolveLiveEnv(): { baseUrl: string; apiKey: string } {
   }
   // This suite creates, mutates, and spends. A mistyped base URL must not
   // aim it at a remote deployment (review finding, PR #30).
-  const { hostname } = new URL(baseUrl);
-  if (!LOCAL_HOSTNAMES.has(hostname)) {
-    throw new Error(
-      `PLATFORM_BASE_URL points at "${hostname}" — the live tier only targets the local platform stack.`,
-    );
+  const gatewayUrl = process.env.MODEL_GATEWAY_BASE_URL || undefined;
+  for (const [name, url] of [
+    ["PLATFORM_BASE_URL", baseUrl],
+    ["MODEL_GATEWAY_BASE_URL", gatewayUrl],
+  ] as const) {
+    if (!url) continue;
+    const { hostname } = new URL(url);
+    if (!LOCAL_HOSTNAMES.has(hostname)) {
+      throw new Error(
+        `${name} points at "${hostname}" — the live tier only targets the local platform stack.`,
+      );
+    }
   }
-  return { baseUrl, apiKey };
+  return { baseUrl, apiKey, gatewayUrl };
 }
 
 /** The password the live config gives the spawned console instance. */

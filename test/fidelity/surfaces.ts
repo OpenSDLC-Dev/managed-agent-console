@@ -1597,6 +1597,20 @@ export const SURFACES: Surface[] = [
     description: "The same editor populated, with the curl block.",
   },
   {
+    id: "agent-model-select",
+    route: `/agents/${AGENT}/edit`,
+    fixture: AGENT + " on a gateway that lacks its model",
+    description:
+      "The model field as a select of the gateway's chat models (plan 10 decision 6).",
+    setup: async (page) => {
+      // Tall enough for the whole form: the full-page shot resizes a shorter
+      // viewport, and the resize closes the popup.
+      await page.setViewportSize({ width: 1440, height: 1200 });
+      await page.getByRole("combobox", { name: "Model", exact: true }).click();
+      await page.getByRole("option", { name: "agent-default" }).waitFor();
+    },
+  },
+  {
     id: "environment-new",
     route: "/environments/new",
     fixture: "empty form",

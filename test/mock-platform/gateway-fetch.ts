@@ -43,3 +43,21 @@ export function sentBody(
   )[index];
   return call?.[1]?.body ? JSON.parse(String(call[1].body)) : undefined;
 }
+
+/**
+ * What the BFF answers a gateway path while `MODEL_GATEWAY_BASE_URL` is unset,
+ * for a test stub that answers every other path itself. Undefined for a path
+ * outside `/api/gateway/`.
+ */
+export function noGateway(input: RequestInfo | URL): Response | undefined {
+  if (
+    !new URL(String(input), "http://console").pathname.startsWith(
+      "/api/gateway/",
+    )
+  )
+    return undefined;
+  return Response.json(
+    { type: "error", error: { type: "not_found_error", message: "" } },
+    { status: 404 },
+  );
+}

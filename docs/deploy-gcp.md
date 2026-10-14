@@ -26,10 +26,11 @@ Identity Federation trust policy is what protects the deployment.
 | `WIF_PROVIDER`            | the Workload Identity Federation provider the job's OIDC token is exchanged at |
 | `DEPLOY_SERVICE_ACCOUNT`  | the identity that provider lets this repository impersonate                    |
 | `PLATFORM_BASE_URL`       | the control plane's in-cluster Service URL                                     |
+| `MODEL_GATEWAY_BASE_URL`  | optional: the model gateway's in-cluster Service URL; unset hides its screens  |
 
-The workflow's **first step asserts every one is set and non-empty**, before it authenticates or
-builds. An unset variable renders as the empty string, and `gcloud --project ""`, `kubectl -n ""` and
-an image tag with no repository all fail late and confusingly.
+The workflow's **first step asserts every one but `MODEL_GATEWAY_BASE_URL` is set and
+non-empty**, before it authenticates or builds. An unset variable renders as the empty string, and
+`gcloud --project ""`, `kubectl -n ""` and an image tag with no repository all fail late and confusingly.
 
 The console sits in the platform's namespace, so it reaches the control plane over cluster DNS and
 **no request carrying the management key crosses a public network**. That is narrower than "the key
@@ -77,6 +78,7 @@ substitution step in `deploy.yml`.
 | `CONSOLE_IMAGE`    | `CONSOLE_IMAGE_REPO`, tagged with this run's commit sha                                                                                                    |
 | `SECRETS_CHECKSUM` | `sha256` of the Secret Manager payload this run read                                                                                                       |
 | `CONTROLPLANE_URL` | `PLATFORM_BASE_URL` — spelled differently from the container variable it is assigned to, since a `sed` on that name would rewrite the key beside the value |
+| `MODELGATEWAY_URL` | `MODEL_GATEWAY_BASE_URL`, or empty — spelled differently for the same reason                                                                               |
 | `CONSOLE_HOST`     | `CONSOLE_HOST` — a leftover placeholder in an image tag is a readable pull failure; one in `ManagedCertificate.spec.domains` is a rejected DNS name        |
 
 The **namespace is not in these files** — every `kubectl` call takes `-n`. Keep it that way: a

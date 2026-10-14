@@ -12,7 +12,7 @@ ensureLoopbackProxyBypass();
  * Run with: RUN_LIVE_CONSOLE_TESTS=1 pnpm test:e2e:live
  */
 const CONSOLE_PORT = 3200;
-const { baseUrl, apiKey } = resolveLiveEnv();
+const { baseUrl, apiKey, gatewayUrl } = resolveLiveEnv();
 
 export default defineConfig({
   testDir: "test/e2e-live",
@@ -40,6 +40,7 @@ export default defineConfig({
         PLATFORM_BASE_URL: baseUrl,
         PLATFORM_API_KEY: apiKey,
         CONSOLE_PASSWORD: LIVE_CONSOLE_PASSWORD,
+        ...(gatewayUrl ? { MODEL_GATEWAY_BASE_URL: gatewayUrl } : {}),
       },
     },
   ],

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
+import { chooseModel } from "./choose-model";
 
 const COMPLETED = "drm_endedresearch0000000001";
 
@@ -42,7 +43,7 @@ test("creates, cancels and archives a pending dream", async ({ page }) => {
   await page
     .getByLabel("Session IDs")
     .fill("sesn_research0000000000001\nsesn_gatedbash00000000001");
-  await page.getByLabel("Model").fill("claude-sonnet-4-8");
+  await chooseModel(page);
   await page.getByLabel("Speed").click();
   await page.getByRole("option", { name: "Fast" }).click();
   await page.getByLabel("Instructions (optional)").fill("Keep durable facts.");

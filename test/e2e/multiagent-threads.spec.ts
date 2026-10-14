@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
+import { chooseModel } from "./choose-model";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -9,6 +10,7 @@ test("creates a coordinator with an ordered roster", async ({ page }) => {
   await signIn(page);
   await page.goto("/agents/new");
   await page.getByLabel("Name").fill("Coordinator");
+  await chooseModel(page);
   await page.getByRole("combobox", { name: "Add subagent" }).click();
   await page
     .getByRole("option", { name: "General task agent", exact: true })
