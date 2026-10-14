@@ -189,6 +189,29 @@ describe("ModelSetupDialog", () => {
     );
   });
 
+  // Provider names are not unique. The seed already holds a "MiniMax CN".
+  it("probe: does not adopt a provider that was there before the write", async () => {
+    let refuse = true;
+    const fetchMock = stubGatewayFetch((method, rest) => {
+      if (refuse && method === "POST" && rest === "providers") {
+        refuse = false;
+        return Response.json(
+          { type: "error", error: { type: "api_error", message: "down" } },
+          { status: 500 },
+        );
+      }
+    });
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "providers")).toHaveLength(2);
+    const key = posts(fetchMock).find(([p]) => p.endsWith("/credentials"))!;
+    expect(key[0]).not.toContain("gwprov_minimaxcn1");
+  });
+
   it("probe: opens the model that landed, not the name typed after", async () => {
     loseAnswers("aliases");
     const { onDone } = renderSetup();

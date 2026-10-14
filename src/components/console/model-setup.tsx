@@ -194,14 +194,21 @@ export function ModelSetupDialog({
       setMade({ ...ids });
     };
     const list = async <T,>(path: string, match: (row: T) => boolean) =>
-      // The newest match: providers, keys and upstream models list oldest
-      // first (store/*.go), and a model name is unique.
+      // The newest match: keys and upstream models list oldest first
+      // (store/*.go), and a model name is unique.
       (await gatewayGet<{ data: T[] }>(path)).data.filter(match).at(-1);
     const providerName = defaultName(profile, region);
+    const readProviders = async () =>
+      (await gatewayGet<{ data: GatewayProvider[] }>("providers")).data;
+    // Provider names are not unique, so the provider lookup takes only one
+    // that appeared after the write was sent. The later lookups search under
+    // that provider, so they find only this run's rows.
+    let before: Set<string> | undefined;
     try {
       await step(
         "provider",
         async () => {
+          before = new Set((await readProviders()).map((p) => p.id));
           const created = await gatewayPost<GatewayProvider>("providers", {
             name: providerName,
             profile: profile.name,
@@ -213,13 +220,20 @@ export function ModelSetupDialog({
           });
           return { id: created.id, label: created.name };
         },
-        // The form runs on a gateway that had no provider when it opened.
         async () => {
-          const found = await list<GatewayProvider>(
-            "providers",
-            (p) => p.name === providerName && p.profile === profile.name,
+          if (!before) return undefined; // the write was never sent
+          const seen = before;
+          const fresh = (await readProviders()).filter(
+            (p) =>
+              !seen.has(p.id) &&
+              p.name === providerName &&
+              p.profile === profile.name,
           );
-          return found && { id: found.id, label: found.name };
+          if (fresh.length > 1)
+            throw new Error(
+              `More than one provider named "${providerName}" appeared after this form sent one. Check Providers before you continue.`,
+            );
+          return fresh[0] && { id: fresh[0].id, label: fresh[0].name };
         },
       );
       await step(
