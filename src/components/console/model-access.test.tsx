@@ -271,6 +271,50 @@ describe("Model access on API keys", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  // The control plane refuses changes to its own keys, but a gateway policy
+  // on one, written through the API, is a separate row: on the brain's key it
+  // limits every agent. Deleting it restores the built-in grant.
+  it("probe: offers to remove a policy someone wrote on a built-in key", async () => {
+    const BRAIN = apiKey({
+      id: "apikey_brain01",
+      name: "brain",
+      created_by: null,
+    });
+    const fetchMock = stubGatewayFetch((method, rest) => {
+      if (method === "GET" && rest === "key_policies")
+        return Response.json({
+          data: [policy({ api_key_id: BRAIN.id, aliases: ["minimax-m3"] })],
+        });
+      if (method === "DELETE" && rest === `key_policies/${BRAIN.id}`)
+        return Response.json({
+          type: "key_policy_deleted",
+          api_key_id: BRAIN.id,
+        });
+    });
+    renderTable([BRAIN, BOOTSTRAP]);
+    const row = (key: ApiKey) => screen.getByText(key.name).closest("tr")!;
+    await userEvent.click(
+      await within(row(BRAIN)).findByRole("button", {
+        name: "Remove model policy from brain",
+      }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Remove model policy",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls
+          .filter(([, i]) => i?.method === "DELETE")
+          .map(([url]) => String(url)),
+      ).toEqual([`/api/gateway/admin/v1/key_policies/${BRAIN.id}`]),
+    );
+    expect(
+      within(row(BOOTSTRAP)).queryByRole("button", { name: /model policy/ }),
+    ).toBeNull();
+  });
+
   it("probe: does not lift a limit the operator typed past what JSON holds", async () => {
     const fetchMock = stubGatewayFetch();
     renderTable([CI]);

@@ -376,10 +376,13 @@ export function usePutGatewayKeyPolicy(apiKeyId: string) {
 }
 
 /** Revokes the grant. The gateway answers 404 for a key that has none. */
-export function useDeleteGatewayKeyPolicy(apiKeyId: string) {
+export function useDeleteGatewayKeyPolicy(
+  apiKeyId: string,
+  { errorToast = false } = {},
+) {
   const client = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: errorToast ? { errorTitle: "Removal failed" } : { errorToast: false },
     mutationFn: () =>
       gatewayDelete<{ type: "key_policy_deleted"; api_key_id: string }>(
         `key_policies/${apiKeyId}`,

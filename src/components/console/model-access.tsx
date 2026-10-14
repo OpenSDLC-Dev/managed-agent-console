@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { ShieldOff } from "lucide-react";
+import { ConfirmIconButton } from "@/components/console/archive-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -200,6 +202,28 @@ export function ModelAccessButton({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Removes a policy written on a key the control plane manages. The platform
+ * refuses changes to the key itself, but the policy is the gateway's own row,
+ * and on the brain's key it limits every agent. Without it the key has its
+ * built-in grant again, so the access dialog, whose "no access" means no
+ * policy, would mislabel the choice.
+ */
+export function RemovePolicyButton({ apiKey }: { apiKey: ApiKey }) {
+  const remove = useDeleteGatewayKeyPolicy(apiKey.id, { errorToast: true });
+  return (
+    <ConfirmIconButton
+      label={`Remove model policy from ${apiKey.name}`}
+      title="Remove model policy"
+      description={`${apiKey.name} returns to its built-in grant: every model, with no limits.`}
+      pending={remove.isPending}
+      onConfirm={() => remove.mutate()}
+    >
+      <ShieldOff className="size-3.5" />
+    </ConfirmIconButton>
   );
 }
 

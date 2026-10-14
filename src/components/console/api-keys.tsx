@@ -24,6 +24,7 @@ import {
 import { ConfirmIconButton } from "@/components/console/archive-button";
 import {
   ModelAccessButton,
+  RemovePolicyButton,
   ModelAccessCell,
 } from "@/components/console/model-access";
 import { Trash2 } from "lucide-react";
@@ -490,9 +491,15 @@ export function ApiKeysTable({
         // refuses every mutation on it: its lifecycle is rotation-by-restart.
         // Showing controls that are guaranteed to 400 would be a worse lie than
         // showing none, and this is a mirror of the wire rather than a rule
-        // stricter than it.
-        if (!k.created_by) return null;
+        // stricter than it. A gateway policy on such a key is not the key,
+        // and stays removable.
         const policy = policyList?.find((p) => p.api_key_id === k.id);
+        if (!k.created_by)
+          return gateway && policy ? (
+            <span className="flex justify-end">
+              <RemovePolicyButton apiKey={k} />
+            </span>
+          ) : null;
         // Archived is terminal on this surface, and an expired key admits
         // exactly one operation — archiving it. Both are the platform's rules,
         // stated in its refusals. Archiving leaves the gateway's policy, which
