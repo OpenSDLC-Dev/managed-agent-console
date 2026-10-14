@@ -43,7 +43,7 @@ test("dashboard stays centered and its compact navigation remains usable", async
     page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
   ).toHaveAttribute("data-active", "true");
   await expect(
-    page.getByRole("navigation").getByRole("link", { name: "API keys" }),
+    page.getByRole("navigation").getByRole("link", { name: "API Keys" }),
   ).toHaveAttribute("data-active", "false");
   await page.getByRole("button", { name: "Search Ctrl K" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();

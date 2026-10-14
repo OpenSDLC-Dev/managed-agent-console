@@ -62,7 +62,7 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
   await name.fill("Kept draft");
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Memory stores", exact: true })
+    .getByRole("link", { name: "Memory Stores", exact: true })
     .click();
   const prompt = page.getByRole("dialog", {
     name: "Unsaved changes",
@@ -125,7 +125,7 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
   await page.getByLabel("Name", { exact: true }).fill("Sidebar draft");
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Memory stores", exact: true })
+    .getByRole("link", { name: "Memory Stores", exact: true })
     .click();
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/memory-stores$/);

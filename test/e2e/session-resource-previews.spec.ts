@@ -60,7 +60,7 @@ test("nested memory selection keeps the Session open, renders Markdown/raw and r
     preview.getByRole("heading", { name: "Project brief" }),
   ).toBeVisible();
   await expect(
-    preview.getByRole("link", { name: /Open in Memory stores/ }),
+    preview.getByRole("link", { name: /Open in Memory Stores/ }),
   ).toHaveAttribute(
     "href",
     "/memory-stores/memstore_projectnotes000001?memory=mem_projectbrief000000001",

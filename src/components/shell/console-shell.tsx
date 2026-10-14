@@ -16,13 +16,21 @@ function subscribeViewport(callback: () => void) {
   return () => media.removeEventListener("change", callback);
 }
 
-/** Keep navigation and its footer in the viewport while the page scrolls. */
+/**
+ * Keep navigation and its footer in the viewport while the page scrolls.
+ *
+ * `version` is a slot rather than an import so the version stays a server
+ * component: this shell is client code, and importing package.json here would
+ * ship the whole manifest to the browser.
+ */
 export function ConsoleShell({
   children,
   footer,
+  version,
 }: {
   children: React.ReactNode;
   footer: React.ReactNode;
+  version?: React.ReactNode;
 }) {
   const narrow = useSyncExternalStore(
     subscribeViewport,
@@ -74,15 +82,18 @@ export function ConsoleShell({
           )}
         >
           {open && (
-            <Link
-              href="/dashboard"
-              onClick={() => {
-                if (narrow) close();
-              }}
-              className="min-w-0 flex-1 font-serif text-lg font-medium"
-            >
-              Agent Console
-            </Link>
+            <div className="min-w-0 flex-1 leading-tight">
+              <Link
+                href="/dashboard"
+                onClick={() => {
+                  if (narrow) close();
+                }}
+                className="font-serif text-lg font-medium"
+              >
+                Agent Console
+              </Link>
+              {version}
+            </div>
           )}
           <Button
             ref={toggleRef}

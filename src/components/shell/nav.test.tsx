@@ -25,7 +25,7 @@ const EXPECTED = [
   // Top level, and first: the landing page, which is not a platform surface.
   { label: "Dashboard", href: "/dashboard" },
   // Top level and second, which is where the reference puts it.
-  { label: "API keys", href: "/api-keys", surface: "api-keys" },
+  { label: "API Keys", href: "/api-keys", surface: "api-keys" },
   { label: "Files", href: "/files", surface: "files", group: "Build" },
   { label: "Skills", href: "/skills", surface: "skills", group: "Build" },
   {
@@ -53,13 +53,13 @@ const EXPECTED = [
     group: "Managed Agents",
   },
   {
-    label: "Credential vaults",
+    label: "Credential Vaults",
     href: "/vaults",
     surface: "vaults",
     group: "Managed Agents",
   },
   {
-    label: "Memory stores",
+    label: "Memory Stores",
     href: "/memory-stores",
     surface: "memory-stores",
     group: "Managed Agents",
@@ -180,7 +180,7 @@ describe("Nav", () => {
     renderNav();
     expect(rowOrder()).toEqual([
       "Dashboard",
-      "API keys",
+      "API Keys",
       "Build",
       "Files",
       "Skills",
@@ -189,8 +189,8 @@ describe("Nav", () => {
       "Sessions",
       "Deployments",
       "Environments",
-      "Credential vaults",
-      "Memory stores",
+      "Credential Vaults",
+      "Memory Stores",
       "Dreams",
     ]);
   });
@@ -323,7 +323,7 @@ describe("Nav", () => {
         expect(groupHeader(other.label), other.label).not.toBeNull();
       }
       expect(link("Dashboard")).not.toBeNull();
-      expect(link("API keys")).not.toBeNull();
+      expect(link("API Keys")).not.toBeNull();
     });
   }
 

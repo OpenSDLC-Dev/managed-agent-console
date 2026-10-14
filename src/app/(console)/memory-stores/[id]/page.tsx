@@ -140,7 +140,7 @@ export default function MemoryStoreDetailPage({
   return (
     <div>
       <Breadcrumb
-        parent={{ href: "/memory-stores", label: "Memory stores" }}
+        parent={{ href: "/memory-stores", label: "Memory Stores" }}
         current={item.name}
       />
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row">

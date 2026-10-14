@@ -35,7 +35,7 @@ describe("ConnectionStatus", () => {
     );
     renderWidget();
     await waitFor(() =>
-      expect(screen.getByText("Platform connected")).toBeDefined(),
+      expect(screen.getByText("Platform Connected")).toBeDefined(),
     );
   });
 
@@ -58,7 +58,7 @@ describe("ConnectionStatus", () => {
     );
     renderWidget();
     await waitFor(() =>
-      expect(screen.getByText("Platform unreachable")).toBeDefined(),
+      expect(screen.getByText("Platform Unreachable")).toBeDefined(),
     );
     expect(screen.getByText("invalid x-api-key")).toBeDefined();
     expect(screen.getByText(/req_test1/)).toBeDefined();
@@ -69,7 +69,7 @@ describe("ConnectionStatus", () => {
 
   // On an idle page this 30-second poll is the only BFF consumer still running,
   // so if it read a sign-out as an outage the operator would sit in front of
-  // "Platform unreachable" with a live SSE trace beside it and nothing left to
+  // "Platform Unreachable" with a live SSE trace beside it and nothing left to
   // notice (found in review, PR #95).
   it("probe: sends the operator to sign in when the console session has ended", async () => {
     vi.stubGlobal(

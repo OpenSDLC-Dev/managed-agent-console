@@ -59,7 +59,7 @@ describe("SidebarFooter", () => {
     );
     const { container } = renderFooter();
     await screen.findByText("Stub Operator");
-    await screen.findByText("Platform connected");
+    await screen.findByText("Platform Connected");
 
     expect(rules(container)).toHaveLength(1);
     // And it is the group's, not the first block's: it wraps both of them.
@@ -71,7 +71,7 @@ describe("SidebarFooter", () => {
   it("draws that same one rule on a deployment without identity", async () => {
     vi.stubGlobal("fetch", serve({ body: { signed_in: false }, status: 404 }));
     const { container } = renderFooter();
-    await screen.findByText("Platform connected");
+    await screen.findByText("Platform Connected");
 
     expect(screen.queryByTestId("signed-in-as")).toBeNull();
     expect(rules(container)).toHaveLength(1);

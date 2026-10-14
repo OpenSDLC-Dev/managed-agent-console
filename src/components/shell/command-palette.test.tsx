@@ -125,15 +125,15 @@ describe("CommandPalette", () => {
     // dropped. Dashboard leads and is not a platform surface.
     expect(options.map((o) => o.textContent)).toEqual([
       "Dashboard",
-      "API keys",
+      "API Keys",
       "Files",
       "Skills",
       "Agents",
       "Sessions",
       "Deployments",
       "Environments",
-      "Credential vaults",
-      "Memory stores",
+      "Credential Vaults",
+      "Memory Stores",
       "Dreams",
     ]);
 

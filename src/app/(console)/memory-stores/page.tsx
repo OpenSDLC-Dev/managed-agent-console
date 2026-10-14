@@ -106,7 +106,7 @@ function MemoryStoresList() {
   return (
     <div>
       <PageHeader
-        title="Memory stores"
+        title="Memory Stores"
         subtitle={SURFACES["memory-stores"].blurb}
         actions={<CreateMemoryStoreButton />}
       />

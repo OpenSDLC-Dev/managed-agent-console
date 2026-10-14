@@ -50,7 +50,7 @@ export const SURFACES = {
   },
   "memory-stores": {
     path: "v1/memory_stores",
-    label: "Memory stores",
+    label: "Memory Stores",
     blurb: "Durable files shared across agent sessions.",
   },
   dreams: {
@@ -65,7 +65,7 @@ export const SURFACES = {
   },
   vaults: {
     path: "v1/vaults",
-    label: "Credential vaults",
+    label: "Credential Vaults",
     blurb: "Credentials your agents use for MCP servers and other tools.",
   },
   skills: {
@@ -91,7 +91,7 @@ export const SURFACES = {
   // on authority it cannot verify.
   "api-keys": {
     path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
-    label: "API keys",
+    label: "API Keys",
     api: "console",
     // Shorter than this page's own subtitle, and deliberately: that one warns
     // what a management key can do and outlives, which is the right thing to

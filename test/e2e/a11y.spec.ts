@@ -68,7 +68,7 @@ test("memory store list, detail, memory, version and forms pass axe", async ({
   const memory = "mem_projectbrief000000001";
   const version = "memver_briefmodified000001";
   for (const [route, ready] of [
-    ["/memory-stores", "Memory stores"],
+    ["/memory-stores", "Memory Stores"],
     [`/memory-stores/${store}`, "Project notes"],
     [`/memory-stores/${store}/memories/${memory}`, "/brief.md"],
     [`/memory-stores/${store}/versions/${version}`, "Memory version"],
