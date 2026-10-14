@@ -6,6 +6,20 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Added
+
+- **`MODEL_GATEWAY_BASE_URL` connects the console to the platform's model gateway**
+  ([plan 10](docs/plan/10_model-gateway.md)). The console proxies the gateway's admin API under
+  `/api/gateway/`, with the same credential rules as the control plane. No screen uses it yet. When
+  the variable is unset, every gateway path answers 404.
+
+### Security
+
+- **The BFF percent-encodes each path segment it forwards, and refuses one that holds a control
+  character.** The URL parser deletes tabs, LFs and CRs before it resolves dot segments. A segment
+  such as `..%09` passed the dot-segment check and was sent as `..`, so a crafted link could take
+  the management credential outside `/v1`.
+
 ### Changed
 
 - **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the

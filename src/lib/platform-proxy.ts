@@ -12,12 +12,13 @@ import {
 import { SIGNED_OUT_HEADER } from "@/lib/identity/signed-out";
 
 /**
- * The BFF's forwarding core, shared by the two proxy routes.
+ * The BFF's forwarding core, shared by the proxy routes.
  *
- * The console reaches the platform over two namespaces that differ in nothing
- * but their path: `/v1/...` (the wire surface) and `/api/oauth/...` (the
- * off-wire console API plan 30 mirrored from the reference console). Both are
- * management-authenticated and both must inject the key server-side, so the
+ * The console reaches the platform over namespaces that differ in nothing
+ * but their path: `/v1/...` (the wire surface), `/api/oauth/...` (the
+ * off-wire console API plan 30 mirrored from the reference console), and the
+ * model gateway's `/admin/v1/...` on a server of its own ({@link Upstream}).
+ * All are management-authenticated and all must inject the key server-side, so the
  * injection, the header allowlists, the streaming and the failure envelopes
  * live here once — a second copy is a second place to forget that an inbound
  * `x-api-key` must never be forwarded.
@@ -64,45 +65,76 @@ export function envelope(
  * Whether a segment would make the request we *send* differ from the path a
  * route's gate approved.
  *
- * Each gate checks a string; `fetch` then reparses the URL we build from it,
- * and WHATWG URL resolution collapses dot segments. So
- * `organizations/../environments/e/tokens` satisfies a shape check and is sent
- * as `environments/e/tokens` — the gate asserts one path and the management
- * credential travels to another. The `/v1` gate is the sharper case: it only
- * inspects the first segment, so `v1/../../x` leaves the wire surface entirely.
+ * Each gate checks decoded segments, and `forward` percent-encodes every one
+ * before it builds the URL. So no character inside a segment — `/`, `?`, `#`,
+ * `%`, `\` — can select another path or start a query on the wire, and a
+ * gateway model name holding one reaches the gateway intact (PR #215 review).
  *
- * `%` is refused with them. Next decodes the catch-all once per segment, so a
- * surviving `%` is double-encoded input — and the URL standard resolves
- * `%2e%2e` as `..` too, which means one decoding pass is not enough to see it.
- * No path this console builds carries anything but platform ids, none of which
- * contain a percent sign, so refusing the character costs nothing.
+ * Encoding leaves dots alone, and WHATWG URL resolution collapses dot
+ * segments. So `organizations/../environments/e/tokens` would satisfy a shape
+ * check and be sent as `environments/e/tokens` — the gate asserts one path and
+ * the management credential travels to another. The `/v1` gate is the sharper
+ * case: it only inspects the first segment, so `v1/../../x` would leave the
+ * wire surface entirely. Those segments are refused here, with the empty one.
  *
- * Belt-and-braces by design: it lives in the shared core rather than in either
- * gate, so a third route added later inherits it without having to know.
+ * Control characters go too. Encoded they are harmless, but no id and no
+ * gateway model name can hold one (`checkToken` refuses them), so refusing
+ * them costs nothing and keeps a raw one from ever reaching a URL.
+ *
+ * Belt-and-braces by design: it lives in the shared core rather than in any
+ * gate, so a route added later inherits it without having to know.
  */
-function escapesItsPath(upstreamPath: string): boolean {
-  return upstreamPath
-    .split("/")
-    .some(
-      (segment) =>
-        segment === "" ||
-        segment === "." ||
-        segment === ".." ||
-        segment.includes("%") ||
-        segment.includes("\\"),
-    );
+function unsafeSegment(segment: string): boolean {
+  return (
+    segment === "" ||
+    segment === "." ||
+    segment === ".." ||
+    CONTROL.test(segment)
+  );
 }
 
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
 /**
- * Forward `request` to `<PLATFORM_BASE_URL>/<upstreamPath>` with the management
- * key attached. `upstreamPath` is built by the calling route from its own
- * validated path — never from raw user input.
+ * A server the BFF forwards to. The control plane is the default; the model
+ * gateway's admin API is the other (plan 10). Both take the same credential —
+ * the operator's token in identity mode, the management key otherwise — so the
+ * credential logic below is shared, and only these facts differ.
+ */
+export interface Upstream {
+  /** Throws, as `platformBaseUrl` does, when the deployment did not configure it. */
+  baseUrl: () => string;
+  /** What the 502 calls it, and the variable that points at it. */
+  name: string;
+  variable: string;
+  /**
+   * Whether a 401 from it means the operator's token is dead. The control
+   * plane verifies that token and nothing else; the gateway also answers 401
+   * when it runs without `IDENTITY_*`, a configuration fault that ending the
+   * session would turn into signing every operator out (plan 10 decision 4).
+   */
+  endsSessionOn401: boolean;
+}
+
+const PLATFORM: Upstream = {
+  baseUrl: platformBaseUrl,
+  name: "platform",
+  variable: "PLATFORM_BASE_URL",
+  endsSessionOn401: true,
+};
+
+/**
+ * Forward `request` to `<base URL>/<segments>` with the credential attached.
+ * `segments` are decoded, as Next hands a catch-all over, and built by the
+ * calling route from its own validated path — never from raw user input.
  */
 export async function forward(
   request: NextRequest,
-  upstreamPath: string,
+  segments: string[],
+  target: Upstream = PLATFORM,
 ): Promise<Response> {
-  if (escapesItsPath(upstreamPath)) {
+  const upstreamPath = segments.join("/");
+  if (segments.some(unsafeSegment)) {
     return envelope(
       404,
       "invalid_request_error",
@@ -133,7 +165,7 @@ export async function forward(
   let baseUrl: string;
   let apiKey: string | undefined;
   try {
-    baseUrl = platformBaseUrl();
+    baseUrl = target.baseUrl();
     // The management key is not read at all in identity mode. It stays in the
     // pod as the deep health check's own credential, and this is what keeps the
     // two apart: a request the operator made never touches it.
@@ -146,7 +178,7 @@ export async function forward(
     );
   }
 
-  const url = `${baseUrl}/${upstreamPath}${request.nextUrl.search}`;
+  const url = `${baseUrl}/${segments.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
   const headers = new Headers();
   for (const name of FORWARD_REQUEST_HEADERS) {
     const value = request.headers.get(name);
@@ -181,7 +213,7 @@ export async function forward(
     return envelope(
       502,
       "api_error",
-      "platform unreachable — check PLATFORM_BASE_URL",
+      `${target.name} unreachable — check ${target.variable}`,
     );
   }
 
@@ -204,7 +236,11 @@ export async function forward(
   // any site can make this request. So where the platform answers 401 for a
   // value the browser chose — a foreign organization on the console
   // namespaces — the route refuses that path before it reaches here.
-  if (upstream.status === 401 && session !== undefined) {
+  if (
+    upstream.status === 401 &&
+    session !== undefined &&
+    target.endsSessionOn401
+  ) {
     deleteSession(handle);
     responseHeaders.set(SIGNED_OUT_HEADER, "1");
     return clearIdentityCookie(

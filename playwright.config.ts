@@ -8,6 +8,9 @@ ensureLoopbackProxyBypass();
 
 const CONSOLE_PORT = 3100;
 const MOCK_PORT = 18080;
+// The model gateway double, in the mock's process on a port of its own
+// (test/fidelity/consoles.ts GATEWAY_PORT gives the reason).
+const GATEWAY_PORT = 18070;
 
 export default defineConfig({
   testDir: "test/e2e",
@@ -36,6 +39,7 @@ export default defineConfig({
       env: {
         MOCK_PLATFORM_PORT: String(MOCK_PORT),
         MOCK_PLATFORM_KEY: "test-key",
+        MOCK_GATEWAY_PORT: String(GATEWAY_PORT),
       },
     },
     {
@@ -49,6 +53,7 @@ export default defineConfig({
       env: {
         PLATFORM_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
         PLATFORM_API_KEY: "test-key",
+        MODEL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
         CONSOLE_PASSWORD: "test-password",
       },
     },

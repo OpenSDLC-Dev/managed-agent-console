@@ -17,6 +17,17 @@ export function platformApiKey(): string {
   return key;
 }
 
+/**
+ * Base URL of the platform's model gateway (`cmd/modelgateway`), whose
+ * `/admin/v1/` API the gateway screens drive. Unset ⇒ this deployment runs no
+ * gateway the console manages, and the gateway BFF answers every path 404 so
+ * the screens hide (plan 10 decision 5). Optional, unlike PLATFORM_BASE_URL.
+ */
+export function modelGatewayBaseUrl(): string | undefined {
+  const url = process.env.MODEL_GATEWAY_BASE_URL;
+  return url ? url.replace(/\/+$/, "") : undefined;
+}
+
 /** Unset ⇒ the login gate is disabled (loopback/dev deployments). */
 export function consolePassword(): string | undefined {
   return process.env.CONSOLE_PASSWORD || undefined;

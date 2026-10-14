@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 import {
   CONSOLE_PORTS,
   consoleUrl,
+  GATEWAY_PORT,
+  GATEWAY_URL,
   IDP_CLIENT_ID,
   IDP_ISSUER,
   IDP_PORT,
@@ -75,6 +77,7 @@ export default defineConfig({
         MOCK_PLATFORM_PORT: String(MOCK_PORT),
         MOCK_PLATFORM_KEY: "test-key",
         MOCK_OIDC_PORT: String(IDP_PORT),
+        MOCK_GATEWAY_PORT: String(GATEWAY_PORT),
         // The same constant the console is handed below: discovery compares the
         // document's issuer to IDENTITY_OIDC_ISSUER byte for byte.
         MOCK_OIDC_ISSUER: IDP_ISSUER,
@@ -93,6 +96,7 @@ export default defineConfig({
       env: {
         PLATFORM_BASE_URL: MOCK_URL,
         PLATFORM_API_KEY: "test-key",
+        MODEL_GATEWAY_BASE_URL: GATEWAY_URL,
         CONSOLE_PASSWORD: "test-password",
         // Stated rather than left unset: `next start` fills anything this block
         // does not name from a developer's `.env.local`, and an IDENTITY_MODE
@@ -116,6 +120,7 @@ export default defineConfig({
       // four below read as absent when empty (`env.ts`, `identity/config.ts`).
       env: {
         PLATFORM_BASE_URL: MOCK_URL,
+        MODEL_GATEWAY_BASE_URL: GATEWAY_URL,
         // Cleared, not omitted. In identity mode the BFF never reads it, so a
         // page that renders here can only have rendered on the operator's own
         // token — which is what these shots are evidence of. Inheriting a real

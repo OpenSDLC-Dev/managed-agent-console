@@ -63,7 +63,7 @@ async function proxy(
       `unsupported console path "/api/console/${joined}"`,
     );
   }
-  const response = await forward(request, `api/console/${joined}`);
+  const response = await forward(request, ["api", "console", ...path]);
   // The one response in the console that carries a plaintext credential. The
   // platform already marks it `no-store` and the proxy forwards that header, so
   // this is a floor rather than a correction: a credential must not be cached

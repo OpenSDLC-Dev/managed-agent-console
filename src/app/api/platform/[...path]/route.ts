@@ -49,7 +49,7 @@ async function proxy(
       `unsupported proxy path "/${joined}"`,
     );
   }
-  return forward(request, joined);
+  return forward(request, path);
 }
 
 export {

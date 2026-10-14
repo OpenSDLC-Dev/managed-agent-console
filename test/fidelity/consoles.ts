@@ -27,6 +27,15 @@ export const MOCK_URL = `http://127.0.0.1:${MOCK_PORT}`;
 export const IDP_PORT = 18091;
 
 /**
+ * The model gateway double (`test/mock-platform/gateway.mjs`), in the mock
+ * platform's process on a port of its own for the reason the provider has one:
+ * the gateway is a server of its own, not a path on the platform. 18070 is the
+ * e2e tier's slot.
+ */
+export const GATEWAY_PORT = 18071;
+export const GATEWAY_URL = `http://127.0.0.1:${GATEWAY_PORT}`;
+
+/**
  * Byte-identical to the console's `IDENTITY_OIDC_ISSUER`, which is why both
  * processes are handed this one constant: `discover()` compares the discovery
  * document's `issuer` to the configured one as an exact string (OIDC Discovery

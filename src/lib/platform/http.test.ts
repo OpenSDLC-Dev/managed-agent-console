@@ -8,6 +8,9 @@ import {
   consoleGet,
   consolePost,
   consolePostNoContent,
+  gatewayDelete,
+  gatewayGet,
+  gatewayPost,
   platformDelete,
   platformGet,
   platformPost,
@@ -293,6 +296,93 @@ describe("console-API helpers", () => {
         "organizations/default/environments/env_1/tokens/gone/revoke",
       ),
     ).rejects.toBeInstanceOf(PlatformError);
+  });
+});
+
+describe("model gateway helpers", () => {
+  it("gatewayGet targets the admin API under /api/gateway with the query", async () => {
+    const fetchMock = vi.fn(async () => json({ data: [], has_more: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    await gatewayGet("usage/requests", { limit: 50, before: undefined });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gateway/admin/v1/usage/requests?limit=50",
+    );
+  });
+
+  it("gatewayPost sends JSON and returns the parsed body", async () => {
+    const fetchMock = vi.fn(async () => json({ id: "gwprov_1" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      gatewayPost("providers", { profile: "deepseek" }),
+    ).resolves.toEqual({ id: "gwprov_1" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/gateway/admin/v1/providers", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ profile: "deepseek" }),
+    });
+  });
+
+  it("gatewayDelete returns the deletion receipt", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({ type: "provider_deleted", id: "gwprov_1" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(gatewayDelete("providers/gwprov_1")).resolves.toEqual({
+      type: "provider_deleted",
+      id: "gwprov_1",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gateway/admin/v1/providers/gwprov_1",
+      { method: "DELETE" },
+    );
+  });
+
+  // A model name may hold `?`, `#` or `%` (checkAliasName). Raw, the browser
+  // would read `?b` as a query and delete `aliases/a` (PR #215 review, P1).
+  it("probe: encodes a model name's parts before the browser parses the URL", async () => {
+    const fetchMock = vi.fn(async () =>
+      json({ type: "alias_deleted", name: "x" }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await gatewayDelete("aliases/Qwen/a?b#c%d");
+    const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
+    expect(url).toBe("/api/gateway/admin/v1/aliases/Qwen/a%3Fb%23c%25d");
+    const parsed = new URL(url, "http://console");
+    expect(parsed.search).toBe("");
+    expect(parsed.hash).toBe("");
+    expect(parsed.pathname.split("/").map(decodeURIComponent)).toEqual([
+      "",
+      "api",
+      "gateway",
+      "admin",
+      "v1",
+      "aliases",
+      "Qwen",
+      "a?b#c%d",
+    ]);
+  });
+
+  it("throws a PlatformError with the gateway's envelope", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          {
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "provider has deployments",
+            },
+          },
+          409,
+        ),
+      ),
+    );
+    const error = await gatewayDelete("providers/gwprov_1").catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(PlatformError);
+    expect(error).toMatchObject({ status: 409 });
   });
 });
 
