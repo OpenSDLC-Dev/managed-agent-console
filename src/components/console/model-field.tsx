@@ -55,6 +55,7 @@ export function ModelField({
   readOnly,
   placeholder,
   className,
+  error,
 }: {
   id: string;
   value: string;
@@ -64,6 +65,8 @@ export function ModelField({
   placeholder?: string;
   /** For the text box; the select shows names in mono. */
   className?: string;
+  /** Why Save sent nothing; only the select can lack a choice. */
+  error?: string;
 }) {
   if (readOnly || !choices.names)
     return (
@@ -93,6 +96,8 @@ export function ModelField({
           id={id}
           className="w-full"
           data-model={known ? value : ""}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${id}-error` : undefined}
         >
           <SelectValue placeholder="Choose a model">
             {known ? <span className="font-mono">{value}</span> : undefined}
@@ -106,6 +111,11 @@ export function ModelField({
           ))}
         </SelectContent>
       </Select>
+      {error && (
+        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         The gateway&apos;s chat models. To add one, go to{" "}
         <Link href="/models" className="underline underline-offset-2">

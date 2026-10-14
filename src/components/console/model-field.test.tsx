@@ -165,7 +165,7 @@ describe("ModelField", () => {
 });
 
 describe("the agent editor's model", () => {
-  it("saves only once a listed model is chosen", async () => {
+  it("sends nothing until a listed model is chosen, and says why on the field", async () => {
     const fetchMock = stubGatewayFetch((method, rest) => {
       if (!rest.startsWith("/api/platform/")) return undefined;
       return method === "POST"
@@ -185,18 +185,20 @@ describe("the agent editor's model", () => {
     );
     const save = screen.getByRole("button", { name: "Save changes" });
     const minimax = await screen.findByRole("option", { name: "minimax-m3" });
-    expect(save).toBeDisabled();
-    await userEvent.click(minimax);
-    expect(save).toBeEnabled();
+    const sent = () =>
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+    // Enabled, as for every field the platform requires; it sends nothing.
     await userEvent.click(save);
-    await waitFor(() =>
-      expect(
-        fetchMock.mock.calls.find(([, init]) => init?.method === "POST"),
-      ).toBeDefined(),
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "choose one of the gateway's models",
     );
-    const [, init] = fetchMock.mock.calls.find(
-      ([, i]) => i?.method === "POST",
-    )!;
-    expect(JSON.parse(String(init!.body)).model).toEqual({ id: "minimax-m3" });
+    expect(sent()).toHaveLength(0);
+    await userEvent.click(minimax);
+    expect(screen.queryByRole("alert")).toBeNull();
+    await userEvent.click(save);
+    await waitFor(() => expect(sent()).toHaveLength(1));
+    expect(JSON.parse(String(sent()[0][1]!.body)).model).toEqual({
+      id: "minimax-m3",
+    });
   });
 });

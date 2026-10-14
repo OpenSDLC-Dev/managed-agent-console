@@ -361,7 +361,8 @@ jobs:
               echo "---"
               sed -e "s|CONSOLE_IMAGE|$(esc "$IMAGE:$GITHUB_SHA")|g" \
                   -e "s|SECRETS_CHECKSUM|$(esc "$SECRETS_CHECKSUM")|g" \
-                  -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g"                   -e "s|MODELGATEWAY_URL|$(esc "$MODELGATEWAY_URL")|g" \
+                  -e "s|CONTROLPLANE_URL|$(esc "$CONTROLPLANE_URL")|g" \
+                  -e "s|MODELGATEWAY_URL|$(esc "$MODELGATEWAY_URL")|g" \
                   -e "s|CONSOLE_HOST|$(esc "$CONSOLE_HOST")|g" "$f"
             done
           }
