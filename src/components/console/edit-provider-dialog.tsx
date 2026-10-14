@@ -54,7 +54,7 @@ function EditProviderDialog({
   provider: GatewayProvider;
   onClose: () => void;
 }) {
-  const update = useUpdateGatewayProvider(provider.id);
+  const update = useUpdateGatewayProvider(provider.id, { errorToast: false });
   const [name, setName] = useState(provider.name);
   const [headers, setHeaders] = useState(() =>
     Object.entries(provider.headers).map(([key, value]) => ({ key, value })),

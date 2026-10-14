@@ -115,10 +115,14 @@ export function useCreateGatewayProvider() {
   });
 }
 
-export function useUpdateGatewayProvider(id: string) {
+/** `errorToast: false` is for the Edit dialog, which shows the refusal itself. */
+export function useUpdateGatewayProvider(
+  id: string,
+  { errorToast = true } = {},
+) {
   const client = useQueryClient();
   return useMutation({
-    meta: { errorTitle: "Update failed" },
+    meta: errorToast ? { errorTitle: "Update failed" } : { errorToast: false },
     mutationFn: (body: GatewayProviderUpdate) =>
       gatewayPost<GatewayProvider>(`providers/${id}`, body),
     onSuccess: (provider) => providerChanged(client, provider),
@@ -250,10 +254,14 @@ export function useCreateGatewayDeployment() {
   });
 }
 
-export function useUpdateGatewayDeployment() {
+/**
+ * `errorToast: false` is for the edit dialog, which shows the gateway's
+ * refusal itself; a row's Enable/Disable has nowhere else to show it.
+ */
+export function useUpdateGatewayDeployment({ errorToast = true } = {}) {
   const client = useQueryClient();
   return useMutation({
-    meta: { errorToast: false },
+    meta: errorToast ? { errorTitle: "Update failed" } : { errorToast: false },
     mutationFn: ({ id, ...body }: GatewayDeploymentUpdate & { id: string }) =>
       gatewayPost<GatewayDeployment>(`deployments/${id}`, body),
     onSuccess: () =>

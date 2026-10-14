@@ -10,6 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UpstreamModels } from "./upstream-models";
+import { Providers } from "@/components/shell/providers";
+import { toastPlatformError } from "@/lib/platform/toast-error";
 import {
   gatewayFixtures,
   resetGateway,
@@ -19,6 +21,10 @@ import {
   stubGatewayFetch,
 } from "../../../test/mock-platform/gateway-fetch";
 import type { GatewayProvider } from "@/lib/platform/types";
+
+vi.mock("@/lib/platform/toast-error", () => ({
+  toastPlatformError: vi.fn(),
+}));
 
 resetGateway();
 const providers = gatewayFixtures().providers as GatewayProvider[];
@@ -41,6 +47,7 @@ const row = async (model: string) =>
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe("UpstreamModels", () => {
@@ -115,5 +122,42 @@ describe("UpstreamModels", () => {
       cache_write: null,
       cache_read: null,
     });
+  });
+
+  // The row toggle shares its hook with the edit dialog, which answers a
+  // refusal inline; the toggle has no dialog, so its refusal must toast.
+  it("toasts a refused Enable/Disable", async () => {
+    // jsdom has no matchMedia; the shell's <Toaster> needs it.
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    stubGatewayFetch((method, rest) =>
+      method === "POST" && rest.startsWith("deployments/")
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "permission_error", message: "viewer role" },
+            },
+            { status: 403 },
+          )
+        : undefined,
+    );
+    render(
+      <Providers>
+        <UpstreamModels provider={DEEPSEEK} />
+      </Providers>,
+    );
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Disable" }),
+    );
+    await waitFor(() =>
+      expect(toastPlatformError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "viewer role" }),
+        "Update failed",
+      ),
+    );
   });
 });

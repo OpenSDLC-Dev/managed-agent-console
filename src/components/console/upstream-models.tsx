@@ -266,7 +266,7 @@ function UpstreamModelDialog({
   onClose: () => void;
 }) {
   const create = useCreateGatewayDeployment();
-  const update = useUpdateGatewayDeployment();
+  const update = useUpdateGatewayDeployment({ errorToast: false });
   const mutation = deployment ? update : create;
   const [model, setModel] = useState(deployment?.upstream_model ?? "");
   const [kind, setKind] = useState<GatewayKind>(deployment?.kind ?? "chat");

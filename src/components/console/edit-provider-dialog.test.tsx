@@ -4,6 +4,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EditProviderButton } from "./edit-provider-dialog";
+import { Providers } from "@/components/shell/providers";
+import { toastPlatformError } from "@/lib/platform/toast-error";
 import {
   gatewayFixtures,
   resetGateway,
@@ -13,6 +15,10 @@ import {
   stubGatewayFetch,
 } from "../../../test/mock-platform/gateway-fetch";
 import type { GatewayProvider } from "@/lib/platform/types";
+
+vi.mock("@/lib/platform/toast-error", () => ({
+  toastPlatformError: vi.fn(),
+}));
 
 resetGateway();
 const providers = gatewayFixtures().providers as GatewayProvider[];
@@ -32,6 +38,7 @@ function renderEdit(provider: GatewayProvider) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 describe("EditProviderButton", () => {
@@ -65,7 +72,14 @@ describe("EditProviderButton", () => {
     });
   });
 
-  it("shows the gateway's refusal and stays open", async () => {
+  // Inline only: the shell's toast would report the same refusal twice.
+  it("shows the gateway's refusal inline, without a toast, and stays open", async () => {
+    // jsdom has no matchMedia; the shell's <Toaster> needs it.
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
     stubGatewayFetch(() =>
       Response.json(
         {
@@ -78,11 +92,17 @@ describe("EditProviderButton", () => {
         { status: 400 },
       ),
     );
-    await renderEdit(providers[0]);
+    render(
+      <Providers>
+        <EditProviderButton provider={providers[0]} />
+      </Providers>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "would carry a credential",
     );
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(toastPlatformError).not.toHaveBeenCalled();
   });
 });
