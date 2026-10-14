@@ -150,7 +150,9 @@ describe("ModelDialog", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Remove Primary upstream model 2" }),
     );
-    expect(screen.queryByText("Fallback 1")).toBeNull();
+    expect(
+      document.querySelectorAll("[role=dialog] [data-priority]"),
+    ).toHaveLength(1);
     // The last target left cannot be removed: a model needs one.
     expect(
       screen.getByRole("button", { name: "Remove Primary upstream model 1" }),

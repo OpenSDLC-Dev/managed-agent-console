@@ -41,6 +41,7 @@ describe("tiers", () => {
     ]);
   });
 
+  // The one test that asserts the tier label's strings.
   it("labels tiers by position, not by priority number", () => {
     expect([0, 1, 2].map(tierLabel)).toEqual([
       "Primary",
@@ -93,13 +94,11 @@ describe("RoutingTiers", () => {
       "0",
       "1",
     ]);
-    expect(boxes[0]).toHaveTextContent("Primary");
     expect(boxes[0]).toHaveTextContent("on MiniMax CN");
     expect(
       [...boxes[0].querySelectorAll("[data-share]")].map((s) =>
         s.getAttribute("data-share"),
       ),
     ).toEqual(["0.75", "0.25"]);
-    expect(boxes[1]).toHaveTextContent("Fallback 1");
   });
 });

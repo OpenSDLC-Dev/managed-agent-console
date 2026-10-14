@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ModelSetupDialog } from "./model-setup";
+import { ModelSetupDialog, NoModelsCallout } from "./model-setup";
 import { stubGatewayFetch } from "../../../test/mock-platform/gateway-fetch";
 
 const SECRET = "sk-setup-0123456789abcdef";
@@ -183,5 +183,69 @@ describe("ModelSetupDialog", () => {
     expect(JSON.stringify(client.getQueryCache().getAll())).not.toContain(
       SECRET,
     );
+  });
+
+  describe("from the empty-gateway callout", () => {
+    function renderCallout() {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <NoModelsCallout onDone={vi.fn()} />
+        </QueryClientProvider>,
+      );
+    }
+    const open = () =>
+      userEvent.click(screen.getByRole("button", { name: "Set up a model" }));
+    const cancel = () =>
+      userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // The gateway takes a second provider of the same name, so starting over
+    // would leave the first one and its key behind.
+    it("resumes where it stopped after a close, without a second provider", async () => {
+      let refuse = true;
+      const fetchMock = stubGatewayFetch((method, rest) =>
+        refuse && method === "POST" && rest === "deployments"
+          ? Response.json(
+              { type: "error", error: { type: "api_error", message: "down" } },
+              { status: 500 },
+            )
+          : undefined,
+      );
+      renderCallout();
+      await open();
+      await fill();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await screen.findByRole("alert");
+      await cancel();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+      refuse = false;
+      await open();
+      expect(states()).toEqual([
+        "provider:done",
+        "key:done",
+        "deployment:failed",
+        "model:pending",
+      ]);
+      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(posts(fetchMock).map(([path]) => path)).toContain("aliases");
+      expect(
+        posts(fetchMock).filter(([path]) => path === "providers"),
+      ).toHaveLength(1);
+    });
+
+    it("probe: closing drops a key the gateway has not sealed", async () => {
+      stubGatewayFetch();
+      renderCallout();
+      await open();
+      await fill();
+      await cancel();
+      await open();
+      expect(screen.getByLabelText("API key")).toHaveValue("");
+      expect(document.body.innerHTML).not.toContain(SECRET);
+    });
   });
 });

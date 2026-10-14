@@ -40,6 +40,10 @@ type Made = Partial<Record<Step, { id: string; label: string }>>;
 /**
  * Shown on Models while the gateway has none. Until one exists, every
  * agent's model call fails, so the page says so and offers the setup.
+ *
+ * The dialog stays mounted once opened, so closing it partway and opening it
+ * again resumes where it stopped. Starting over would make a second provider:
+ * the gateway does not refuse a duplicate name.
  */
 export function NoModelsCallout({
   onDone,
@@ -47,6 +51,7 @@ export function NoModelsCallout({
   onDone: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState(false);
   return (
     <div
       className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${WARNING_BOX}`}
@@ -56,11 +61,19 @@ export function NoModelsCallout({
         The gateway has no models yet. Every agent&apos;s model call fails until
         one exists.
       </span>
-      <Button size="sm" className="h-8" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        className="h-8"
+        onClick={() => {
+          setOpen(true);
+          setOpened(true);
+        }}
+      >
         Set up a model
       </Button>
-      {open && (
+      {opened && (
         <ModelSetupDialog
+          open={open}
           onClose={() => setOpen(false)}
           onDone={(name) => {
             setOpen(false);
@@ -80,13 +93,15 @@ export function NoModelsCallout({
  * failed. That is orchestration of the operator's own calls, not domain
  * logic: each call's body is what the single-resource dialogs send.
  *
- * The vendor key lives in this form's state only until the gateway seals it,
- * and goes through no mutation cache.
+ * The vendor key lives in this form's state only until the gateway seals it
+ * or the dialog closes, and goes through no mutation cache.
  */
 export function ModelSetupDialog({
+  open = true,
   onClose,
   onDone,
 }: {
+  open?: boolean;
   onClose: () => void;
   onDone: (name: string) => void;
 }) {
@@ -177,7 +192,9 @@ export function ModelSetupDialog({
         });
         return { id: created.name, label: created.name };
       });
-      void client.invalidateQueries({ queryKey: ["gateway"] });
+      // The list is read again before the page inspects the new model, so the
+      // inspector never opens on a list that lacks it.
+      await client.invalidateQueries({ queryKey: ["gateway"] });
       onDone(modelName);
     } catch (error) {
       setFailure({
@@ -198,6 +215,12 @@ export function ModelSetupDialog({
         : failure?.step === s
           ? "failed"
           : "pending";
+  // Closing drops a key the gateway has not sealed; everything else stays
+  // for the next open.
+  const close = () => {
+    setKey("");
+    onClose();
+  };
   const ready =
     !!profile &&
     (!!made.key || !!key.trim()) &&
@@ -206,9 +229,9 @@ export function ModelSetupDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onOpenChange={(next) => {
-        if (!next && !running) onClose();
+        if (!next && !running) close();
       }}
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto p-6 sm:max-w-[600px]">
@@ -345,7 +368,7 @@ export function ModelSetupDialog({
             A failed step stops here and keeps what was made.
           </span>
           <span className="flex gap-2">
-            <Button variant="ghost" disabled={!!running} onClick={onClose}>
+            <Button variant="ghost" disabled={!!running} onClick={close}>
               Cancel
             </Button>
             <Button disabled={!ready || !!running} onClick={() => void run()}>

@@ -145,7 +145,6 @@ describe("ModelsPage", () => {
         ),
       ).toEqual(["0", "1"]),
     );
-    expect(within(panel).getByText("Fallback 1")).toBeInTheDocument();
 
     await userEvent.click(
       within(panel).getByRole("button", { name: "Delete" }),
