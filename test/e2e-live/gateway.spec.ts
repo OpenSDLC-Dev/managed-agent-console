@@ -68,6 +68,20 @@ test("a model made through the gateway BFF reaches the console's screens", async
     targets: [{ deployment_id: deployment.id, priority: 0, weight: 1 }],
   });
 
+  // Add provider lists every vendor the real gateway publishes, so the
+  // console's transcription parses each profile.
+  const profiles = (await gw("GET", "profiles")).data as {
+    display_name: string;
+  }[];
+  await page.goto("/providers");
+  await page.getByRole("button", { name: "Add provider" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add provider" });
+  for (const p of profiles)
+    await expect(
+      dialog.getByText(p.display_name, { exact: true }),
+    ).toBeVisible();
+  await page.keyboard.press("Escape");
+
   // Models lists it, and its inspector routes it to the upstream model.
   await page.goto(`/models?model=${encodeURIComponent(RUN)}`);
   await expect(page.getByText(UPSTREAM).first()).toBeVisible();
