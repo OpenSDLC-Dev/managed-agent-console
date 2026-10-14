@@ -20,6 +20,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   their protocols and weights, and upstream models with limits, prices and the models that route to
   them. An Edit dialog changes the name, extra headers, stall timeout and trace context. The
   console keeps no copy of a vendor key once the gateway has it.
+- **Model Gateway → Models.** The list shows each name agents send, with its kind and the upstream
+  models it routes to. The inspector shows the routing tiers and each target's share. A dialog adds
+  a model or edits its routing: tiers of upstream models with weights, tried in order. An embedding
+  model keeps its one upstream model.
 
 ### Security
 

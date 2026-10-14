@@ -285,3 +285,60 @@ export function useDeleteGatewayDeployment() {
       void client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
   });
 }
+
+/** aliases.go targetJSON — a weight left out is 1. */
+export type GatewayTargetInput = GatewayAlias["targets"][number];
+
+/**
+ * A model's path. `gatewayGet` and friends encode each part, so a name may
+ * hold any character the wire allows; its own slashes stay separators, which
+ * the gateway's `{name...}` route joins back.
+ */
+export const aliasPath = (name: string) => `aliases/${name}`;
+
+function aliasChanged(client: QueryClient) {
+  void client.invalidateQueries({ queryKey: ["gateway", "aliases"] });
+  // "Used by" on a provider's page reads the aliases too.
+  void client.invalidateQueries({ queryKey: ["gateway", "deployments"] });
+}
+
+/** aliases.go createAlias — the kind is the targets', so it is not sent. */
+export function useCreateGatewayAlias() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: {
+      name: string;
+      display_name?: string;
+      targets: GatewayTargetInput[];
+    }) => gatewayPost<GatewayAlias>("aliases", body),
+    onSuccess: () => aliasChanged(client),
+  });
+}
+
+/** aliases.go updateAlias — `targets`, when named, replaces them whole. */
+export function useUpdateGatewayAlias(name: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: {
+      display_name?: string;
+      targets?: GatewayTargetInput[];
+    }) => gatewayPost<GatewayAlias>(aliasPath(name), body),
+    onSuccess: () => aliasChanged(client),
+  });
+}
+
+/**
+ * Refused with a 409 while a key policy grants the model (store/aliases.go);
+ * the toast carries the gateway's message, which names the keys.
+ */
+export function useDeleteGatewayAlias(name: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: () =>
+      gatewayDelete<{ type: "alias_deleted"; name: string }>(aliasPath(name)),
+    onSuccess: () => aliasChanged(client),
+  });
+}

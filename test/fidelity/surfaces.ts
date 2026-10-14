@@ -975,6 +975,13 @@ export const SURFACES: Surface[] = [
     description: "Resource list with byte sizes and an upload action.",
   },
   {
+    id: "models-list",
+    route: "/models",
+    fixture: "5 gateway models: chat, embedding, rerank",
+    description:
+      "Model gateway models: name and display name, kind, and the upstream models each routes to by tier and share.",
+  },
+  {
     id: "providers-list",
     route: "/providers",
     fixture: "4 gateway providers, one disabled on plain HTTP",
@@ -989,6 +996,13 @@ export const SURFACES: Surface[] = [
     fixture: AGENT,
     description:
       "Detail sections, coordinator roster, config rendering, version history table.",
+  },
+  {
+    id: "model-inspector",
+    route: "/models?model=agent-default",
+    fixture: "agent-default: a 3:1 primary tier and one fallback",
+    description:
+      "Non-modal model inspector: kind, actions, and the routing tiers with each target's provider and share.",
   },
   {
     id: "environment-inspector",
@@ -1955,10 +1969,22 @@ export const SURFACES: Surface[] = [
   // finding, PR #38). One representative per distinct layout, not one per
   // instance: the four resource dialogs share a shell, so `vault-create`
   // stands for its shape and `credential-add` earns its own entry only
-  // because it is the write-only-secret form. `provider-add` earns one for
-  // its vendor grid, a layout no other dialog has; `provider-key-add` for
-  // the gateway's write-only key, and `upstream-model-edit` for its price
-  // grid.
+  // because it is the write-only-secret form. `model-edit` earns one for its
+  // routing tiers and `provider-add` for its vendor grid, layouts no other
+  // dialog has; `provider-key-add` for the gateway's write-only key, and
+  // `upstream-model-edit` for its price grid.
+  {
+    id: "model-edit",
+    route: "/models?model=agent-default",
+    fixture: "agent-default",
+    description:
+      "Edit routing: tiers of upstream models with weights and shares, add a target or a fallback tier.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit routing", exact: true })
+        .click();
+    },
+  },
   {
     id: "provider-add",
     route: "/providers",

@@ -128,6 +128,7 @@ describe("CommandPalette", () => {
       "API Keys",
       "Files",
       "Skills",
+      "Models",
       "Providers",
       "Agents",
       "Sessions",

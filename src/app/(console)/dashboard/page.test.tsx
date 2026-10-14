@@ -27,7 +27,7 @@ function renderDashboard(unimplemented?: string[]) {
       const absent = unimplemented.some((s) =>
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : s === "providers"
+          : s === "model-gateway"
             ? String(input).includes("/api/gateway/")
             : String(input).includes(`/v1/${s}?`),
       );
@@ -105,6 +105,7 @@ describe("DashboardPage", () => {
       ["api-keys", "/api-keys"],
       ["files", "/files"],
       ["skills", "/skills"],
+      ["models", "/models"],
       ["providers", "/providers"],
       ["agents", "/agents"],
       ["sessions", "/sessions"],
@@ -140,14 +141,14 @@ describe("DashboardPage", () => {
   });
 
   it("drops the Model Gateway section on a console that runs without one", async () => {
-    renderDashboard(["providers"]);
+    renderDashboard(["model-gateway"]);
     await waitFor(() => expect(headings()).not.toContain("Model Gateway"));
     expect(card("agents")).not.toBeNull();
   });
 
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(11);
+    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(12);
   });
 
   it("hides shortcuts whose platform surfaces are unavailable", async () => {
