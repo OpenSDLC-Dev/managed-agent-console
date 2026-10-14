@@ -106,33 +106,53 @@ describe("ModelSetupDialog", () => {
     ]);
   });
 
+  /**
+   * The mock gateway, losing the answer to the first POST to `path` after it
+   * lands, and to the first `lostReads` reads of `path` after that.
+   */
+  function loseAnswers(path: string, lostReads = 0) {
+    const fetchMock = stubGatewayFetch();
+    emptyGateway();
+    let lostWrite = false;
+    let reads = lostReads;
+    const lost = () =>
+      Response.json(
+        { type: "error", error: { type: "api_error", message: "reset" } },
+        { status: 502 },
+      );
+    vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+      const answer = await fetchMock(input, init);
+      if (!input.endsWith(`/${path}`)) return answer;
+      if (init?.method === "POST" && !lostWrite) {
+        lostWrite = true;
+        return lost();
+      }
+      if (!init?.method && lostWrite && reads > 0) {
+        reads--;
+        return lost();
+      }
+      return answer;
+    });
+    return fetchMock;
+  }
+  const writes = (fetchMock: ReturnType<typeof stubGatewayFetch>) =>
+    posts(fetchMock).map(([p]) => p.split("/").at(-1));
+  const resume = () =>
+    userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
   // None of the four writes is idempotent. A write that landed but whose
-  // answer was lost is found in the gateway, not made a second time.
+  // answer was lost is found in the gateway on Continue, not made again.
   it.each(["providers", "credentials", "deployments", "aliases"])(
     "probe: does not repeat a %s write whose answer was lost",
     async (path) => {
-      const fetchMock = stubGatewayFetch();
-      emptyGateway();
-      let lose = true;
-      vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
-        const answer = await fetchMock(input, init);
-        if (lose && init?.method === "POST" && input.endsWith(`/${path}`)) {
-          lose = false;
-          return Response.json(
-            {
-              type: "error",
-              error: { type: "api_error", message: "connection reset" },
-            },
-            { status: 502 },
-          );
-        }
-        return answer;
-      });
+      const fetchMock = loseAnswers(path);
       const { onDone } = renderSetup();
       await fill();
       await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await screen.findByRole("alert");
+      await resume();
       await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
-      expect(posts(fetchMock).map(([p]) => p.split("/").at(-1))).toEqual([
+      expect(writes(fetchMock)).toEqual([
         "providers",
         "credentials",
         "deployments",
@@ -140,6 +160,20 @@ describe("ModelSetupDialog", () => {
       ]);
     },
   );
+
+  it("probe: fails a step again, without the write, when its lookup is lost too", async () => {
+    const fetchMock = loseAnswers("providers", 1);
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await resume();
+    await waitFor(() => expect(states()[0]).toBe("provider:failed"));
+    expect(writes(fetchMock)).toEqual(["providers"]);
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "providers")).toHaveLength(1);
+  });
 
   it("offers only vendors whose hosts are published", async () => {
     stubGatewayFetch();

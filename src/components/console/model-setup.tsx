@@ -157,6 +157,10 @@ export function ModelSetupDialog({
 
   const run = async () => {
     if (!profile) return;
+    // None of these writes is idempotent, and a lost answer can hide one that
+    // landed. So the step that failed is looked up before it is tried again,
+    // and a failed lookup fails the step again rather than repeat the write.
+    const retry = failure?.step;
     setFailure(undefined);
     const ids: Made = { ...made };
     let current: Step = "provider";
@@ -169,16 +173,7 @@ export function ModelSetupDialog({
       current = id;
       if (ids[id]) return;
       setRunning(id);
-      try {
-        ids[id] = await call();
-      } catch (error) {
-        // None of these writes is idempotent, and a lost answer can hide one
-        // that landed. So a failure is checked against what the gateway now
-        // holds, and Continue never makes a row a second time.
-        const found = await find().catch(() => undefined);
-        if (!found) throw error;
-        ids[id] = found;
-      }
+      ids[id] = (id === retry && (await find())) || (await call());
       setMade({ ...ids });
     };
     const list = async <T,>(path: string, match: (row: T) => boolean) =>
@@ -458,7 +453,7 @@ export function ModelSetupDialog({
             <Button disabled={!ready || !!running} onClick={() => void run()}>
               {running
                 ? "Creating…"
-                : Object.keys(made).length
+                : failure || Object.keys(made).length
                   ? "Continue"
                   : "Create"}
             </Button>
