@@ -10,6 +10,11 @@ import type {
  * in the platform): the lowest priority is tried first, and a tier is used only when
  * every target above it fails before answering. Inside a tier, traffic splits
  * by weight. The console groups and shares; it never reorders.
+ *
+ * A share is the target's part of its tier's weight, as configured. The
+ * router skips a target that cannot serve a request (disabled, or with no key
+ * allowed on its protocol), and the console does not recompute that: the
+ * inspector marks a disabled target, and the hint names the rule.
  */
 
 export interface TierTarget {

@@ -80,9 +80,10 @@ function Model({
       <section className="pt-5">
         <h4 className="text-[15px] font-medium">Routing</h4>
         <p className="pb-2 text-[13px] text-muted-foreground">
-          Tried top to bottom. Inside a tier, traffic splits by weight. A
-          failure before the first byte tries the next key, then the next
-          upstream model in the tier, then the next tier.
+          Tried top to bottom. Inside a tier, traffic splits by weight across
+          the upstream models that can serve the request. A failure before the
+          first byte tries the next key, then the next upstream model in the
+          tier, then the next tier.
         </p>
         <RoutingTiers
           alias={alias}
