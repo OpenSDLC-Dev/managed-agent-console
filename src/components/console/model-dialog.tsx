@@ -257,9 +257,8 @@ export function ModelDialog({
                         <>
                           <Input
                             aria-label={`${label} weight`}
-                            type="number"
-                            min={1}
-                            max={1000}
+                            type="text"
+                            inputMode="numeric"
                             value={row.weight}
                             onChange={(e) =>
                               setRow(t, i, { ...row, weight: e.target.value })

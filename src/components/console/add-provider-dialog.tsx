@@ -282,9 +282,8 @@ function ProviderForm({
               <Label htmlFor="provider-stall">Stall timeout (ms)</Label>
               <Input
                 id="provider-stall"
-                type="number"
-                min={1}
-                step={1}
+                type="text"
+                inputMode="numeric"
                 placeholder="Gateway default"
                 value={stallMs}
                 onChange={(e) => setStallMs(e.target.value)}

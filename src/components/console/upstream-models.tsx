@@ -416,8 +416,8 @@ function UpstreamModelDialog({
                   <Label htmlFor="upstream-max-input">Context window</Label>
                   <Input
                     id="upstream-max-input"
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Tokens"
                     value={maxInput}
                     onChange={(e) => setMaxInput(e.target.value)}
@@ -427,8 +427,8 @@ function UpstreamModelDialog({
                   <Label htmlFor="upstream-max-output">Max output</Label>
                   <Input
                     id="upstream-max-output"
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Tokens"
                     value={maxOutput}
                     onChange={(e) => setMaxOutput(e.target.value)}
@@ -447,9 +447,8 @@ function UpstreamModelDialog({
                   <Label htmlFor={`upstream-price-${k}`}>{label}</Label>
                   <Input
                     id={`upstream-price-${k}`}
-                    type="number"
-                    min={0}
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="—"
                     value={prices[k]}
                     onChange={(e) =>

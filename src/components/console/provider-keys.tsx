@@ -264,9 +264,8 @@ function AddKeyDialog({
             <Label htmlFor="gateway-key-weight">Weight</Label>
             <Input
               id="gateway-key-weight"
-              type="number"
-              min={1}
-              step={1}
+              type="text"
+              inputMode="numeric"
               className="w-28"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}

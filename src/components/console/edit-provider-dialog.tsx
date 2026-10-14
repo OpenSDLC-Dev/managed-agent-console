@@ -152,9 +152,8 @@ function EditProviderDialog({
             <Label htmlFor="edit-provider-stall">Stall timeout (ms)</Label>
             <Input
               id="edit-provider-stall"
-              type="number"
-              min={1}
-              step={1}
+              type="text"
+              inputMode="numeric"
               placeholder="Gateway default"
               value={stallMs}
               onChange={(e) => setStallMs(e.target.value)}

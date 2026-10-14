@@ -240,11 +240,25 @@ export async function gatewayGet<T>(
   return (await response.json()) as T;
 }
 
+/**
+ * JSON has no Infinity or NaN, and JSON.stringify writes either as null,
+ * which the gateway reads as "unset" or "no limit": "1e309" typed as a rate
+ * limit would lift it. So such a body is not sent at all. The gateway forms'
+ * number fields are text inputs for the same reason: a number input hands
+ * the page "" for text it cannot parse, and "" reads as unset.
+ */
+const finiteJson = (body: unknown) =>
+  JSON.stringify(body, (key, value) => {
+    if (typeof value === "number" && !Number.isFinite(value))
+      throw new Error(`${key} is not a number the gateway can take.`);
+    return value;
+  });
+
 export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(gatewayUrl(path), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: finiteJson(body),
   });
   await assertOk(response);
   return (await response.json()) as T;

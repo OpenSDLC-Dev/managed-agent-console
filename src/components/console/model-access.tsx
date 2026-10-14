@@ -324,9 +324,8 @@ function ModelAccessDialog({
                   <Label htmlFor="access-rpm">Requests per minute</Label>
                   <Input
                     id="access-rpm"
-                    type="number"
-                    min={1}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="No limit"
                     value={rpm}
                     onChange={(e) => setRpm(e.target.value)}
@@ -336,9 +335,8 @@ function ModelAccessDialog({
                   <Label htmlFor="access-tpm">Tokens per minute</Label>
                   <Input
                     id="access-tpm"
-                    type="number"
-                    min={1}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="No limit"
                     value={tpm}
                     onChange={(e) => setTpm(e.target.value)}

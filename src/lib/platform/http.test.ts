@@ -322,6 +322,24 @@ describe("model gateway helpers", () => {
     });
   });
 
+  // JSON has no Infinity or NaN; JSON.stringify writes either as null, which
+  // the gateway reads as "unset" or "no limit". "1e309" in a number field is
+  // Infinity.
+  it.each([
+    ["rpm", Infinity],
+    ["weight", NaN],
+  ])(
+    "probe: gatewayPost sends nothing when %s is not a finite number",
+    async (field, value) => {
+      const fetchMock = vi.fn(async () => json({}));
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        gatewayPost("key_policies/k", { targets: [{ [field]: value }] }),
+      ).rejects.toThrow(field);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("gatewayDelete returns the deletion receipt", async () => {
     const fetchMock = vi.fn(async () =>
       json({ type: "provider_deleted", id: "gwprov_1" }),

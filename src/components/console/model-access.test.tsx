@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -268,6 +269,19 @@ describe("Model access on API keys", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(message);
     expect(sentBody(fetchMock, "POST")).toMatchObject({ rpm: 0 });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("probe: does not lift a limit the operator typed past what JSON holds", async () => {
+    const fetchMock = stubGatewayFetch();
+    renderTable([CI]);
+    const dialog = await openAccess(CI);
+    const rpm = within(dialog).getByLabelText("Requests per minute");
+    fireEvent.change(rpm, { target: { value: "1e309" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("rpm");
+    expect(
+      fetchMock.mock.calls.filter(([, i]) => i?.method === "POST"),
+    ).toHaveLength(0);
   });
 
   // Archiving leaves the gateway's policy, and a policy blocks deleting any
