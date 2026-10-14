@@ -25,9 +25,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   a model or edits its routing: tiers of upstream models with weights, tried in order. An embedding
   model keeps its one upstream model.
 - **First-run setup for an empty gateway.** While the gateway has no models, Models says that every
-  agent's model call fails and offers one form. The form makes a provider, its key, an upstream
-  model and a model, in that order. A refused step stops the form and keeps what was made, and
-  Continue resumes at that step.
+  agent's model call fails. While it also has no provider, Models offers one form. The form makes a
+  provider, its key, an upstream model and a model, in that order. A refused step stops the form and
+  keeps what was made, and Continue resumes at that step.
 - **Model access on API Keys.** A column shows what each key may call through the gateway, and a
   dialog grants no models, every model, or selected models, with per-minute limits. The control
   plane's own keys show their built-in grant and offer no control. A model's inspector lists the
