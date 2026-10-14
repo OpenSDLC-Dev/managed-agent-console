@@ -300,7 +300,9 @@ export function ModelSetupDialog({
       // The list is read again before the page inspects the new model, so the
       // inspector never opens on a list that lacks it.
       await client.invalidateQueries({ queryKey: ["gateway"] });
-      onDone(modelName);
+      // The row that exists, which a recovered write may name differently
+      // from the form.
+      onDone(ids.model!.id);
     } catch (error) {
       setFailure({
         step: current,

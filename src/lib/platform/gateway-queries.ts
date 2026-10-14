@@ -293,7 +293,9 @@ export type GatewayTargetInput = GatewayAlias["targets"][number];
 /**
  * A model's path. `gatewayGet` and friends encode each part, so a name may
  * hold any character the wire allows; its own slashes stay separators, which
- * the gateway's `{name...}` route joins back.
+ * the gateway's `{name...}` route joins back. The gateway refuses a name
+ * with an empty, `.` or `..` part (validate.go checkAliasName), so no part
+ * is one the browser would resolve away.
  */
 export const aliasPath = (name: string) => `aliases/${name}`;
 

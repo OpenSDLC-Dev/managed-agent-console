@@ -189,6 +189,20 @@ describe("ModelSetupDialog", () => {
     );
   });
 
+  it("probe: opens the model that landed, not the name typed after", async () => {
+    loseAnswers("aliases");
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await userEvent.type(
+      screen.getByLabelText("Model name agents send"),
+      "-edited",
+    );
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
+  });
+
   it("probe: drops the vendor key when its write fails, and asks again only if the gateway has none", async () => {
     // Landed, answer lost: Continue finds the key without asking for it.
     let fetchMock = loseAnswers("credentials");
