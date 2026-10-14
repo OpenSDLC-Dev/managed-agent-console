@@ -47,6 +47,17 @@ describe("vendorLabel", () => {
     expect(vendorLabel(mixed, profiles)).toBe("MiniMax");
   });
 
+  it("names no site when one endpoint is published and another is custom", () => {
+    const partly = {
+      ...provider("gwprov_minimaxcn1"),
+      endpoints: {
+        anthropic: "https://api.minimax.cn/anthropic",
+        openai: "https://proxy.example.com/v1",
+      },
+    };
+    expect(vendorLabel(partly, profiles)).toBe("MiniMax");
+  });
+
   it("falls back to the wire name while the profiles are unread", () => {
     expect(vendorLabel(provider("gwprov_giteeai001"), undefined)).toBe("gitee");
   });

@@ -81,20 +81,20 @@ export function endpointEntries(provider: GatewayProvider) {
 
 /**
  * Which of a regional vendor's sites a provider calls, read off the endpoints
- * it was created with. Undefined for a single-site vendor, for an endpoint the
+ * it was created with. Undefined for a single-site vendor, for any endpoint the
  * profile does not publish, and for endpoints on both sites.
  */
 export function providerRegion(
   provider: GatewayProvider,
   profile: GatewayProfile | undefined,
 ): keyof typeof REGION_LABEL | undefined {
-  const urls = Object.values(provider.endpoints);
-  const regions = new Set(
-    profile?.hosts
-      .filter((h) => h.region && urls.includes(h.base_url))
-      .map((h) => h.region),
+  // Every endpoint must be one the site publishes: a custom URL beside a
+  // published one says nothing about which site that URL reaches.
+  const regions = Object.values(provider.endpoints).map(
+    (url) => profile?.hosts.find((h) => h.region && h.base_url === url)?.region,
   );
-  return regions.size === 1 ? [...regions][0] : undefined;
+  const [first] = regions;
+  return first && regions.every((r) => r === first) ? first : undefined;
 }
 
 /** "MiniMax · China": the vendor's name, and its site when it has two. */
