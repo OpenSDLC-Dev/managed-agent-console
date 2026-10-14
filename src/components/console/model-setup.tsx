@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IdCode, WARNING_BOX } from "@/components/console/bits";
-import { gatewayPost } from "@/lib/platform/http";
+import { gatewayGet, gatewayPost } from "@/lib/platform/http";
 import {
   useGatewayProfiles,
   useGatewayProviders,
@@ -160,58 +160,122 @@ export function ModelSetupDialog({
     setFailure(undefined);
     const ids: Made = { ...made };
     let current: Step = "provider";
+    type Row = { id: string; label: string };
     const step = async (
       id: Step,
-      call: () => Promise<{ id: string; label: string }>,
+      call: () => Promise<Row>,
+      find: () => Promise<Row | undefined>,
     ) => {
       current = id;
       if (ids[id]) return;
       setRunning(id);
-      ids[id] = await call();
+      try {
+        ids[id] = await call();
+      } catch (error) {
+        // None of these writes is idempotent, and a lost answer can hide one
+        // that landed. So a failure is checked against what the gateway now
+        // holds, and Continue never makes a row a second time.
+        const found = await find().catch(() => undefined);
+        if (!found) throw error;
+        ids[id] = found;
+      }
       setMade({ ...ids });
     };
+    const list = async <T,>(path: string, match: (row: T) => boolean) =>
+      // The newest match: providers, keys and upstream models list oldest
+      // first (store/*.go), and a model name is unique.
+      (await gatewayGet<{ data: T[] }>(path)).data.filter(match).at(-1);
+    const providerName = defaultName(profile, region);
     try {
-      await step("provider", async () => {
-        const created = await gatewayPost<GatewayProvider>("providers", {
-          name: defaultName(profile, region),
-          profile: profile.name,
-          endpoints: Object.fromEntries(
-            Object.entries(defaultEndpoints(profile, region))
-              .filter(([, e]) => e?.on && e.url)
-              .map(([protocol, e]) => [protocol, e!.url]),
-          ),
-        });
-        return { id: created.id, label: created.name };
-      });
-      await step("key", async () => {
-        const created = await gatewayPost<GatewayCredential>(
-          `providers/${ids.provider!.id}/credentials`,
-          { key },
-        );
-        setKey("");
-        return { id: created.id, label: `••••${created.last_four}` };
-      });
-      await step("deployment", async () => {
-        // Capabilities and prices start at the wire's zero values; the
-        // provider's page edits them.
-        const created = await gatewayPost<GatewayDeployment>("deployments", {
-          provider_id: ids.provider!.id,
-          upstream_model: upstream.trim(),
-          kind: "chat",
-          capabilities: { tools: false, thinking: false, vision: false },
-          prices: {},
-        });
-        return { id: created.id, label: created.upstream_model };
-      });
-      await step("model", async () => {
-        const created = await gatewayPost<GatewayAlias>("aliases", {
-          name: modelName,
-          targets: [
-            { deployment_id: ids.deployment!.id, priority: 0, weight: 1 },
-          ],
-        });
-        return { id: created.name, label: created.name };
-      });
+      await step(
+        "provider",
+        async () => {
+          const created = await gatewayPost<GatewayProvider>("providers", {
+            name: providerName,
+            profile: profile.name,
+            endpoints: Object.fromEntries(
+              Object.entries(defaultEndpoints(profile, region))
+                .filter(([, e]) => e?.on && e.url)
+                .map(([protocol, e]) => [protocol, e!.url]),
+            ),
+          });
+          return { id: created.id, label: created.name };
+        },
+        // The form runs on a gateway that had no provider when it opened.
+        async () => {
+          const found = await list<GatewayProvider>(
+            "providers",
+            (p) => p.name === providerName && p.profile === profile.name,
+          );
+          return found && { id: found.id, label: found.name };
+        },
+      );
+      await step(
+        "key",
+        async () => {
+          const created = await gatewayPost<GatewayCredential>(
+            `providers/${ids.provider!.id}/credentials`,
+            { key },
+          );
+          setKey("");
+          return { id: created.id, label: `••••${created.last_four}` };
+        },
+        // The provider is this run's, so any key on it is too.
+        async () => {
+          const found = await list<GatewayCredential>(
+            `providers/${ids.provider!.id}/credentials`,
+            () => true,
+          );
+          if (!found) return undefined;
+          setKey("");
+          return { id: found.id, label: `••••${found.last_four}` };
+        },
+      );
+      await step(
+        "deployment",
+        async () => {
+          // Capabilities and prices start at the wire's zero values; the
+          // provider's page edits them.
+          const created = await gatewayPost<GatewayDeployment>("deployments", {
+            provider_id: ids.provider!.id,
+            upstream_model: upstream.trim(),
+            kind: "chat",
+            capabilities: { tools: false, thinking: false, vision: false },
+            prices: {},
+          });
+          return { id: created.id, label: created.upstream_model };
+        },
+        async () => {
+          const found = await list<GatewayDeployment>(
+            "deployments",
+            (d) =>
+              d.provider_id === ids.provider!.id &&
+              d.upstream_model === upstream.trim(),
+          );
+          return found && { id: found.id, label: found.upstream_model };
+        },
+      );
+      await step(
+        "model",
+        async () => {
+          const created = await gatewayPost<GatewayAlias>("aliases", {
+            name: modelName,
+            targets: [
+              { deployment_id: ids.deployment!.id, priority: 0, weight: 1 },
+            ],
+          });
+          return { id: created.name, label: created.name };
+        },
+        async () => {
+          const found = await list<GatewayAlias>(
+            "aliases",
+            (a) =>
+              a.name === modelName &&
+              a.targets.some((t) => t.deployment_id === ids.deployment!.id),
+          );
+          return found && { id: found.name, label: found.name };
+        },
+      );
       // The list is read again before the page inspects the new model, so the
       // inspector never opens on a list that lacks it.
       await client.invalidateQueries({ queryKey: ["gateway"] });

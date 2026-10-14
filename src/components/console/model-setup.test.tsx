@@ -106,6 +106,41 @@ describe("ModelSetupDialog", () => {
     ]);
   });
 
+  // None of the four writes is idempotent. A write that landed but whose
+  // answer was lost is found in the gateway, not made a second time.
+  it.each(["providers", "credentials", "deployments", "aliases"])(
+    "probe: does not repeat a %s write whose answer was lost",
+    async (path) => {
+      const fetchMock = stubGatewayFetch();
+      emptyGateway();
+      let lose = true;
+      vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+        const answer = await fetchMock(input, init);
+        if (lose && init?.method === "POST" && input.endsWith(`/${path}`)) {
+          lose = false;
+          return Response.json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "connection reset" },
+            },
+            { status: 502 },
+          );
+        }
+        return answer;
+      });
+      const { onDone } = renderSetup();
+      await fill();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
+      expect(posts(fetchMock).map(([p]) => p.split("/").at(-1))).toEqual([
+        "providers",
+        "credentials",
+        "deployments",
+        "aliases",
+      ]);
+    },
+  );
+
   it("offers only vendors whose hosts are published", async () => {
     stubGatewayFetch();
     renderSetup();
