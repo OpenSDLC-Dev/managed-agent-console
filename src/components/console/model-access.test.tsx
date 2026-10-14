@@ -244,6 +244,54 @@ describe("Model access on API keys", () => {
     expect(deletes()).toHaveLength(1);
   });
 
+  // The gateway owns the bounds on a limit (admin/keypolicies.go), so the
+  // dialog checks none of its own and shows the gateway's refusal instead.
+  it("shows the gateway's refusal of a limit and stays open", async () => {
+    const message = "rpm must be at least 1, or null for no limit";
+    const fetchMock = stubGatewayFetch((method, rest) =>
+      method === "POST" && rest.startsWith("key_policies/")
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "invalid_request_error", message },
+            },
+            { status: 400 },
+          )
+        : undefined,
+    );
+    renderTable([CI]);
+    const dialog = await openAccess(CI);
+    const rpm = within(dialog).getByLabelText("Requests per minute");
+    await userEvent.clear(rpm);
+    await userEvent.type(rpm, "0");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(message);
+    expect(sentBody(fetchMock, "POST")).toMatchObject({ rpm: 0 });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  // Archiving leaves the gateway's policy, and a policy blocks deleting any
+  // model it names (store/aliases.go DeleteAlias); so the control that
+  // removes it stays.
+  it("probe: keeps the control on an archived key that still has a policy", async () => {
+    stubGatewayFetch();
+    const archived = { ...CI, status: "archived" as const };
+    const bare = { ...FRESH, status: "archived" as const };
+    renderTable([archived, bare]);
+    const row = (key: ApiKey) => screen.getByText(key.name).closest("tr")!;
+    expect(
+      await within(row(archived)).findByRole("button", {
+        name: "Model access",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(row(archived)).queryByRole("button", { name: /Archive API key/ }),
+    ).toBeNull();
+    expect(
+      within(row(bare)).queryByRole("button", { name: "Model access" }),
+    ).toBeNull();
+  });
+
   it("probe: drops the column on a console that runs without a gateway", async () => {
     // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
     stubGatewayFetch(() =>
