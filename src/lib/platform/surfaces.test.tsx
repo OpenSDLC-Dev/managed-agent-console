@@ -24,10 +24,11 @@ function wrapper() {
 /**
  * Fetch stub answering each probe by status, keyed on the surface name.
  *
- * Two prefixes, because one surface is not on the wire: management keys live in
- * the platform's off-wire console namespace and are probed through the other
- * BFF (`/api/console/...`). Collapsing both to a name here keeps every test
- * below written in surfaces rather than in URLs.
+ * Three prefixes, because two surfaces are not on the wire: management keys
+ * live in the platform's off-wire console namespace (`/api/console/...`), and
+ * the model gateway's admin API is a server of its own (`/api/gateway/...`).
+ * Collapsing all three to a name here keeps every test below written in
+ * surfaces rather than in URLs.
  */
 function stubProbes(status: (surface: string) => number) {
   vi.stubGlobal(
@@ -36,7 +37,9 @@ function stubProbes(status: (surface: string) => number) {
       const { pathname } = new URL(input, "http://console");
       const surface = pathname.startsWith("/api/console/")
         ? "api-keys"
-        : pathname.replace("/api/platform/v1/", "");
+        : pathname.startsWith("/api/gateway/")
+          ? pathname.replace("/api/gateway/admin/v1/", "")
+          : pathname.replace("/api/platform/v1/", "");
       const code = status(surface);
       return Promise.resolve(
         new Response(
@@ -183,7 +186,19 @@ describe("useSurfaces", () => {
       skills: false,
       files: false,
       "api-keys": true,
+      providers: true,
     });
+  });
+
+  // The gateway BFF answers this exact envelope for every path while
+  // MODEL_GATEWAY_BASE_URL is unset (src/app/api/gateway): the screens hide
+  // rather than error on a deployment that runs no gateway.
+  it("probe: hides the gateway surfaces when the console runs without a gateway", async () => {
+    stubProbes((surface) => (surface === "providers" ? 404 : 200));
+    const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(result.current?.providers).toBe(false);
+    expect(result.current?.agents).toBe(true);
   });
 
   it("probe: keeps a surface available when its probe fails with a 5xx", async () => {
@@ -218,12 +233,14 @@ describe("useSurfaces", () => {
     const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
     expect(calls).toHaveLength(Object.keys(SURFACES).length);
     for (const entry of Object.values(SURFACES)) {
-      // The wire surfaces ask for a page of one; the console namespace serves a
-      // bare array and reads no query params, so it is asked plainly.
+      // The wire surfaces ask for a page of one; the console namespace and the
+      // gateway serve unpaged lists, so they are asked plainly.
       expect(calls).toContain(
-        "api" in entry
-          ? `/api/console/${entry.path}`
-          : `/api/platform/${entry.path}?limit=1`,
+        !("api" in entry)
+          ? `/api/platform/${entry.path}?limit=1`
+          : entry.api === "gateway"
+            ? `/api/gateway/admin/v1/${entry.path}`
+            : `/api/console/${entry.path}`,
       );
     }
   });
