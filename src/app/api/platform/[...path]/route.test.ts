@@ -88,6 +88,26 @@ describe("platform BFF proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // The URL parser deletes every tab, LF and CR before it resolves dot
+  // segments, so a decoded `..%09` passes an exact `..` check and is then sent
+  // as `..` (PR #215 review, P1).
+  it.each([
+    ["a tab", "\t"],
+    ["a line feed", "\n"],
+    ["a carriage return", "\r"],
+  ])(
+    "probe: refuses a climb hidden by %s without contacting the platform",
+    async (_label, control) => {
+      const path = ["v1", `..${control}`, `.${control}.`, "admin", "keys"];
+      const response = await GET(
+        new NextRequest("http://localhost:3000/api/platform/v1/x"),
+        ctx(...path),
+      );
+      expect(response.status).toBe(404);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   // The work API is a worker's surface, authenticated by an environment key;
   // the platform answers any other credential there with a 401, which
   // `forward` reads as the operator's own token refused. The console never

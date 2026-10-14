@@ -78,6 +78,12 @@ export function envelope(
  * No path this console builds carries anything but platform ids, none of which
  * contain a percent sign, so refusing the character costs nothing.
  *
+ * Control characters are refused for the same reason. The URL parser deletes
+ * every tab, LF and CR in its input before it resolves dot segments, so a
+ * decoded `..%09` is not `..` here and is `..` on the wire (PR #215 review).
+ * Neither an id nor a gateway model name can hold one (`checkToken` refuses
+ * control characters), so the whole C0 range and DEL go.
+ *
  * Belt-and-braces by design: it lives in the shared core rather than in either
  * gate, so a third route added later inherits it without having to know.
  */
@@ -90,9 +96,12 @@ function escapesItsPath(upstreamPath: string): boolean {
         segment === "." ||
         segment === ".." ||
         segment.includes("%") ||
-        segment.includes("\\"),
+        segment.includes("\\") ||
+        CONTROL.test(segment),
     );
 }
+
+const CONTROL = /[\u0000-\u001f\u007f]/;
 
 /**
  * A server the BFF forwards to. The control plane is the default; the model

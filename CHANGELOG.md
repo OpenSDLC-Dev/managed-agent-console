@@ -13,6 +13,13 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   `/api/gateway/`, with the same credential rules as the control plane. No screen uses it yet. When
   the variable is unset, every gateway path answers 404.
 
+### Security
+
+- **The BFF refuses a path segment that holds a control character.** The URL parser deletes tabs,
+  LFs and CRs before it resolves dot segments. A segment such as `..%09` passed the dot-segment
+  check and was sent as `..`, so a crafted link could take the management credential outside
+  `/v1`.
+
 ### Changed
 
 - **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the

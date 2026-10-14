@@ -130,6 +130,11 @@ describe("model gateway BFF", () => {
     ["a decoded fragment", ["admin", "v1", "aliases", "a#b"]],
     ["a percent", ["admin", "v1", "aliases", "%2e%2e"]],
     ["a backslash", ["admin", "v1", "providers", "a\\b"]],
+    // The URL parser deletes tabs, LFs and CRs before resolving dot segments,
+    // so `..%09` would be sent as `..` (PR #215 review, P1).
+    ["a tab-hidden climb", ["admin", "v1", "aliases", "..\t", "profiles", "x"]],
+    ["a LF-hidden climb", ["admin", "v1", "aliases", ".\n.", "profiles", "x"]],
+    ["a CR-hidden climb", ["admin", "v1", "aliases", "\r..", "profiles", "x"]],
   ])(
     "probe: refuses a model name carrying %s without forwarding",
     async (_, path) => {
