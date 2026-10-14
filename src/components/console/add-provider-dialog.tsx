@@ -22,10 +22,10 @@ import {
 import type { GatewayProfile, GatewayProtocol } from "@/lib/platform/types";
 import { PROTOCOL_LABEL, REGION_LABEL } from "./gateway-bits";
 
-type Region = keyof typeof REGION_LABEL;
+export type Region = keyof typeof REGION_LABEL;
 type Endpoints = Partial<Record<GatewayProtocol, { on: boolean; url: string }>>;
 
-const isRegional = (profile: GatewayProfile) =>
+export const isRegional = (profile: GatewayProfile) =>
   profile.hosts.some((h) => h.region);
 
 /**
@@ -34,7 +34,10 @@ const isRegional = (profile: GatewayProfile) =>
  * other region starts unticked; a profile with no hosts at all (the "any
  * endpoint" profiles) starts ticked and empty, for the operator to fill.
  */
-function defaultEndpoints(profile: GatewayProfile, region: Region): Endpoints {
+export function defaultEndpoints(
+  profile: GatewayProfile,
+  region: Region,
+): Endpoints {
   return Object.fromEntries(
     profile.protocols.map((protocol) => {
       const hosts = profile.hosts.filter((h) => h.protocol === protocol);
@@ -48,7 +51,7 @@ function defaultEndpoints(profile: GatewayProfile, region: Region): Endpoints {
 }
 
 /** A name to start from, which the operator may change: "MiniMax CN". */
-function defaultName(profile: GatewayProfile, region: Region): string {
+export function defaultName(profile: GatewayProfile, region: Region): string {
   if (profile.hosts.length === 0) return "";
   const base = profile.display_name.split(" (")[0];
   if (!isRegional(profile)) return base;

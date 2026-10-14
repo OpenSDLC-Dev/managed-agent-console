@@ -95,3 +95,29 @@ test("a model name with a slash routes to its own path", async ({ page }) => {
   await expect(dialog).toBeHidden();
   await expect(panel.getByText("Coder · created")).toBeVisible();
 });
+
+test("a fresh gateway's first model, set up in one form", async ({
+  page,
+  request,
+}) => {
+  await request.post(`${MOCK}/__empty-gateway`);
+  await signIn(page, "/models");
+  const callout = page.getByTestId("no-models");
+  await callout.getByRole("button", { name: "Set up a model" }).click();
+  const dialog = page.getByRole("dialog", { name: "Set up a model" });
+  await dialog.getByLabel("Vendor").selectOption("deepseek");
+  await dialog.getByLabel("API key").fill("sk-e2e-0123456789abcd");
+  await dialog.getByLabel("Upstream model ID").fill("deepseek-v4-flash");
+  await dialog.getByRole("button", { name: "Create" }).click();
+
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(/\/models\?model=deepseek-v4-flash$/);
+  await expect(callout).toBeHidden();
+  const panel = page.getByRole("region", { name: "Model details" });
+  await expect(panel.getByText("on DeepSeek")).toBeVisible();
+
+  // The provider, its key and the upstream model are on Providers too.
+  await page.goto("/providers");
+  const provider = page.getByRole("row").filter({ hasText: "DeepSeek" });
+  await expect(provider.locator("[data-count]")).toHaveText(["1", "1"]);
+});

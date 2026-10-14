@@ -24,6 +24,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   models it routes to. The inspector shows the routing tiers and each target's share. A dialog adds
   a model or edits its routing: tiers of upstream models with weights, tried in order. An embedding
   model keeps its one upstream model.
+- **First-run setup for an empty gateway.** While the gateway has no models, Models says that every
+  agent's model call fails and offers one form. The form makes a provider, its key, an upstream
+  model and a model, in that order. A refused step stops the form and keeps what was made, and
+  Continue resumes at that step.
 
 ### Security
 

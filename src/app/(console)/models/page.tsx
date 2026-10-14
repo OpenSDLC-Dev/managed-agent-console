@@ -14,6 +14,7 @@ import {
 import { ResourceInspector } from "@/components/console/resource-inspector";
 import { ModelDetail } from "@/components/console/model-detail";
 import { ModelDialog } from "@/components/console/model-dialog";
+import { NoModelsCallout } from "@/components/console/model-setup";
 import { RoutesTo } from "@/components/console/model-routing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,7 @@ function ModelsList() {
         subtitle={SURFACES.models.blurb}
         actions={<AddModelButton />}
       />
+      {data && all.length === 0 && <NoModelsCallout onDone={inspect} />}
       <div className="flex items-center gap-1.5 pb-4 text-sm">
         <span className="text-muted-foreground">Kind</span>
         <Select

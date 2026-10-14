@@ -68,7 +68,8 @@ const SEAMS = [
     // a worker to one environment, a management key is root on the platform.
     // `provider-keys` is the inbound twin: a vendor key the operator types
     // once, which the gateway seals and the console must not keep (plan 10).
-    modules: ["environment-keys", "api-keys", "provider-keys"],
+    // `model-setup` takes the same key through a first-run form.
+    modules: ["environment-keys", "api-keys", "provider-keys", "model-setup"],
   },
   {
     dir: "src/lib/identity",

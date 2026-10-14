@@ -420,6 +420,15 @@ export function resetGateway() {
 }
 resetGateway();
 
+/** A gateway as a fresh deployment starts it: profiles only. */
+export function emptyGateway() {
+  providers = [];
+  credentials = [];
+  deployments = [];
+  aliases = [];
+  keyPolicies = [];
+}
+
 /** The seeded collections, for the conformance suite. */
 export const gatewayFixtures = () => ({
   profiles: PROFILES,

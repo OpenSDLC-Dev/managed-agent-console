@@ -33,7 +33,7 @@ import {
   vaultCredentials,
   vaults,
 } from "./fixtures.mjs";
-import { gatewayRoute, resetGateway } from "./gateway.mjs";
+import { emptyGateway, gatewayRoute, resetGateway } from "./gateway.mjs";
 import { PORT as OIDC_PORT, oidcServer, resetOidc } from "./oidc.mjs";
 
 const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
@@ -2609,6 +2609,16 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     res.writeHead(dream ? 200 : 404);
     res.end(JSON.stringify({ ok: !!dream }));
+    return;
+  }
+
+  // Test hook: the model gateway as a fresh deployment starts it, for the
+  // first-run setup. `/__reset` restores the seeds.
+  if (req.method === "POST" && url.pathname === "/__empty-gateway") {
+    emptyGateway();
+    res.setHeader("content-type", "application/json");
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true }));
     return;
   }
 

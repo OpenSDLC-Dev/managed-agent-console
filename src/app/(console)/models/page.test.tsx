@@ -170,6 +170,29 @@ describe("ModelsPage", () => {
     expect(await within(panel).findByText("No such model")).toBeInTheDocument();
   });
 
+  it("offers the first-run setup while the gateway has no models", async () => {
+    stubGatewayFetch((method, rest) =>
+      method === "GET" && rest === "aliases"
+        ? Response.json({ data: [] })
+        : undefined,
+    );
+    renderPage();
+    const callout = await screen.findByTestId("no-models");
+    await userEvent.click(
+      within(callout).getByRole("button", { name: "Set up a model" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Set up a model" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no setup once a model exists", async () => {
+    stubGatewayFetch();
+    renderPage();
+    await row("agent-default");
+    expect(screen.queryByTestId("no-models")).toBeNull();
+  });
+
   it("probe: stands in for the page on a console that runs without a gateway", async () => {
     // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
     stubGatewayFetch(() =>

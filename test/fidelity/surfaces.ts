@@ -1970,8 +1970,8 @@ export const SURFACES: Surface[] = [
   // instance: the four resource dialogs share a shell, so `vault-create`
   // stands for its shape and `credential-add` earns its own entry only
   // because it is the write-only-secret form. `model-edit` earns one for its
-  // routing tiers and `provider-add` for its vendor grid, layouts no other
-  // dialog has; `provider-key-add` for the gateway's write-only key, and
+  // routing tiers, `model-setup` for its step list and `provider-add` for its
+  // vendor grid, layouts no other dialog has; `provider-key-add` for the gateway's write-only key, and
   // `upstream-model-edit` for its price grid.
   {
     id: "model-edit",
@@ -1983,6 +1983,24 @@ export const SURFACES: Surface[] = [
       await page
         .getByRole("button", { name: "Edit routing", exact: true })
         .click();
+    },
+  },
+  {
+    id: "model-setup",
+    route: "/models",
+    fixture: "a gateway with no models",
+    description:
+      "First-run setup: the empty-gateway callout and the one form that makes a provider, its key, an upstream model and a model.",
+    setup: async (page) => {
+      const emptied = await page.request.post(MOCK_URL + "/__empty-gateway");
+      if (!emptied.ok()) throw new Error("Could not empty the mock gateway");
+      await page.reload();
+      await page
+        .getByRole("button", { name: "Set up a model", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Set up a model" });
+      await dialog.getByLabel("Vendor").selectOption("minimax");
+      await dialog.getByLabel("Upstream model ID").fill("MiniMax-M3");
     },
   },
   {
