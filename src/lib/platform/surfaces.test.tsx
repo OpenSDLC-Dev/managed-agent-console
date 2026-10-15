@@ -186,6 +186,7 @@ describe("useSurfaces", () => {
       skills: false,
       files: false,
       "api-keys": true,
+      models: true,
       providers: true,
     });
   });
@@ -194,10 +195,13 @@ describe("useSurfaces", () => {
   // MODEL_GATEWAY_BASE_URL is unset (src/app/api/gateway): the screens hide
   // rather than error on a deployment that runs no gateway.
   it("probe: hides the gateway surfaces when the console runs without a gateway", async () => {
-    stubProbes((surface) => (surface === "providers" ? 404 : 200));
+    stubProbes((surface) =>
+      surface === "providers" || surface === "aliases" ? 404 : 200,
+    );
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     expect(result.current?.providers).toBe(false);
+    expect(result.current?.models).toBe(false);
     expect(result.current?.agents).toBe(true);
   });
 

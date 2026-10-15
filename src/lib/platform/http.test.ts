@@ -11,6 +11,8 @@ import {
   gatewayDelete,
   gatewayGet,
   gatewayPost,
+  wireDecimal,
+  wireInteger,
   platformDelete,
   platformGet,
   platformPost,
@@ -320,6 +322,47 @@ describe("model gateway helpers", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ profile: "deepseek" }),
     });
+  });
+
+  // JSON has no Infinity or NaN; JSON.stringify writes either as null, which
+  // the gateway reads as "unset" or "no limit". "1e309" in a number field is
+  // Infinity.
+  it.each([
+    ["rpm", Infinity],
+    ["weight", NaN],
+  ])(
+    "probe: gatewayPost sends nothing when %s is not a finite number",
+    async (field, value) => {
+      const fetchMock = vi.fn(async () => json({}));
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(
+        gatewayPost("key_policies/k", { targets: [{ [field]: value }] }),
+      ).rejects.toThrow(field);
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("wireInteger keeps what JSON carries exactly, and NaNs what would round", () => {
+    expect(wireInteger("42")).toBe(42);
+    expect(wireInteger("9007199254740991")).toBe(9007199254740991);
+    expect(wireInteger("9007199254740993")).toBeNaN();
+    // A fraction is the gateway's to refuse, in its own words.
+    expect(wireInteger("1.5")).toBe(1.5);
+  });
+
+  it.each(["0x10", "1e3", "1.0000000000000001", "9007199254740990.5"])(
+    "probe: wireInteger NaNs %s, which Number reads as an integer nobody typed",
+    (text) => {
+      expect(wireInteger(text)).toBeNaN();
+    },
+  );
+
+  it("wireDecimal reads decimal notation only", () => {
+    expect(wireDecimal("0.15")).toBe(0.15);
+    expect(wireDecimal(".5")).toBe(0.5);
+    expect(wireDecimal("2e-1")).toBe(0.2);
+    expect(wireDecimal("0x10")).toBeNaN();
+    expect(wireDecimal("Infinity")).toBeNaN();
   });
 
   it("gatewayDelete returns the deletion receipt", async () => {

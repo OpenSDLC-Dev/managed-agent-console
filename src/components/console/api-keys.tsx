@@ -22,11 +22,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ConfirmIconButton } from "@/components/console/archive-button";
+import {
+  ModelAccessButton,
+  RemovePolicyButton,
+  ModelAccessCell,
+} from "@/components/console/model-access";
 import { Trash2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
 import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
+import { useGatewayKeyPolicies } from "@/lib/platform/gateway-queries";
+import { isUnimplemented } from "@/lib/platform/surfaces";
 import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import type { ApiKey } from "@/lib/platform/types";
 
@@ -399,6 +406,11 @@ export function ApiKeysTable({
   error: unknown;
 }) {
   const update = useUpdateApiKey();
+  // Model access is the model gateway's (plan 10); a console without one
+  // answers 404 and the column goes. While unknown, it shows.
+  const policies = useGatewayKeyPolicies();
+  const gateway = !isUnimplemented(policies.error);
+  const policyList = policies.data?.data;
 
   const columns: Column<ApiKey>[] = [
     {
@@ -429,6 +441,21 @@ export function ApiKeysTable({
         </span>
       ),
     },
+    ...(gateway
+      ? [
+          {
+            key: "model_access",
+            header: "Model access",
+            cell: (k: ApiKey) => (
+              <ModelAccessCell
+                apiKey={k}
+                policies={policyList}
+                loading={policies.isPending}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       key: "created",
       header: "Created",
@@ -464,15 +491,33 @@ export function ApiKeysTable({
         // refuses every mutation on it: its lifecycle is rotation-by-restart.
         // Showing controls that are guaranteed to 400 would be a worse lie than
         // showing none, and this is a mirror of the wire rather than a rule
-        // stricter than it.
-        if (!k.created_by) return null;
+        // stricter than it. A gateway policy on such a key is not the key,
+        // and stays removable.
+        const policy = policyList?.find((p) => p.api_key_id === k.id);
+        if (!k.created_by)
+          return gateway && policy ? (
+            <span className="flex justify-end">
+              <RemovePolicyButton apiKey={k} />
+            </span>
+          ) : null;
         // Archived is terminal on this surface, and an expired key admits
         // exactly one operation — archiving it. Both are the platform's rules,
-        // stated in its refusals.
-        if (k.status === "archived") return null;
+        // stated in its refusals. Archiving leaves the gateway's policy, which
+        // blocks deleting any model it names, so its removal stays offered;
+        // neither key is offered a grant, which could only block that.
+        if (k.status === "archived")
+          return gateway && policy ? (
+            <span className="flex justify-end">
+              <RemovePolicyButton apiKey={k} />
+            </span>
+          ) : null;
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
+            {gateway && policyList && !expired && (
+              <ModelAccessButton apiKey={k} policy={policy} />
+            )}
+            {gateway && expired && policy && <RemovePolicyButton apiKey={k} />}
             {!expired && (
               <Button
                 variant="ghost"

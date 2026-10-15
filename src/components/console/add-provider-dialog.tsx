@@ -21,11 +21,12 @@ import {
 } from "@/lib/platform/gateway-queries";
 import type { GatewayProfile, GatewayProtocol } from "@/lib/platform/types";
 import { PROTOCOL_LABEL, REGION_LABEL } from "./gateway-bits";
+import { wireInteger } from "@/lib/platform/http";
 
-type Region = keyof typeof REGION_LABEL;
+export type Region = keyof typeof REGION_LABEL;
 type Endpoints = Partial<Record<GatewayProtocol, { on: boolean; url: string }>>;
 
-const isRegional = (profile: GatewayProfile) =>
+export const isRegional = (profile: GatewayProfile) =>
   profile.hosts.some((h) => h.region);
 
 /**
@@ -34,7 +35,10 @@ const isRegional = (profile: GatewayProfile) =>
  * other region starts unticked; a profile with no hosts at all (the "any
  * endpoint" profiles) starts ticked and empty, for the operator to fill.
  */
-function defaultEndpoints(profile: GatewayProfile, region: Region): Endpoints {
+export function defaultEndpoints(
+  profile: GatewayProfile,
+  region: Region,
+): Endpoints {
   return Object.fromEntries(
     profile.protocols.map((protocol) => {
       const hosts = profile.hosts.filter((h) => h.protocol === protocol);
@@ -48,7 +52,7 @@ function defaultEndpoints(profile: GatewayProfile, region: Region): Endpoints {
 }
 
 /** A name to start from, which the operator may change: "MiniMax CN". */
-function defaultName(profile: GatewayProfile, region: Region): string {
+export function defaultName(profile: GatewayProfile, region: Region): string {
   if (profile.hosts.length === 0) return "";
   const base = profile.display_name.split(" (")[0];
   if (!isRegional(profile)) return base;
@@ -156,7 +160,7 @@ function ProviderForm({
         endpoints: Object.fromEntries(
           chosen.map(([protocol, e]) => [protocol, e.url.trim()]),
         ),
-        ...(stallMs.trim() ? { stall_timeout_ms: Number(stallMs) } : {}),
+        ...(stallMs.trim() ? { stall_timeout_ms: wireInteger(stallMs) } : {}),
         ...(trace ? { propagate_trace: true } : {}),
       },
       { onSuccess: (created) => router.push(`/providers/${created.id}`) },
@@ -279,9 +283,8 @@ function ProviderForm({
               <Label htmlFor="provider-stall">Stall timeout (ms)</Label>
               <Input
                 id="provider-stall"
-                type="number"
-                min={1}
-                step={1}
+                type="text"
+                inputMode="numeric"
                 placeholder="Gateway default"
                 value={stallMs}
                 onChange={(e) => setStallMs(e.target.value)}

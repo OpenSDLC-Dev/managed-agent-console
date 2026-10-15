@@ -31,6 +31,7 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
+import { wireDecimal, wireInteger } from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -303,14 +304,14 @@ function UpstreamModelDialog({
 
   const capabilities = {
     ...flags,
-    ...(maxInput.trim() ? { max_input_tokens: Number(maxInput) } : {}),
-    ...(maxOutput.trim() ? { max_tokens: Number(maxOutput) } : {}),
+    ...(maxInput.trim() ? { max_input_tokens: wireInteger(maxInput) } : {}),
+    ...(maxOutput.trim() ? { max_tokens: wireInteger(maxOutput) } : {}),
   };
   // A blank price is unpriced: left out on create, null on an update, which
   // replaces the prices whole.
   const priceBody: Partial<Prices> = {};
   for (const [k] of PRICES) {
-    if (prices[k].trim()) priceBody[k] = Number(prices[k]);
+    if (prices[k].trim()) priceBody[k] = wireDecimal(prices[k]);
     else if (deployment) priceBody[k] = null;
   }
 
@@ -416,8 +417,8 @@ function UpstreamModelDialog({
                   <Label htmlFor="upstream-max-input">Context window</Label>
                   <Input
                     id="upstream-max-input"
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Tokens"
                     value={maxInput}
                     onChange={(e) => setMaxInput(e.target.value)}
@@ -427,8 +428,8 @@ function UpstreamModelDialog({
                   <Label htmlFor="upstream-max-output">Max output</Label>
                   <Input
                     id="upstream-max-output"
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
                     placeholder="Tokens"
                     value={maxOutput}
                     onChange={(e) => setMaxOutput(e.target.value)}
@@ -447,9 +448,8 @@ function UpstreamModelDialog({
                   <Label htmlFor={`upstream-price-${k}`}>{label}</Label>
                   <Input
                     id={`upstream-price-${k}`}
-                    type="number"
-                    min={0}
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="—"
                     value={prices[k]}
                     onChange={(e) =>

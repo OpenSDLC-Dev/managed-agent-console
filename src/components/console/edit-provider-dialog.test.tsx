@@ -72,6 +72,19 @@ describe("EditProviderButton", () => {
     });
   });
 
+  // The bounds are the gateway's (providers.go stallTimeout), so the dialog
+  // checks none of its own and shows the gateway's refusal.
+  it("leaves the stall timeout's bounds to the gateway, and shows its refusal", async () => {
+    stubGatewayFetch();
+    await renderEdit(providers[0]);
+    await userEvent.type(screen.getByLabelText("Stall timeout (ms)"), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "stall_timeout_ms must be between 1 and 2147483647",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   // Inline only: the shell's toast would report the same refusal twice.
   it("shows the gateway's refusal inline, without a toast, and stays open", async () => {
     // jsdom has no matchMedia; the shell's <Toaster> needs it.

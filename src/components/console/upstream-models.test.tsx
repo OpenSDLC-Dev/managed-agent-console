@@ -122,6 +122,23 @@ describe("UpstreamModels", () => {
     expect(await screen.findByText("deepseek-v4-lite")).toBeInTheDocument();
   });
 
+  // Number reads "0x10" as 16, a price nobody typed (PR #218 review).
+  it("probe: sends no price other than the one typed", async () => {
+    const fetchMock = stubGatewayFetch();
+    renderModels();
+    await row("deepseek-v4-pro");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Edit deepseek-v4-pro" }),
+    );
+    await userEvent.clear(screen.getByLabelText("Input"));
+    await userEvent.type(screen.getByLabelText("Input"), "0x10");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("input");
+    expect(
+      fetchMock.mock.calls.filter(([, i]) => i?.method === "POST"),
+    ).toHaveLength(0);
+  });
+
   it("edits without sending the fields fixed at creation, and replaces prices whole", async () => {
     const fetchMock = stubGatewayFetch();
     renderModels();

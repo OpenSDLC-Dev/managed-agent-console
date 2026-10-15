@@ -1,0 +1,435 @@
+import "@testing-library/jest-dom/vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ModelSetupDialog, NoModelsCallout } from "./model-setup";
+import { stubGatewayFetch } from "../../../test/mock-platform/gateway-fetch";
+import { emptyGateway } from "../../../test/mock-platform/gateway.mjs";
+
+const SECRET = "sk-setup-0123456789abcdef";
+
+function renderSetup() {
+  const onDone = vi.fn();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <ModelSetupDialog onClose={vi.fn()} onDone={onDone} />
+    </QueryClientProvider>,
+  );
+  return { onDone, client };
+}
+
+/** Each POST the setup made, as `[path, body]`. */
+const posts = (fetchMock: ReturnType<typeof stubGatewayFetch>) =>
+  fetchMock.mock.calls
+    .filter(([, init]) => init?.method === "POST")
+    .map(([url, init]) => [
+      String(url).replace("/api/gateway/admin/v1/", ""),
+      JSON.parse(String(init!.body)),
+    ]);
+
+const states = () =>
+  [...document.querySelectorAll("[data-step]")].map(
+    (s) => `${s.getAttribute("data-step")}:${s.getAttribute("data-state")}`,
+  );
+
+async function fill(model = "MiniMax-M3") {
+  await screen.findByRole("option", { name: "MiniMax" });
+  await userEvent.selectOptions(screen.getByLabelText("Vendor"), "minimax");
+  await userEvent.type(screen.getByLabelText("API key"), SECRET);
+  await userEvent.type(screen.getByLabelText("Upstream model ID"), model);
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe("ModelSetupDialog", () => {
+  it("makes a provider, its key, an upstream model and a model, in that order", async () => {
+    const fetchMock = stubGatewayFetch();
+    const { onDone } = renderSetup();
+    await fill();
+    // The name agents send follows the upstream model until it is edited.
+    expect(screen.getByLabelText("Model name agents send")).toHaveValue(
+      "MiniMax-M3",
+    );
+    await userEvent.clear(screen.getByLabelText("Model name agents send"));
+    await userEvent.type(
+      screen.getByLabelText("Model name agents send"),
+      "minimax",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("minimax"));
+
+    const [provider, key, deployment, model] = posts(fetchMock);
+    expect(provider).toEqual([
+      "providers",
+      {
+        name: "MiniMax CN",
+        profile: "minimax",
+        endpoints: {
+          anthropic: "https://api.minimax.cn/anthropic",
+          openai: "https://api.minimax.cn/v1",
+        },
+      },
+    ]);
+    const providerId = key[0].split("/")[1];
+    expect(providerId).toMatch(/^gwprov_/);
+    expect(key).toEqual([
+      `providers/${providerId}/credentials`,
+      { key: SECRET },
+    ]);
+    expect(deployment).toEqual([
+      "deployments",
+      {
+        provider_id: providerId,
+        upstream_model: "MiniMax-M3",
+        kind: "chat",
+        capabilities: { tools: false, thinking: false, vision: false },
+        prices: {},
+      },
+    ]);
+    expect(model[1]).toMatchObject({
+      name: "minimax",
+      targets: [{ priority: 0, weight: 1 }],
+    });
+    expect(model[1].targets[0].deployment_id).toMatch(/^gwdep_/);
+    expect(states()).toEqual([
+      "provider:done",
+      "key:done",
+      "deployment:done",
+      "model:done",
+    ]);
+  });
+
+  /**
+   * The mock gateway, losing the answer to the first POST to `path` after it
+   * lands, and to the first `lostReads` reads of `path` after that.
+   */
+  function loseAnswers(path: string, lostReads = 0) {
+    const fetchMock = stubGatewayFetch();
+    emptyGateway();
+    let lostWrite = false;
+    let reads = lostReads;
+    const lost = () =>
+      Response.json(
+        { type: "error", error: { type: "api_error", message: "reset" } },
+        { status: 502 },
+      );
+    vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+      const answer = await fetchMock(input, init);
+      if (!input.endsWith(`/${path}`)) return answer;
+      if (init?.method === "POST" && !lostWrite) {
+        lostWrite = true;
+        return lost();
+      }
+      if (!init?.method && lostWrite && reads > 0) {
+        reads--;
+        return lost();
+      }
+      return answer;
+    });
+    return fetchMock;
+  }
+  const writes = (fetchMock: ReturnType<typeof stubGatewayFetch>) =>
+    posts(fetchMock).map(([p]) => p.split("/").at(-1));
+  const resume = () =>
+    userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+  // None of the four writes is idempotent. A write that landed but whose
+  // answer was lost is found in the gateway on Continue, not made again.
+  it.each(["providers", "credentials", "deployments", "aliases"])(
+    "probe: does not repeat a %s write whose answer was lost",
+    async (path) => {
+      const fetchMock = loseAnswers(path);
+      const { onDone } = renderSetup();
+      await fill();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await screen.findByRole("alert");
+      await resume();
+      await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
+      expect(writes(fetchMock)).toEqual([
+        "providers",
+        "credentials",
+        "deployments",
+        "aliases",
+      ]);
+    },
+  );
+
+  it("probe: fails a step again, without the write, when its lookup is lost too", async () => {
+    const fetchMock = loseAnswers("providers", 1);
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await resume();
+    await waitFor(() => expect(states()[0]).toBe("provider:failed"));
+    expect(writes(fetchMock)).toEqual(["providers"]);
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "providers")).toHaveLength(1);
+  });
+
+  it("probe: looks up what a lost write sent, not what the form says since", async () => {
+    const fetchMock = loseAnswers("deployments");
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await userEvent.type(screen.getByLabelText("Upstream model ID"), "-v2");
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "deployments")).toHaveLength(
+      1,
+    );
+  });
+
+  // Provider names are not unique. The seed already holds a "MiniMax CN".
+  it("probe: does not adopt a provider that was there before the write", async () => {
+    let refuse = true;
+    const fetchMock = stubGatewayFetch((method, rest) => {
+      if (refuse && method === "POST" && rest === "providers") {
+        refuse = false;
+        return Response.json(
+          { type: "error", error: { type: "api_error", message: "down" } },
+          { status: 500 },
+        );
+      }
+    });
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "providers")).toHaveLength(2);
+    const key = posts(fetchMock).find(([p]) => p.endsWith("/credentials"))!;
+    expect(key[0]).not.toContain("gwprov_minimaxcn1");
+  });
+
+  it("probe: opens the model that landed, not the name typed after", async () => {
+    loseAnswers("aliases");
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    await userEvent.type(
+      screen.getByLabelText("Model name agents send"),
+      "-edited",
+    );
+    await resume();
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
+  });
+
+  it("probe: drops the vendor key when its write fails, and asks again only if the gateway has none", async () => {
+    // Landed, answer lost: Continue finds the key without asking for it.
+    let fetchMock = loseAnswers("credentials");
+    const first = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    await resume();
+    await waitFor(() => expect(first.onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "credentials")).toHaveLength(
+      1,
+    );
+    cleanup();
+
+    // Refused: nothing landed, so Continue asks for the key again.
+    let refuse = true;
+    fetchMock = stubGatewayFetch((method, rest) => {
+      if (refuse && method === "POST" && rest.endsWith("/credentials")) {
+        refuse = false;
+        return Response.json(
+          { type: "error", error: { type: "api_error", message: "down" } },
+          { status: 500 },
+        );
+      }
+    });
+    emptyGateway();
+    const second = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+    await resume();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter the API key again",
+    );
+    await userEvent.type(screen.getByLabelText("API key"), SECRET);
+    await resume();
+    await waitFor(() => expect(second.onDone).toHaveBeenCalled());
+    expect(writes(fetchMock).filter((w) => w === "credentials")).toHaveLength(
+      2,
+    );
+  });
+
+  it("offers only vendors whose hosts are published", async () => {
+    stubGatewayFetch();
+    renderSetup();
+    await screen.findByRole("option", { name: "MiniMax" });
+    expect(
+      screen.queryByRole("option", { name: /Any .* endpoint/ }),
+    ).toBeNull();
+  });
+
+  it("stops at the first refusal, keeps what it made, and continues from there", async () => {
+    let refuse = true;
+    const fetchMock = stubGatewayFetch((method, rest) =>
+      refuse && method === "POST" && rest === "deployments"
+        ? Response.json(
+            {
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                message: "upstream_model contains whitespace",
+              },
+            },
+            { status: 400 },
+          )
+        : undefined,
+    );
+    const { onDone } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "upstream_model contains whitespace",
+    );
+    expect(states()).toEqual([
+      "provider:done",
+      "key:done",
+      "deployment:failed",
+      "model:pending",
+    ]);
+    expect(screen.getByLabelText("Vendor")).toBeDisabled();
+    expect(screen.getByLabelText("API key")).toBeDisabled();
+
+    refuse = false;
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith("MiniMax-M3"));
+    // The provider and its key were made once, not again.
+    expect(posts(fetchMock).map(([path]) => path.split("/")[0])).toEqual([
+      "providers",
+      "providers",
+      "deployments",
+      "deployments",
+      "aliases",
+    ]);
+  });
+
+  it("probe: keeps no trace of the key once the gateway has it", async () => {
+    stubGatewayFetch((method, rest) =>
+      method === "POST" && rest === "aliases"
+        ? Response.json(
+            { type: "error", error: { type: "api_error", message: "down" } },
+            { status: 500 },
+          )
+        : undefined,
+    );
+    const { client } = renderSetup();
+    await fill();
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    // The key step shows the tail the gateway rendered, and nothing more.
+    expect(screen.getByLabelText("API key")).toHaveValue("");
+    expect(document.querySelector("[data-step=key]")?.textContent).toMatch(
+      /••••cdef/,
+    );
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    expect(JSON.stringify(client.getMutationCache().getAll())).not.toContain(
+      SECRET,
+    );
+    expect(JSON.stringify(client.getQueryCache().getAll())).not.toContain(
+      SECRET,
+    );
+  });
+
+  describe("from the empty-gateway callout", () => {
+    function renderCallout() {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <NoModelsCallout onDone={vi.fn()} />
+        </QueryClientProvider>,
+      );
+    }
+    const open = async () =>
+      userEvent.click(
+        await screen.findByRole("button", { name: "Set up a model" }),
+      );
+    const cancel = () =>
+      userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    // The gateway takes a second provider of the same name, so starting over
+    // would leave the first one and its key behind.
+    it("resumes where it stopped after a close, without a second provider", async () => {
+      let refuse = true;
+      const fetchMock = stubGatewayFetch((method, rest) =>
+        refuse && method === "POST" && rest === "deployments"
+          ? Response.json(
+              { type: "error", error: { type: "api_error", message: "down" } },
+              { status: 500 },
+            )
+          : undefined,
+      );
+      emptyGateway();
+      renderCallout();
+      await open();
+      await fill();
+      await userEvent.click(screen.getByRole("button", { name: "Create" }));
+      await screen.findByRole("alert");
+      await cancel();
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+      refuse = false;
+      await open();
+      expect(states()).toEqual([
+        "provider:done",
+        "key:done",
+        "deployment:failed",
+        "model:pending",
+      ]);
+      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(posts(fetchMock).map(([path]) => path)).toContain("aliases");
+      expect(
+        posts(fetchMock).filter(([path]) => path === "providers"),
+      ).toHaveLength(1);
+    });
+
+    // A reload forgets what an earlier run made, and a gateway with no models
+    // can still hold its provider; a second run would add another. So the
+    // form is offered only before any provider exists.
+    it("probe: offers no setup on a gateway that already has a provider", async () => {
+      stubGatewayFetch();
+      renderCallout();
+      expect(
+        await screen.findByRole("link", { name: "Providers" }),
+      ).toHaveAttribute("href", "/providers");
+      expect(
+        screen.queryByRole("button", { name: "Set up a model" }),
+      ).toBeNull();
+    });
+
+    it("probe: closing drops a key the gateway has not sealed", async () => {
+      stubGatewayFetch();
+      emptyGateway();
+      renderCallout();
+      await open();
+      await fill();
+      await cancel();
+      await open();
+      expect(screen.getByLabelText("API key")).toHaveValue("");
+      expect(document.body.innerHTML).not.toContain(SECRET);
+    });
+  });
+});

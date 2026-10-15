@@ -54,6 +54,12 @@ function renderTable(keys: ApiKey[], fetchMock?: ReturnType<typeof vi.fn>) {
   };
 }
 
+/** The one write a test made. The table also reads the gateway's key policies. */
+const postOf = (fetchMock: ReturnType<typeof vi.fn>) =>
+  fetchMock.mock.calls.find(
+    ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+  ) as [string, RequestInit] | undefined;
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -154,8 +160,8 @@ describe("ApiKeysTable", () => {
     renderTable([apiKey({ id: "apikey_1" })], fetchMock);
 
     await userEvent.click(screen.getByTestId("toggle-apikey_1"));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
+    const [url, init] = postOf(fetchMock)!;
     expect(url).toBe(`${KEYS}/apikey_1`);
     expect(init.method).toBe("POST");
     expect(JSON.parse(String(init.body))).toEqual({ status: "inactive" });
@@ -170,8 +176,8 @@ describe("ApiKeysTable", () => {
     renderTable([apiKey({ id: "apikey_1", status: "inactive" })], fetchMock);
 
     await userEvent.click(screen.getByTestId("toggle-apikey_1"));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
+    const [, init] = postOf(fetchMock)!;
     expect(JSON.parse(String(init.body))).toEqual({ status: "active" });
   });
 });
@@ -199,8 +205,8 @@ describe("creating a key", () => {
     await userEvent.selectOptions(screen.getByTestId("api-key-expires"), "7d");
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
+    const [, init] = postOf(fetchMock)!;
     const body = JSON.parse(String(init.body)) as {
       name: string;
       expires_at: string;
@@ -226,8 +232,8 @@ describe("creating a key", () => {
     expect(screen.getByTestId("never-expires-warning")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
+    const [, init] = postOf(fetchMock)!;
     expect(Object.keys(JSON.parse(String(init.body)))).toEqual(["name"]);
   });
 
@@ -264,7 +270,7 @@ describe("creating a key", () => {
       "custom",
     );
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(postOf(fetchMock)).toBeUndefined();
   });
 
   /**

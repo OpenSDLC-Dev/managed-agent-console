@@ -104,6 +104,13 @@ export const SURFACES = {
   // unset, and the gateway's own catch-all answers the same for a path it does
   // not serve (`internal/modelgateway/admin/admin.go` routes). A collection
   // route carries no id, so its 404 means the surface is absent.
+  models: {
+    path: "aliases",
+    label: "Models",
+    api: "gateway",
+    blurb:
+      "The names agents and applications send. Each routes to upstream models on your providers.",
+  },
   providers: {
     path: "providers",
     label: "Providers",

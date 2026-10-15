@@ -975,6 +975,13 @@ export const SURFACES: Surface[] = [
     description: "Resource list with byte sizes and an upload action.",
   },
   {
+    id: "models-list",
+    route: "/models",
+    fixture: "5 gateway models: chat, embedding, rerank",
+    description:
+      "Model gateway models: name and display name, kind, and the upstream models each routes to by tier and share.",
+  },
+  {
     id: "providers-list",
     route: "/providers",
     fixture: "4 gateway providers, one disabled on plain HTTP",
@@ -989,6 +996,16 @@ export const SURFACES: Surface[] = [
     fixture: AGENT,
     description:
       "Detail sections, coordinator roster, config rendering, version history table.",
+  },
+  {
+    id: "model-inspector",
+    route: "/models?model=agent-default",
+    fixture: "agent-default: a 3:1 primary tier and one fallback",
+    description:
+      "Non-modal model inspector: kind, actions, the routing tiers with each target's provider and share, and the keys that can call it.",
+    setup: async (page) => {
+      await page.locator("[data-callers]").waitFor();
+    },
   },
   {
     id: "environment-inspector",
@@ -1955,10 +1972,40 @@ export const SURFACES: Surface[] = [
   // finding, PR #38). One representative per distinct layout, not one per
   // instance: the four resource dialogs share a shell, so `vault-create`
   // stands for its shape and `credential-add` earns its own entry only
-  // because it is the write-only-secret form. `provider-add` earns one for
-  // its vendor grid, a layout no other dialog has; `provider-key-add` for
-  // the gateway's write-only key, and `upstream-model-edit` for its price
-  // grid.
+  // because it is the write-only-secret form. `model-edit` earns one for its
+  // routing tiers, `model-setup` for its step list and `provider-add` for its
+  // vendor grid, layouts no other dialog has; `provider-key-add` for the gateway's write-only key, and
+  // `upstream-model-edit` for its price grid.
+  {
+    id: "model-edit",
+    route: "/models?model=agent-default",
+    fixture: "agent-default",
+    description:
+      "Edit routing: tiers of upstream models with weights and shares, add a target or a fallback tier.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Edit routing", exact: true })
+        .click();
+    },
+  },
+  {
+    id: "model-setup",
+    route: "/models",
+    fixture: "a gateway with no models",
+    description:
+      "First-run setup: the empty-gateway callout and the one form that makes a provider, its key, an upstream model and a model.",
+    setup: async (page) => {
+      const emptied = await page.request.post(MOCK_URL + "/__empty-gateway");
+      if (!emptied.ok()) throw new Error("Could not empty the mock gateway");
+      await page.reload();
+      await page
+        .getByRole("button", { name: "Set up a model", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Set up a model" });
+      await dialog.getByLabel("Vendor").selectOption("minimax");
+      await dialog.getByLabel("Upstream model ID").fill("MiniMax-M3");
+    },
+  },
   {
     id: "provider-add",
     route: "/providers",
@@ -2052,9 +2099,25 @@ export const SURFACES: Surface[] = [
     route: "/api-keys",
     fixture: "2 keys, one control-plane managed",
     description:
-      "The management-key listing: a two-line Key cell, and the one row whose controls are absent because the platform refuses to mutate it.",
+      "The management-key listing: a two-line Key cell, each key's model access, and the one row whose controls are absent because the platform refuses to mutate it.",
     setup: async (page) => {
       await page.getByText("ci-deploy").waitFor();
+      await page.locator("[data-models='2']").waitFor();
+    },
+  },
+  {
+    id: "api-key-model-access",
+    route: "/api-keys",
+    fixture: "ci-deploy: two models at 60 RPM",
+    description:
+      "Model access: no access, every model, or selected models, with the per-minute limits.",
+    setup: async (page) => {
+      await page
+        .getByRole("row")
+        .filter({ hasText: "ci-deploy" })
+        .getByRole("button", { name: "Model access" })
+        .click();
+      await page.locator("[role=dialog] [data-alias]").first().waitFor();
     },
   },
   {

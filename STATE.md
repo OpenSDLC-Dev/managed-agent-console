@@ -9,8 +9,9 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 - [x] 1. BFF namespace `/api/gateway`, browser helpers, admin-view transcription, mock gateway
 - [x] 2a. Surface probe and query hooks; Providers: list, add, detail with enable and delete
 - [x] 2b. Provider keys and upstream models; edit a provider
-- [ ] 3. Models: list, inspector, routing editor; first-run setup
-- [ ] 4. API Keys: model access column and dialog
+- [x] 3a. Models: list, inspector, routing editor
+- [x] 3b. First-run setup for a gateway with no models
+- [x] 4. API Keys: model access column and dialog
 - [ ] 5. Analytics → Usage: overview and request ledger
 - [ ] 6. Agent and Dream model select; deploy manifests; fidelity surfaces; live contract
 

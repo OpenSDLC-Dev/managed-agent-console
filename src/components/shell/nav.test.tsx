@@ -29,6 +29,12 @@ const EXPECTED = [
   { label: "Files", href: "/files", surface: "files", group: "Build" },
   { label: "Skills", href: "/skills", surface: "skills", group: "Build" },
   {
+    label: "Models",
+    href: "/models",
+    surface: "models",
+    group: "Model Gateway",
+  },
+  {
     label: "Providers",
     href: "/providers",
     surface: "providers",
@@ -81,7 +87,7 @@ const EXPECTED = [
 /** The groups, in nav order, and what each holds. */
 const GROUPS = [
   { label: "Build", surfaces: ["files", "skills"] },
-  { label: "Model Gateway", surfaces: ["providers"] },
+  { label: "Model Gateway", surfaces: ["models", "providers"] },
   {
     label: "Managed Agents",
     surfaces: [
@@ -119,8 +125,10 @@ function renderNav(
         // matches the pattern above.
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : s === "providers"
-            ? String(input).includes("/api/gateway/")
+          : s === "providers" || s === "models"
+            ? String(input).includes(
+                `/api/gateway/admin/v1/${SURFACES[s].path}`,
+              )
             : String(input).includes(
                 `/api/platform/${SURFACES[s as keyof typeof SURFACES].path}?`,
               ),
@@ -195,6 +203,7 @@ describe("Nav", () => {
       "Files",
       "Skills",
       "Model Gateway",
+      "Models",
       "Providers",
       "Managed Agents",
       "Agents",

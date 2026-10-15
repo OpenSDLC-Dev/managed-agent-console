@@ -12,6 +12,7 @@ import type {
   GatewayAlias,
   GatewayCredential,
   GatewayDeployment,
+  GatewayKeyPolicy,
   GatewayKind,
   GatewayProfile,
   GatewayProtocol,
@@ -283,5 +284,110 @@ export function useDeleteGatewayDeployment() {
       ),
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+  });
+}
+
+/** aliases.go targetJSON — a weight left out is 1. */
+export type GatewayTargetInput = GatewayAlias["targets"][number];
+
+/**
+ * A model's path. `gatewayGet` and friends encode each part, so a name may
+ * hold any character the wire allows; its own slashes stay separators, which
+ * the gateway's `{name...}` route joins back. The gateway refuses a name
+ * with an empty, `.` or `..` part (validate.go checkAliasName), so no part
+ * is one the browser would resolve away.
+ */
+export const aliasPath = (name: string) => `aliases/${name}`;
+
+function aliasChanged(client: QueryClient) {
+  void client.invalidateQueries({ queryKey: ["gateway", "aliases"] });
+  // "Used by" on a provider's page reads the aliases too.
+  void client.invalidateQueries({ queryKey: ["gateway", "deployments"] });
+}
+
+/** aliases.go createAlias — the kind is the targets', so it is not sent. */
+export function useCreateGatewayAlias() {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: {
+      name: string;
+      display_name?: string;
+      targets: GatewayTargetInput[];
+    }) => gatewayPost<GatewayAlias>("aliases", body),
+    onSuccess: () => aliasChanged(client),
+  });
+}
+
+/** aliases.go updateAlias — `targets`, when named, replaces them whole. */
+export function useUpdateGatewayAlias(name: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: {
+      display_name?: string;
+      targets?: GatewayTargetInput[];
+    }) => gatewayPost<GatewayAlias>(aliasPath(name), body),
+    onSuccess: () => aliasChanged(client),
+  });
+}
+
+/**
+ * Refused with a 409 while a key policy grants the model (store/aliases.go);
+ * the toast carries the gateway's message, which names the keys.
+ */
+export function useDeleteGatewayAlias(name: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorTitle: "Delete failed" },
+    mutationFn: () =>
+      gatewayDelete<{ type: "alias_deleted"; name: string }>(aliasPath(name)),
+    onSuccess: () => aliasChanged(client),
+  });
+}
+
+/**
+ * Each key's model grant (keypolicies.go). A key without a row calls no model,
+ * except the bootstrap and brain keys, which the gateway knows by value.
+ */
+export function useGatewayKeyPolicies() {
+  return useQuery({
+    queryKey: ["gateway", "key_policies"],
+    queryFn: () => gatewayGet<List<GatewayKeyPolicy>>("key_policies"),
+  });
+}
+
+/** keypolicies.go putKeyPolicy: written whole, so each field is named. */
+export type GatewayKeyPolicyWrite = Pick<
+  GatewayKeyPolicy,
+  "aliases" | "rpm" | "tpm"
+>;
+
+/** The dialog shows the gateway's refusal itself, so no toast behind it. */
+export function usePutGatewayKeyPolicy(apiKeyId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: (body: GatewayKeyPolicyWrite) =>
+      gatewayPost<GatewayKeyPolicy>(`key_policies/${apiKeyId}`, body),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "key_policies"] }),
+  });
+}
+
+/** Revokes the grant. The gateway answers 404 for a key that has none. */
+export function useDeleteGatewayKeyPolicy(
+  apiKeyId: string,
+  { errorToast = false } = {},
+) {
+  const client = useQueryClient();
+  return useMutation({
+    meta: errorToast ? { errorTitle: "Removal failed" } : { errorToast: false },
+    mutationFn: () =>
+      gatewayDelete<{ type: "key_policy_deleted"; api_key_id: string }>(
+        `key_policies/${apiKeyId}`,
+      ),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "key_policies"] }),
   });
 }

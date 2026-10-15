@@ -1,6 +1,7 @@
 import {
   Bot,
   Boxes,
+  Cpu,
   Database,
   FileText,
   Hammer,
@@ -95,7 +96,7 @@ export const NAV: NavEntry[] = [
     kind: "group",
     label: "Model Gateway",
     icon: Network,
-    items: [surfaceEntry("providers", Plug)],
+    items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
   },
   {
     kind: "group",
