@@ -185,5 +185,5 @@ describe("DeploymentsPage", () => {
         ),
       ).toBe(true),
     );
-  }, 10_000);
+  });
 });

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
@@ -107,6 +108,7 @@ for (const owner of ["session", "deployment"] as const) {
       await expect
         .poll(() => dialog.evaluate((el) => el.scrollWidth <= el.clientWidth))
         .toBe(true);
+      await settleMotion(page);
       expect(
         (await new AxeBuilder({ page }).include('[role="dialog"]').analyze())
           .violations,

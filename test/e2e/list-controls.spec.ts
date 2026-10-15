@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -95,6 +96,7 @@ test("deployment Agent filter submits the server predicate and lookup encodes pa
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(360);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page
     .getByRole("textbox", { name: "Find deployment by ID" })

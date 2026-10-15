@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 // A session's own files (platform #578): the copy each file mount mints and
@@ -59,6 +60,7 @@ test("Resources lists the session's own files with the reference's request, offe
   const file = await saved;
   expect(file.suggestedFilename()).toBe("summary.xlsx");
   expect(statSync(await file.path()).size).toBe(120400);
+  await settleMotion(page);
   expect(
     (
       await new AxeBuilder({ page })

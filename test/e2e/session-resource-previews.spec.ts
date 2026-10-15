@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 async function createSession(page: Page) {
@@ -110,6 +111,7 @@ test("resource metadata and archived previews stay usable at narrow widths", asy
   await expect(page.getByRole("button", { name: "Attach file" })).toHaveCount(
     0,
   );
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

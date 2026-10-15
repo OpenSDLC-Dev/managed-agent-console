@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -11,6 +12,7 @@ test.beforeEach(async ({ request }) => {
  * the gate is "no violations", so any regression fails loudly.
  */
 async function expectNoViolations(page: Page) {
+  await settleMotion(page);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();

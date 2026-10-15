@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const CLOUD = "env_egress000000000000001";
@@ -51,6 +52,7 @@ test("environment inspector preserves the list, history, keyboard focus and API 
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(390);
+  await settleMotion(page);
   expect(
     await new AxeBuilder({ page })
       .include('[aria-label="Environment details"]')
@@ -311,6 +313,7 @@ test("environment editor preserves package arguments and metadata through retry,
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(390);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(

@@ -28,7 +28,7 @@ it("searches suggestions, preserves exact custom values, and cancels without mut
     await screen.findByRole("option", { name: "Custom/ServerZone" }),
   );
   expect(change).toHaveBeenCalledWith("Custom/ServerZone");
-}, 10_000);
+});
 
 it("formats UTC, fractional offsets and seasonal daylight saving without rejecting aliases", () => {
   const winter = new Date("2026-01-01T12:00:00Z");

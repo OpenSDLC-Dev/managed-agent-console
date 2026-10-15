@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 test("dashboard stays centered and its compact navigation remains usable", async ({
@@ -92,6 +93,7 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     const bounds = await card.boundingBox();
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   }
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect(page.getByRole("main")).not.toBeVisible();

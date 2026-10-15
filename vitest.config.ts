@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react(), tsconfigPaths()],
   test: {
     environment: "jsdom",
+    // Multi-step tests take 3–4 s on a typical CI run under coverage, and
+    // three of them reached 5.1 s on a slow runner and failed at Vitest's
+    // 5 s default (#217). The slowest takes 7.3 s. A hung test still fails.
+    testTimeout: 15_000,
     // test/fidelity holds no product code, but the shot manifest has an
     // invariant CI should enforce: a duplicate id silently overwrites another
     // surface's screenshot, which reads as coverage while losing it.

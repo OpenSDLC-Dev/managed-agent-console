@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const SESSION = "/sessions/sesn_gatedbash00000000001";
@@ -75,6 +76,7 @@ test("Thread details expose pinned metadata, server usage and an inspectable req
   ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await preview.getByText("Inspect model requests", { exact: true }).click();
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

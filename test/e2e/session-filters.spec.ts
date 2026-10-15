@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 const MOCK = "http://127.0.0.1:18080";
 test.beforeEach(async ({ request }) => {
@@ -83,6 +84,7 @@ test("status multi-select defaults to active and Created sorts on the server", a
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(390);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page
     .getByRole("textbox", { name: "Find session by ID" })

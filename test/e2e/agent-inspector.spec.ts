@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const AGENT = "agent_researcher00000000001";
@@ -92,6 +93,7 @@ test("agent permissions follow the selected resource and remain usable at narrow
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await panel.getByRole("button", { name: "API", exact: true }).click();
   await expect(panel.locator("pre")).toContainText('"permission_policy"');

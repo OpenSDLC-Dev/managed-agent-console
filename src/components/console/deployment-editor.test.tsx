@@ -590,7 +590,7 @@ describe("deployment editor wire mapping", () => {
       },
     });
     expect(push).toHaveBeenCalledWith("/deployments/depl_created");
-  }, 15_000);
+  });
 
   it("keeps malformed JSON for correction without calling the platform", async () => {
     const fetch = vi.fn<

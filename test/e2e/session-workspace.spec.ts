@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const SESSION = "/sessions/sesn_gatedbash00000000001";
@@ -91,6 +92,13 @@ test("narrow transcript and inspector remain accessible, resizable and keyboard 
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  // The timeline's zoom buttons enable when events arrive, which nothing
+  // orders before `live`, and fade in from half opacity (#222).
+  // settleMotion only waits for a fade that has already started.
+  await expect(
+    page.getByRole("button", { name: "Reset timeline zoom" }),
+  ).toHaveCSS("opacity", "1");
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const open = page.getByRole("button", { name: "Open session inspector" });
   await open.click();
@@ -101,6 +109,7 @@ test("narrow transcript and inspector remain accessible, resizable and keyboard 
   ).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "Events", exact: true }).click();
   await page.getByTestId("inspector-event-row").first().click();
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page
     .getByRole("button", { name: "Close session inspector" })
