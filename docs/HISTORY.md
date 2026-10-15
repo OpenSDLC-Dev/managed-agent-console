@@ -6,7 +6,7 @@ a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/]
 
 ## [Plan 10](./plan/10_model-gateway.md) — Model Gateway management (archived 2026-10-15)
 
-PRs #215, #216, #218, #USAGE_PR, #SELECT_PR. Console screens for the platform's model gateway: providers
+PRs #215, #216, #218, #223, #SELECT_PR. Console screens for the platform's model gateway: providers
 with their keys and upstream models, models and their routing, a first-run setup, each API key's
 model access, Analytics → Usage, and the agent and Dream model select.
 
@@ -33,6 +33,9 @@ requires.
   gateway's number fields are now text inputs, and a value that would change on its way is not sent.
 - A request priced per million tokens often costs under half a cent, which two decimals wrote as
   `0.00`, the same as free. Usage keeps two significant digits under a cent, on its axis too.
+- A daily usage read may answer 50,000 rows, so every path that ran once per row or per group
+  needed one pass or a cap: the grouping, the name lookups, the grouped table. `Map.groupBy`, the
+  obvious one-pass tool, is newer than the browsers Next.js 16 supports (Chrome 111, Safari 16.4).
 - A disabled Save gave no reason. It also blocked the empty-form refusal that the other agent
   fields rely on. Save now stays enabled and reports a missing model on the field.
 
