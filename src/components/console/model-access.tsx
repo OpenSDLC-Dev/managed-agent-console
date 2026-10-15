@@ -23,6 +23,7 @@ import {
 } from "@/lib/platform/gateway-queries";
 import { useApiKeys } from "@/lib/platform/queries";
 import type { ApiKey, GatewayKeyPolicy } from "@/lib/platform/types";
+import { wireInteger } from "@/lib/platform/http";
 
 /**
  * What a key may call through the model gateway (auth.go authenticate): its
@@ -174,7 +175,7 @@ type Grant = "none" | "all" | "some";
 
 const limitText = (v: number | null | undefined) =>
   v === null || v === undefined ? "" : String(v);
-const limitValue = (v: string) => (v.trim() ? Number(v) : null);
+const limitValue = (v: string) => (v.trim() ? wireInteger(v) : null);
 
 export function ModelAccessButton({
   apiKey,

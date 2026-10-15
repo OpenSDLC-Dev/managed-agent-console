@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useUpdateGatewayProvider } from "@/lib/platform/gateway-queries";
 import type { GatewayProvider } from "@/lib/platform/types";
+import { wireInteger } from "@/lib/platform/http";
 
 export function EditProviderButton({
   provider,
@@ -77,7 +78,7 @@ function EditProviderDialog({
             .map((h) => [h.key.trim(), h.value]),
         ),
         // Blank puts the gateway's default back.
-        stall_timeout_ms: stallMs.trim() ? Number(stallMs) : null,
+        stall_timeout_ms: stallMs.trim() ? wireInteger(stallMs) : null,
         propagate_trace: trace,
       },
       { onSuccess: onClose },

@@ -315,18 +315,28 @@ describe("Model access on API keys", () => {
     ).toBeNull();
   });
 
-  it("probe: does not lift a limit the operator typed past what JSON holds", async () => {
-    const fetchMock = stubGatewayFetch();
-    renderTable([CI]);
-    const dialog = await openAccess(CI);
-    const rpm = within(dialog).getByLabelText("Requests per minute");
-    fireEvent.change(rpm, { target: { value: "1e309" } });
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("rpm");
-    expect(
-      fetchMock.mock.calls.filter(([, i]) => i?.method === "POST"),
-    ).toHaveLength(0);
-  });
+  // "1e309" is Infinity, which JSON writes as null: no limit. A whole number
+  // past 2^53 rounds to another one the gateway would store.
+  it.each([
+    ["rpm", "Requests per minute", "1e309"],
+    ["tpm", "Tokens per minute", "9007199254740993"],
+  ])(
+    "probe: sends no %s other than the one typed",
+    async (field, label, typed) => {
+      const fetchMock = stubGatewayFetch();
+      renderTable([CI]);
+      const dialog = await openAccess(CI);
+      const input = within(dialog).getByLabelText(label);
+      fireEvent.change(input, { target: { value: typed } });
+      await userEvent.click(
+        within(dialog).getByRole("button", { name: "Save" }),
+      );
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(field);
+      expect(
+        fetchMock.mock.calls.filter(([, i]) => i?.method === "POST"),
+      ).toHaveLength(0);
+    },
+  );
 
   // Archiving leaves the gateway's policy, and a policy blocks deleting any
   // model it names (store/aliases.go DeleteAlias); so the control that

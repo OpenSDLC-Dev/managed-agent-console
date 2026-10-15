@@ -22,6 +22,7 @@ import {
 } from "@/lib/platform/gateway-queries";
 import type { GatewayAlias, GatewayKind } from "@/lib/platform/types";
 import { percent, tierLabel, tiers } from "./model-routing";
+import { wireInteger } from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 
@@ -52,7 +53,7 @@ function targetsOf(rows: Row[][]): GatewayTargetInput[] {
     tier.map((r) => ({
       deployment_id: r.deployment_id,
       priority,
-      weight: Number(r.weight),
+      weight: wireInteger(r.weight),
     })),
   );
 }

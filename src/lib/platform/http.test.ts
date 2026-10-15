@@ -11,6 +11,7 @@ import {
   gatewayDelete,
   gatewayGet,
   gatewayPost,
+  wireInteger,
   platformDelete,
   platformGet,
   platformPost,
@@ -339,6 +340,14 @@ describe("model gateway helpers", () => {
       expect(fetchMock).not.toHaveBeenCalled();
     },
   );
+
+  it("wireInteger keeps what JSON carries exactly, and NaNs what would round", () => {
+    expect(wireInteger("42")).toBe(42);
+    expect(wireInteger("9007199254740991")).toBe(9007199254740991);
+    expect(wireInteger("9007199254740993")).toBeNaN();
+    // A fraction is the gateway's to refuse, in its own words.
+    expect(wireInteger("1.5")).toBe(1.5);
+  });
 
   it("gatewayDelete returns the deletion receipt", async () => {
     const fetchMock = vi.fn(async () =>

@@ -35,6 +35,7 @@ import {
   ProtocolBadge,
   endpointEntries,
 } from "./gateway-bits";
+import { wireInteger } from "@/lib/platform/http";
 
 /**
  * A provider's vendor keys (`/admin/v1/providers/{id}/credentials`). The
@@ -204,7 +205,9 @@ function AddKeyDialog({
         // Left out, the gateway gives the key every protocol the provider
         // serves (store/credentials.go), which is what all ticked means.
         ...(protocols.length < served.length ? { protocols } : {}),
-        ...(weight.trim() && weight !== "1" ? { weight: Number(weight) } : {}),
+        ...(weight.trim() && weight !== "1"
+          ? { weight: wireInteger(weight) }
+          : {}),
       },
       { onSuccess: onClose },
     );

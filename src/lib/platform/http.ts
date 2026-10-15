@@ -254,6 +254,16 @@ const finiteJson = (body: unknown) =>
     return value;
   });
 
+/**
+ * The operator's text as a whole number for an integer field. One past
+ * 2^53 would round to another the gateway could store, so it becomes NaN,
+ * which gatewayPost refuses. A fraction passes, for the gateway to refuse.
+ */
+export const wireInteger = (text: string) => {
+  const n = Number(text);
+  return Number.isInteger(n) && !Number.isSafeInteger(n) ? NaN : n;
+};
+
 export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(gatewayUrl(path), {
     method: "POST",

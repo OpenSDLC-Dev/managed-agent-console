@@ -31,6 +31,7 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
+import { wireInteger } from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -303,8 +304,8 @@ function UpstreamModelDialog({
 
   const capabilities = {
     ...flags,
-    ...(maxInput.trim() ? { max_input_tokens: Number(maxInput) } : {}),
-    ...(maxOutput.trim() ? { max_tokens: Number(maxOutput) } : {}),
+    ...(maxInput.trim() ? { max_input_tokens: wireInteger(maxInput) } : {}),
+    ...(maxOutput.trim() ? { max_tokens: wireInteger(maxOutput) } : {}),
   };
   // A blank price is unpriced: left out on create, null on an update, which
   // replaces the prices whole.

@@ -21,6 +21,7 @@ import {
 } from "@/lib/platform/gateway-queries";
 import type { GatewayProfile, GatewayProtocol } from "@/lib/platform/types";
 import { PROTOCOL_LABEL, REGION_LABEL } from "./gateway-bits";
+import { wireInteger } from "@/lib/platform/http";
 
 export type Region = keyof typeof REGION_LABEL;
 type Endpoints = Partial<Record<GatewayProtocol, { on: boolean; url: string }>>;
@@ -159,7 +160,7 @@ function ProviderForm({
         endpoints: Object.fromEntries(
           chosen.map(([protocol, e]) => [protocol, e.url.trim()]),
         ),
-        ...(stallMs.trim() ? { stall_timeout_ms: Number(stallMs) } : {}),
+        ...(stallMs.trim() ? { stall_timeout_ms: wireInteger(stallMs) } : {}),
         ...(trace ? { propagate_trace: true } : {}),
       },
       { onSuccess: (created) => router.push(`/providers/${created.id}`) },
