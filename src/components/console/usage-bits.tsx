@@ -25,6 +25,7 @@ const money = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const small = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 2 });
 
 /** "412.6M"; a dash for a count the upstream did not report. */
 export const tokenCount = (n: number | null) =>
@@ -34,9 +35,13 @@ export const tokenCount = (n: number | null) =>
 export const exactCount = (n: number | null) =>
   n === null ? "—" : whole.format(n);
 
-/** "1,204.50", no currency; a dash for a request with no cost. */
+/**
+ * "1,204.50", no currency. A cost under 0.01 keeps two significant digits,
+ * "0.00051", so a cheap request does not read as free. A dash for a request
+ * with no cost.
+ */
 export const costText = (n: number | null) =>
-  n === null ? "—" : money.format(n);
+  n === null ? "—" : n > 0 && n < 0.01 ? small.format(n) : money.format(n);
 
 /** "8.4s". */
 export const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;

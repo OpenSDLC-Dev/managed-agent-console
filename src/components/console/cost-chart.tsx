@@ -4,17 +4,28 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { costText, dayLabel } from "./usage-bits";
 
-/** A round axis top and step: 1, 2, 2.5 or 5 times a power of ten, ≤ 4 steps. */
-export function niceScale(max: number): { top: number; step: number } {
-  if (max <= 0) return { top: 1, step: 0.25 };
+/**
+ * A round axis top and step: 1, 2, 2.5 or 5 times a power of ten, ≤ 4 steps.
+ * A tick has the decimals a multiple of the step needs, and below a step of 1
+ * at least a cost's two: a 0.025 step is not labelled "0.03".
+ */
+export function niceScale(max: number): {
+  top: number;
+  step: number;
+  decimals: number;
+} {
+  if (max <= 0) return { top: 1, step: 0.25, decimals: 2 };
   const raw = max / 4;
-  const power = 10 ** Math.floor(Math.log10(raw));
-  const step =
-    [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => s >= raw) ??
-    10 * power;
+  const exp = Math.floor(Math.log10(raw));
+  const m = [1, 2, 2.5, 5].find((m) => m * 10 ** exp >= raw) ?? 10;
+  const step = m * 10 ** exp;
   // toPrecision drops the binary residue: 3 × 0.2 is 0.6000000000000001.
   const top = Number((Math.ceil(max / step) * step).toPrecision(12));
-  return { top, step };
+  const decimals = Math.max(
+    step < 1 ? 2 : 0,
+    -exp + (m === 2.5 ? 1 : m === 10 ? -1 : 0),
+  );
+  return { top, step, decimals };
 }
 
 /**
@@ -24,7 +35,9 @@ export function niceScale(max: number): { top: number; step: number } {
  */
 export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
   const [active, setActive] = useState<number>();
-  const { top, step } = niceScale(Math.max(0, ...days.map((d) => d.cost)));
+  const { top, step, decimals } = niceScale(
+    Math.max(0, ...days.map((d) => d.cost)),
+  );
   const ticks = Array.from(
     { length: Math.round(top / step) + 1 },
     (_, i) => i * step,
@@ -48,7 +61,7 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
             aria-hidden
           >
             <span className="absolute -top-2 -left-10 w-8 text-right text-[11px] text-muted-foreground tabular-nums">
-              {step < 1 ? t.toFixed(2) : t}
+              {t.toFixed(decimals)}
             </span>
           </div>
         ))}

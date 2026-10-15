@@ -183,6 +183,33 @@ describe("Usage requests", () => {
     );
   });
 
+  // The Requests tab changes only the query string, which keeps the page
+  // mounted (PR #223 review).
+  it("probe: follows the URL when its session changes on a mounted page", async () => {
+    navigation.pathname = "/usage/requests";
+    navigation.search = `session_id=${ledger[0].session_id}`;
+    const fetchMock = stub();
+    const page = (
+      <QueryClientProvider client={new QueryClient()}>
+        <UsageRequestsPage />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(page);
+    await screen.findByDisplayValue(ledger[0].session_id!);
+    navigation.search = "";
+    rerender(page);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Session ID")).toHaveValue(""),
+    );
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/requests")
+          .at(-1)
+          ?.searchParams.has("session_id"),
+      ).toBe(false),
+    );
+  });
+
   it("loads older rows from before the last one shown", async () => {
     navigation.pathname = "/usage/requests";
     const fetchMock = stubGatewayFetch((_method, rest, url) => {

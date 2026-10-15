@@ -46,9 +46,16 @@ export default function UsageRequestsPage() {
  * a row links back to its session and a session can link here.
  */
 function Ledger() {
-  const search = useSearchParams();
+  const urlSession = useSearchParams().get("session_id") ?? "";
   const [filter, setFilter] = useState<GatewayUsageFilter>({});
-  const [session, setSession] = useState(search.get("session_id") ?? "");
+  const [session, setSession] = useState(urlSession);
+  // A link that changes only the query string, such as the Requests tab,
+  // keeps this page mounted, so a new URL session replaces the typed one.
+  const [seeded, setSeeded] = useState(urlSession);
+  if (seeded !== urlSession) {
+    setSeeded(urlSession);
+    setSession(urlSession);
+  }
   const query = useGatewayUsageRequests({
     ...filter,
     session_id: session.trim() || undefined,

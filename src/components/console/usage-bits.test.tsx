@@ -27,9 +27,13 @@ describe("usage formatters", () => {
     expect(exactCount(null)).toBe("—");
   });
 
-  it("writes cost to the cent, with no currency", () => {
+  // A cost under a cent keeps two significant digits, so a cheap request
+  // does not read as free (PR #223 review).
+  it("probe: writes cost to the cent, a cost under it in two digits, with no currency", () => {
     expect(costText(1204.5)).toBe("1,204.50");
     expect(costText(0.0485)).toBe("0.05");
+    expect(costText(0.000512)).toBe("0.00051");
+    expect(costText(0)).toBe("0.00");
     expect(costText(null)).toBe("—");
   });
 
@@ -52,11 +56,21 @@ describe("usage formatters", () => {
 
 describe("niceScale", () => {
   it.each([
-    [73, { top: 80, step: 20 }],
-    [0.42, { top: 0.6, step: 0.2 }],
-    [1204, { top: 1500, step: 500 }],
-    [0, { top: 1, step: 0.25 }],
+    [73, { top: 80, step: 20, decimals: 0 }],
+    [0.42, { top: 0.6, step: 0.2, decimals: 2 }],
+    [1204, { top: 1500, step: 500, decimals: 0 }],
+    [9, { top: 10, step: 2.5, decimals: 1 }],
+    [0, { top: 1, step: 0.25, decimals: 2 }],
   ])("%s → %o", (max, scale) => {
+    expect(niceScale(max)).toEqual(scale);
+  });
+
+  // Two decimals labelled every tick under a cent "0.00", and a 0.025 step
+  // "0.03" (PR #223 review).
+  it.each([
+    [0.003, { top: 0.003, step: 0.001, decimals: 3 }],
+    [0.09, { top: 0.1, step: 0.025, decimals: 3 }],
+  ])("probe: %s → %o, enough decimals for each tick", (max, scale) => {
     expect(niceScale(max)).toEqual(scale);
   });
 });
