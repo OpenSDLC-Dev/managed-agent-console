@@ -99,6 +99,21 @@ function Tile({
   );
 }
 
+/**
+ * The rows under each key, in one pass: a read can answer 50,000 rows
+ * (usage.go maxDailyRows). Not Map.groupBy, which is newer than the
+ * browsers Next.js supports (Chrome 117, Safari 17.4).
+ */
+function groupBy<T>(rows: T[], key: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const group = groups.get(key(row));
+    if (group) group.push(row);
+    else groups.set(key(row), [row]);
+  }
+  return groups;
+}
+
 export default function UsagePage() {
   const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
   const [filter, setFilter] = useState<GatewayUsageFilter>({});
@@ -111,8 +126,7 @@ export default function UsagePage() {
 
   const rows = data?.data ?? [];
   const totals = sum(rows);
-  // One pass each: a read can answer 50,000 rows (usage.go maxDailyRows).
-  const byDay = Map.groupBy(rows, (r) => r.day);
+  const byDay = groupBy(rows, (r) => r.day);
   // Every day in the span, a day without traffic drawn as zero.
   const perDay = Array.from({ length: days }, (_, i) => {
     const day = new Date(Date.parse(`${range.from}T00:00:00Z`) + i * 86_400_000)
@@ -120,7 +134,7 @@ export default function UsagePage() {
       .slice(0, 10);
     return { day, cost: sum(byDay.get(day) ?? []).cost };
   });
-  const groups = [...Map.groupBy(rows, (r) => r[by])]
+  const groups = [...groupBy(rows, (r) => r[by])]
     .map(([id, group]) => ({ id, ...sum(group) }))
     .sort((a, b) => b.cost - a.cost || b.requests - a.requests);
   const groupName = (id: string) =>

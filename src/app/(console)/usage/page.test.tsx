@@ -95,6 +95,26 @@ describe("Usage overview", () => {
     );
   });
 
+  // Next.js supports Chrome 111 and Safari 16.4, which have no Map.groupBy
+  // (PR #223 review).
+  it("probe: renders in a browser without Map.groupBy", async () => {
+    const groupBy = Map.groupBy;
+    // @ts-expect-error -- the browsers the probe stands for lack it
+    delete Map.groupBy;
+    try {
+      stub();
+      renderPage(<UsagePage />);
+      await waitFor(() =>
+        expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0),
+      );
+      expect(
+        document.querySelector("[data-group=agent-default]"),
+      ).not.toBeNull();
+    } finally {
+      Map.groupBy = groupBy;
+    }
+  });
+
   it("groups by key under the key's name", async () => {
     stub();
     renderPage(<UsagePage />);
