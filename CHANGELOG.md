@@ -51,6 +51,13 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the
   connection state, and navigation labels are title case: `API Keys`, `Credential Vaults`,
   `Memory Stores`, and `Platform Connected` / `Platform Unreachable` / `Checking Platform…`.
+- **The agent and Dream model field lists the gateway's chat models.** With a gateway, the field is a
+  select of its chat models by name. A saved name the gateway lacks shows empty. The agent editor
+  then sends nothing on Save and says why on the field; the Dream form waits for a model, as for its
+  other required fields. Without a gateway, or when the gateway cannot be read, the field stays a
+  text box. The Raw tab and the API still take any name.
+- **The k8s manifest passes `MODEL_GATEWAY_BASE_URL`** from an optional repository variable of that
+  name. Unset keeps the gateway screens hidden.
 
 ## Released
 

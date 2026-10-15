@@ -4,6 +4,43 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## [Plan 10](./plan/10_model-gateway.md) — Model Gateway management (archived 2026-10-15)
+
+PRs #215, #216, #218, #223, #224. Console screens for the platform's model gateway: providers
+with their keys and upstream models, models and their routing, a first-run setup, each API key's
+model access, Analytics → Usage, and the agent and Dream model select.
+
+**Acceptance, against a real gateway (platform `2a528c6`, model-free):** a provider, a dummy key, an
+upstream model and a model, made through the console's BFF, appeared on Models, in the agent
+editor's model select, and as a grant on a console-minted key. Add provider listed all eight vendor
+profiles the gateway publishes. With the key archived, the gateway refused to delete the model its
+policy named (409), and the key's row removed the policy. Deleting in the gateway's order left no
+rows. The run needed an isolated compose project with throwaway keys: the local stack's image
+predated the gateway, and its `.env` lacked the `BRAIN_API_KEY` that the gateway service now
+requires.
+
+**What review found that CI did not:**
+
+- None of the first-run setup's four writes is idempotent. Several review rounds found ways that a
+  retry made a row twice: a reload re-offered the form, a lost answer or a lost lookup repeated the
+  write, a retry looked up the form's edited values, and a lookup by name adopted an older provider.
+  The rule that holds: a failed step is looked up, by what it sent, before it is tried again, and
+  the provider lookup takes only a row that appeared after the write.
+- Archiving a key leaves its gateway policy, and the policy blocks deleting any model it names. So
+  an archived or expired key offers only to remove its policy: a grant on it serves no request.
+- A number input hands the page `""` for text it cannot parse, and `""` read as "no limit". JSON
+  writes Infinity as null, the same "no limit", and `Number` reads hex and rounds past 2^53. The
+  gateway's number fields are now text inputs, and a value that would change on its way is not sent.
+- A request priced per million tokens often costs under half a cent, which two decimals wrote as
+  `0.00`, the same as free. Usage keeps two significant digits under a cent, on its axis too.
+- A daily usage read may answer 50,000 rows, so every path that ran once per row or per group
+  needed one pass or a cap: the grouping, the name lookups, the grouped table. `Map.groupBy`, the
+  obvious one-pass tool, is newer than the browsers Next.js 16 supports (Chrome 111, Safari 16.4).
+- A disabled Save gave no reason. It also blocked the empty-form refusal that the other agent
+  fields rely on. Save now stays enabled and reports a missing model on the field.
+
+Open: #219, #220, #221.
+
 ## [Plan 08](./plan/08_console-sso-rbac.md) — console SSO and role-aware UI (archived 2026-08-14)
 
 Issue #56, PRs #92–#96, #100. Browser OIDC login, and the BFF forwarding the operator's own token in

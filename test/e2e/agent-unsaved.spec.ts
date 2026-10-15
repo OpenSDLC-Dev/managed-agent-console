@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
+import { chooseModel } from "./choose-model";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -83,6 +84,8 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
   await nativePrompt.dismiss();
   await reload;
   await expect(name).toHaveValue("Kept draft");
+  // The seeded model predates the gateway, so a save first picks one.
+  await chooseModel(page);
   await page
     .getByRole("button", { name: "Save new version", exact: true })
     .click();

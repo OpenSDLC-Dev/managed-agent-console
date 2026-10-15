@@ -18,6 +18,7 @@ import {
   newAgentForm,
 } from "./agent-editor";
 import type { Agent, Skill } from "@/lib/platform/types";
+import { noGateway } from "../../../test/mock-platform/gateway-fetch";
 
 const { pushSpy, backSpy, refreshSpy } = vi.hoisted(() => ({
   pushSpy: vi.fn(),
@@ -164,6 +165,8 @@ function stubFetch({
 }: { skills?: unknown; agents?: unknown; save?: () => Response } = {}) {
   const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const gateway = noGateway(input);
+    if (gateway) return gateway;
     if (init?.method === "POST") return save();
     if (url.startsWith("/api/platform/v1/skills")) return json(skills);
     if (url.startsWith("/api/platform/v1/agents")) return json(agents);

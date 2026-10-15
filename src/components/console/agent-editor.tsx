@@ -8,6 +8,11 @@ import {
   type MCPBindings,
 } from "./additional-tools-editor";
 import { RequestId } from "@/components/console/bits";
+import {
+  ModelField,
+  modelChosen,
+  useModelChoices,
+} from "@/components/console/model-field";
 import { useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
@@ -362,6 +367,12 @@ export function AgentEditor({
   const skillOptions =
     skillsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const agentsQuery = useAgentOptions();
+  const models = useModelChoices();
+  // The raw tab writes the config as the API takes it, so only the form
+  // waits for a listed model.
+  const modelMissing =
+    tab === "rendered" && !readOnly && !modelChosen(models, form.modelId);
+  const [modelAsked, setModelAsked] = useState(false);
   const schemaError = schemaDraftError(form.toolSchemas ?? {});
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -412,6 +423,13 @@ export function AgentEditor({
   const save = () => {
     if (readOnly || mutation.isPending || (tab === "rendered" && schemaError))
       return;
+    // Save stays enabled, as for every other field the platform requires,
+    // and says on the field why it sent nothing.
+    if (modelMissing) {
+      setModelAsked(true);
+      document.getElementById("agent-model")?.focus();
+      return;
+    }
     setConflict(false);
     let body: AgentWriteBody;
     if (tab === "raw") {
@@ -597,13 +615,23 @@ export function AgentEditor({
                   />
                 </div>
                 <div className="grid grid-cols-[1fr_130px] gap-2">
-                  <div className="space-y-1.5">
+                  {/* min-w-0: the select's trigger does not wrap. */}
+                  <div className="min-w-0 space-y-1.5">
                     <Label htmlFor="agent-model">Model</Label>
-                    <Input
+                    <ModelField
                       id="agent-model"
                       className="font-mono"
                       value={form.modelId}
-                      onChange={(e) => set("modelId", e.target.value)}
+                      onChange={(value) => set("modelId", value)}
+                      choices={models}
+                      readOnly={readOnly}
+                      error={
+                        !modelAsked || !modelMissing
+                          ? undefined
+                          : models.pending
+                            ? "The gateway's models are still loading."
+                            : "A model is required: choose one of the gateway's models."
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">

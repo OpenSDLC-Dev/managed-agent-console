@@ -1,5 +1,5 @@
 ---
-status: active
+status: archived
 ---
 
 # Model Gateway management (plan 10)
@@ -36,8 +36,10 @@ catalogue fails every agent turn. Today an operator configures it with `curl`
    gateway path `404 not_found_error`; the surface probe on `admin/v1/aliases` then hides the screens,
    the API Keys column, and turns the agent model field back into a text box (principle 3).
 6. **The agent and Dream model field is a select of the gateway's chat Models**, names only, without
-   `*`. A saved value the list lacks shows empty, and Save needs a choice. This is a **deliberate
-   exception to principle 4**: the wire still takes any string, so API and CLI callers are unaffected.
+   `*`. A saved value the list lacks shows empty, and Save sends nothing until one is chosen; it says
+   why on the field, so Save stays enabled as for every other field. Save also waits while the list
+   loads (PR #224 review). This is a **deliberate exception to principle 4**: the wire still takes
+   any string, so API and CLI callers are unaffected.
 7. **Model access lives on the API Keys page** (platform plan 59): a column and a dialog that writes or
    deletes the key policy. Env-managed keys (`bootstrap`, `brain`) get no grant control: a policy
    written for the brain's key would limit every agent's model calls. One written through the API
@@ -90,6 +92,4 @@ catalogue fails every agent turn. Today an operator configures it with `curl`
 
 ## Open
 
-- The Analytics label, from the reference once Chrome is signed in.
-- Whether staging's console key is the bootstrap key (decision 3).
-- The platform PR for decision 10.
+Filed as issues: the Analytics label (#219), staging (#220), the vendor names (#221).

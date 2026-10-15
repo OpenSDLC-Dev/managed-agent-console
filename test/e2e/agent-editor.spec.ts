@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
+import { chooseModel } from "./choose-model";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -11,7 +12,7 @@ test("create an agent through the rendered form", async ({ page }) => {
   await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.getByLabel("Name").fill("Deploy helper");
-  await page.getByLabel("Model", { exact: true }).fill("claude-opus-4-8");
+  await chooseModel(page, "minimax-m3");
   await page.getByRole("button", { name: /Tool permissions/ }).click();
   await page.getByLabel("bash policy").click();
   await page.getByRole("option", { name: "always ask" }).click();
@@ -54,6 +55,8 @@ test("create an agent from a starter template", async ({ page }) => {
     "x-api-key: $PLATFORM_API_KEY",
   );
 
+  // The template names a model the gateway lacks, so the select starts empty.
+  await chooseModel(page);
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/agent_mock/);
   await expect(
@@ -107,7 +110,10 @@ test("stale-version saves surface the 409 conflict", async ({ context }) => {
   await pageB.goto("/agents/agent_researcher00000000001/edit");
   await expect(pageB.getByLabel("Name")).toHaveValue("Deep researcher");
 
-  // A saves first (v bump), then B saves against the stale version.
+  // A saves first (v bump), then B saves against the stale version. The
+  // seeded model predates the gateway, so each picks one of its models.
+  await chooseModel(pageA);
+  await chooseModel(pageB);
   await pageA.getByLabel("Description").fill("A's change");
   await pageA.getByRole("button", { name: "Save changes" }).click();
   await expect(pageA).toHaveURL(/\/agents\/agent_researcher00000000001$/);
@@ -179,6 +185,7 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
 }) => {
   await signIn(page, "/agents/new");
   await page.getByLabel("Name", { exact: true }).fill("Support");
+  await chooseModel(page);
   await page.getByRole("button", { name: "Add custom tool" }).click();
   const tool = page.locator('[data-tool-type="custom"]');
   await tool.getByText("Definition", { exact: true }).click();

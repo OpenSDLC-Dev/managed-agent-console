@@ -11,13 +11,16 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DreamEditor, dreamSessionIds } from "./dream-editor";
 import { dreams, memoryStores } from "../../../test/mock-platform/fixtures.mjs";
+import { noGateway } from "../../../test/mock-platform/gateway-fetch";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 function renderEditor() {
   const fetchMock = vi.fn(
-    async (_input: RequestInfo | URL, init?: RequestInit) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const gateway = noGateway(input);
+      if (gateway) return gateway;
       if (init?.method === "POST")
         return new Response(JSON.stringify(dreams[1]), { status: 200 });
       return new Response(
@@ -41,7 +44,9 @@ function renderEditor() {
   return fetchMock;
 }
 
-function fillRequired() {
+async function fillRequired() {
+  // The model field waits for the gateway's answer, here the BFF's 404.
+  await waitFor(() => expect(screen.getByLabelText("Model")).toBeEnabled());
   fireEvent.change(screen.getByLabelText("Memory store"), {
     target: { value: memoryStores[0].id },
   });
@@ -70,7 +75,7 @@ describe("DreamEditor", () => {
 
   it("submits the platform's default model and output shapes", async () => {
     const fetchMock = renderEditor();
-    fillRequired();
+    await fillRequired();
     expect(
       document.querySelector('[data-session-count="3"]'),
     ).toHaveTextContent("3 of 100");
@@ -98,7 +103,7 @@ describe("DreamEditor", () => {
   it("submits explicit speed, instructions and in-place output", async () => {
     const user = userEvent.setup();
     const fetchMock = renderEditor();
-    fillRequired();
+    await fillRequired();
     fireEvent.change(screen.getByLabelText("Instructions (optional)"), {
       target: { value: "Keep durable facts." },
     });
@@ -124,9 +129,9 @@ describe("DreamEditor", () => {
     });
   });
 
-  it("counts Unicode characters and prevents an oversized instruction", () => {
+  it("counts Unicode characters and prevents an oversized instruction", async () => {
     renderEditor();
-    fillRequired();
+    await fillRequired();
     fireEvent.change(screen.getByLabelText("Instructions (optional)"), {
       target: { value: "🙂".repeat(4097) },
     });

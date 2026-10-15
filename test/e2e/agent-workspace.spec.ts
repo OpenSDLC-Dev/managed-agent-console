@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
+import { chooseModel } from "./choose-model";
 const AGENT = "agent_researcher00000000001";
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -23,6 +24,8 @@ test("inline configuration discards, saves a new version and opens read-only his
     "Multi-step web research with citations.",
   );
   await description.fill("Saved inline");
+  // The seeded model predates the gateway, so a save first picks one.
+  await chooseModel(page);
   const save = page.waitForRequest(
     (req) =>
       req.method() === "POST" && req.url().endsWith("/v1/agents/" + AGENT),
@@ -120,11 +123,13 @@ test("two inline editors retain the stale draft until the operator reloads the l
   await page
     .getByLabel("Description", { exact: true })
     .fill("Remote saved value");
+  await chooseModel(page);
   await page.getByRole("button", { name: "Save new version" }).click();
   await expect(
     page.getByRole("combobox", { name: "Agent version" }),
   ).toContainText("Version: 4");
   await other.getByLabel("Description", { exact: true }).fill("Stale draft");
+  await chooseModel(other);
   await other.getByRole("button", { name: "Save new version" }).click();
   await expect(other.getByText(/Someone else updated/)).toBeVisible();
   await expect(other.getByLabel("Description", { exact: true })).toHaveValue(

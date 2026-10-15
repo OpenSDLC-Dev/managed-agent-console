@@ -19,6 +19,7 @@ import {
 import { UnsavedChangesProvider } from "@/components/shell/unsaved-changes";
 import type { Agent } from "@/lib/platform/types";
 import AgentDetailPage from "./page";
+import { noGateway } from "../../../../../test/mock-platform/gateway-fetch";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => useTestSearchParams(),
@@ -99,6 +100,8 @@ function setup({
   } as Agent;
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), location.origin);
+    const gateway = noGateway(input);
+    if (gateway) return gateway;
     const error = (message: string, status: number) =>
       Response.json({ error: { type: "api_error", message } }, { status });
     if (url.pathname.endsWith("/versions"))

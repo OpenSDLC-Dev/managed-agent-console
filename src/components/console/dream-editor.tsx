@@ -13,6 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RequestId } from "@/components/console/bits";
+import {
+  ModelField,
+  modelChosen,
+  useModelChoices,
+} from "@/components/console/model-field";
 import { PlatformError } from "@/lib/platform/http";
 import {
   useCreateDream,
@@ -34,6 +39,7 @@ export function DreamEditor() {
   const router = useRouter();
   const create = useCreateDream();
   const stores = useMemoryStoreOptions();
+  const models = useModelChoices();
   const [memoryStoreId, setMemoryStoreId] = useState("");
   const [sessions, setSessions] = useState("");
   const [modelId, setModelId] = useState("");
@@ -48,6 +54,7 @@ export function DreamEditor() {
     sessionIds.length >= 1 &&
     sessionIds.length <= 100 &&
     !!modelId &&
+    modelChosen(models, modelId) &&
     instructionLength <= 4096 &&
     !create.isPending;
 
@@ -116,10 +123,11 @@ export function DreamEditor() {
       <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
         <div className="space-y-1.5">
           <Label htmlFor="dream-model">Model</Label>
-          <Input
+          <ModelField
             id="dream-model"
             value={modelId}
-            onChange={(event) => setModelId(event.target.value)}
+            onChange={setModelId}
+            choices={models}
             placeholder="claude-sonnet-4-8"
           />
         </div>
