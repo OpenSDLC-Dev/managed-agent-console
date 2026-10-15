@@ -114,9 +114,10 @@ export const NAV: NavEntry[] = [
       surfaceEntry("dreams", Moon),
     ],
   },
-  // The reference files its usage pages under Analytics (owner's call,
-  // 2026-10-13; the label is not yet measured in Chrome). Its one item is the
-  // gateway's, so a console without a gateway loses the whole group.
+  // The reference files its usage pages under `Analytics`, right after
+  // `Managed Agents`, with `Usage` first (measured in Chrome 2026-10-16,
+  // #219). Its one item here is the gateway's, so a console without a gateway
+  // loses the whole group.
   {
     kind: "group",
     label: "Analytics",
