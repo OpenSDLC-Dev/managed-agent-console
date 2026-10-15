@@ -504,19 +504,20 @@ export function ApiKeysTable({
         // exactly one operation — archiving it. Both are the platform's rules,
         // stated in its refusals. Archiving leaves the gateway's policy, which
         // blocks deleting any model it names, so its removal stays offered;
-        // neither key is offered a new grant, which could only block that.
+        // neither key is offered a grant, which could only block that.
         if (k.status === "archived")
           return gateway && policy ? (
             <span className="flex justify-end">
-              <ModelAccessButton apiKey={k} policy={policy} />
+              <RemovePolicyButton apiKey={k} />
             </span>
           ) : null;
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
-            {gateway && policyList && (!expired || policy) && (
+            {gateway && policyList && !expired && (
               <ModelAccessButton apiKey={k} policy={policy} />
             )}
+            {gateway && expired && policy && <RemovePolicyButton apiKey={k} />}
             {!expired && (
               <Button
                 variant="ghost"

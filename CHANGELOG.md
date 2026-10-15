@@ -31,8 +31,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - **Model access on API Keys.** A column shows what each key may call through the gateway, and a
   dialog grants no models, every model, or selected models, with per-minute limits. The control
   plane's own keys show their built-in grant, and offer only to remove a policy someone wrote on
-  one. An archived key keeps the control while it has a policy, since a policy blocks deleting the
-  models it names. A model's inspector lists the active keys that can call it.
+  one. An archived or expired key offers only to remove a policy it still has, since a policy blocks
+  deleting the models it names. A model's inspector lists the active keys that can call it.
 
 ### Security
 

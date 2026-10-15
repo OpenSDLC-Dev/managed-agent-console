@@ -207,11 +207,14 @@ export function ModelAccessButton({
 }
 
 /**
- * Removes a policy written on a key the control plane manages. The platform
- * refuses changes to the key itself, but the policy is the gateway's own row,
- * and on the brain's key it limits every agent. Without it the key has its
- * built-in grant again, so the access dialog, whose "no access" means no
- * policy, would mislabel the choice.
+ * Removes a key's policy, where the access dialog's grants do not fit.
+ *
+ * - A key the control plane manages: the platform refuses changes to the key
+ *   itself, but the policy is the gateway's own row, and on the brain's key it
+ *   limits every agent. Without it the key has its built-in grant again, so
+ *   the dialog, whose "no access" means no policy, would mislabel the choice.
+ * - An archived or expired key: a grant can serve no request, and only blocks
+ *   deleting the models it names (store/aliases.go DeleteAlias).
  */
 export function RemovePolicyButton({ apiKey }: { apiKey: ApiKey }) {
   const remove = useDeleteGatewayKeyPolicy(apiKey.id, { errorToast: true });
@@ -219,7 +222,11 @@ export function RemovePolicyButton({ apiKey }: { apiKey: ApiKey }) {
     <ConfirmIconButton
       label={`Remove model policy from ${apiKey.name}`}
       title="Remove model policy"
-      description={`${apiKey.name} returns to its built-in grant: every model, with no limits.`}
+      description={
+        apiKey.created_by
+          ? `${apiKey.name} keeps no model access, and the models the policy names can be deleted.`
+          : `${apiKey.name} returns to its built-in grant: every model, with no limits.`
+      }
       pending={remove.isPending}
       onConfirm={() => remove.mutate()}
     >

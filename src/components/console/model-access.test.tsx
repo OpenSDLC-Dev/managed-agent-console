@@ -349,7 +349,7 @@ describe("Model access on API keys", () => {
     const row = (key: ApiKey) => screen.getByText(key.name).closest("tr")!;
     expect(
       await within(row(archived)).findByRole("button", {
-        name: "Model access",
+        name: "Remove model policy from ci-deploy",
       }),
     ).toBeInTheDocument();
     expect(
@@ -360,19 +360,42 @@ describe("Model access on API keys", () => {
     ).toBeNull();
   });
 
-  // An expired key can only be archived, so a new grant on one would only
-  // block deleting the models it names; an existing one stays removable.
+  // A grant on a dead key serves no request and only blocks deleting the
+  // models it names, so the policy it has can be removed and not widened
+  // (PR #218 review).
   it.each(["archived", "expired"] as const)(
-    "probe: offers no new grant on an %s key, only the removal of one it has",
+    "probe: offers no grant on an %s key, only the removal of one it has",
     async (status) => {
-      stubGatewayFetch();
+      const fetchMock = stubGatewayFetch();
       const held = { ...CI, status };
       const bare = { ...FRESH, status };
       renderTable([held, bare]);
       const row = (key: ApiKey) => screen.getByText(key.name).closest("tr")!;
+      await userEvent.click(
+        await within(row(held)).findByRole("button", {
+          name: "Remove model policy from ci-deploy",
+        }),
+      );
       expect(
-        await within(row(held)).findByRole("button", { name: "Model access" }),
+        await screen.findByText(
+          "ci-deploy keeps no model access, and the models the policy names can be deleted.",
+        ),
       ).toBeInTheDocument();
+      await userEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Remove model policy",
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          fetchMock.mock.calls
+            .filter(([, i]) => i?.method && i.method !== "GET")
+            .map(([url, i]) => `${i?.method} ${String(url)}`),
+        ).toEqual([`DELETE /api/gateway/admin/v1/key_policies/${CI.id}`]),
+      );
+      expect(
+        within(row(held)).queryByRole("button", { name: "Model access" }),
+      ).toBeNull();
       await waitFor(() =>
         expect(access(bare)).toHaveAttribute("data-models", "none"),
       );

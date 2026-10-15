@@ -31,7 +31,7 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
-import { wireInteger } from "@/lib/platform/http";
+import { wireDecimal, wireInteger } from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -311,7 +311,7 @@ function UpstreamModelDialog({
   // replaces the prices whole.
   const priceBody: Partial<Prices> = {};
   for (const [k] of PRICES) {
-    if (prices[k].trim()) priceBody[k] = Number(prices[k]);
+    if (prices[k].trim()) priceBody[k] = wireDecimal(prices[k]);
     else if (deployment) priceBody[k] = null;
   }
 

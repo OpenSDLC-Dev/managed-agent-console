@@ -11,6 +11,7 @@ import {
   gatewayDelete,
   gatewayGet,
   gatewayPost,
+  wireDecimal,
   wireInteger,
   platformDelete,
   platformGet,
@@ -347,6 +348,21 @@ describe("model gateway helpers", () => {
     expect(wireInteger("9007199254740993")).toBeNaN();
     // A fraction is the gateway's to refuse, in its own words.
     expect(wireInteger("1.5")).toBe(1.5);
+  });
+
+  it.each(["0x10", "1e3", "1.0000000000000001", "9007199254740990.5"])(
+    "probe: wireInteger NaNs %s, which Number reads as an integer nobody typed",
+    (text) => {
+      expect(wireInteger(text)).toBeNaN();
+    },
+  );
+
+  it("wireDecimal reads decimal notation only", () => {
+    expect(wireDecimal("0.15")).toBe(0.15);
+    expect(wireDecimal(".5")).toBe(0.5);
+    expect(wireDecimal("2e-1")).toBe(0.2);
+    expect(wireDecimal("0x10")).toBeNaN();
+    expect(wireDecimal("Infinity")).toBeNaN();
   });
 
   it("gatewayDelete returns the deletion receipt", async () => {
