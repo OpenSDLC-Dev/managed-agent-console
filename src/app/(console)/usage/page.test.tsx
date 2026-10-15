@@ -95,6 +95,35 @@ describe("Usage overview", () => {
     );
   });
 
+  // A read can name thousands of keys or models; a row for each would stall
+  // the page (PR #223 review).
+  it("probe: shows the 100 costliest groups, and says how many more there are", async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({
+      ...daily[0],
+      alias: `model-${i}`,
+      cost: i,
+    }));
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(KEYS)
+        : rest === "usage/daily"
+          ? Response.json({ data: many })
+          : undefined,
+    );
+    renderPage(<UsagePage />);
+    await waitFor(() =>
+      expect(document.querySelector("[data-hidden-groups]")).toHaveAttribute(
+        "data-hidden-groups",
+        "50",
+      ),
+    );
+    const shown = document.querySelectorAll(
+      "table[data-by=alias] [data-group]",
+    );
+    expect(shown).toHaveLength(100);
+    expect(shown[0]).toHaveAttribute("data-group", "model-149");
+  });
+
   // Cache writes have a price of their own (deployments.go cache_write), so
   // the overview counts them beside cache reads (PR #223 review).
   it("probe: counts cache writes beside cache reads", async () => {

@@ -14,6 +14,7 @@ import {
   UsageFilters,
   UsageViews,
   costText,
+  exactCount,
   lastDays,
   tokenCount,
   useUsageNames,
@@ -27,6 +28,12 @@ import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import type { GatewayDailyUsage } from "@/lib/platform/types";
 
 const PERIODS = [7, 30, 90] as const;
+/**
+ * The grouped table's rows, highest cost first. A read can name thousands of
+ * keys or models, and a row for each would stall the page; the filters reach
+ * the rest.
+ */
+const SHOWN_GROUPS = 100;
 
 type Totals = Pick<
   GatewayDailyUsage,
@@ -270,7 +277,7 @@ export default function UsagePage() {
                 </tr>
               </thead>
               <tbody>
-                {groups.map((g) => (
+                {groups.slice(0, SHOWN_GROUPS).map((g) => (
                   <tr key={g.id} className="border-b" data-group={g.id}>
                     <td
                       className={cn(
@@ -302,6 +309,15 @@ export default function UsagePage() {
                 ))}
               </tbody>
             </table>
+          )}
+          {groups.length > SHOWN_GROUPS && (
+            <p
+              className="pt-2 text-xs text-muted-foreground"
+              data-hidden-groups={groups.length - SHOWN_GROUPS}
+            >
+              {exactCount(groups.length - SHOWN_GROUPS)} more, each with a lower
+              cost. Filter by key, model or upstream model to see one.
+            </p>
           )}
         </>
       )}
