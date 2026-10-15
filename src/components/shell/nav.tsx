@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
 import { useNavPreference } from "./nav-preference";
@@ -196,6 +196,16 @@ function Entry({
 export function Nav({ compact = false }: { compact?: boolean }) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
+  // The list outgrows a laptop's height once every group is open, and the
+  // sidebar scrolls; the page you are on must not be the row below the fold.
+  // The compact rail has no such list, so expanding the sidebar brings the
+  // row in too.
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    nav.current
+      ?.querySelector("[aria-current=page]")
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [pathname, surfaces, compact]);
   const available: Available = (surface) => surfaces?.[surface] !== false;
   if (compact) {
     return (
@@ -243,7 +253,11 @@ export function Nav({ compact = false }: { compact?: boolean }) {
     );
   }
   return (
-    <nav aria-label="Main navigation" className="flex flex-col gap-1 px-3 pt-4">
+    <nav
+      ref={nav}
+      aria-label="Main navigation"
+      className="flex flex-col gap-1 px-3 pt-4"
+    >
       {NAV.map((entry) => (
         <Entry
           key={

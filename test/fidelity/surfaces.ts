@@ -982,6 +982,37 @@ export const SURFACES: Surface[] = [
       "Model gateway models: name and display name, kind, and the upstream models each routes to by tier and share.",
   },
   {
+    id: "usage-overview",
+    route: "/usage",
+    fixture: "14 days of the mock gateway's rollups",
+    description:
+      "Analytics → Usage: tiles, cost per day, and the table grouped by model.",
+    setup: async (page) => {
+      await page.locator("table[data-by]").waitFor();
+    },
+  },
+  {
+    id: "usage-chart-tooltip",
+    route: "/usage",
+    fixture: "the latest day's bar, hovered",
+    description: "A bar's hover answer: its UTC day and its cost.",
+    setup: async (page) => {
+      await page.locator("table[data-by]").waitFor();
+      await page.getByRole("listitem").last().hover();
+      await page.getByRole("tooltip").waitFor();
+    },
+  },
+  {
+    id: "usage-requests",
+    route: "/usage/requests",
+    fixture: "4 ledger rows: a session, an embedding, a 429 and a 502",
+    description:
+      "The per-request ledger: key, model and upstream, session link, route, status, tokens, cost and timings.",
+    setup: async (page) => {
+      await page.locator("[data-status]").first().waitFor();
+    },
+  },
+  {
     id: "providers-list",
     route: "/providers",
     fixture: "4 gateway providers, one disabled on plain HTTP",

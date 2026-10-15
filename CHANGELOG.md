@@ -33,6 +33,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   plane's own keys show their built-in grant, and offer only to remove a policy someone wrote on
   one. An archived or expired key offers only to remove a policy it still has, since a policy blocks
   deleting the models it names. A model's inspector lists the active keys that can call it.
+- **Analytics → Usage.** Overview totals the gateway's model calls over 7, 30 or 90 days: requests,
+  errors, tokens and cost, a daily cost chart, and a table by key, model or upstream model. Requests
+  lists each call, newest first, with its route, status, tokens, cost and latency, and links the
+  session that made it. Both filter by key, model and upstream model. Cost has no currency: it is
+  the prices the operator entered.
 
 ### Security
 

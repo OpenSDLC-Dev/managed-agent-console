@@ -188,6 +188,7 @@ describe("useSurfaces", () => {
       "api-keys": true,
       models: true,
       providers: true,
+      usage: true,
     });
   });
 
@@ -196,12 +197,13 @@ describe("useSurfaces", () => {
   // rather than error on a deployment that runs no gateway.
   it("probe: hides the gateway surfaces when the console runs without a gateway", async () => {
     stubProbes((surface) =>
-      surface === "providers" || surface === "aliases" ? 404 : 200,
+      ["providers", "aliases", "usage/requests"].includes(surface) ? 404 : 200,
     );
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     expect(result.current?.providers).toBe(false);
     expect(result.current?.models).toBe(false);
+    expect(result.current?.usage).toBe(false);
     expect(result.current?.agents).toBe(true);
   });
 
@@ -238,12 +240,13 @@ describe("useSurfaces", () => {
     expect(calls).toHaveLength(Object.keys(SURFACES).length);
     for (const entry of Object.values(SURFACES)) {
       // The wire surfaces ask for a page of one; the console namespace and the
-      // gateway serve unpaged lists, so they are asked plainly.
+      // gateway serve unpaged lists, so they are asked plainly — but for the
+      // gateway's ledger, which pages, asked for one row.
       expect(calls).toContain(
         !("api" in entry)
           ? `/api/platform/${entry.path}?limit=1`
           : entry.api === "gateway"
-            ? `/api/gateway/admin/v1/${entry.path}`
+            ? `/api/gateway/admin/v1/${entry.path}${"query" in entry ? "?limit=1" : ""}`
             : `/api/console/${entry.path}`,
       );
     }

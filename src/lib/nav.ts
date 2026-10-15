@@ -1,6 +1,8 @@
 import {
   Bot,
   Boxes,
+  ChartColumn,
+  ChartLine,
   Cpu,
   Database,
   FileText,
@@ -111,6 +113,15 @@ export const NAV: NavEntry[] = [
       surfaceEntry("memory-stores", Database),
       surfaceEntry("dreams", Moon),
     ],
+  },
+  // The reference files its usage pages under Analytics (owner's call,
+  // 2026-10-13; the label is not yet measured in Chrome). Its one item is the
+  // gateway's, so a console without a gateway loses the whole group.
+  {
+    kind: "group",
+    label: "Analytics",
+    icon: ChartLine,
+    items: [surfaceEntry("usage", ChartColumn)],
   },
 ];
 

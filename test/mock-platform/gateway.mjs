@@ -874,7 +874,25 @@ export function gatewayRoute(method, rest, params, body = {}) {
     }
   }
 
+  // usage.go query: a parameter the read does not take, or one given empty,
+  // is refused rather than dropped.
+  const queryRefusal = (allowed) => {
+    for (const [k, v] of params) {
+      if (!allowed.includes(k))
+        return invalid(`unknown query parameter "${k}"`);
+      if (v === "") return invalid(`query parameter "${k}" is empty`);
+    }
+  };
+
   if (rest === "usage/daily" && method === "GET") {
+    const refused = queryRefusal([
+      "from",
+      "to",
+      "api_key_id",
+      "alias",
+      "deployment_id",
+    ]);
+    if (refused) return refused;
     const from = params.get("from");
     const to = params.get("to");
     return list(
@@ -885,6 +903,15 @@ export function gatewayRoute(method, rest, params, body = {}) {
   }
 
   if (rest === "usage/requests" && method === "GET") {
+    const refused = queryRefusal([
+      "before",
+      "limit",
+      "api_key_id",
+      "alias",
+      "deployment_id",
+      "session_id",
+    ]);
+    if (refused) return refused;
     const limit = Number(params.get("limit") ?? 100);
     const before = Number(params.get("before") ?? Infinity);
     const rows = filterRows(ledger, params).filter((r) => r.id < before);

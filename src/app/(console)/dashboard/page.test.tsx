@@ -96,6 +96,7 @@ describe("DashboardPage", () => {
       "Build",
       "Model Gateway",
       "Managed Agents",
+      "Analytics",
     ]);
   });
 
@@ -114,6 +115,7 @@ describe("DashboardPage", () => {
       ["dreams", "/dreams"],
       ["environments", "/environments"],
       ["vaults", "/vaults"],
+      ["usage", "/usage"],
     ];
     for (const [surface, href] of routes) {
       expect(card(surface), surface).not.toBeNull();
@@ -137,18 +139,24 @@ describe("DashboardPage", () => {
   it("drops a whole section when the deployment serves none of it", async () => {
     renderDashboard(["files", "skills"]);
     await waitFor(() => expect(headings()).not.toContain("Build"));
-    expect(headings()).toEqual(["Manage", "Model Gateway", "Managed Agents"]);
+    expect(headings()).toEqual([
+      "Manage",
+      "Model Gateway",
+      "Managed Agents",
+      "Analytics",
+    ]);
   });
 
-  it("drops the Model Gateway section on a console that runs without one", async () => {
+  it("drops the Model Gateway and Analytics sections on a console that runs without a gateway", async () => {
     renderDashboard(["model-gateway"]);
     await waitFor(() => expect(headings()).not.toContain("Model Gateway"));
+    expect(headings()).not.toContain("Analytics");
     expect(card("agents")).not.toBeNull();
   });
 
   it("shows every card while the probe has not answered", () => {
     renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(12);
+    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(13);
   });
 
   it("hides shortcuts whose platform surfaces are unavailable", async () => {

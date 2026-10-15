@@ -82,6 +82,7 @@ const EXPECTED = [
     surface: "dreams",
     group: "Managed Agents",
   },
+  { label: "Usage", href: "/usage", surface: "usage", group: "Analytics" },
 ];
 
 /** The groups, in nav order, and what each holds. */
@@ -100,6 +101,7 @@ const GROUPS = [
       "dreams",
     ],
   },
+  { label: "Analytics", surfaces: ["usage"] },
 ];
 
 const SURFACE_ITEMS = EXPECTED.filter((i) => i.surface);
@@ -125,7 +127,7 @@ function renderNav(
         // matches the pattern above.
         s === "api-keys"
           ? String(input).includes("/api/console/")
-          : s === "providers" || s === "models"
+          : s === "providers" || s === "models" || s === "usage"
             ? String(input).includes(
                 `/api/gateway/admin/v1/${SURFACES[s].path}`,
               )
@@ -193,7 +195,7 @@ describe("Nav", () => {
   // The order is the point of the grouping, and the assertion the flat nav did
   // not have: every routing test below passed against the ungrouped list too,
   // so without this one a regrouping could be undone and the suite stay green.
-  it("draws the reference's order: two top-level rows, then Build, Model Gateway and Managed Agents", () => {
+  it("draws the reference's order: two top-level rows, then Build, Model Gateway, Managed Agents and Analytics", () => {
     navState.pathname = "/";
     renderNav();
     expect(rowOrder()).toEqual([
@@ -213,12 +215,59 @@ describe("Nav", () => {
       "Credential Vaults",
       "Memory Stores",
       "Dreams",
+      "Analytics",
+      "Usage",
     ]);
   });
 
   // The reference draws an icon on top-level rows and on group headers, and
   // none on the rows inside a group; a nested row pads left instead, so every
   // label lands in one column (docs/design-reference.md).
+  // Analytics is the last group, and with every group open it sits below a
+  // laptop's fold; the sidebar scrolls, so the current page is brought in.
+  it("scrolls the current page's row into view", () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      navState.pathname = "/usage";
+      renderNav();
+      expect(scrolled.map((el) => el.getAttribute("href"))).toContain("/usage");
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  // Expanding a collapsed sidebar changes only `compact` (PR #223 review).
+  it("probe: scrolls the current page's row into view when the sidebar expands", () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      navState.pathname = "/usage";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => new Promise<Response>(() => {})),
+      );
+      const client = new QueryClient();
+      const nav = (compact: boolean) => (
+        <QueryClientProvider client={client}>
+          <Nav compact={compact} />
+        </QueryClientProvider>
+      );
+      const { rerender } = render(nav(true));
+      scrolled.length = 0;
+      rerender(nav(false));
+      expect(scrolled.map((el) => el.getAttribute("href"))).toContain("/usage");
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("gives top-level rows an icon and rows inside a group an indent instead", () => {
     navState.pathname = "/";
     renderNav();

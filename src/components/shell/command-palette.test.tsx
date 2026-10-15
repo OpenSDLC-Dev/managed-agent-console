@@ -137,6 +137,7 @@ describe("CommandPalette", () => {
       "Credential Vaults",
       "Memory Stores",
       "Dreams",
+      "Usage",
     ]);
 
     // The searchable list queries, plus one surface probe per registered

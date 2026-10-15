@@ -118,6 +118,15 @@ export const SURFACES = {
     blurb:
       "Vendor accounts the gateway calls, with their keys and upstream models.",
   },
+  // Probed through the ledger at one row: the daily read answers 30 days of
+  // rollups, up to 50,000 of them (usage.go maxDailyRows).
+  usage: {
+    path: "usage/requests",
+    label: "Usage",
+    api: "gateway",
+    query: { limit: 1 },
+    blurb: "Model calls through the gateway: requests, tokens and cost.",
+  },
 } as const;
 
 export type Surface = keyof typeof SURFACES;
@@ -173,7 +182,10 @@ export function useSurfaces(): Record<Surface, boolean> | undefined {
           if (!("api" in entry))
             await platformGet<unknown>(entry.path, { limit: 1 });
           else if (entry.api === "gateway")
-            await gatewayGet<unknown>(entry.path);
+            await gatewayGet<unknown>(
+              entry.path,
+              "query" in entry ? entry.query : undefined,
+            );
           else await consoleKeysGet<unknown>(entry.path);
           return [surface, true] as const;
         } catch (error) {
