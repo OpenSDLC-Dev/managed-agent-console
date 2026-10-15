@@ -18,7 +18,7 @@ import {
   UsageViews,
   costText,
   exactCount,
-  seconds,
+  duration,
   useUsageNames,
 } from "@/components/console/usage-bits";
 import { Badge } from "@/components/ui/badge";
@@ -145,13 +145,25 @@ function Ledger() {
       key: "tokens",
       header: "Tokens in / out",
       className: "text-right whitespace-nowrap",
+      // Cache tokens are counted and priced apart from input, so a cached
+      // call shows them too: input alone cannot explain its cost.
       cell: (r) => (
         <span
-          className="text-[13px] tabular-nums"
+          className="grid justify-items-end text-[13px] tabular-nums"
           data-input={r.input_tokens ?? ""}
           data-output={r.output_tokens ?? ""}
+          data-cache-read={r.cache_read_tokens ?? ""}
+          data-cache-write={r.cache_write_tokens ?? ""}
         >
-          {exactCount(r.input_tokens)} / {exactCount(r.output_tokens)}
+          <span>
+            {exactCount(r.input_tokens)} / {exactCount(r.output_tokens)}
+          </span>
+          {(r.cache_read_tokens ?? 0) + (r.cache_write_tokens ?? 0) > 0 && (
+            <span className="text-xs text-muted-foreground">
+              cache {exactCount(r.cache_read_tokens)} read,{" "}
+              {exactCount(r.cache_write_tokens)} write
+            </span>
+          )}
         </span>
       ),
     },
@@ -174,7 +186,7 @@ function Ledger() {
           className="text-[13px] tabular-nums"
           data-latency-ms={r.latency_ms}
         >
-          {seconds(r.latency_ms)}
+          {duration(r.latency_ms)}
         </span>
       ),
     },
@@ -187,7 +199,7 @@ function Ledger() {
           className="text-[13px] tabular-nums"
           data-ttft-ms={r.ttft_ms ?? ""}
         >
-          {r.ttft_ms === null ? "—" : seconds(r.ttft_ms)}
+          {r.ttft_ms === null ? "—" : duration(r.ttft_ms)}
         </span>
       ),
     },

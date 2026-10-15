@@ -44,8 +44,11 @@ export const exactCount = (n: number | null) =>
 export const costText = (n: number | null) =>
   n === null ? "—" : n > 0 && n < 0.01 ? small.format(n) : money.format(n);
 
-/** "8.4s". */
-export const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+/** "8.4s"; under a second "12ms", and under 10 ms "0.4ms", so a fast call is not "0.0s". */
+export const duration = (ms: number) =>
+  ms >= 999.5
+    ? `${(ms / 1000).toFixed(1)}s`
+    : `${ms >= 10 ? Math.round(ms) : Number(ms.toFixed(1))}ms`;
 
 /** "Oct 12" for a UTC day as YYYY-MM-DD. */
 export const dayLabel = (day: string) =>

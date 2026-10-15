@@ -238,6 +238,38 @@ describe("Usage requests", () => {
     );
   });
 
+  // Cache tokens are priced apart from input (PR #223 review).
+  it("probe: shows a cached call's cache tokens, and none on an uncached one", async () => {
+    navigation.pathname = "/usage/requests";
+    const cached = ledger.find((r) => (r.cache_read_tokens ?? 0) > 0)!;
+    const plain = {
+      ...cached,
+      id: cached.id + 1000,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+    };
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(KEYS)
+        : rest === "usage/requests"
+          ? Response.json({ data: [plain, cached], has_more: false })
+          : undefined,
+    );
+    renderPage(<UsageRequestsPage />);
+    const cell = await waitFor(() => {
+      const c = document.querySelector(
+        `[data-cache-read="${cached.cache_read_tokens}"]`,
+      );
+      expect(c).not.toBeNull();
+      return c!;
+    });
+    expect(cell.childNodes).toHaveLength(2);
+    // Two zero counts add no line, and no stray "0" either.
+    expect(
+      document.querySelector('[data-cache-read="0"]')!.childNodes,
+    ).toHaveLength(1);
+  });
+
   it("filters by a session from the URL", async () => {
     navigation.pathname = "/usage/requests";
     navigation.search = `session_id=${ledger[0].session_id}`;

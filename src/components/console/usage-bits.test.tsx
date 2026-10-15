@@ -6,7 +6,7 @@ import {
   dayLabel,
   exactCount,
   lastDays,
-  seconds,
+  duration,
   tokenCount,
 } from "./usage-bits";
 import { CostChart, niceScale } from "./cost-chart";
@@ -37,9 +37,12 @@ describe("usage formatters", () => {
     expect(costText(null)).toBe("—");
   });
 
-  it("writes a duration in seconds", () => {
-    expect(seconds(8400)).toBe("8.4s");
-    expect(seconds(12)).toBe("0.0s");
+  // A fast call read "0.0s", the same as no time at all (PR #223 review).
+  it("probe: writes a duration in seconds, and one under a second in ms", () => {
+    expect(duration(8400)).toBe("8.4s");
+    expect(duration(999.6)).toBe("1.0s");
+    expect(duration(12.4)).toBe("12ms");
+    expect(duration(0.42)).toBe("0.4ms");
   });
 
   it("labels a UTC day, whatever the local zone", () => {
