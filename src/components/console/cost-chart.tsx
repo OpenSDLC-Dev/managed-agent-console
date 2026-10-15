@@ -42,6 +42,9 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
     { length: Math.round(top / step) + 1 },
     (_, i) => i * step,
   );
+  // At most five day labels, whole weeks apart: thirteen weekly labels
+  // overlapped across a phone's 90 days (PR #223 review).
+  const every = 7 * Math.ceil(days.length / 35);
   const label = (i: number) =>
     `${dayLabel(days[i].day)}: ${costText(days[i].cost)}`;
   return (
@@ -94,10 +97,11 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
                   height: d.cost > 0 ? `max(1px, ${(d.cost / top) * 100}%)` : 0,
                 }}
               />
-              {i % 7 === 0 && (
+              {i % every === 0 && (
                 <span
                   className="absolute -bottom-[20px] left-1/2 -translate-x-1/2 text-[11px] whitespace-nowrap text-muted-foreground"
                   aria-hidden
+                  data-axis-day={d.day}
                 >
                   {dayLabel(d.day)}
                 </span>

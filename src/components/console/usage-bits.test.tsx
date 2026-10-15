@@ -95,6 +95,28 @@ describe("CostChart", () => {
     ]);
   });
 
+  it.each([
+    [7, 1],
+    [30, 5],
+    [90, 5],
+  ])(
+    "probe: labels %s days with at most five dates, whole weeks apart",
+    (n, labels) => {
+      const span = Array.from({ length: n }, (_, i) => ({
+        day: new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10),
+        cost: 1,
+      }));
+      render(<CostChart days={span} />);
+      const shown = [...document.querySelectorAll("[data-axis-day]")];
+      expect(shown).toHaveLength(labels);
+      const apart =
+        (Date.parse(shown[1]?.getAttribute("data-axis-day") ?? "") -
+          Date.parse(shown[0].getAttribute("data-axis-day")!)) /
+        86_400_000;
+      if (labels > 1) expect(apart % 7).toBe(0);
+    },
+  );
+
   it("answers hover and focus with the bar's day and value", () => {
     render(<CostChart days={days} />);
     const bar = screen.getAllByRole("listitem")[1];

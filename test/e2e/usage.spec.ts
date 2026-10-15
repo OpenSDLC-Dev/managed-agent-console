@@ -67,6 +67,15 @@ test("probe: the overview fits a phone's width", async ({ page }) => {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  // Ninety days of date labels must not run into each other.
+  await page.getByRole("combobox").first().selectOption("90");
+  await expect(page.locator("[role=list] > *")).toHaveCount(90);
+  const boxes = await page
+    .locator("[data-axis-day]")
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+  expect(boxes.length).toBeGreaterThan(1);
+  for (let i = 1; i < boxes.length; i++)
+    expect(boxes[i].left).toBeGreaterThanOrEqual(boxes[i - 1].right);
 });
 
 test("a console without a gateway has no Analytics", async ({
