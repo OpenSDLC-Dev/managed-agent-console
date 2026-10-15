@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const store = "memstore_projectnotes000001";
@@ -109,6 +110,7 @@ test("tree supports keyboard traversal and guards dirty selection on a narrow vi
   );
   await expect(prompt).toBeHidden();
   await page.setViewportSize({ width: 390, height: 844 });
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

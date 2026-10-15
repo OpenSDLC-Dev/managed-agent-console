@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
@@ -87,6 +88,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
     await page.setViewportSize({ width: 390, height: 844 });
     await openCreatedFilter(page);
     await page.getByRole("button", { name: "Open End calendar" }).click();
+    await settleMotion(page);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),

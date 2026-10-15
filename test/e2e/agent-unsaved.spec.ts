@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 import { chooseModel } from "./choose-model";
 
@@ -38,6 +39,7 @@ test("agent modal retains drafts on Stay and discards only on Leave", async ({
   await expect
     .poll(() => prompt.evaluate((el) => getComputedStyle(el).opacity))
     .toBe("1");
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const session = "sesn_research0000000000001";
@@ -224,6 +225,7 @@ test("a narrow child inspector remains reachable without document overflow", asy
   await expect(
     page.getByRole("button", { name: "Child thread Beta", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

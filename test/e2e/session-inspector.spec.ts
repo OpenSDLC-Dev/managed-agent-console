@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 const MOCK = "http://127.0.0.1:18080";
 const GATED = "sesn_gatedbash00000000001";
@@ -116,6 +117,7 @@ test("deep links, missing sessions, resizing and narrow inspector accessibility 
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
+    await settleMotion(page);
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   }
   await panel.getByRole("button", { name: "Close details" }).click();

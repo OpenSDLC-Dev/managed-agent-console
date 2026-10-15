@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
@@ -103,6 +104,7 @@ test("direct archive preserves an inspector's filters and prevents duplicate pen
   await expect(panel.getByText("archived", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(url);
   expect(calls).toBe(1);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 

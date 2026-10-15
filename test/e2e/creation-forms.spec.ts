@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
@@ -50,6 +51,7 @@ test("memory creation cancels without navigation and retains drafts after a plat
   await expect
     .poll(() => dialog.evaluate((el) => getComputedStyle(el).opacity))
     .toBe("1");
+  await settleMotion(page);
   expect(
     (await new AxeBuilder({ page }).include('[role="dialog"]').analyze())
       .violations,
@@ -142,6 +144,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   await expect
     .poll(() => dialog.evaluate((el) => getComputedStyle(el).opacity))
     .toBe("1");
+  await settleMotion(page);
   expect(
     (await new AxeBuilder({ page }).include('[role="dialog"]').analyze())
       .violations,
@@ -226,6 +229,7 @@ test("schedule clock supports AM/PM keyboard changes and preserves midnight on e
   ).toBe(true);
   await time.fill("12:00");
   await page.setViewportSize({ width: 390, height: 844 });
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const submitted = page.waitForRequest(
     (req) =>

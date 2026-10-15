@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 import { chooseModel } from "./choose-model";
 const AGENT = "agent_researcher00000000001";
@@ -212,6 +213,7 @@ test("narrow editing keeps the draft actions reachable and exposes invalid histo
       page.getByRole("button", { name: "deployments", exact: true }),
     ).toBeInViewport();
   }
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   await page.goto("/agents/" + AGENT + "?version=bad");

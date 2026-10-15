@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 const DEPLOYMENT = "depl_weekresearch00000001";
 const MOCK = "http://127.0.0.1:18080";
@@ -69,6 +70,7 @@ test("lookup errors, resize and narrow resources remain accessible", async ({
   await panel
     .getByRole("link", { name: "Project notes", exact: true })
     .scrollIntoViewIfNeeded();
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),

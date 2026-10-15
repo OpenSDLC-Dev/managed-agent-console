@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const ID = "depl_weekresearch00000001";
@@ -99,6 +100,7 @@ test("Agent version paging retains its selection after an error and retries from
   );
   await expect(version).toContainText("v3");
   await expect(older).toBeEnabled();
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   allowOlder = true;
   await older.focus();
@@ -191,6 +193,7 @@ test("run inspection retains filters and history, handles missing Sessions and r
   await expect
     .poll(() => raw.evaluate((node) => node.scrollLeft))
     .toBeGreaterThan(0);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -281,5 +284,6 @@ test("narrow configuration keeps its save bar visible and archived values remain
   await expect
     .poll(() => configuration.evaluate((node) => node.scrollTop))
     .toBeGreaterThan(0);
+  await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
