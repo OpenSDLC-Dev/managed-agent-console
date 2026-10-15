@@ -111,15 +111,17 @@ export default function UsagePage() {
 
   const rows = data?.data ?? [];
   const totals = sum(rows);
+  // One pass each: a read can answer 50,000 rows (usage.go maxDailyRows).
+  const byDay = Map.groupBy(rows, (r) => r.day);
   // Every day in the span, a day without traffic drawn as zero.
   const perDay = Array.from({ length: days }, (_, i) => {
     const day = new Date(Date.parse(`${range.from}T00:00:00Z`) + i * 86_400_000)
       .toISOString()
       .slice(0, 10);
-    return { day, cost: sum(rows.filter((r) => r.day === day)).cost };
+    return { day, cost: sum(byDay.get(day) ?? []).cost };
   });
-  const groups = [...new Set(rows.map((r) => r[by]))]
-    .map((id) => ({ id, ...sum(rows.filter((r) => r[by] === id)) }))
+  const groups = [...Map.groupBy(rows, (r) => r[by])]
+    .map(([id, group]) => ({ id, ...sum(group) }))
     .sort((a, b) => b.cost - a.cost || b.requests - a.requests);
   const groupName = (id: string) =>
     by === "api_key_id"
@@ -135,7 +137,7 @@ export default function UsagePage() {
         subtitle={`${SURFACES.usage.blurb} Days are UTC.`}
       />
       <UsageViews />
-      <UsageFilters filter={filter} onChange={setFilter}>
+      <UsageFilters filter={filter} onChange={setFilter} seen={rows}>
         <label className="flex items-center gap-1.5 text-sm">
           <span className="sr-only">Period</span>
           <select

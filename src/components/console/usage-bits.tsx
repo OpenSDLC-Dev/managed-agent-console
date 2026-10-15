@@ -113,14 +113,20 @@ export function useUsageNames() {
 
 const SELECT = "h-8 rounded-md border bg-transparent px-2 text-sm";
 
-/** Key, model and upstream filters, each the read's own parameter. */
+/**
+ * Key, model and upstream filters, each the read's own parameter. Usage
+ * outlives a model or upstream model deleted since, so each also offers, by
+ * id, what the page's rows name and the catalog lacks.
+ */
 export function UsageFilters({
   filter,
   onChange,
+  seen,
   children,
 }: {
   filter: GatewayUsageFilter;
   onChange: (filter: GatewayUsageFilter) => void;
+  seen: Required<GatewayUsageFilter>[];
   children?: React.ReactNode;
 }) {
   const names = useUsageNames();
@@ -128,26 +134,35 @@ export function UsageFilters({
     label: string,
     key: keyof GatewayUsageFilter,
     all: string,
-    options: [string, string][],
-  ) => (
-    <label className="flex items-center gap-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <select
-        className={SELECT}
-        value={filter[key] ?? ""}
-        onChange={(e) =>
-          onChange({ ...filter, [key]: e.target.value || undefined })
-        }
-      >
-        <option value="">{all}</option>
-        {options.map(([value, text]) => (
-          <option key={value} value={value}>
-            {text}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+    catalog: [string, string][],
+  ) => {
+    const known = new Set(catalog.map(([value]) => value));
+    const gone = new Set(
+      [...seen.map((r) => r[key]), filter[key]].filter(
+        (v): v is string => !!v && !known.has(v),
+      ),
+    );
+    const options = [...catalog, ...[...gone].map((v) => [v, v])];
+    return (
+      <label className="flex items-center gap-1.5 text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <select
+          className={SELECT}
+          value={filter[key] ?? ""}
+          onChange={(e) =>
+            onChange({ ...filter, [key]: e.target.value || undefined })
+          }
+        >
+          <option value="">{all}</option>
+          {options.map(([value, text]) => (
+            <option key={value} value={value}>
+              {text}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  };
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pb-4">
       {children}

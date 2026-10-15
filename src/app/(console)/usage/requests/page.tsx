@@ -200,7 +200,7 @@ function Ledger() {
         subtitle={`${SURFACES.usage.blurb} Days are UTC.`}
       />
       <UsageViews />
-      <UsageFilters filter={filter} onChange={setFilter}>
+      <UsageFilters filter={filter} onChange={setFilter} seen={rows}>
         <Input
           aria-label="Session ID"
           placeholder="Session ID"

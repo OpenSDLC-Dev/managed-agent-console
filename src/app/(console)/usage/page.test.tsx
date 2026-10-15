@@ -131,6 +131,33 @@ describe("Usage overview", () => {
       for (const [, value] of url.searchParams) expect(value).not.toBe("");
   });
 
+  // Usage outlives a model deleted since; the gateway still filters by its
+  // name (PR #223 review).
+  it("probe: filters by a model the catalog no longer has", async () => {
+    const retired = { ...daily[0], alias: "retired-model" };
+    const fetchMock = stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(KEYS)
+        : rest === "usage/daily"
+          ? Response.json({ data: [...daily, retired] })
+          : undefined,
+    );
+    renderPage(<UsagePage />);
+    const model = await screen.findByRole("combobox", { name: "Model" });
+    await waitFor(() =>
+      expect(
+        within(model).getByRole("option", { name: "retired-model" }),
+      ).toBeInTheDocument(),
+    );
+    await userEvent.selectOptions(model, "retired-model");
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/daily").at(-1)?.searchParams.get("alias"),
+      ).toBe("retired-model"),
+    );
+    expect(model).toHaveValue("retired-model");
+  });
+
   it("probe: stands in for the page on a console that runs without a gateway", async () => {
     stubGatewayFetch(() =>
       Response.json(
