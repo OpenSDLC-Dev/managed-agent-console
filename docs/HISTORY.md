@@ -31,6 +31,8 @@ requires.
 - A number input hands the page `""` for text it cannot parse, and `""` read as "no limit". JSON
   writes Infinity as null, the same "no limit", and `Number` reads hex and rounds past 2^53. The
   gateway's number fields are now text inputs, and a value that would change on its way is not sent.
+- A request priced per million tokens often costs under half a cent, which two decimals wrote as
+  `0.00`, the same as free. Usage keeps two significant digits under a cent, on its axis too.
 - A disabled Save gave no reason. It also blocked the empty-form refusal that the other agent
   fields rely on. Save now stays enabled and reports a missing model on the field.
 
