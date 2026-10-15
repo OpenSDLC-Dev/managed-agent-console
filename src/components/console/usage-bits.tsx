@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -95,19 +96,27 @@ export function UsageViews() {
 
 /**
  * What the ledger and the rollups name only by id: a key by its name, an
- * upstream model by its model id. One deleted since shows its id.
+ * upstream model by its model id. One deleted since shows its id. Each
+ * catalog is indexed once, since every group and ledger row looks one up.
  */
 export function useUsageNames() {
   const keys = useApiKeys();
   const aliases = useGatewayAliases();
   const deployments = useGatewayDeployments();
+  const keyNames = useMemo(
+    () => new Map(keys.data?.map((k) => [k.id, k.name])),
+    [keys.data],
+  );
+  const upstreams = useMemo(
+    () => new Map(deployments.data?.data.map((d) => [d.id, d.upstream_model])),
+    [deployments.data],
+  );
   return {
     keys: keys.data ?? [],
     aliases: aliases.data?.data ?? [],
     deployments: deployments.data?.data ?? [],
-    keyName: (id: string) => keys.data?.find((k) => k.id === id)?.name ?? id,
-    upstreamName: (id: string) =>
-      deployments.data?.data.find((d) => d.id === id)?.upstream_model ?? id,
+    keyName: (id: string) => keyNames.get(id) ?? id,
+    upstreamName: (id: string) => upstreams.get(id) ?? id,
   };
 }
 
