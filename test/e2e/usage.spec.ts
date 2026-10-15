@@ -49,8 +49,24 @@ test("follow a request to its session, and filter the ledger by one", async ({
   ).toHaveAttribute("href", /^\/sessions\/sesn_/);
 
   await page.getByLabel("Session ID").fill("sesn_01JA6MOCKGATEWAY000002");
+  await page.getByLabel("Session ID").press("Enter");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toHaveAttribute("data-status", "502");
+});
+
+// The grouped table scrolls on a phone instead of widening the page
+// (PR #223 review).
+test("probe: the overview fits a phone's width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page, "/usage");
+  await expect(
+    page.locator("table[data-by] [data-group]").first(),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("a console without a gateway has no Analytics", async ({

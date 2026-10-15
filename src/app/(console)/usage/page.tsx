@@ -255,60 +255,66 @@ export default function UsagePage() {
               hint="Calls appear here once an agent or application sends one through the gateway."
             />
           ) : (
-            <table className="w-full text-sm" data-by={by}>
-              <thead>
-                <tr className="border-b text-left text-[13px] text-muted-foreground">
-                  <th className="py-2 pr-3 font-normal">
-                    {BY.find(([v]) => v === by)![1]}
-                  </th>
-                  {[
-                    "Requests",
-                    "Errors",
-                    "Input",
-                    "Output",
-                    "Cache read",
-                    "Cache write",
-                    "Cost",
-                  ].map((h) => (
-                    <th key={h} className="py-2 pl-3 text-right font-normal">
-                      {h}
+            // A phone scrolls the table, not the page (PR #223 review).
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-by={by}>
+                <thead>
+                  <tr className="border-b text-left text-[13px] text-muted-foreground">
+                    <th className="py-2 pr-3 font-normal">
+                      {BY.find(([v]) => v === by)![1]}
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {groups.slice(0, SHOWN_GROUPS).map((g) => (
-                  <tr key={g.id} className="border-b" data-group={g.id}>
-                    <td
-                      className={cn(
-                        "py-2 pr-3",
-                        by !== "api_key_id" && "font-mono text-[13px]",
-                      )}
-                    >
-                      {groupName(g.id)}
-                    </td>
                     {[
-                      g.requests,
-                      g.errors,
-                      g.input_tokens,
-                      g.output_tokens,
-                      g.cache_read_tokens,
-                      g.cache_write_tokens,
-                    ].map((n, i) => (
-                      <td key={i} className="py-2 pl-3 text-right tabular-nums">
-                        {tokenCount(n)}
-                      </td>
+                      "Requests",
+                      "Errors",
+                      "Input",
+                      "Output",
+                      "Cache read",
+                      "Cache write",
+                      "Cost",
+                    ].map((h) => (
+                      <th key={h} className="py-2 pl-3 text-right font-normal">
+                        {h}
+                      </th>
                     ))}
-                    <td
-                      className="py-2 pl-3 text-right tabular-nums"
-                      data-cost={g.cost}
-                    >
-                      {costText(g.cost)}
-                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {groups.slice(0, SHOWN_GROUPS).map((g) => (
+                    <tr key={g.id} className="border-b" data-group={g.id}>
+                      <td
+                        className={cn(
+                          "py-2 pr-3",
+                          by !== "api_key_id" && "font-mono text-[13px]",
+                        )}
+                      >
+                        {groupName(g.id)}
+                      </td>
+                      {[
+                        g.requests,
+                        g.errors,
+                        g.input_tokens,
+                        g.output_tokens,
+                        g.cache_read_tokens,
+                        g.cache_write_tokens,
+                      ].map((n, i) => (
+                        <td
+                          key={i}
+                          className="py-2 pl-3 text-right tabular-nums"
+                        >
+                          {tokenCount(n)}
+                        </td>
+                      ))}
+                      <td
+                        className="py-2 pl-3 text-right tabular-nums"
+                        data-cost={g.cost}
+                      >
+                        {costText(g.cost)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           {groups.length > SHOWN_GROUPS && (
             <p

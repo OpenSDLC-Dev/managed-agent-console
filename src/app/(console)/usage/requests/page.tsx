@@ -48,12 +48,16 @@ export default function UsageRequestsPage() {
 function Ledger() {
   const urlSession = useSearchParams().get("session_id") ?? "";
   const [filter, setFilter] = useState<GatewayUsageFilter>({});
+  // The id is matched whole, so it applies on Enter or blur, not on each
+  // keystroke: a read per keystroke would find nothing (PR #223 review).
+  const [draft, setDraft] = useState(urlSession);
   const [session, setSession] = useState(urlSession);
   // A link that changes only the query string, such as the Requests tab,
   // keeps this page mounted, so a new URL session replaces the typed one.
   const [seeded, setSeeded] = useState(urlSession);
   if (seeded !== urlSession) {
     setSeeded(urlSession);
+    setDraft(urlSession);
     setSession(urlSession);
   }
   const query = useGatewayUsageRequests({
@@ -213,13 +217,21 @@ function Ledger() {
       />
       <UsageViews />
       <UsageFilters filter={filter} onChange={setFilter} seen={rows}>
-        <Input
-          aria-label="Session ID"
-          placeholder="Session ID"
-          className="h-8 w-56 font-mono text-[13px]"
-          value={session}
-          onChange={(e) => setSession(e.target.value)}
-        />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSession(draft);
+          }}
+        >
+          <Input
+            aria-label="Session ID"
+            placeholder="Session ID, then Enter"
+            className="h-8 w-56 font-mono text-[13px]"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => setSession(draft)}
+          />
+        </form>
       </UsageFilters>
       {/* A failed older page keeps the rows already loaded, as the agent
           version list does, and Load older stays to try it again. */}

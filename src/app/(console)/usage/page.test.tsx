@@ -341,6 +341,28 @@ describe("Usage requests", () => {
     );
   });
 
+  // The id is matched whole; a read per keystroke would find nothing
+  // (PR #223 review).
+  it("probe: applies a typed session on Enter, not on each keystroke", async () => {
+    navigation.pathname = "/usage/requests";
+    const fetchMock = stub();
+    renderPage(<UsageRequestsPage />);
+    await screen.findAllByRole("row");
+    const reads0 = reads(fetchMock, "usage/requests").length;
+    const id = ledger[0].session_id!;
+    await userEvent.type(screen.getByLabelText("Session ID"), id);
+    expect(reads(fetchMock, "usage/requests")).toHaveLength(reads0);
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/requests")
+          .at(-1)
+          ?.searchParams.get("session_id"),
+      ).toBe(id),
+    );
+    expect(reads(fetchMock, "usage/requests")).toHaveLength(reads0 + 1);
+  });
+
   it("loads older rows from before the last one shown", async () => {
     navigation.pathname = "/usage/requests";
     const fetchMock = stubGatewayFetch((_method, rest, url) => {
