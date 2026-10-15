@@ -150,6 +150,51 @@ describe("ModelField", () => {
     ).toHaveAttribute("href", "/models");
   });
 
+  // A slow gateway must not leave a window in which Save takes a name the
+  // list would refuse (PR #224 review).
+  it("probe: waits for the gateway's list before Save takes any name", async () => {
+    stubGatewayFetch((method, rest) =>
+      method === "GET" && rest === "aliases"
+        ? (new Promise<Response>(() => {}) as unknown as Response)
+        : undefined,
+    );
+    renderWith(<Field initial="claude-opus-4-2" />);
+    expect(screen.getByLabelText("Model")).toBeDisabled();
+    expect(chosen()).toBe("false");
+  });
+
+  // TanStack keeps the last list in `data` when a refetch fails; the field
+  // falls back to the text box all the same (PR #224 review).
+  it("probe: falls back to the text box when a refetch fails over a cached list", async () => {
+    let reads = 0;
+    stubGatewayFetch((method, rest) =>
+      method === "GET" && rest === "aliases" && ++reads > 1
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "gateway down" },
+            },
+            { status: 502 },
+          )
+        : undefined,
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <Field initial="claude-opus-4-2" />
+      </QueryClientProvider>,
+    );
+    await screen.findAllByRole("option");
+    await client.refetchQueries({ queryKey: ["gateway", "aliases"] });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Model")).toHaveValue("claude-opus-4-2"),
+    );
+    expect(chosen()).toBe("true");
+    expect(screen.getByText(/gateway down/)).toBeInTheDocument();
+  });
+
   it("shows the saved name as it is when read-only", async () => {
     stubGatewayFetch();
     renderWith(<Field initial="claude-opus-4-2" readOnly />);

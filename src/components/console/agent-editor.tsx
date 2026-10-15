@@ -626,9 +626,11 @@ export function AgentEditor({
                       choices={models}
                       readOnly={readOnly}
                       error={
-                        modelAsked && modelMissing
-                          ? "A model is required: choose one of the gateway's models."
-                          : undefined
+                        !modelAsked || !modelMissing
+                          ? undefined
+                          : models.pending
+                            ? "The gateway's models are still loading."
+                            : "A model is required: choose one of the gateway's models."
                       }
                     />
                   </div>

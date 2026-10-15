@@ -15,6 +15,8 @@ import { isUnimplemented } from "@/lib/platform/surfaces";
 export interface ModelChoices {
   /** The gateway's chat Models; unset where the field is a text box. */
   names?: string[];
+  /** The list is still being read, so nothing can be chosen yet. */
+  pending?: boolean;
   /** Why a configured gateway's list is unknown. */
   failed?: Error;
 }
@@ -22,16 +24,21 @@ export interface ModelChoices {
 /**
  * What the agent and Dream model field offers (plan 10 decision 6): the
  * gateway's chat Models by name, without the `*` catch-all. Until the list
- * arrives the field is the text box it was, so a console without a gateway
- * sees no change. A failed read keeps it too: the wire takes any string, and
- * an outage should not stop an agent's other edits.
+ * arrives, Save waits: a slow gateway must not leave a window for a name it
+ * does not list. A console without a gateway gets the BFF's 404 at once and
+ * keeps its text box. A failed read falls back to the text box too, even with
+ * a list cached from an earlier read: the wire takes any string, and an
+ * outage should not stop an agent's other edits.
  */
 export function useModelChoices(): ModelChoices {
   const aliases = useGatewayAliases();
   return {
-    names: aliases.data?.data
-      .filter((a) => a.kind === "chat" && a.name !== "*")
-      .map((a) => a.name),
+    names: aliases.error
+      ? undefined
+      : aliases.data?.data
+          .filter((a) => a.kind === "chat" && a.name !== "*")
+          .map((a) => a.name),
+    pending: aliases.isPending,
     failed:
       aliases.error && !isUnimplemented(aliases.error)
         ? aliases.error
@@ -41,7 +48,7 @@ export function useModelChoices(): ModelChoices {
 
 /** Whether Save can take `value`: a listed name, or whatever the text box holds. */
 export const modelChosen = (choices: ModelChoices, value: string) =>
-  !choices.names || choices.names.includes(value);
+  !choices.pending && (!choices.names || choices.names.includes(value));
 
 /**
  * A saved name the list lacks shows empty, so Save waits for a choice. A
@@ -75,7 +82,12 @@ export function ModelField({
           id={id}
           className={className}
           value={value}
-          placeholder={placeholder}
+          placeholder={
+            choices.pending && !readOnly
+              ? "Loading the gateway's models…"
+              : placeholder
+          }
+          disabled={choices.pending && !readOnly}
           onChange={(e) => onChange(e.target.value)}
         />
         {choices.failed && !readOnly && (
