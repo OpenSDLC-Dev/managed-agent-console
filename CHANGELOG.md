@@ -28,8 +28,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   agent's model call fails. While it also has no provider, Models offers one form. The form makes a
   provider, its key, an upstream model and a model, in that order. A refused step stops the form and
   keeps what was made, and Continue resumes at that step.
-- **Model access on API Keys.** A column shows what each key may call through the gateway, and a
-  dialog grants no models, every model, or selected models, with per-minute limits. The control
+- **Model access on API Keys.** A column shows each key's grant on the gateway, and a dialog
+  grants no models, every model, or selected models, with per-minute limits. The control
   plane's own keys show their built-in grant, and offer only to remove a policy someone wrote on
   one. An archived or expired key offers only to remove a policy it still has, since a policy blocks
   deleting the models it names. A model's inspector lists the active keys that can call it.

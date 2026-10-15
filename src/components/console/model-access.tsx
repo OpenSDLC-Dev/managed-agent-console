@@ -26,10 +26,12 @@ import type { ApiKey, GatewayKeyPolicy } from "@/lib/platform/types";
 import { wireInteger } from "@/lib/platform/http";
 
 /**
- * What a key may call through the model gateway (auth.go authenticate): its
- * policy when it has one; else every model for the bootstrap and brain keys,
- * which the gateway knows by value and the control plane registers with no
- * issuer; else nothing. A policy written for either of those still applies.
+ * A key's grant on the model gateway (auth.go authenticate): its policy when
+ * it has one; else every model for the bootstrap and brain keys, which the
+ * gateway knows by value and the control plane registers with no issuer;
+ * else nothing. A policy written for either of those still applies. Only an
+ * active, unexpired key may use its grant; the key's status column says
+ * which, and an inactive key's grant applies again once it is reactivated.
  */
 export interface Access {
   models: "all" | "none" | number;
