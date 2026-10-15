@@ -209,9 +209,9 @@ function Ledger() {
           onChange={(e) => setSession(e.target.value)}
         />
       </UsageFilters>
-      {query.error ? (
-        <ErrorState error={query.error} />
-      ) : (
+      {/* A failed older page keeps the rows already loaded, as the agent
+          version list does, and Load older stays to try it again. */}
+      {(rows.length > 0 || !query.error) && (
         <DataTable
           columns={columns}
           rows={rows}
@@ -225,6 +225,7 @@ function Ledger() {
           }
         />
       )}
+      {query.error && <ErrorState error={query.error} />}
       <div className="flex flex-wrap items-center gap-3 pt-3">
         {query.hasNextPage && (
           <Button

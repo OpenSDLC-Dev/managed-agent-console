@@ -95,6 +95,29 @@ describe("Usage overview", () => {
     );
   });
 
+  // Cache writes have a price of their own (deployments.go cache_write), so
+  // the overview counts them beside cache reads (PR #223 review).
+  it("probe: counts cache writes beside cache reads", async () => {
+    const written = daily.map((r) => ({ ...r, cache_write_tokens: 1000 }));
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(KEYS)
+        : rest === "usage/daily"
+          ? Response.json({ data: written })
+          : undefined,
+    );
+    renderPage(<UsagePage />);
+    await waitFor(() =>
+      expect(document.querySelector("[data-cache-write]")).toHaveAttribute(
+        "data-cache-write",
+        String(1000 * written.length),
+      ),
+    );
+    expect(
+      screen.getByRole("columnheader", { name: "Cache write" }),
+    ).toBeInTheDocument();
+  });
+
   // Next.js supports Chrome 111 and Safari 16.4, which have no Map.groupBy
   // (PR #223 review).
   it("probe: renders in a browser without Map.groupBy", async () => {
@@ -282,5 +305,32 @@ describe("Usage requests", () => {
       reads(fetchMock, "usage/requests").at(-1)?.searchParams.get("before"),
     ).toBe(String(ledger[1].id));
     expect(screen.queryByRole("button", { name: "Load older" })).toBeNull();
+  });
+
+  // TanStack keeps the loaded pages beside the error (PR #223 review).
+  it("probe: keeps the loaded rows when an older page fails", async () => {
+    navigation.pathname = "/usage/requests";
+    stubGatewayFetch((_method, rest, url) => {
+      if (rest.endsWith("/api_keys")) return Response.json(KEYS);
+      if (rest !== "usage/requests") return undefined;
+      return url.searchParams.get("before")
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "ledger read failed" },
+            },
+            { status: 500 },
+          )
+        : Response.json({ data: ledger.slice(0, 2), has_more: true });
+    });
+    renderPage(<UsageRequestsPage />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Load older" }),
+    );
+    expect(await screen.findByText(/ledger read failed/)).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-status]")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Load older" }),
+    ).toBeInTheDocument();
   });
 });

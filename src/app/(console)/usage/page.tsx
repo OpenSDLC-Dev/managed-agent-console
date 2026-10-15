@@ -34,6 +34,7 @@ type Totals = Pick<
   | "errors"
   | "input_tokens"
   | "output_tokens"
+  | "cache_write_tokens"
   | "cache_read_tokens"
   | "cost"
 >;
@@ -43,6 +44,7 @@ const ZERO: Totals = {
   errors: 0,
   input_tokens: 0,
   output_tokens: 0,
+  cache_write_tokens: 0,
   cache_read_tokens: 0,
   cost: 0,
 };
@@ -58,6 +60,7 @@ function sum(rows: GatewayDailyUsage[]): Totals {
       errors: t.errors + r.errors,
       input_tokens: t.input_tokens + r.input_tokens,
       output_tokens: t.output_tokens + r.output_tokens,
+      cache_write_tokens: t.cache_write_tokens + r.cache_write_tokens,
       cache_read_tokens: t.cache_read_tokens + r.cache_read_tokens,
       cost: t.cost + r.cost,
     }),
@@ -80,7 +83,7 @@ function Tile({
 }: {
   label: string;
   value: string;
-  note?: string;
+  note?: React.ReactNode;
   data: Record<string, number>;
 }) {
   return (
@@ -195,9 +198,15 @@ export default function UsagePage() {
             <Tile
               label="Input tokens"
               value={tokenCount(totals.input_tokens)}
-              note={`+ ${tokenCount(totals.cache_read_tokens)} cache read`}
+              note={
+                <>
+                  + {tokenCount(totals.cache_read_tokens)} cache read
+                  <br />+ {tokenCount(totals.cache_write_tokens)} cache write
+                </>
+              }
               data={{
                 input: totals.input_tokens,
+                "cache-write": totals.cache_write_tokens,
                 "cache-read": totals.cache_read_tokens,
               }}
             />
@@ -251,6 +260,7 @@ export default function UsagePage() {
                     "Input",
                     "Output",
                     "Cache read",
+                    "Cache write",
                     "Cost",
                   ].map((h) => (
                     <th key={h} className="py-2 pl-3 text-right font-normal">
@@ -276,6 +286,7 @@ export default function UsagePage() {
                       g.input_tokens,
                       g.output_tokens,
                       g.cache_read_tokens,
+                      g.cache_write_tokens,
                     ].map((n, i) => (
                       <td key={i} className="py-2 pl-3 text-right tabular-nums">
                         {tokenCount(n)}
