@@ -145,6 +145,8 @@ test("a model made through the gateway BFF reaches the console's screens", async
  * failure is a real failure.
  */
 test.afterAll(async () => {
+  // beforeAll refused to start, so this run made nothing to sweep.
+  if (!api) return;
   const headers = { "x-api-key": apiKey };
   const failures: string[] = [];
   const send = async (

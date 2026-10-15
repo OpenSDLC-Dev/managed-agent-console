@@ -44,7 +44,8 @@ vi.mock("@/components/ui/select", async () => {
         { "data-model": props["data-model"] },
         children,
       ),
-    SelectValue: () => null,
+    SelectValue: ({ placeholder }: { placeholder?: string }) =>
+      React.createElement("span", { "data-placeholder": placeholder }),
     SelectContent: ({ children }: { children?: React.ReactNode }) =>
       React.createElement("div", null, children),
     SelectItem: ({
@@ -127,6 +128,26 @@ describe("ModelField", () => {
     await userEvent.click(screen.getByRole("option", { name: CHAT[0] }));
     expect(shown()).toBe(CHAT[0]);
     expect(chosen()).toBe("true");
+  });
+
+  // An empty list has nothing to choose: the trigger says so, and the hint
+  // under it links to Models (PR #224 review).
+  it("probe: says the gateway has no chat models, and links to Models", async () => {
+    stubGatewayFetch((method, rest) =>
+      method === "GET" && rest === "aliases"
+        ? Response.json({ data: [] })
+        : undefined,
+    );
+    renderWith(<Field />);
+    await waitFor(() =>
+      expect(document.querySelector("[data-placeholder]")).toHaveAttribute(
+        "data-placeholder",
+        "The gateway has no chat models yet",
+      ),
+    );
+    expect(
+      screen.getByRole("link", { name: "Model Gateway → Models" }),
+    ).toHaveAttribute("href", "/models");
   });
 
   it("shows the saved name as it is when read-only", async () => {

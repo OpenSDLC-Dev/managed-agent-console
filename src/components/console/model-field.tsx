@@ -99,7 +99,13 @@ export function ModelField({
           aria-invalid={!!error}
           aria-describedby={error ? `${id}-error` : undefined}
         >
-          <SelectValue placeholder="Choose a model">
+          <SelectValue
+            placeholder={
+              choices.names.length
+                ? "Choose a model"
+                : "The gateway has no chat models yet"
+            }
+          >
             {known ? <span className="font-mono">{value}</span> : undefined}
           </SelectValue>
         </SelectTrigger>
