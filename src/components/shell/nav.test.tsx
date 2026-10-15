@@ -240,6 +240,34 @@ describe("Nav", () => {
     }
   });
 
+  // Expanding a collapsed sidebar changes only `compact` (PR #223 review).
+  it("probe: scrolls the current page's row into view when the sidebar expands", () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      navState.pathname = "/usage";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => new Promise<Response>(() => {})),
+      );
+      const client = new QueryClient();
+      const nav = (compact: boolean) => (
+        <QueryClientProvider client={client}>
+          <Nav compact={compact} />
+        </QueryClientProvider>
+      );
+      const { rerender } = render(nav(true));
+      scrolled.length = 0;
+      rerender(nav(false));
+      expect(scrolled.map((el) => el.getAttribute("href"))).toContain("/usage");
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("gives top-level rows an icon and rows inside a group an indent instead", () => {
     navState.pathname = "/";
     renderNav();
