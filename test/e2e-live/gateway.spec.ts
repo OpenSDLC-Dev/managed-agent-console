@@ -113,11 +113,30 @@ test("a model made through the gateway BFF reaches the console's screens", async
   await page.goto("/usage");
   await expect(page.locator("[data-requests]")).toBeVisible();
 
-  await gw("DELETE", `key_policies/${key.id}`);
+  // Archiving leaves the policy, which blocks deleting the model it names
+  // (store/aliases.go DeleteAlias); the archived key offers only its removal.
+  await bff(page, "POST", `console/${KEYS}/${key.id}`, { status: "archived" });
+  const blocked = await page.request.delete(
+    `/api/gateway/admin/v1/aliases/${encodeURIComponent(RUN)}`,
+  );
+  expect(blocked.status()).toBe(409);
+  await page.goto("/api-keys");
+  const row = page.getByRole("row").filter({ hasText: RUN });
+  await row
+    .getByRole("button", { name: `Remove model policy from ${RUN}` })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Remove model policy" })
+    .click();
+  await expect(access).toHaveAttribute("data-models", "none");
+  await expect(row.getByRole("button", { name: "Model access" })).toHaveCount(
+    0,
+  );
+
   await gw("DELETE", `aliases/${encodeURIComponent(RUN)}`);
   await gw("DELETE", `deployments/${deployment.id}`);
   await gw("DELETE", `providers/${provider.id}`);
-  await bff(page, "POST", `console/${KEYS}/${key.id}`, { status: "archived" });
 });
 
 /**

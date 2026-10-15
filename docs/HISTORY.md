@@ -13,9 +13,11 @@ model access, Analytics → Usage, and the agent and Dream model select.
 **Acceptance, against a real gateway (platform `2a528c6`, model-free):** a provider, a dummy key, an
 upstream model and a model, made through the console's BFF, appeared on Models, in the agent
 editor's model select, and as a grant on a console-minted key. Add provider listed all eight vendor
-profiles the gateway publishes. Deleting in the gateway's order left no rows. The run needed an
-isolated compose project with throwaway keys: the local stack's image predated the gateway, and its
-`.env` lacked the `BRAIN_API_KEY` that the gateway service now requires.
+profiles the gateway publishes. With the key archived, the gateway refused to delete the model its
+policy named (409), and the key's row removed the policy. Deleting in the gateway's order left no
+rows. The run needed an isolated compose project with throwaway keys: the local stack's image
+predated the gateway, and its `.env` lacked the `BRAIN_API_KEY` that the gateway service now
+requires.
 
 **What review found that CI did not:**
 
