@@ -267,4 +267,37 @@ describe("the agent editor's model", () => {
       id: "minimax-m3",
     });
   });
+
+  // The loading box is disabled and cannot take focus, so Save's reason
+  // must show under it (PR #224 review).
+  it("probe: says why Save sent nothing while the gateway's models load", async () => {
+    const fetchMock = stubGatewayFetch((method, rest) => {
+      if (method === "GET" && rest === "aliases")
+        return new Promise<Response>(() => {}) as unknown as Response;
+      if (!rest.startsWith("/api/platform/")) return undefined;
+      return Response.json({ data: [] });
+    });
+    renderWith(
+      <AgentEditor
+        mode="edit"
+        agentId="agent_1"
+        version={1}
+        initial={formFromConfig({
+          name: "Deep researcher",
+          model: { id: "claude-opus-4-2" },
+        })}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The gateway's models are still loading.",
+    );
+    expect(screen.getByLabelText("Model")).toHaveAttribute(
+      "aria-describedby",
+      "agent-model-error",
+    );
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(0);
+  });
 });

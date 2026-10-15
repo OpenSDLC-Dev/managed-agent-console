@@ -75,6 +75,13 @@ export function ModelField({
   /** Why Save sent nothing; only the select can lack a choice. */
   error?: string;
 }) {
+  // Shown under either control: while the list loads, Save's reason sits
+  // under a disabled box that cannot take focus.
+  const errorNote = error && (
+    <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
+      {error}
+    </p>
+  );
   if (readOnly || !choices.names)
     return (
       <>
@@ -82,6 +89,8 @@ export function ModelField({
           id={id}
           className={className}
           value={value}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${id}-error` : undefined}
           placeholder={
             choices.pending && !readOnly
               ? "Loading the gateway's models…"
@@ -90,6 +99,7 @@ export function ModelField({
           disabled={choices.pending && !readOnly}
           onChange={(e) => onChange(e.target.value)}
         />
+        {errorNote}
         {choices.failed && !readOnly && (
           <p className="text-xs text-muted-foreground">
             Could not read the gateway&apos;s models: {choices.failed.message}
@@ -129,11 +139,7 @@ export function ModelField({
           ))}
         </SelectContent>
       </Select>
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {errorNote}
       <p className="text-xs text-muted-foreground">
         The gateway&apos;s chat models. To add one, go to{" "}
         <Link href="/models" className="underline underline-offset-2">
