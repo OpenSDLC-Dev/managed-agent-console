@@ -6,7 +6,7 @@ a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/]
 
 ## [Plan 10](./plan/10_model-gateway.md) — Model Gateway management (archived 2026-10-15)
 
-PRs #215, #216, #218, #223, #SELECT_PR. Console screens for the platform's model gateway: providers
+PRs #215, #216, #218, #223, #224. Console screens for the platform's model gateway: providers
 with their keys and upstream models, models and their routing, a first-run setup, each API key's
 model access, Analytics → Usage, and the agent and Dream model select.
 
