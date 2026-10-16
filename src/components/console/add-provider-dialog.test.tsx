@@ -103,7 +103,7 @@ describe("AddProviderButton", () => {
     stubGatewayFetch();
     await open();
     await userEvent.click(
-      await screen.findByRole("radio", { name: /Any OpenAI-compatible/ }),
+      await screen.findByRole("radio", { name: /Other OpenAI-compatible/ }),
     );
     expect(endpoint("OpenAI-compatible")).toHaveValue("");
     expect(screen.getByLabelText("Name")).toHaveValue("");

@@ -56,14 +56,14 @@ const PROFILES = [
   {
     type: "profile",
     name: "anthropic-generic",
-    display_name: "Any Anthropic Messages endpoint",
+    display_name: "Other Anthropic-compatible Endpoint",
     protocols: ["anthropic"],
     hosts: [],
   },
   {
     type: "profile",
     name: "openai-generic",
-    display_name: "Any OpenAI-compatible endpoint",
+    display_name: "Other OpenAI-compatible Endpoint",
     protocols: ["openai"],
     hosts: [],
   },
