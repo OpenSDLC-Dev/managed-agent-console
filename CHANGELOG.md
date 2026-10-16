@@ -38,6 +38,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   lists each call, newest first, with its route, status, tokens, cost and latency, and links the
   session that made it. Both filter by key, model and upstream model. Cost has no currency: it is
   the prices the operator entered.
+- **A failed deploy on `main` opens an issue** (#228). `deploy-alert.yml` keeps one `cd-failure`
+  issue open, assigned to the run's actor, while staging deploys fail, and closes it on the next
+  run that deploys. Before this, every deploy failed for a month and no one knew.
 
 ### Security
 

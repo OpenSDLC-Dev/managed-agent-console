@@ -1,0 +1,42 @@
+name: deploy-alert
+
+# Opens an issue while `deploy` fails on main and closes it on the next run that
+# deploys (#228). The rules and their reasons are in scripts/deploy-alert.mjs.
+#
+# `workflow_run` runs the copy of this file on the DEFAULT BRANCH, so a PR that
+# changes it does not run it. scripts/deploy-alert.test.mts is the test.
+on:
+  workflow_run:
+    workflows: [deploy]
+    types: [completed]
+    # Also fires for a dispatch from another branch. Without this filter, that
+    # run's failure would be reported as "failing on main".
+    branches: [main]
+
+permissions:
+  contents: read
+  # The issue, its labels and its assignee.
+  issues: write
+  # Each run's step conclusions: they tell a parked run from a deploy.
+  actions: read
+
+# Serialized, never cancelled. Correctness does not depend on it: each run
+# derives the whole state again from the run history.
+concurrency:
+  group: deploy-alert
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The runner's own Node, as release.yml uses: the script needs no package.
+      - name: Reconcile the CD issue with the newest deploy run that carries news
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: node scripts/deploy-alert.mjs
