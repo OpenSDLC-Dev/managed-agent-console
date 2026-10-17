@@ -49,6 +49,12 @@ zero nodes, its `power-saved-*` cluster labels make the run finish green, deploy
 in a notice and the run summary. To catch staging up to `main`, revive it with the platform's
 `make gcp-env-start`, then dispatch this workflow by hand.
 
+**A failed run opens an issue.** A deploy runs after the merge, so its failure blocks nothing. From
+2026-09-02 every run failed for a month, and staging kept an August revision until 2026-10-16.
+[deploy-alert.yml](../.github/workflows/deploy-alert.yml) now keeps one issue labelled `cd-failure`
+open while runs on `main` fail. The issue is assigned to the run's actor and gets one comment per
+new failing run. The next run that deploys closes it. A parked run neither opens nor closes it.
+
 **No secrets in this repository.** The job asks GitHub for a short-lived OIDC token, WIF exchanges it
 for an impersonation of `DEPLOY_SERVICE_ACCOUNT`, and the one credential the deployment needs —
 Secret Manager's `controlplane-api-key`, the same value the platform chart installs as
@@ -175,6 +181,18 @@ The console answers on `CONSOLE_HOST` over HTTPS, behind a global external Appli
 with a Google-managed certificate; plain HTTP redirects rather than being refused. Three parts are
 human-driven and not in CD: the **global** static IP (a global forwarding rule cannot take a regional
 address), the **DNS-only** A record, and the first certificate issuance.
+
+**The certificate controller can fill the quota.** A project holds 10 SSL certificates. On
+2026-09-01 GKE's managed-certificate controller made 9 new certificates for this host and deleted
+none. Its next one then failed on the quota for six weeks, so the ManagedCertificate never became
+`Active`, and on 2026-10-16 the gate rolled the deploy back. The site kept serving on the old
+certificates. When the gate says the certificate is absent, read the events in
+`kubectl describe managedcertificate console`. This case reads `Quota 'SSL_CERTIFICATES' exceeded`,
+and `gcloud compute ssl-certificates list` shows several certificates for this one host. To fix it,
+in this order: point the HTTPS proxy at one ACTIVE certificate, set the Ingress's
+`ingress.gcp.kubernetes.io/pre-shared-cert` annotation to that certificate, then delete the others,
+which the proxy no longer uses. The controller then makes its own certificate. Clearing the
+annotation alone frees no quota, because the certificates still exist.
 
 **The gate is Google sign-in, enforced at the load balancer by IAP, restricted to the Workspace
 domain.** The production console runs no authentication code at all — `CONSOLE_PASSWORD` is unset, so
