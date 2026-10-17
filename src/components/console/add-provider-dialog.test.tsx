@@ -46,7 +46,7 @@ describe("AddProviderButton", () => {
     expect(
       await screen.findByRole("radio", { name: /DeepSeek/ }),
     ).toBeChecked();
-    expect(endpoint("Anthropic Messages")).toHaveValue(
+    expect(endpoint("Anthropic-compatible")).toHaveValue(
       "https://api.deepseek.com/anthropic",
     );
     expect(endpoint("OpenAI-compatible")).toHaveValue(
@@ -64,7 +64,7 @@ describe("AddProviderButton", () => {
       await screen.findByRole("radio", { name: /MiniMax/ }),
     );
     expect(screen.getByRole("radio", { name: "China" })).toBeChecked();
-    expect(endpoint("Anthropic Messages")).toHaveValue(
+    expect(endpoint("Anthropic-compatible")).toHaveValue(
       "https://api.minimax.cn/anthropic",
     );
     expect(screen.getByLabelText("Name")).toHaveValue("MiniMax CN");

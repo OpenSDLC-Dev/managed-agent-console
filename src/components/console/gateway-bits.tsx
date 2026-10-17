@@ -13,7 +13,7 @@ import type {
  */
 
 export const PROTOCOL_LABEL: Record<GatewayProtocol, string> = {
-  anthropic: "Anthropic Messages",
+  anthropic: "Anthropic-compatible",
   openai: "OpenAI-compatible",
   gemini: "Gemini API",
 };
