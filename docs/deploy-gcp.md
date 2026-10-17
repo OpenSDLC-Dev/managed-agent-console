@@ -186,10 +186,13 @@ address), the **DNS-only** A record, and the first certificate issuance.
 2026-09-01 GKE's managed-certificate controller made 9 new certificates for this host and deleted
 none. Its next one then failed on the quota for six weeks, so the ManagedCertificate never became
 `Active`, and on 2026-10-16 the gate rolled the deploy back. The site kept serving on the old
-certificates. When the gate says the certificate is absent, look for `QUOTA_EXCEEDED` in
-`kubectl describe managedcertificate console`. To fix it: point the HTTPS proxy at one ACTIVE
-certificate, set the Ingress's `ingress.gcp.kubernetes.io/pre-shared-cert` annotation to that
-certificate, and delete the rest. The controller then makes its own certificate.
+certificates. When the gate says the certificate is absent, read the events in
+`kubectl describe managedcertificate console`. This case reads `Quota 'SSL_CERTIFICATES' exceeded`,
+and `gcloud compute ssl-certificates list` shows several certificates for this one host. To fix it,
+in this order: point the HTTPS proxy at one ACTIVE certificate, set the Ingress's
+`ingress.gcp.kubernetes.io/pre-shared-cert` annotation to that certificate, then delete the others,
+which the proxy no longer uses. The controller then makes its own certificate. Clearing the
+annotation alone frees no quota, because the certificates still exist.
 
 **The gate is Google sign-in, enforced at the load balancer by IAP, restricted to the Workspace
 domain.** The production console runs no authentication code at all — `CONSOLE_PASSWORD` is unset, so
