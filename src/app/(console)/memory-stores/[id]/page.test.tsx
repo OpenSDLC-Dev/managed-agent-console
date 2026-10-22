@@ -48,11 +48,25 @@ function setup() {
         JSON.stringify({ ...store, archived_at: "2026-09-08T00:00:00Z" }),
         { status: 200 },
       );
-    if (url.includes("/memories?"))
+    if (url.includes("/memories?")) {
+      const search = new URL(url, "http://console.test").searchParams;
+      // platform internal/api/memories.go: depth=0 beside a prefix is refused.
+      if (search.get("depth") === "0" && search.get("path_prefix"))
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "depth: must be greater than or equal to 1",
+            },
+          }),
+          { status: 400 },
+        );
       return new Response(
         JSON.stringify({ data: memories, next_page: "cur_mem" }),
         { status: 200 },
       );
+    }
     if (url.includes("/memory_versions?"))
       return new Response(
         JSON.stringify({ data: memoryVersions, next_page: "cur_ver" }),
@@ -75,6 +89,40 @@ function setup() {
 }
 
 describe("MemoryStoreDetailPage", () => {
+  it.each(["/", "/decisions/"])(
+    "sends depth only for one-level lists under %s",
+    async (prefix) => {
+      const { fetch } = setup();
+      await screen.findByRole("heading", { name: "Project notes" });
+      await userEvent.click(
+        screen.getByText("Store details and version history"),
+      );
+      const latestList = () =>
+        fetch.mock.calls
+          .map(([url]) => new URL(String(url), "http://console.test"))
+          .filter(
+            (url) =>
+              url.pathname.endsWith("/memories") &&
+              url.searchParams.get("limit") === "20" &&
+              url.searchParams.get("path_prefix") === prefix,
+          )
+          .at(-1)?.searchParams;
+      fireEvent.change(screen.getByLabelText("Path prefix"), {
+        target: { value: prefix },
+      });
+      await waitFor(() => expect(latestList()?.get("depth")).toBe("1"));
+
+      await userEvent.click(screen.getByLabelText("Memory depth"));
+      await userEvent.click(
+        await screen.findByRole("option", { name: "Recursive" }),
+      );
+      await waitFor(() => expect(latestList()?.get("depth")).toBeNull());
+      expect(
+        screen.queryByText("depth: must be greater than or equal to 1"),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it("renders the tree and history and drives navigation and archive", async () => {
     const { fetch, store } = setup();
     expect(

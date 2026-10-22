@@ -6,6 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Fixed
+
+- **Recursive memory lists omit `depth`** (#234). The platform refuses `depth=0` beside a
+  path prefix. One-level lists keep `depth=1`.
+
 ### Added
 
 - **`MODEL_GATEWAY_BASE_URL` connects the console to the platform's model gateway**
