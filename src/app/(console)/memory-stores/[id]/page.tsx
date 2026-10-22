@@ -125,7 +125,7 @@ export default function MemoryStoreDetailPage({
   const memories = useMemories(id, {
     page: memoryPager.page,
     path_prefix: queryPathPrefix,
-    depth,
+    depth: depth === 1 ? 1 : undefined,
   });
   const versions = useMemoryVersions(id, {
     page: versionPager.page,
