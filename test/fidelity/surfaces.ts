@@ -1227,6 +1227,55 @@ export const SURFACES: Surface[] = [
     description:
       "Memory contents tree with no file selected; store actions and status.",
   },
+  ...["tree", "list"].map((view): Surface => ({
+    id: `memory-${view}-end`,
+    route: `/memory-stores/${MEMORY_STORE}`,
+    fixture: "20 memories followed by an empty terminal page (#236)",
+    description: `Memory ${view} end-of-walk message and enabled Previous control.`,
+    setup: async (page) => {
+      await page.route(
+        `**/api/platform/v1/memory_stores/${MEMORY_STORE}/memories?*`,
+        async (route) => {
+          if (new URL(route.request().url()).searchParams.has("page")) {
+            await route.fulfill({ json: { data: [], next_page: null } });
+            return;
+          }
+          const response = await route.fetch();
+          const body = await response.json();
+          const memory = body.data.find(
+            (item: { type: string }) => item.type === "memory",
+          );
+          await route.fulfill({
+            json: {
+              data: Array.from({ length: 20 }, (_, index) => ({
+                ...memory,
+                id: `mem_page${index}`,
+                path: `/item-${String(index).padStart(2, "0")}.md`,
+              })),
+              next_page: "terminal-page",
+            },
+          });
+        },
+      );
+      await page.reload();
+      await page.getByRole("treeitem", { name: /item-00.md/ }).waitFor();
+      if (view === "list")
+        await page
+          .getByText("Store details and version history", { exact: true })
+          .click();
+      const target =
+        view === "tree"
+          ? page.getByRole("tree", { name: "Memories" })
+          : page.getByTestId("memory-list");
+      await target
+        .getByRole("button", {
+          name: view === "tree" ? "Next" : "Next page",
+          exact: true,
+        })
+        .click();
+      await target.locator('[data-memory-page-state="end"]').waitFor();
+    },
+  })),
   ...["rendered", "api"].map((view): Surface => ({
     id: "memory-store-inspector-" + view,
     route: "/memory-stores?store=" + MEMORY_STORE,

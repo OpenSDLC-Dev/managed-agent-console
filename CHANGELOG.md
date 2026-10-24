@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Memory browsing tolerates the platform's terminal empty page** (#236). The tree and list
+  name the end of the walk and keep Previous available. Clearing the path box omits `path_prefix`.
 - **Recursive memory lists omit `depth`** (#234). The platform refuses `depth=0` beside a
   path prefix. One-level lists keep `depth=1`.
 
