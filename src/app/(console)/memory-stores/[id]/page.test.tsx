@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -39,7 +40,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function setup() {
+function setup(memoryReply?: (url: URL) => Response) {
   const store = structuredClone(memoryStores[0]);
   const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -49,7 +50,20 @@ function setup() {
         { status: 200 },
       );
     if (url.includes("/memories?")) {
-      const search = new URL(url, "http://console.test").searchParams;
+      const request = new URL(url, "http://console.test");
+      const search = request.searchParams;
+      if (search.has("path_prefix") && search.get("path_prefix") === "")
+        return Response.json(
+          {
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message:
+                "invalid parameter 'path_prefix' in query: empty value is not allowed",
+            },
+          },
+          { status: 400 },
+        );
       // platform internal/api/memories.go: depth=0 beside a prefix is refused.
       if (search.get("depth") === "0" && search.get("path_prefix"))
         return new Response(
@@ -62,6 +76,7 @@ function setup() {
           }),
           { status: 400 },
         );
+      if (memoryReply) return memoryReply(request);
       return new Response(
         JSON.stringify({ data: memories, next_page: "cur_mem" }),
         { status: 200 },
@@ -89,6 +104,88 @@ function setup() {
 }
 
 describe("MemoryStoreDetailPage", () => {
+  it.each(["One level", "Recursive"])(
+    "omits a cleared prefix in %s mode",
+    async (mode) => {
+      const { fetch } = setup();
+      await screen.findByRole("heading", { name: "Project notes" });
+      await userEvent.click(
+        screen.getByText("Store details and version history"),
+      );
+      if (mode === "Recursive") {
+        await userEvent.click(screen.getByLabelText("Memory depth"));
+        await userEvent.click(
+          await screen.findByRole("option", { name: mode }),
+        );
+      }
+      fireEvent.change(screen.getByLabelText("Path prefix"), {
+        target: { value: "" },
+      });
+      await waitFor(() => {
+        const latest = fetch.mock.calls
+          .map(([url]) => new URL(String(url), "http://console.test"))
+          .filter((url) => url.pathname.endsWith("/memories"))
+          .at(-1);
+        expect(latest?.searchParams.has("path_prefix")).toBe(false);
+        expect(latest?.searchParams.get("depth")).toBe(
+          mode === "Recursive" ? null : "1",
+        );
+      });
+    },
+  );
+
+  it("distinguishes an empty terminal page from an empty filtered list", async () => {
+    const fullPage = Array.from({ length: 20 }, (_, index) => ({
+      ...memories[0],
+      id: `mem_page${index}`,
+      path: `/item-${String(index).padStart(2, "0")}.md`,
+    }));
+    setup((url) =>
+      Response.json({
+        data:
+          url.searchParams.has("page") ||
+          url.searchParams.get("path_prefix") === "/empty/"
+            ? []
+            : fullPage,
+        next_page:
+          url.searchParams.has("page") ||
+          url.searchParams.get("path_prefix") === "/empty/"
+            ? null
+            : "terminal-page",
+      }),
+    );
+    await screen.findByRole("heading", { name: "Project notes" });
+    await userEvent.click(
+      screen.getByText("Store details and version history"),
+    );
+    const list = within(screen.getByTestId("memory-list"));
+    await list.findByText("/item-00.md");
+    await userEvent.click(list.getByRole("button", { name: "Next page" }));
+    expect(
+      await list.findByText("No more memories at this path"),
+    ).toBeVisible();
+    expect(list.getByTestId("empty-state").parentElement).toHaveAttribute(
+      "data-memory-page-state",
+      "end",
+    );
+    expect(list.getByRole("button", { name: "Next page" })).toBeDisabled();
+    expect(list.getByRole("button", { name: "Previous page" })).toBeEnabled();
+
+    await userEvent.click(list.getByRole("button", { name: "Previous page" }));
+    expect(await list.findByText("/item-00.md")).toBeVisible();
+    expect(list.getByRole("button", { name: "Previous page" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Path prefix"), {
+      target: { value: "/empty/" },
+    });
+    expect(await list.findByText("No memories at this path")).toBeVisible();
+    expect(list.getByTestId("empty-state").parentElement).toHaveAttribute(
+      "data-memory-page-state",
+      "empty",
+    );
+    expect(list.getByRole("button", { name: "Previous page" })).toBeDisabled();
+  });
+
   it.each(["/", "/decisions/"])(
     "sends depth only for one-level lists under %s",
     async (prefix) => {

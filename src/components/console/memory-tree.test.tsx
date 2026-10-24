@@ -115,7 +115,39 @@ it("reveals the selected prefix and allows it to be collapsed", async () => {
 it("renders an empty tree without inventing a folder", async () => {
   setup(() => Response.json({ data: [], next_page: null }));
   expect(await screen.findByText("No memories")).toBeVisible();
+  expect(screen.getByText("No memories")).toHaveAttribute(
+    "data-memory-page-state",
+    "empty",
+  );
   expect(screen.queryAllByRole("treeitem")).toHaveLength(0);
+});
+
+it("marks an empty page after a full page as the end and permits going back", async () => {
+  const fullPage = Array.from({ length: 20 }, (_, index) => ({
+    ...memories[0],
+    id: `mem_page${index}`,
+    path: `/item-${String(index).padStart(2, "0")}.md`,
+  }));
+  setup((url) =>
+    Response.json({
+      data: url.searchParams.has("page") ? [] : fullPage,
+      next_page: url.searchParams.has("page") ? null : "terminal-page",
+    }),
+  );
+  await screen.findByRole("treeitem", { name: /item-00.md/ });
+  await userEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(await screen.findByText("No more memories")).toBeVisible();
+  expect(screen.getByText("No more memories")).toHaveAttribute(
+    "data-memory-page-state",
+    "end",
+  );
+  expect(screen.queryByText("No memories", { exact: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled();
+  await userEvent.click(screen.getByRole("button", { name: "Previous" }));
+  expect(
+    await screen.findByRole("treeitem", { name: /item-00.md/ }),
+  ).toHaveAttribute("tabindex", "0");
 });
 
 it("reports a failed prefix query", async () => {

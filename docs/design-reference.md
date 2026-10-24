@@ -5,6 +5,14 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Memory pagination — checked 2026-10-24 (#236)
+
+Chrome's active memory-store list was empty, so no populated end-page UI was available to compare.
+The recorded `2026-10-22-memory-list-order` walk ends with an empty fourth page after three full
+`depth=1` pages (idx 25–28); platform PR #982 now serves that boundary. The console names an empty
+page reached through Next as the end of the walk, with Previous available, rather than treating it
+as an empty store. The existing controls and layout stay in use.
+
 ## File compatibility check (2026-09-11)
 
 Chrome showed the reference Files empty table, upload action and disabled previous/next

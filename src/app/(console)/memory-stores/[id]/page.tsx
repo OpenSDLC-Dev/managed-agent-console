@@ -124,7 +124,7 @@ export default function MemoryStoreDetailPage({
   const versionPager = useCursorPage(`${id}:${operation}`);
   const memories = useMemories(id, {
     page: memoryPager.page,
-    path_prefix: queryPathPrefix,
+    path_prefix: queryPathPrefix || undefined,
     depth: depth === 1 ? 1 : undefined,
   });
   const versions = useMemoryVersions(id, {
@@ -275,10 +275,24 @@ export default function MemoryStoreDetailPage({
                         )
                   }
                   empty={
-                    <EmptyState
-                      title="No memories at this path"
-                      hint="Create a memory or choose another prefix."
-                    />
+                    <div
+                      data-memory-page-state={
+                        memoryPager.hasPrev ? "end" : "empty"
+                      }
+                    >
+                      <EmptyState
+                        title={
+                          memoryPager.hasPrev
+                            ? "No more memories at this path"
+                            : "No memories at this path"
+                        }
+                        hint={
+                          memoryPager.hasPrev
+                            ? "Go back to the previous page to view the memories."
+                            : "Create a memory or choose another prefix."
+                        }
+                      />
+                    </div>
                   }
                 />
                 <Pager

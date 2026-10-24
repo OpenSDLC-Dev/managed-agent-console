@@ -102,7 +102,12 @@ function MemoryLevel({
   return (
     <>
       {rows.length === 0 && (
-        <p className="p-2 text-sm text-muted-foreground">No memories</p>
+        <p
+          className="p-2 text-sm text-muted-foreground"
+          data-memory-page-state={pager.hasPrev ? "end" : "empty"}
+        >
+          {pager.hasPrev ? "No more memories" : "No memories"}
+        </p>
       )}
       {rows.map((item, index) => {
         const folder = item.type === "memory_prefix";
