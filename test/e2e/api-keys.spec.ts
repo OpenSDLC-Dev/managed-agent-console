@@ -7,6 +7,12 @@ test.beforeEach(async ({ request }) => {
   await request.post(`${MOCK}/__reset`);
 });
 
+// The mock is shared across spec files. Teardown also runs after a failed case.
+test.afterEach(async ({ request }) => {
+  const reset = await request.post(`${MOCK}/__reset`);
+  expect(reset.ok()).toBe(true);
+});
+
 /**
  * Plan 07 slice 4 — the management-key surface, on the platform's *other*
  * console namespace (`/api/console/`, not plan 30's `/api/oauth/`).
