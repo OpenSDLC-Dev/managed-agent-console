@@ -244,7 +244,7 @@ describe("ErrorState", () => {
   // A denial is not a fault. Rendered in `destructive` red it reads as
   // something to retry or report, and neither will change the answer until an
   // administrator changes the operator's role.
-  it("presents a denial calmly, and says whose role the message is about", () => {
+  it("presents a denial calmly, with access guidance", () => {
     const error = new PlatformError(403, {
       type: "error",
       request_id: "req_denied",

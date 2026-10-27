@@ -2642,7 +2642,14 @@ const server = createServer(async (req, res) => {
   if (forbidden.some((p) => url.pathname.startsWith(`/${p}`))) {
     res.setHeader("content-type", "application/json");
     res.writeHead(403);
-    res.end(envelope("permission_error", "this route requires the admin role"));
+    const role =
+      url.pathname.startsWith("/api/console/") ||
+      url.pathname.endsWith("/redact")
+        ? "admin"
+        : "developer";
+    res.end(
+      envelope("permission_error", `this route requires the ${role} role`),
+    );
     return;
   }
 
@@ -5693,7 +5700,9 @@ const gatewayServer = createServer(async (req, res) => {
       403,
       envelope(
         "permission_error",
-        "this request needs the admin role; yours is viewer",
+        req.method === "GET"
+          ? "this request needs the developer role; yours is user"
+          : "this request needs the admin role; yours is developer",
       ),
     );
   }

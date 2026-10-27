@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
+import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 
 /**
@@ -84,11 +85,8 @@ export const SURFACES = {
   // the other BFF. The rule above still holds and for the same reason — this is
   // a collection route whose only variable segments are constants this console
   // sends, so a 404 cannot be about a missing id.
-  //
-  // It is also the only admin-gated surface. A viewer's probe answers 403, not
-  // 404, so the item stays in the nav and the page explains the refusal — which
-  // is plan 08 D4's rule, not an oversight: the console does not hide a control
-  // on authority it cannot verify.
+  // A non-admin's collection read answers 403. That refusal hides the entry
+  // point, not the feature: direct routes still explain the platform's denial.
   "api-keys": {
     path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
     label: "API Keys",
@@ -160,41 +158,58 @@ export function isUnimplemented(error: unknown): boolean {
   return error.status === 404 && error.errorType === "not_found_error";
 }
 
+export type SurfaceState =
+  | { status: "available" | "unimplemented" | "unknown" }
+  | { status: "denied"; error: PlatformError };
+
+/** Hide only confirmed absence or a refused collection read, never uncertainty. */
+export function isSurfaceVisible(state: SurfaceState | undefined): boolean {
+  return (
+    state === undefined ||
+    state.status === "available" ||
+    state.status === "unknown"
+  );
+}
+
 /**
- * Availability of every surface, probed once per session in parallel.
- *
- * Only a confirmed 404 marks a surface unavailable: a network failure or a
- * 5xx leaves it available, so a struggling platform degrades to "shown and
- * erroring" rather than to "silently missing". Undefined until the probe
- * answers, and callers show everything while unknown — a deployment that
- * serves every surface never flickers.
+ * Collection reads, probed once per session in parallel. A permission_error
+ * keeps its refusal for direct routes; it never means the feature is absent.
+ * This consumes the platform's answer, not a role or a promise of write access.
+ * Network, intermediary and 5xx failures stay visible and error on the page.
  */
-export function useSurfaces(): Record<Surface, boolean> | undefined {
+export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
   return useQuery({
     queryKey: ["surfaces"],
     queryFn: async () => {
-      const probes = SURFACE_NAMES.map(async (surface) => {
-        const entry = SURFACES[surface];
-        try {
-          // The console namespace serves a bare array and reads no query
-          // params, so it is asked for the whole (short) list rather than for
-          // a page of one. The gateway's lists are unpaged too.
-          if (!("api" in entry))
-            await platformGet<unknown>(entry.path, { limit: 1 });
-          else if (entry.api === "gateway")
-            await gatewayGet<unknown>(
-              entry.path,
-              "query" in entry ? entry.query : undefined,
-            );
-          else await consoleKeysGet<unknown>(entry.path);
-          return [surface, true] as const;
-        } catch (error) {
-          return [surface, !isUnimplemented(error)] as const;
-        }
-      });
+      const probes = SURFACE_NAMES.map(
+        async (surface): Promise<[Surface, SurfaceState]> => {
+          const entry = SURFACES[surface];
+          try {
+            // The console namespace serves a bare array and reads no query
+            // params, so it is asked for the whole (short) list rather than for
+            // a page of one. The gateway's lists are unpaged too.
+            if (!("api" in entry))
+              await platformGet<unknown>(entry.path, { limit: 1 });
+            else if (entry.api === "gateway")
+              await gatewayGet<unknown>(
+                entry.path,
+                "query" in entry ? entry.query : undefined,
+              );
+            else await consoleKeysGet<unknown>(entry.path);
+            return [surface, { status: "available" }];
+          } catch (error) {
+            if (error instanceof PlatformError && isPermissionDenied(error))
+              return [surface, { status: "denied", error }];
+            return [
+              surface,
+              { status: isUnimplemented(error) ? "unimplemented" : "unknown" },
+            ];
+          }
+        },
+      );
       return Object.fromEntries(await Promise.all(probes)) as Record<
         Surface,
-        boolean
+        SurfaceState
       >;
     },
     staleTime: Infinity,

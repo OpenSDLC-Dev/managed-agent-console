@@ -8,6 +8,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Resource entry points follow confirmed read refusals** (platform plan 69 slice 1). Navigation,
+  Dashboard and Search omit surfaces whose collection read returns `403 permission_error`.
+  Direct bookmarks explain the refusal, not feature absence. A refused connection probe reports access
+  denied rather than an outage. Read access does not imply write access.
 - **Memory browsing tolerates the platform's terminal empty page** (#236). The tree and list
   name the end of the walk and keep Previous available. Clearing the path box omits `path_prefix`.
 - **Recursive memory lists omit `depth`** (#234). The platform refuses `depth=0` beside a

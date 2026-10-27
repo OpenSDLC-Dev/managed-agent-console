@@ -175,7 +175,11 @@ describe("UpstreamModels", () => {
         ? Response.json(
             {
               type: "error",
-              error: { type: "permission_error", message: "viewer role" },
+              error: {
+                type: "permission_error",
+                message:
+                  "this request needs the admin role; yours is developer",
+              },
             },
             { status: 403 },
           )
@@ -192,7 +196,9 @@ describe("UpstreamModels", () => {
     );
     await waitFor(() =>
       expect(toastPlatformError).toHaveBeenCalledWith(
-        expect.objectContaining({ message: "viewer role" }),
+        expect.objectContaining({
+          message: "this request needs the admin role; yours is developer",
+        }),
         "Update failed",
       ),
     );

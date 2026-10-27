@@ -10,11 +10,9 @@ import { isUnimplemented } from "@/lib/platform/surfaces";
  * Management keys — the credential the console itself runs on when identity is
  * off, and the one an operator hands to a CLI or a CI job.
  *
- * The surface is admin-only on the platform, so in identity mode a viewer's
- * request answers **403** rather than 404: the page stays, and the denial reads
- * as a denial (plan 08 slice 4) rather than as a deployment that lacks the
- * feature. That distinction is the whole reason `isUnimplemented` requires the
- * platform's own `not_found_error` and not merely a status.
+ * This deployment-wide surface stays admin-only in plan 69 slice 1. A refused
+ * collection read hides its entry point; SurfaceGuard explains the refusal at
+ * direct URLs. It is not evidence that the deployment lacks the feature.
  */
 export default function ApiKeysPage() {
   const keys = useApiKeys();
