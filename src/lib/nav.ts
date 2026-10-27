@@ -54,7 +54,7 @@ export interface LocalEntry {
   icon: LucideIcon;
 }
 
-/** A platform surface. Hidden once the probe says this deployment lacks it. */
+/** A platform surface. Hidden on confirmed absence or a refused collection read. */
 export interface SurfaceEntry {
   kind: "surface";
   surface: Surface;

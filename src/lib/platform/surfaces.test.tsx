@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { PlatformError } from "./http";
 import {
   SURFACES,
+  isSurfaceVisible,
   isUnimplemented,
   surfaceOfPath,
   useSurfaces,
@@ -49,8 +50,16 @@ function stubProbes(status: (surface: string) => number) {
               : {
                   type: "error",
                   error: {
-                    type: "not_found_error",
-                    message: "Not found",
+                    type:
+                      code === 403
+                        ? "permission_error"
+                        : code === 404
+                          ? "not_found_error"
+                          : "api_error",
+                    message:
+                      code === 403
+                        ? "this route requires the developer role"
+                        : "Not found",
                   },
                 },
           ),
@@ -90,12 +99,8 @@ describe("isUnimplemented", () => {
     }
   });
 
-  // Named by plan 08 as a property this slice must hold rather than inherit.
-  // A viewer whose role cannot reach a surface must see it **shown and
-  // erroring**, never silently gone: the endpoint is there, and hiding it would
-  // tell them the deployment does not have the feature. Feature detection is
-  // about what a deployment serves; a role is about who is asking.
-  it("probe: a permission_error never hides a surface", () => {
+  // A refusal is not feature absence, even when its entry point is hidden.
+  it("probe: a permission_error never means an unimplemented surface", () => {
     const denied = new PlatformError(403, {
       type: "error",
       error: {
@@ -131,6 +136,25 @@ describe("isUnimplemented", () => {
   });
 });
 
+it("probe: visibility hides only confirmed absence and denied reads", () => {
+  expect(isSurfaceVisible(undefined)).toBe(true);
+  expect(isSurfaceVisible({ status: "available" })).toBe(true);
+  expect(isSurfaceVisible({ status: "unknown" })).toBe(true);
+  expect(isSurfaceVisible({ status: "unimplemented" })).toBe(false);
+  expect(
+    isSurfaceVisible({
+      status: "denied",
+      error: new PlatformError(403, {
+        type: "error",
+        error: {
+          type: "permission_error",
+          message: "this route requires the developer role",
+        },
+      }),
+    }),
+  ).toBe(false);
+});
+
 describe("surfaceOfPath", () => {
   it("names the surface a console path belongs to, list page or deeper", () => {
     expect(surfaceOfPath("/skills")).toBe("skills");
@@ -151,6 +175,40 @@ describe("surfaceOfPath", () => {
 });
 
 describe("useSurfaces", () => {
+  it("probe: distinguishes denied reads, absence and uncertain failures", async () => {
+    stubProbes(
+      (surface) =>
+        ({ skills: 403, files: 404, aliases: 501, vaults: 503 })[surface] ??
+        200,
+    );
+    const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(result.current?.skills).toMatchObject({
+      status: "denied",
+      error: {
+        status: 403,
+        errorType: "permission_error",
+        message: "this route requires the developer role",
+      },
+    });
+    expect(result.current?.files).toEqual({ status: "unimplemented" });
+    expect(result.current?.models).toEqual({ status: "unimplemented" });
+    expect(result.current?.vaults).toEqual({ status: "unknown" });
+    expect(result.current?.agents).toEqual({ status: "available" });
+  });
+
+  it("probe: an intermediary's bare 403 remains unknown, not an account denial", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response("<html>Forbidden</html>", { status: 403 }),
+      ),
+    );
+    const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(result.current?.skills).toEqual({ status: "unknown" });
+  });
+
   it("is undefined until the probe answers", () => {
     vi.stubGlobal(
       "fetch",
@@ -165,7 +223,9 @@ describe("useSurfaces", () => {
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     for (const surface of Object.keys(SURFACES)) {
-      expect(result.current?.[surface as keyof typeof SURFACES]).toBe(true);
+      expect(result.current?.[surface as keyof typeof SURFACES]).toEqual({
+        status: "available",
+      });
     }
   });
 
@@ -176,19 +236,19 @@ describe("useSurfaces", () => {
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     expect(result.current).toEqual({
-      agents: true,
-      sessions: true,
-      deployments: true,
-      "memory-stores": true,
-      dreams: true,
-      environments: true,
-      vaults: true,
-      skills: false,
-      files: false,
-      "api-keys": true,
-      models: true,
-      providers: true,
-      usage: true,
+      agents: { status: "available" },
+      sessions: { status: "available" },
+      deployments: { status: "available" },
+      "memory-stores": { status: "available" },
+      dreams: { status: "available" },
+      environments: { status: "available" },
+      vaults: { status: "available" },
+      skills: { status: "unimplemented" },
+      files: { status: "unimplemented" },
+      "api-keys": { status: "available" },
+      models: { status: "available" },
+      providers: { status: "available" },
+      usage: { status: "available" },
     });
   });
 
@@ -201,10 +261,10 @@ describe("useSurfaces", () => {
     );
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
-    expect(result.current?.providers).toBe(false);
-    expect(result.current?.models).toBe(false);
-    expect(result.current?.usage).toBe(false);
-    expect(result.current?.agents).toBe(true);
+    expect(result.current?.providers).toEqual({ status: "unimplemented" });
+    expect(result.current?.models).toEqual({ status: "unimplemented" });
+    expect(result.current?.usage).toEqual({ status: "unimplemented" });
+    expect(result.current?.agents).toEqual({ status: "available" });
   });
 
   it("probe: keeps a surface available when its probe fails with a 5xx", async () => {
@@ -213,7 +273,7 @@ describe("useSurfaces", () => {
     stubProbes((surface) => (surface === "vaults" ? 500 : 200));
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
-    expect(result.current?.vaults).toBe(true);
+    expect(result.current?.vaults).toEqual({ status: "unknown" });
   });
 
   it("probe: keeps a surface available when its probe never reaches the platform", async () => {
@@ -229,7 +289,7 @@ describe("useSurfaces", () => {
     );
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
-    expect(result.current?.files).toBe(true);
+    expect(result.current?.files).toEqual({ status: "unknown" });
   });
 
   it("probes each collection once, through the BFF its namespace belongs to", async () => {

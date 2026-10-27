@@ -115,6 +115,7 @@ const SURFACE_ITEMS = EXPECTED.filter((i) => i.surface);
 function renderNav(
   unimplemented?: string[],
   props: ComponentProps<typeof Nav> = {},
+  status = 404,
 ) {
   vi.stubGlobal(
     "fetch",
@@ -142,13 +143,19 @@ function renderNav(
               ? {
                   type: "error",
                   error: {
-                    type: "not_found_error",
-                    message: "Not found",
+                    type:
+                      status === 403 ? "permission_error" : "not_found_error",
+                    message:
+                      status === 403
+                        ? String(input).includes("/api/console/")
+                          ? "this route requires the admin role"
+                          : "this route requires the developer role"
+                        : "Not found",
                   },
                 }
               : { data: [] },
           ),
-          { status: absent ? 404 : 200 },
+          { status: absent ? status : 200 },
         ),
       );
     }),
@@ -182,6 +189,18 @@ afterEach(() => {
 });
 
 describe("Nav", () => {
+  for (const compact of [false, true]) {
+    it(`probe: hides only denied read destinations in ${compact ? "compact" : "expanded"} navigation`, async () => {
+      renderNav(["api-keys", "files", "skills"], { compact }, 403);
+      await waitFor(() => expect(link("API Keys")).toBeNull());
+      expect(link("Skills")).toBeNull();
+      expect(groupHeader("Build")).toBeNull();
+      expect(link("Dashboard")).not.toBeNull();
+      if (compact) expect(groupHeader("Managed Agents")).not.toBeNull();
+      else expect(link("Agents")).not.toBeNull();
+    });
+  }
+
   it("renders every item with its href and surface", () => {
     navState.pathname = "/";
     renderNav();

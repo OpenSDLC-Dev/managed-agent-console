@@ -6,12 +6,9 @@ import { IDENTITY_COOKIE, getSession } from "@/lib/identity/session";
  * Who this browser is signed in as — the only thing the console knows about the
  * operator, and deliberately less than the shell would like to show.
  *
- * It carries **no role**, because the console cannot learn one: the platform has
- * no `me` route, and `requireRole` denies at every floor, so "authenticated, any
- * role" is not expressible there (plan 08 D4, filed as a platform issue). Until
- * that lands the console renders every control and lets the platform refuse —
- * which is why a 403 has to read as a permission outcome rather than a fault.
- * When it lands, this route is where the capability manifest arrives.
+ * It carries **no role**. The platform owns authorization and serves no role or
+ * capability endpoint for this console. Collection-read refusals affect entry
+ * points, not this identity response; successful reads do not authorize writes.
  *
  * It carries no token either. The ID token stays server-side (D2); what the
  * browser gets is what it would put on screen, and nothing that authorizes

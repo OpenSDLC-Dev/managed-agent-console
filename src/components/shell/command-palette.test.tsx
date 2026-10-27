@@ -113,6 +113,45 @@ const setQuery = (input: HTMLElement, value: string) =>
   fireEvent.change(input, { target: { value } });
 
 describe("CommandPalette", () => {
+  it("probe: removes denied shortcuts and resource hits even if a prior list still has data", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://console");
+      if (
+        (url.pathname === "/api/platform/v1/skills" &&
+          url.searchParams.get("limit") === "1") ||
+        url.pathname.startsWith("/api/console/")
+      ) {
+        return new Response(
+          JSON.stringify({
+            type: "error",
+            error: {
+              type: "permission_error",
+              message: url.pathname.startsWith("/api/console/")
+                ? "this route requires the admin role"
+                : "this route requires the developer role",
+            },
+          }),
+          { status: 403 },
+        );
+      }
+      return new Response(JSON.stringify(LISTS[url.pathname] ?? { data: [] }), {
+        status: 200,
+      });
+    });
+    renderPalette();
+    const input = await openPalette();
+    await waitFor(() =>
+      expect(screen.queryByRole("option", { name: "API Keys" })).toBeNull(),
+    );
+    expect(screen.queryByRole("option", { name: "Skills" })).toBeNull();
+    expect(screen.getByRole("option", { name: "Agents" })).toBeDefined();
+    setQuery(input, "01");
+    await waitFor(() =>
+      expect(screen.getByText("Support triage")).toBeDefined(),
+    );
+    expect(screen.queryByText("PDF filler")).toBeNull();
+  });
+
   it("opens with Ctrl+K, lists the Go to sections, and fetches every list", async () => {
     renderPalette();
     expect(screen.queryByRole("combobox")).toBeNull();

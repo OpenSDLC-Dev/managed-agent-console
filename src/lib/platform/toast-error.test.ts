@@ -62,9 +62,8 @@ describe("toastPlatformError", () => {
     expect(lastToast().options.description).toBe("Something went wrong");
   });
 
-  // The console shows every control because it cannot know which the operator
-  // may use (plan 08 D4), so this toast is where they find out. "Request failed"
-  // would invite a retry that answers the same way until somebody changes a role.
+  // Read access does not imply write access. A refused write still needs an
+  // actionable denial, not a fault that invites an unhelpful retry.
   describe("a denial", () => {
     const forbidden = new PlatformError(403, {
       type: "error",
@@ -85,12 +84,11 @@ describe("toastPlatformError", () => {
       expect(options.description).toContain(ROLE_NOTE);
     });
 
-    // The message names the role the ROUTE requires, never the caller's
-    // (identitylane.go), which is what makes it safe to show and useless to a
-    // prober — but on its own it reads as a fact about the route.
-    it("says whose role the message is about", () => {
+    it("directs the operator to an administrator without interpreting roles", () => {
       toastPlatformError(forbidden);
-      expect(lastToast().options.description).toContain("not the one you hold");
+      expect(lastToast().options.description).toContain(
+        "The platform refused this request. Ask an administrator to check your access.",
+      );
     });
 
     it("still yields to a title the call site chose", () => {

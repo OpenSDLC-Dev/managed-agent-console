@@ -6,7 +6,12 @@ import { CreateKeyButton } from "@/components/console/api-keys";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_SECTIONS, type SurfaceEntry } from "@/lib/nav";
-import { SURFACES, surfaceRoute, useSurfaces } from "@/lib/platform/surfaces";
+import {
+  SURFACES,
+  surfaceRoute,
+  useSurfaces,
+  isSurfaceVisible,
+} from "@/lib/platform/surfaces";
 
 /**
  * The landing page. Static: it serves no platform data, so there is nothing on
@@ -47,9 +52,8 @@ export default function DashboardPage() {
   const surfaces = useSurfaces();
   const sections = DASHBOARD_SECTIONS.map(({ heading, items }) => ({
     heading,
-    // Unknown means shown, as everywhere else: a card goes only once the
-    // platform has said it does not serve that surface.
-    items: items.filter(({ surface }) => surfaces?.[surface] !== false),
+    // Unknown stays shown. Confirmed absence and refused reads lose their links.
+    items: items.filter(({ surface }) => isSurfaceVisible(surfaces?.[surface])),
   })).filter(({ items }) => items.length > 0);
 
   return (
@@ -75,8 +79,10 @@ export default function DashboardPage() {
           >
             <BookOpen />
           </a>
-          {surfaces?.["api-keys"] !== false && <CreateKeyButton shortcut />}
-          {surfaces?.agents !== false && (
+          {isSurfaceVisible(surfaces?.["api-keys"]) && (
+            <CreateKeyButton shortcut />
+          )}
+          {isSurfaceVisible(surfaces?.agents) && (
             <Link href="/agents/new" className={cn(buttonVariants())}>
               <Waypoints />
               Build an agent

@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 /** Probe answering 404 for `unimplemented`, 200 for the rest. */
-function renderGuard(pathname: string, unimplemented: string[]) {
+function renderGuard(pathname: string, unimplemented: string[], status = 404) {
   navState.pathname = pathname;
   vi.stubGlobal(
     "fetch",
@@ -27,13 +27,17 @@ function renderGuard(pathname: string, unimplemented: string[]) {
               ? {
                   type: "error",
                   error: {
-                    type: "not_found_error",
-                    message: "Not found",
+                    type:
+                      status === 403 ? "permission_error" : "not_found_error",
+                    message:
+                      status === 403
+                        ? "this route requires the developer role"
+                        : "Not found",
                   },
                 }
               : { data: [] },
           ),
-          { status: absent ? 404 : 200 },
+          { status: absent ? status : 200 },
         ),
       );
     }),
@@ -57,6 +61,23 @@ afterEach(() => {
 });
 
 describe("SurfaceGuard", () => {
+  for (const pathname of [
+    "/skills",
+    "/skills/skill_1",
+    "/agents/agent_1/edit",
+    "/sessions/new",
+  ]) {
+    it(`probe: explains a denied collection read at ${pathname}, not absence`, async () => {
+      renderGuard(pathname, [pathname.split("/")[1]], 403);
+      const state = await screen.findByTestId("error-state");
+      expect(state).toHaveAttribute("data-error-status", "403");
+      expect(state).toHaveAttribute("data-denied", "true");
+      expect(state).toHaveTextContent("this route requires the developer role");
+      expect(screen.queryByTestId("unavailable-surface")).toBeNull();
+      expect(screen.queryByText("the page")).toBeNull();
+    });
+  }
+
   it("renders the page while availability is unknown", () => {
     vi.stubGlobal(
       "fetch",

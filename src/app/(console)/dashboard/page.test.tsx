@@ -19,7 +19,7 @@ vi.mock("next/link", () => ({
  * argument it never settles, which is the state a page renders in before the
  * platform has said anything — and the one where everything shows.
  */
-function renderDashboard(unimplemented?: string[]) {
+function renderDashboard(unimplemented?: string[], status = 404) {
   vi.stubGlobal(
     "fetch",
     vi.fn((input: string) => {
@@ -38,13 +38,19 @@ function renderDashboard(unimplemented?: string[]) {
               ? {
                   type: "error",
                   error: {
-                    type: "not_found_error",
-                    message: "Not found",
+                    type:
+                      status === 403 ? "permission_error" : "not_found_error",
+                    message:
+                      status === 403
+                        ? String(input).includes("/api/console/")
+                          ? "this route requires the admin role"
+                          : "this route requires the developer role"
+                        : "Not found",
                   },
                 }
               : { data: [] },
           ),
-          { status: absent ? 404 : 200 },
+          { status: absent ? status : 200 },
         ),
       );
     }),
@@ -71,6 +77,20 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it("probe: drops denied-read cards and shortcuts without hiding readable resources", async () => {
+    renderDashboard(["api-keys", "agents", "files", "skills"], 403);
+    await waitFor(() => expect(card("api-keys")).toBeNull());
+    expect(card("agents")).toBeNull();
+    expect(headings()).not.toContain("Build");
+    expect(headings()).not.toContain("Manage");
+    expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
+    expect(card("vaults")).not.toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Explore docs" }),
+    ).toBeInTheDocument();
+  });
+
   // The one test that asserts the human strings, so a copy edit reddens this
   // and not a suite (CLAUDE.md).
   it("titles the page and exposes the primary shortcuts", () => {

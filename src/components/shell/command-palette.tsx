@@ -31,7 +31,11 @@ import {
   useSkills,
   useVaults,
 } from "@/lib/platform/queries";
-import { useSurfaces, type Surface } from "@/lib/platform/surfaces";
+import {
+  isSurfaceVisible,
+  useSurfaces,
+  type Surface,
+} from "@/lib/platform/surfaces";
 
 interface Item {
   key: string;
@@ -40,7 +44,7 @@ interface Item {
   href: string;
   group: string;
   icon: LucideIcon;
-  /** Set on the section shortcuts; resource hits carry no surface. */
+  /** Collection owning the shortcut or resource hit; absent for local pages. */
   surface?: Surface;
 }
 
@@ -82,17 +86,16 @@ function useSearchItems(query: string): Item[] {
   // Uploads only, each listed on /files: since platform #578 the unfiltered
   // list leaves out a session's copies and outputs, found from their session.
   const files = useFiles();
-  // The resource groups below need no gating — an unimplemented surface's
-  // query errors, so its list is simply empty. Only the "Go to" entries would
-  // still offer a dead page.
+  // A failed list may retain cached rows. Apply the collection's read refusal
+  // to resource hits too, not only to the "Go to" shortcuts.
   const surfaces = useSurfaces();
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
+    const visible = (item: Item) =>
+      item.surface === undefined || isSurfaceVisible(surfaces?.[item.surface]);
     const items: Item[] = SECTIONS.filter(
-      (s) =>
-        (s.surface === undefined || surfaces?.[s.surface] !== false) &&
-        (!q || s.label.toLowerCase().includes(q)),
+      (s) => visible(s) && (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;
     for (const a of agents.data?.data ?? []) {
@@ -103,6 +106,7 @@ function useSearchItems(query: string): Item[] {
           detail: a.id,
           href: `/agents/${a.id}`,
           group: "Agents",
+          surface: "agents",
           icon: Bot,
         });
     }
@@ -114,6 +118,7 @@ function useSearchItems(query: string): Item[] {
           detail: s.id,
           href: `/sessions/${s.id}`,
           group: "Sessions",
+          surface: "sessions",
           icon: MessagesSquare,
         });
     }
@@ -125,6 +130,7 @@ function useSearchItems(query: string): Item[] {
           detail: deployment.id,
           href: `/deployments/${deployment.id}`,
           group: "Deployments",
+          surface: "deployments",
           icon: Rocket,
         });
     }
@@ -135,6 +141,7 @@ function useSearchItems(query: string): Item[] {
           label: dream.id,
           href: `/dreams/${dream.id}`,
           group: "Dreams",
+          surface: "dreams",
           icon: Moon,
         });
     }
@@ -146,6 +153,7 @@ function useSearchItems(query: string): Item[] {
           detail: e.id,
           href: `/environments/${e.id}`,
           group: "Environments",
+          surface: "environments",
           icon: Boxes,
         });
     }
@@ -157,6 +165,7 @@ function useSearchItems(query: string): Item[] {
           detail: store.id,
           href: `/memory-stores/${store.id}`,
           group: "Memory Stores",
+          surface: "memory-stores",
           icon: Database,
         });
     }
@@ -168,6 +177,7 @@ function useSearchItems(query: string): Item[] {
           detail: v.id,
           href: `/vaults/${v.id}`,
           group: "Vaults",
+          surface: "vaults",
           icon: KeyRound,
         });
     }
@@ -179,6 +189,7 @@ function useSearchItems(query: string): Item[] {
           detail: s.id,
           href: `/skills/${s.id}`,
           group: "Skills",
+          surface: "skills",
           icon: Sparkles,
         });
     }
@@ -190,10 +201,11 @@ function useSearchItems(query: string): Item[] {
           detail: f.id,
           href: "/files",
           group: "Files",
+          surface: "files",
           icon: FileText,
         });
     }
-    return items;
+    return items.filter(visible);
   }, [
     query,
     surfaces,
