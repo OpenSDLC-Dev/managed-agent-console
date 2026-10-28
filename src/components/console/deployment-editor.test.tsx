@@ -501,7 +501,7 @@ describe("deployment editor wire mapping", () => {
     await userEvent.type(screen.getByLabelText("Name"), "Morning run");
     await userEvent.type(screen.getByLabelText("Description"), "Daily triage");
     await userEvent.click(
-      screen.getByRole("button", { name: "Credential vaults" }),
+      screen.getByRole("button", { name: /^Credential vaults/ }),
     );
     await userEvent.click(screen.getByRole("checkbox", { name: "GitHub" }));
     await userEvent.click(

@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Control names include their visible labels.** Search, calendar days, vault selectors,
+  resource previews and timeline zoom now keep their labels available to voice control.
 - **Resource entry points follow confirmed read refusals** (platform plan 69 slice 1). Navigation,
   Dashboard and Search omit surfaces whose collection read returns `403 permission_error`.
   Direct bookmarks explain the refusal, not feature absence. A refused connection probe reports access

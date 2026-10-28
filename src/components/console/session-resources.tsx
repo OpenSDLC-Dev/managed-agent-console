@@ -319,6 +319,12 @@ export function SessionResources({ session }: { session: Session }) {
             resource.type === "file"
               ? fileById.get(resource.file_id)
               : undefined;
+          const label =
+            resource.type === "file"
+              ? resource.file_id
+              : resource.type === "github_repository"
+                ? resource.url
+                : resource.name;
           return (
             <Fragment key={id}>
               <div className="flex items-start justify-between gap-3 rounded-lg border p-3 text-sm">
@@ -341,15 +347,11 @@ export function SessionResources({ session }: { session: Session }) {
                 <div className="min-w-0 flex-1 space-y-1">
                   <button
                     className="break-all text-left font-medium hover:underline"
-                    aria-label={`Inspect resource ${resource.mount_path}`}
+                    aria-label={`Inspect resource ${resource.mount_path}: ${label}`}
                     aria-pressed={selected === resource && !selection?.memoryId}
                     onClick={() => inspect(id)}
                   >
-                    {resource.type === "file"
-                      ? resource.file_id
-                      : resource.type === "github_repository"
-                        ? resource.url
-                        : resource.name}
+                    {label}
                   </button>
                   <p className="flex justify-between gap-2 font-mono text-xs text-muted-foreground">
                     <span className="min-w-0 break-all">

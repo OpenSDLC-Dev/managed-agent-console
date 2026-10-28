@@ -116,7 +116,7 @@ it("opens a bound store and its memory inline without leaving the Session", asyn
   });
   await userEvent.click(
     screen.getByRole("button", {
-      name: "Inspect resource /mnt/memory/project-notes",
+      name: /^Inspect resource \/mnt\/memory\/project-notes: /,
     }),
   );
   expect(
@@ -189,7 +189,9 @@ it("filters attached resources while retaining read-only inspection for an archi
 it("uses file metadata and never requests a non-downloadable upload's content", async () => {
   const { fetch } = setup();
   await userEvent.click(
-    screen.getByRole("button", { name: "Inspect resource /mnt/notes.md" }),
+    screen.getByRole("button", {
+      name: /^Inspect resource \/mnt\/notes\.md: /,
+    }),
   );
   const preview = await screen.findByTestId("session-file-preview");
   expect(
@@ -228,7 +230,9 @@ it("loads downloadable text only on request, escapes HTML and supports retry aft
         : undefined,
   });
   await userEvent.click(
-    screen.getByRole("button", { name: "Inspect resource /mnt/notes.md" }),
+    screen.getByRole("button", {
+      name: /^Inspect resource \/mnt\/notes\.md: /,
+    }),
   );
   await screen.findByTestId("session-file-preview");
   expect(fetch).toHaveBeenCalledTimes(1);
@@ -261,7 +265,9 @@ it.each([
   async (file) => {
     const { fetch } = setup({ file: { ...file, downloadable: true } });
     await userEvent.click(
-      screen.getByRole("button", { name: "Inspect resource /mnt/notes.md" }),
+      screen.getByRole("button", {
+        name: /^Inspect resource \/mnt\/notes\.md: /,
+      }),
     );
     expect(await screen.findByRole("link", { name: "Download" })).toBeVisible();
     expect(
@@ -274,7 +280,9 @@ it.each([
 it("keeps the Session usable when an attached file is missing", async () => {
   setup({ get: (path) => (path.includes("/files/") ? error(404) : undefined) });
   await userEvent.click(
-    screen.getByRole("button", { name: "Inspect resource /mnt/notes.md" }),
+    screen.getByRole("button", {
+      name: /^Inspect resource \/mnt\/notes\.md: /,
+    }),
   );
   expect(await screen.findByText("Resource unavailable")).toBeVisible();
   await userEvent.click(

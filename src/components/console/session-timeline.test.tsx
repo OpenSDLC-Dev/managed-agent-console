@@ -47,13 +47,14 @@ it("plots only stamped events, pairs model spans and selects the exact persisted
 
 it("zooms the loaded timeline with bounded native keyboard controls and resets to fit", async () => {
   timeline();
-  const zoom = screen.getByRole("button", { name: "Reset timeline zoom" });
+  const zoom = screen.getByRole("button", { name: /^Reset timeline zoom/ });
   const plus = screen.getByRole("button", { name: "Zoom in" });
   expect(screen.getByRole("button", { name: "Zoom out" })).toBeDisabled();
   plus.focus();
   await userEvent.keyboard("{Enter}");
   expect(zoom).toHaveAttribute("data-zoom", "2");
   expect(zoom).toHaveTextContent("2.00×");
+  expect(zoom).toHaveAccessibleName("Reset timeline zoom, 2.00×");
   await userEvent.click(plus);
   await userEvent.click(plus);
   expect(plus).toBeDisabled();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
@@ -66,6 +66,7 @@ export function SessionCreateForm({
   const [title, setTitle] = useState("");
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const vaultLabelId = useId();
   const [attached, setAttached] = useState<AttachedFile[]>([]);
   const [initialResources, setInitialResources] = useState<ResourceInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -201,19 +202,22 @@ export function SessionCreateForm({
       {vaultList.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label>Credential vaults (optional)</Label>
+            <Label id={vaultLabelId}>Credential vaults (optional)</Label>
             <ManageLink href="/vaults">Manage credential vaults</ManageLink>
           </div>
           <div className="relative">
             <button
               type="button"
-              aria-label="Credential vaults"
+              aria-labelledby={`${vaultLabelId} ${vaultLabelId}-value`}
               aria-expanded={vaultOpen}
               aria-haspopup="listbox"
               className="flex h-8 w-full items-center justify-between rounded-lg border px-2.5 text-sm"
               onClick={() => setVaultOpen((open) => !open)}
             >
-              <span className="truncate text-muted-foreground">
+              <span
+                id={`${vaultLabelId}-value`}
+                className="truncate text-muted-foreground"
+              >
                 {vaultIds.length === 0
                   ? "Select one or more vaults"
                   : vaultList

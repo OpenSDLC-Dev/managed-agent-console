@@ -301,7 +301,7 @@ it.each([
     } else expect(note).toBeNull();
     expect(
       screen.getByRole("button", {
-        name: `Inspect resource ${fileResource.mount_path}`,
+        name: `Inspect resource ${fileResource.mount_path}: ${fileResource.file_id}`,
       }),
     ).toBeEnabled();
     expect(panel().querySelector("[data-size-bytes]")).toBeNull();
@@ -905,7 +905,7 @@ it("offers Remove on a file resource alone: a memory store has no id to remove, 
   ).toBeInTheDocument();
   expect(
     screen.getByRole("button", {
-      name: "Inspect resource /mnt/memory/project-notes",
+      name: /^Inspect resource \/mnt\/memory\/project-notes: /,
     }),
   ).toBeInTheDocument();
   expect(
@@ -963,7 +963,9 @@ it("renders archived attachments without mutation controls", () => {
   expect(screen.getByText(repository.url)).toBeInTheDocument();
   expect(screen.getByText("Project notes")).toBeInTheDocument();
   expect(
-    screen.getByRole("button", { name: "Inspect resource /workspace/project" }),
+    screen.getByRole("button", {
+      name: /^Inspect resource \/workspace\/project: /,
+    }),
   ).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
   expect(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { ChevronsUpDown, Paperclip, X } from "lucide-react";
@@ -250,6 +250,7 @@ export function DeploymentEditor({
   );
   const initialMessage = initialMessageFromEvents(form.initialEvents);
   const [vaultOpen, setVaultOpen] = useState(false);
+  const vaultLabelId = useId();
   const [attached, setAttached] = useState<AttachedFile[]>([]);
   const [resources, setResources] = useState<ResourceInput[]>(baseResources);
   const resourcesDirty =
@@ -653,7 +654,7 @@ export function DeploymentEditor({
             {vaultChoices.length > 0 && (
               <div className="space-y-1.5">
                 <div className="flex justify-between gap-3">
-                  <Label>Credential vaults (optional)</Label>
+                  <Label id={vaultLabelId}>Credential vaults (optional)</Label>
                   <a
                     href="/vaults"
                     target="_blank"
@@ -666,12 +667,15 @@ export function DeploymentEditor({
                 <div className="relative">
                   <button
                     type="button"
-                    aria-label="Credential vaults"
+                    aria-labelledby={`${vaultLabelId} ${vaultLabelId}-value`}
                     aria-expanded={vaultOpen}
                     className="flex h-8 w-full items-center justify-between rounded-lg border px-2.5 text-sm"
                     onClick={() => setVaultOpen((open) => !open)}
                   >
-                    <span className="truncate text-muted-foreground">
+                    <span
+                      id={`${vaultLabelId}-value`}
+                      className="truncate text-muted-foreground"
+                    >
                       {form.vaultIds.length === 0
                         ? "Select one or more vaults"
                         : vaultChoices

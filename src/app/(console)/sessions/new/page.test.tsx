@@ -307,7 +307,7 @@ describe("NewSessionPage", () => {
     await userEvent.type(screen.getByLabelText("Title (optional)"), "Run 1");
     // Toggle the vault binding off and on again — the final body keeps it.
     await userEvent.click(
-      screen.getByRole("button", { name: "Credential vaults" }),
+      screen.getByRole("button", { name: /^Credential vaults/ }),
     );
     const checkbox = await screen.findByRole("checkbox");
     await userEvent.click(checkbox);
