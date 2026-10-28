@@ -4,12 +4,6 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-### API key deletion
-
-- [x] Verify the platform contract and the reference's Delete menu and confirmation.
-- [x] Replace the Archive icon with a Delete menu and explain managed-key restrictions.
-- [ ] Verify tests, Chrome fidelity, branch review and PR checks; merge and sync main.
-
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from
