@@ -8,7 +8,12 @@ import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV, type GroupEntry, type NavEntry } from "@/lib/nav";
-import { SURFACES, surfaceRoute, useSurfaces } from "@/lib/platform/surfaces";
+import {
+  SURFACES,
+  surfaceRoute,
+  useSurfaces,
+  isSurfaceVisible,
+} from "@/lib/platform/surfaces";
 import type { Surface } from "@/lib/platform/surfaces";
 
 /** Shared by every row so the group header sits flush with its neighbours. */
@@ -206,7 +211,8 @@ export function Nav({ compact = false }: { compact?: boolean }) {
       ?.querySelector("[aria-current=page]")
       ?.scrollIntoView?.({ block: "nearest" });
   }, [pathname, surfaces, compact]);
-  const available: Available = (surface) => surfaces?.[surface] !== false;
+  const available: Available = (surface) =>
+    isSurfaceVisible(surfaces?.[surface]);
   if (compact) {
     return (
       <nav

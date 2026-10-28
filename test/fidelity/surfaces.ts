@@ -2033,13 +2033,93 @@ export const SURFACES: Surface[] = [
     route: "/skills",
     fixture: "a platform that refuses this role — the mock's own 403",
     description:
-      "ErrorState's denied variant (plan 08 slice 4): the platform's message quoted verbatim, naming the role the route requires rather than the one the operator holds, over a nav item that deliberately stays put. The third of the three refusal layouts — `detail-error` is a 404 on an item, `surface-unavailable` a surface the deployment lacks, this one a surface the operator may not read.",
+      "A refused collection read: the existing calm ErrorState quotes the platform, while navigation drops only the denied entry. This is not an absent feature.",
     setup: async (page) => {
       await page.request.post(`${MOCK_URL}/__forbid`, {
         data: { paths: ["v1/skills"] },
       });
       await page.reload();
       await page.getByTestId("error-state").waitFor();
+    },
+  },
+  // Stub OIDC signs in through the real console RP. The mock injects the
+  // refusals; these states do not establish the platform's stored-role mapping.
+  ...["dashboard", "palette", "bookmark"].map((view): Surface => ({
+    id: "read-denied-" + view,
+    mode: "sso",
+    route: view === "bookmark" ? `/skills/${SKILL}` : "/dashboard",
+    fixture: "stub OIDC session with injected resource-read permission_error",
+    description:
+      "No resource entry points after refused reads; direct bookmarks explain the refusal: " +
+      view,
+    setup: async (page) => {
+      const refused = await page.request.post(`${MOCK_URL}/__forbid`, {
+        data: { paths: ["v1/", "api/console/", "admin/v1/"] },
+      });
+      if (!refused.ok()) throw new Error("Cannot stage denied reads");
+      await page.reload();
+      await page.waitForFunction(
+        () => !document.querySelector("nav [data-surface]"),
+      );
+      await page
+        .locator('[data-testid="connection-dot"][data-state="denied"]')
+        .waitFor();
+      if (view === "bookmark") {
+        await page
+          .locator('[data-testid="error-state"][data-denied="true"]')
+          .waitFor();
+      } else {
+        await page.waitForFunction(
+          () => !document.querySelector("[data-dashboard-card]"),
+        );
+        if (view === "palette") {
+          await page.keyboard.press("Control+k");
+          await page
+            .getByRole("option", { name: "Dashboard", exact: true })
+            .waitFor();
+          if ((await page.getByRole("option").count()) !== 1)
+            throw new Error("Denied resource in palette");
+        }
+      }
+      // Resolve against this page, not the walker's password-mode baseURL.
+      const write = await page.request.post(
+        new URL("/api/platform/v1/agents", page.url()).href,
+        { data: {} },
+      );
+      if (write.status() !== 403)
+        throw new Error("Expected injected write refusal");
+      const session = await page.request.get(
+        new URL("/api/auth/session", page.url()).href,
+      );
+      if (!session.ok() || !(await session.json()).signed_in)
+        throw new Error("403 ended identity session");
+    },
+  })),
+  {
+    id: "api-keys-denied",
+    mode: "sso",
+    route: "/api-keys",
+    fixture: "stub OIDC session; management-key collection alone refuses reads",
+    description:
+      "Admin-only key refusal leaves readable resource navigation intact.",
+    setup: async (page) => {
+      const refused = await page.request.post(`${MOCK_URL}/__forbid`, {
+        data: { paths: ["api/console/organizations/default/workspaces"] },
+      });
+      if (!refused.ok()) throw new Error("Cannot stage denied API keys");
+      await page.reload();
+      await page
+        .locator('[data-testid="error-state"][data-denied="true"]')
+        .waitFor();
+      await page
+        .locator('nav [data-surface="api-keys"]')
+        .waitFor({ state: "detached" });
+      await page.locator('nav [data-surface="agents"]').waitFor();
+      const session = await page.request.get(
+        new URL("/api/auth/session", page.url()).href,
+      );
+      if (!session.ok() || !(await session.json()).signed_in)
+        throw new Error("403 ended identity session");
     },
   },
   {

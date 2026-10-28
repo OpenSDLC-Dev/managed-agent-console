@@ -7,6 +7,12 @@ test.beforeEach(async ({ request }) => {
   await request.post(`${MOCK}/__reset`);
 });
 
+// The mock is shared across spec files. Teardown also runs after a failed case.
+test.afterEach(async ({ request }) => {
+  const reset = await request.post(`${MOCK}/__reset`);
+  expect(reset.ok()).toBe(true);
+});
+
 /**
  * Plan 07 slice 4 — the management-key surface, on the platform's *other*
  * console namespace (`/api/console/`, not plan 30's `/api/oauth/`).
@@ -97,12 +103,10 @@ test("a platform without the surface loses the nav item", async ({
   await expect(standIn).toHaveAttribute("data-surface", "api-keys");
 });
 
-// The other half of that rule, and the one plan 08 slice 4 settled: a 403 is
-// NOT feature absence. This surface is admin-only on the platform, so a viewer
-// meets a denial here — which must read as a denial, with the item still in the
-// nav, or an operator would report a missing feature instead of asking for a
-// role.
-test("a forbidden key list stays in the nav and explains itself", async ({
+// Management keys stay admin-only in plan 69 slice 1. A refused read hides
+// the entry, but a direct URL must explain the refusal rather than absence.
+// This injects a 403 in the password/key lane; it does not resolve an OIDC role.
+test("a forbidden key list hides only its entry and explains itself", async ({
   page,
   request,
 }) => {
@@ -117,5 +121,9 @@ test("a forbidden key list stays in the nav and explains itself", async ({
   await expect(state).toHaveAttribute("data-error-status", "403");
   await expect(state).toHaveAttribute("data-denied", "true");
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=api-keys]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
+  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(
+    page.getByText("this route requires the admin role"),
+  ).toBeVisible();
 });

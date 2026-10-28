@@ -5,7 +5,8 @@ import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 import { cn } from "@/lib/utils";
 
 type ProbeResult =
-  { ok: true } | { ok: false; message: string; requestId?: string };
+  | { ok: true }
+  | { ok: false; message: string; requestId?: string; denied?: boolean };
 
 async function probe(): Promise<ProbeResult> {
   let response: Response;
@@ -24,12 +25,16 @@ async function probe(): Promise<ProbeResult> {
   const requestId = response.headers.get("request-id") ?? undefined;
   try {
     const body = (await response.json()) as {
-      error?: { message?: string };
+      error?: { type?: string; message?: string };
     };
     return {
       ok: false,
       message: body.error?.message ?? `HTTP ${response.status}`,
       requestId,
+      // The agents read also refuses a signed-in user with no resource access.
+      // That is not an outage; a bare intermediary 403 remains a fault.
+      denied:
+        response.status === 403 && body.error?.type === "permission_error",
     };
   } catch {
     return { ok: false, message: `HTTP ${response.status}`, requestId };
@@ -44,7 +49,14 @@ export function ConnectionStatus() {
     refetchOnWindowFocus: false,
   });
 
-  const state = data === undefined ? "checking" : data.ok ? "up" : "down";
+  const state =
+    data === undefined
+      ? "checking"
+      : data.ok
+        ? "up"
+        : data.denied
+          ? "denied"
+          : "down";
   return (
     <div className="px-4 py-3 text-[13px]">
       <div className="flex items-center gap-2">
@@ -56,11 +68,13 @@ export function ConnectionStatus() {
             state === "up" && "bg-emerald-500",
             state === "down" && "bg-red-500",
             state === "checking" && "bg-muted-foreground/40",
+            state === "denied" && "bg-muted-foreground",
           )}
         />
         <span className="text-sidebar-foreground">
           {state === "up" && "Platform Connected"}
           {state === "down" && "Platform Unreachable"}
+          {state === "denied" && "Platform Access Denied"}
           {state === "checking" && "Checking Platform…"}
         </span>
       </div>

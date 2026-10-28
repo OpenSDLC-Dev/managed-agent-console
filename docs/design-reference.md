@@ -178,10 +178,11 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   resource cards; ours has no billing, no model catalogue and no usage surface to show, so it is one
   card per served surface under the sidebar's own headings. It is also the console's first page that
   is **not** a platform surface, so it never joins the 404 probe and is always shown.
-- **Navigation is composed at runtime, not fixed** (issue #33). A hosted product implements every
-  surface it shows; a self-hosted console can be pointed at a deployment serving only part of the
-  wire, so the shell probes each collection route once per session and drops what answers 404. Only a
-  confirmed 404 hides anything, so an unreachable platform still shows every item.
+- **Navigation follows the deployment's collection reads** (issue #33). A self-hosted deployment may
+  lack a surface or refuse the current person's read. Confirmed absence (`404 not_found_error` or
+  `501`) and refused reads (`403 permission_error`) hide entry points, for different reasons.
+  Unknown, network and server failures keep them visible. Direct routes distinguish refusal from
+  absence; see [Authorization presentation](#authorization-presentation--checked-2026-10-27).
 - **`Model Gateway` is a group the reference does not have** (plan 10, added 2026-10-14). The
   reference calls only Anthropic's models. A self-hosted platform routes every agent through its own
   gateway, so the gateway's screens sit in a group between `Build` and `Managed Agents`. They have no
@@ -255,6 +256,19 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   therefore the colour that gets read and `--destructive-surface` the wash behind it; the wash keeps
   the value it always had, so the controls look as they did and only the glyphs move. The reference
   ships one `danger-100`, but it also ships no dark mode — the surface we borrowed it for is ours.
+
+## Authorization presentation — checked 2026-10-27
+
+Platform plan 69 slice 1 gives `user` no resource reads. Hiding a confirmed collection-read refusal
+is a narrow departure from archived plan 08 D4: the platform's actual answer supplies the evidence,
+not an IdP claim or a browser role map. This does not implement platform #403 or infer write access.
+The existing calm error state explains direct-route refusals; write controls still let the platform decide.
+A refused collection read on the connection probe reports access denied, not an outage.
+
+Fresh Chrome access to the reference Dashboard showed its sign-in offer, not an authenticated resource
+surface. No new authenticated reference facts were inferred. The local Chrome pass uses the recorded
+layout and error treatment above, in both themes. Stub OIDC exercises the console sign-in and session
+boundary; injected platform refusals do not prove the platform's stored-role resolution.
 
 ## Fidelity verification
 
