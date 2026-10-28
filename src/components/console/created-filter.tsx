@@ -92,6 +92,21 @@ function DateField({
             defaultMonth={selected}
             showOutsideDays
             navLayout="around"
+            labels={{
+              // Use the visible numeric day as a whole word in the name.
+              // DayPicker's ordinal (2nd) does not match the button text (2).
+              labelDayButton: (date, modifiers) => {
+                let name = date.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                });
+                if (modifiers.today) name = `Today, ${name}`;
+                if (modifiers.selected) name += ", selected";
+                return name;
+              },
+            }}
             onSelect={(date) => {
               onChange(date ? dateValue(date) : "");
               setOpen(false);

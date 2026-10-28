@@ -121,7 +121,7 @@ export function SessionTimeline({
           <Button
             size="sm"
             variant="ghost"
-            aria-label="Reset timeline zoom"
+            aria-label={`Reset timeline zoom, ${zoom.toFixed(2)}×`}
             data-zoom={zoom}
             disabled={!timed.length}
             onClick={() => setZoom(1)}

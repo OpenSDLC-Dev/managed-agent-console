@@ -343,8 +343,8 @@ export function CommandPalette({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Search Ctrl K"
-        title={compact ? "Search Ctrl K" : undefined}
+        aria-label="Search Console… Ctrl K"
+        title={compact ? "Search Console… Ctrl K" : undefined}
         className={cn(
           "mx-2 flex h-8 shrink-0 items-center gap-2 rounded-lg border bg-background px-2 text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
           compact && "justify-center border-transparent px-0",
