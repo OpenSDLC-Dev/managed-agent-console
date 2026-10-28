@@ -5,6 +5,16 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## API key deletion — checked 2026-10-28
+
+Chrome shows `Actions` → `More actions for …` → `Delete API key`, followed by a
+`Delete API key` dialog naming the key and warning that deletion cannot be undone.
+The console reuses its shared Delete menu and confirmation. It also warns that clients
+lose access immediately. Platform `internal/api/consoleapikeys.go:updateAPIKeyIn`
+implements this as `status: archived`; the retained row keeps its wire status.
+Control-plane-managed keys have no Delete action because the platform refuses updates.
+The console explains their deployment-configuration rotation beside the list.
+
 ## Memory pagination — checked 2026-10-24 (#236)
 
 Chrome's active memory-store list was empty, so no populated end-page UI was available to compare.
@@ -200,8 +210,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   actor id the wire carries rather than a display name, because there is no member lookup to enrich
   it with. `Status` is added because our rows are `active`/`inactive`/`archived` plus a derived
   `expired` and the console acts on them.
-- **Retiring a key is `Archive`, not `Delete`** — the platform serves no DELETE on the surface at
-  all, and naming the control after a verb the wire lacks would misdescribe the button.
 - **No work-queue Overview on the environment detail page**, and this one is forced rather than
   chosen: the reference does render it, but the platform registers `…/work/stats` on the
   environment-key lane at `RoleNone`, which no human credential can reach. Revisit if it ever moves

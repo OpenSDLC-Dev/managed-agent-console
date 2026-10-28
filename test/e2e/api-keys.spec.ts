@@ -17,7 +17,7 @@ test.afterEach(async ({ request }) => {
  * Plan 07 slice 4 — the management-key surface, on the platform's *other*
  * console namespace (`/api/console/`, not plan 30's `/api/oauth/`).
  */
-test("issue a key, see it once, then disable and archive it", async ({
+test("issue a key, see it once, then disable and delete it", async ({
   page,
 }) => {
   await signIn(page, "/agents");
@@ -56,12 +56,19 @@ test("issue a key, see it once, then disable and archive it", async ({
     "inactive",
   );
 
-  // The trigger names the row ("Archive API key e2e-key"); the confirm button
-  // in the dialog is the title alone, so both need exact matching to be told
-  // apart.
-  await row.getByRole("button", { name: "Archive API key e2e-key" }).click();
+  await row.getByRole("button", { name: "More actions for e2e-key" }).click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("e2e-key");
+  // Cancelling keeps the key and returns to its row.
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "inactive",
+  );
+  await row.getByRole("button", { name: "More actions for e2e-key" }).click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await page
-    .getByRole("button", { name: "Archive API key", exact: true })
+    .getByRole("button", { name: "Delete API key", exact: true })
     .click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
@@ -69,6 +76,49 @@ test("issue a key, see it once, then disable and archive it", async ({
   );
   // Terminal: nothing is offered on it afterwards.
   await expect(row.getByRole("button")).toHaveCount(0);
+  await page.reload();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "archived",
+  );
+});
+
+test("a refused deletion keeps the key and reports the platform error", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/api-keys");
+  const row = page.getByRole("row").filter({ hasText: "ci-deploy" });
+  await page.route(
+    "**/api/console/organizations/default/workspaces/default/api_keys/*",
+    async (route) => {
+      await route.fulfill({
+        status: 400,
+        json: {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: "Archived API keys cannot be updated.",
+          },
+        },
+      });
+    },
+  );
+  await row.getByRole("button", { name: "More actions for ci-deploy" }).click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Delete API key", exact: true })
+    .click();
+  await expect(
+    page.getByText("Archived API keys cannot be updated."),
+  ).toBeVisible();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "active",
+  );
+  await expect(
+    row.getByRole("button", { name: "More actions for ci-deploy" }),
+  ).toBeEnabled();
 });
 
 // A key nobody issued belongs to CONTROLPLANE_API_KEY and the platform refuses
@@ -83,6 +133,7 @@ test("the control-plane's own key is listed and not mutable", async ({
   await expect(row).toBeVisible();
   await expect(row.getByText("Control plane")).toBeVisible();
   await expect(row.getByRole("button")).toHaveCount(0);
+  await expect(page.getByText(/cannot be deleted here/)).toBeVisible();
 });
 
 // A deployment predating the surface answers 404 through its router catch-all,

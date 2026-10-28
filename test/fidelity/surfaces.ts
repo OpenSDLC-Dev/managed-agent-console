@@ -2280,6 +2280,36 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "api-key-delete-menu",
+    route: "/api-keys",
+    fixture: "ci-deploy action menu",
+    description: "The explicit Delete action for an issued API key.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "More actions for ci-deploy" })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Delete", exact: true })
+        .waitFor();
+    },
+  },
+  {
+    id: "api-key-delete-confirm",
+    route: "/api-keys",
+    fixture: "ci-deploy awaiting deletion confirmation",
+    description:
+      "Deletion names the key and explains immediate, irreversible revocation.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "More actions for ci-deploy" })
+        .click();
+      await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Delete this API key?" })
+        .waitFor();
+    },
+  },
+  {
     id: "api-key-model-access",
     route: "/api-keys",
     fixture: "ci-deploy: two models at 60 RPM",

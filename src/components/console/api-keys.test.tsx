@@ -129,26 +129,101 @@ describe("ApiKeysTable", () => {
     expect(screen.getByText("Control plane")).toBeInTheDocument();
     expect(screen.queryByTestId("toggle-apikey_boot")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /Archive API key/ }),
+      screen.queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
+    expect(screen.getByText(/cannot be deleted here/)).toBeInTheDocument();
   });
 
   it("offers nothing on an archived key, which is terminal", () => {
     renderTable([apiKey({ id: "apikey_1", status: "archived" })]);
     expect(screen.queryByTestId("toggle-apikey_1")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /Archive API key/ }),
+      screen.queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
   });
 
   // "An expired key can only be archived, not renamed or re-activated" is the
   // platform's rule, stated in its own refusal.
-  it("offers only the archive on an expired key", () => {
+  it("offers only deletion on an expired key", async () => {
     renderTable([apiKey({ id: "apikey_1", status: "expired" })]);
     expect(screen.queryByTestId("toggle-apikey_1")).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: /More actions for/ }),
+    );
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: /Archive API key/ }),
+      screen.getByRole("menuitem", { name: "Delete" }),
     ).toBeInTheDocument();
+  });
+
+  it.each(["active", "inactive", "expired"])(
+    "deletes a %s key only after confirmation, using the platform's archive status",
+    async (status) => {
+      const fetchMock = vi.fn(async () =>
+        json(apiKey({ id: "apikey_1", status: "archived" })),
+      );
+      const { client } = renderTable(
+        [apiKey({ id: "apikey_1", status })],
+        fetchMock,
+      );
+      const invalidate = vi.spyOn(client, "invalidateQueries");
+      await userEvent.click(
+        screen.getByRole("button", { name: /More actions for/ }),
+      );
+      await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+      expect(screen.getByRole("dialog")).toHaveTextContent("ci-deploy");
+      expect(postOf(fetchMock)).toBeUndefined();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Delete API key" }),
+      );
+      await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
+      const [url, init] = postOf(fetchMock)!;
+      expect(url).toBe(`${KEYS}/apikey_1`);
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(String(init.body))).toEqual({ status: "archived" });
+      await waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: ["api-keys"] }),
+      );
+    },
+  );
+
+  it("cancels deletion without changing the key", async () => {
+    const fetchMock = vi.fn(async () => json([]));
+    renderTable([apiKey({ id: "apikey_1" })], fetchMock);
+    await userEvent.click(
+      screen.getByRole("button", { name: /More actions for/ }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(postOf(fetchMock)).toBeUndefined();
+  });
+
+  it("prevents a second deletion while the first request is pending", async () => {
+    let settle: (response: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST")
+          return new Promise<Response>((resolve) => {
+            settle = resolve;
+          });
+        return json([]);
+      },
+    );
+    renderTable([apiKey({ id: "apikey_1" })], fetchMock);
+    await userEvent.click(
+      screen.getByRole("button", { name: /More actions for/ }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Delete API key" }),
+    );
+    const trigger = screen.getByRole("button", { name: /More actions for/ });
+    await waitFor(() => expect(trigger).toBeDisabled());
+    await userEvent.click(trigger);
+    expect(screen.queryByRole("menu")).toBeNull();
+    settle(json(apiKey({ id: "apikey_1", status: "archived" })));
+    await waitFor(() => expect(trigger).toBeEnabled());
   });
 
   it("disables an active key through the status field, since there is no verb", async () => {
