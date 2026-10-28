@@ -210,8 +210,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   actor id the wire carries rather than a display name, because there is no member lookup to enrich
   it with. `Status` is added because our rows are `active`/`inactive`/`archived` plus a derived
   `expired` and the console acts on them.
-- **Retiring a key is `Archive`, not `Delete`** — the platform serves no DELETE on the surface at
-  all, and naming the control after a verb the wire lacks would misdescribe the button.
 - **No work-queue Overview on the environment detail page**, and this one is forced rather than
   chosen: the reference does render it, but the platform registers `…/work/stats` on the
   environment-key lane at `RoleNone`, which no human credential can reach. Revisit if it ever moves
