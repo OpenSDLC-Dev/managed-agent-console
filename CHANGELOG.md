@@ -8,6 +8,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **API Keys names permanent revocation Delete in the row menu.** Confirmation identifies
+  the key and warns that clients lose access immediately. Control-plane-managed keys explain
+  why they must be rotated in deployment configuration.
 - **Control names include their visible labels.** Search, calendar days, vault selectors,
   resource previews and timeline zoom now keep their labels available to voice control.
 - **Resource entry points follow confirmed read refusals** (platform plan 69 slice 1). Navigation,

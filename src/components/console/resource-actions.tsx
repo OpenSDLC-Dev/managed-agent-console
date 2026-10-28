@@ -130,7 +130,9 @@ export function ResourceActions({
         aria-label={menuLabel}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        disabled={!!archivePending && !canDelete && !onDownload}
+        disabled={
+          deletePending || (!!archivePending && !canDelete && !onDownload)
+        }
         onClick={toggleMenu}
       >
         <MoreHorizontal className="size-4" />
@@ -194,6 +196,7 @@ export function ResourceActions({
               <button
                 type="button"
                 role="menuitem"
+                disabled={deletePending}
                 className="flex w-full rounded-md px-2 py-1.5 text-left text-sm text-destructive outline-hidden hover:bg-destructive-surface/10 focus:bg-destructive-surface/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 onClick={() => {
                   setMenuOpen(false);

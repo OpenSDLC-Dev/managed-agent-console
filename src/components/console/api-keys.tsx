@@ -21,13 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ConfirmIconButton } from "@/components/console/archive-button";
+import { ResourceActions } from "@/components/console/resource-actions";
 import {
   ModelAccessButton,
   RemovePolicyButton,
   ModelAccessCell,
 } from "@/components/console/model-access";
-import { Trash2 } from "lucide-react";
 import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
 import { PlatformError } from "@/lib/platform/http";
@@ -255,7 +254,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
           identified no row at all, so a lost plaintext meant a credential the
           operator could not pick out of a list and could only revoke blind.
           Here the minted key appears in the listing under the name they typed,
-          with its hint and creation time, and Archive is one click on that row.
+          with its hint and creation time, and Delete is in that row's menu.
           Closing the gap properly would mean holding the plaintext in
           module state across a navigation so it could be shown on return —
           a second storage path for the one value this file exists to render
@@ -328,7 +327,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
                     data-testid="never-expires-warning"
                     className="text-[13px] text-destructive"
                   >
-                    This key will work until somebody archives it.
+                    This key will work until somebody deletes it.
                   </p>
                 )}
                 {choice === "custom" && (
@@ -485,7 +484,7 @@ export function ApiKeysTable({
     },
     {
       key: "actions",
-      header: "",
+      header: "Actions",
       cell: (k) => {
         // A key the control plane manages has no issuer, and the platform
         // refuses every mutation on it: its lifecycle is rotation-by-restart.
@@ -535,15 +534,15 @@ export function ApiKeysTable({
                 {k.status === "active" ? "Disable" : "Enable"}
               </Button>
             )}
-            <ConfirmIconButton
-              label={`Archive API key ${k.name}`}
-              title="Archive API key"
-              description="Are you sure you want to archive this API key? Anything using it stops working immediately, and archiving cannot be undone."
-              pending={update.isPending}
-              onConfirm={() => update.mutate({ id: k.id, status: "archived" })}
-            >
-              <Trash2 className="size-3.5" />
-            </ConfirmIconButton>
+            <ResourceActions
+              resource="API key"
+              menuLabel={`More actions for ${k.name}`}
+              deleteDescription={`Delete API key “${k.name}”? Anything using it stops working immediately. This action cannot be undone.`}
+              deletePending={update.isPending}
+              // The platform's delete is a terminal status update, not DELETE
+              // (internal/api/consoleapikeys.go, updateAPIKeyIn).
+              onDelete={() => update.mutate({ id: k.id, status: "archived" })}
+            />
           </span>
         );
       },
@@ -560,6 +559,12 @@ export function ApiKeysTable({
         loading={loading}
         empty={<EmptyState title="No API keys yet." />}
       />
+      {keys.some((key) => !key.created_by) && (
+        <p className="mt-3 text-[13px] text-muted-foreground">
+          Keys managed by the control plane cannot be deleted here. Rotate them
+          in the deployment configuration.
+        </p>
+      )}
     </>
   );
 }

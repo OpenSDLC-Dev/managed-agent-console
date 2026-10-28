@@ -280,12 +280,13 @@ test("a console-issued management key drives the real wire API, and Disable stop
   const refused = await call();
   expect(refused.status()).toBe(401);
 
-  // Archive is terminal and doubles as this test's cleanup.
+  // Delete is terminal and doubles as this test's cleanup.
   await row
-    .getByRole("button", { name: `Archive API key live-e2e-mgmt-${RUN}` })
+    .getByRole("button", { name: `More actions for live-e2e-mgmt-${RUN}` })
     .click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await page
-    .getByRole("button", { name: "Archive API key", exact: true })
+    .getByRole("button", { name: "Delete API key", exact: true })
     .click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",

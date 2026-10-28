@@ -353,7 +353,7 @@ describe("Model access on API keys", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      within(row(archived)).queryByRole("button", { name: /Archive API key/ }),
+      within(row(archived)).queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
     expect(
       within(row(bare)).queryByRole("button", { name: "Model access" }),

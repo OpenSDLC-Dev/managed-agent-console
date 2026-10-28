@@ -5,6 +5,16 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## API key deletion — checked 2026-10-28
+
+Chrome shows `Actions` → `More actions for …` → `Delete API key`, followed by a
+`Delete API key` dialog naming the key and warning that deletion cannot be undone.
+The console reuses its shared Delete menu and confirmation. It also warns that clients
+lose access immediately. Platform `internal/api/consoleapikeys.go:updateAPIKeyIn`
+implements this as `status: archived`; the retained row keeps its wire status.
+Control-plane-managed keys have no Delete action because the platform refuses updates.
+The console explains their deployment-configuration rotation beside the list.
+
 ## Memory pagination — checked 2026-10-24 (#236)
 
 Chrome's active memory-store list was empty, so no populated end-page UI was available to compare.
