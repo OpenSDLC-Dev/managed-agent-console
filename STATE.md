@@ -4,12 +4,6 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-### Deployment editor test (#244)
-
-- [x] Reproduce and measure the create-input test with delayed timer turns.
-- [x] Change text once per field and preserve wire and secret assertions.
-- [ ] Review, pass CI and merge.
-
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from
