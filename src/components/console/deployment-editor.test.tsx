@@ -416,6 +416,13 @@ describe("deployment editor wire mapping", () => {
   });
 
   it("drives every create input and submits resources without echoing secrets", async () => {
+    // This test checks form-to-wire mapping. Per-character input adds timer
+    // turns and full-form renders that can exhaust the timeout under load (#244).
+    const changeText = (input: HTMLElement, value: string) => {
+      expect(input).toBeEnabled();
+      expect(input).not.toHaveAttribute("readonly");
+      fireEvent.change(input, { target: { value } });
+    };
     const posts: { url: string; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -498,8 +505,8 @@ describe("deployment editor wire mapping", () => {
       await screen.findByRole("button", { name: /Task agent/ }),
     );
     await userEvent.click(screen.getByRole("button", { name: /Workers/ }));
-    await userEvent.type(screen.getByLabelText("Name"), "Morning run");
-    await userEvent.type(screen.getByLabelText("Description"), "Daily triage");
+    changeText(screen.getByLabelText("Name"), "Morning run");
+    changeText(screen.getByLabelText("Description"), "Daily triage");
     await userEvent.click(
       screen.getByRole("button", { name: /^Credential vaults/ }),
     );
@@ -515,15 +522,11 @@ describe("deployment editor wire mapping", () => {
     });
     await userEvent.click(screen.getByRole("radio", { name: "Schedule" }));
     await userEvent.click(screen.getByRole("button", { name: "Edit cron" }));
-    await userEvent.clear(screen.getByLabelText("Cron expression"));
-    await userEvent.type(
-      screen.getByLabelText("Cron expression"),
-      "30 8 * * 1-5",
-    );
+    changeText(screen.getByLabelText("Cron expression"), "30 8 * * 1-5");
     await userEvent.click(
       screen.getByRole("combobox", { name: "IANA timezone" }),
     );
-    await userEvent.type(
+    changeText(
       await screen.findByRole("combobox", { name: "Search timezones" }),
       "Shanghai",
     );
@@ -537,13 +540,13 @@ describe("deployment editor wire mapping", () => {
         name: "GitHub repository",
       }),
     );
-    await userEvent.type(
+    changeText(
       screen.getByLabelText("Repository URL"),
       "https://github.com/example/project",
     );
-    await userEvent.type(screen.getByLabelText("Authorization token"), "token");
+    changeText(screen.getByLabelText("Authorization token"), "token");
     await userEvent.selectOptions(screen.getByLabelText("Checkout"), "branch");
-    await userEvent.type(screen.getByLabelText("Branch name"), "main");
+    changeText(screen.getByLabelText("Branch name"), "main");
     await userEvent.click(screen.getByRole("button", { name: "Resource" }));
     await userEvent.click(
       await screen.findByRole("menuitem", {
@@ -557,9 +560,9 @@ describe("deployment editor wire mapping", () => {
         ),
       ).toHaveTextContent("Project notes"),
     );
-    await userEvent.type(screen.getByLabelText("Memory store ID"), "mem_1");
+    changeText(screen.getByLabelText("Memory store ID"), "mem_1");
     await userEvent.selectOptions(screen.getByLabelText("Access"), "read_only");
-    await userEvent.type(
+    changeText(
       screen.getByLabelText("Memory instructions (optional)"),
       "Read context",
     );
@@ -578,14 +581,27 @@ describe("deployment editor wire mapping", () => {
       url: "/api/platform/v1/deployments",
       body: {
         name: "Morning run",
+        description: "Daily triage",
         agent: { id: "agent_1", version: 3 },
         environment_id: "env_1",
         vault_ids: ["vlt_1"],
+        initial_events: [{ type: "user.message", content: "Go" }],
+        metadata: { owner: "ops" },
         schedule: { expression: "30 8 * * 1-5", timezone: "Asia/Shanghai" },
         resources: [
           { type: "file", file_id: "file_uploaded" },
-          { type: "github_repository", authorization_token: "token" },
-          { type: "memory_store", memory_store_id: "mem_1" },
+          {
+            type: "github_repository",
+            url: "https://github.com/example/project",
+            authorization_token: "token",
+            checkout: { type: "branch", name: "main" },
+          },
+          {
+            type: "memory_store",
+            memory_store_id: "mem_1",
+            access: "read_only",
+            instructions: "Read context",
+          },
         ],
       },
     });

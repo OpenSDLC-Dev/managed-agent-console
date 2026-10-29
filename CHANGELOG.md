@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Deployment editor mapping tests avoid per-character timer waits** (#244).
+  They retain field editability, request values and write-only credential checks.
 - **Denied-read navigation tests wait for link removal** (#242). A slow accessibility
   scan no longer consumes the probe's wait timeout under coverage load.
 - **API Keys names permanent revocation Delete in the row menu.** Confirmation identifies
