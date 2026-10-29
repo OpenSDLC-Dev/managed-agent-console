@@ -4,6 +4,12 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
+### Navigation probe test (#242)
+
+- [x] Reproduce the denied-read navigation wait with a slow accessibility scan.
+- [x] Wait for link removal and preserve the denial assertions.
+- [ ] Review, pass CI, merge and sync local `main`.
+
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from
