@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
@@ -192,7 +198,14 @@ describe("Nav", () => {
   for (const compact of [false, true]) {
     it(`probe: hides only denied read destinations in ${compact ? "compact" : "expanded"} navigation`, async () => {
       renderNav(["api-keys", "files", "skills"], { compact }, 403);
-      await waitFor(() => expect(link("API Keys")).toBeNull());
+      // Capture the initial link before starting the timeout. Polling its
+      // removal avoids repeating a role/name scan while query notifications
+      // are queued, which can exhaust waitFor's 1 s budget under load (#242).
+      await waitForElementToBeRemoved(
+        screen.getByRole("link", { name: "API Keys" }),
+      );
+      expect(link("API Keys")).toBeNull();
+      expect(link("Files")).toBeNull();
       expect(link("Skills")).toBeNull();
       expect(groupHeader("Build")).toBeNull();
       expect(link("Dashboard")).not.toBeNull();

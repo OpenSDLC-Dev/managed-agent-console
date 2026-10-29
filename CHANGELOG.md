@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Denied-read navigation tests wait for link removal** (#242). A slow accessibility
+  scan no longer consumes the probe's wait timeout under coverage load.
 - **API Keys names permanent revocation Delete in the row menu.** Confirmation identifies
   the key and warns that clients lose access immediately. Control-plane-managed keys explain
   why they must be rotated in deployment configuration.
