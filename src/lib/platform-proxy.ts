@@ -133,6 +133,13 @@ export async function forward(
   segments: string[],
   target: Upstream = PLATFORM,
 ): Promise<Response> {
+  if (consoleAuthMode().kind === "platform") {
+    return envelope(
+      404,
+      "not_found_error",
+      "native requests belong to the application edge",
+    );
+  }
   const upstreamPath = segments.join("/");
   if (segments.some(unsafeSegment)) {
     return envelope(

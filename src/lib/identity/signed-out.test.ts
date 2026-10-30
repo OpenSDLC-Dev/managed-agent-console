@@ -40,6 +40,12 @@ describe("isSignedOut", () => {
 });
 
 describe("bounceToLogin", () => {
+  it("probe: setup is not a blanket exemption for revoked authenticated sessions", () => {
+    at("/setup");
+    bounceToLogin();
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fsetup");
+  });
   it("remembers where the operator was, query and all", () => {
     at("/sessions/sess_1", "?tab=trace");
     bounceToLogin();

@@ -1,3 +1,4 @@
+import { consoleAuthMode } from "@/lib/identity/mode";
 import { NextRequest, NextResponse } from "next/server";
 import {
   SESSION_COOKIE,
@@ -8,6 +9,16 @@ import {
 import { consolePassword } from "@/lib/env";
 
 export async function POST(request: NextRequest) {
+  if (consoleAuthMode().kind === "platform")
+    return NextResponse.json(
+      {
+        error: {
+          type: "not_found_error",
+          message: "native authentication belongs to the application edge",
+        },
+      },
+      { status: 404 },
+    );
   const password = consolePassword();
   if (!password) {
     // No gate configured — nothing to log in to.

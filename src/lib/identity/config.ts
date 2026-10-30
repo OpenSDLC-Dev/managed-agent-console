@@ -1,8 +1,8 @@
 import "server-only";
 
 /**
- * The console's identity configuration — the relying-party half of the
- * platform's OIDC verifier (plan 08, slice 1).
+ * The console's legacy local-RP identity configuration — the relying-party
+ * half of the platform's OIDC verifier (plan 08, slice 1).
  *
  * The variable names are the platform's own, deliberately: a deployment that
  * turns identity on sets `IDENTITY_MODE` and `IDENTITY_OIDC_ISSUER` to the same
@@ -12,18 +12,16 @@ import "server-only";
  * id, so two different values would produce tokens the platform rejects on
  * every proxied request (plan 08 D1).
  *
- * **The console's own config carries its mode; it never probes for it.** The
- * platform makes SSO-on indistinguishable from SSO-off to an unauthenticated
- * caller by design, and a 403 is not "surface absent" — so the feature
- * detection the rest of the console rests on (CLAUDE.md principle 3) cannot see
- * identity at all. Recorded as a divergence in docs/wire-divergences.md.
+ * **The legacy local RP reads its mode from local configuration.** The current
+ * platform exposes anonymous `GET /api/auth/config`, including in verifier-only
+ * OIDC mode. This parser does not use that endpoint. See docs/wire-divergences.md.
  *
  * Nothing here is read when the mode is disabled, so a staged rollout can place
  * the configuration first and flip the mode second — the same property the
  * platform's `ConfigFromEnv` has, for the same reason.
  */
 
-/** What the console does about identity. `trusted_proxy` is the platform's Mode B, which this console does not implement. */
+/** Identity modes for the legacy local RP. `trusted_proxy` is the platform's Mode B, which this parser does not implement. */
 export type IdentityMode = "disabled" | "oidc";
 
 export type OidcConfig = {

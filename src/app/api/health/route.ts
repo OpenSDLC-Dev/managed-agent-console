@@ -6,7 +6,11 @@ import {
   IdentityConfigError,
   identityConfig,
 } from "@/lib/identity/config";
-import { consoleAuthModeFrom, sendsUserToken } from "@/lib/identity/mode";
+import {
+  consoleAuthModeFrom,
+  platformLoginEnabled,
+  sendsUserToken,
+} from "@/lib/identity/mode";
 
 /**
  * Readiness probe, and the gate a deployment is allowed to pass.
@@ -63,6 +67,37 @@ export const dynamic = "force-dynamic";
 const DEEP_TIMEOUT_MS = 5000;
 
 export async function GET(request: NextRequest): Promise<Response> {
+  let native: boolean;
+  try {
+    native = platformLoginEnabled();
+  } catch (error) {
+    if (!(error instanceof IdentityConfigError)) throw error;
+    return Response.json(
+      {
+        status: "error",
+        configured: false,
+        missing: error.missing,
+        invalid: error.invalid,
+        login_gate: consolePassword() !== undefined,
+      },
+      { status: 503 },
+    );
+  }
+  if (native) {
+    const deep = request.nextUrl.searchParams.has("deep");
+    // Native readiness is console-owned. Only the application edge can test
+    // backend cookie admission; this process must never spend a leftover key.
+    return Response.json(
+      {
+        status: deep ? "degraded" : "ok",
+        configured: true,
+        login_gate: false,
+        identity: { mode: "platform" },
+        ...(deep ? { platform: { checked: false, reachable: false } } : {}),
+      },
+      { status: deep ? 503 : 200 },
+    );
+  }
   const password = consolePassword();
   // Reported, not required: the gate is optional by design (an operator may
   // front the console with their own auth). The pipeline that publishes this

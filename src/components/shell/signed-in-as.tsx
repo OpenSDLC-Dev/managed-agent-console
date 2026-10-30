@@ -5,60 +5,30 @@ import { useLeaveConfirmation } from "./unsaved-changes";
 import { useState } from "react";
 import { beginSignOut, leaveAfterSignOut } from "@/lib/identity/signed-out";
 
-/**
- * Who the operator is signed in as, and the only way out.
- *
- * It renders **nothing** on a deployment without identity — where the route
- * answers 404 — so the password-gated and open configurations keep the sidebar
- * they had. That is feature detection on the console's own surface rather than
- * the platform's, which is the honest shape here: the platform cannot be asked
- * whether this console runs SSO (see docs/wire-divergences.md).
- *
- * It shows **no role**, which is a divergence from the reference console and a
- * deliberate one — the platform has no route that would tell us (plan 08 D4).
- * Claiming a role we inferred would be exactly the second copy of the authority
- * rules that CLAUDE.md principle 5 forbids.
- */
-type SessionInfo = { signed_in: boolean; email?: string; name?: string };
+import { csrfHeaders, isNativeConsole } from "@/lib/platform/http";
+import { readAccount } from "@/lib/platform/native";
 
-/** Long enough that a slow logout still completes; short enough to be a wait. */
 const SIGN_OUT_TIMEOUT_MS = 5_000;
-
-async function readSession(): Promise<SessionInfo | null> {
-  const response = await fetch("/api/auth/session");
-  // 404 is "this deployment has no identity", not a failure — and only 404.
-  // Anything else that failed has to stay a failure: read as absence it would
-  // be cached as one, and a single 502 from a restarting pod or the proxy in
-  // front of it would take the account block — and with it the only Sign out
-  // control — away for the life of the page.
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(
-      `the console session could not be read: ${response.status}`,
-    );
-  }
-  return (await response.json()) as SessionInfo;
-}
 
 export function SignedInAs() {
   const leave = useLeaveConfirmation();
   const [signingOut, setSigningOut] = useState(false);
   const { data } = useQuery({
     queryKey: ["console-session"],
-    queryFn: readSession,
-    // A deployment's identity configuration cannot change without a restart
-    // that ends this page's session anyway, so a *successful* answer is good
-    // for the life of the page and never refetches on focus. A failed one is
-    // not: it retries, and stays stale so returning to the tab tries again.
-    staleTime: Infinity,
-    gcTime: Infinity,
+    queryFn: readAccount,
+    // Legacy profile metadata is stable for the page. Native authority is not:
+    // another administrator can change the current role or deactivate us.
+    staleTime: isNativeConsole() ? 0 : Infinity,
+    gcTime: isNativeConsole() ? 0 : Infinity,
+    refetchInterval: isNativeConsole() ? 15_000 : false,
     retry: 1,
   });
 
   if (!data?.signed_in) return null;
   // A provider need not release either claim; the fallback still gives the
   // operator the control they came for.
-  const label = data.name ?? data.email ?? "Signed in";
+  const label =
+    data.name || data.email || data.login_name || data.id || "Signed in";
 
   async function signOut() {
     setSigningOut(true);
@@ -82,6 +52,9 @@ export function SignedInAs() {
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
+        ...(isNativeConsole()
+          ? { headers: await csrfHeaders(bound.signal) }
+          : {}),
         signal: bound.signal,
       });
     } catch {
@@ -96,7 +69,7 @@ export function SignedInAs() {
     <div
       className="px-4 py-3 text-[13px]"
       data-testid="signed-in-as"
-      data-account={data.email ?? data.name}
+      data-account={data.email || data.name || data.login_name || data.id}
     >
       {/* 14px/500 over a 12px muted line is the reference's own account block,
           measured 2026-08-14; only what the second line *says* diverges. */}
@@ -110,6 +83,19 @@ export function SignedInAs() {
         <div className="truncate text-[12px] text-muted-foreground">
           {data.email}
         </div>
+      )}
+      {isNativeConsole() && (
+        <div
+          className="text-[12px] text-muted-foreground"
+          data-role={data.role}
+        >
+          {data.role}
+        </div>
+      )}
+      {isNativeConsole() && data.role === "user" && (
+        <a href="/setup" className="block text-xs underline">
+          Redeem administrator setup code
+        </a>
       )}
       <button
         type="button"

@@ -1,4 +1,5 @@
 "use client";
+import { assertOk, resourceURL } from "@/lib/platform/http";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -94,9 +95,11 @@ export function useSessionTrace(
         try {
           await seed(controller.signal);
           if (cancelled) return;
-          const streamPath = threadId
-            ? `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/stream`
-            : `/api/platform/v1/sessions/${encodeURIComponent(sessionId)}/events/stream`;
+          const streamPath = resourceURL(
+            threadId
+              ? `v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/stream`
+              : `v1/sessions/${encodeURIComponent(sessionId)}/events/stream`,
+          );
           response = await fetch(
             `${streamPath}?event_deltas[]=agent.message&event_deltas[]=agent.thinking`,
             {
@@ -114,7 +117,8 @@ export function useSessionTrace(
             if (!cancelled) setConnection("closed");
             return;
           }
-          if (!response.ok || !response.body) {
+          await assertOk(response);
+          if (!response.body) {
             throw new Error(`stream failed: HTTP ${response.status}`);
           }
           // A catch-up failure must not throw away live-only terminal bytes.
@@ -184,14 +188,19 @@ export function useSessionTrace(
           }
           // Upstream closed without session.deleted — treat as a drop.
           throw new Error("stream ended");
-        } catch {
+        } catch (error) {
           if (cancelled || controller.signal.aborted) return;
           controller.abort();
           update(clearPreviews(traceRef.current));
           // The seed above goes through `assertOk`, which bounces on its own —
           // so by the time a signed-out failure lands here the navigation has
           // already started, and what is left to do is stop retrying.
-          if (hasBouncedToLogin()) {
+          if (
+            hasBouncedToLogin() ||
+            (error instanceof PlatformError &&
+              error.status === 403 &&
+              error.errorType === "permission_error")
+          ) {
             setConnection("closed");
             return;
           }

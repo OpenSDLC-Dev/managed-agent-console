@@ -110,26 +110,27 @@ is a lie. The extra request runs only on that 404. Telling the two apart by mess
 rejected — both are `not_found_error`, and matching on platform prose is the guessing principle 1
 forbids.
 
-## Identity cannot be feature-detected, and the console does not try (plan 08)
+## Legacy console identity uses local configuration (plan 08)
 
-Principle 3 says divergences are handled by feature detection. Whether a deployment authenticates its
-operators is the one thing that rule cannot reach, for three separate reasons, any one sufficient:
+With `CONSOLE_AUTH_MODE` unset, the console selects legacy RP, shared-password or
+open mode from its own configuration (`src/lib/identity/`), not a platform probe.
+This configuration determines the BFF credential and login page. `/api/health`
+reports the legacy identity mode as `identity.mode`.
 
-1. **The platform hides it on purpose** — an unauthenticated request gets the same answer either way
-   (`internal/api/server.go:324-327`). There is no probe whose result differs.
-2. **A 403 is not "surface absent"** — a route that exists and refuses this caller should stay shown
-   and erroring, which is right for a permission error and wrong for a mode question.
-3. **The console needs the answer before it makes any call** — which credential the BFF attaches, and
-   which login page the browser is sent to, are decided while composing the first request.
+The current platform exposes anonymous `GET /api/auth/config` even without native
+login. A verifier-only OIDC deployment returns `mode: "oidc"` and
+`native_login: false`. The legacy console does not use that endpoint to select
+its mode. For native login, see [README.md](../README.md#native-platform-login-unreleased).
 
-So the console's **own configuration** carries its mode (`src/lib/identity/`), reported at
-`/api/health` as `identity.mode`. The variable names are the platform's own, and two values must
-agree across the two processes: the issuer, and the console's client id, which the platform must
-expect as `IDENTITY_OIDC_AUDIENCE`. The URL rules are transcribed from the platform's verifier rather
-than invented, because a URL this console accepts and the platform refuses is a deployment that boots
-and then cannot serve. The platform's third mode, `trusted_proxy`, is **refused** rather than
-ignored: reading it as "identity off" would leave a deployment that believes it authenticates
-operators serving them unauthenticated.
+[Plan 08](./plan/08_console-sso-rbac.md) records the original feature-detection
+rationale. A 403 still means a permission denial, not an absent surface.
+
+In legacy RP mode, the issuer must match the platform's configured issuer. The
+console's client id must match `IDENTITY_OIDC_AUDIENCE` on the platform. The URL
+rules follow the platform's verifier to avoid configurations that the console
+accepts but the platform rejects. Legacy mode **refuses**
+`IDENTITY_MODE=trusted_proxy`; treating it as "identity off" could admit operators
+without authentication.
 
 ## Reference surfaces the platform has deferred
 

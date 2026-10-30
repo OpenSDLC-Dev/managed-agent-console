@@ -1,3 +1,4 @@
+import { consoleAuthMode } from "@/lib/identity/mode";
 import { NextRequest, NextResponse } from "next/server";
 import { clearIdentityCookie } from "@/lib/identity/routes";
 import { IDENTITY_COOKIE, deleteSession } from "@/lib/identity/session";
@@ -19,6 +20,16 @@ import { IDENTITY_COOKIE, deleteSession } from "@/lib/identity/session";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest): Promise<Response> {
+  if (consoleAuthMode().kind === "platform")
+    return NextResponse.json(
+      {
+        error: {
+          type: "not_found_error",
+          message: "native authentication belongs to the application edge",
+        },
+      },
+      { status: 404 },
+    );
   deleteSession(request.cookies.get(IDENTITY_COOKIE)?.value);
   return clearIdentityCookie(NextResponse.json({ ok: true }), request);
 }

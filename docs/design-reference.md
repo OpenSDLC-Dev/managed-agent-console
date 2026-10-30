@@ -223,11 +223,11 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   `sk-map-env01-` prefix (so a leaked key of ours can never be mistaken for an Anthropic credential),
   an exported `ANTHROPIC_BASE_URL` telling the worker where this platform is, and that value written
   as `$PLATFORM_BASE_URL` rather than filled in, because it is server-side configuration.
-- **The login page has no reference counterpart** and offers up to two ways in. A deployment can run
+- **The legacy login page has no reference counterpart** and offers up to two ways in. A deployment can run
   both gates at once, and they do different jobs: SSO is primary, and the shared password sits below
   it under a line saying plainly that it admits you to the console and authorizes nothing on the
   platform. Without that line, two controls read as two ways to the same place.
-- **The signed-in account block names no role and no organization.** Ours copies the reference's
+- **The legacy signed-in account block names no role and no organization.** Ours copies the reference's
   placement and type scale (14px/500 name over a 12px/17px muted line, re-measured 2026-08-15) and
   parts company on what the second line says: the role is unavailable (no `me` route, and inferring
   one would be the second copy of the authority rules principle 5 forbids), and single-tenant v1 has
@@ -277,6 +277,20 @@ Fresh Chrome access to the reference Dashboard showed its sign-in offer, not an 
 surface. No new authenticated reference facts were inferred. The local Chrome pass uses the recorded
 layout and error treatment above, in both themes. Stub OIDC exercises the console sign-in and session
 boundary; injected platform refusals do not prove the platform's stored-role resolution.
+
+## Native browser administration — checked 2026-10-29
+
+A fresh, isolated Chrome visited the reference Dashboard without an account. It showed the public sign-in offer.
+No authenticated member, service-account or account-menu state was available. Do not treat those states as freshly extracted reference design.
+
+Native pages reuse this repository's tokens, tables, dialogs, form controls and recorded account-block type scale.
+Self-hosting requires named local development accounts, operator setup codes, backend role metadata and explicit last-admin refusals.
+Unlike the legacy account block above, the native block shows the role returned by `/api/auth/session`, never a role inferred from claims.
+A signed-in user without resource authority keeps account and setup controls. IdP-managed roles are labelled, not hand-editable.
+
+`test/fidelity/native-surfaces.ts` names the native light/dark states; `test/native/fidelity.spec.ts` walks them against real platform handlers.
+The local Chrome pass covers login, setup/refusal, no-resource access, mapped members, creation, last-admin refusal, loading and service-account editing/archive state.
+It checks keyboard focus and horizontal overflow. Screenshots are local-state evidence, not an authenticated-reference comparison.
 
 ## Fidelity verification
 

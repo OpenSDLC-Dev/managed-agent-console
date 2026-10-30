@@ -173,6 +173,49 @@ describe("SignedInAs", () => {
     expect(hasBouncedToLogin()).toBe(true);
   });
 
+  it("probe: native sign-out also bounds a stalled CSRF metadata read", async () => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    vi.useFakeTimers();
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "window",
+      Object.create(window, { location: { value: { assign } } }),
+    );
+    let reads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (++reads === 1)
+          return Response.json({
+            signed_in: true,
+            login_name: "local-admin",
+            role: "admin",
+            csrf_token: "synthetic",
+          });
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      }),
+    );
+    try {
+      renderBlock();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("local-admin")).toBeDefined();
+      fireEvent.click(screen.getByTestId("sign-out"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      expect(hasBouncedToLogin()).toBe(true);
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/login");
+    } finally {
+      delete document.documentElement.dataset.consoleAuth;
+    }
+  });
+
   // Staying on a console the operator asked to leave — in front of whoever is
   // next at the keyboard — is worse than leaving with the server session
   // possibly still alive, which the login page lets them retry.

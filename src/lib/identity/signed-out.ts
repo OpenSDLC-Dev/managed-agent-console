@@ -22,7 +22,10 @@ export const SIGNED_OUT_HEADER = "x-console-signed-out";
 export function isSignedOut(response: {
   headers: { get(name: string): string | null };
 }): boolean {
-  return response.headers.get(SIGNED_OUT_HEADER) !== null;
+  return (
+    response.headers.get(SIGNED_OUT_HEADER) !== null ||
+    response.headers.get("x-platform-signed-out") === "1"
+  );
 }
 
 /**

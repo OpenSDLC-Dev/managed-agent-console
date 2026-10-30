@@ -28,6 +28,13 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- **Native platform browser login**, selected at runtime with `CONSOLE_AUTH_MODE=platform`.
+  The platform owns the opaque cookie, current role and CSRF checks. Setup, member administration
+  and service-account lifecycle use direct edge-owned routes. Resource requests, downloads and both
+  Session stream paths share the private proxy. Legacy password, OIDC and key deployments keep their existing routes.
+- **A non-release full-SHA image channel**, gated on trusted-main CI and scanned native builds for both architectures.
+  It publishes no release, version alias or `latest` tag. SemVer releases stay on hold through platform plan 69 slice 7.
+
 - **`MODEL_GATEWAY_BASE_URL` connects the console to the platform's model gateway**
   ([plan 10](docs/plan/10_model-gateway.md)). The console proxies the gateway's admin API under
   `/api/gateway/`, with the same credential rules as the control plane. No screen uses it yet. When

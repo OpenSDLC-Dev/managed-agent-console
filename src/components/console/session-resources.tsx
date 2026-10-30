@@ -1,4 +1,5 @@
 "use client";
+import { ResourceDownload } from "./resource-download";
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
@@ -452,14 +453,14 @@ export function SessionResources({ session }: { session: Session }) {
                       Expired
                     </span>
                   ) : (
-                    <a
+                    <ResourceDownload
                       className="text-xs underline"
-                      href={`/api/platform/v1/files/${encodeURIComponent(file.id)}/content`}
-                      download={file.filename}
+                      path={`v1/files/${encodeURIComponent(file.id)}/content`}
+                      filename={file.filename}
                       aria-label={`Download ${named}`}
                     >
                       Download
-                    </a>
+                    </ResourceDownload>
                   ))}
                 {/* files.go deleteFile takes an output or a copy as it takes
                     an upload, archived session or not, as the Files page did.

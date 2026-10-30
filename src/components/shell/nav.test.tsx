@@ -10,7 +10,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { Nav } from "./nav";
-import { SURFACES, SURFACE_NAMES } from "@/lib/platform/surfaces";
+import { SURFACES } from "@/lib/platform/surfaces";
+
+const LEGACY_SURFACES = Object.values(SURFACES).filter(
+  (entry) => !("api" in entry) || entry.api !== "native",
+);
 
 const navState = vi.hoisted(() => ({ pathname: "/" }));
 
@@ -381,7 +385,7 @@ describe("Nav", () => {
     // One probe per platform surface and not one more: Dashboard is a console
     // page, so no answer from the platform can take it away.
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(SURFACE_NAMES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     expect(link("Dashboard")).not.toBeNull();
     const probed = vi
@@ -395,7 +399,7 @@ describe("Nav", () => {
     navState.pathname = "/";
     renderNav([]);
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(SURFACE_NAMES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
   });
@@ -444,7 +448,7 @@ describe("Nav", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(SURFACE_NAMES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
   });

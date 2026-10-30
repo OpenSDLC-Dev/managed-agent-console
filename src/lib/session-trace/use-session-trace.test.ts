@@ -115,6 +115,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.useRealTimers();
   resetSignedOutBounceForTests();
@@ -729,3 +730,103 @@ describe("useSessionTrace", () => {
     unmount();
   });
 });
+
+it("native parent and child streams share the private resource lane", async () => {
+  document.documentElement.dataset.consoleAuth = "platform";
+  for (const thread of [undefined, "sthr_child"]) {
+    const { unmount } = renderHook(() =>
+      useSessionTrace("sesn_native", thread),
+    );
+    await flush();
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes(
+          thread
+            ? "/api/organizations/default/proxy/v1/sessions/sesn_native/threads/sthr_child/stream?"
+            : "/api/organizations/default/proxy/v1/sessions/sesn_native/events/stream?",
+        ),
+      ),
+    ).toBe(true);
+    unmount();
+  }
+  delete document.documentElement.dataset.consoleAuth;
+});
+it("native permission withdrawal closes retries without signing out", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  fetchMock.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          type: "error",
+          error: { type: "permission_error", message: "developer required" },
+        }),
+        { status: 403 },
+      ),
+  );
+  const { result, unmount } = renderHook(() => useSessionTrace("sesn_denied"));
+  await flush();
+  expect(result.current.connection).toBe("closed");
+  expect(hasBouncedToLogin()).toBe(false);
+  const calls = fetchMock.mock.calls.length;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000);
+  });
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
+  unmount();
+});
+
+it.each([
+  [undefined, 401],
+  [undefined, 403],
+  ["sthr_child", 401],
+  ["sthr_child", 403],
+] as const)(
+  "probe: native marked stream %s status %i leaves once and stops retries",
+  async (thread, status) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "window",
+      Object.create(window, {
+        location: {
+          value: {
+            pathname: "/sessions/sesn_native_marked",
+            search: "",
+            assign,
+          },
+        },
+      }),
+    );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fetchMock.mockImplementation(async (input) =>
+      String(input).includes("/stream?")
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "authentication_error", message: "signed out" },
+            },
+            { status, headers: { "x-platform-signed-out": "1" } },
+          )
+        : Response.json({ data: [] }),
+    );
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sesn_native_marked", thread),
+    );
+    await flush();
+    expect(result.current.connection).toBe("closed");
+    expect(hasBouncedToLogin()).toBe(true);
+    expect(assign).toHaveBeenCalledExactlyOnceWith(
+      "/login?return_to=%2Fsessions%2Fsesn_native_marked",
+    );
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain(
+      thread ? "/threads/sthr_child/stream?" : "/events/stream?",
+    );
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+    expect(assign).toHaveBeenCalledTimes(1);
+    unmount();
+  },
+);

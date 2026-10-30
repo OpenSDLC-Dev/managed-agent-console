@@ -19,6 +19,8 @@ import {
   Rocket,
   Sparkles,
   Waypoints,
+  Users,
+  UserRoundCog,
   type LucideIcon,
 } from "lucide-react";
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
@@ -88,6 +90,15 @@ export const NAV: NavEntry[] = [
   // `KeySquare` and not the round-bowed key the reference draws, because
   // `KeyRound` is already Credential vaults' and one icon may mean one thing.
   surfaceEntry("api-keys", KeySquare),
+  {
+    kind: "group",
+    label: "Organization",
+    icon: Users,
+    items: [
+      surfaceEntry("members", Users),
+      surfaceEntry("service-accounts", UserRoundCog),
+    ],
+  },
   {
     kind: "group",
     label: "Build",

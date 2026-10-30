@@ -84,3 +84,18 @@ describe("consoleAuthMode", () => {
     expect(() => consoleAuthMode()).toThrow(IdentityConfigError);
   });
 });
+
+it("probe: an unknown explicit console mode cannot fall back to a legacy key", () => {
+  vi.stubEnv("CONSOLE_AUTH_MODE", "platfrom");
+  vi.stubEnv("IDENTITY_MODE", undefined);
+  vi.stubEnv("PLATFORM_API_KEY", "stale-key");
+  expect(() => consoleAuthMode()).toThrow(IdentityConfigError);
+});
+
+it("native mode ignores stale RP and password configuration", () => {
+  vi.stubEnv("CONSOLE_AUTH_MODE", "platform");
+  vi.stubEnv("IDENTITY_MODE", "not-a-mode");
+  vi.stubEnv("CONSOLE_PASSWORD", "stale-password");
+  expect(() => consoleAuthMode()).not.toThrow();
+  expect(consoleAuthMode()).toEqual({ kind: "platform" });
+});
