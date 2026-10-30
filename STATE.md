@@ -18,12 +18,12 @@ Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 
 ### Platform plan 69 slice 2
 
-Native console source passed local independent verification and task review.
-Committed branch review, PR/CI and publication remain pending.
+[PR #246](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246) is open; remote CI, merge and publication remain pending.
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
-- [x] Local independent source verification and task review (historical evidence).
-- [x] Independently verify and review the precommit prose batch.
-- [ ] Run committed medium-effort branch review.
+## Tasks
+
+- [x] Local independent checks, task review and precommit prose closure: [evidence](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246#verification).
+- [x] Committed medium-effort review of `3998c621`: no merge-blocking correctness findings ([evidence](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246#verification)).
 - [ ] Finish the companion PR and CI, then merge.
 - [ ] After merge, verify the full-SHA multi-arch registry digest before platform deployment wiring.
