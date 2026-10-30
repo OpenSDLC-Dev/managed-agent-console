@@ -29,6 +29,7 @@ beforeEach(() => {
   vi.stubEnv("PLATFORM_BASE_URL", BASE_URL);
   vi.stubEnv("PLATFORM_API_KEY", API_KEY);
   vi.stubEnv("CONSOLE_PASSWORD", undefined);
+  vi.stubEnv("CONSOLE_AUTH_MODE", undefined);
   vi.stubEnv("IDENTITY_MODE", undefined);
 });
 
@@ -98,6 +99,40 @@ describe("GET /api/health", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each(["", "?deep=1"])(
+    "probe: rejects an explicit auth mode typo before spending leftover legacy credentials (%s)",
+    async (query) => {
+      vi.stubEnv("CONSOLE_AUTH_MODE", "platfrom");
+      fetchMock.mockResolvedValue(Response.json({ data: [] }));
+      const response = await GET(healthRequest(query));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "error",
+        configured: false,
+        invalid: ["CONSOLE_AUTH_MODE"],
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, ""])(
+    "preserves legacy readiness and deep checking with auth mode %j",
+    async (mode) => {
+      vi.stubEnv("CONSOLE_AUTH_MODE", mode);
+      fetchMock.mockResolvedValue(Response.json({ data: [] }));
+      expect((await GET(healthRequest())).status).toBe(200);
+      expect(fetchMock).not.toHaveBeenCalled();
+      const deep = await GET(healthRequest("?deep=1"));
+      expect(deep.status).toBe(200);
+      expect(await deep.json()).toMatchObject({
+        configured: true,
+        identity: { mode: "disabled" },
+        platform: { checked: true },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("reports the login gate as configured", async () => {
     vi.stubEnv("CONSOLE_PASSWORD", "hunter2");

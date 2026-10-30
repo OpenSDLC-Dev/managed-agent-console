@@ -5,6 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SurfaceGuard } from "./surface-guard";
 import { SURFACES } from "@/lib/platform/surfaces";
 
+const LEGACY_SURFACES = Object.values(SURFACES).filter(
+  (entry) => !("api" in entry) || entry.api !== "native",
+);
+
 const navState = vi.hoisted(() => ({ pathname: "/skills" }));
 
 vi.mock("next/navigation", () => ({
@@ -100,9 +104,7 @@ describe("SurfaceGuard", () => {
   it("renders the page when the deployment serves its surface", async () => {
     renderGuard("/skills", []);
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
-        Object.keys(SURFACES).length,
-      ),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
@@ -127,9 +129,7 @@ describe("SurfaceGuard", () => {
   it("leaves a route that belongs to no surface alone", async () => {
     renderGuard("/login", ["skills", "agents"]);
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
-        Object.keys(SURFACES).length,
-      ),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
@@ -151,9 +151,7 @@ describe("SurfaceGuard", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(
-        Object.keys(SURFACES).length,
-      ),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
     );
     expect(screen.getByText("the page")).toBeInTheDocument();
   });

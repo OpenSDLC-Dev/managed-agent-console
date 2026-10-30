@@ -1,13 +1,13 @@
 import { consoleAuthMode } from "@/lib/identity/mode";
 import { DEFAULT_RETURN_TO, safeReturnTo } from "@/lib/identity/rp";
+import { NativeAuth } from "@/components/console/native-auth";
 import { LoginForm } from "./login-form";
 
 /**
- * The login page is a server component only so it can read which gate this
- * deployment runs — plan 08 D3. That fact comes from configuration and cannot
- * come from anywhere else: the platform makes SSO-on indistinguishable from
- * SSO-off to an unauthenticated caller, and this page's caller is by definition
- * unauthenticated (see docs/wire-divergences.md).
+ * The login page reads the deployment's local console auth mode server-side
+ * (plan 08 D3). Native mode delegates platform login and config presentation to
+ * NativeAuth. Legacy mode uses local RP and password-gate settings.
+ * See docs/wire-divergences.md.
  */
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,10 @@ export default async function LoginPage({
 }) {
   let sso = false;
   let password = true;
+  let native = false;
   try {
     const mode = consoleAuthMode();
+    native = mode.kind === "platform";
     sso = mode.kind === "sso";
     // With both configured, the password gate is deployment protection in
     // front of this page and SSO is the thing that authorizes anything — so
@@ -33,6 +35,8 @@ export default async function LoginPage({
     sso = false;
     password = true;
   }
+
+  if (native) return <NativeAuth />;
 
   const params = await searchParams;
   const reason = params["sso_error"];

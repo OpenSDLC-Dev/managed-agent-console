@@ -35,6 +35,26 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
  */
 const SEAMS = [
   {
+    dir: "src/lib/identity",
+    why: "native mode and local credential refusal",
+    modules: ["mode", "native-boundary"],
+  },
+  {
+    dir: "src/lib/platform",
+    why: "native CSRF, private URL selection and marked sign-out",
+    modules: ["native"],
+  },
+  {
+    dir: "src/components/console",
+    why: "native configuration, managed authority and checked downloads",
+    modules: ["native-auth", "native-management", "resource-download"],
+  },
+  {
+    dir: "scripts",
+    why: "trusted SHA publication and owned runtime cleanup",
+    modules: ["publish-sha", "native-runtime"],
+  },
+  {
     dir: "src/lib/session-trace",
     why: "SSE / seed reconciliation — a stream may drop, reorder, or duplicate anything",
     // `store` reconciles the stream; `summary` and `timing` read wire fields

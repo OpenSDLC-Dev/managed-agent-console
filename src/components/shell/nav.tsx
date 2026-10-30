@@ -212,7 +212,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
       ?.scrollIntoView?.({ block: "nearest" });
   }, [pathname, surfaces, compact]);
   const available: Available = (surface) =>
-    isSurfaceVisible(surfaces?.[surface]);
+    isSurfaceVisible(surfaces?.[surface], surface);
   if (compact) {
     return (
       <nav

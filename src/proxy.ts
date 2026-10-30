@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, isValidSession } from "@/lib/auth";
 
 export async function proxy(request: NextRequest) {
+  if (process.env.CONSOLE_AUTH_MODE === "platform") return NextResponse.next();
   const password = process.env.CONSOLE_PASSWORD;
   if (!password) return NextResponse.next();
 

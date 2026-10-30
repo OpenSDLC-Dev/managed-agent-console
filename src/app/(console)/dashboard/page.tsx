@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isNativeConsole } from "@/lib/platform/http";
 import { ArrowRight, BookOpen, Waypoints } from "lucide-react";
 import { CreateKeyButton } from "@/components/console/api-keys";
 import { buttonVariants } from "@/components/ui/button";
@@ -53,7 +54,9 @@ export default function DashboardPage() {
   const sections = DASHBOARD_SECTIONS.map(({ heading, items }) => ({
     heading,
     // Unknown stays shown. Confirmed absence and refused reads lose their links.
-    items: items.filter(({ surface }) => isSurfaceVisible(surfaces?.[surface])),
+    items: items.filter(({ surface }) =>
+      isSurfaceVisible(surfaces?.[surface], surface),
+    ),
   })).filter(({ items }) => items.length > 0);
 
   return (
@@ -90,6 +93,17 @@ export default function DashboardPage() {
           )}
         </div>
       </header>
+      {isNativeConsole() && sections.length === 0 && (
+        <div className="mb-6 space-y-2 text-sm" data-no-resource-access>
+          <p>You are signed in. This account has no resource access.</p>
+          <a href="/setup" className="underline">
+            Redeem an administrator setup code
+          </a>
+          <p className="text-muted-foreground">
+            Or ask an organization administrator to change your role.
+          </p>
+        </div>
+      )}
       <div>
         {sections.map(({ heading, items }) => (
           <section key={heading} className="mb-6">

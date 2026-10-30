@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:e2e": "next build && playwright test",
     "test:e2e:live": "next build && playwright test --config playwright.live.config.ts",
+    "test:e2e:native": "next build && playwright test --config playwright.native.config.ts",
     "test:coverage": "vitest run --coverage",
     "probes:check": "node scripts/check-probes.mjs",
     "release:prepare": "node scripts/changelog.mjs prepare",

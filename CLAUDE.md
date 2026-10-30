@@ -14,10 +14,10 @@ Two references, two roles:
 ## Non-negotiable design principles
 
 1. **The platform API is the single source of truth — never guess at a wire shape.** Resolution order: the platform checkout's source (`internal/api/` route registration and handlers, `internal/domain/` types — sibling checkout at `../managed-agent-platform`, `/add-dir` it when needed) → the platform's docs → observing a locally running compose stack. Record any assumption a plan or PR rests on in the plan file or the issue.
-2. **The management API key never reaches the browser.** Every platform call — SSE streams included — goes through the console's own server (route handlers acting as a thin proxy). No `NEXT_PUBLIC_*` variable ever carries a credential, and no platform response is passed through with secrets intact.
-3. **Wire-neutral where it is free.** The console sends `x-api-key` and `anthropic-beta` headers like any wire-compatible client — or, where the deployment configures identity, the operator's own `Authorization: Bearer` — so it can in principle drive any endpoint speaking the same protocol. It never depends on behavior the platform doesn't implement, and platform-specific divergences are handled by feature detection (an unimplemented surface returning 404/501 hides its UI), not by hard-coding a vendor.
+2. **The configured management API key never reaches browser JavaScript.** Legacy resource calls and SSE use the console's credential BFF. Native mode uses platform-owned HttpOnly cookies and edge-owned private API routes, never a legacy key or console-local RP token. No `NEXT_PUBLIC_*` variable carries a credential.
+3. **Wire-neutral where it is free.** The legacy BFF sends `x-api-key` or the operator's own `Authorization: Bearer`, never both, plus protocol headers such as `anthropic-beta`. It can drive compatible endpoints, but never depends on behavior the platform does not implement. Native browser sessions, CSRF and private resource routes are a platform-specific contract, not public API parity. Feature detection hides absent surfaces; it does not hard-code a vendor.
 4. **Thin console.** The platform owns semantics; the console owns presentation and interaction state. No domain logic client-side beyond what rendering requires — no recomputing session state from events the platform already serves, no client-side validation stricter than the wire's.
-5. **Identity belongs to the platform; the console is its relying party.** _Amended 2026-08-14, when the platform grew OIDC verification and per-route roles ([plan 08](./docs/plan/08_console-sso-rbac.md)); before that it forbade SSO/RBAC outright._ The console never invents authority: it runs a browser sign-in against the deployment's identity provider and forwards the operator's own token in place of the management key, **never both** — the platform's dispatcher takes an `x-api-key` and drops the role, so sending both would serve every operator as root without failing anything — and it **fails closed without a session**. It does not mirror the platform's claim→role mapping, keep a user table, or decide who may do what. `CONSOLE_PASSWORD` survives as a distinct mode for local development and the suites; where identity is configured, a password session authorizes nothing on the platform.
+5. **Identity and current authority belong to the platform.** With `CONSOLE_AUTH_MODE=platform`, the backend owns login, the OIDC callback, sessions, setup, roles and status. The console reads metadata from `/api/auth/session`; the cookie stays HttpOnly. It never maps claims or substitutes navigation admission for server checks. With the mode unset, the legacy local RP, shared-password and open modes remain ([plan 08](./docs/plan/08_console-sso-rbac.md)). Legacy SSO forwards only the operator's token and fails closed without a session, never falling back to the management key. A shared-password session gives no platform authority where legacy identity is configured.
 
 ## Stack (settled by plan 01)
 
@@ -31,13 +31,14 @@ pnpm test            # unit/component tests — no network, no money
 pnpm test:coverage   # the same suite under the CI thresholds
 pnpm test:e2e        # Playwright against the mock platform server
 pnpm test:e2e:live   # the live tier, against a real local platform stack
+pnpm test:e2e:native # model-free native browser tier, with owned real-platform fixtures
 pnpm lint            # eslint; format:check and typecheck are separate scripts — CI runs all three
 pnpm probes:check    # the adversarial-probe ratchet: `probe: …` tests still collected, per seam
 pnpm fidelity:shots  # one Chrome screenshot per surface per theme, into fidelity-shots/
 pnpm release:prepare # file the changelog section a release ships with — docs/releasing.md
 ```
 
-Testing mirrors the platform's tiered philosophy: the default suites run against recorded fixtures and a mock platform server and spend nothing; the live tier (`RUN_LIVE_CONSOLE_TESTS=1`) drives a real local platform stack. Once opted in, missing configuration **fails** rather than skips. `.env*` files are gitignored — never commit a real key.
+Testing mirrors the platform's tiered philosophy. Default suites use recorded fixtures and a mock platform server, with no model spend. The live tier (`RUN_LIVE_CONSOLE_TESTS=1`) drives a real local platform stack. Once opted in, missing configuration **fails** rather than skips. The separate native browser tier uses owned, model-free platform fixtures; setup and fidelity commands are in [README.md](./README.md#development). Native light/dark shots do not prove authenticated reference fidelity when only its public sign-in offer was accessible. `.env*` files are gitignored — never commit a real key.
 
 ## Where things live
 

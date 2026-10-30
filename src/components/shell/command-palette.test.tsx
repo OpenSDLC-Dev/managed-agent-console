@@ -11,6 +11,10 @@ import { CommandPalette } from "./command-palette";
 import { NAV_DESTINATIONS } from "@/lib/nav";
 import { SURFACES } from "@/lib/platform/surfaces";
 
+const LEGACY_SURFACES = Object.values(SURFACES).filter(
+  (entry) => !("api" in entry) || entry.api !== "native",
+);
+
 const routerState = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
@@ -185,7 +189,7 @@ describe("CommandPalette", () => {
     const LIST_QUERIES = 9;
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledTimes(
-        LIST_QUERIES + Object.keys(SURFACES).length,
+        LIST_QUERIES + LEGACY_SURFACES.length,
       ),
     );
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
@@ -405,7 +409,11 @@ describe("CommandPalette", () => {
     // Back to the destinations — not the resource search hits above. Derived from
     // the nav itself: one per surface plus the console-local Dashboard, and a
     // hardcoded count here has been wrong once already.
-    expect(screen.getAllByRole("option")).toHaveLength(NAV_DESTINATIONS.length);
+    expect(screen.getAllByRole("option")).toHaveLength(
+      NAV_DESTINATIONS.filter(
+        (item) => !["members", "service-accounts"].includes(item.surface ?? ""),
+      ).length,
+    );
     expect(screen.getByText("Go to")).toBeDefined();
   });
 });
