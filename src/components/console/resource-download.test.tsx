@@ -48,13 +48,19 @@ it("native downloads select the private lane and save a binary blob with its fil
       }),
   );
   vi.stubGlobal("fetch", fetcher);
+  const onClick = vi.fn();
   render(
-    <ResourceDownload path="v1/files/file_a/content" filename="output.bin">
+    <ResourceDownload
+      path="v1/files/file_a/content"
+      filename="output.bin"
+      onClick={onClick}
+    >
       Download
     </ResourceDownload>,
   );
   fireEvent.click(screen.getByRole("link"));
   await waitFor(() => expect(saved).toEqual(["output.bin"]));
+  expect(onClick).toHaveBeenCalledTimes(1);
   expect(fetcher).toHaveBeenCalledWith(
     "/api/organizations/default/proxy/v1/files/file_a/content",
   );
@@ -109,4 +115,45 @@ it("legacy downloads keep their original BFF link and download attribute", () =>
     "/api/platform/v1/skills/skill_a/content",
   );
   expect(screen.getByRole("link")).toHaveAttribute("download", "skill.zip");
+});
+
+it.each([false, true])(
+  "download callback is composed once in native=%s and can cancel",
+  async (native) => {
+    if (native) document.documentElement.dataset.consoleAuth = "platform";
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const onClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement>) =>
+      event.preventDefault(),
+    );
+    render(
+      <ResourceDownload
+        path="v1/files/file_a/content"
+        filename="output.bin"
+        onClick={onClick}
+      >
+        Download
+      </ResourceDownload>,
+    );
+    expect(fireEvent.click(screen.getByRole("link"))).toBe(false);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(fetcher).not.toHaveBeenCalled();
+  },
+);
+it("legacy non-cancelling callback preserves default link navigation without fetch interception", () => {
+  const onClick = vi.fn();
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  render(
+    <ResourceDownload
+      path="v1/files/file_a/content"
+      filename="output.bin"
+      onClick={onClick}
+    >
+      Download
+    </ResourceDownload>,
+  );
+  expect(fireEvent.click(screen.getByRole("link"))).toBe(true);
+  expect(onClick).toHaveBeenCalledTimes(1);
+  expect(fetcher).not.toHaveBeenCalled();
 });

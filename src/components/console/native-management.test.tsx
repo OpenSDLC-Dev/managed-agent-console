@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Members } from "./members";
@@ -42,33 +49,49 @@ function mount(ui: React.ReactNode) {
   render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
   return client;
 }
-function mock({ mode = "password", mapped = false, refuse = false } = {}) {
+function mock({
+  mode = "password",
+  mapped = false,
+  refuse = false,
+  pending,
+  self = true,
+}: {
+  mode?: string;
+  mapped?: boolean;
+  refuse?: boolean;
+  pending?: Promise<Response>;
+  self?: boolean;
+} = {}) {
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/auth/config")
       return Response.json({ mode, native_login: true });
     if (url === "/api/auth/session")
       return Response.json({
         ...member,
+        id: self ? member.id : "user_caller",
         signed_in: true,
         csrf_token: "test-csrf",
       });
     if (init?.method && init.method !== "GET")
-      return refuse
-        ? Response.json(
-            {
-              error: {
-                type: "invalid_request_error",
-                message:
-                  "cannot remove or demote the last active human administrator",
+      return (
+        pending ??
+        (refuse
+          ? Response.json(
+              {
+                error: {
+                  type: "invalid_request_error",
+                  message:
+                    "cannot remove or demote the last active human administrator",
+                },
               },
-            },
-            { status: 409 },
-          )
-        : Response.json(
-            init.method === "DELETE"
-              ? { id: member.id, type: "user_deleted" }
-              : service,
-          );
+              { status: 409 },
+            )
+          : Response.json(
+              init.method === "DELETE"
+                ? { id: member.id, type: "user_deleted" }
+                : service,
+            ))
+      );
     if (url.includes("service_accounts"))
       return Response.json({ data: [service], next_page: "opaque-cursor" });
     return Response.json({
@@ -214,3 +237,202 @@ it("service account edits keep names immutable, clear description and use opaque
     expect.objectContaining({ method: "POST" }),
   );
 });
+
+function deferredWrite() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+it.each(["remove", "role"])(
+  "pending member %s cannot open a new create draft",
+  async (operation) => {
+    const pending = deferredWrite();
+    mock({ pending: pending.promise, self: false });
+    const client = mount(<Members />);
+    const user = userEvent.setup();
+    await screen.findByText("Alice");
+    if (operation === "remove") {
+      await user.click(screen.getByRole("button", { name: "Remove Alice" }));
+      await user.click(screen.getByRole("button", { name: "Confirm removal" }));
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+    } else {
+      await user.selectOptions(
+        screen.getByLabelText("Role for Alice"),
+        "developer",
+      );
+    }
+    const trigger = screen.getByRole("button", { name: "Create local member" });
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(screen.queryByLabelText("Login name")).not.toBeInTheDocument();
+    await act(async () => pending.resolve(Response.json({ id: member.id })));
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    await user.type(screen.getByLabelText("Login name"), "later-draft");
+    expect(screen.getByLabelText("Login name")).toHaveValue("later-draft");
+    client.clear();
+  },
+);
+it("refused member creation keeps non-secret draft and clears only rendered password before awaiting", async () => {
+  const pending = deferredWrite();
+  const fetcher = mock({ pending: pending.promise });
+  const client = mount(<Members />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Create local member" }),
+  );
+  await user.type(screen.getByLabelText("Login name"), "new-person");
+  await user.type(screen.getByLabelText("Name", { exact: true }), "New Person");
+  await user.selectOptions(
+    screen.getByLabelText("Role", { exact: true }),
+    "admin",
+  );
+  await user.type(screen.getByLabelText("Password"), "password-for-test");
+  await user.click(screen.getByRole("button", { name: "Create member" }));
+  expect(screen.getByLabelText("Password")).toHaveValue("");
+  expect(fetcher).toHaveBeenCalledWith(
+    "/api/console/organizations/default/members",
+    expect.objectContaining({
+      headers: expect.objectContaining({ "X-CSRF-Token": "test-csrf" }),
+      body: JSON.stringify({
+        login_name: "new-person",
+        password: "password-for-test",
+        name: "New Person",
+        role: "admin",
+      }),
+    }),
+  );
+  const assertNoSecret = () => {
+    expect(
+      JSON.stringify(
+        client
+          .getQueryCache()
+          .getAll()
+          .map((q) => [q.queryKey, q.state.data]),
+      ),
+    ).not.toContain("password-for-test");
+    expect(client.getMutationCache().getAll()).toHaveLength(0);
+  };
+  assertNoSecret();
+  await act(async () =>
+    pending.resolve(
+      Response.json(
+        {
+          error: {
+            type: "conflict_error",
+            message: "this name is unavailable",
+          },
+        },
+        { status: 409 },
+      ),
+    ),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "this name is unavailable",
+  );
+  expect(screen.getByLabelText("Login name")).toHaveValue("new-person");
+  expect(screen.getByLabelText("Name", { exact: true })).toHaveValue(
+    "New Person",
+  );
+  expect(screen.getByLabelText("Role", { exact: true })).toHaveValue("admin");
+  expect(screen.getByLabelText("Password")).toHaveValue("");
+  assertNoSecret();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(
+    screen.getByRole("button", { name: "Create local member" }),
+  ).toBeEnabled();
+  client.clear();
+});
+it("successful member creation disposes the draft and reopening restores defaults", async () => {
+  mock();
+  const client = mount(<Members />);
+  const user = userEvent.setup();
+  const trigger = await screen.findByRole("button", {
+    name: "Create local member",
+  });
+  await user.click(trigger);
+  await user.type(screen.getByLabelText("Login name"), "new-person");
+  await user.type(screen.getByLabelText("Password"), "password-for-test");
+  await user.selectOptions(
+    screen.getByLabelText("Role", { exact: true }),
+    "admin",
+  );
+  await user.click(screen.getByRole("button", { name: "Create member" }));
+  await waitFor(() => expect(screen.queryByLabelText("Password")).toBeNull());
+  await user.click(trigger);
+  expect(screen.getByLabelText("Login name")).toHaveValue("");
+  expect(screen.getByLabelText("Name", { exact: true })).toHaveValue("");
+  expect(screen.getByLabelText("Password")).toHaveValue("");
+  expect(screen.getByLabelText("Role", { exact: true })).toHaveValue("user");
+  client.clear();
+});
+it("member password policy refusal sends no write and preserves editable draft", async () => {
+  const fetcher = mock();
+  const client = mount(<Members />);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole("button", { name: "Create local member" }),
+  );
+  await user.type(screen.getByLabelText("Login name"), "draft");
+  await user.type(screen.getByLabelText("Password"), "short");
+  await user.click(screen.getByRole("button", { name: "Create member" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("12–1024");
+  expect(screen.getByLabelText("Login name")).toHaveValue("draft");
+  expect(
+    fetcher.mock.calls.filter(([, init]) => init?.method === "POST"),
+  ).toHaveLength(0);
+  client.clear();
+});
+it.each(["create", "update", "archive"])(
+  "pending service-account %s cannot open a new draft after dismissal",
+  async (operation) => {
+    const pending = deferredWrite();
+    mock({ pending: pending.promise });
+    const client = mount(<ServiceAccounts />);
+    const user = userEvent.setup();
+    await screen.findByText("build-bot");
+    const trigger = screen.getByRole("button", {
+      name: "Create service account",
+    });
+    if (operation === "archive") {
+      await user.click(
+        screen.getByRole("button", { name: "Archive build-bot" }),
+      );
+      await user.click(screen.getByRole("button", { name: "Confirm archive" }));
+    } else {
+      await user.click(
+        operation === "create"
+          ? trigger
+          : screen.getByRole("button", { name: "Edit build-bot" }),
+      );
+      if (operation === "create")
+        await user.type(screen.getByLabelText("Name"), "pending-bot");
+      await user.click(
+        screen.getByRole("button", {
+          name: operation === "create" ? "Create account" : "Save account",
+        }),
+      );
+    }
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    await act(async () =>
+      pending.resolve(
+        operation === "update"
+          ? Response.json(
+              { error: { type: "invalid_request_error", message: "refused" } },
+              { status: 400 },
+            )
+          : Response.json(service),
+      ),
+    );
+    await waitFor(() => expect(trigger).toBeEnabled());
+    await user.click(trigger);
+    await user.type(screen.getByLabelText("Name"), "later-bot");
+    expect(screen.getByLabelText("Name")).toHaveValue("later-bot");
+    client.clear();
+  },
+);

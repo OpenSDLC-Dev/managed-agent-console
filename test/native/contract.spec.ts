@@ -1,7 +1,15 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { join, relative } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { test, expect, type Page } from "@playwright/test";
+import { credentialHeaders } from "./credential-headers";
 const org = "/api/console/organizations/default";
 const password = "native-test-password-123";
 function receipt() {
@@ -40,6 +48,138 @@ async function login(page: Page, name: string) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+for (const [name, relativeSource] of [
+  ["plain", false],
+  ["plain", true],
+  ["source with spaces", false],
+  ["source with spaces", true],
+  ...(process.platform === "win32"
+    ? []
+    : [
+        ['source"quote', false],
+        ["source\\backslash", false],
+      ]),
+] as [string, boolean][]) {
+  test(`real offline runtime replacement resolves ${name} (relative=${relativeSource})`, () => {
+    const evidence = process.env.NATIVE_EVIDENCE_DIR;
+    expect(evidence, "NATIVE_EVIDENCE_DIR is required").toBeTruthy();
+    const dir = mkdtempSync(join(evidence!, "np-"));
+    try {
+      const root = process.cwd();
+      const platform = join(dir, name);
+      mkdirSync(platform);
+      writeFileSync(
+        join(platform, "go.mod"),
+        "module github.com/OpenSDLC-Dev/managed-agent-platform\n\ngo 1.18\n",
+      );
+      writeFileSync(join(platform, "go.sum"), "");
+      writeFileSync(
+        join(platform, "probe.go"),
+        "package platform\nconst Present = true\n",
+      );
+      const preload = join(dir, "commands.mjs");
+      // Stop at the build boundary. Only the later go list is real; every Docker
+      // command is event-only, with the same original-receipt cleanup contract.
+      writeFileSync(
+        preload,
+        `
+import cp from "node:child_process";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
+import { syncBuiltinESMExports } from "node:module";
+import { writeFileSync } from "node:fs";
+const id = "1".padStart(64, "0");
+cp.spawn = (command, args) => {
+  if (command !== "docker" && command !== "go") throw Error("unexpected spawn " + command);
+  if (command === "docker" && args[0] === "create") writeFileSync(args[args.indexOf("--cidfile") + 1], id);
+  const child = new EventEmitter();
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.exitCode = command === "go" ? 1 : 0; child.signalCode = null;
+  const stdout = args[0] === "inspect" ? "[]" : args[0] === "rm" ? id : args[0] === "port" ? "127.0.0.1:54321" : "";
+  queueMicrotask(() => {
+    child.stdout.end(stdout); child.stderr.end(command === "go" ? "path captured" : "");
+    child.emit("close", child.exitCode, null);
+  });
+  return child;
+};
+syncBuiltinESMExports();
+`,
+      );
+      const env = {
+        NODE_ENV: "test" as const,
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        SystemRoot: process.env.SystemRoot,
+        NATIVE_EVIDENCE_DIR: dir,
+        NATIVE_PLATFORM_SOURCE: relativeSource
+          ? relative(root, platform)
+          : platform,
+      };
+      const captured = spawnSync(
+        process.execPath,
+        [
+          "--import",
+          pathToFileURL(preload).href,
+          join(root, "test/native/runtime.mjs"),
+        ],
+        { cwd: root, env, encoding: "utf8", timeout: 12_000 },
+      );
+      expect(captured.status, captured.stderr).toBe(1);
+      expect(captured.stderr).toContain("path captured");
+      const capturedReceipt = JSON.parse(
+        readFileSync(join(dir, "task6-native-receipt.json"), "utf8"),
+      );
+      expect(capturedReceipt.cleaned).toBe(true);
+      const goModule = join(capturedReceipt.dir, "module");
+      writeFileSync(
+        join(goModule, "main.go"),
+        'package main\nimport p "github.com/OpenSDLC-Dev/managed-agent-platform"\nvar _ = p.Present\nfunc main() {}\n',
+      );
+      const loaded = spawnSync(
+        "go",
+        [
+          "list",
+          "-mod=mod",
+          "-json",
+          "github.com/OpenSDLC-Dev/managed-agent-platform",
+        ],
+        {
+          cwd: goModule,
+          encoding: "utf8",
+          timeout: 12_000,
+          env: {
+            ...env,
+            GOPROXY: "off",
+            GOSUMDB: "off",
+            GOTOOLCHAIN: "local",
+            GOWORK: "off",
+            GOENV: "off",
+            GOTELEMETRY: "off",
+            GOPATH: join(dir, "gopath"),
+            GOCACHE: join(dir, "gocache"),
+          },
+        },
+      );
+      expect(
+        loaded.error,
+        "native package resolution requires Go",
+      ).toBeUndefined();
+      if (process.platform !== "win32" && name.includes("\\")) {
+        // Correct quoting cannot make a POSIX literal backslash a valid Go path.
+        expect(loaded.status).not.toBe(0);
+        expect(loaded.stderr).toContain(
+          "replacement directory appears to be Windows path",
+        );
+      } else {
+        expect(loaded.status, loaded.stderr).toBe(0);
+        expect(JSON.parse(loaded.stdout).Dir).toBe(platform);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
 test("real native password/setup, current authority, management, private bytes/SSE and logout", async ({
   page,
   context,
@@ -47,11 +187,9 @@ test("real native password/setup, current authority, management, private bytes/S
 }) => {
   const offered: string[] = [];
   page.on("request", (r) => {
-    if (
-      r.url().includes("127.0.0.1:38200") &&
-      (r.headers()["x-api-key"] || r.headers().authorization)
-    )
-      offered.push(r.url());
+    offered.push(
+      ...credentialHeaders("http://127.0.0.1:38200", r.url(), r.headers()),
+    );
   });
   await page.goto("/setup");
   await page.getByLabel("Setup code").fill("bad-code");
@@ -461,7 +599,13 @@ test("real native OIDC follows platform-owned PKCE/callback and setup refreshes 
   });
   const page = await context.newPage();
   const calls: string[] = [];
-  page.on("request", (r) => calls.push(new URL(r.url()).pathname));
+  const offered: string[] = [];
+  page.on("request", (r) => {
+    calls.push(new URL(r.url()).pathname);
+    offered.push(
+      ...credentialHeaders("http://127.0.0.1:38201", r.url(), r.headers()),
+    );
+  });
   await page.goto("/login");
   await page.getByRole("link", { name: "Sign in with SSO" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -478,6 +622,7 @@ test("real native OIDC follows platform-owned PKCE/callback and setup refreshes 
   await page.getByRole("button", { name: "Redeem setup code" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.locator("[data-role=admin]")).toBeVisible();
+  expect(offered).toEqual([]);
   await context.close();
 });
 

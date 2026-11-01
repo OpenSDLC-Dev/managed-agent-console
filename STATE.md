@@ -18,7 +18,7 @@ Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 
 ### Platform plan 69 slice 2
 
-[PR #246](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246) is open; remote CI, merge and publication remain pending.
+Native console delivery: [PR #246](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246). Review follow-up, CI, merge and image verification remain pending.
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
 ## Tasks

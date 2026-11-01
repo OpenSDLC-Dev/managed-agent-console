@@ -72,6 +72,7 @@ const headings = () =>
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -188,4 +189,50 @@ describe("DashboardPage", () => {
       screen.getByRole("link", { name: "Explore docs" }),
     ).toBeInTheDocument();
   });
+});
+
+// Probe status is authoritative; an absent route is not an account refusal.
+it.each([
+  ["all-unimplemented", 404, false, false],
+  ["all-denied", 403, false, true],
+  ["mixed-denied-unimplemented", 404, true, true],
+  ["unknown-outage", 503, false, false],
+])("native dashboard diagnosis: %s", async (_name, status, mixed, denied) => {
+  document.documentElement.dataset.consoleAuth = "platform";
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const code = mixed && url.includes("/members?") ? 403 : status;
+      return Response.json(
+        {
+          error: {
+            type:
+              code === 403
+                ? "permission_error"
+                : code === 404
+                  ? "not_found_error"
+                  : "api_error",
+            message: "probe refused",
+          },
+        },
+        { status: code },
+      );
+    }),
+  );
+  render(
+    <QueryClientProvider client={client}>
+      <DashboardPage />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(client.getQueryState(["surfaces"])?.status).toBe("success"),
+  );
+  expect(document.querySelectorAll("[data-dashboard-card]").length).toBe(
+    status === 503 ? 13 : 0,
+  );
+  expect(!!document.querySelector("[data-no-resource-access]")).toBe(denied);
+  client.clear();
 });

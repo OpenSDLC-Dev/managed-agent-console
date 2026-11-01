@@ -110,7 +110,8 @@ export function Members() {
       setError(problem);
       return;
     }
-    form.reset();
+    const password = form.elements.namedItem("password") as HTMLInputElement;
+    password.value = "";
     void change(`${ORGANIZATION}/members`, body);
   }
 
@@ -123,6 +124,7 @@ export function Members() {
           config.data?.mode === "password" && (
             <Button
               ref={createRef}
+              disabled={busy}
               onClick={() => {
                 setError(undefined);
                 setCreate(true);

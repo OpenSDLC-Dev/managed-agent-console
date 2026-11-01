@@ -75,4 +75,46 @@ export const NATIVE_SURFACES = [
     fixture: "account editor",
     description: "Immutable name, editable description and organization role.",
   },
+  {
+    id: "native-dashboard-unimplemented",
+    route: "/dashboard",
+    fixture: "unimplemented collection probes",
+    description: "Absent collections are not diagnosed as account-wide denial.",
+  },
+  {
+    id: "native-members-pending-removal",
+    route: "/members",
+    fixture: "pending non-self removal after dismissal",
+    description: "Create stays disabled until the admitted write settles.",
+  },
+  {
+    id: "native-members-pending-role",
+    route: "/members",
+    fixture: "pending non-self role update",
+    description: "A pending role write cannot open a new create draft.",
+  },
+  {
+    id: "native-member-create-refused",
+    route: "/members",
+    fixture: "duplicate local login refusal",
+    description: "Non-secret draft stays; the transient password is cleared.",
+  },
+  {
+    id: "native-service-account-pending-create",
+    route: "/service-accounts",
+    fixture: "pending create after dismissal",
+    description: "Create stays disabled while the earlier create settles.",
+  },
+  {
+    id: "native-service-account-pending-update",
+    route: "/service-accounts",
+    fixture: "pending update after dismissal",
+    description: "Create stays disabled while the earlier edit settles.",
+  },
+  {
+    id: "native-service-account-pending-archive",
+    route: "/service-accounts",
+    fixture: "pending archive after dismissal",
+    description: "Create stays disabled while the admitted archive settles.",
+  },
 ].map((surface) => ({ ...surface, mode: "platform" as const }));

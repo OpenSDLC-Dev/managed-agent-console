@@ -90,6 +90,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -417,3 +418,52 @@ describe("CommandPalette", () => {
     expect(screen.getByText("Go to")).toBeDefined();
   });
 });
+
+it.each(["available", "denied", "unknown"])(
+  "probe: native organization palette shortcuts use %s collection authority",
+  async (status) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "http://console").pathname;
+      if (
+        path === "/api/console/organizations/default/members" ||
+        path === "/api/console/organizations/default/service_accounts"
+      ) {
+        return status === "available"
+          ? Response.json({ data: [] })
+          : Response.json(
+              {
+                error: {
+                  type: status === "denied" ? "permission_error" : "api_error",
+                  message: "probe refused",
+                },
+              },
+              { status: status === "denied" ? 403 : 503 },
+            );
+      }
+      return Response.json({ data: [] });
+    });
+    renderPalette();
+    await openPalette();
+    for (const [label, href] of [
+      ["Members", "/members"],
+      ["Service accounts", "/service-accounts"],
+    ]) {
+      if (status === "available") {
+        const option = await screen.findByRole("option", { name: label });
+        fireEvent.click(option);
+        expect(routerState.push).toHaveBeenLastCalledWith(href);
+        await openPalette();
+      } else {
+        await waitFor(() =>
+          expect(
+            fetchMock.mock.calls.some(([input]) =>
+              String(input).includes("/service_accounts?"),
+            ),
+          ).toBe(true),
+        );
+        expect(screen.queryByRole("option", { name: label })).toBeNull();
+      }
+    }
+  },
+);

@@ -830,3 +830,54 @@ it.each([
     unmount();
   },
 );
+
+it.each([undefined, "sthr_child"])(
+  "probe: unmarked stream-open 403 for %s closes without logout or retry after successful history",
+  async (thread) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "window",
+      Object.create(window, {
+        location: {
+          value: { pathname: "/sessions/sesn_denied", search: "", assign },
+        },
+      }),
+    );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fetchMock.mockImplementation(async (input) =>
+      String(input).includes("/stream?")
+        ? Response.json(
+            {
+              error: {
+                type: "permission_error",
+                message: "developer required",
+              },
+            },
+            { status: 403 },
+          )
+        : Response.json({ data: [] }),
+    );
+    const { result, unmount } = renderHook(() =>
+      useSessionTrace("sesn_denied", thread),
+    );
+    try {
+      await flush();
+      expect(fetchMock.mock.calls).toHaveLength(2);
+      expect(String(fetchMock.mock.calls[0][0])).not.toContain("/stream?");
+      expect(String(fetchMock.mock.calls[1][0])).toContain(
+        thread ? "/threads/sthr_child/stream?" : "/events/stream?",
+      );
+      expect(result.current.connection).toBe("closed");
+      expect(hasBouncedToLogin()).toBe(false);
+      expect(assign).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(fetchMock.mock.calls).toHaveLength(2);
+      expect(assign).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+    }
+  },
+);

@@ -89,6 +89,7 @@ export function ServiceAccounts() {
         actions={
           <Button
             ref={triggerRef}
+            disabled={busy}
             onClick={() => {
               setError(undefined);
               setEditor("new");

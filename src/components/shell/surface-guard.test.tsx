@@ -22,7 +22,10 @@ function renderGuard(pathname: string, unimplemented: string[], status = 404) {
     "fetch",
     vi.fn((input: string) => {
       const absent = unimplemented.some((s) =>
-        String(input).includes(`/v1/${s}?`),
+        ["members", "service-accounts"].includes(s)
+          ? new URL(String(input), "http://console").pathname ===
+            `/api/console/organizations/default/${s === "members" ? "members" : "service_accounts"}`
+          : String(input).includes(`/v1/${s}?`),
       );
       return Promise.resolve(
         new Response(
@@ -60,6 +63,7 @@ function renderGuard(pathname: string, unimplemented: string[], status = 404) {
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -156,3 +160,29 @@ describe("SurfaceGuard", () => {
     expect(screen.getByText("the page")).toBeInTheDocument();
   });
 });
+
+it.each([
+  ["members", 403],
+  ["members", 404],
+  ["service-accounts", 403],
+  ["service-accounts", 404],
+] as const)(
+  "probe: native direct route /%s replaces children for collection status %i",
+  async (surface, status) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    renderGuard(`/${surface}`, [surface], status);
+    if (status === 403) {
+      const state = await screen.findByTestId("error-state");
+      expect(state).toHaveAttribute("data-error-status", "403");
+      expect(state).toHaveAttribute("data-denied", "true");
+      expect(screen.queryByTestId("unavailable-surface")).toBeNull();
+    } else {
+      expect(await screen.findByTestId("unavailable-surface")).toHaveAttribute(
+        "data-surface",
+        surface,
+      );
+      expect(screen.queryByTestId("error-state")).toBeNull();
+    }
+    expect(screen.queryByText("the page")).toBeNull();
+  },
+);

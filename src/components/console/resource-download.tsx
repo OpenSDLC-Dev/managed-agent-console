@@ -11,6 +11,7 @@ export function ResourceDownload({
   path,
   filename,
   children,
+  onClick,
   ...props
 }: { path: string; filename: string; children: React.ReactNode } & Omit<
   React.AnchorHTMLAttributes<HTMLAnchorElement>,
@@ -22,7 +23,8 @@ export function ResourceDownload({
       href={resourceURL(path)}
       download={filename}
       onClick={(event) => {
-        if (!isNativeConsole()) return;
+        onClick?.(event);
+        if (event.defaultPrevented || !isNativeConsole()) return;
         event.preventDefault();
         void downloadResource(path, filename).catch((error) =>
           toastPlatformError(error, "Download failed"),

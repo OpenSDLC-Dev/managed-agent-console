@@ -3,8 +3,14 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { NativeAuth } from "./native-auth";
+const navigation = vi.hoisted(() => ({ enter: vi.fn() }));
+vi.mock("@/lib/platform/native", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform/native")>()),
+  enterConsole: navigation.enter,
+}));
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   vi.unstubAllGlobals();
   delete document.documentElement.dataset.consoleAuth;
 });
@@ -163,3 +169,60 @@ it("native login does not reference a setup-only password hint", async () => {
     "aria-describedby",
   );
 });
+
+it.each(["oidc", "trusted_proxy"])(
+  "probe: signed-in %s setup posts code only with current CSRF then navigates",
+  async (mode) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    let sessionReads = 0;
+    let resolve!: (response: Response) => void;
+    const pending = new Promise<Response>((r) => {
+      resolve = r;
+    });
+    const fetcher = vi.fn(async (url: string) => {
+      if (url === "/api/auth/config")
+        return Response.json({ mode, native_login: true });
+      if (url === "/api/auth/session")
+        return Response.json({
+          signed_in: true,
+          id: "user_person",
+          role: "user",
+          role_source: "manual",
+          email: "person@example.test",
+          name: "Person",
+          expires_at: "2027-01-01T00:00:00Z",
+          csrf_token: ++sessionReads === 1 ? "old-csrf" : "current-csrf",
+        });
+      if (url === "/api/console/organizations/default/setup_code/redeem")
+        return pending;
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    render(<NativeAuth setup />);
+    const user = userEvent.setup();
+    await user.type(
+      await screen.findByLabelText("Setup code"),
+      "synthetic-code",
+    );
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Redeem setup code" }));
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(
+        "/api/console/organizations/default/setup_code/redeem",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ code: "synthetic-code" }),
+          headers: {
+            "content-type": "application/json",
+            "X-CSRF-Token": "current-csrf",
+          },
+        }),
+      ),
+    );
+    expect(screen.getByLabelText("Setup code")).toHaveValue("");
+    resolve(Response.json({ id: "user_person", role: "admin" }));
+    await waitFor(() =>
+      expect(navigation.enter).toHaveBeenCalledExactlyOnceWith(),
+    );
+  },
+);

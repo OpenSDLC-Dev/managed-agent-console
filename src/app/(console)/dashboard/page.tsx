@@ -93,17 +93,21 @@ export default function DashboardPage() {
           )}
         </div>
       </header>
-      {isNativeConsole() && sections.length === 0 && (
-        <div className="mb-6 space-y-2 text-sm" data-no-resource-access>
-          <p>You are signed in. This account has no resource access.</p>
-          <a href="/setup" className="underline">
-            Redeem an administrator setup code
-          </a>
-          <p className="text-muted-foreground">
-            Or ask an organization administrator to change your role.
-          </p>
-        </div>
-      )}
+      {isNativeConsole() &&
+        sections.length === 0 &&
+        Object.values(surfaces ?? {}).some(
+          (probe) => probe.status === "denied",
+        ) && (
+          <div className="mb-6 space-y-2 text-sm" data-no-resource-access>
+            <p>You are signed in. This account has no resource access.</p>
+            <a href="/setup" className="underline">
+              Redeem an administrator setup code
+            </a>
+            <p className="text-muted-foreground">
+              Or ask an organization administrator to change your role.
+            </p>
+          </div>
+        )}
       <div>
         {sections.map(({ heading, items }) => (
           <section key={heading} className="mb-6">

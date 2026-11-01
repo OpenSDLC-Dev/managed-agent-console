@@ -1,5 +1,5 @@
 // Owned, model-free native integration. No .env or shared stack is used.
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createServer, request } from "node:http";
 import {
   mkdirSync,
@@ -16,7 +16,9 @@ import { once } from "node:events";
 
 const root = resolve(import.meta.dirname, "../..");
 const evidence = process.env.NATIVE_EVIDENCE_DIR;
-const platform = process.env.NATIVE_PLATFORM_SOURCE;
+const platform = process.env.NATIVE_PLATFORM_SOURCE
+  ? resolve(process.env.NATIVE_PLATFORM_SOURCE)
+  : undefined;
 if (!evidence || !platform)
   throw new Error(
     "NATIVE_EVIDENCE_DIR and NATIVE_PLATFORM_SOURCE are required (no credential files).",
@@ -25,7 +27,10 @@ mkdirSync(evidence, { recursive: true });
 const dir = mkdtempSync(join(evidence, "task6-native-"));
 const children = [],
   edges = [];
-let container;
+const readiness = new AbortController();
+let container,
+  stopping = false,
+  startupDone;
 const receipt = { dir, platform, started: [], container: null, cleaned: false };
 function durable(path, value, exclusive = false) {
   const fd = openSync(path, exclusive ? "wx" : "w", 0o600);
@@ -44,64 +49,116 @@ record();
 const env = {
   PATH: process.env.PATH,
   HOME: process.env.HOME,
+  SystemRoot: process.env.SystemRoot,
   TMPDIR: dir,
   NO_PROXY: "*",
   no_proxy: "*",
   NATIVE_RUN_DIR: dir,
   NATIVE_EVIDENCE_DIR: evidence,
 };
-function command(cmd, args, options = {}) {
-  const result = spawnSync(cmd, args, {
-    cwd: root,
-    encoding: "utf8",
-    ...options,
-    env: { ...env, ...options.env },
-  });
-  if (result.status !== 0)
-    throw new Error(
-      `${cmd} ${args[0]} failed: ${result.stderr || result.stdout}`,
-    );
-  return result.stdout.trim();
+function checkStarting() {
+  if (stopping) throw new Error("native runtime is stopping");
 }
-receipt.before = command("docker", ["ps", "--no-trunc", "-aq"])
-  .split("\n")
-  .filter(Boolean);
-record();
-function start(cmd, args, name, extra = {}) {
-  const fd = openSync(join(dir, `${name}.log`), "w", 0o600);
+function own(child, creation) {
+  const entry = { child, creation, error: undefined, closed: false };
+  // Failed spawns have no PID. Listen before doing any receipt I/O.
+  child.on("error", (error) => {
+    entry.error = error;
+  });
+  entry.done = new Promise((resolve) =>
+    child.once("close", () => {
+      entry.closed = true;
+      resolve();
+    }),
+  );
+  children.push(entry);
+  return entry;
+}
+async function command(cmd, args, options = {}, duringCleanup = false) {
+  if (!duringCleanup) checkStarting();
   const child = spawn(cmd, args, {
     cwd: root,
-    env: { ...env, ...extra },
-    stdio: ["ignore", fd, fd],
+    ...options,
+    env: { ...env, ...options.env },
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  closeSync(fd);
-  children.push(child);
   const creation = {
-    name,
-    pid: child.pid,
     command: cmd,
     args,
+    pid: child.pid ?? null,
     createdAt: new Date().toISOString(),
   };
-  durable(join(dir, `${name}-creation.json`), creation, true);
-  receipt.started.push(creation);
+  const entry = own(child, creation);
+  receipt.commands ??= [];
+  receipt.commands.push(creation);
   record();
-  return child;
+  let stdout = "",
+    stderr = "";
+  child.stdout.on("data", (data) => {
+    stdout += data;
+  });
+  child.stderr.on("data", (data) => {
+    stderr += data;
+  });
+  await entry.done;
+  if (entry.error) throw entry.error;
+  if (child.exitCode !== 0)
+    throw new Error(
+      `${cmd} ${args[0]} failed: ${stderr || stdout || child.signalCode}`,
+    );
+  if (!duringCleanup) checkStarting();
+  return stdout.trim();
+}
+function start(cmd, args, name, extra = {}) {
+  checkStarting();
+  const fd = openSync(join(dir, `${name}.log`), "w", 0o600);
+  let entry;
+  try {
+    const child = spawn(cmd, args, {
+      cwd: root,
+      env: { ...env, ...extra },
+      stdio: ["ignore", fd, fd],
+    });
+    const creation = {
+      name,
+      pid: child.pid ?? null,
+      command: cmd,
+      args,
+      createdAt: new Date().toISOString(),
+    };
+    entry = own(child, creation);
+    child.on("error", (error) => {
+      void shutdown(error);
+    });
+    durable(join(dir, `${name}-creation.json`), creation, true);
+    receipt.started.push(creation);
+    record();
+  } finally {
+    closeSync(fd);
+  }
+  return entry.child;
 }
 async function wait(url) {
   for (let n = 0; n < 240; n++) {
+    checkStarting();
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: readiness.signal });
       await response.arrayBuffer();
       if (response.status < 500) return;
-    } catch {}
-    const dead = children.find((c) => c.exitCode !== null);
-    if (dead) throw new Error(`owned process ${dead.pid} exited; see ${dir}`);
+    } catch {
+      checkStarting();
+    }
+    const dead = children.find(
+      (entry) => entry.creation.name && (entry.error || entry.closed),
+    );
+    if (dead)
+      throw new Error(`owned process ${dead.child.pid} exited; see ${dir}`);
     await new Promise((r) => setTimeout(r, 250));
   }
   throw new Error(`runtime did not become ready: ${url}`);
 }
 async function listen(server, port) {
+  checkStarting();
   edges.push(server);
   server.listen(port, "127.0.0.1");
   await once(server, "listening");
@@ -150,10 +207,82 @@ async function edge(port, upstream) {
   });
   await listen(server, port);
 }
-let cleaning;
+let cleaning,
+  failed = false;
+async function stop(entry) {
+  if (entry.closed) return;
+  const { child } = entry;
+  if (!child.pid) {
+    await entry.done;
+    return;
+  }
+  child.kill("SIGTERM");
+  let timer;
+  await Promise.race([
+    entry.done,
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, 5000);
+    }),
+  ]);
+  clearTimeout(timer);
+  if (!entry.closed) {
+    child.kill("SIGKILL");
+    await entry.done;
+  }
+}
+function captureContainer() {
+  if (container) return;
+  // Only the original Docker --cidfile receipt establishes ownership after an
+  // interrupted create. Never discover a container by name, label or timestamp.
+  // SIGKILL or an engine create without a returned receipt cannot be recovered.
+  let id;
+  try {
+    id = readFileSync(join(dir, "container.cid"), "utf8").trim();
+  } catch {
+    return;
+  }
+  if (!/^[a-f0-9]{64}$/.test(id))
+    throw new Error("invalid original container receipt");
+  container = id;
+  receipt.container = id;
+  receipt.containerCreation = { ...receipt.containerAttempt, id };
+  durable(
+    join(dir, "container-creation.json"),
+    receipt.containerCreation,
+    true,
+  );
+  record();
+}
+async function captureVolumes(duringCleanup = false) {
+  if (!container || receipt.volumes) return;
+  receipt.volumes = JSON.parse(
+    await command(
+      "docker",
+      ["inspect", "--format", "{{json .Mounts}}", container],
+      {},
+      duringCleanup,
+    ),
+  )
+    .filter((mount) => mount.Type === "volume")
+    .map((mount) => mount.Name);
+  durable(
+    join(dir, "volume-creation.json"),
+    { container, volumes: receipt.volumes },
+    true,
+  );
+  record();
+}
 function cleanup() {
+  stopping = true;
+  // Abort both pending headers and body reads before joining startup. Cleanup
+  // commands do not share this signal and must still finish.
+  readiness.abort();
   return (cleaning ??= (async () => {
     receipt.cleanupErrors = [];
+    // Interrupt and await commands too. Startup sees stopping after every await;
+    // join it before final cleanup so it cannot create resources behind us.
+    await Promise.all(children.map(stop));
+    await startupDone;
     await Promise.all(
       edges.map(
         (server) =>
@@ -163,49 +292,42 @@ function cleanup() {
           }),
       ),
     );
-    for (const child of children.toReversed()) {
-      if (child.exitCode !== null || child.signalCode !== null) continue;
-      const exited = once(child, "exit");
-      child.kill("SIGTERM");
-      let timer;
-      await Promise.race([
-        exited,
-        new Promise((r) => {
-          timer = setTimeout(r, 5000);
-        }),
-      ]);
-      clearTimeout(timer);
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill("SIGKILL");
-        await exited;
-      }
+    await Promise.all(children.map(stop));
+    try {
+      captureContainer();
+      if (receipt.containerAttempt && !container)
+        throw new Error(
+          "container creation has no original receipt; ownership outcome is unknown",
+        );
+      await captureVolumes(true);
+    } catch (error) {
+      receipt.cleanupErrors.push(String(error));
     }
     if (container) {
       receipt.cleanupCommand = ["docker", "rm", "-f", "-v", container];
       record();
       try {
-        receipt.removedContainer = command("docker", [
-          "rm",
-          "-f",
-          "-v",
-          container,
-        ]);
+        receipt.removedContainer = await command(
+          "docker",
+          ["rm", "-f", "-v", container],
+          {},
+          true,
+        );
       } catch (error) {
         receipt.cleanupErrors.push(String(error));
       }
     }
-    // Synthetic setup codes are inputs, not evidence.
     for (const mode of ["password", "oidc"])
       rmSync(join(dir, `${mode}-setup-code`), { force: true });
     try {
-      receipt.after = command("docker", ["ps", "--no-trunc", "-aq"])
+      receipt.after = (
+        await command("docker", ["ps", "--no-trunc", "-aq"], {}, true)
+      )
         .split("\n")
         .filter(Boolean);
-    } catch (error) {
-      receipt.cleanupErrors.push(String(error));
-    }
-    try {
-      const volumes = command("docker", ["volume", "ls", "-q"]).split("\n");
+      const volumes = (
+        await command("docker", ["volume", "ls", "-q"], {}, true)
+      ).split("\n");
       receipt.volumesAfter = (receipt.volumes ?? []).map((name) => ({
         name,
         absent: !volumes.includes(name),
@@ -213,15 +335,16 @@ function cleanup() {
     } catch (error) {
       receipt.cleanupErrors.push(String(error));
     }
-    receipt.processesAfter = receipt.started.map((p) => {
-      const child = children.find((c) => c.pid === p.pid);
-      return {
-        pid: p.pid,
-        exited: child.exitCode !== null || child.signalCode !== null,
+    receipt.processesAfter = children.map(
+      ({ child, creation, closed, error }) => ({
+        pid: creation.pid,
+        command: creation.command,
+        exited: closed,
         exitCode: child.exitCode,
         signal: child.signalCode,
-      };
-    });
+        ...(error ? { error: String(error) } : {}),
+      }),
+    );
     receipt.cleaned =
       receipt.cleanupErrors.length === 0 &&
       receipt.processesAfter.every((p) => p.exited) &&
@@ -234,137 +357,154 @@ function cleanup() {
       );
   })());
 }
-process.once(
-  "SIGTERM",
-  () => void cleanup().then(() => process.exit(receipt.cleaned ? 0 : 1)),
-);
-process.once(
-  "SIGINT",
-  () => void cleanup().then(() => process.exit(receipt.cleaned ? 0 : 1)),
-);
-try {
-  const name = `console-native-${process.pid}-${Date.now()}`;
-  const args = [
-    "create",
-    "--cidfile",
-    join(dir, "container.cid"),
-    "--name",
-    name,
-    "--label",
-    "console-native-owned=true",
-    "-e",
-    "POSTGRES_PASSWORD=native-test",
-    "-p",
-    "127.0.0.1::5432",
-    "postgres:18-alpine",
-  ];
-  container = command("docker", args);
-  receipt.container = container;
-  receipt.containerCreation = {
-    id: container,
-    name,
-    command: ["docker", ...args],
-    createdAt: new Date().toISOString(),
-  };
-  durable(
-    join(dir, "container-creation.json"),
-    receipt.containerCreation,
-    true,
-  );
-  record();
-  receipt.volumes = JSON.parse(
-    command("docker", ["inspect", "--format", "{{json .Mounts}}", container]),
-  )
-    .filter((mount) => mount.Type === "volume")
-    .map((mount) => mount.Name);
-  durable(
-    join(dir, "volume-creation.json"),
-    { container, volumes: receipt.volumes },
-    true,
-  );
-  record();
-  command("docker", ["start", container]);
-  const port = command("docker", ["port", container, "5432/tcp"])
-    .split(":")
-    .at(-1);
-  for (let i = 0; ; i++) {
-    if (
-      spawnSync("docker", [
+async function shutdown(error) {
+  if (error) {
+    failed = true;
+    console.error(error);
+  }
+  try {
+    await cleanup();
+  } catch (error) {
+    failed = true;
+    console.error(error);
+  }
+  process.exit(failed || !receipt.cleaned ? 1 : 0);
+}
+process.once("SIGTERM", () => {
+  void shutdown();
+});
+process.once("SIGINT", () => {
+  void shutdown();
+});
+startupDone = (async () => {
+  try {
+    receipt.before = (await command("docker", ["ps", "--no-trunc", "-aq"]))
+      .split("\n")
+      .filter(Boolean);
+    record();
+    const name = `console-native-${process.pid}-${Date.now()}`;
+    const args = [
+      "create",
+      "--cidfile",
+      join(dir, "container.cid"),
+      "--name",
+      name,
+      "--label",
+      "console-native-owned=true",
+      "-e",
+      "POSTGRES_PASSWORD=native-test",
+      "-p",
+      "127.0.0.1::5432",
+      "postgres:18-alpine",
+    ];
+    receipt.containerAttempt = {
+      name,
+      command: ["docker", ...args],
+      createdAt: new Date().toISOString(),
+    };
+    durable(
+      join(dir, "container-attempt.json"),
+      receipt.containerAttempt,
+      true,
+    );
+    record();
+    try {
+      await command("docker", args);
+    } finally {
+      captureContainer();
+    }
+    if (!container)
+      throw new Error("Docker returned no original container receipt");
+    await captureVolumes();
+    await command("docker", ["start", container]);
+    const port = (await command("docker", ["port", container, "5432/tcp"]))
+      .split(":")
+      .at(-1);
+    for (let i = 0; ; i++) {
+      try {
+        await command("docker", [
+          "exec",
+          container,
+          "pg_isready",
+          "-h",
+          "127.0.0.1",
+          "-U",
+          "postgres",
+        ]);
+        break;
+      } catch {
+        checkStarting();
+      }
+      if (i === 100) throw new Error("owned PostgreSQL not ready");
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    for (const mode of ["password", "oidc"])
+      await command("docker", [
         "exec",
         container,
-        "pg_isready",
+        "createdb",
         "-h",
         "127.0.0.1",
         "-U",
         "postgres",
-      ]).status === 0
-    )
-      break;
-    if (i === 100) throw new Error("owned PostgreSQL not ready");
-    await new Promise((r) => setTimeout(r, 100));
+        `native_${mode}`,
+      ]);
+    const goModule = join(dir, "module");
+    mkdirSync(goModule);
+    const goMod = readFileSync(join(platform, "go.mod"), "utf8").replace(
+      /^module .*$/m,
+      "module github.com/OpenSDLC-Dev/managed-agent-platform/console-native-test",
+    );
+    writeFileSync(
+      join(goModule, "go.mod"),
+      goMod +
+        `\nrequire github.com/OpenSDLC-Dev/managed-agent-platform v0.0.0\nreplace github.com/OpenSDLC-Dev/managed-agent-platform => ${JSON.stringify(platform)}\n`,
+    );
+    writeFileSync(
+      join(goModule, "go.sum"),
+      readFileSync(join(platform, "go.sum")),
+    );
+    writeFileSync(
+      join(goModule, "main.go"),
+      readFileSync(join(root, "test/native/platform.go")),
+    );
+    await command(
+      "go",
+      ["build", "-mod=mod", "-o", join(dir, "native-platform"), "."],
+      { cwd: goModule },
+    );
+    process.env.MOCK_OIDC_PORT = "38130";
+    process.env.MOCK_OIDC_ISSUER = "http://127.0.0.1:38130";
+    const { oidcServer } = await import("../mock-platform/oidc.mjs");
+    checkStarting();
+    await listen(oidcServer, 38130);
+    start(join(dir, "native-platform"), [], "platform", {
+      DATABASE_BASE: `postgres://postgres:native-test@127.0.0.1:${port}`,
+    });
+    await wait("http://127.0.0.1:38110/api/auth/config");
+    await wait("http://127.0.0.1:38111/api/auth/config");
+    start(
+      process.execPath,
+      ["node_modules/next/dist/bin/next", "start", "--port", "38100"],
+      "console",
+      {
+        CONSOLE_AUTH_MODE: "platform",
+        PLATFORM_API_KEY: "",
+        CONSOLE_PASSWORD: "",
+        IDENTITY_MODE: "",
+        PLATFORM_BASE_URL: "",
+      },
+    );
+    await wait("http://127.0.0.1:38100/api/health");
+    await edge(38200, 38110);
+    await edge(38201, 38111);
+    console.log(`native runtime ready; receipt ${join(dir, "receipt.json")}`);
+  } catch (error) {
+    if (!stopping) {
+      console.error(error);
+      failed = true;
+    }
   }
-  for (const mode of ["password", "oidc"])
-    command("docker", [
-      "exec",
-      container,
-      "createdb",
-      "-h",
-      "127.0.0.1",
-      "-U",
-      "postgres",
-      `native_${mode}`,
-    ]);
-  const goModule = join(dir, "module");
-  mkdirSync(goModule);
-  const goMod = readFileSync(join(platform, "go.mod"), "utf8").replace(
-    /^module .*$/m,
-    "module github.com/OpenSDLC-Dev/managed-agent-platform/console-native-test",
-  );
-  writeFileSync(
-    join(goModule, "go.mod"),
-    goMod +
-      `\nrequire github.com/OpenSDLC-Dev/managed-agent-platform v0.0.0\nreplace github.com/OpenSDLC-Dev/managed-agent-platform => ${platform}\n`,
-  );
-  writeFileSync(
-    join(goModule, "go.sum"),
-    readFileSync(join(platform, "go.sum")),
-  );
-  writeFileSync(
-    join(goModule, "main.go"),
-    readFileSync(join(root, "test/native/platform.go")),
-  );
-  command(
-    "go",
-    ["build", "-mod=mod", "-o", join(dir, "native-platform"), "."],
-    { cwd: goModule },
-  );
-  process.env.MOCK_OIDC_PORT = "38130";
-  process.env.MOCK_OIDC_ISSUER = "http://127.0.0.1:38130";
-  const { oidcServer } = await import("../mock-platform/oidc.mjs");
-  await listen(oidcServer, 38130);
-  start(join(dir, "native-platform"), [], "platform", {
-    DATABASE_BASE: `postgres://postgres:native-test@127.0.0.1:${port}`,
-  });
-  await wait("http://127.0.0.1:38110/api/auth/config");
-  await wait("http://127.0.0.1:38111/api/auth/config");
-  start(
-    process.execPath,
-    ["node_modules/next/dist/bin/next", "start", "--port", "38100"],
-    "console",
-    {
-      CONSOLE_AUTH_MODE: "platform",
-      PLATFORM_API_KEY: "",
-      CONSOLE_PASSWORD: "",
-      IDENTITY_MODE: "",
-      PLATFORM_BASE_URL: "",
-    },
-  );
-  await wait("http://127.0.0.1:38100/api/health");
-  await edge(38200, 38110);
-  await edge(38201, 38111);
-  console.log(`native runtime ready; receipt ${join(dir, "receipt.json")}`);
-} catch (error) {
-  console.error(error);
-  await cleanup();
-  process.exit(1);
-}
+})();
+await startupDone;
+if (failed || stopping) await shutdown();

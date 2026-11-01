@@ -89,7 +89,11 @@ function check(w: Workflow) {
     s.uses?.startsWith("aquasecurity/trivy-action@"),
   );
   const push = b.steps.findIndex((s) => s.run?.includes("publish-sha.sh push"));
-  expect(scan).toBeGreaterThan(0);
+  const build = b.steps.findIndex(
+    (s) => s.run === "bash scripts/publish-sha.sh build",
+  );
+  expect(build).toBeGreaterThanOrEqual(0);
+  expect(scan).toBeGreaterThan(build);
   expect(push).toBeGreaterThan(scan);
   expect(b.steps[scan].if).toBeUndefined();
   expect(b.steps[scan]["continue-on-error"] ?? false).toBe(false);
@@ -181,7 +185,7 @@ function run(
 git() { printf '%s\\n' "$CHECKOUT_SHA"; }
 docker() {
   printf '%s\\n' "$*" >> "$CALLS"
-  if [ "\${1:-}" = login ]; then read -r token || true; fi
+  if [ "\${1:-}" = login ]; then read -r token || true; printf '%s\\n' "$token" >> "$TOKENS"; fi
   case "$*" in
     *"imagetools inspect"*)
       if [ "\${BAD_DIGEST:-}" = 1 ]; then echo invalid
@@ -229,6 +233,7 @@ source "$1" "$2"
           GITHUB_ACTOR: "test",
           GITHUB_OUTPUT: shellPath(join(dir, "output")),
           CALLS: shellPath(join(dir, "calls")),
+          TOKENS: shellPath(join(dir, "tokens")),
           ...overrides,
         },
       },
@@ -237,7 +242,19 @@ source "$1" "$2"
     try {
       calls = readFileSync(join(dir, "calls"), "utf8");
     } catch {}
-    return { status: result.status, calls, stderr: result.stderr };
+    const output = existsSync(join(dir, "output"))
+      ? readFileSync(join(dir, "output"), "utf8")
+      : "";
+    const tokens = existsSync(join(dir, "tokens"))
+      ? readFileSync(join(dir, "tokens"), "utf8")
+      : "";
+    return {
+      status: result.status,
+      calls,
+      stderr: result.stderr,
+      output,
+      tokens,
+    };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -266,13 +283,15 @@ function checkManifest(result: ReturnType<typeof run>) {
     `buildx imagetools create -t ${image}:sha-${sha} ${image}@sha256:${"1".padStart(64, "0")} ${image}@sha256:${"2".padStart(64, "0")}`,
   );
   expect(result.calls).not.toContain(":latest");
+  checkLogin(result);
+  expect(result.output).toBe(`digest=sha256:${"3".padStart(64, "0")}\n`);
 }
 it("executes actual build/push/manifest shell using isolated registry stubs", () => {
   const script = source();
   checkBuild(run(script, "build"));
   const pushed = run(script, "push");
-  expect(pushed.status, pushed.stderr).toBe(0);
-  expect(pushed.calls).toContain(`push ${image}:staging-${sha}-42-2-amd64`);
+  checkPush(pushed);
+  expect(run(script, "build").tokens).toBe("");
   checkManifest(run(script, "manifest"));
   expect(run(script, "manifest", { BAD_DIGEST: "1" }).status).not.toBe(0);
   for (const overrides of [
@@ -318,4 +337,56 @@ it("probe: a parsed scanner skipped by its step condition is rejected", () => {
   expect(scan).toBeDefined();
   scan!.if = false;
   expect(() => check(w)).toThrow();
+});
+
+it("probe: parsed scan-before-build mutant is rejected by production ordering oracle", () => {
+  const w = structuredClone(workflow);
+  const steps = w.jobs["sha-build"].steps;
+  const build = steps.findIndex(
+    (s) => s.run === "bash scripts/publish-sha.sh build",
+  );
+  const scan = steps.findIndex((s) =>
+    s.uses?.startsWith("aquasecurity/trivy-action@"),
+  );
+  [steps[build], steps[scan]] = [steps[scan], steps[build]];
+  const parsed = parse(JSON.stringify(w)) as Workflow;
+  expect(() =>
+    admitted(parsed.jobs["sha-build"].if, "push", "refs/heads/main"),
+  ).not.toThrow();
+  expect(() => check(parsed)).toThrow();
+});
+function checkLogin(result: ReturnType<typeof run>) {
+  expect(
+    result.calls.split("\n").filter((line) => line.startsWith("login ")),
+  ).toEqual(["login ghcr.io -u test --password-stdin"]);
+  expect(result.tokens).toBe("synthetic\n");
+}
+function checkPush(result: ReturnType<typeof run>) {
+  checkLogin(result);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.calls).toContain(`push ${image}:staging-${sha}-42-2-amd64`);
+}
+it.each(["push", "manifest"])(
+  "probe: runnable %s without login token pipe is rejected",
+  (command) => {
+    const script = source();
+    const mutant = script.replaceAll(`printf '%s' "$PUBLISH_TOKEN" | `, "");
+    expect(mutant).not.toBe(script);
+    const result = run(mutant, command);
+    expect(result.status, result.stderr).toBe(0);
+    expect(() =>
+      command === "push" ? checkPush(result) : checkManifest(result),
+    ).toThrow();
+  },
+);
+it("probe: runnable child-digest export is rejected by final-index output oracle", () => {
+  const script = source();
+  const mutant = script.replace(
+    'echo "digest=$digest"',
+    'echo "digest=$amd64"',
+  );
+  expect(mutant).not.toBe(script);
+  const result = run(mutant, "manifest");
+  expect(result.status, result.stderr).toBe(0);
+  expect(() => checkManifest(result)).toThrow();
 });
