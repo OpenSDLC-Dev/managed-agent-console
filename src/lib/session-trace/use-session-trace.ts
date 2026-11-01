@@ -153,6 +153,11 @@ export function useSessionTrace(
           backoff = 1_000;
           for await (const frame of parseSseStream(response.body)) {
             if (cancelled) return;
+            if (hasBouncedToLogin()) {
+              update(clearPreviews(traceRef.current));
+              setConnection("closed");
+              return;
+            }
             let data: unknown;
             try {
               data = JSON.parse(frame.data);

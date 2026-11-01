@@ -167,12 +167,25 @@ syncBuiltinESMExports();
         { cwd: root, env, encoding: "utf8", timeout: 12_000 },
       );
       expect(captured.status, captured.stderr).toBe(1);
-      expect(captured.stderr).toContain("path captured");
-      const capturedReceipt = JSON.parse(
-        readFileSync(join(dir, "task6-native-receipt.json"), "utf8"),
-      );
-      expect(capturedReceipt.cleaned).toBe(true);
-      const goModule = join(capturedReceipt.dir, "module");
+      const unsupported = process.platform !== "win32" && name.includes("\\");
+      let goModule: string;
+      if (unsupported) {
+        expect(captured.stderr).toContain("literal backslash");
+        // Real Go separately proves why this path must fail before resources.
+        goModule = join(dir, "offline-module");
+        mkdirSync(goModule);
+        writeFileSync(
+          join(goModule, "go.mod"),
+          `module offline-probe\n\ngo 1.18\nrequire github.com/OpenSDLC-Dev/managed-agent-platform v0.0.0\nreplace github.com/OpenSDLC-Dev/managed-agent-platform => ${JSON.stringify(platform)}\n`,
+        );
+      } else {
+        expect(captured.stderr).toContain("path captured");
+        const capturedReceipt = JSON.parse(
+          readFileSync(join(dir, "task6-native-receipt.json"), "utf8"),
+        );
+        expect(capturedReceipt.cleaned).toBe(true);
+        goModule = join(capturedReceipt.dir, "module");
+      }
       writeFileSync(
         join(goModule, "main.go"),
         'package main\nimport p "github.com/OpenSDLC-Dev/managed-agent-platform"\nvar _ = p.Present\nfunc main() {}\n',
@@ -734,6 +747,208 @@ test("real native password/setup, current authority, management, private bytes/S
   });
   // Restore account A and its child view for the existing authority-withdrawal
   // contract. The two-page test above did not log either account out.
+  await login(page, "first-admin");
+  await test.step("initial metadata outage cannot populate A-private work before first successful B identity", async () => {
+    expect(
+      (
+        await write(page, `${org}/members`, {
+          login_name: "initial-user",
+          password,
+          role: "user",
+        })
+      ).status,
+    ).toBe(200);
+    const firstPage = await context.newPage();
+    const switcher = await context.newPage();
+    const privateRequests: string[] = [];
+    const privateResponses: { path: string; status: number }[] = [];
+    firstPage.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (
+        path.startsWith("/api/console/") ||
+        path.startsWith("/api/organizations/") ||
+        path.startsWith("/admin/v1/")
+      )
+        privateRequests.push(path);
+    });
+    firstPage.on("response", (response) => {
+      const path = new URL(response.url()).pathname;
+      if (
+        path.startsWith("/api/console/") ||
+        path.startsWith("/api/organizations/") ||
+        path.startsWith("/admin/v1/")
+      )
+        privateResponses.push({ path, status: response.status() });
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const arrived = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let metadataCalls = 0;
+    let heldPrincipal: string | undefined;
+    let heldStatus: number | undefined;
+    const metadataResponses: { id: string; status: number; marked: boolean }[] =
+      [];
+    await firstPage.route("**/api/auth/session", async (route) => {
+      metadataCalls++;
+      if (metadataCalls === 1) {
+        const original = await route.fetch();
+        heldPrincipal = (await original.json()).id;
+        heldStatus = original.status();
+        started();
+        await held;
+        await route.fulfill({
+          status: 503,
+          json: {
+            error: { type: "api_error", message: "initial metadata outage" },
+          },
+        });
+      } else {
+        const response = await route.fetch();
+        const body = await response.json();
+        metadataResponses.push({
+          id: body.id,
+          status: response.status(),
+          marked:
+            response.headers()["x-platform-signed-out"] === "1" ||
+            "x-console-signed-out" in response.headers(),
+        });
+        await route.fulfill({ response });
+      }
+    });
+    try {
+      await firstPage.goto("/members");
+      await arrived;
+      expect(heldStatus).toBe(200);
+      expect(heldPrincipal).toBe(session.id);
+      // The real A cookie can read private members now, but the app must not.
+      const opportunity = await firstPage.request.get(`${org}/members`);
+      expect(opportunity.status()).toBe(200);
+      await expect(
+        firstPage.locator('[data-native-identity="loading"]'),
+      ).toBeVisible();
+      await expect(
+        firstPage.getByRole("button", { name: "Create local member" }),
+      ).toHaveCount(0);
+      const beforeKeys = await firstPage
+        .locator('[data-native-identity="loading"]')
+        .evaluate((element) => {
+          type Fiber = {
+            memoizedProps?: { client?: QueryClient };
+            return?: Fiber;
+          };
+          const key = Object.keys(element).find((key) =>
+            key.startsWith("__reactFiber$"),
+          )!;
+          let fiber = (element as unknown as Record<string, Fiber>)[key];
+          while (fiber && !fiber.memoizedProps?.client?.getQueryData)
+            fiber = fiber.return!;
+          const client = fiber?.memoizedProps?.client;
+          if (!client) throw new Error("real Query provider missing");
+          Object.assign(window, { __initialDocument: true });
+          return client
+            .getQueryCache()
+            .getAll()
+            .map((query) => query.queryKey);
+        });
+      expect(beforeKeys).toEqual([["console-session"]]);
+      expect(privateRequests).toEqual([]);
+      await firstPage.screenshot({
+        path: join(
+          process.env.NATIVE_EVIDENCE_DIR!,
+          "initial-identity-loading.png",
+        ),
+        fullPage: true,
+      });
+      await login(switcher, "initial-user");
+      const next = await (
+        await switcher.request.get("/api/auth/session")
+      ).json();
+      expect(next.id).not.toBe(session.id);
+      expect(next.role).toBe("user");
+      release();
+      await firstPage.bringToFront();
+      await expect(firstPage.getByTestId("signed-in-as")).toHaveAttribute(
+        "data-account",
+        "initial-user",
+      );
+      await expect(firstPage.getByTestId("error-state")).toHaveAttribute(
+        "data-denied",
+        "true",
+      );
+      await expect(firstPage).toHaveURL(/\/members$/);
+      await expect(
+        firstPage.getByRole("button", { name: "Create local member" }),
+      ).toHaveCount(0);
+      expect(
+        await firstPage.evaluate(() => "__initialDocument" in window),
+      ).toBe(true);
+      const after = await privateCache(firstPage, sid);
+      expect(after).toEqual({
+        oldWindow: false,
+        oldPrivate: false,
+        oldResource: false,
+      });
+      expect(metadataResponses.length).toBeGreaterThan(0);
+      expect(
+        metadataResponses.every(
+          (response) =>
+            response.id === next.id &&
+            response.status === 200 &&
+            !response.marked,
+        ),
+      ).toBe(true);
+      expect(privateResponses.length).toBeGreaterThan(0);
+      expect(
+        privateResponses.every((response) => response.status === 403),
+      ).toBe(true);
+      const original = await firstPage.request.get("/api/auth/session", {
+        headers: { cookie: `map_session=${cookie.value}` },
+      });
+      expect(original.status()).toBe(200);
+      await firstPage.screenshot({
+        path: join(
+          process.env.NATIVE_EVIDENCE_DIR!,
+          "initial-identity-b-user-denied.png",
+        ),
+        fullPage: true,
+      });
+      writeFileSync(
+        join(
+          process.env.NATIVE_EVIDENCE_DIR!,
+          "initial-principal-browser.json",
+        ),
+        JSON.stringify(
+          {
+            sameContext: firstPage.context() === switcher.context(),
+            oldPrincipal: session.id,
+            firstConfirmedPrincipal: next.id,
+            heldStatus,
+            heldPrincipal,
+            injectedInitialStatus: 503,
+            privateOpportunityStatus: opportunity.status(),
+            beforeKeys,
+            privateRequestsBeforeRetry: [],
+            metadataResponses,
+            privateResponses,
+            after,
+            initialDocumentRetainedWithoutPrivatePopulation: true,
+            oldServerSessionStillValid: original.status() === 200,
+          },
+          null,
+          2,
+        ),
+      );
+    } finally {
+      release();
+      await firstPage.close();
+      await switcher.close();
+    }
+  });
   await login(page, "first-admin");
   await page.goto(`/sessions/${sid}?inspector=thread`);
   await page

@@ -2,6 +2,19 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-identity-loading",
+    route: "/members",
+    fixture: "held initial session metadata",
+    description:
+      "No private page or admission query before the initial principal.",
+  },
+  {
+    id: "native-identity-failure",
+    route: "/members",
+    fixture: "initial session metadata outage",
+    description: "An unbound document stays closed through session retries.",
+  },
+  {
     id: "native-password-login",
     route: "/login",
     fixture: "anonymous password mode",
@@ -82,6 +95,12 @@ export const NATIVE_SURFACES = [
     description: "Absent collections are not diagnosed as account-wide denial.",
   },
   {
+    id: "native-members-pending-create",
+    route: "/members",
+    fixture: "pending local create after dismissal",
+    description: "Focus returns to inactive Create while its write settles.",
+  },
+  {
     id: "native-members-pending-removal",
     route: "/members",
     fixture: "pending non-self removal after dismissal",
@@ -118,3 +137,14 @@ export const NATIVE_SURFACES = [
     description: "Create stays disabled while the admitted archive settles.",
   },
 ].map((surface) => ({ ...surface, mode: "platform" as const }));
+
+export function selectNativeSurfaces(selection?: string) {
+  if (!selection) return NATIVE_SURFACES;
+  const ids = selection.split(",");
+  const unknown = ids.filter(
+    (id) => !NATIVE_SURFACES.some((surface) => surface.id === id),
+  );
+  if (unknown.length)
+    throw new Error(`Unknown NATIVE_FIDELITY_IDS: ${unknown.join(",")}`);
+  return NATIVE_SURFACES.filter((surface) => ids.includes(surface.id));
+}

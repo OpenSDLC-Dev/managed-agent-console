@@ -1,3 +1,4 @@
+import { ConsoleSessionBoundary } from "@/components/shell/console-session";
 import { ConsoleShell } from "@/components/shell/console-shell";
 import { Providers } from "@/components/shell/providers";
 import { SidebarFooter } from "@/components/shell/sidebar-footer";
@@ -10,29 +11,33 @@ export default function ConsoleLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <Providers>
-      <ConsoleShell
-        version={<ConsoleVersion />}
-        footer={
-          <>
-            <div className="px-4 pb-3">
-              <ThemeToggle />
-            </div>
-            <div className="px-4 pb-2 text-[13px]">
-              <a
-                href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
-                target="_blank"
-                rel="noreferrer"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Platform documentation ↗
-              </a>
-            </div>
-            <SidebarFooter />
-          </>
-        }
+      <ConsoleSessionBoundary
+        native={process.env.CONSOLE_AUTH_MODE === "platform"}
       >
-        <SurfaceGuard>{children}</SurfaceGuard>
-      </ConsoleShell>
+        <ConsoleShell
+          version={<ConsoleVersion />}
+          footer={
+            <>
+              <div className="px-4 pb-3">
+                <ThemeToggle />
+              </div>
+              <div className="px-4 pb-2 text-[13px]">
+                <a
+                  href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Platform documentation ↗
+                </a>
+              </div>
+              <SidebarFooter />
+            </>
+          }
+        >
+          <SurfaceGuard>{children}</SurfaceGuard>
+        </ConsoleShell>
+      </ConsoleSessionBoundary>
     </Providers>
   );
 }

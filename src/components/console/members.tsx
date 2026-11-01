@@ -124,6 +124,8 @@ export function Members() {
           config.data?.mode === "password" && (
             <Button
               ref={createRef}
+              focusableWhenDisabled
+              className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
               disabled={busy}
               onClick={() => {
                 setError(undefined);

@@ -264,7 +264,7 @@ it.each(["remove", "role"])(
       );
     }
     const trigger = screen.getByRole("button", { name: "Create local member" });
-    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
     await user.click(trigger);
     expect(screen.queryByLabelText("Login name")).not.toBeInTheDocument();
     await act(async () => pending.resolve(Response.json({ id: member.id })));
@@ -416,7 +416,7 @@ it.each(["create", "update", "archive"])(
       );
     }
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
     await user.click(trigger);
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
     await act(async () =>

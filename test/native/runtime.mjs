@@ -23,6 +23,10 @@ if (!evidence || !platform)
   throw new Error(
     "NATIVE_EVIDENCE_DIR and NATIVE_PLATFORM_SOURCE are required (no credential files).",
   );
+if (process.platform !== "win32" && platform.includes("\\"))
+  throw new Error(
+    "NATIVE_PLATFORM_SOURCE cannot contain a literal backslash on non-Windows hosts (Go replacement path limitation).",
+  );
 mkdirSync(evidence, { recursive: true });
 const dir = mkdtempSync(join(evidence, "task6-native-"));
 const children = [],
@@ -30,6 +34,7 @@ const children = [],
 const readiness = new AbortController();
 let container,
   stopping = false,
+  ready = false,
   startupDone;
 const receipt = { dir, platform, started: [], container: null, cleaned: false };
 function durable(path, value, exclusive = false) {
@@ -130,6 +135,14 @@ function start(cmd, args, name, extra = {}) {
     child.on("error", (error) => {
       void shutdown(error);
     });
+    child.on("close", () => {
+      if (ready && !stopping)
+        void shutdown(
+          new Error(
+            `owned process ${creation.pid} (${name}) exited; see ${dir}`,
+          ),
+        );
+    });
     durable(join(dir, `${name}-creation.json`), creation, true);
     receipt.started.push(creation);
     record();
@@ -138,21 +151,27 @@ function start(cmd, args, name, extra = {}) {
   }
   return entry.child;
 }
+function checkAlive() {
+  const dead = children.find(
+    (entry) => entry.creation.name && (entry.error || entry.closed),
+  );
+  if (dead)
+    throw new Error(`owned process ${dead.child.pid} exited; see ${dir}`);
+}
 async function wait(url) {
   for (let n = 0; n < 240; n++) {
     checkStarting();
+    checkAlive();
     try {
       const response = await fetch(url, { signal: readiness.signal });
       await response.arrayBuffer();
-      if (response.status < 500) return;
+      checkStarting();
+      checkAlive();
+      if (response.status === 200) return;
     } catch {
       checkStarting();
     }
-    const dead = children.find(
-      (entry) => entry.creation.name && (entry.error || entry.closed),
-    );
-    if (dead)
-      throw new Error(`owned process ${dead.child.pid} exited; see ${dir}`);
+    checkAlive();
     await new Promise((r) => setTimeout(r, 250));
   }
   throw new Error(`runtime did not become ready: ${url}`);
@@ -388,10 +407,10 @@ async function shutdown(error) {
   }
   process.exit(failed || !receipt.cleaned ? 1 : 0);
 }
-process.once("SIGTERM", () => {
+process.on("SIGTERM", () => {
   void shutdown();
 });
-process.once("SIGINT", () => {
+process.on("SIGINT", () => {
   void shutdown();
 });
 startupDone = (async () => {
@@ -516,6 +535,9 @@ startupDone = (async () => {
     await wait("http://127.0.0.1:38100/api/health");
     await edge(38200, 38110);
     await edge(38201, 38111);
+    checkStarting();
+    checkAlive();
+    ready = true;
     console.log(`native runtime ready; receipt ${join(dir, "receipt.json")}`);
   } catch (error) {
     if (!stopping) {

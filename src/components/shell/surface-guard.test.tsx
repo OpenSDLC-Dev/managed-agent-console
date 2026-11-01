@@ -1,7 +1,9 @@
 ﻿import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Members } from "@/components/console/members";
+import { ServiceAccounts } from "@/components/console/service-accounts";
 import { SurfaceGuard } from "./surface-guard";
 import { SURFACES } from "@/lib/platform/surfaces";
 
@@ -184,5 +186,133 @@ it.each([
       expect(screen.queryByTestId("error-state")).toBeNull();
     }
     expect(screen.queryByText("the page")).toBeNull();
+  },
+);
+
+it.each(["members", "service-accounts"] as const)(
+  "probe: native /%s mounts real actions only after admission settles",
+  async (surface) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    navState.pathname = `/${surface}`;
+    let settle!: () => void;
+    const pending = new Promise<void>((r) => {
+      settle = r;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        if (input === "/api/auth/config")
+          return Response.json({ mode: "password", native_login: true });
+        if (input === "/api/auth/session")
+          return Response.json({
+            signed_in: true,
+            id: "user_admin",
+            role: "admin",
+            csrf_token: "test-csrf",
+          });
+        await pending;
+        return Response.json({ data: [], next_page: null, has_more: false });
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <SurfaceGuard>
+          {surface === "members" ? <Members /> : <ServiceAccounts />}
+        </SurfaceGuard>
+      </QueryClientProvider>,
+    );
+    await act(async () => {});
+    expect
+      .soft(
+        screen.queryByRole("button", {
+          name: /Create (local member|service account)/,
+        }),
+      )
+      .toBeNull();
+    expect
+      .soft(
+        client
+          .getQueryCache()
+          .getAll()
+          .map((q) => q.queryKey),
+      )
+      .toEqual([["surfaces"]]);
+    await act(async () => {
+      settle();
+    });
+    expect(
+      await screen.findByRole("button", {
+        name:
+          surface === "members"
+            ? "Create local member"
+            : "Create service account",
+      }),
+    ).toBeEnabled();
+    client.clear();
+  },
+);
+it.each([403, 404, 503] as const)(
+  "probe: native pending admission then %i never mounts a private action",
+  async (status) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    navState.pathname = "/service-accounts";
+    let settle!: () => void;
+    const pending = new Promise<void>((r) => {
+      settle = r;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await pending;
+        return Response.json(
+          {
+            error: {
+              type:
+                status === 403
+                  ? "permission_error"
+                  : status === 404
+                    ? "not_found_error"
+                    : "api_error",
+              message: "admission unavailable",
+            },
+          },
+          { status },
+        );
+      }),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <SurfaceGuard>
+          <ServiceAccounts />
+        </SurfaceGuard>
+      </QueryClientProvider>,
+    );
+    expect
+      .soft(screen.queryByRole("button", { name: "Create service account" }))
+      .toBeNull();
+    await act(async () => {
+      settle();
+    });
+    await waitFor(() =>
+      expect(client.getQueryData(["surfaces"])).toBeDefined(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Create service account" }),
+    ).toBeNull();
+    if (status === 404)
+      expect(
+        await screen.findByTestId("unavailable-surface"),
+      ).toBeInTheDocument();
+    else {
+      expect(await screen.findByTestId("error-state")).toBeInTheDocument();
+      expect(screen.queryByTestId("unavailable-surface")).toBeNull();
+    }
+    client.clear();
   },
 );

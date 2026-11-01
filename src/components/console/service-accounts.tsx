@@ -89,6 +89,8 @@ export function ServiceAccounts() {
         actions={
           <Button
             ref={triggerRef}
+            focusableWhenDisabled
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
             disabled={busy}
             onClick={() => {
               setError(undefined);

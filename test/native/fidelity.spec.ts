@@ -2,7 +2,8 @@ import { readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test, expect } from "@playwright/test";
-import { NATIVE_SURFACES } from "../fidelity/native-surfaces";
+import { selectNativeSurfaces } from "../fidelity/native-surfaces";
+const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
 const org = "/api/console/organizations/default";
 const password = "native-shot-password-123";
 
@@ -110,11 +111,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
       })
     ).status(),
   ).toBe(200);
-  for (const surface of NATIVE_SURFACES.filter(
-    (surface) =>
-      !process.env.NATIVE_FIDELITY_IDS ||
-      process.env.NATIVE_FIDELITY_IDS.split(",").includes(surface.id),
-  )) {
+  for (const surface of selected) {
     await test.step(surface.id, async () => {
       let releaseWrite: (() => void) | undefined;
       let writeArrived: Promise<void> | undefined;
@@ -131,7 +128,35 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           ].includes(surface.id)
         )
           await page.context().addCookies(adminCookies);
-        if (surface.id === "native-oidc-login") {
+        if (
+          surface.id === "native-identity-loading" ||
+          surface.id === "native-identity-failure"
+        ) {
+          await page.route("**/api/auth/session", async (route) => {
+            if (surface.id === "native-identity-loading") {
+              await new Promise((r) => setTimeout(r, 2000));
+              await route.continue().catch(() => {});
+            } else
+              await route.fulfill({
+                status: 503,
+                json: {
+                  error: {
+                    type: "api_error",
+                    message: "Session metadata is temporarily unavailable.",
+                  },
+                },
+              });
+          });
+          await page.goto(surface.route);
+          await expect(
+            page.locator(
+              `[data-native-identity=${surface.id.endsWith("loading") ? "loading" : "error"}]`,
+            ),
+          ).toBeVisible();
+          await expect(
+            page.getByRole("button", { name: "Create local member" }),
+          ).toHaveCount(0);
+        } else if (surface.id === "native-oidc-login") {
           await page.goto("http://127.0.0.1:38201/login");
           await expect(
             page.getByRole("link", { name: "Sign in with SSO" }),
@@ -260,17 +285,27 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
                 .getByLabel(`Role for ${target}`, { exact: true })
                 .selectOption("developer");
             } else if (surface.id.endsWith("pending-create")) {
+              const isMember = surface.route === "/members";
               await page
                 .getByRole("button", {
-                  name: "Create service account",
+                  name: isMember
+                    ? "Create local member"
+                    : "Create service account",
                   exact: true,
                 })
                 .click();
               await page
-                .getByLabel("Name", { exact: true })
+                .getByLabel(isMember ? "Login name" : "Name", { exact: true })
                 .fill(`new-${target}`);
+              if (isMember)
+                await page
+                  .getByLabel("Password", { exact: true })
+                  .fill(password);
               await page
-                .getByRole("button", { name: "Create account", exact: true })
+                .getByRole("button", {
+                  name: isMember ? "Create member" : "Create account",
+                  exact: true,
+                })
                 .click();
             } else if (surface.id.endsWith("pending-update")) {
               await page
@@ -301,6 +336,16 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               exact: true,
             });
             await expect(trigger).toBeDisabled();
+            if (
+              surface.id.endsWith("pending-create") ||
+              surface.id.endsWith("pending-update")
+            ) {
+              await expect(trigger).toBeFocused();
+              await trigger.press("Enter");
+              await trigger.press("Space");
+              await trigger.dispatchEvent("click");
+              await expect(page.getByRole("dialog")).toHaveCount(0);
+            }
             await expect(page.getByRole("dialog")).toHaveCount(0);
           }
           if (surface.id === "native-member-create-refused") {

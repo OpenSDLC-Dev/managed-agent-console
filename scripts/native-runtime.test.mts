@@ -34,10 +34,24 @@ function fixture(kind: string, platformPath = "platform") {
 import cp from "node:child_process";
 import http from "node:http";
 import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { syncBuiltinESMExports } from "node:module";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const original = cp.spawn, sync = cp.spawnSync;
+const servers = new Map();
+const timeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...args) => timeout(fn, kind.startsWith("status-") && ms === 250 ? 0 : ms, ...args);
+function synthetic(name) {
+  const child = new EventEmitter();
+  child.pid = 424242; child.exitCode = null; child.signalCode = null;
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  const alive = setInterval(() => {}, 1000);
+  child.finish = (code = 0, signal = null) => { clearInterval(alive); child.exitCode = code; child.signalCode = signal; child.emit("close", code, signal); };
+  child.kill = signal => { queueMicrotask(() => child.finish(null, signal)); return true; };
+  servers.set(name, child);
+  return child;
+}
 const dir = ${JSON.stringify(dir)}, kind = ${JSON.stringify(kind)};
 const id = "1".padStart(64, "0");
 const log = (value) => appendFileSync(${JSON.stringify(calls)}, JSON.stringify(value) + "\\n");
@@ -74,6 +88,17 @@ cp.spawnSync = (command, args, options) => {
 };
 cp.spawn = (command, args, options) => {
   if (command === "docker" || command === "go") {
+    if (command === "docker" && args[0] === "create" && kind === "create-no-receipt") {
+      log({ command, args, held: true });
+      return synthetic("create");
+    }
+    if (command === "docker" && args[0] === "rm" && kind === "repeat-signals") {
+      const value = result(command, args, options);
+      const child = synthetic("cleanup");
+      log({ cleanupHeld: true });
+      timeout(() => { child.stdout.end(value.stdout); child.finish(); }, 300);
+      return child;
+    }
     if (command === "docker" && args[0] === "port" && kind === "blocked") {
       const child = original(process.execPath, ["-e", "setInterval(()=>{}, 1000)"], options);
       log({ held: true, pid: child.pid });
@@ -88,6 +113,7 @@ cp.spawn = (command, args, options) => {
     return original(process.execPath, ["-e", "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
   }
   if (command.endsWith("native-platform")) {
+    if (["ready", "repeat-signals", "post-ready-close", "dead-200", "dead-before-announce"].includes(kind) || kind.startsWith("status-")) return synthetic("platform");
     if (kind.startsWith("held-")) {
       // Event-only server: the supervisor owns only the runtime child, even on RED.
       const child = new EventEmitter();
@@ -116,18 +142,29 @@ cp.spawn = (command, args, options) => {
     if (kind === "denied" && process.platform !== "win32") writeFileSync(missing, "not executable", { mode: 0o600 });
     return original(missing, [], options);
   }
-  if (command === process.execPath && args.includes("node_modules/next/dist/bin/next")) return original(join(dir, "missing-console"), [], options);
+  if (command === process.execPath && args.includes("node_modules/next/dist/bin/next")) {
+    if (["ready", "repeat-signals", "post-ready-close", "dead-200", "dead-before-announce"].includes(kind) || kind.startsWith("status-")) return synthetic("console");
+    return original(join(dir, "missing-console"), [], options);
+  }
   throw Error("unexpected spawn " + command);
 };
+let listeners = 0;
 http.createServer = () => {
   const server = new EventEmitter();
-  server.listen = () => queueMicrotask(() => server.emit("listening"));
+  server.listen = () => queueMicrotask(() => {
+    server.emit("listening");
+    listeners++;
+    if (kind === "dead-before-announce" && listeners === 3) servers.get("console").finish();
+    if (kind === "post-ready-close" && listeners === 3) timeout(() => servers.get("platform").finish(), 50);
+  });
   server.closeAllConnections = () => {};
   server.close = (callback) => callback();
   return server;
 };
 globalThis.fetch = async (url, { signal } = {}) => {
-  if (!kind.startsWith("held-")) return new Response("{}", { status: 200 });
+  if (kind === "dead-200" && !servers.get("platform").exitCode) servers.get("platform").finish();
+  const status = kind.startsWith("status-") ? Number(kind.split("-")[1]) : 200;
+  if (!kind.startsWith("held-")) { log({ readiness: url, status }); return new Response("{}", { status }); }
   // An in-flight socket keeps the runtime alive after its server child stops.
   const pending = setInterval(() => {}, 1000);
   const cancelled = () => {
@@ -314,12 +351,7 @@ it.each([
   ["plain", true],
   ["source with spaces", false],
   ["source with spaces", true],
-  ...(process.platform === "win32"
-    ? []
-    : [
-        ['source"quote', false],
-        ["source\\backslash", false],
-      ]),
+  ...(process.platform === "win32" ? [] : [['source"quote', false]]),
 ] as [string, boolean][])(
   "probe: runtime replacement serializes an absolute %s path (relative=%s)",
   (name, relativeSource) => {
@@ -346,6 +378,204 @@ it.each([
       expect(receipt.platform).toBe(f.platform);
       expect(commands.find((c) => c.command === "go").cwd).toBe(goModule);
     } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+
+it.each([401, 404, 503])(
+  "probe: readiness rejects HTTP %i and joins owned cleanup",
+  (status) => {
+    const f = fixture(`status-${status}`);
+    try {
+      const result = spawnSync(process.execPath, f.args, {
+        env: f.env,
+        encoding: "utf8",
+        timeout: 5000,
+      });
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toContain("runtime did not become ready");
+      expect(result.stdout).not.toContain("native runtime ready");
+      assertClean(f);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it("probe: an already closed named child cannot be ready even with HTTP 200", () => {
+  const f = fixture("dead-200");
+  try {
+    const result = spawnSync(process.execPath, f.args, {
+      env: f.env,
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toMatch(/owned process .* exited/);
+    expect(result.stdout).not.toContain("native runtime ready");
+    assertClean(f);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+it("probe: an unexpected long-lived child close after readiness fails and cleans the runtime", () => {
+  const f = fixture("post-ready-close");
+  try {
+    const result = spawnSync(process.execPath, f.args, {
+      env: f.env,
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stdout).toContain("native runtime ready");
+    expect(result.stderr).toMatch(/owned process .* exited/);
+    assertClean(f);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+it.skipIf(process.platform === "win32").each(["SIGTERM", "SIGINT"] as const)(
+  "probe: repeated %s joins cleanup rather than terminating it",
+  async (signal) => {
+    const f = fixture("repeat-signals");
+    const child = spawn(process.execPath, f.args, {
+      env: f.env,
+      stdio: "pipe",
+    });
+    const closed = once(child, "close");
+    let output = "";
+    child.stdout.on("data", (data) => {
+      output += data;
+    });
+    try {
+      for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
+        await new Promise((r) => setTimeout(r, 10));
+      expect(output).toContain("native runtime ready");
+      child.kill(signal);
+      for (
+        let n = 0;
+        n < 200 &&
+        !readFileSync(f.calls, "utf8").includes('"cleanupHeld":true');
+        n++
+      )
+        await new Promise((r) => setTimeout(r, 10));
+      expect(readFileSync(f.calls, "utf8")).toContain('"cleanupHeld":true');
+      child.kill(signal);
+      expect(await closed).toEqual([0, null]);
+      assertClean(f);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      await closed;
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it.skipIf(process.platform === "win32")(
+  "probe: POSIX literal-backslash platform source fails before resources",
+  () => {
+    const f = fixture("path", "source\\backslash");
+    try {
+      const result = spawnSync(process.execPath, f.args, {
+        env: f.env,
+        encoding: "utf8",
+        timeout: 5000,
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("literal backslash");
+      expect(existsSync(f.calls)).toBe(false);
+      expect(existsSync(f.evidence)).toBe(false);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it.skipIf(process.platform === "win32")(
+  "probe: interrupted create without a cidfile reports unknown ownership and never removes anything",
+  async () => {
+    const f = fixture("create-no-receipt");
+    const child = spawn(process.execPath, f.args, {
+      env: f.env,
+      stdio: "pipe",
+    });
+    const closed = once(child, "close");
+    try {
+      for (let n = 0; n < 200; n++) {
+        if (
+          existsSync(f.calls) &&
+          readFileSync(f.calls, "utf8").includes('"held":true')
+        )
+          break;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(readFileSync(f.calls, "utf8")).toContain('"held":true');
+      child.kill("SIGTERM");
+      expect(await closed).toEqual([1, null]);
+      const receipt = JSON.parse(
+        readFileSync(join(f.evidence, "task6-native-receipt.json"), "utf8"),
+      );
+      expect(receipt.cleanupErrors).toEqual([
+        "Error: container creation has no original receipt; ownership outcome is unknown",
+      ]);
+      expect(receipt.cleaned).toBe(false);
+      const commands = readFileSync(f.calls, "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      expect(commands.filter((c) => c.args?.[0] === "rm")).toEqual([]);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      await closed;
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+
+it("probe: a child closing between health and the final ready announcement fails startup", () => {
+  const f = fixture("dead-before-announce");
+  try {
+    const result = spawnSync(process.execPath, f.args, {
+      env: f.env,
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(1);
+    expect(result.stderr).toMatch(/owned process .* exited/);
+    expect(result.stdout).not.toContain("native runtime ready");
+    assertClean(f);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+it.skipIf(process.platform === "win32")(
+  "healthy HTTP 200 children become ready and normal shutdown ignores their owned closes",
+  async () => {
+    const f = fixture("ready");
+    const child = spawn(process.execPath, f.args, {
+      env: f.env,
+      stdio: "pipe",
+    });
+    const closed = once(child, "close");
+    let output = "";
+    child.stdout.on("data", (data) => {
+      output += data;
+    });
+    try {
+      for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
+        await new Promise((r) => setTimeout(r, 10));
+      expect(output).toContain("native runtime ready");
+      child.kill("SIGTERM");
+      expect(await closed).toEqual([0, null]);
+      assertClean(f);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+      await closed;
       rmSync(f.dir, { recursive: true, force: true });
     }
   },
