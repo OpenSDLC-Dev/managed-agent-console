@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { useEffect, type ReactNode } from "react";
 import {
@@ -9,6 +16,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import ConsoleLayout from "@/app/(console)/layout";
+import { Members } from "@/components/console/members";
 import { nativeGet } from "@/lib/platform/native";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { resetSignedOutBounceForTests } from "@/lib/identity/signed-out";
@@ -281,6 +289,119 @@ it("keeps same-id metadata updates but departs exactly once for a later differen
   await refresh();
   expect(assign).toHaveBeenCalledTimes(1);
 });
+it.each([false, true])(
+  "probe: pending deliberate logout preserves its private boundary (different principal=%s)",
+  async (different) => {
+    const logout = held();
+    const privateRead = held();
+    const row = {
+      id: "user_sensitive",
+      type: "user",
+      name: "Sensitive A row",
+      email: "private@example.test",
+      login_name: "private-member",
+      role: "user",
+      role_source: "manual",
+      status: "active",
+      added_at: "2026-10-01T00:00:00Z",
+    };
+    const originalFetch = fetcher.getMockImplementation()! as typeof fetch;
+    fetcher.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input);
+        if (path === "/api/auth/logout") return logout.promise;
+        if (path === "/api/auth/config")
+          return Response.json({ mode: "password", native_login: true });
+        if (
+          actor.id === accountB.id &&
+          (path.startsWith("/api/console/") ||
+            path.startsWith("/api/organizations/") ||
+            path.startsWith("/admin/v1/"))
+        )
+          return privateRead.promise;
+        if (path.includes("/api/console/organizations/default/members"))
+          return Response.json({
+            data: [row],
+            has_more: false,
+            first_id: row.id,
+            last_id: row.id,
+          });
+        return originalFetch(input, init);
+      },
+    );
+    try {
+      render(
+        <ConsoleLayout>
+          <PrivatePage />
+          <Members />
+        </ConsoleLayout>,
+      );
+      await screen.findByText("Sensitive A row");
+      await screen.findByText("Actor A");
+      expect(mounts).toBe(1);
+      fireEvent.click(screen.getByTestId("sign-out"));
+      await waitFor(() =>
+        expect(fetcher).toHaveBeenCalledWith(
+          "/api/auth/logout",
+          expect.objectContaining({ method: "POST" }),
+        ),
+      );
+      expect(screen.getByTestId("sign-out")).toBeDisabled();
+      actor = different
+        ? { ...accountB, csrf_token: "csrf-b" }
+        : {
+            ...accountA,
+            name: "Renamed A",
+            role: "developer",
+            email: "a@example.test",
+            csrf_token: "new-csrf",
+            expires_at: "2098-01-01T00:00:00Z",
+          };
+      await refresh();
+      // Drain query notifications and the admission effect before inspecting UI.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+      expect(
+        state.client!.getQueryData<{ id: string }>(["console-session"])?.id,
+      ).toBe(actor.id);
+      // Retain the cache hazard: withholding, not clearing, isolates B from A.
+      expect(
+        JSON.stringify(state.client!.getQueriesData({ queryKey: ["members"] })),
+      ).toContain("Sensitive A row");
+      expect(assign).not.toHaveBeenCalled();
+      if (different) {
+        expect.soft(screen.queryByText("Sensitive A row")).toBeNull();
+        expect.soft(screen.queryByTestId("private-page")).toBeNull();
+        expect.soft(screen.queryByText("Actor B")).toBeNull();
+        const signOut = screen.queryByTestId("sign-out");
+        if (signOut) expect.soft(signOut).toBeDisabled();
+      } else {
+        expect(screen.getByText("Sensitive A row")).toBeVisible();
+        expect(screen.getByText("Renamed A")).toBeVisible();
+        expect(screen.getByTestId("sign-out")).toBeDisabled();
+      }
+      expect.soft(mounts).toBe(1);
+    } finally {
+      await act(async () => {
+        privateRead.release(
+          Response.json(
+            { error: { type: "permission_error", message: "requires admin" } },
+            { status: 403 },
+          ),
+        );
+        logout.release(Response.json({ ok: true }));
+      });
+    }
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/login"),
+    );
+    expect(
+      fetcher.mock.calls.filter(([path]) => path === "/api/auth/logout"),
+    ).toHaveLength(1);
+  },
+);
+
 it("retains the document principal across actual layout remounts", async () => {
   const first = render(
     <ConsoleLayout>

@@ -950,6 +950,218 @@ test("real native password/setup, current authority, management, private bytes/S
     }
   });
   await login(page, "first-admin");
+  await test.step("pending deliberate logout never rebinds a replacement cookie over private member cache", async () => {
+    await page.goto("/members");
+    await expect(page.getByLabel("Role for first-admin")).toBeVisible();
+    const before = await privateCache(page, sid, true);
+    expect(before.oldPrivate).toBe(true);
+    const oldCookie = (await context.cookies()).find(
+      (cookie) => cookie.name === "map_session",
+    )!;
+    const oldSession = await (
+      await page.request.get("/api/auth/session")
+    ).json();
+    const switcher = await context.newPage();
+    expect(switcher.context()).toBe(page.context());
+    const navigations: string[] = [];
+    const navigation = (request: Request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+        navigations.push(
+          new URL(request.url()).pathname + new URL(request.url()).search,
+        );
+    };
+    page.on("request", navigation);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const arrived = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    let logoutStatus: number | undefined;
+    let logoutCalls = 0;
+    const logoutRoute = async (route: import("@playwright/test").Route) => {
+      logoutCalls++;
+      // The real POST revokes A. Delay only its successful response (including
+      // its expired cookie), not B's login, metadata or private authorization.
+      const response = await route.fetch();
+      logoutStatus = response.status();
+      started();
+      await held;
+      await route.fulfill({ response });
+    };
+    await page.route("**/api/auth/logout", logoutRoute);
+    try {
+      await page.evaluate(() => {
+        const client = (
+          window as unknown as { __nativePrincipalDocument: QueryClient }
+        ).__nativePrincipalDocument;
+        const proof = {
+          client,
+          metadata: [] as {
+            id: string;
+            role: string;
+            status: number;
+            marked: boolean;
+          }[],
+          renders: [] as {
+            account: string | null;
+            oldRow: boolean;
+            privateControl: boolean;
+            signOutEnabled: boolean;
+          }[],
+        };
+        Object.assign(window, { __pendingSignoutProof: proof });
+        const original = window.fetch;
+        window.fetch = async (...args) => {
+          const response = await original(...args);
+          if (String(args[0]) === "/api/auth/session" && response.ok) {
+            const body = await response.clone().json();
+            proof.metadata.push({
+              id: body.id,
+              role: body.role,
+              status: response.status,
+              marked:
+                response.headers.has("x-platform-signed-out") ||
+                response.headers.has("x-console-signed-out"),
+            });
+          }
+          return response;
+        };
+        const observer = new MutationObserver(() => {
+          const footer = document.querySelector('[data-testid="signed-in-as"]');
+          const signOut = document.querySelector<HTMLButtonElement>(
+            '[data-testid="sign-out"]',
+          );
+          proof.renders.push({
+            account: footer?.getAttribute("data-account") ?? null,
+            oldRow: !!document.querySelector(
+              '[aria-label="Role for first-admin"]',
+            ),
+            privateControl: [...document.querySelectorAll("button")].some(
+              (button) => button.textContent === "Create local member",
+            ),
+            signOutEnabled: !!signOut && !signOut.disabled,
+          });
+        });
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+        });
+      });
+      await page.getByTestId("sign-out").click();
+      await arrived;
+      expect(logoutStatus).toBe(200);
+      await expect(page.getByTestId("sign-out")).toBeDisabled();
+      const revoked = await page.request.get("/api/auth/session", {
+        headers: { cookie: `map_session=${oldCookie.value}` },
+      });
+      expect(revoked.status()).toBe(401);
+      await login(switcher, "initial-user");
+      const replacement = await (
+        await switcher.request.get("/api/auth/session")
+      ).json();
+      expect(replacement.id).not.toBe(oldSession.id);
+      expect(replacement.role).toBe("user");
+      await page.evaluate(async () => {
+        const { client } = (
+          window as unknown as {
+            __pendingSignoutProof: { client: QueryClient };
+          }
+        ).__pendingSignoutProof;
+        await client.refetchQueries({ queryKey: ["console-session"] });
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+      });
+      const pending = await page.evaluate(() => {
+        const proof = (
+          window as unknown as {
+            __pendingSignoutProof: {
+              client: QueryClient;
+              metadata: unknown[];
+              renders: {
+                account: string | null;
+                oldRow: boolean;
+                privateControl: boolean;
+                signOutEnabled: boolean;
+              }[];
+            };
+          }
+        ).__pendingSignoutProof;
+        return {
+          id: proof.client.getQueryData<{ id: string }>(["console-session"])
+            ?.id,
+          memberCacheRetained: JSON.stringify(
+            proof.client.getQueriesData({ queryKey: ["members"] }),
+          ).includes("first-admin"),
+          oldPrivateCacheRetained:
+            proof.client.getQueryData(["members", "principal-boundary"]) !==
+            undefined,
+          metadata: proof.metadata,
+          replacementRenders: proof.renders.filter(
+            (render) => render.account === "initial-user",
+          ),
+        };
+      });
+      expect(pending.id).toBe(replacement.id);
+      expect(pending.metadata).toContainEqual({
+        id: replacement.id,
+        role: "user",
+        status: 200,
+        marked: false,
+      });
+      expect(pending.memberCacheRetained).toBe(true);
+      expect(pending.oldPrivateCacheRetained).toBe(true);
+      expect(pending.replacementRenders).toEqual([]);
+      await expect(
+        page.locator('[data-native-identity="loading"]'),
+      ).toBeVisible();
+      await expect(page.getByLabel("Role for first-admin")).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Create local member" }),
+      ).toHaveCount(0);
+      await expect(page.getByTestId("signed-in-as")).toHaveCount(0);
+      await expect(page.getByTestId("sign-out")).toHaveCount(0);
+      expect(navigations).toEqual([]);
+      release();
+      await expect(page).toHaveURL(/\/login$/);
+      expect(navigations).toEqual(["/login"]);
+      expect(logoutCalls).toBe(1);
+      writeFileSync(
+        join(process.env.NATIVE_EVIDENCE_DIR!, "pending-signout-browser.json"),
+        JSON.stringify(
+          {
+            sameContext: true,
+            oldPrincipal: oldSession.id,
+            replacementPrincipal: replacement.id,
+            injectedFault:
+              "Only the actual successful logout response and its expired cookie were held; metadata and private reads were real and unmodified.",
+            logoutStatus,
+            oldServerSessionStatusAfterActualLogout: revoked.status(),
+            pending,
+            navigations,
+            logoutCalls,
+          },
+          null,
+          2,
+        ),
+      );
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+      page.off("request", navigation);
+      await switcher.close();
+    }
+  });
+  // The held POST revoked only the later A session, not the original setup
+  // session. Restore that actual fixture cookie without exceeding login limits.
+  await context.addCookies([cookie]);
+  expect((await (await page.request.get("/api/auth/session")).json()).id).toBe(
+    session.id,
+  );
   await page.goto(`/sessions/${sid}?inspector=thread`);
   await page
     .getByRole("button", { name: "Child thread worker", exact: true })

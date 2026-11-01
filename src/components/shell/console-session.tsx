@@ -56,9 +56,12 @@ function NativeSessionBoundary({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // The observer above confirms the document id before private children mount.
     // Keep this boundary mounted through errors, including the initial retry.
+    // Keep the initial id even when deliberate sign-out suppresses automatic departure.
     // Admission needs a committed effect after the external document identity check.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (data?.signed_in && data.id && !hasBouncedToLogin()) setBoundId(data.id);
+    if (data?.signed_in && data.id && !hasBouncedToLogin()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBoundId((initial) => initial ?? data.id);
+    }
   }, [data?.signed_in, data?.id]);
   if (!boundId || boundId !== data?.id || hasBouncedToLogin()) {
     return (
