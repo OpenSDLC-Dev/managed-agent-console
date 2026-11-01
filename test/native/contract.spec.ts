@@ -8,10 +8,18 @@ import {
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Request } from "@playwright/test";
+import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
 const org = "/api/console/organizations/default";
 const password = "native-test-password-123";
+type StreamReceipt = {
+  id: number;
+  port: number;
+  path: string;
+  openedAt: string;
+  closedAt: string | null;
+};
 function receipt() {
   return JSON.parse(
     readFileSync(
@@ -46,6 +54,40 @@ async function login(page: Page, name: string) {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+}
+
+// Inspect the actual provider rather than claiming that a window marker proves
+// Query cache disposal. This test-only traversal adds no production debug hook.
+async function privateCache(page: Page, sid: string, seed = false) {
+  return page.getByTestId("signed-in-as").evaluate(
+    (element, { sid, seed }) => {
+      type Fiber = { memoizedProps?: { client?: QueryClient }; return?: Fiber };
+      const key = Object.keys(element).find((key) =>
+        key.startsWith("__reactFiber$"),
+      );
+      let fiber: Fiber | undefined = key
+        ? (element as unknown as Record<string, Fiber>)[key]
+        : undefined;
+      while (fiber && !fiber.memoizedProps?.client?.getQueryData)
+        fiber = fiber.return;
+      const client = fiber?.memoizedProps?.client;
+      if (!client)
+        throw new Error("The real QueryClient provider was not found");
+      if (seed) {
+        client.setQueryData(["members", "principal-boundary"], {
+          email: "old-private@example.test",
+        });
+        Object.assign(window, { __nativePrincipalDocument: client });
+      }
+      return {
+        oldWindow: "__nativePrincipalDocument" in window,
+        oldPrivate:
+          client.getQueryData(["members", "principal-boundary"]) !== undefined,
+        oldResource: client.getQueryData(["session", sid]) !== undefined,
+      };
+    },
+    { sid, seed },
+  );
 }
 
 for (const [name, relativeSource] of [
@@ -498,6 +540,205 @@ test("real native password/setup, current authority, management, private bytes/S
       ),
     )
     .toBe(true);
+  await expect(page.getByTestId("stream-state")).toHaveAttribute(
+    "data-state",
+    "live",
+  );
+  await test.step("same-context account replacement drops the old document, Query cache and both live streams", async () => {
+    const oldStreams = (receipt().streams as StreamReceipt[]).filter(
+      (stream) =>
+        stream.port === 38200 && stream.path.includes(`/sessions/${sid}/`),
+    );
+    expect(oldStreams).toHaveLength(2);
+    expect(oldStreams.every((stream) => stream.closedAt === null)).toBe(true);
+    const before = await privateCache(page, sid, true);
+    expect(before).toEqual({
+      oldWindow: true,
+      oldPrivate: true,
+      oldResource: true,
+    });
+    const switcher = await context.newPage();
+    expect(switcher.context()).toBe(page.context());
+    const navigations: string[] = [];
+    const navigation = (r: Request) => {
+      if (r.isNavigationRequest() && r.frame() === page.mainFrame())
+        navigations.push(new URL(r.url()).pathname);
+    };
+    page.on("request", navigation);
+    const nextSession = await (
+      await userPage.request.get("/api/auth/session")
+    ).json();
+    // Capture a clone before returning the real response to the app. Chromium
+    // can discard the protocol response body as soon as the document leaves.
+    await page.evaluate(() => {
+      const original = window.fetch;
+      window.fetch = async (...args) => {
+        const response = await original(...args);
+        if (String(args[0]) === "/api/auth/session" && response.ok) {
+          const { id, signed_in } = await response.clone().json();
+          console.info(
+            "principal-boundary-session:" +
+              JSON.stringify({
+                id,
+                signed_in,
+                status: response.status,
+                signedOutMarker:
+                  response.headers.has("x-platform-signed-out") ||
+                  response.headers.has("x-console-signed-out"),
+              }),
+          );
+        }
+        return response;
+      };
+    });
+    const confirmedReplacement = page.waitForEvent("console", {
+      predicate: (message) =>
+        message.text().startsWith("principal-boundary-session:") &&
+        JSON.parse(message.text().split("principal-boundary-session:")[1])
+          .id === nextSession.id,
+      timeout: 20_000,
+    });
+    try {
+      await login(switcher, "new-person");
+      await page.bringToFront();
+      const replacement = JSON.parse(
+        (await confirmedReplacement)
+          .text()
+          .split("principal-boundary-session:")[1],
+      );
+      expect(replacement).toEqual({
+        id: nextSession.id,
+        signed_in: true,
+        status: 200,
+        signedOutMarker: false,
+      });
+      expect(nextSession.id).not.toBe(session.id);
+      await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
+      await expect(page.getByTestId("signed-in-as")).toHaveAttribute(
+        "data-account",
+        "new-person",
+      );
+      const after = await privateCache(page, sid);
+      expect(after).toEqual({
+        oldWindow: false,
+        oldPrivate: false,
+        oldResource: false,
+      });
+      // Assert closures on the original fixture response handles, not on
+      // Playwright events that Chromium omits for a discarded document.
+      await expect
+        .poll(() =>
+          oldStreams.every((old) =>
+            (receipt().streams as StreamReceipt[]).some(
+              (current) =>
+                current.id === old.id && typeof current.closedAt === "string",
+            ),
+          ),
+        )
+        .toBe(true);
+      expect(navigations.filter((path) => path === "/")).toHaveLength(1);
+      expect(navigations).not.toContain("/login");
+      // Use the original fixture cookie only in this explicit request. A document
+      // switch must not revoke that still-valid server session to make SSE end.
+      const original = await page.request.get("/api/auth/session", {
+        headers: { cookie: `map_session=${cookie.value}` },
+      });
+      expect(original.status()).toBe(200);
+      expect((await original.json()).id).toBe(session.id);
+      writeFileSync(
+        join(
+          process.env.NATIVE_EVIDENCE_DIR!,
+          "principal-boundary-browser.json",
+        ),
+        JSON.stringify(
+          {
+            sameContext: true,
+            oldPrincipal: session.id,
+            newPrincipal: nextSession.id,
+            replacementStatus: replacement.status,
+            signedOutMarker: false,
+            before,
+            after,
+            navigations,
+            oldSessionStillValid: original.status() === 200,
+            streams: (receipt().streams as StreamReceipt[]).filter((current) =>
+              oldStreams.some((old) => old.id === current.id),
+            ),
+          },
+          null,
+          2,
+        ),
+      );
+
+      // The same replacement must also leave a real dirty editor without an
+      // application confirmation or a native beforeunload prompt retaining it.
+      page.off("request", navigation);
+      await login(page, "first-admin");
+      await page.goto(`/agents/${agent.body.id}`);
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("Old actor unsaved draft");
+      await page
+        .getByRole("link", { name: "Dashboard", exact: true })
+        .first()
+        .click();
+      const prompt = page.getByRole("dialog", {
+        name: "Unsaved changes",
+        exact: true,
+      });
+      await prompt.getByRole("button", { name: "Stay" }).click();
+      await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+        "Old actor unsaved draft",
+      );
+      const dialogs: string[] = [];
+      const onDialog = (dialog: import("@playwright/test").Dialog) => {
+        dialogs.push(dialog.type());
+        void dialog.dismiss();
+      };
+      page.on("dialog", onDialog);
+      try {
+        await login(switcher, "new-person");
+        await page.bringToFront();
+        await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
+        await expect(page.getByTestId("signed-in-as")).toHaveAttribute(
+          "data-account",
+          "new-person",
+        );
+        await expect(page.getByLabel("Name", { exact: true })).toHaveCount(0);
+        await expect(prompt).toHaveCount(0);
+        expect(dialogs).toEqual([]);
+        writeFileSync(
+          join(
+            process.env.NATIVE_EVIDENCE_DIR!,
+            "principal-boundary-dirty-browser.json",
+          ),
+          JSON.stringify(
+            {
+              voluntaryNavigationGuarded: true,
+              oldDraftRetainedOnStay: true,
+              replacementReachedNewDocument: true,
+              oldDraftInputs: 0,
+              dialogs,
+            },
+            null,
+            2,
+          ),
+        );
+      } finally {
+        page.off("dialog", onDialog);
+      }
+    } finally {
+      page.off("request", navigation);
+      await switcher.close();
+    }
+  });
+  // Restore account A and its child view for the existing authority-withdrawal
+  // contract. The two-page test above did not log either account out.
+  await login(page, "first-admin");
+  await page.goto(`/sessions/${sid}?inspector=thread`);
+  await page
+    .getByRole("button", { name: "Child thread worker", exact: true })
+    .click();
   await expect(page.getByTestId("stream-state")).toHaveAttribute(
     "data-state",
     "live",

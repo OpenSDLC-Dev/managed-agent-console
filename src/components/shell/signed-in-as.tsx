@@ -2,8 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useLeaveConfirmation } from "./unsaved-changes";
-import { useState } from "react";
-import { beginSignOut, leaveAfterSignOut } from "@/lib/identity/signed-out";
+import { useEffect, useState } from "react";
+import {
+  beginSignOut,
+  leaveAfterSignOut,
+  leaveIfPrincipalChanged,
+} from "@/lib/identity/signed-out";
 
 import { csrfHeaders, isNativeConsole } from "@/lib/platform/http";
 import { readAccount } from "@/lib/platform/native";
@@ -23,6 +27,12 @@ export function SignedInAs() {
     refetchInterval: isNativeConsole() ? 15_000 : false,
     retry: 1,
   });
+
+  useEffect(() => {
+    if (isNativeConsole() && data?.signed_in && data.id) {
+      leaveIfPrincipalChanged(data.id, () => leave.setDirty(false));
+    }
+  }, [data?.signed_in, data?.id, leave]);
 
   if (!data?.signed_in) return null;
   // A provider need not release either claim; the fallback still gives the

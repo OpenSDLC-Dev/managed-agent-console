@@ -180,6 +180,24 @@ async function edge(port, upstream) {
           path.startsWith("/v1/")
         ? upstream
         : 38100;
+    if (path.endsWith("/stream")) {
+      // Keep the original response handle as evidence. Chromium can discard an
+      // old document's SSE requests without emitting Playwright finish events.
+      receipt.streams ??= [];
+      const stream = {
+        id: receipt.streams.length + 1,
+        port,
+        path: req.url,
+        openedAt: new Date().toISOString(),
+        closedAt: null,
+      };
+      receipt.streams.push(stream);
+      record();
+      res.once("close", () => {
+        stream.closedAt = new Date().toISOString();
+        record();
+      });
+    }
     const forward = request(
       {
         host: "127.0.0.1",

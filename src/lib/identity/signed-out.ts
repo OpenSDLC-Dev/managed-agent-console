@@ -49,10 +49,15 @@ let bouncing = false;
  */
 let leavingDeliberately = false;
 
+// The account observer can remount or share its query with another consumer.
+// Keep the confirmed native principal for this document, not for one observer.
+let confirmedPrincipalId: string | undefined;
+
 /** Test seam — the flags above outlive a single test otherwise. */
 export function resetSignedOutBounceForTests(): void {
   bouncing = false;
   leavingDeliberately = false;
+  confirmedPrincipalId = undefined;
 }
 
 /** Records the operator's intent before the sign-out request goes out. */
@@ -105,6 +110,22 @@ export function bounceToLogin(): void {
 export function leaveAfterSignOut(): void {
   if (typeof window === "undefined") return;
   leave("/login");
+}
+
+/** A shared cookie can change accounts without ending the old server session. */
+export function leaveIfPrincipalChanged(
+  id: string,
+  discardDraft: () => void,
+): void {
+  if (typeof window === "undefined" || bouncing || leavingDeliberately) return;
+  if (confirmedPrincipalId === undefined) {
+    confirmedPrincipalId = id;
+    return;
+  }
+  if (confirmedPrincipalId === id) return;
+  // This draft belongs to the old actor. An unload prompt must not retain it.
+  discardDraft();
+  leave(new URL("/", window.location.origin).href);
 }
 
 function leave(target: string): void {
