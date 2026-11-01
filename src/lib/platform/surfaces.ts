@@ -2,6 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
+import { isNativeConsole } from "./http";
+import { nativeGet, ORGANIZATION } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 
@@ -34,6 +36,18 @@ import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
  * sentences and neither is a copy of the other.
  */
 export const SURFACES = {
+  members: {
+    path: `${ORGANIZATION}/members`,
+    label: "Members",
+    blurb: "People and their organization roles.",
+    api: "native",
+  },
+  "service-accounts": {
+    path: `${ORGANIZATION}/service_accounts`,
+    label: "Service accounts",
+    blurb: "Non-human organization accounts.",
+    api: "native",
+  },
   agents: {
     path: "v1/agents",
     label: "Agents",
@@ -163,7 +177,17 @@ export type SurfaceState =
   | { status: "denied"; error: PlatformError };
 
 /** Hide only confirmed absence or a refused collection read, never uncertainty. */
-export function isSurfaceVisible(state: SurfaceState | undefined): boolean {
+export function isSurfaceVisible(
+  state: SurfaceState | undefined,
+  surface?: Surface,
+): boolean {
+  // Human-only administration never flashes open while admission is unknown.
+  if (
+    surface &&
+    "api" in SURFACES[surface] &&
+    SURFACES[surface].api === "native"
+  )
+    return isNativeConsole() && state?.status === "available";
   return (
     state === undefined ||
     state.status === "available" ||
@@ -188,7 +212,11 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
             // The console namespace serves a bare array and reads no query
             // params, so it is asked for the whole (short) list rather than for
             // a page of one. The gateway's lists are unpaged too.
-            if (!("api" in entry))
+            if ("api" in entry && entry.api === "native") {
+              if (!isNativeConsole())
+                return [surface, { status: "unimplemented" }];
+              await nativeGet(entry.path, { limit: 1 });
+            } else if (!("api" in entry))
               await platformGet<unknown>(entry.path, { limit: 1 });
             else if (entry.api === "gateway")
               await gatewayGet<unknown>(
@@ -212,11 +240,12 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
         SurfaceState
       >;
     },
-    staleTime: Infinity,
+    staleTime: isNativeConsole() ? 0 : Infinity,
+    refetchInterval: isNativeConsole() ? 15_000 : false,
     gcTime: Infinity,
     // A 404 is definitive and a probe failure is not fatal — neither is worth
     // a second round trip.
     retry: false,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: isNativeConsole(),
   }).data;
 }

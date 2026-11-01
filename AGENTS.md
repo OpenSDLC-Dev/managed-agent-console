@@ -8,8 +8,11 @@ a change. These are the rules most often violated by tools that skip it:
 - **Never guess a wire shape.** The platform's implemented surface is the single source of truth
   (`../managed-agent-platform`'s `internal/api/`, `internal/domain/`). A wire shape without a source
   is a defect.
-- **The management API key never reaches the browser.** No `NEXT_PUBLIC_*` carries a credential;
-  `.env*` is gitignored — flag any real key in a diff.
+- **The configured management API key never reaches browser JavaScript.** No `NEXT_PUBLIC_*`
+  carries a credential; `.env*` is gitignored — flag any real key in a diff.
+- **The platform owns native login and current authority.** Native calls use HttpOnly cookies and
+  edge-owned private routes, never a legacy key or local RP token. Legacy mode keeps its credential
+  BFF and SSO's fail-closed rule. Navigation admission never replaces a server check.
 - **Never commit to `main`.** Branch → PR → CI green **and** zero unresolved review threads → squash
   merge, with a Conventional Commit PR title.
 - **Green means:** `pnpm lint` (zero warnings), `format:check`, `typecheck`, `test:coverage`,

@@ -56,7 +56,8 @@ test.beforeEach(async ({ request }) => {
   }
 });
 
-for (const surface of SURFACES) {
+// Native surfaces require the real-platform walker in playwright.native.config.ts.
+for (const surface of SURFACES.filter((s) => s.mode !== "platform")) {
   test(`shot: ${surface.id}`, async ({ page }, testInfo) => {
     const theme = testInfo.project.name;
     const mode = surface.mode ?? DEFAULT_MODE;

@@ -6,9 +6,44 @@ This console is the operator-facing frontend for a platform deployment you run y
 
 **Status: v0.8.2 — the v1 feature set is complete.** Changes are in [CHANGELOG.md](./CHANGELOG.md); active work is in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
-## How it holds your key
+## Authentication modes
 
-A thin server-side proxy: every platform call — SSE included — goes through the console's own server, and **no credential ever reaches the browser.** Which credential the server attaches depends on the deployment, and the two are never sent together:
+The same production build selects its mode at runtime. The management key never reaches browser JavaScript.
+
+### Native platform login (unreleased)
+
+Set `CONSOLE_AUTH_MODE=platform` behind the platform's one-origin application edge.
+The platform owns the HttpOnly cookie, current role, CSRF checks and sign-in method.
+The console needs no `PLATFORM_API_KEY`, `CONSOLE_PASSWORD` or console-local OIDC settings in this mode.
+It refuses local credential routes and BFF calls rather than falling back to an old key.
+
+```mermaid
+flowchart LR
+  Browser -->|native auth, setup, members, service accounts and private resources| Edge[Application edge]
+  Browser -->|native gateway administration| Edge
+  Edge --> Controlplane[Platform control plane]
+  Edge --> Gateway[Model gateway]
+  Edge -->|pages, assets and shallow health| Console[Console server]
+  Browser -->|legacy mode only| BFF[Console credential BFF]
+```
+
+Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
+`/setup` offers code redemption; the platform decides eligibility. Administrators can manage members and service accounts.
+A signed-in `user` has no resource reads. Its account, setup and sign-out controls remain available.
+Service-account creation does not issue a key. Key ownership and other later plan-69 slices are not implemented here.
+
+Shallow `/api/health` remains console-owned. Native deep health reports `checked:false` with status 503;
+it cannot check a person's resource access without their cookie and never spends a leftover key.
+The application edge must route native API calls to their owner, not to the console's legacy BFF.
+
+**Release hold:** do not cut a SemVer release until platform plan 69 slice 7.
+The non-release SHA image procedure is in [docs/releasing.md](./docs/releasing.md#non-release-sha-channel).
+No native-compatible published image is claimed by these source changes.
+
+### Legacy deployments (default)
+
+With `CONSOLE_AUTH_MODE` unset, calls and SSE go through the console's thin server-side proxy.
+The two credentials below are never sent together:
 
 - **No identity configured** — the server attaches the management key (`PLATFORM_API_KEY`). A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else, since anyone who reaches an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure.
 - **Identity configured** — the console signs the operator in against the deployment's provider and forwards **their own token**, never the management key ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)). Without a session it fails closed. `PLATFORM_API_KEY` stays only as the deep health check's service credential, which no browser request can spend.
@@ -89,6 +124,20 @@ environment and no worker. They require the additional opt-in
 `$env:RUN_LIVE_MODEL_CONTRACT_TESTS='1'`) and may spend real model tokens.
 Set the opt-in flags in the invoking shell; dotenv files cannot grant consent.
 Add `--project=model-backed` to `pnpm test:contract:live` to run only those tests.
+
+The model-free native browser tier builds production code and starts its own PostgreSQL, real platform handlers,
+local test identity provider and application edge. It reads no credential files and runs no brain or vendor calls:
+
+```bash
+NATIVE_PLATFORM_SOURCE=/absolute/path/to/managed-agent-platform \
+NATIVE_EVIDENCE_DIR=/absolute/path/to/scratch \
+pnpm test:e2e:native
+```
+
+The platform source must implement plan 69 slice 2. The tier needs Docker and that checkout's Go toolchain.
+It creates durable receipts before starting its container, then awaits shutdown and removes only its own container and volumes.
+Use `NATIVE_FIDELITY=1` with the same command to walk the native manifest in installed Chrome, light and dark.
+Those shots are local fidelity evidence, not proof of access to authenticated reference screens.
 
 The live tier drives a **real platform stack** (the platform repo's `deploy/compose`) and spends real
 model tokens:

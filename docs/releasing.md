@@ -5,6 +5,28 @@ How a console release is cut. The reasoning behind each choice is
 [release-please.yml](../.github/workflows/release-please.yml),
 [release.yml](../.github/workflows/release.yml) and [scripts/changelog.mjs](../scripts/changelog.mjs).
 
+## Plan 69 release hold
+
+Do not merge a release-please PR, dispatch `release.yml` or cut a SemVer release until platform plan 69 slice 7.
+This hold does not change the existing staging deploy workflow. Use the receiver-only channel below for slice 2.
+
+## Non-release SHA channel
+
+On a trusted repository push to `main`, `ci.yml` waits for both `ci-ok` and the Docker vulnerability gate.
+It builds amd64 and arm64 on native runners, labels the full checked-out source SHA, and scans each child before push.
+Run-unique staging tags feed one `sha-<full commit>` manifest tag. No SemVer alias, `latest`, Git tag or Release is created.
+The tag may move on a rerun. Deployments must pin the verified index digest, not this mutable tag.
+
+Before a platform deployment consumes that image, verify:
+
+- The exact merged source SHA and successful completed publisher jobs.
+- A public manifest index with runnable linux/amd64 and linux/arm64 children.
+- Each child's source, revision and `sha-<full commit>` version labels.
+- The index digest and compatible platform source SHA recorded for the deployment.
+
+Local publisher tests exercise parsed workflow gates and stubbed shell commands. They do not prove an image was published.
+The native integration tier exercises real handlers from the supplied platform checkout; it is not release compatibility certification.
+
 ## What a release is
 
 - A `vX.Y.Z` tag on `main`, and a GitHub Release whose body is that version's

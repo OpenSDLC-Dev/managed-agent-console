@@ -1,4 +1,5 @@
 "use client";
+import { ResourceDownload } from "./resource-download";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -81,14 +82,14 @@ export function SkillDetail({
       cell: (v) => (
         <span className="cursor-pointer">
           {/* Zip download streams through the BFF; dual-auth on the wire. */}
-          <a
-            href={`/api/platform/v1/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(v.id)}/content`}
-            download
+          <ResourceDownload
+            path={`v1/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(v.id)}/content`}
+            filename={`${v.id}.zip`}
             aria-label={`Download version ${v.id}`}
             className="text-muted-foreground hover:text-foreground"
           >
             <Download className="size-3.5" />
-          </a>
+          </ResourceDownload>
           {custom && (
             <ConfirmIconButton
               label={`Delete version ${v.id}`}

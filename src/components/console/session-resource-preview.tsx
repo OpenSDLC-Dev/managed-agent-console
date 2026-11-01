@@ -1,4 +1,5 @@
 "use client";
+import { ResourceDownload } from "./resource-download";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -163,13 +164,13 @@ function FilePreview({
                 {content.error ? "Retry preview" : "Preview content"}
               </Button>
             )}
-            <a
+            <ResourceDownload
               className="inline-flex items-center underline"
-              href={`/api/platform/v1/files/${data.id}/content`}
-              download={data.filename}
+              path={`v1/files/${encodeURIComponent(data.id)}/content`}
+              filename={data.filename}
             >
               Download
-            </a>
+            </ResourceDownload>
           </div>
           {!textPreview && (
             <p className="text-xs text-muted-foreground">

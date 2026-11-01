@@ -94,6 +94,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
+        CONSOLE_AUTH_MODE: "",
         PLATFORM_BASE_URL: MOCK_URL,
         PLATFORM_API_KEY: "test-key",
         MODEL_GATEWAY_BASE_URL: GATEWAY_URL,
@@ -119,6 +120,7 @@ export default defineConfig({
       // so an omitted variable is whatever that machine happens to hold. All
       // four below read as absent when empty (`env.ts`, `identity/config.ts`).
       env: {
+        CONSOLE_AUTH_MODE: "",
         PLATFORM_BASE_URL: MOCK_URL,
         MODEL_GATEWAY_BASE_URL: GATEWAY_URL,
         // Cleared, not omitted. In identity mode the BFF never reads it, so a

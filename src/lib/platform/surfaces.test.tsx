@@ -222,7 +222,9 @@ describe("useSurfaces", () => {
     stubProbes(() => 200);
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
-    for (const surface of Object.keys(SURFACES)) {
+    for (const surface of Object.keys(SURFACES).filter(
+      (s) => !["members", "service-accounts"].includes(s),
+    )) {
       expect(result.current?.[surface as keyof typeof SURFACES]).toEqual({
         status: "available",
       });
@@ -236,6 +238,8 @@ describe("useSurfaces", () => {
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     expect(result.current).toEqual({
+      members: { status: "unimplemented" },
+      "service-accounts": { status: "unimplemented" },
       agents: { status: "available" },
       sessions: { status: "available" },
       deployments: { status: "available" },
@@ -297,8 +301,13 @@ describe("useSurfaces", () => {
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
-    expect(calls).toHaveLength(Object.keys(SURFACES).length);
-    for (const entry of Object.values(SURFACES)) {
+    expect(calls).toHaveLength(
+      Object.values(SURFACES).filter((e) => !("api" in e) || e.api !== "native")
+        .length,
+    );
+    for (const entry of Object.values(SURFACES).filter(
+      (e) => !("api" in e) || e.api !== "native",
+    )) {
       // The wire surfaces ask for a page of one; the console namespace and the
       // gateway serve unpaged lists, so they are asked plainly — but for the
       // gateway's ledger, which pages, asked for one row.
@@ -311,4 +320,13 @@ describe("useSurfaces", () => {
       );
     }
   });
+});
+
+it("native-only administration stays hidden until its collection read succeeds", () => {
+  expect(isSurfaceVisible(undefined, "members")).toBe(false);
+  document.documentElement.dataset.consoleAuth = "platform";
+  expect(isSurfaceVisible({ status: "unknown" }, "members")).toBe(false);
+  expect(isSurfaceVisible({ status: "available" }, "members")).toBe(true);
+  delete document.documentElement.dataset.consoleAuth;
+  expect(isSurfaceVisible({ status: "available" }, "members")).toBe(false);
 });

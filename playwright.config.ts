@@ -51,6 +51,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
+        CONSOLE_AUTH_MODE: "",
         PLATFORM_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
         PLATFORM_API_KEY: "test-key",
         MODEL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,

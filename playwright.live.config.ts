@@ -37,6 +37,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: {
+        CONSOLE_AUTH_MODE: "",
         PLATFORM_BASE_URL: baseUrl,
         PLATFORM_API_KEY: apiKey,
         CONSOLE_PASSWORD: LIVE_CONSOLE_PASSWORD,

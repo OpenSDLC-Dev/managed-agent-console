@@ -93,7 +93,8 @@ function useSearchItems(query: string): Item[] {
   return useMemo(() => {
     const q = query.trim().toLowerCase();
     const visible = (item: Item) =>
-      item.surface === undefined || isSurfaceVisible(surfaces?.[item.surface]);
+      item.surface === undefined ||
+      isSurfaceVisible(surfaces?.[item.surface], item.surface);
     const items: Item[] = SECTIONS.filter(
       (s) => visible(s) && (!q || s.label.toLowerCase().includes(q)),
     );

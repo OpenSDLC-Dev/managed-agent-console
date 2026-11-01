@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 import { cn } from "@/lib/utils";
+import { resourceURL } from "@/lib/platform/http";
 
 type ProbeResult =
   | { ok: true }
@@ -11,7 +12,7 @@ type ProbeResult =
 async function probe(): Promise<ProbeResult> {
   let response: Response;
   try {
-    response = await fetch("/api/platform/v1/agents?limit=1");
+    response = await fetch(`${resourceURL("v1/agents")}?limit=1`);
   } catch {
     return { ok: false, message: "console server unreachable" };
   }

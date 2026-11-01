@@ -74,3 +74,66 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+  # Receiver-first non-release channel. ci-ok alone excludes the image scan.
+  sha-build:
+    needs: [ci-ok, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'OpenSDLC-Dev/managed-agent-console'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/opensdlc-dev/managed-agent-console
+      SOURCE_SHA: ${{ github.sha }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build full-SHA source
+        run: bash scripts/publish-sha.sh build
+      - name: Scan child before push
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ghcr.io/opensdlc-dev/managed-agent-console:staging-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.arch }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push scanned child
+        env:
+          PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/publish-sha.sh push
+
+  sha-publish:
+    needs: [sha-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'OpenSDLC-Dev/managed-agent-console'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/opensdlc-dev/managed-agent-console
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Join scanned digests on the full-SHA channel only
+        id: manifest
+        env:
+          PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/publish-sha.sh manifest

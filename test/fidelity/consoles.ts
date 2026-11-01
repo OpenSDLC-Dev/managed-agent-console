@@ -59,6 +59,7 @@ export const IDP_CLIENT_ID = "managed-agent-console";
  * comparing against anything (Henry, 2026-08-15).
  */
 export const CONSOLE_PORTS = {
+  platform: 38200,
   password: 3101,
   sso: 3111,
 } as const;

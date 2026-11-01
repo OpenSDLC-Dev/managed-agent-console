@@ -1,8 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ErrorState, UnavailableSurface } from "@/components/console/bits";
+import {
+  ErrorState,
+  ListSkeleton,
+  UnavailableSurface,
+} from "@/components/console/bits";
 import { PageHeader } from "./page-header";
+import { isNativeConsole } from "@/lib/platform/http";
 import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
 
 /**
@@ -27,6 +32,25 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       <div>
         <PageHeader title={SURFACES[surface].label} />
         <ErrorState error={state.error} />
+      </div>
+    );
+  const entry = SURFACES[surface];
+  if (
+    isNativeConsole() &&
+    "api" in entry &&
+    entry.api === "native" &&
+    state?.status !== "available"
+  )
+    return (
+      <div>
+        <PageHeader title={entry.label} />
+        {state ? (
+          <ErrorState
+            error={new Error("Unable to confirm access to this surface.")}
+          />
+        ) : (
+          <ListSkeleton />
+        )}
       </div>
     );
   return <>{children}</>;

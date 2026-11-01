@@ -11,6 +11,10 @@ import { CommandPalette } from "./command-palette";
 import { NAV_DESTINATIONS } from "@/lib/nav";
 import { SURFACES } from "@/lib/platform/surfaces";
 
+const LEGACY_SURFACES = Object.values(SURFACES).filter(
+  (entry) => !("api" in entry) || entry.api !== "native",
+);
+
 const routerState = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
@@ -86,6 +90,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -185,7 +190,7 @@ describe("CommandPalette", () => {
     const LIST_QUERIES = 9;
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledTimes(
-        LIST_QUERIES + Object.keys(SURFACES).length,
+        LIST_QUERIES + LEGACY_SURFACES.length,
       ),
     );
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
@@ -405,7 +410,60 @@ describe("CommandPalette", () => {
     // Back to the destinations — not the resource search hits above. Derived from
     // the nav itself: one per surface plus the console-local Dashboard, and a
     // hardcoded count here has been wrong once already.
-    expect(screen.getAllByRole("option")).toHaveLength(NAV_DESTINATIONS.length);
+    expect(screen.getAllByRole("option")).toHaveLength(
+      NAV_DESTINATIONS.filter(
+        (item) => !["members", "service-accounts"].includes(item.surface ?? ""),
+      ).length,
+    );
     expect(screen.getByText("Go to")).toBeDefined();
   });
 });
+
+it.each(["available", "denied", "unknown"])(
+  "probe: native organization palette shortcuts use %s collection authority",
+  async (status) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "http://console").pathname;
+      if (
+        path === "/api/console/organizations/default/members" ||
+        path === "/api/console/organizations/default/service_accounts"
+      ) {
+        return status === "available"
+          ? Response.json({ data: [] })
+          : Response.json(
+              {
+                error: {
+                  type: status === "denied" ? "permission_error" : "api_error",
+                  message: "probe refused",
+                },
+              },
+              { status: status === "denied" ? 403 : 503 },
+            );
+      }
+      return Response.json({ data: [] });
+    });
+    renderPalette();
+    await openPalette();
+    for (const [label, href] of [
+      ["Members", "/members"],
+      ["Service accounts", "/service-accounts"],
+    ]) {
+      if (status === "available") {
+        const option = await screen.findByRole("option", { name: label });
+        fireEvent.click(option);
+        expect(routerState.push).toHaveBeenLastCalledWith(href);
+        await openPalette();
+      } else {
+        await waitFor(() =>
+          expect(
+            fetchMock.mock.calls.some(([input]) =>
+              String(input).includes("/service_accounts?"),
+            ),
+          ).toBe(true),
+        );
+        expect(screen.queryByRole("option", { name: label })).toBeNull();
+      }
+    }
+  },
+);

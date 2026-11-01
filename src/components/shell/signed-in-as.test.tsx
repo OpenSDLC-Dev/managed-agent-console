@@ -13,6 +13,8 @@ import {
   hasBouncedToLogin,
   resetSignedOutBounceForTests,
 } from "@/lib/identity/signed-out";
+import { StrictMode, type ReactNode } from "react";
+import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { SignedInAs } from "./signed-in-as";
 
 function renderBlock() {
@@ -43,6 +45,218 @@ afterEach(() => {
   // nobody is advancing.
   vi.useRealTimers();
   resetSignedOutBounceForTests();
+  delete document.documentElement.dataset.consoleAuth;
+});
+
+const accountA = {
+  signed_in: true,
+  id: "user_old",
+  name: "Old account",
+  role: "admin",
+  csrf_token: "old-csrf",
+};
+const accountB = { ...accountA, id: "user_new", name: "New account" };
+
+function nativeBlock() {
+  document.documentElement.dataset.consoleAuth = "platform";
+  const assign = vi.fn();
+  vi.stubGlobal(
+    "window",
+    Object.create(window, {
+      location: {
+        value: {
+          origin: "http://localhost",
+          pathname: "/sessions/sesn_old",
+          search: "",
+          assign,
+        },
+      },
+    }),
+  );
+  const fetchMock = answers(accountA);
+  vi.stubGlobal("fetch", fetchMock);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, retryDelay: 0 } },
+  });
+  const mount = (children: ReactNode = <SignedInAs />) =>
+    render(
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    );
+  const refresh = () =>
+    act(async () => {
+      await client.invalidateQueries({ queryKey: ["console-session"] });
+    });
+  return { assign, fetchMock, client, mount, refresh };
+}
+
+describe("native principal document boundary", () => {
+  it("probe: a successful principal replacement leaves the old private cache and parent/child streams", async () => {
+    const { assign, client, mount, refresh } = nativeBlock();
+    let account = accountA;
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/api/auth/session")
+          return Response.json(account);
+        if (String(input).includes("/stream?")) {
+          const signal = init!.signal!;
+          signals.push(signal);
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode(": live\n\n"));
+                signal.addEventListener("abort", () => controller.close(), {
+                  once: true,
+                });
+              },
+            }),
+            { headers: { "content-type": "text/event-stream" } },
+          );
+        }
+        return Response.json({ data: [], next_page: null });
+      }),
+    );
+    client.setQueryData(["members"], { email: "old-private@example.test" });
+    function Trace({ child }: { child?: string }) {
+      const { connection } = useSessionTrace("sesn_old", child);
+      return <span data-testid={child || "parent"}>{connection}</span>;
+    }
+    const view = mount(
+      <>
+        <SignedInAs />
+        <Trace />
+        <Trace child="sthr_child" />
+      </>,
+    );
+    await screen.findByText("Old account");
+    await waitFor(() => {
+      expect(screen.getByTestId("parent").textContent).toBe("live");
+      expect(screen.getByTestId("sthr_child").textContent).toBe("live");
+    });
+    expect(assign).not.toHaveBeenCalled();
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    account = accountB;
+    await refresh();
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/"),
+    );
+    // Mocked navigation cannot destroy a document. Model its teardown explicitly;
+    // the native browser test proves that the real boundary drops these caches.
+    expect(client.getQueryData(["members"])).toEqual({
+      email: "old-private@example.test",
+    });
+    view.unmount();
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    client.clear();
+  });
+
+  it("initializes once and keeps same-id role, profile, CSRF and expiry updates in the document", async () => {
+    const { assign, fetchMock, client, mount, refresh } = nativeBlock();
+    mount();
+    await screen.findByText("Old account");
+    expect(assign).not.toHaveBeenCalled();
+    fetchMock.mockImplementation(
+      answers({
+        ...accountA,
+        role: "user",
+        name: "Renamed account",
+        email: "changed@example.test",
+        csrf_token: "rotated-csrf",
+        expires_at: "2099-01-01T00:00:00Z",
+      }),
+    );
+    await refresh();
+    await screen.findByText("Renamed account");
+    expect(screen.getByText("changed@example.test")).toBeDefined();
+    expect(screen.getByText("user")).toBeDefined();
+    expect(assign).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it.each([
+    ["a network failure", () => Promise.reject(new TypeError("offline"))],
+    ["a transient server error", answers({}, 502)],
+    ["an unmarked permission refusal", answers({}, 403)],
+    ["a missing identity probe", answers({ signed_in: false })],
+    ["metadata without a principal id", answers({ signed_in: true })],
+  ])("remembers the confirmed principal across %s", async (_name, reply) => {
+    const { assign, fetchMock, client, mount, refresh } = nativeBlock();
+    mount();
+    await screen.findByText("Old account");
+    fetchMock.mockImplementation(reply);
+    await refresh();
+    expect(assign).not.toHaveBeenCalled();
+    fetchMock.mockImplementation(answers(accountB));
+    await refresh();
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/"),
+    );
+    client.clear();
+  });
+
+  it("remembers identity across observer remounts and leaves once for duplicate notifications", async () => {
+    const { assign, fetchMock, client, mount, refresh } = nativeBlock();
+    const first = mount();
+    await screen.findByText("Old account");
+    first.unmount();
+    client.removeQueries({ queryKey: ["console-session"] });
+    fetchMock.mockImplementation(answers(accountB));
+    mount(
+      <StrictMode>
+        <SignedInAs />
+        <SignedInAs />
+      </StrictMode>,
+    );
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/"),
+    );
+    fetchMock.mockImplementation(answers({ ...accountB, name: "New label" }));
+    await refresh();
+    expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/");
+    client.clear();
+  });
+
+  it("does not treat legacy metadata ids as native principal replacement", async () => {
+    const { assign, fetchMock, client, mount, refresh } = nativeBlock();
+    delete document.documentElement.dataset.consoleAuth;
+    mount();
+    await screen.findByText("Old account");
+    fetchMock.mockImplementation(answers(accountB));
+    await refresh();
+    await screen.findByText("New account");
+    expect(assign).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it("lets an in-flight deliberate sign-out outrank principal replacement", async () => {
+    const { assign, client, mount, refresh } = nativeBlock();
+    let account = accountA;
+    let finishLogout!: (response: Response) => void;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/logout")
+        return new Promise<Response>((resolve) => {
+          finishLogout = resolve;
+        });
+      return Response.json(account);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    mount();
+    await screen.findByText("Old account");
+    await userEvent.click(screen.getByTestId("sign-out"));
+    await waitFor(() => expect(finishLogout).toBeDefined());
+    account = accountB;
+    await refresh();
+    expect(assign).not.toHaveBeenCalled();
+    await act(async () => {
+      finishLogout(Response.json({ ok: true }));
+    });
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/login"),
+    );
+    client.clear();
+  });
 });
 
 describe("SignedInAs", () => {
@@ -171,6 +385,49 @@ describe("SignedInAs", () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
     expect(hasBouncedToLogin()).toBe(true);
+  });
+
+  it("probe: native sign-out also bounds a stalled CSRF metadata read", async () => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    vi.useFakeTimers();
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "window",
+      Object.create(window, { location: { value: { assign } } }),
+    );
+    let reads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (++reads === 1)
+          return Response.json({
+            signed_in: true,
+            login_name: "local-admin",
+            role: "admin",
+            csrf_token: "synthetic",
+          });
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      }),
+    );
+    try {
+      renderBlock();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("local-admin")).toBeDefined();
+      fireEvent.click(screen.getByTestId("sign-out"));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      expect(hasBouncedToLogin()).toBe(true);
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/login");
+    } finally {
+      delete document.documentElement.dataset.consoleAuth;
+    }
   });
 
   // Staying on a console the operator asked to leave — in front of whoever is

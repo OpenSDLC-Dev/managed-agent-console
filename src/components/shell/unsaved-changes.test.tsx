@@ -1,10 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SignedInAs } from "./signed-in-as";
+import { resetSignedOutBounceForTests } from "@/lib/identity/signed-out";
 import { StrictMode, useState } from "react";
 import { UnsavedChangesProvider, useUnsavedChanges } from "./unsaved-changes";
 const push = vi.fn();
@@ -13,6 +21,8 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  resetSignedOutBounceForTests();
+  delete document.documentElement.dataset.consoleAuth;
 });
 function Draft({ leave }: { leave: () => void }) {
   const [dirty, setDirty] = useState(false);
@@ -108,6 +118,67 @@ it("does not destroy the sign-in session while an operator chooses Stay", async 
   const unloading = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unloading);
   expect(unloading.defaultPrevented).toBe(false);
+});
+
+it("probe: native principal replacement discards dirty state without a leave prompt, unlike same-id updates", async () => {
+  resetSignedOutBounceForTests();
+  document.documentElement.dataset.consoleAuth = "platform";
+  let account = {
+    signed_in: true,
+    id: "user_a",
+    name: "Account A",
+    role: "admin",
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(account)),
+  );
+  const unloading = new Event("beforeunload", { cancelable: true });
+  const assign = vi.fn(() => {
+    window.dispatchEvent(unloading);
+  });
+  vi.stubGlobal(
+    "window",
+    Object.create(window, {
+      location: { value: { origin: "http://localhost", assign } },
+    }),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <UnsavedChangesProvider>
+        <Draft leave={vi.fn()} />
+        <SignedInAs />
+      </UnsavedChangesProvider>
+    </QueryClientProvider>,
+  );
+  await screen.findByText("Account A");
+  const user = userEvent.setup();
+  await user.click(screen.getByLabelText("Draft"));
+  account = { ...account, name: "Renamed A", role: "user" };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["console-session"] });
+  });
+  await screen.findByText("Renamed A");
+  expect(assign).not.toHaveBeenCalled();
+  const guarded = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(guarded);
+  expect(guarded.defaultPrevented).toBe(true);
+  await user.click(screen.getByText("Cancel edit"));
+  await user.click(await screen.findByRole("button", { name: "Stay" }));
+  expect(screen.getByLabelText("Draft")).toBeChecked();
+  account = { ...account, id: "user_b", name: "Account B" };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ["console-session"] });
+  });
+  await waitFor(() =>
+    expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/"),
+  );
+  expect(unloading.defaultPrevented).toBe(false);
+  expect(screen.queryByRole("button", { name: "Stay" })).toBeNull();
+  client.clear();
 });
 
 it("keeps a mounted dirty editor guarded when an accepted action does not leave", async () => {

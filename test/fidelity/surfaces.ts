@@ -1,3 +1,4 @@
+import { NATIVE_SURFACES } from "./native-surfaces";
 import type { Page } from "@playwright/test";
 import { type ConsoleMode, MOCK_URL } from "./consoles";
 
@@ -77,6 +78,7 @@ const PROVIDER = "gwprov_deepseek01";
 const PLAIN_HTTP_PROVIDER = "gwprov_vllmlocal1";
 
 export const SURFACES: Surface[] = [
+  ...NATIVE_SURFACES,
   ...["thinking", "growing", "final", "reconnecting", "narrow"].map(
     (view): Surface => ({
       id: "session-streaming-" + view,

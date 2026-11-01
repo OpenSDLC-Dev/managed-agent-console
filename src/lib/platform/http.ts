@@ -1,9 +1,9 @@
 import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 
 /**
- * Browser-side helpers for talking to the platform through the BFF proxy.
- * Everything goes to /api/platform/v1/... — or, for the off-wire console API,
- * /api/oauth/... — never to the platform directly (CLAUDE.md principle 2).
+ * Browser transports share one runtime-selected resource lane. Legacy calls
+ * use credential BFFs; native calls use cookie-authenticated edge-owned routes.
+ * Neither lane exposes a management key or provider token to JavaScript.
  */
 
 export interface ErrorEnvelope {
@@ -55,7 +55,7 @@ export interface OffsetPage<T> {
  * waiting on a promise that never settles would render a spinner over the whole
  * departure.
  */
-async function assertOk(response: Response): Promise<void> {
+export async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
   if (isSignedOut(response)) bounceToLogin();
   const envelope = (await response
@@ -64,7 +64,7 @@ async function assertOk(response: Response): Promise<void> {
   throw new PlatformError(response.status, envelope);
 }
 
-function queryString(
+export function queryString(
   params?: Record<string, string | number | boolean | string[] | undefined>,
 ): string {
   const search = new URLSearchParams();
@@ -87,7 +87,7 @@ export async function platformGet<T>(
   headers?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(
-    `/api/platform/${path}${queryString(params)}`,
+    `${resourceURL(path)}${queryString(params)}`,
     signal || headers ? { signal, headers } : undefined,
   );
   await assertOk(response);
@@ -95,9 +95,9 @@ export async function platformGet<T>(
 }
 
 export async function platformPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api/platform/${path}`, {
+  const response = await fetch(resourceURL(path), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(await csrfHeaders()) },
     body: JSON.stringify(body),
   });
   await assertOk(response);
@@ -106,7 +106,7 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
 
 /** File content is bytes, not a JSON envelope (internal/api/files.go:downloadFile). */
 export async function platformGetText(path: string): Promise<string> {
-  const response = await fetch(`/api/platform/${path}`);
+  const response = await fetch(resourceURL(path));
   await assertOk(response);
   return response.text();
 }
@@ -115,8 +115,9 @@ export async function platformPostForm<T>(
   path: string,
   form: FormData,
 ): Promise<T> {
-  const response = await fetch(`/api/platform/${path}`, {
+  const response = await fetch(resourceURL(path), {
     method: "POST",
+    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
     body: form,
   });
   await assertOk(response);
@@ -127,8 +128,9 @@ export async function platformDelete<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
 ): Promise<T> {
-  const response = await fetch(`/api/platform/${path}${queryString(params)}`, {
+  const response = await fetch(`${resourceURL(path)}${queryString(params)}`, {
     method: "DELETE",
+    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
   });
   await assertOk(response);
   return (await response.json()) as T;
@@ -153,7 +155,7 @@ export async function consoleGet<T>(
 export async function consolePost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`/api/oauth/${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(await csrfHeaders()) },
     body: JSON.stringify(body),
   });
   await assertOk(response);
@@ -191,7 +193,7 @@ export async function consoleKeysPost<T>(
 ): Promise<T> {
   const response = await fetch(`/api/console/${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(await csrfHeaders()) },
     body: JSON.stringify(body),
   });
   await assertOk(response);
@@ -204,10 +206,14 @@ export async function consolePostNoContent(
 ): Promise<void> {
   const response = await fetch(`/api/oauth/${path}`, {
     method: "POST",
+    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
     ...(body === undefined
       ? {}
       : {
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(await csrfHeaders()),
+          },
           body: JSON.stringify(body),
         }),
   });
@@ -229,7 +235,7 @@ export async function consolePostNoContent(
 // separators; a name's own slashes are the gateway's separators too.
 
 const gatewayUrl = (path: string) =>
-  `/api/gateway/admin/v1/${path.split("/").map(encodeURIComponent).join("/")}`;
+  `${isNativeConsole() ? "" : "/api/gateway"}/admin/v1/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 export async function gatewayGet<T>(
   path: string,
@@ -279,7 +285,7 @@ export const wireDecimal = (text: string) =>
 export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(gatewayUrl(path), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(await csrfHeaders()) },
     body: finiteJson(body),
   });
   await assertOk(response);
@@ -289,7 +295,52 @@ export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
 export async function gatewayDelete<T>(path: string): Promise<T> {
   const response = await fetch(gatewayUrl(path), {
     method: "DELETE",
+    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
   });
   await assertOk(response);
   return (await response.json()) as T;
+}
+
+/** Request-time mode stamped by the server, never a build-frozen public env. */
+export function isNativeConsole(): boolean {
+  return (
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.consoleAuth === "platform"
+  );
+}
+
+/** The only resource lane selector, shared by JSON, bytes, downloads and SSE. */
+export function resourceURL(path: string): string {
+  return `${isNativeConsole() ? "/api/organizations/default/proxy" : "/api/platform"}/${path}`;
+}
+
+/** Read metadata only. The browser owns the opaque HttpOnly cookie. */
+export async function csrfHeaders(
+  signal?: AbortSignal,
+): Promise<Record<string, string>> {
+  if (!isNativeConsole()) return {};
+  const response = await fetch("/api/auth/session", {
+    cache: "no-store",
+    ...(signal ? { signal } : {}),
+  });
+  await assertOk(response);
+  const session = (await response.json()) as { csrf_token?: string };
+  if (!session.csrf_token)
+    throw new Error("The platform session has no CSRF token.");
+  return { "X-CSRF-Token": session.csrf_token };
+}
+
+/** Downloads must observe sign-out markers too; anchors cannot inspect headers. */
+export async function downloadResource(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const response = await fetch(resourceURL(path));
+  await assertOk(response);
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }

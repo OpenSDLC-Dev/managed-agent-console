@@ -1,6 +1,11 @@
 import "server-only";
 import { consolePassword } from "@/lib/env";
-import { type IdentityConfig, identityConfig, type OidcConfig } from "./config";
+import {
+  type IdentityConfig,
+  IdentityConfigError,
+  identityConfig,
+  type OidcConfig,
+} from "./config";
 
 /**
  * Which gate governs this console, and what the BFF is allowed to send on a
@@ -25,6 +30,7 @@ import { type IdentityConfig, identityConfig, type OidcConfig } from "./config";
  * carried as `passwordGate`, not as a second way to be authorized.
  */
 export type ConsoleAuthMode =
+  | { kind: "platform" }
   /** Identity is configured. `passwordGate` is deployment protection in front of the login page. */
   | { kind: "sso"; identity: OidcConfig; passwordGate: boolean }
   /** The shared-password gate, and the management key behind it. */
@@ -34,7 +40,21 @@ export type ConsoleAuthMode =
 
 /** Reads the process environment. Throws `IdentityConfigError` on a broken identity configuration — fail closed, never silently unauthenticated. */
 export function consoleAuthMode(): ConsoleAuthMode {
+  if (platformLoginEnabled()) return { kind: "platform" };
   return consoleAuthModeFrom(identityConfig(), consolePassword());
+}
+
+/** Validate the runtime switch before reading any legacy credentials. */
+export function platformLoginEnabled(): boolean {
+  const mode = process.env.CONSOLE_AUTH_MODE;
+  if (mode === "platform") return true;
+  if (mode !== undefined && mode !== "") {
+    throw new IdentityConfigError(
+      "CONSOLE_AUTH_MODE must be unset or platform",
+      { invalid: ["CONSOLE_AUTH_MODE"] },
+    );
+  }
+  return false;
 }
 
 /** The matrix itself, over values rather than the environment, so every row is a test. */
