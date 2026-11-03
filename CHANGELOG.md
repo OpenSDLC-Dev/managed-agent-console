@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **CI retains Playwright evidence after a successful retry** (#249). Reports,
+  failed-attempt traces and screenshots are uploaded even when the job passes.
 - **Deployment editor mapping tests avoid per-character timer waits** (#244).
   They retain field editability, request values and write-only credential checks.
 - **Denied-read navigation tests wait for link removal** (#242). A slow accessibility
