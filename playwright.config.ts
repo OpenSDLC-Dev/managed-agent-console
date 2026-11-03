@@ -28,6 +28,7 @@ export default defineConfig({
     // locale pick the digit separators.
     locale: "en-US",
     trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
   webServer: [
     {

@@ -38,8 +38,10 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       # test:e2e runs `next build` first, so the build is covered here too.
       - run: pnpm test:e2e
-      - name: Upload Playwright artifacts on failure
-        if: failure()
+      # Playwright can pass a job after a failed attempt. Keep that attempt's
+      # trace and report too; failure() discarded the evidence for #249.
+      - name: Upload Playwright artifacts
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-${{ matrix.os }}

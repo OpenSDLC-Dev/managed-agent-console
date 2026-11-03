@@ -4,6 +4,14 @@ Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
+### Login readiness (#249)
+
+- [x] Run 30 vault flows and 100 consecutive logins; original timeout not reproduced.
+- [x] Reproduce retry-only artifact loss and retain traces, reports and screenshots.
+- [ ] Review, pass CI and merge.
+
+The original hydration cause still needs a new failed-attempt trace in #249.
+
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from
