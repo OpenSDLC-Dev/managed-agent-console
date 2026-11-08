@@ -30,7 +30,10 @@ flowchart LR
 Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
 `/setup` offers code redemption; the platform decides eligibility. Administrators can manage members and service accounts.
 A signed-in `user` has no resource reads. Its account, setup and sign-out controls remain available.
-Service-account creation does not issue a key. Key ownership and other later plan-69 slices are not implemented here.
+Service-account creation does not issue a key. On API Keys, developers issue and manage their own owned keys.
+Administrators can also select an active service account and manage non-preset keys.
+Owned keys use their owner's current role on the public control-plane API. Deactivating the owner revokes access.
+They do not yet authorize model inference or legacy gateway policies. Browser calls keep using the native cookie, never a revealed key.
 
 Shallow `/api/health` remains console-owned. Native deep health reports `checked:false` with status 503;
 it cannot check a person's resource access without their cookie and never spends a leftover key.
@@ -38,7 +41,7 @@ The application edge must route native API calls to their owner, not to the cons
 
 **Release hold:** do not cut a SemVer release until platform plan 69 slice 7.
 The non-release SHA image procedure is in [docs/releasing.md](./docs/releasing.md#non-release-sha-channel).
-No native-compatible published image is claimed by these source changes.
+No new owned-key-compatible published image is claimed by these source changes. Prior native delivery is recorded in the platform history linked from [STATE.md](./STATE.md).
 
 ### Legacy deployments (default)
 
@@ -134,10 +137,14 @@ NATIVE_EVIDENCE_DIR=/absolute/path/to/scratch \
 pnpm test:e2e:native
 ```
 
-The platform source must implement plan 69 slice 2. The tier needs Docker and that checkout's Go toolchain.
+The platform source must implement plan 69 slice 3 owned-key issuance. The tier needs Docker and that checkout's Go toolchain.
+It accepts only a local Unix Docker endpoint and refuses to start beside platform test-fixture containers.
+The runtime checks its effective child environment, preserves Docker selectors and disables Next telemetry before starting resources.
 It creates durable receipts before starting its container, then awaits shutdown and removes only its own container and volumes.
 Use `NATIVE_FIDELITY=1` with the same command to walk the native manifest in installed Chrome, light and dark.
 Those shots are local fidelity evidence, not proof of access to authenticated reference screens.
+Native specs must import [the guarded test fixture](./test/native/test.ts); its pinned runner hooks redact issued-key errors before output.
+Both native modes run synthetic unexpected-failure controls, including a first-write observer. Never log credentials or attach them explicitly; reveal screenshots must stay masked.
 
 The live tier drives a **real platform stack** (the platform repo's `deploy/compose`) and spends real
 model tokens:

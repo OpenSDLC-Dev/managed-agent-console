@@ -1,5 +1,6 @@
 # Build
 FROM node:24-alpine AS build
+ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -9,6 +10,7 @@ RUN pnpm build
 
 # Run — Next standalone output only
 FROM node:24-alpine
+ENV NEXT_TELEMETRY_DISABLED=1
 # node:24-alpine is rebuilt on Node's cadence, not Alpine's, so its apk packages
 # trail Alpine's own security fixes — the trivy gate reds on a patched CVE days
 # before the base image picks the fix up. Refresh what is already installed: no

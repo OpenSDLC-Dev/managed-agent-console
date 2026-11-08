@@ -10,9 +10,8 @@ import { isUnimplemented } from "@/lib/platform/surfaces";
  * Management keys — the credential the console itself runs on when identity is
  * off, and the one an operator hands to a CLI or a CI job.
  *
- * This deployment-wide surface stays admin-only in plan 69 slice 1. A refused
- * collection read hides its entry point; SurfaceGuard explains the refusal at
- * direct URLs. It is not evidence that the deployment lacks the feature.
+ * The server scopes native developer lists to their own owned rows; admins
+ * list all. SurfaceGuard preserves the server's refusal at direct URLs.
  */
 export default function ApiKeysPage() {
   const keys = useApiKeys();
@@ -23,7 +22,7 @@ export default function ApiKeysPage() {
     <div>
       <PageHeader
         title="API Keys"
-        subtitle="API keys carry full management authority and stay active after the person who created them is gone."
+        subtitle="Owned keys use their owner’s current role and stop working when the owner is deactivated. Unowned keys retain legacy authority."
         actions={<CreateKeyButton />}
       />
       <ApiKeysTable

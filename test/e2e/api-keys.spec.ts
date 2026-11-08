@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
+// Even fixture keys do not belong in traces or failure screenshots.
+test.use({ trace: "off", screenshot: "off", video: "off" });
+
 const MOCK = "http://127.0.0.1:18080";
 
 test.beforeEach(async ({ request }) => {
@@ -154,7 +157,7 @@ test("a platform without the surface loses the nav item", async ({
   await expect(standIn).toHaveAttribute("data-surface", "api-keys");
 });
 
-// Management keys stay admin-only in plan 69 slice 1. A refused read hides
+// A refused key-list read hides
 // the entry, but a direct URL must explain the refusal rather than absence.
 // This injects a 403 in the password/key lane; it does not resolve an OIDC role.
 test("a forbidden key list hides only its entry and explains itself", async ({
@@ -177,4 +180,26 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   await expect(
     page.getByText("this route requires the admin role"),
   ).toBeVisible();
+});
+
+test("legacy Dashboard key shortcut never assigns a principal", async ({
+  page,
+}) => {
+  await signIn(page, "/dashboard");
+  await page.getByRole("button", { name: "Get API key", exact: true }).click();
+  await expect(page.getByLabel("Owner", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Name", { exact: true }).fill("legacy-shortcut");
+  const issuance = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api_keys") &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const response = await issuance;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).not.toHaveProperty("principal_id");
+  await expect(
+    page.getByRole("heading", { name: "Save your API key" }),
+  ).toBeVisible();
+  await page.getByTestId("close-revealed-api-key").click();
 });

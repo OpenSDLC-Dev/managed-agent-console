@@ -1,4 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
+
+it("native runtime environment contracts (no resources)", () => {
+  expect(() =>
+    execFileSync(
+      process.execPath,
+      ["--test", resolve("test/native/environment.test.mjs")],
+      { timeout: 30_000 },
+    ),
+  ).not.toThrow();
+});
 import { ensureLoopbackProxyBypass } from "./playwright-env";
 
 vi.mock("./e2e-live/env", () => ({

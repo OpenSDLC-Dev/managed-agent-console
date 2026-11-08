@@ -51,16 +51,98 @@ const record = () => {
   durable(join(evidence, "task6-native-receipt.json"), receipt);
 };
 record();
-const env = {
+const selectors = Object.fromEntries(
+  ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"]
+    .filter((key) => process.env[key] !== undefined)
+    .map((key) => [key, process.env[key]]),
+);
+const env = Object.freeze({
   PATH: process.env.PATH,
   HOME: process.env.HOME,
+  XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
   SystemRoot: process.env.SystemRoot,
-  TMPDIR: dir,
+  ...selectors,
+  NEXT_TELEMETRY_DISABLED: "1",
+  TMPDIR: process.env.TMPDIR || dir,
   NO_PROXY: "*",
   no_proxy: "*",
   NATIVE_RUN_DIR: dir,
   NATIVE_EVIDENCE_DIR: evidence,
-};
+});
+let dockerEndpoint;
+async function effectiveDockerEndpoint(options = {}, duringCleanup = false) {
+  const actual = { ...env, ...options.env };
+  if (actual.DOCKER_HOST && !actual.DOCKER_CONTEXT) return actual.DOCKER_HOST;
+  const context = await command(
+    "docker",
+    ["context", "show"],
+    options,
+    duringCleanup,
+  );
+  return command(
+    "docker",
+    ["context", "inspect", context, "--format", "{{.Endpoints.docker.Host}}"],
+    options,
+    duringCleanup,
+  );
+}
+async function preflightDocker() {
+  // Check the verified parent's selection and the actual rebuilt child. A
+  // different HOME default must never silently redirect startup or cleanup.
+  const parent = await effectiveDockerEndpoint({ env: selectors });
+  const effective = await effectiveDockerEndpoint();
+  if (!effective.startsWith("unix://") || effective !== parent)
+    throw new Error(
+      "native Docker target is not the verified local Unix endpoint",
+    );
+  const fixtures = await command("docker", [
+    "ps",
+    "--all",
+    "--no-trunc",
+    "--filter",
+    "label=dev.opensdlc.managed-agent-platform.test-fixture",
+    "--format",
+    "{{.ID}}",
+  ]);
+  if (fixtures)
+    throw new Error(
+      "foreign platform fixture present; no resource operation allowed",
+    );
+  dockerEndpoint = effective;
+  receipt.dockerTarget = {
+    endpointClass: "local-unix",
+    matchesParent: true,
+    selectorNames: Object.keys(selectors),
+    checkedAt: new Date().toISOString(),
+    foreignFixtures: false,
+  };
+  record();
+}
+async function probeEnvironment() {
+  const script = `JSON.stringify({telemetryDisabled:process.env.NEXT_TELEMETRY_DISABLED === "1",unsafeNames:Object.keys(process.env).filter(k=>/^(RUN_LIVE_|RUN_EVALS|MODEL_|ANTHROPIC_|AWS_|GOOGLE_|OTEL_|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY)/i.test(k))})`;
+  const commandProbe = JSON.parse(
+    await command(process.execPath, ["-e", `console.log(${script})`]),
+  );
+  const path = join(dir, "environment-start.json");
+  start(
+    process.execPath,
+    [
+      "-e",
+      `require("node:fs").writeFileSync(${JSON.stringify(path)}, ${script}, {mode:0o600})`,
+    ],
+    "environment-probe",
+  );
+  await children.at(-1).done;
+  const startProbe = JSON.parse(readFileSync(path, "utf8"));
+  receipt.environment = { command: commandProbe, start: startProbe };
+  record();
+  if (
+    [commandProbe, startProbe].some(
+      (probe) => !probe.telemetryDisabled || probe.unsafeNames.length,
+    )
+  )
+    throw new Error("unsafe native child environment");
+}
 function checkStarting() {
   if (stopping) throw new Error("native runtime is stopping");
 }
@@ -81,6 +163,15 @@ function own(child, creation) {
 }
 async function command(cmd, args, options = {}, duringCleanup = false) {
   if (!duringCleanup) checkStarting();
+  if (cmd === "docker" && ["create", "start", "exec", "rm"].includes(args[0])) {
+    if (
+      !dockerEndpoint ||
+      (await effectiveDockerEndpoint({}, duringCleanup)) !== dockerEndpoint
+    )
+      throw new Error(
+        "native Docker endpoint changed; refusing resource operation",
+      );
+  }
   const child = spawn(cmd, args, {
     cwd: root,
     ...options,
@@ -153,7 +244,10 @@ function start(cmd, args, name, extra = {}) {
 }
 function checkAlive() {
   const dead = children.find(
-    (entry) => entry.creation.name && (entry.error || entry.closed),
+    (entry) =>
+      entry.creation.name &&
+      entry.creation.name !== "environment-probe" &&
+      (entry.error || entry.closed),
   );
   if (dead)
     throw new Error(`owned process ${dead.child.pid} exited; see ${dir}`);
@@ -358,12 +452,16 @@ function cleanup() {
       rmSync(join(dir, `${mode}-setup-code`), { force: true });
     try {
       receipt.after = (
-        await command("docker", ["ps", "--no-trunc", "-aq"], {}, true)
+        dockerEndpoint
+          ? await command("docker", ["ps", "--no-trunc", "-aq"], {}, true)
+          : ""
       )
         .split("\n")
         .filter(Boolean);
       const volumes = (
-        await command("docker", ["volume", "ls", "-q"], {}, true)
+        dockerEndpoint
+          ? await command("docker", ["volume", "ls", "-q"], {}, true)
+          : ""
       ).split("\n");
       receipt.volumesAfter = (receipt.volumes ?? []).map((name) => ({
         name,
@@ -415,6 +513,9 @@ process.on("SIGINT", () => {
 });
 startupDone = (async () => {
   try {
+    await preflightDocker();
+    await probeEnvironment();
+    if (process.argv.includes("--check-environment")) return;
     receipt.before = (await command("docker", ["ps", "--no-trunc", "-aq"]))
       .split("\n")
       .filter(Boolean);
@@ -547,4 +648,5 @@ startupDone = (async () => {
   }
 })();
 await startupDone;
-if (failed || stopping) await shutdown();
+if (failed || stopping || process.argv.includes("--check-environment"))
+  await shutdown();

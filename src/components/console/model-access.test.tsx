@@ -17,6 +17,84 @@ import {
   stubGatewayFetch,
 } from "../../../test/mock-platform/gateway-fetch";
 import type { ApiKey, GatewayKeyPolicy } from "@/lib/platform/types";
+import {
+  ConsoleSessionContext,
+  useConsoleSession,
+} from "@/components/shell/console-session";
+
+it("probe: owned keys cannot write legacy model policies", async () => {
+  stubGatewayFetch();
+  const owned = Object.assign(apiKey({ id: "apikey_ci01" }), {
+    principal: { type: "user_actor", user_id: "user_self" },
+    can_manage: true,
+  });
+  renderTable([owned]);
+  await waitFor(() =>
+    expect(access(owned)).toHaveAttribute("data-models", "none"),
+  );
+  expect(screen.queryByRole("button", { name: "Model access" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Remove model policy/ }),
+  ).toBeNull();
+  cleanup();
+  document.documentElement.dataset.consoleAuth = "platform";
+  stubGatewayFetch((_method, rest) =>
+    rest === "/admin/v1/key_policies"
+      ? Response.json({ data: [policy({ aliases: ["a", "b"] })] })
+      : undefined,
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <ConsoleSessionContext.Provider
+        value={
+          {
+            data: { id: "user_self", signed_in: true, role: "developer" },
+          } as ReturnType<typeof useConsoleSession>
+        }
+      >
+        <ApiKeysTable
+          keys={[{ ...CI, can_manage: true } as ApiKey]}
+          loading={false}
+          error={null}
+        />
+      </ConsoleSessionContext.Provider>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(access(CI)).toHaveAttribute("data-models", "2"));
+  expect(screen.queryByRole("button", { name: "Model access" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /Remove model policy/ }),
+  ).toBeNull();
+});
+
+it("owned keys cannot appear as gateway callers even with a stale legacy policy", async () => {
+  const owned = Object.assign(apiKey({ id: "apikey_ci01" }), {
+    principal: {
+      type: "service_account_actor",
+      service_account_id: "svac_self",
+    },
+  });
+  stubGatewayFetch((_method, rest) =>
+    rest.endsWith("/api_keys")
+      ? Response.json([owned])
+      : rest === "key_policies"
+        ? Response.json({ data: [policy({ aliases: ["agent-default"] })] })
+        : undefined,
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <ModelKeys alias="agent-default" />
+    </QueryClientProvider>,
+  );
+  await screen.findByText(/No active key/);
+  expect(document.querySelector("[data-key-id]")).toBeNull();
+});
 
 const apiKey = (over: Partial<ApiKey> & { id: string }): ApiKey => ({
   type: "api_key",
@@ -75,6 +153,7 @@ const openAccess = async (key: ApiKey) => {
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
 });
 

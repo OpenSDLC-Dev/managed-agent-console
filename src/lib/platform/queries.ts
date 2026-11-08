@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { useContext } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import {
   useMutation,
   useInfiniteQuery,
@@ -9,6 +11,7 @@ import {
 } from "@tanstack/react-query";
 import {
   PlatformError,
+  isNativeConsole,
   consoleGet,
   consoleKeysGet,
   consoleKeysPost,
@@ -27,6 +30,7 @@ import type { ResourceInput } from "./session-resources";
 import type {
   Agent,
   ApiKey,
+  ApiKeyListItem,
   ApiKeyIssued,
   Deployment,
   DeploymentRun,
@@ -1362,9 +1366,12 @@ const KEYS_PATH = `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/
 
 /** The listing is a bare array: no envelope, no paging (consoleapikeys.go). */
 export function useApiKeys() {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const native = isNativeConsole();
   return useQuery({
-    queryKey: ["api-keys"],
-    queryFn: () => consoleKeysGet<ApiKey[]>(KEYS_PATH),
+    queryKey: native ? ["api-keys", session?.id, session?.role] : ["api-keys"],
+    queryFn: () => consoleKeysGet<ApiKeyListItem[]>(KEYS_PATH),
+    ...(native ? { gcTime: 0 } : {}),
   });
 }
 
@@ -1388,8 +1395,11 @@ export function useCreateApiKey() {
   return useMutation({
     meta: { errorToast: false },
     gcTime: 0,
-    mutationFn: (body: { name: string; expires_at?: string }) =>
-      consoleKeysPost<ApiKeyIssued>(KEYS_PATH, body),
+    mutationFn: (body: {
+      name: string;
+      expires_at?: string;
+      principal_id?: string;
+    }) => consoleKeysPost<ApiKeyIssued>(KEYS_PATH, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     },

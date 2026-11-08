@@ -51,6 +51,7 @@ export type {
   MemoryVersion,
   KeyActor,
   ApiKey,
+  ApiKeyListItem,
   ApiKeyIssued,
   ModelRef,
   ModelUsage,

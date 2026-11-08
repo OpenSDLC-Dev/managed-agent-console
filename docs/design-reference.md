@@ -5,6 +5,23 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Owned API keys — checked 2026-11-08
+
+The [published ownership summary](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/a7fa9c0715c92f85ffbdf6f9d595e7d014d6a4d8/2026-11-07-owned-key-memory-actors/README.md) distinguishes the user/service-account owner from the human creator.
+It records admin list permission hints, not lower-human-role visibility.
+A fresh isolated Chrome reached only the public sign-in offer. No authenticated-reference screenshot parity is claimed.
+
+The native companion reuses the existing key dialogs, table and Dashboard shortcut.
+Self-hosting departures follow platform `internal/api/consoleapikeys.go`:
+
+- Workspace stays a null seam; there is no `scope` or workspace selector API.
+- Developers manage only their own owned keys. Admins may assign an active service account, never another human.
+- Owned keys have no model-inference grant in this slice. Legacy unowned-key policy controls remain separate.
+
+The lower-human-role policy is conservative and local. Reference evidence remains open in [recordings #40](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/40).
+`test/fidelity/native-surfaces.ts` and its real-platform Chrome walker cover the list, form, owner selection, masked reveal and Dashboard form in both themes.
+These are local-state checks against the recorded design system, not a new authenticated-reference comparison.
+
 ## API key deletion — checked 2026-10-28
 
 Chrome shows `Actions` → `More actions for …` → `Delete API key`, followed by a

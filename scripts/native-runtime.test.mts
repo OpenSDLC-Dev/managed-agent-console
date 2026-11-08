@@ -63,6 +63,7 @@ function result(command, args, options) {
   }
   if (command !== "docker") throw Error("unexpected command " + command);
   switch (args[0]) {
+    case "context": return { status: 0, stdout: args[1] === "show" ? "fake-local" : "unix:///fake-local.sock" };
     case "create":
       writeFileSync(args[args.indexOf("--cidfile") + 1], id);
       return { status: 0, stdout: id };
@@ -87,6 +88,7 @@ cp.spawnSync = (command, args, options) => {
   return { stdout: "", stderr: "", ...result(command, args, options) };
 };
 cp.spawn = (command, args, options) => {
+  if (command === process.execPath && args[0] === "-e") return original(command, args, options);
   if (command === "docker" || command === "go") {
     if (command === "docker" && args[0] === "create" && kind === "create-no-receipt") {
       log({ command, args, held: true });
@@ -329,6 +331,7 @@ it.skipIf(process.platform === "win32").each(["held-headers", "held-body"])(
       expect(commands.filter((c) => c.readinessCancelled)).toHaveLength(1);
       expect(commands.filter((c) => c.server)).toHaveLength(1);
       expect(receipt.started.map((c: { name: string }) => c.name)).toEqual([
+        "environment-probe",
         "platform",
       ]);
       expect(receipt.listeners.map((c: { port: number }) => c.port)).toEqual([

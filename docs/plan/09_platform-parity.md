@@ -1,5 +1,5 @@
 ---
-status: completed
+status: archived
 ---
 
 # Platform capability parity

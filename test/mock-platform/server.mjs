@@ -2730,7 +2730,14 @@ const server = createServer(async (req, res) => {
       res.writeHead(200);
       // A bare array: no envelope, no paging, which is what the reference's
       // own console listing returns.
-      res.end(JSON.stringify(apiKeysStore.map(render)));
+      res.end(
+        JSON.stringify(
+          apiKeysStore.map((key) => ({
+            ...render(key),
+            can_manage: !!key.created_by,
+          })),
+        ),
+      );
       return;
     }
 

@@ -8,7 +8,8 @@ import {
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { test, expect, type Page, type Request } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
+import { test, expect } from "./test";
 import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
 const org = "/api/console/organizations/default";
@@ -131,13 +132,15 @@ import { PassThrough } from "node:stream";
 import { syncBuiltinESMExports } from "node:module";
 import { writeFileSync } from "node:fs";
 const id = "1".padStart(64, "0");
-cp.spawn = (command, args) => {
+const originalSpawn = cp.spawn;
+cp.spawn = (command, args, options) => {
+  if (command === process.execPath) return originalSpawn(command, args, options);
   if (command !== "docker" && command !== "go") throw Error("unexpected spawn " + command);
   if (command === "docker" && args[0] === "create") writeFileSync(args[args.indexOf("--cidfile") + 1], id);
   const child = new EventEmitter();
   child.stdout = new PassThrough(); child.stderr = new PassThrough();
   child.exitCode = command === "go" ? 1 : 0; child.signalCode = null;
-  const stdout = args[0] === "inspect" ? "[]" : args[0] === "rm" ? id : args[0] === "port" ? "127.0.0.1:54321" : "";
+  const stdout = args[0] === "context" ? (args[1] === "show" ? "fake-local" : "unix:///fake-local.sock") : args[0] === "inspect" ? "[]" : args[0] === "rm" ? id : args[0] === "port" ? "127.0.0.1:54321" : "";
   queueMicrotask(() => {
     child.stdout.end(stdout); child.stderr.end(command === "go" ? "path captured" : "");
     child.emit("close", child.exitCode, null);
@@ -1326,4 +1329,203 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
   expect(
     (await context.cookies()).some((cookie) => cookie.name === "map_session"),
   ).toBe(false);
+});
+
+test("native owned keys preserve owner creator permissions and credential isolation", async ({
+  page,
+  browser,
+}) => {
+  const keysPath = `${org}/workspaces/default/api_keys`;
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "owned-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) await login(page, "new-person");
+  else await page.goto("/dashboard");
+  const admin = await (await page.request.get("/api/auth/session")).json();
+  const offered: string[] = [];
+  page.on("request", (request) =>
+    offered.push(
+      ...credentialHeaders(
+        "http://127.0.0.1:38200",
+        request.url(),
+        request.headers(),
+      ),
+    ),
+  );
+  // The picker must follow the server's real cursor, not a partial directory.
+  for (let n = 0; n < 101; n++) {
+    const created = await write(page, `${org}/service_accounts`, {
+      name: `owned-picker-${n}`,
+    });
+    expect(created.status).toBe(200);
+  }
+  const retired = await write(page, `${org}/service_accounts`, {
+    name: "owned-picker-retired",
+  });
+  expect(retired.status).toBe(200);
+  expect(
+    (await write(page, `${org}/service_accounts/${retired.body.id}/archive`))
+      .status,
+  ).toBe(200);
+  const first = await (
+    await page.request.get(`${org}/service_accounts?limit=100`)
+  ).json();
+  expect(Boolean(first.next_page)).toBe(true);
+  const second = await (
+    await page.request.get(
+      `${org}/service_accounts?limit=100&page=${encodeURIComponent(first.next_page)}`,
+    )
+  ).json();
+  const service = second.data[0];
+  expect(Boolean(service?.id)).toBe(true);
+  await page.goto("/api-keys");
+  await page.getByRole("button", { name: "Create key", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("native-owned-service");
+  await expect(
+    page.getByLabel("Owner").locator(`option[value="${retired.body.id}"]`),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Load more service accounts" })
+    .click();
+  await expect(
+    page.getByLabel("Owner").locator(`option[value="${service.id}"]`),
+  ).toHaveCount(1);
+  await page.getByLabel("Owner").selectOption(service.id);
+  const issuance = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(keysPath) &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const response = await issuance;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toMatchObject({
+    principal_id: service.id,
+  });
+  const issued = await response.json();
+  expect(issued.principal).toEqual({
+    type: "service_account_actor",
+    service_account_id: service.id,
+  });
+  expect(issued.created_by).toEqual({ type: "user", id: admin.id });
+  expect(Object.hasOwn(issued, "can_manage")).toBe(false);
+  expect(issued.workspace_id).toBeNull();
+  expect(Object.hasOwn(issued, "scope")).toBe(false);
+  const reveal = page.getByTestId("revealed-api-key");
+  await expect(reveal).toBeVisible();
+  expect(
+    await reveal.evaluate((element) =>
+      /^sk-map-api01-.+/.test(element.textContent ?? ""),
+    ),
+  ).toBe(true);
+  const noStoredKey = await page.evaluate(
+    (secret) =>
+      ![localStorage, sessionStorage].some((storage) =>
+        Object.values(storage).some((value) => String(value).includes(secret)),
+      ),
+    issued.raw_key,
+  );
+  expect(noStoredKey).toBe(true);
+  await page.getByTestId("close-revealed-api-key").click();
+  expect((await page.content()).includes(issued.raw_key)).toBe(false);
+  // Never retain plaintext in test evidence or pass it into any transport.
+  delete issued.raw_key;
+  const listed = await (await page.request.get(keysPath)).json();
+  expect(
+    listed.every(
+      (key: { can_manage?: boolean }) => typeof key.can_manage === "boolean",
+    ),
+  ).toBe(true);
+  const row = page.getByRole("row").filter({ hasText: "native-owned-service" });
+  await expect(row.locator("[data-owner-id]")).toHaveAttribute(
+    "data-owner-id",
+    service.id,
+  );
+  await expect(row.locator("[data-created-by]")).toHaveAttribute(
+    "data-created-by",
+    admin.id,
+  );
+  await expect(
+    row.getByRole("button", { name: "Model access", exact: true }),
+  ).toHaveCount(0);
+  await row.getByRole("button", { name: "Disable", exact: true }).click();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "inactive",
+  );
+  // The Dashboard shortcut uses the exact session ID, without manufacturing aliases.
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Get API key", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("native-owned-self");
+  const selfIssuance = page.waitForResponse(
+    (answer) =>
+      answer.url().endsWith(keysPath) && answer.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const selfResponse = await selfIssuance;
+  expect(selfResponse.status()).toBe(200);
+  expect(selfResponse.request().postDataJSON()).toMatchObject({
+    principal_id: admin.id,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Save your API key" }),
+  ).toBeVisible();
+  await page.getByTestId("close-revealed-api-key").click();
+  expect(offered).toEqual([]);
+  const member = await write(page, `${org}/members`, {
+    login_name: "owned-developer",
+    password,
+    role: "developer",
+  });
+  expect(member.status).toBe(200);
+  const developerContext = await browser.newContext({
+    baseURL: "http://127.0.0.1:38200",
+  });
+  try {
+    const developer = await developerContext.newPage();
+    const directory: string[] = [];
+    developer.on("request", (request) => {
+      if (/\/members|\/service_accounts/.test(new URL(request.url()).pathname))
+        directory.push(request.method());
+    });
+    await login(developer, "owned-developer");
+    await developer
+      .getByRole("button", { name: "Get API key", exact: true })
+      .click();
+    await developer
+      .getByLabel("Name", { exact: true })
+      .fill("native-owned-developer");
+    const developerIssuance = developer.waitForResponse(
+      (answer) =>
+        answer.url().endsWith(keysPath) && answer.request().method() === "POST",
+    );
+    await developer.getByRole("button", { name: "Add", exact: true }).click();
+    expect((await developerIssuance).status()).toBe(200);
+    await expect(
+      developer.getByRole("heading", { name: "Save your API key" }),
+    ).toBeVisible();
+    await developer.getByTestId("close-revealed-api-key").click();
+    await developer.goto("/api-keys");
+    await expect(
+      developer.getByText("native-owned-developer", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      developer.getByText("native-owned-service", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      developer.getByRole("button", { name: "Model access", exact: true }),
+    ).toHaveCount(0);
+    expect(directory).toEqual([]);
+    const own = await (await developer.request.get(keysPath)).json();
+    expect(own.length).toBe(1);
+    expect(own[0].can_manage).toBe(true);
+    expect(own[0].principal).toEqual({
+      type: "user_actor",
+      user_id: member.body.id,
+    });
+  } finally {
+    await developerContext.close();
+  }
 });

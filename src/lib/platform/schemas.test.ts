@@ -17,6 +17,56 @@
  * (`test/e2e-live/live.spec.ts`), where real responses exist.
  */
 import type { AddressInfo } from "node:net";
+
+it("owned key DTO keeps owner and creator separate", () => {
+  const base = {
+    id: "apikey_owned",
+    type: "api_key",
+    name: "owned",
+    workspace_id: null,
+    created_at: "2026-11-07T00:00:00Z",
+    created_by: { type: "user", id: "user_issuer" },
+    partial_key_hint: "hint",
+    status: "active",
+    expires_at: null,
+  };
+  for (const principal of [
+    { type: "user_actor", user_id: "user_owner" },
+    { type: "service_account_actor", service_account_id: "svac_owner" },
+  ]) {
+    const updated = ApiKeySchema.safeParse({ ...base, principal });
+    expect(updated.success).toBe(true);
+    if (!updated.success) continue;
+    expect(updated.data.principal).toEqual(principal);
+    expect(updated.data.created_by).toEqual(base.created_by);
+    expect(updated.data.workspace_id).toBeNull();
+    expect(updated.data).not.toHaveProperty("scope");
+    expect(updated.data).not.toHaveProperty("can_manage");
+    const issued = ApiKeyIssuedSchema.parse({
+      ...base,
+      principal,
+      raw_key: "synthetic",
+    });
+    expect(issued).not.toHaveProperty("can_manage");
+    expect(
+      ApiKeyListSchema.parse([{ ...base, principal, can_manage: false }])[0],
+    ).toHaveProperty("can_manage", false);
+  }
+  for (const created_by of [
+    null,
+    { type: "principal", id: "principal_old" },
+    { type: "api_key", id: "apikey_old" },
+  ])
+    expect(
+      ApiKeySchema.parse({ ...base, principal: null, created_by }).created_by,
+    ).toEqual(created_by);
+  for (const principal of [
+    { type: "principal", id: "user_owner" },
+    { type: "user_actor", service_account_id: "svac_owner" },
+    { type: "service_account_actor", user_id: "user_owner" },
+  ])
+    expect(ApiKeySchema.safeParse({ ...base, principal }).success).toBe(false);
+});
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { z } from "zod";
 import * as fixtures from "../../../test/mock-platform/fixtures.mjs";

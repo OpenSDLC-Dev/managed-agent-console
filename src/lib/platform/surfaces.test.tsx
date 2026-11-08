@@ -2,6 +2,45 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import {
+  ConsoleSessionContext,
+  useConsoleSession,
+} from "@/components/shell/console-session";
+
+it.each(["developer", "user"])(
+  "native %s surface probes do not fetch admin directories",
+  async (role) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ data: [] }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { result } = renderHook(useSurfaces, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <ConsoleSessionContext.Provider
+            value={
+              {
+                data: { signed_in: true, id: "user_self", role },
+              } as ReturnType<typeof useConsoleSession>
+            }
+          >
+            {children}
+          </ConsoleSessionContext.Provider>
+        </QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(
+      fetcher.mock.calls.some((call) =>
+        /members|service_accounts/.test(String(call[0])),
+      ),
+    ).toBe(false);
+  },
+);
 import { PlatformError } from "./http";
 import {
   SURFACES,
@@ -71,6 +110,7 @@ function stubProbes(status: (surface: string) => number) {
 }
 
 afterEach(() => {
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });

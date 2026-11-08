@@ -709,21 +709,25 @@ export const EnvironmentKeyIssuedSchema = z.object({
 // management keys answer with the whole resource plus one extra field.
 
 /**
- * consoleapikeys.go — the actor that issued a key: `{id, type}`. Our type
- * vocabulary is `principal` (a human over SSO) or `api_key` (the machine
- * credential that issued it); the reference's has only `user`, because it has
- * a `user_` id to give and we do not. Null on a key seeded from the control
- * plane's own environment variable, which nobody issued.
+ * consoleapikeys.go — the creator, not the owner. Owned keys use user/id;
+ * historical unowned rows retain principal/api_key. Preset keys have no creator.
  */
 export const KeyActorSchema = z.object({
   id: z.string(),
   type: z.string(),
 });
 
+export const ApiKeyOwnerSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("user_actor"), user_id: z.string() }),
+  z.object({
+    type: z.literal("service_account_actor"),
+    service_account_id: z.string(),
+  }),
+]);
+
 /**
- * consoleapikeys.go — a management key as both the listing and an update
- * render it. `workspace_id` and `principal` are always null on this platform
- * and are kept in the shape because the reference sends them null too.
+ * consoleapikeys.go — create/update metadata. The workspace remains a null
+ * tenancy seam. Ownership is separate from audit creator and list permission.
  *
  * `status` is a plain string rather than an enum on purpose: `expired` is
  * *derived* from `expires_at` by the platform and is not settable, so the set a
@@ -741,7 +745,7 @@ export const ApiKeySchema = z.object({
   partial_key_hint: z.string(),
   status: z.string(),
   expires_at: z.string().nullable(),
-  principal: KeyActorSchema.nullable(),
+  principal: ApiKeyOwnerSchema.nullable(),
 });
 
 /**
@@ -759,7 +763,11 @@ export const ApiKeyIssuedSchema = ApiKeySchema.extend({
  * list returns; the `/v1` keyset envelope and files' classic envelope both stay
  * where they belong.
  */
-export const ApiKeyListSchema = z.array(ApiKeySchema);
+// Old unowned servers omit the hint. Owned rows without it fail closed in UI.
+export const ApiKeyListItemSchema = ApiKeySchema.extend({
+  can_manage: z.boolean().optional(),
+});
+export const ApiKeyListSchema = z.array(ApiKeyListItemSchema);
 
 // ---- the model gateway's admin API (internal/modelgateway/admin/), plan 10
 //
@@ -995,6 +1003,7 @@ export type EnvironmentKeyPage = z.infer<typeof EnvironmentKeyPageSchema>;
 export type EnvironmentKeyIssued = z.infer<typeof EnvironmentKeyIssuedSchema>;
 export type KeyActor = z.infer<typeof KeyActorSchema>;
 export type ApiKey = z.infer<typeof ApiKeySchema>;
+export type ApiKeyListItem = z.infer<typeof ApiKeyListItemSchema>;
 export type ApiKeyIssued = z.infer<typeof ApiKeyIssuedSchema>;
 export type GatewayProtocol = z.infer<typeof GatewayProtocolSchema>;
 export type GatewayKind = z.infer<typeof GatewayKindSchema>;

@@ -1,10 +1,19 @@
 "use client";
 
-import { useRef, useState, type RefObject } from "react";
+import { useContext, useEffect, useRef, useState, type RefObject } from "react";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
+import {
+  nativeGet,
+  ORGANIZATION,
+  type NativeSession,
+  type ServiceAccountPage,
+} from "@/lib/platform/native";
 import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {
   Day,
+  IdCode,
   EmptyState,
   ErrorState,
   RequestId,
@@ -29,12 +38,12 @@ import {
 } from "@/components/console/model-access";
 import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
-import { PlatformError } from "@/lib/platform/http";
+import { PlatformError, isNativeConsole } from "@/lib/platform/http";
 import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
 import { useGatewayKeyPolicies } from "@/lib/platform/gateway-queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
-import type { ApiKey } from "@/lib/platform/types";
+import type { ApiKeyListItem } from "@/lib/platform/types";
 
 /**
  * How long a new key lives, offered as the reference offers it.
@@ -99,7 +108,7 @@ const STATUS_STYLE: Record<string, string> = {
 /**
  * The reveal-once dialog, the only place a management key's plaintext is ever
  * rendered — the same discipline plan 07 slice 3 wrote for environment keys,
- * and it matters more here: this credential is root on the platform. The value
+ * and it matters here too: this is a bearer credential. The value
  * is not written to a `data-*` attribute, not logged, not put in a toast, not
  * stored, and passed nowhere but this block and the clipboard.
  */
@@ -130,7 +139,7 @@ function RevealKeyDialog({
         </DialogHeader>
         <pre
           data-testid="revealed-api-key"
-          className="rounded-md border bg-secondary/40 p-3 font-mono text-[12px] break-all"
+          className="min-w-0 rounded-md border bg-secondary/40 p-3 font-mono text-[12px] break-all whitespace-pre-wrap"
         >
           {secret}
         </pre>
@@ -168,6 +177,36 @@ function RevealKeyDialog({
  * The Dashboard shortcut uses the same sequence as the API keys list.
  */
 export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const native = isNativeConsole();
+  if (
+    native &&
+    (!session?.signed_in ||
+      !session.id ||
+      !["admin", "developer"].includes(session.role ?? ""))
+  )
+    return null;
+  // A replaced principal (or changed role) cannot retain a draft, picker,
+  // mutation observer or one-time reveal from the previous authority.
+  return (
+    <KeyCreation
+      key={native ? `${session?.id}:${session?.role}` : "legacy"}
+      shortcut={shortcut}
+    />
+  );
+}
+
+function KeyCreation({ shortcut }: { shortcut: boolean }) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const native = isNativeConsole();
+  const queryClient = useQueryClient();
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const create = useCreateApiKey();
   const [open, setOpen] = useState(false);
@@ -175,6 +214,28 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
   const [choice, setChoice] = useState<ExpiryChoice>("30d");
   const [custom, setCustom] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
+  const [owner, setOwner] = useState(session?.id ?? "");
+  const [checking, setChecking] = useState(false);
+  const [sessionError, setSessionError] = useState<unknown>(null);
+  const accounts = useInfiniteQuery({
+    queryKey: ["key-owner-service-accounts", session?.id, session?.role],
+    queryFn: ({ pageParam }) =>
+      nativeGet<ServiceAccountPage>(`${ORGANIZATION}/service_accounts`, {
+        page: pageParam,
+        limit: 100,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.next_page ?? undefined,
+    enabled: native && session?.role === "admin" && open,
+    gcTime: 0,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const services =
+    accounts.data?.pages
+      .flatMap((page) => page.data)
+      .filter((account) => !account.archived_at) ?? [];
+  const pending = create.isPending || checking;
 
   const discardSecret = () => {
     setSecret(null);
@@ -194,17 +255,51 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
     setName("");
     setChoice("30d");
     setCustom("");
+    setOwner(session?.id ?? "");
+    setSessionError(null);
     create.reset();
   };
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed || customIsIncomplete(choice, custom)) return;
+    let principalId: string | undefined;
+    if (native) {
+      setChecking(true);
+      setSessionError(null);
+      try {
+        const current = await nativeGet<NativeSession>("/api/auth/session");
+        if (!active.current) return;
+        if (!current.signed_in || current.id !== session?.id) {
+          setOpen(false);
+          resetDraft();
+          queryClient.setQueryData(["console-session"], current);
+          return;
+        }
+        if (
+          current.role === "user" ||
+          (owner !== current.id && current.role !== "admin")
+        )
+          throw new Error(
+            "Your role changed. Reopen the form to select an owner.",
+          );
+        principalId = owner || current.id;
+      } catch (error) {
+        if (active.current) setSessionError(error);
+        return;
+      } finally {
+        if (active.current) setChecking(false);
+      }
+    }
     const expiresAt = expiryInstant(choice, custom, Date.now());
     create.mutate(
       // Absent rather than null for "never": both mean the same to the
       // platform, and absent is what the reference sends.
-      { name: trimmed, ...(expiresAt ? { expires_at: expiresAt } : {}) },
+      {
+        name: trimmed,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+        ...(principalId ? { principal_id: principalId } : {}),
+      },
       {
         onSuccess: (issued) => {
           setSecret(issued.raw_key);
@@ -219,7 +314,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
     );
   };
 
-  const error = create.error;
+  const error = sessionError ?? create.error;
   const incomplete = !name.trim() || customIsIncomplete(choice, custom);
   return (
     <>
@@ -262,7 +357,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
       <Dialog
         open={open}
         onOpenChange={(next) => {
-          if (!next && create.isPending) return;
+          if (!next && pending) return;
           setOpen(next);
           if (!next) resetDraft();
         }}
@@ -271,13 +366,15 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              submit();
+              void submit();
             }}
           >
             <DialogHeader>
               <DialogTitle>Create API key</DialogTitle>
               <DialogDescription>
-                An API key carries full management authority on this platform.
+                {native
+                  ? "An owned key uses its owner’s current role. Deactivating the owner revokes access."
+                  : "An unowned key carries legacy management authority on this platform."}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
@@ -292,6 +389,51 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
                   disabled
                 />
               </div>
+              {native && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="api-key-owner">Owner</Label>
+                  <select
+                    id="api-key-owner"
+                    className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
+                    value={owner}
+                    onChange={(event) => setOwner(event.target.value)}
+                    disabled={pending || session?.role !== "admin"}
+                  >
+                    <option value={session?.id}>
+                      You ·{" "}
+                      {session?.name || session?.login_name || session?.id}
+                    </option>
+                    {services.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        Service account · {account.name || account.id}
+                      </option>
+                    ))}
+                  </select>
+                  {accounts.isFetching && (
+                    <p
+                      role="status"
+                      className="text-[13px] text-muted-foreground"
+                    >
+                      Loading service accounts…
+                    </p>
+                  )}
+                  {accounts.error && (
+                    <p role="alert" className="text-[13px] text-destructive">
+                      {accounts.error.message}
+                    </p>
+                  )}
+                  {accounts.hasNextPage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={accounts.isFetching || pending}
+                      onClick={() => void accounts.fetchNextPage()}
+                    >
+                      Load more service accounts
+                    </Button>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <Label htmlFor="api-key-name">Name</Label>
                 <Input
@@ -327,7 +469,9 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
                     data-testid="never-expires-warning"
                     className="text-[13px] text-destructive"
                   >
-                    This key will work until somebody deletes it.
+                    {native
+                      ? "No time limit. Disabling or deleting this key, or deactivating its owner, revokes access."
+                      : "No time limit. Disabling or deleting this key revokes access."}
                   </p>
                 )}
                 {choice === "custom" && (
@@ -356,7 +500,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
               <Button
                 type="button"
                 variant="ghost"
-                disabled={create.isPending}
+                disabled={pending}
                 onClick={() => {
                   // Through the same door as every other close: setting `open`
                   // alone would skip `onOpenChange` and leave the draft behind.
@@ -366,7 +510,7 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={create.isPending || incomplete}>
+              <Button type="submit" disabled={pending || incomplete}>
                 Add
               </Button>
             </DialogFooter>
@@ -391,19 +535,20 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
  * Three of the reference's columns do not ship, and their absence is a decision
  * rather than an omission (plan 07's own "three gaps"): `Last used` and `Cost`
  * have no source on this platform, and `Created by` renders the actor id the
- * wire carries instead of a display name over an email, because there is no
- * member lookup to enrich it with. Inventing any of the three would be the
- * console asserting something nobody told it.
+ * wire carries instead of a display name over an email. It does not fetch an
+ * admin-only directory to enrich developer rows.
  */
 export function ApiKeysTable({
   keys,
   loading,
   error,
 }: {
-  keys: ApiKey[];
+  keys: ApiKeyListItem[];
   loading: boolean;
   error: unknown;
 }) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const canWritePolicies = !isNativeConsole() || session?.role === "admin";
   const update = useUpdateApiKey();
   // Model access is the model gateway's (plan 10); a console without one
   // answers 404 and the column goes. While unknown, it shows.
@@ -411,7 +556,7 @@ export function ApiKeysTable({
   const gateway = !isUnimplemented(policies.error);
   const policyList = policies.data?.data;
 
-  const columns: Column<ApiKey>[] = [
+  const columns: Column<ApiKeyListItem>[] = [
     {
       key: "key",
       header: "Key",
@@ -428,15 +573,55 @@ export function ApiKeysTable({
       ),
     },
     {
+      key: "owner",
+      header: "Owner",
+      cell: (key) => {
+        const owner = key.principal;
+        const id =
+          owner?.type === "user_actor"
+            ? owner.user_id
+            : owner?.service_account_id;
+        return (
+          <span
+            className="flex flex-col text-[13px]"
+            data-owner-id={id ?? ""}
+            data-owner-type={owner?.type ?? ""}
+          >
+            <span>
+              {owner
+                ? owner.type === "user_actor"
+                  ? "User"
+                  : "Service account"
+                : "Unowned"}
+            </span>
+            {id && <IdCode id={id} />}
+          </span>
+        );
+      },
+    },
+    {
       key: "created_by",
       header: "Created by",
       cell: (k) => (
         <span
-          className="whitespace-nowrap text-[13px] text-muted-foreground"
+          className="flex flex-col whitespace-nowrap text-[13px]"
           data-created-by={k.created_by?.id ?? ""}
           data-created-by-type={k.created_by?.type ?? ""}
         >
-          {k.created_by ? k.created_by.id : "Control plane"}
+          {k.created_by ? (
+            <>
+              <span>
+                {k.created_by.type === "user"
+                  ? "User"
+                  : k.created_by.type === "api_key"
+                    ? "API key"
+                    : "Principal"}
+              </span>
+              <IdCode id={k.created_by.id} />
+            </>
+          ) : (
+            "Control plane"
+          )}
         </span>
       ),
     },
@@ -445,7 +630,7 @@ export function ApiKeysTable({
           {
             key: "model_access",
             header: "Model access",
-            cell: (k: ApiKey) => (
+            cell: (k: ApiKeyListItem) => (
               <ModelAccessCell
                 apiKey={k}
                 policies={policyList}
@@ -493,8 +678,10 @@ export function ApiKeysTable({
         // stricter than it. A gateway policy on such a key is not the key,
         // and stays removable.
         const policy = policyList?.find((p) => p.api_key_id === k.id);
+        const policyControl = gateway && canWritePolicies && !k.principal;
+        const manageable = k.can_manage ?? (!k.principal && !!k.created_by);
         if (!k.created_by)
-          return gateway && policy ? (
+          return policyControl && policy ? (
             <span className="flex justify-end">
               <RemovePolicyButton apiKey={k} />
             </span>
@@ -504,8 +691,9 @@ export function ApiKeysTable({
         // stated in its refusals. Archiving leaves the gateway's policy, which
         // blocks deleting any model it names, so its removal stays offered;
         // neither key is offered a grant, which could only block that.
+        if (!manageable) return null;
         if (k.status === "archived")
-          return gateway && policy ? (
+          return policyControl && policy ? (
             <span className="flex justify-end">
               <RemovePolicyButton apiKey={k} />
             </span>
@@ -513,10 +701,12 @@ export function ApiKeysTable({
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
-            {gateway && policyList && !expired && (
+            {policyControl && policyList && !expired && (
               <ModelAccessButton apiKey={k} policy={policy} />
             )}
-            {gateway && expired && policy && <RemovePolicyButton apiKey={k} />}
+            {policyControl && expired && policy && (
+              <RemovePolicyButton apiKey={k} />
+            )}
             {!expired && (
               <Button
                 variant="ghost"

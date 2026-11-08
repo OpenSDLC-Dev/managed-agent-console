@@ -80,3 +80,20 @@ describe("the fidelity surface manifest", () => {
     expect(unshot).toEqual([]);
   });
 });
+
+it("collects every owned-key fidelity interaction", async () => {
+  const { selectNativeSurfaces } = await import("./native-surfaces");
+  const ids = [
+    "native-owned-key-list",
+    "native-owned-key-form",
+    "native-owned-key-owner-picker",
+    "native-owned-key-reveal",
+    "native-owned-key-dashboard-form",
+  ];
+  expect(
+    selectNativeSurfaces(ids.join(",")).map((surface) => surface.id),
+  ).toEqual(ids);
+  expect(() => selectNativeSurfaces("native-owned-key-unknown")).toThrow(
+    "Unknown",
+  );
+});

@@ -11,7 +11,59 @@ import {
   gatewayGet,
   gatewayPost,
   gatewayDelete,
+  PlatformError,
 } from "./http";
+
+it("owned issuance stays cookie-authenticated and preserves a role refusal without credential fallback", async () => {
+  document.documentElement.dataset.consoleAuth = "platform";
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    if (url === "/api/auth/session")
+      return Response.json({ csrf_token: "synthetic-csrf", signed_in: true });
+    if (init?.method === "POST")
+      return Response.json(
+        {
+          error: {
+            type: "permission_error",
+            message: "owner assignment refused",
+          },
+          request_id: "req_owned",
+        },
+        { status: 403 },
+      );
+    return Response.json({ data: [] });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  let caught: unknown;
+  try {
+    await consoleKeysPost("organizations/default/workspaces/default/api_keys", {
+      name: "owned",
+      principal_id: "svac_selected",
+    });
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(PlatformError);
+  expect(caught).toMatchObject({
+    status: 403,
+    errorType: "permission_error",
+    requestId: "req_owned",
+  });
+  await platformGet("v1/agents");
+  await platformGetText("v1/files/file_a/content");
+  await gatewayGet("providers");
+  const writes = fetcher.mock.calls.filter(
+    ([, init]) => init?.method === "POST",
+  );
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(String(writes[0][1]?.body))).toHaveProperty(
+    "principal_id",
+    "svac_selected",
+  );
+  for (const [, init] of fetcher.mock.calls) {
+    expect(new Headers(init?.headers).has("x-api-key")).toBe(false);
+    expect(new Headers(init?.headers).has("authorization")).toBe(false);
+  }
+});
 import { isSignedOut } from "@/lib/identity/signed-out";
 
 afterEach(() => {

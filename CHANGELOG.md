@@ -30,6 +30,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- **Principal-owned API keys in native mode** (platform plan 69 slice 3). Developers issue keys for themselves; administrators can also select active service accounts. Owner and creator stay separate, and row permissions govern lifecycle controls. Principal changes discard drafts and one-time reveals. Owned-key model access remains unavailable. Native fixtures and both Docker stages disable Next telemetry. Native failure diagnostics redact issued keys before output.
+
 - **Native platform browser login**, selected at runtime with `CONSOLE_AUTH_MODE=platform`.
   The platform owns the opaque cookie, current role and CSRF checks. Setup, member administration
   and service-account lifecycle use direct edge-owned routes. Resource requests, downloads and both
