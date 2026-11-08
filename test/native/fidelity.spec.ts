@@ -1,6 +1,6 @@
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { nativeDocker } from "./docker";
 import { test, expect } from "./test";
 import { selectNativeSurfaces } from "../fidelity/native-surfaces";
 const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
@@ -66,23 +66,19 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     },
   });
   expect([200, 409]).toContain(addMapped.status());
-  const mapped = spawnSync(
-    "docker",
-    [
-      "exec",
-      receipt.container,
-      "psql",
-      "-U",
-      "postgres",
-      "-d",
-      "native_password",
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-c",
-      "UPDATE principals SET role_source='idp' WHERE subject='shot-mapped'",
-    ],
-    { encoding: "utf8" },
-  );
+  const mapped = nativeDocker([
+    "exec",
+    receipt.container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "UPDATE principals SET role_source='idp' WHERE subject='shot-mapped'",
+  ]);
   expect(mapped.status, mapped.stderr).toBe(0);
   const addAccount = await request.post(`${org}/service_accounts`, {
     headers,

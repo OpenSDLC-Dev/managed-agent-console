@@ -119,6 +119,7 @@ async function preflightDocker() {
   dockerEndpoint = effective;
   receipt.dockerTarget = {
     endpointClass: "local-unix",
+    endpoint: effective,
     matchesParent: true,
     selectorNames: Object.keys(selectors),
     checkedAt: new Date().toISOString(),
@@ -290,6 +291,24 @@ async function listen(server, port) {
 async function edge(port, upstream) {
   const server = createServer((req, res) => {
     const path = new URL(req.url, "http://edge").pathname;
+    if (path.startsWith("/v1/")) {
+      // Observe selection at the actual local edge, never credential values.
+      receipt.publicRequests ??= [];
+      const observation = {
+        port,
+        path,
+        method: req.method,
+        headerNames: ["x-api-key", "authorization"].filter(
+          (name) => req.headers[name] !== undefined,
+        ),
+        status: null,
+      };
+      receipt.publicRequests.push(observation);
+      res.once("finish", () => {
+        observation.status = res.statusCode;
+        record();
+      });
+    }
     const backend = path.startsWith("/admin/v1/")
       ? upstream === 38110
         ? 38120
@@ -619,6 +638,20 @@ startupDone = (async () => {
       ["build", "-mod=mod", "-o", join(dir, "native-platform"), "."],
       { cwd: goModule },
     );
+    mkdirSync(join(goModule, "client"));
+    writeFileSync(
+      join(goModule, "client/main.go"),
+      readFileSync(join(root, "test/native/owned-key-client.go")),
+    );
+    receipt.sdkClient = join(dir, "owned-key-client");
+    await command(
+      "go",
+      ["build", "-mod=readonly", "-o", receipt.sdkClient, "./client"],
+      {
+        cwd: goModule,
+      },
+    );
+    record();
     process.env.MOCK_OIDC_PORT = "38130";
     process.env.MOCK_OIDC_ISSUER = "http://127.0.0.1:38130";
     const { oidcServer } = await import("../mock-platform/oidc.mjs");

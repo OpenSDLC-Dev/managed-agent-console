@@ -4,6 +4,23 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 69 slice 3 — prepublication checks
+
+The 2026-11-08 local candidate used platform `158aa61e` and Console source based
+on `e9a383a`. Independent verification repeated the browser-issued human and
+service-account key checks, including pinned-SDK calls and cookie persistence readbacks.
+Installed Chrome walked 27 native surfaces in each theme; reveals remained masked.
+The runs preserved baseline resources and removed their recorded fixtures.
+
+The independent no-cache local arm64 image build used pnpm 12.18.0.
+Local test commands used pnpm 11.21.0. The Dockerfile enables Corepack without a pnpm pin;
+the image build and local tests did not use the same package-manager version.
+
+These are source-fixture results, not acceptance of a published Console image.
+The [platform acceptance record](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/docs/HISTORY.md#plan-69-slice-3-prepublication-client-checks)
+holds mixed-receiver evidence and limits. Final source/image pairing and fresh
+packaged Compose plus real-`ant` acceptance remain with that platform delivery.
+
 ## [Plan 10](./plan/10_model-gateway.md) — Model Gateway management (archived 2026-10-15)
 
 PRs #215, #216, #218, #223, #224. Console screens for the platform's model gateway: providers

@@ -48,10 +48,17 @@ No new owned-key-compatible published image is claimed by these source changes. 
 With `CONSOLE_AUTH_MODE` unset, calls and SSE go through the console's thin server-side proxy.
 With platform plan 69 slice 3, human issuance is self-owned; no-identity management-key issuance remains unowned.
 The legacy key form leaves that assignment to the platform.
+
+**Upgrade boundary:** platform plan 69 slice 3 refuses human IdP tokens on public `/v1`.
+Legacy SSO resource requests therefore fail, even after sign-in.
+Deploy native mode (`CONSOLE_AUTH_MODE=platform`) and validate its cookie routing before this change.
+Check sign-in and private resource access on the deployed origin. There is no management-key fallback.
+The no-identity management-key lane remains available until slice 7's cutover.
+
 The two credentials below are never sent together:
 
 - **No identity configured** — the server attaches the management key (`PLATFORM_API_KEY`). A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else, since anyone who reaches an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure.
-- **Identity configured** — the console signs the operator in against the deployment's provider and forwards **their own token**, never the management key ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)). Without a session it fails closed. `PLATFORM_API_KEY` stays only as the deep health check's service credential, which no browser request can spend.
+- **Identity configured (older control planes)** — the console signs the operator in against the deployment's provider and forwards **their own token**, never the management key ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)). Without a session it fails closed. `PLATFORM_API_KEY` stays only as the deep health check's service credential, which no browser request can spend.
 
 | Variable            | Required | Meaning                                                |
 | ------------------- | -------- | ------------------------------------------------------ |
@@ -60,8 +67,8 @@ The two credentials below are never sent together:
 | `CONSOLE_PASSWORD`  | no\*     | Enables the login gate when set; unset ⇒ no gate       |
 
 \* Optional only on `localhost`, or where something else authenticates in front of the console — as
-on the GKE deployment below. Otherwise mandatory. \*\* Required unless identity is configured, where
-browser calls carry the operator's token and the key serves only the deep health check.
+on the GKE deployment below. Otherwise mandatory. \*\* Required in no-identity legacy mode.
+In legacy identity mode, an optional key serves only the deep health check; the upgrade boundary above still applies.
 
 ## Quickstart (Docker)
 
@@ -131,7 +138,7 @@ Set the opt-in flags in the invoking shell; dotenv files cannot grant consent.
 Add `--project=model-backed` to `pnpm test:contract:live` to run only those tests.
 
 The model-free native browser tier builds production code and starts its own PostgreSQL, real platform handlers,
-local test identity provider and application edge. It reads no credential files and runs no brain or vendor calls:
+local test identity provider and application edge. It reads no deployment credential files and runs no brain or vendor calls:
 
 ```bash
 NATIVE_PLATFORM_SOURCE=/absolute/path/to/managed-agent-platform \
@@ -140,6 +147,10 @@ pnpm test:e2e:native
 ```
 
 The platform source must implement plan 69 slice 3 owned-key issuance. The tier needs Docker and that checkout's Go toolchain.
+A test-only client builds against the platform's pinned Go SDK. Human and service-account keys come from the browser's one-time reveal, then reach the client through stdin.
+Independent cookie reads check persisted Memory actors, redacted nulls and current authority. No `ant` checkout is needed by this automated tier.
+The separate real-`ant` check must run against a fresh packaged Compose install after immutable source/image pairing.
+Native fixtures and a local candidate image do not satisfy that deployment check; the [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/STATE.md) tracks it.
 It accepts only a local Unix Docker endpoint and refuses to start beside platform test-fixture containers.
 A nonempty `DOCKER_CONFIG` must be an absolute path; the runtime refuses relative paths before any Docker command.
 The runtime checks its effective child environment, retains the Docker selectors and disables Next telemetry before starting resources.
