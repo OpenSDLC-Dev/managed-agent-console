@@ -11,10 +11,13 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "../..");
+let pnpmCLI = process.env.npm_config_user_agent?.startsWith("pnpm/")
+  ? process.env.npm_execpath
+  : undefined;
 function probe(
   selectors = { DOCKER_HOST: "unix:///verified-A.sock" },
   {
@@ -22,13 +25,17 @@ function probe(
     nodeOnly = false,
     launcher = "direct Node",
     homeLocal = false,
+    literalPath = false,
   } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), "env-"));
   const calls = join(dir, "calls.jsonl");
   // A copy makes the invoking and Console directories genuinely distinct even
   // when the suite runs from Console. Neither HOME nor the process cwd changes.
-  const consoleRoot = join(dir, "console");
+  const consoleRoot = join(
+    dir,
+    literalPath ? "console %NATIVE_LITERAL_PATH% with spaces" : "console",
+  );
   mkdirSync(join(consoleRoot, "test/native"), { recursive: true });
   const runtime = join(consoleRoot, "test/native/runtime.mjs");
   writeFileSync(runtime, readFileSync(join(root, "test/native/runtime.mjs")));
@@ -74,7 +81,7 @@ cp.spawn = (cmd, args, options) => {
   const configured = env.DOCKER_CONFIG && resolve(cwd, env.DOCKER_CONFIG) === configA;
   const otherLocal = env.DOCKER_CONFIG && resolve(cwd, env.DOCKER_CONFIG) === ${JSON.stringify(resolve(consoleRoot, "relative-config"))};
   const selected = env.DOCKER_CONTEXT === "verified-A" || (!env.DOCKER_CONTEXT && env.DOCKER_HOST === "unix:///verified-A.sock") || configured || (${homeLocal} && !env.DOCKER_CONTEXT && !env.DOCKER_HOST && !env.DOCKER_CONFIG);
-  appendFileSync(${JSON.stringify(calls)}, JSON.stringify({args, selected, cwd, telemetryDisabled:env.NEXT_TELEMETRY_DISABLED === "1", selectorNames:Object.keys(env).filter(k => k.startsWith("DOCKER_"))}) + "\\n");
+  appendFileSync(${JSON.stringify(calls)}, JSON.stringify({args, selected, cwd, literalPathCanary:process.env.NATIVE_LITERAL_PATH === "expanded-wrong-directory", telemetryDisabled:env.NEXT_TELEMETRY_DISABLED === "1", selectorNames:Object.keys(env).filter(k => k.startsWith("DOCKER_"))}) + "\\n");
   let stdout = "", status = 0;
   if (args[0] === "context" && args[1] === "show") stdout = env.DOCKER_CONTEXT || "home-B";
   else if (args[0] === "context" && args[1] === "inspect") stdout = selected ? "unix:///verified-A.sock" : otherLocal ? "unix:///different-local-B.sock" : "tcp://remote-B:2375";
@@ -97,59 +104,94 @@ syncBuiltinESMExports();
       runtime,
       "--check-environment",
     ];
-    const executable = launcher === "pnpm --dir" ? "pnpm" : process.execPath;
+    if (launcher === "pnpm --dir" && !pnpmCLI) {
+      // Direct `node --test` has no pnpm runner metadata. Ask the real pnpm
+      // through a constant script; cwd is an OS argument, never shell text.
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({
+          private: true,
+          scripts: { "native-pnpm-entry": "node -p process.env.npm_execpath" },
+        }),
+      );
+      const windows = process.platform === "win32";
+      const entry = spawnSync(
+        windows ? "pnpm run --silent native-pnpm-entry" : "pnpm",
+        windows ? [] : ["run", "--silent", "native-pnpm-entry"],
+        { cwd: dir, env, encoding: "utf8", shell: windows, timeout: 20_000 },
+      );
+      assert.equal(entry.error, undefined);
+      assert.equal(entry.signal, null);
+      assert.equal(entry.status, 0, entry.stderr);
+      pnpmCLI = entry.stdout.trim();
+      assert.ok(isAbsolute(pnpmCLI), "pnpm must report its absolute CLI entry");
+    }
+    // Node transports every fixture path literally, including %NAME% on Windows.
+    // This is the actual pnpm CLI, not a substitute for its cwd behavior.
     const args =
       launcher === "pnpm --dir"
-        ? ["--dir", consoleRoot, "exec", process.execPath, ...runtimeArgs]
+        ? [
+            pnpmCLI,
+            "--dir",
+            consoleRoot,
+            "exec",
+            process.execPath,
+            ...runtimeArgs,
+          ]
         : runtimeArgs;
-    // Only the real Windows pnpm launcher needs cmd dispatch. Docker remains
-    // intercepted through Node; no fake shebang executable or PATH edits.
-    // Keep the bare pnpm name unquoted so cmd.exe resolves the shim's %~dp0
-    // from its directory, not the caller's cwd. Path arguments stay quoted.
-    const shell = launcher === "pnpm --dir" && process.platform === "win32";
-    const result = spawnSync(
-      shell
-        ? `${executable} ${args.map((arg) => `"${arg}"`).join(" ")}`
-        : executable,
-      shell ? [] : args,
-      {
-        env: {
-          ...env,
-          ...selectors,
-          NATIVE_EVIDENCE_DIR: dir,
-          NATIVE_PLATFORM_SOURCE: root,
-          RUN_LIVE_FUTURE: "synthetic",
-          MODEL_API_KEY: "synthetic",
-          OTEL_EXPORTER_OTLP_ENDPOINT: "https://invalid.example",
-          DOCKER_TLS_VERIFY: "synthetic",
-        },
-        encoding: "utf8",
-        shell,
-        timeout: 20_000,
+    const result = spawnSync(process.execPath, args, {
+      env: {
+        ...env,
+        ...selectors,
+        NATIVE_EVIDENCE_DIR: dir,
+        NATIVE_PLATFORM_SOURCE: root,
+        RUN_LIVE_FUTURE: "synthetic",
+        MODEL_API_KEY: "synthetic",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://invalid.example",
+        DOCKER_TLS_VERIFY: "synthetic",
+        ...(literalPath
+          ? { NATIVE_LITERAL_PATH: "expanded-wrong-directory" }
+          : {}),
       },
-    );
+      encoding: "utf8",
+      timeout: 20_000,
+    });
     assert.equal(
       result.error,
       undefined,
       "runtime must launch without a setup error",
     );
     assert.equal(result.signal, null, "runtime must finish without a timeout");
-    const operations = (existsSync(calls) ? readFileSync(calls, "utf8") : "")
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map(JSON.parse);
-    const receiptPath = join(dir, "task6-native-receipt.json");
-    assert.ok(
-      existsSync(receiptPath),
-      `runtime receipt missing through ${launcher}: ${JSON.stringify({
-        status: result.status,
-        signal: result.signal,
-        stdout: result.stdout,
-        stderr: result.stderr,
-      })}`,
-    );
-    const receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
+    let operations, receipt;
+    let artifact = "trace";
+    try {
+      operations = (existsSync(calls) ? readFileSync(calls, "utf8") : "")
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .map(JSON.parse);
+      artifact = "receipt";
+      receipt = JSON.parse(
+        readFileSync(join(dir, "task6-native-receipt.json"), "utf8"),
+      );
+    } catch (error) {
+      // JSON parse messages can quote private artifact contents. Report only
+      // the category and the intercepted child's result, never the exception.
+      const category =
+        error instanceof SyntaxError
+          ? "invalid-json"
+          : error.code === "ENOENT"
+            ? "missing"
+            : "unreadable";
+      assert.fail(
+        `runtime ${artifact} ${category} through ${launcher}: ${JSON.stringify({
+          status: result.status,
+          signal: result.signal,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        })}`,
+      );
+    }
     return {
       status: result.status,
       stderr: result.stderr,
@@ -228,6 +270,30 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
     }
   });
 }
+
+test("native pnpm keeps literal percent and spaces in fixture paths", () => {
+  const { operations, receipt, status } = probe(undefined, {
+    launcher: "pnpm --dir",
+    literalPath: true,
+  });
+  assert.equal(status, 0);
+  assert.ok(operations.length > 0);
+  assert.ok(
+    operations.every(
+      (call) =>
+        call.cwd.endsWith("console %NATIVE_LITERAL_PATH% with spaces") &&
+        call.cwd !== process.cwd() &&
+        call.literalPathCanary,
+    ),
+  );
+  assert.equal(receipt.dockerTarget.matchesParent, true);
+  assert.equal(receipt.cleaned, true);
+  assert.ok(
+    !operations.some((call) =>
+      ["create", "start", "exec", "rm"].includes(call.args[0]),
+    ),
+  );
+});
 
 test("native environment contracts need only portable Node executable dispatch", () => {
   const { operations, receipt, status } = probe(undefined, { nodeOnly: true });

@@ -455,14 +455,21 @@ it.each([401, 404, 503])(
         } catch {
           // Receipt creation or writing may be the phase that failed.
         }
+        // A cleanup timeout may follow a readiness error containing its URL.
         console.error(
           "native readiness child failure",
           JSON.stringify({
             status: result.status,
             signal: result.signal,
             errorCode: (result.error as NodeJS.ErrnoException).code,
-            stdout: result.stdout,
-            stderr: result.stderr,
+            stdout: result.stdout?.replace(
+              /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+              "[redacted-url]",
+            ),
+            stderr: result.stderr?.replace(
+              /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+              "[redacted-url]",
+            ),
             ...progress,
           }),
         );
