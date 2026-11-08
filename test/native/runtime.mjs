@@ -11,10 +11,11 @@ import {
   fsyncSync,
   rmSync,
 } from "node:fs";
-import { resolve, join } from "node:path";
+import { isAbsolute, resolve, join } from "node:path";
 import { once } from "node:events";
 
 const root = resolve(import.meta.dirname, "../..");
+const invokingCwd = process.cwd();
 const evidence = process.env.NATIVE_EVIDENCE_DIR;
 const platform = process.env.NATIVE_PLATFORM_SOURCE
   ? resolve(process.env.NATIVE_PLATFORM_SOURCE)
@@ -87,9 +88,16 @@ async function effectiveDockerEndpoint(options = {}, duringCleanup = false) {
   );
 }
 async function preflightDocker() {
+  // A launcher such as pnpm --dir can change cwd before this runtime starts.
+  // Refuse ambiguous configuration before even dispatching Docker metadata reads.
+  if (selectors.DOCKER_CONFIG && !isAbsolute(selectors.DOCKER_CONFIG))
+    throw new Error("DOCKER_CONFIG must be an absolute path when nonempty");
   // Check the verified parent's selection and the actual rebuilt child. A
   // different HOME default must never silently redirect startup or cleanup.
-  const parent = await effectiveDockerEndpoint({ env: selectors });
+  const parent = await effectiveDockerEndpoint({
+    cwd: invokingCwd,
+    env: selectors,
+  });
   const effective = await effectiveDockerEndpoint();
   if (!effective.startsWith("unix://") || effective !== parent)
     throw new Error(

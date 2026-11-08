@@ -16,7 +16,7 @@ Self-hosting departures follow platform `internal/api/consoleapikeys.go`:
 
 - Workspace stays a null seam; there is no `scope` or workspace selector API.
 - Developers manage only their own owned keys. Admins may assign an active service account, never another human.
-- Owned keys have no model-inference grant in this slice. Legacy unowned-key policy controls remain separate.
+- Owned keys have no model-inference grant in this slice. Legacy unowned-key policy controls remain separate. Empty caller summaries describe only the visible inventory, including legacy sessions that expose no role.
 
 The lower-human-role policy is conservative and local. Reference evidence remains open in [recordings #40](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/40).
 `test/fidelity/native-surfaces.ts` and its real-platform Chrome walker cover the list, form, owner selection, masked reveal and Dashboard form in both themes.

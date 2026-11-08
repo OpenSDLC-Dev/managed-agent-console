@@ -46,6 +46,8 @@ No new owned-key-compatible published image is claimed by these source changes. 
 ### Legacy deployments (default)
 
 With `CONSOLE_AUTH_MODE` unset, calls and SSE go through the console's thin server-side proxy.
+With platform plan 69 slice 3, human issuance is self-owned; no-identity management-key issuance remains unowned.
+The legacy key form leaves that assignment to the platform.
 The two credentials below are never sent together:
 
 - **No identity configured** — the server attaches the management key (`PLATFORM_API_KEY`). A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else, since anyone who reaches an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure.
@@ -139,7 +141,8 @@ pnpm test:e2e:native
 
 The platform source must implement plan 69 slice 3 owned-key issuance. The tier needs Docker and that checkout's Go toolchain.
 It accepts only a local Unix Docker endpoint and refuses to start beside platform test-fixture containers.
-The runtime checks its effective child environment, preserves Docker selectors and disables Next telemetry before starting resources.
+A nonempty `DOCKER_CONFIG` must be an absolute path; the runtime refuses relative paths before any Docker command.
+The runtime checks its effective child environment, retains the Docker selectors and disables Next telemetry before starting resources.
 It creates durable receipts before starting its container, then awaits shutdown and removes only its own container and volumes.
 Use `NATIVE_FIDELITY=1` with the same command to walk the native manifest in installed Chrome, light and dark.
 Those shots are local fidelity evidence, not proof of access to authenticated reference screens.

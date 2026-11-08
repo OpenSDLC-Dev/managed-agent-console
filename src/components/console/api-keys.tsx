@@ -228,7 +228,9 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
     getNextPageParam: (page) => page.next_page ?? undefined,
     enabled: native && session?.role === "admin" && open,
     gcTime: 0,
-    staleTime: Infinity,
+    // This observer stays mounted while closed. Re-enable must read the directory
+    // again: an account can be created or archived without leaving this page.
+    staleTime: 0,
     retry: false,
   });
   const services =
@@ -270,7 +272,11 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
       try {
         const current = await nativeGet<NativeSession>("/api/auth/session");
         if (!active.current) return;
-        if (!current.signed_in || current.id !== session?.id) {
+        if (
+          !current.signed_in ||
+          current.id !== session?.id ||
+          current.role !== session?.role
+        ) {
           setOpen(false);
           resetDraft();
           queryClient.setQueryData(["console-session"], current);
@@ -374,7 +380,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
               <DialogDescription>
                 {native
                   ? "An owned key uses its owner’s current role. Deactivating the owner revokes access."
-                  : "An unowned key carries legacy management authority on this platform."}
+                  : "The platform assigns ownership from the issuing identity. Owned keys use their owner’s current role; unowned keys retain legacy authority."}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">

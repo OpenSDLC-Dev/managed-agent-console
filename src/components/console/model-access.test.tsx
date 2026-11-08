@@ -70,6 +70,162 @@ it("probe: owned keys cannot write legacy model policies", async () => {
   ).toBeNull();
 });
 
+it.each(["developer", "admin"] as const)(
+  "native %s model callers respect the key-list visibility scope",
+  async (role) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const owned = apiKey({
+      id: "apikey_self",
+      principal: { type: "user_actor", user_id: "user_self" },
+    });
+    const fetchMock = stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(role === "admin" ? [owned, CI] : [owned])
+        : rest === "/admin/v1/key_policies"
+          ? Response.json({ data: [policy({ aliases: ["agent-default"] })] })
+          : undefined,
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ConsoleSessionContext.Provider
+          value={
+            { data: { id: "user_self", signed_in: true, role } } as ReturnType<
+              typeof useConsoleSession
+            >
+          }
+        >
+          <ModelKeys alias="agent-default" />
+        </ConsoleSessionContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes("key_policies"),
+      ),
+    ).toBe(true);
+    if (role === "developer") {
+      expect(screen.queryByText(/No active key can call it/)).toBeNull();
+      expect(screen.queryByText(/Grant one on API Keys/)).toBeNull();
+      expect(screen.getByText(/only your owned keys/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/administrator to check other callers/),
+      ).toBeInTheDocument();
+      expect(document.querySelector("[data-callers]")).toBeNull();
+    } else {
+      expect(document.querySelector("[data-callers]")).toHaveAttribute(
+        "data-callers",
+        "1",
+      );
+      expect(document.querySelector("[data-key-id]")).toHaveAttribute(
+        "data-key-id",
+        CI.id,
+      );
+    }
+  },
+);
+
+it.each([false, true])(
+  "role-less legacy human model callers use visible inventory (full list=%s)",
+  async (fullList) => {
+    // The retained SSO session route supplies display metadata, not ID or role.
+    const session = {
+      signed_in: true,
+      email: "operator@example.invalid",
+      name: "Operator",
+    };
+    const owned = apiKey({
+      id: "apikey_self",
+      principal: { type: "user_actor", user_id: "user_self" },
+    });
+    const fetchMock = stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(fullList ? [owned, CI] : [owned])
+        : rest === "key_policies"
+          ? Response.json({ data: [policy({ aliases: ["agent-default"] })] })
+          : undefined,
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <ConsoleSessionContext.Provider
+          value={{ data: session } as ReturnType<typeof useConsoleSession>}
+        >
+          <ModelKeys alias="agent-default" />
+        </ConsoleSessionContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/key_policies"),
+      ),
+    ).toBe(true);
+    if (fullList) {
+      // A legacy administrator gets the full list without a new role field.
+      expect(document.querySelector("[data-callers]")).toHaveAttribute(
+        "data-callers",
+        "1",
+      );
+      expect(document.querySelector("[data-key-id]")).toHaveAttribute(
+        "data-key-id",
+        CI.id,
+      );
+    } else {
+      expect(screen.queryByText(/No active key can call it/)).toBeNull();
+      expect(screen.queryByText(/Grant one/)).toBeNull();
+      expect(screen.getByText(/visible|scoped|unknown/i)).toBeInTheDocument();
+      expect(document.querySelector("[data-key-id]")).toBeNull();
+    }
+  },
+);
+
+it.each(["legacy machine", "native unknown", "native admin"])(
+  "%s empty model caller summary describes only visible inventory",
+  async (mode) => {
+    if (mode.startsWith("native"))
+      document.documentElement.dataset.consoleAuth = "platform";
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json([])
+        : rest.endsWith("key_policies")
+          ? Response.json({ data: [policy({ aliases: ["agent-default"] })] })
+          : undefined,
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const session =
+      mode === "legacy machine"
+        ? null
+        : {
+            data: {
+              signed_in: true,
+              id: "user_self",
+              ...(mode === "native admin" ? { role: "admin" } : {}),
+            },
+          };
+    render(
+      <QueryClientProvider client={client}>
+        <ConsoleSessionContext.Provider
+          value={session as ReturnType<typeof useConsoleSession> | null}
+        >
+          <ModelKeys alias="agent-default" />
+        </ConsoleSessionContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(screen.queryByText(/No active key can call it/)).toBeNull();
+    expect(screen.queryByText(/Grant one/)).toBeNull();
+    expect(screen.getByText(/visible|scoped|unknown/i)).toBeInTheDocument();
+  },
+);
+
 it("owned keys cannot appear as gateway callers even with a stale legacy policy", async () => {
   const owned = Object.assign(apiKey({ id: "apikey_ci01" }), {
     principal: {
@@ -92,7 +248,7 @@ it("owned keys cannot appear as gateway callers even with a stale legacy policy"
       <ModelKeys alias="agent-default" />
     </QueryClientProvider>,
   );
-  await screen.findByText(/No active key/);
+  await screen.findByText(/No visible active key/);
   expect(document.querySelector("[data-key-id]")).toBeNull();
 });
 

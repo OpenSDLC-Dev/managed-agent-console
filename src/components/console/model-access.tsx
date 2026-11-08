@@ -98,13 +98,21 @@ export function grantLine(a: Access): string {
 }
 
 /**
- * The active keys that may call `alias` — what the gateway would admit
+ * The visible active keys that may call `alias` — what the gateway would admit
  * (auth.go): a key's policy naming it or every model, or the built-in grant.
  * A key that is not active calls nothing, so it is not listed.
  */
 export function ModelKeys({ alias }: { alias: string }) {
+  const session = useContext(ConsoleSessionContext)?.data;
   const keys = useApiKeys();
   const policies = useGatewayKeyPolicies();
+  if (isNativeConsole() && session?.role === "developer")
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        Your list includes only your owned keys. Model access is not available
+        for owned keys yet. Ask an administrator to check other callers.
+      </p>
+    );
   if (!keys.data || !policies.data)
     return (
       <p className="text-[13px] text-muted-foreground">
@@ -121,7 +129,7 @@ export function ModelKeys({ alias }: { alias: string }) {
   if (callers.length === 0)
     return (
       <p className="text-[13px] text-muted-foreground">
-        No active key can call it. Grant one on API Keys.
+        No visible active key can call this model.
       </p>
     );
   return (

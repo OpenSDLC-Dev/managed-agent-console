@@ -281,6 +281,72 @@ describe("creating a key", () => {
     await userEvent.type(screen.getByLabelText("Name"), "ci-deploy");
   };
 
+  it.each(["human SSO", "management key"])(
+    "legacy %s issuance leaves ownership to the platform and omits assignment",
+    async (lane) => {
+      const issued = apiKey({
+        id: "apikey_new",
+        principal:
+          lane === "human SSO"
+            ? { type: "user_actor", user_id: "user_issuer" }
+            : null,
+      });
+      const fetchMock = vi.fn(async (_input, init?: RequestInit) =>
+        init?.method === "POST"
+          ? json({ ...issued, raw_key: SECRET })
+          : json([]),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new QueryClient({
+        defaultOptions: { mutations: { retry: false } },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <ConsoleSessionContext.Provider
+            value={
+              {
+                data:
+                  lane === "human SSO"
+                    ? {
+                        signed_in: true,
+                        name: "Legacy operator",
+                        email: "operator@example.test",
+                      }
+                    : null,
+              } as ReturnType<typeof useConsoleSession>
+            }
+          >
+            <CreateKeyButton />
+          </ConsoleSessionContext.Provider>
+        </QueryClientProvider>,
+      );
+      await openDialog();
+      expect(
+        screen.queryByText(
+          /An unowned key carries legacy management authority/,
+        ),
+      ).toBeNull();
+      expect(screen.getByRole("dialog")).toHaveTextContent(
+        /platform assigns ownership from the issuing identity/i,
+      );
+      expect(screen.queryByLabelText("Owner")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Add" }));
+      await screen.findByTestId("revealed-api-key");
+      const posts = fetchMock.mock.calls.filter(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(posts).toHaveLength(1);
+      expect(JSON.parse(String(posts[0][1]?.body))).not.toHaveProperty(
+        "principal_id",
+      );
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          /service_accounts|auth\/session/.test(String(url)),
+        ),
+      ).toBe(false);
+    },
+  );
+
   it("sends the chosen lifetime as an absolute instant", async () => {
     const fetchMock = stubCreate();
     renderTable([], fetchMock);
@@ -534,6 +600,10 @@ function nativeFetch(
   options: { pending?: boolean; reject?: boolean; pageFail?: boolean } = {},
 ) {
   let current = session;
+  let firstPage = [
+    serviceAccount("svac_first", "First service"),
+    serviceAccount("svac_archived", "Archived service", "2026-01-01T00:00:00Z"),
+  ];
   let settle: (response: Response) => void = () => {};
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input), "http://console.test");
@@ -553,14 +623,7 @@ function nativeFetch(
               next_page: null,
             }
           : {
-              data: [
-                serviceAccount("svac_first", "First service"),
-                serviceAccount(
-                  "svac_archived",
-                  "Archived service",
-                  "2026-01-01T00:00:00Z",
-                ),
-              ],
+              data: firstPage,
               next_page: "page-two",
             },
       );
@@ -589,6 +652,9 @@ function nativeFetch(
   vi.stubGlobal("fetch", fetcher);
   return {
     fetcher,
+    replaceDirectory: (data: ServiceAccount[]) => {
+      firstPage = data;
+    },
     replace: (data: NativeSession) => {
       current = data;
     },
@@ -643,7 +709,7 @@ it.each([false, true])(
       directory.map(([url]) =>
         new URL(String(url), "http://console.test").searchParams.get("limit"),
       ),
-    ).toEqual(["100", "100"]);
+    ).toEqual(["100", "100", "100"]);
     expect(directory.at(-1)?.[0]).toContain("page=page-two");
     expect(
       fetcher.mock.calls.some(([url]) => String(url).includes("/members")),
@@ -651,8 +717,49 @@ it.each([false, true])(
   },
 );
 
-it("native owner pagination failure remains visible", async () => {
-  nativeFetch({ pageFail: true });
+it.each([false, true])(
+  "probe: native owner directory refreshes on reopening (shortcut=%s)",
+  async (shortcut) => {
+    const mock = nativeFetch();
+    const view = nativeView(session, shortcut);
+    view.client.setQueryData(["unrelated-public-cache"], "retained");
+    const open = () =>
+      userEvent.click(
+        screen.getByRole("button", {
+          name: shortcut ? "Get API key" : "Create key",
+        }),
+      );
+    await open();
+    await screen.findByRole("option", { name: /First service/ });
+    await userEvent.selectOptions(screen.getByLabelText("Owner"), "svac_first");
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    mock.replaceDirectory([
+      serviceAccount("svac_first", "First service", "2026-11-08T00:00:00Z"),
+      serviceAccount("svac_new", "New active service"),
+    ]);
+    await open();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("option", { name: /New active service/ }),
+      ).not.toBeNull(),
+    );
+    expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
+    expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
+    await userEvent.selectOptions(screen.getByLabelText("Owner"), "svac_new");
+    expect(screen.getByLabelText("Owner")).toHaveValue("svac_new");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Load more service accounts" }),
+    );
+    await screen.findByRole("option", { name: /Second-page service/ });
+    expect(view.client.getQueryData(["unrelated-public-cache"])).toBe(
+      "retained",
+    );
+  },
+);
+
+it("native owner pagination failure remains visible and page two can retry", async () => {
+  const options = { pageFail: true };
+  nativeFetch(options);
   nativeView();
   await userEvent.click(screen.getByRole("button", { name: "Create key" }));
   await userEvent.click(
@@ -661,6 +768,12 @@ it("native owner pagination failure remains visible", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Directory page unavailable",
   );
+  options.pageFail = false;
+  await userEvent.click(
+    screen.getByRole("button", { name: "Load more service accounts" }),
+  );
+  await screen.findByRole("option", { name: /Second-page service/ });
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 it.each(["developer", "user"] as const)(
@@ -762,6 +875,71 @@ it.each(["draft", "reveal", "pending"])(
     ).toHaveLength(0);
     await userEvent.click(screen.getByRole("button", { name: "Create key" }));
     expect(screen.getByLabelText("Name")).toHaveValue("");
+  },
+);
+
+it.each([
+  ["developer", "svac_first"],
+  ["user", "svac_first"],
+  ["developer", "user_verbatim-self"],
+] as const)(
+  "probe: submit-time same-principal %s authority replaces admin context for %s",
+  async (role, owner) => {
+    const mock = nativeFetch();
+    document.documentElement.dataset.consoleAuth = "platform";
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    // Use the real session observer, not a test-driven provider replacement.
+    function CurrentSession() {
+      const current = useConsoleSession();
+      return (
+        <ConsoleSessionContext.Provider value={current}>
+          <CreateKeyButton />
+          <ApiKeysTable
+            keys={[apiKey({ id: "apikey_legacy" })]}
+            loading={false}
+            error={null}
+          />
+        </ConsoleSessionContext.Provider>
+      );
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <CurrentSession />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "Model access" });
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await screen.findByRole("option", { name: /First service/ });
+    await userEvent.selectOptions(screen.getByLabelText("Owner"), owner);
+    await userEvent.type(screen.getByLabelText("Name"), "stale-admin-draft");
+    // Only the next HTTP session answer changes. No poll or provider update.
+    mock.replace({ ...session, role });
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(
+        client.getQueryData<NativeSession>(["console-session"])?.role,
+      ).toBe(role),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("button", { name: "Model access" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Remove model policy/ }),
+    ).toBeNull();
+    expect(screen.queryByDisplayValue("stale-admin-draft")).toBeNull();
+    expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
+    expect(postOf(mock.fetcher)).toBeUndefined();
+    if (role === "developer") {
+      await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+      expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
+      expect(screen.getByLabelText("Owner")).toBeDisabled();
+      expect(screen.getByLabelText("Name")).toHaveValue("");
+    } else
+      expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
   },
 );
 
