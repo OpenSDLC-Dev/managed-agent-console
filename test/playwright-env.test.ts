@@ -7,7 +7,7 @@ it("native runtime environment contracts (no resources)", () => {
     execFileSync(
       process.execPath,
       ["--test", resolve("test/native/environment.test.mjs")],
-      { timeout: 30_000 },
+      { timeout: 30_000, stdio: "inherit" },
     ),
   ).not.toThrow();
 });
