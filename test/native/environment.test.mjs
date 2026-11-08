@@ -137,9 +137,17 @@ syncBuiltinESMExports();
       .split("\n")
       .filter(Boolean)
       .map(JSON.parse);
-    const receipt = JSON.parse(
-      readFileSync(join(dir, "task6-native-receipt.json"), "utf8"),
+    const receiptPath = join(dir, "task6-native-receipt.json");
+    assert.ok(
+      existsSync(receiptPath),
+      `runtime receipt missing through ${launcher}: ${JSON.stringify({
+        status: result.status,
+        signal: result.signal,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      })}`,
     );
+    const receipt = JSON.parse(readFileSync(receiptPath, "utf8"));
     return {
       status: result.status,
       stderr: result.stderr,

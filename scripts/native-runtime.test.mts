@@ -396,6 +396,77 @@ it.each([401, 404, 503])(
         encoding: "utf8",
         timeout: 5000,
       });
+      if (result.error) {
+        // This fixture intercepts every command. Report only its safe output
+        // and allowlisted progress, never arguments, environments or receipts.
+        const progress = {
+          callsReadable: false,
+          commands: [] as { command: string; phase: string }[],
+          readinessChecks: 0,
+          receiptReadable: false,
+          started: [] as string[],
+          cleaned: false,
+        };
+        try {
+          const calls = readFileSync(f.calls, "utf8")
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line));
+          progress.commands = calls.flatMap((call) => {
+            const command = ["docker", "go"].find(
+              (name) => name === call?.command,
+            );
+            const phase = [
+              "context",
+              "ps",
+              "volume",
+              "create",
+              "inspect",
+              "start",
+              "port",
+              "exec",
+              "build",
+              "rm",
+            ].find((name) => name === call?.args?.[0]);
+            return command && phase ? [{ command, phase }] : [];
+          });
+          progress.readinessChecks = calls.filter(
+            (call) => typeof call?.readiness === "string",
+          ).length;
+          progress.callsReadable = true;
+        } catch {
+          // A missing or partial trace must not replace the process failure.
+        }
+        try {
+          const receipt = JSON.parse(
+            readFileSync(join(f.evidence, "task6-native-receipt.json"), "utf8"),
+          );
+          progress.started = [
+            "environment-probe",
+            "platform",
+            "console",
+          ].filter((name) =>
+            receipt.started?.some(
+              (child: { name?: string }) => child?.name === name,
+            ),
+          );
+          progress.cleaned = receipt.cleaned === true;
+          progress.receiptReadable = true;
+        } catch {
+          // Receipt creation or writing may be the phase that failed.
+        }
+        console.error(
+          "native readiness child failure",
+          JSON.stringify({
+            status: result.status,
+            signal: result.signal,
+            errorCode: (result.error as NodeJS.ErrnoException).code,
+            stdout: result.stdout,
+            stderr: result.stderr,
+            ...progress,
+          }),
+        );
+      }
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(1);
       expect(result.stderr).toContain("runtime did not become ready");
