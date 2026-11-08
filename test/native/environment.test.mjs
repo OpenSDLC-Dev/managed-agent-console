@@ -104,10 +104,12 @@ syncBuiltinESMExports();
         : runtimeArgs;
     // Only the real Windows pnpm launcher needs cmd dispatch. Docker remains
     // intercepted through Node; no fake shebang executable or PATH edits.
+    // Keep the bare pnpm name unquoted so cmd.exe resolves the shim's %~dp0
+    // from its directory, not the caller's cwd. Path arguments stay quoted.
     const shell = launcher === "pnpm --dir" && process.platform === "win32";
     const result = spawnSync(
       shell
-        ? [executable, ...args].map((arg) => `"${arg}"`).join(" ")
+        ? `${executable} ${args.map((arg) => `"${arg}"`).join(" ")}`
         : executable,
       shell ? [] : args,
       {
