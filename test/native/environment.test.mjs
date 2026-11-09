@@ -39,9 +39,10 @@ function probe(
   mkdirSync(join(consoleRoot, "test/native"), { recursive: true });
   const runtime = join(consoleRoot, "test/native/runtime.mjs");
   writeFileSync(runtime, readFileSync(join(root, "test/native/runtime.mjs")));
+  // This cwd fixture runs only Node builtins, not application dependencies.
   writeFileSync(
     join(consoleRoot, "package.json"),
-    readFileSync(join(root, "package.json")),
+    JSON.stringify({ private: true }),
   );
   const nodeGuard = join(dir, "node-only.mjs");
   writeFileSync(
@@ -56,6 +57,7 @@ cp.spawn = (cmd, args, options) => {
     appendFileSync(${JSON.stringify(calls)}, JSON.stringify({executableDispatch:true}) + "\\n");
     return spawn(process.execPath, ["-e", "process.exit(97)"], options);
   }
+  appendFileSync(${JSON.stringify(calls)}, JSON.stringify({nodeDispatch:true}) + "\\n");
   return spawn(cmd, args, options);
 };
 syncBuiltinESMExports();
@@ -71,6 +73,8 @@ syncBuiltinESMExports();
 import cp from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { syncBuiltinESMExports } from "node:module";
 const spawn = cp.spawn;
 cp.spawn = (cmd, args, options) => {
@@ -88,7 +92,15 @@ cp.spawn = (cmd, args, options) => {
   else if (args[0] === "ps" && (selected || otherLocal)) stdout = args.includes("--filter") && ${blocked} ? "foreign-fixture" : "";
   else if (args[0] === "volume" && (selected || otherLocal)) stdout = "";
   else status = 1;
-  return spawn(process.execPath, ["-e", "process.stdout.write(" + JSON.stringify(stdout) + ");process.exit(" + status + ")"], options);
+  // Docker answers here are data, not process-contract subjects.
+  const child = new EventEmitter();
+  child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.exitCode = null; child.signalCode = null;
+  queueMicrotask(() => {
+    child.stdout.end(stdout); child.stderr.end();
+    child.exitCode = status; child.emit("close", status, null);
+  });
+  return child;
 };
 syncBuiltinESMExports();
 `,
@@ -97,6 +109,11 @@ syncBuiltinESMExports();
     const env = { ...process.env };
     for (const key of Object.keys(env))
       if (key.startsWith("DOCKER_")) delete env[key];
+    assert.ok(
+      readFileSync(join(consoleRoot, "package.json"), "utf8") ===
+        JSON.stringify({ private: true }),
+      "unexpected native runtime fixture manifest",
+    );
     const runtimeArgs = [
       ...(nodeOnly ? ["--import", pathToFileURL(nodeGuard).href] : []),
       "--import",
@@ -114,15 +131,36 @@ syncBuiltinESMExports();
           scripts: { "native-pnpm-entry": "node -p process.env.npm_execpath" },
         }),
       );
+      assert.ok(
+        readFileSync(join(dir, "package.json"), "utf8") ===
+          JSON.stringify({
+            private: true,
+            scripts: {
+              "native-pnpm-entry": "node -p process.env.npm_execpath",
+            },
+          }),
+        "unexpected native metadata fixture manifest",
+      );
       const windows = process.platform === "win32";
       const entry = spawnSync(
         windows ? "pnpm run --silent native-pnpm-entry" : "pnpm",
         windows ? [] : ["run", "--silent", "native-pnpm-entry"],
-        { cwd: dir, env, encoding: "utf8", shell: windows, timeout: 20_000 },
+        {
+          cwd: dir,
+          env: { ...env, pnpm_config_verify_deps_before_run: "false" },
+          encoding: "utf8",
+          shell: windows,
+          timeout: 20_000,
+        },
       );
       assert.equal(entry.error, undefined);
       assert.equal(entry.signal, null);
       assert.equal(entry.status, 0, entry.stderr);
+      assert.ok(
+        !existsSync(join(dir, "node_modules")) &&
+          !existsSync(join(dir, "pnpm-lock.yaml")),
+        "metadata fixture must not initialize dependencies",
+      );
       pnpmCLI = entry.stdout.trim();
       assert.ok(isAbsolute(pnpmCLI), "pnpm must report its absolute CLI entry");
     }
@@ -143,6 +181,11 @@ syncBuiltinESMExports();
       env: {
         ...env,
         ...selectors,
+        // pnpm uses this same child setting. Only the exact fixed manifests
+        // checked above may suppress automatic installation here.
+        ...(launcher === "pnpm --dir"
+          ? { pnpm_config_verify_deps_before_run: "false" }
+          : {}),
         NATIVE_EVIDENCE_DIR: dir,
         NATIVE_PLATFORM_SOURCE: root,
         RUN_LIVE_FUTURE: "synthetic",
@@ -162,6 +205,20 @@ syncBuiltinESMExports();
       "runtime must launch without a setup error",
     );
     assert.equal(result.signal, null, "runtime must finish without a timeout");
+    assert.ok(
+      [dir, consoleRoot].every(
+        (fixture) =>
+          !existsSync(join(fixture, "node_modules")) &&
+          !existsSync(join(fixture, "pnpm-lock.yaml")),
+      ),
+      "native fixtures must not initialize dependencies",
+    );
+    const diagnostic = JSON.stringify({
+      status: result.status,
+      signal: result.signal,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    });
     let operations, receipt;
     let artifact = "trace";
     try {
@@ -184,14 +241,15 @@ syncBuiltinESMExports();
             ? "missing"
             : "unreadable";
       assert.fail(
-        `runtime ${artifact} ${category} through ${launcher}: ${JSON.stringify({
-          status: result.status,
-          signal: result.signal,
-          stdout: result.stdout,
-          stderr: result.stderr,
-        })}`,
+        `runtime ${artifact} ${category} through ${launcher}: ${diagnostic}`,
       );
     }
+    // Relative configuration is refused before any command can write a trace.
+    assert.ok(
+      operations.length > 0 ||
+        (result.status === 1 && /DOCKER_CONFIG.*absolute/i.test(result.stderr)),
+      `runtime trace empty or missing through ${launcher}: ${diagnostic}`,
+    );
     return {
       status: result.status,
       stderr: result.stderr,
@@ -303,6 +361,11 @@ test("native environment contracts need only portable Node executable dispatch",
     "configuration contracts must run without shebang or PATH dispatch",
   );
   assert.ok(operations.every((call) => !call.executableDispatch));
+  assert.equal(
+    operations.filter((call) => call.nodeDispatch).length,
+    2,
+    "only environment probes need real child processes",
+  );
   assert.ok(operations.some((call) => call.args?.includes("--filter")));
   assert.equal(receipt.cleaned, true);
 });

@@ -40,6 +40,7 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const original = cp.spawn, sync = cp.spawnSync;
 const servers = new Map();
+let readinessStarted = false;
 const timeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms, ...args) => timeout(fn, kind.startsWith("status-") && ms === 250 ? 0 : ms, ...args);
 function synthetic(name) {
@@ -107,12 +108,26 @@ cp.spawn = (command, args, options) => {
       return child;
     }
     const value = result(command, args, options);
+    // Status rows test readiness and real cleanup, not canned startup responses.
+    if (kind.startsWith("status-") && !readinessStarted) {
+      const child = synthetic("command");
+      queueMicrotask(() => {
+        child.stdout.end(value.stdout || ""); child.stderr.end(value.stderr || "");
+        child.finish(value.status);
+      });
+      return child;
+    }
     if (command === "docker" && args[0] === "create" && kind === "create-blocked") {
       const child = original(process.execPath, ["-e", "setInterval(()=>{},1000);setTimeout(()=>process.exit(0),10000)"], options);
       log({ held: true, pid: child.pid });
       return child;
     }
-    return original(process.execPath, ["-e", "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
+    if (kind.startsWith("status-")) log({ responseChild: readinessStarted ? "cleanup" : "startup", operation: args[0] });
+    // The child records execution; pre-spawn labels alone also admit synthetic children.
+    const executed = kind.startsWith("status-")
+      ? "require('node:fs').appendFileSync(" + JSON.stringify(${JSON.stringify(calls)}) + ", " + JSON.stringify(JSON.stringify({ responseExecuted: args[0] }) + "\\n") + ");"
+      : "";
+    return original(process.execPath, ["-e", executed + "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
   }
   if (command.endsWith("native-platform")) {
     if (["ready", "repeat-signals", "post-ready-close", "dead-200", "dead-before-announce"].includes(kind) || kind.startsWith("status-")) return synthetic("platform");
@@ -164,6 +179,7 @@ http.createServer = () => {
   return server;
 };
 globalThis.fetch = async (url, { signal } = {}) => {
+  readinessStarted = true;
   if (kind === "dead-200" && !servers.get("platform").exitCode) servers.get("platform").finish();
   const status = kind.startsWith("status-") ? Number(kind.split("-")[1]) : 200;
   if (!kind.startsWith("held-")) { log({ readiness: url, status }); return new Response("{}", { status }); }
@@ -478,7 +494,17 @@ it.each([401, 404, 503])(
       expect(result.status, result.stderr).toBe(1);
       expect(result.stderr).toContain("runtime did not become ready");
       expect(result.stdout).not.toContain("native runtime ready");
-      assertClean(f);
+      const { commands } = assertClean(f);
+      expect(commands.filter((call) => call.readiness).length).toBe(240);
+      expect(
+        commands.filter((call) => call.responseChild === "startup").length,
+      ).toBe(0);
+      const executed = commands.filter((call) => call.responseExecuted);
+      expect(executed.length).toBe(5);
+      for (const operation of ["rm", "ps", "volume"])
+        expect(
+          executed.filter((call) => call.responseExecuted === operation).length,
+        ).toBeGreaterThan(0);
     } finally {
       rmSync(f.dir, { recursive: true, force: true });
     }
