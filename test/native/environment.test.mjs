@@ -86,6 +86,7 @@ function probe(
           }),
         );
     } catch {
+      started = Number.NaN;
       // Diagnostics must not replace the original error or assertion.
     }
     phase = nextPhase;
