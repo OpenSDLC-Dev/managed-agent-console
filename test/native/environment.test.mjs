@@ -199,12 +199,22 @@ syncBuiltinESMExports();
       encoding: "utf8",
       timeout: 20_000,
     });
+    const diagnostic = JSON.stringify({
+      status: result.status,
+      signal: result.signal,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    });
     assert.equal(
       result.error,
       undefined,
-      "runtime must launch without a setup error",
+      `runtime must launch without a setup error: ${diagnostic}`,
     );
-    assert.equal(result.signal, null, "runtime must finish without a timeout");
+    assert.equal(
+      result.signal,
+      null,
+      `runtime must finish without a timeout: ${diagnostic}`,
+    );
     assert.ok(
       [dir, consoleRoot].every(
         (fixture) =>
@@ -213,12 +223,6 @@ syncBuiltinESMExports();
       ),
       "native fixtures must not initialize dependencies",
     );
-    const diagnostic = JSON.stringify({
-      status: result.status,
-      signal: result.signal,
-      stdout: result.stdout,
-      stderr: result.stderr,
-    });
     let operations, receipt;
     let artifact = "trace";
     try {

@@ -554,12 +554,90 @@ it.skipIf(process.platform === "win32").each(["SIGTERM", "SIGINT"] as const)(
     });
     const closed = once(child, "close");
     let output = "";
+    let stderr = "";
     child.stdout.on("data", (data) => {
       output += data;
+    });
+    child.stderr.on("data", (data) => {
+      stderr += data;
     });
     try {
       for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
         await new Promise((r) => setTimeout(r, 10));
+      if (!output.includes("native runtime ready")) {
+        const progress = {
+          callsReadable: false,
+          recordedCommands: [] as string[],
+          readinessChecks: 0,
+          receiptReadable: false,
+          recordedStarts: [] as string[],
+        };
+        try {
+          const calls = readFileSync(f.calls, "utf8")
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line));
+          // Presence only: fixture records do not prove command completion.
+          progress.recordedCommands = [
+            "docker context",
+            "docker ps",
+            "docker volume",
+            "docker create",
+            "docker inspect",
+            "docker start",
+            "docker port",
+            "docker exec",
+            "docker rm",
+            "go build",
+          ].filter((entry) => {
+            const [command, operation] = entry.split(" ");
+            return calls.some(
+              (call) =>
+                call?.command === command && call?.args?.[0] === operation,
+            );
+          });
+          progress.readinessChecks = calls.filter(
+            (call) => typeof call?.readiness === "string",
+          ).length;
+          progress.callsReadable = true;
+        } catch {
+          // Missing or partial progress must not mask the readiness failure.
+        }
+        try {
+          const receipt = JSON.parse(
+            readFileSync(join(f.evidence, "task6-native-receipt.json"), "utf8"),
+          );
+          progress.recordedStarts = [
+            "environment-probe",
+            "platform",
+            "console",
+          ].filter((name) =>
+            receipt.started?.some(
+              (child: { name?: string }) => child?.name === name,
+            ),
+          );
+          progress.receiptReadable = true;
+        } catch {
+          // Do not print parser errors, which may quote private artifact data.
+        }
+        // These intercepted fixture outputs are not arbitrary credential logs.
+        console.error(
+          "native repeated-signal readiness failure",
+          JSON.stringify({
+            pid: child.pid,
+            status: child.exitCode,
+            signal: child.signalCode,
+            stdout: output
+              .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[redacted-url]")
+              .slice(0, 2000),
+            stderr: stderr
+              .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[redacted-url]")
+              .slice(0, 2000),
+            ...progress,
+          }),
+        );
+      }
       expect(output).toContain("native runtime ready");
       child.kill(signal);
       for (
