@@ -13,12 +13,14 @@ import {
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { performance } from "node:perf_hooks";
 
 const root = resolve(import.meta.dirname, "../..");
 let pnpmCLI = process.env.npm_config_user_agent?.startsWith("pnpm/")
   ? process.env.npm_execpath
   : undefined;
 function probe(
+  caseId,
   selectors = { DOCKER_HOST: "unix:///verified-A.sock" },
   {
     blocked = false,
@@ -28,6 +30,66 @@ function probe(
     literalPath = false,
   } = {},
 ) {
+  let phase = "prepare";
+  let started = Number.NaN;
+  try {
+    started = performance.now();
+  } catch {
+    // Diagnostics must not prevent the original call.
+  }
+  function observe(nextPhase, result) {
+    // Boundaries include helper work between launches. A spawnSync return is
+    // not success: its error code, status and signal carry the API outcome.
+    try {
+      const now = performance.now();
+      const elapsedMs = now - started;
+      started = now;
+      const launch = phase === "metadata" || phase === "runtime";
+      const code = result?.error?.code;
+      const signal = result?.signal;
+      if (Number.isFinite(elapsedMs) && elapsedMs >= 0)
+        console.log(
+          "native-environment-timing",
+          JSON.stringify({
+            case: caseId,
+            launcher,
+            phase,
+            elapsedMs,
+            api: launch ? "spawnSync" : null,
+            outcome: launch ? (result ? "returned" : "threw") : "observed",
+            code:
+              code == null
+                ? null
+                : [
+                      "ENOENT",
+                      "EACCES",
+                      "EPERM",
+                      "EINVAL",
+                      "ETIMEDOUT",
+                      "ENOBUFS",
+                    ].includes(code)
+                  ? code
+                  : "other",
+            status: Number.isSafeInteger(result?.status) ? result.status : null,
+            signal:
+              signal == null
+                ? null
+                : [
+                      "SIGTERM",
+                      "SIGKILL",
+                      "SIGINT",
+                      "SIGABRT",
+                      "SIGSEGV",
+                    ].includes(signal)
+                  ? signal
+                  : "other",
+          }),
+        );
+    } catch {
+      // Diagnostics must not replace the original error or assertion.
+    }
+    phase = nextPhase;
+  }
   const dir = mkdtempSync(join(tmpdir(), "env-"));
   const calls = join(dir, "calls.jsonl");
   // A copy makes the invoking and Console directories genuinely distinct even
@@ -142,17 +204,23 @@ syncBuiltinESMExports();
         "unexpected native metadata fixture manifest",
       );
       const windows = process.platform === "win32";
-      const entry = spawnSync(
-        windows ? "pnpm run --silent native-pnpm-entry" : "pnpm",
-        windows ? [] : ["run", "--silent", "native-pnpm-entry"],
-        {
-          cwd: dir,
-          env: { ...env, pnpm_config_verify_deps_before_run: "false" },
-          encoding: "utf8",
-          shell: windows,
-          timeout: 20_000,
-        },
-      );
+      observe("metadata");
+      let entry;
+      try {
+        entry = spawnSync(
+          windows ? "pnpm run --silent native-pnpm-entry" : "pnpm",
+          windows ? [] : ["run", "--silent", "native-pnpm-entry"],
+          {
+            cwd: dir,
+            env: { ...env, pnpm_config_verify_deps_before_run: "false" },
+            encoding: "utf8",
+            shell: windows,
+            timeout: 20_000,
+          },
+        );
+      } finally {
+        observe("runtime-prepare", entry);
+      }
       assert.equal(entry.error, undefined);
       assert.equal(entry.signal, null);
       assert.equal(entry.status, 0, entry.stderr);
@@ -177,28 +245,34 @@ syncBuiltinESMExports();
             ...runtimeArgs,
           ]
         : runtimeArgs;
-    const result = spawnSync(process.execPath, args, {
-      env: {
-        ...env,
-        ...selectors,
-        // pnpm uses this same child setting. Only the exact fixed manifests
-        // checked above may suppress automatic installation here.
-        ...(launcher === "pnpm --dir"
-          ? { pnpm_config_verify_deps_before_run: "false" }
-          : {}),
-        NATIVE_EVIDENCE_DIR: dir,
-        NATIVE_PLATFORM_SOURCE: root,
-        RUN_LIVE_FUTURE: "synthetic",
-        MODEL_API_KEY: "synthetic",
-        OTEL_EXPORTER_OTLP_ENDPOINT: "https://invalid.example",
-        DOCKER_TLS_VERIFY: "synthetic",
-        ...(literalPath
-          ? { NATIVE_LITERAL_PATH: "expanded-wrong-directory" }
-          : {}),
-      },
-      encoding: "utf8",
-      timeout: 20_000,
-    });
+    observe("runtime");
+    let result;
+    try {
+      result = spawnSync(process.execPath, args, {
+        env: {
+          ...env,
+          ...selectors,
+          // pnpm uses this same child setting. Only the exact fixed manifests
+          // checked above may suppress automatic installation here.
+          ...(launcher === "pnpm --dir"
+            ? { pnpm_config_verify_deps_before_run: "false" }
+            : {}),
+          NATIVE_EVIDENCE_DIR: dir,
+          NATIVE_PLATFORM_SOURCE: root,
+          RUN_LIVE_FUTURE: "synthetic",
+          MODEL_API_KEY: "synthetic",
+          OTEL_EXPORTER_OTLP_ENDPOINT: "https://invalid.example",
+          DOCKER_TLS_VERIFY: "synthetic",
+          ...(literalPath
+            ? { NATIVE_LITERAL_PATH: "expanded-wrong-directory" }
+            : {}),
+        },
+        encoding: "utf8",
+        timeout: 20_000,
+      });
+    } finally {
+      observe("artifacts", result);
+    }
     const diagnostic = JSON.stringify({
       status: result.status,
       signal: result.signal,
@@ -261,21 +335,32 @@ syncBuiltinESMExports();
       receipt,
     };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    observe("cleanup");
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } finally {
+      observe("end");
+    }
   }
 }
 
 for (const launcher of ["direct Node", "pnpm --dir"]) {
   test(`native Docker refuses relative configuration before dispatch through ${launcher}`, () => {
-    for (const selectors of [
-      { DOCKER_CONFIG: "relative-config" },
-      {
-        DOCKER_CONFIG: "relative-config",
-        DOCKER_HOST: "unix:///verified-A.sock",
-      },
-      { DOCKER_CONFIG: "relative-config", DOCKER_CONTEXT: "verified-A" },
+    for (const [caseId, selectors] of [
+      ["relative-config", { DOCKER_CONFIG: "relative-config" }],
+      [
+        "relative-config-host",
+        {
+          DOCKER_CONFIG: "relative-config",
+          DOCKER_HOST: "unix:///verified-A.sock",
+        },
+      ],
+      [
+        "relative-config-context",
+        { DOCKER_CONFIG: "relative-config", DOCKER_CONTEXT: "verified-A" },
+      ],
     ]) {
-      const { operations, receipt, status, stderr } = probe(selectors, {
+      const { operations, receipt, status, stderr } = probe(caseId, selectors, {
         launcher,
       });
       assert.deepEqual(
@@ -301,17 +386,22 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
   });
 
   test(`native Docker keeps absolute selectors through ${launcher}`, () => {
-    for (const selectors of [
-      { DOCKER_HOST: "unix:///verified-A.sock" },
-      { DOCKER_CONTEXT: "verified-A" },
-      { DOCKER_CONFIG: resolve("relative-config") },
-      {
-        DOCKER_HOST: "unix:///verified-A.sock",
-        DOCKER_CONTEXT: "verified-A",
-        DOCKER_CONFIG: resolve("relative-config"),
-      },
+    for (const [caseId, selectors] of [
+      ["absolute-host", { DOCKER_HOST: "unix:///verified-A.sock" }],
+      ["absolute-context", { DOCKER_CONTEXT: "verified-A" }],
+      ["absolute-config", { DOCKER_CONFIG: resolve("relative-config") }],
+      [
+        "absolute-combined",
+        {
+          DOCKER_HOST: "unix:///verified-A.sock",
+          DOCKER_CONTEXT: "verified-A",
+          DOCKER_CONFIG: resolve("relative-config"),
+        },
+      ],
     ]) {
-      const { operations, receipt, status } = probe(selectors, { launcher });
+      const { operations, receipt, status } = probe(caseId, selectors, {
+        launcher,
+      });
       assert.equal(status, 0);
       assert.ok(operations.length > 0);
       assert.ok(operations.every((call) => call.selected));
@@ -334,7 +424,7 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
 }
 
 test("native pnpm keeps literal percent and spaces in fixture paths", () => {
-  const { operations, receipt, status } = probe(undefined, {
+  const { operations, receipt, status } = probe("literal-path", undefined, {
     launcher: "pnpm --dir",
     literalPath: true,
   });
@@ -358,7 +448,9 @@ test("native pnpm keeps literal percent and spaces in fixture paths", () => {
 });
 
 test("native environment contracts need only portable Node executable dispatch", () => {
-  const { operations, receipt, status } = probe(undefined, { nodeOnly: true });
+  const { operations, receipt, status } = probe("node-only", undefined, {
+    nodeOnly: true,
+  });
   assert.equal(
     status,
     0,
@@ -375,7 +467,7 @@ test("native environment contracts need only portable Node executable dispatch",
 });
 
 test("native child environments disable Next telemetry", () => {
-  const { operations, receipt, status } = probe();
+  const { operations, receipt, status } = probe("telemetry");
   assert.ok(operations.length > 0);
   assert.ok(
     operations.every((call) => call.telemetryDisabled),
@@ -389,15 +481,18 @@ test("native child environments disable Next telemetry", () => {
 });
 
 test("native Docker uses the preflighted local daemon", () => {
-  for (const selectors of [
-    { DOCKER_HOST: "unix:///verified-A.sock" },
-    {
-      DOCKER_CONTEXT: "verified-A",
-      DOCKER_CONFIG: resolve("synthetic-config"),
-    },
-    { DOCKER_CONFIG: resolve("relative-config") },
+  for (const [caseId, selectors] of [
+    ["preflight-host", { DOCKER_HOST: "unix:///verified-A.sock" }],
+    [
+      "preflight-context-config",
+      {
+        DOCKER_CONTEXT: "verified-A",
+        DOCKER_CONFIG: resolve("synthetic-config"),
+      },
+    ],
+    ["preflight-config", { DOCKER_CONFIG: resolve("relative-config") }],
   ]) {
-    const { operations, receipt, status } = probe(selectors);
+    const { operations, receipt, status } = probe(caseId, selectors);
     assert.ok(
       operations.every((call) => call.selected),
       "child must retain verified A, never HOME default B",
@@ -423,11 +518,11 @@ test("native Docker uses the preflighted local daemon", () => {
       ),
     );
   }
-  for (const [selectors, blocked] of [
-    [{}, false],
-    [{ DOCKER_HOST: "unix:///verified-A.sock" }, true],
+  for (const [caseId, selectors, blocked] of [
+    ["preflight-remote-default", {}, false],
+    ["preflight-blocked", { DOCKER_HOST: "unix:///verified-A.sock" }, true],
   ]) {
-    const result = probe(selectors, { blocked });
+    const result = probe(caseId, selectors, { blocked });
     assert.notEqual(result.status, 0);
     assert.ok(
       !result.operations.some((call) =>
@@ -438,8 +533,11 @@ test("native Docker uses the preflighted local daemon", () => {
 });
 
 test("native Docker supports a local HOME default with absent or empty configuration", () => {
-  for (const selectors of [{}, { DOCKER_CONFIG: "" }]) {
-    const { operations, receipt, status } = probe(selectors, {
+  for (const [caseId, selectors] of [
+    ["home-absent-config", {}],
+    ["home-empty-config", { DOCKER_CONFIG: "" }],
+  ]) {
+    const { operations, receipt, status } = probe(caseId, selectors, {
       homeLocal: true,
     });
     assert.equal(status, 0);

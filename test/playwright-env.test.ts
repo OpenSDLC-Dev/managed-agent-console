@@ -1,15 +1,82 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 
 it("native runtime environment contracts (no resources)", () => {
-  expect(() =>
-    execFileSync(
-      process.execPath,
-      ["--test", resolve("test/native/environment.test.mjs")],
-      { timeout: 30_000, stdio: "inherit" },
-    ),
-  ).not.toThrow();
+  expect(() => {
+    let started = Number.NaN;
+    try {
+      started = performance.now();
+    } catch {
+      // Diagnostics must not prevent the original call.
+    }
+    let returned = false;
+    let failure: unknown;
+    try {
+      execFileSync(
+        process.execPath,
+        ["--test", resolve("test/native/environment.test.mjs")],
+        { timeout: 30_000, stdio: "inherit" },
+      );
+      returned = true;
+    } catch (error) {
+      failure = error;
+      throw error;
+    } finally {
+      // A normal return is execFileSync's success contract, not a separately
+      // observed OS status/signal tuple. Emit before Vitest checks its budget.
+      try {
+        const elapsedMs = performance.now() - started;
+        const result = failure as
+          { code?: unknown; status?: unknown; signal?: unknown } | undefined;
+        const code = result?.code;
+        const signal = result?.signal;
+        if (Number.isFinite(elapsedMs) && elapsedMs >= 0)
+          console.log(
+            "native-environment-timing",
+            JSON.stringify({
+              case: "aggregate",
+              launcher: "direct Node",
+              phase: "suite",
+              elapsedMs,
+              api: "execFileSync",
+              outcome: returned ? "returned" : "threw",
+              code:
+                code == null
+                  ? null
+                  : [
+                        "ENOENT",
+                        "EACCES",
+                        "EPERM",
+                        "EINVAL",
+                        "ETIMEDOUT",
+                        "ENOBUFS",
+                      ].includes(code as string)
+                    ? code
+                    : "other",
+              status: Number.isSafeInteger(result?.status)
+                ? result?.status
+                : null,
+              signal:
+                signal == null
+                  ? null
+                  : [
+                        "SIGTERM",
+                        "SIGKILL",
+                        "SIGINT",
+                        "SIGABRT",
+                        "SIGSEGV",
+                      ].includes(signal as string)
+                    ? signal
+                    : "other",
+            }),
+          );
+      } catch {
+        // Diagnostics must not replace the original error or assertion.
+      }
+    }
+  }).not.toThrow();
 });
 import { ensureLoopbackProxyBypass } from "./playwright-env";
 
