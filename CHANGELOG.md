@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Native key forms can retry an unavailable owner directory.** Retry keeps the name, expiry and owner draft in both API Keys and the Dashboard shortcut.
+- **Native navigation follows confirmed same-account role changes.** Once session metadata confirms the role, surface discovery replaces old administrator links or refusals without waiting for its next poll.
 - **CI retains Playwright evidence after a successful retry** (#249). Reports,
   failed-attempt traces and screenshots are uploaded even when the job passes.
 - **Deployment editor mapping tests avoid per-character timer waits** (#244).

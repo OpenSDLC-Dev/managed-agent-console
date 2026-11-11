@@ -428,6 +428,18 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                       {accounts.error.message}
                     </p>
                   )}
+                  {/* Refetch clears error before the first page arrives. Keep
+                      the recovery action mounted and disabled while it loads. */}
+                  {accounts.isFetched && !accounts.data && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={accounts.isFetching || pending}
+                      onClick={() => void accounts.refetch()}
+                    >
+                      Retry
+                    </Button>
+                  )}
                   {accounts.hasNextPage && (
                     <Button
                       type="button"

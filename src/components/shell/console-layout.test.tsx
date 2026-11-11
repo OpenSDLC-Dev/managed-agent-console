@@ -339,6 +339,7 @@ it.each([false, true])(
       await screen.findByText("Sensitive A row");
       await screen.findByText("Actor A");
       expect(mounts).toBe(1);
+      const client = state.client;
       fireEvent.click(screen.getByTestId("sign-out"));
       await waitFor(() =>
         expect(fetcher).toHaveBeenCalledWith(
@@ -362,6 +363,7 @@ it.each([false, true])(
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 30));
       });
+      expect(state.client).toBe(client);
       expect(
         state.client!.getQueryData<{ id: string }>(["console-session"])?.id,
       ).toBe(actor.id);
@@ -377,7 +379,8 @@ it.each([false, true])(
         const signOut = screen.queryByTestId("sign-out");
         if (signOut) expect.soft(signOut).toBeDisabled();
       } else {
-        expect(screen.getByText("Sensitive A row")).toBeVisible();
+        expect(screen.queryByText("Sensitive A row")).toBeNull();
+        expect(screen.queryByTestId("private-page")).toBeNull();
         expect(screen.getByText("Renamed A")).toBeVisible();
         expect(screen.getByTestId("sign-out")).toBeDisabled();
       }

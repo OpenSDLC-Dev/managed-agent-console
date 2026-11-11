@@ -597,19 +597,27 @@ function serviceAccount(
   };
 }
 function nativeFetch(
-  options: { pending?: boolean; reject?: boolean; pageFail?: boolean } = {},
+  options: {
+    pending?: boolean;
+    reject?: boolean;
+    pageFail?: boolean;
+    firstPageFail?: boolean;
+  } = {},
 ) {
   let current = session;
   let firstPage = [
     serviceAccount("svac_first", "First service"),
     serviceAccount("svac_archived", "Archived service", "2026-01-01T00:00:00Z"),
   ];
-  let settle: (response: Response) => void = () => {};
+  let settle = () => {};
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input), "http://console.test");
     if (url.pathname === "/api/auth/session") return json(current);
     if (url.pathname.endsWith("/service_accounts")) {
-      if (url.searchParams.get("page") === "page-two" && options.pageFail)
+      if (
+        (url.searchParams.get("page") === "page-two" && options.pageFail) ||
+        (!url.searchParams.has("page") && options.firstPageFail)
+      )
         return json(
           {
             error: { type: "api_error", message: "Directory page unavailable" },
@@ -629,9 +637,22 @@ function nativeFetch(
       );
     }
     if (url.pathname === KEYS && init?.method === "POST") {
+      const { principal_id } = JSON.parse(String(init.body));
+      const issued = json({
+        ...ownedKey("apikey_new"),
+        principal:
+          principal_id === current.id
+            ? { type: "user_actor", user_id: principal_id }
+            : {
+                type: "service_account_actor",
+                service_account_id: principal_id,
+              },
+        created_by: { type: "user", id: current.id },
+        raw_key: SECRET,
+      });
       if (options.pending)
         return new Promise<Response>((resolve) => {
-          settle = resolve;
+          settle = () => resolve(issued);
         });
       if (options.reject)
         return json(
@@ -642,7 +663,7 @@ function nativeFetch(
           },
           404,
         );
-      return json({ ...ownedKey("apikey_new"), raw_key: SECRET });
+      return issued;
     }
     if (url.pathname === KEYS)
       return json([ownedKey(`apikey_${current.id}`, true)]);
@@ -658,7 +679,7 @@ function nativeFetch(
     replace: (data: NativeSession) => {
       current = data;
     },
-    settle: () => settle(json({ ...ownedKey("apikey_new"), raw_key: SECRET })),
+    settle: () => settle(),
   };
 }
 
@@ -666,7 +687,13 @@ it.each([false, true])(
   "native key form sends self or an admin-selected active service account (shortcut=%s)",
   async (shortcut) => {
     const { fetcher } = nativeFetch();
-    nativeView(session, shortcut);
+    const { client } = nativeView(session, shortcut);
+    const issuedPrincipals = () =>
+      client
+        .getMutationCache()
+        .getAll()
+        .filter((mutation) => mutation.state.status === "success")
+        .map((mutation) => (mutation.state.data as ApiKey).principal);
     await userEvent.click(
       screen.getByRole("button", {
         name: shortcut ? "Get API key" : "Create key",
@@ -678,6 +705,9 @@ it.each([false, true])(
     expect(JSON.parse(String(postOf(fetcher)![1].body))).toMatchObject({
       principal_id: "user_verbatim-self",
     });
+    expect(issuedPrincipals()).toEqual([
+      { type: "user_actor", user_id: "user_verbatim-self" },
+    ]);
     await userEvent.click(screen.getByTestId("close-revealed-api-key"));
     await userEvent.click(
       screen.getByRole("button", {
@@ -702,6 +732,9 @@ it.each([false, true])(
     expect(JSON.parse(String(posts[1][1]?.body))).toMatchObject({
       principal_id: "svac_second",
     });
+    expect(issuedPrincipals()).toEqual([
+      { type: "service_account_actor", service_account_id: "svac_second" },
+    ]);
     const directory = fetcher.mock.calls.filter(([url]) =>
       String(url).includes("/service_accounts"),
     );
@@ -714,6 +747,39 @@ it.each([false, true])(
     expect(
       fetcher.mock.calls.some(([url]) => String(url).includes("/members")),
     ).toBe(false);
+  },
+);
+
+it.each([
+  ["user_verbatim-self", { type: "user_actor", user_id: "user_verbatim-self" }],
+  [
+    "svac_first",
+    { type: "service_account_actor", service_account_id: "svac_first" },
+  ],
+])(
+  "pending issuance retains the requested principal %s",
+  async (owner, principal) => {
+    const mock = nativeFetch({ pending: true });
+    const { client } = nativeView();
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await screen.findByRole("option", { name: /First service/ });
+    await userEvent.selectOptions(
+      screen.getByLabelText("Owner"),
+      String(owner),
+    );
+    await userEvent.type(screen.getByLabelText("Name"), "pending-owner");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
+    mock.replace({ ...session, id: "user_later-session" });
+    mock.settle();
+    await screen.findByTestId("revealed-api-key");
+    expect(
+      client
+        .getMutationCache()
+        .getAll()
+        .filter((mutation) => mutation.state.status === "success")
+        .map((mutation) => (mutation.state.data as ApiKey).principal),
+    ).toEqual([principal]);
   },
 );
 
@@ -756,6 +822,67 @@ it.each([false, true])(
     );
   },
 );
+
+it.each([false, true])(
+  "native owner directory retries its first page without discarding the draft (shortcut=%s)",
+  async (shortcut) => {
+    const options = { firstPageFail: true };
+    const { fetcher } = nativeFetch(options);
+    nativeView(session, shortcut);
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: shortcut ? "Get API key" : "Create key",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Directory page unavailable",
+    );
+    await userEvent.type(screen.getByLabelText("Name"), "retained-draft");
+    await userEvent.selectOptions(screen.getByLabelText("Expires"), "7d");
+    expect(
+      screen.queryByRole("button", { name: "Load more service accounts" }),
+    ).toBeNull();
+    options.firstPageFail = false;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const directory = fetcher.getMockImplementation()!;
+    fetcher.mockImplementationOnce(async (...args) => {
+      await held;
+      return directory(...args);
+    });
+    const retry = screen.getByRole("button", { name: "Retry" });
+    expect(retry).toHaveAttribute("type", "button");
+    try {
+      await userEvent.click(retry);
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled(),
+      );
+    } finally {
+      release();
+    }
+    await screen.findByRole("option", { name: /First service/ });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByLabelText("Name")).toHaveValue("retained-draft");
+    expect(screen.getByLabelText("Expires")).toHaveValue("7d");
+    expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
+    expect(postOf(fetcher)).toBeUndefined();
+  },
+);
+
+it("native first-page Retry stays disabled while a key is being issued", async () => {
+  const mock = nativeFetch({ firstPageFail: true, pending: true });
+  nativeView();
+  await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+  await screen.findByRole("alert");
+  await userEvent.type(screen.getByLabelText("Name"), "self-during-outage");
+  await userEvent.click(screen.getByRole("button", { name: "Add" }));
+  await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
+  expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+  mock.settle();
+  await screen.findByTestId("revealed-api-key");
+});
 
 it("native owner pagination failure remains visible and page two can retry", async () => {
   const options = { pageFail: true };

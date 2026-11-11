@@ -207,7 +207,9 @@ export function isSurfaceVisible(
 export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
   const session = useContext(ConsoleSessionContext)?.data;
   return useQuery({
-    queryKey: ["surfaces"],
+    queryKey: isNativeConsole()
+      ? ["surfaces", session?.id, session?.role]
+      : ["surfaces"],
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(
         async (surface): Promise<[Surface, SurfaceState]> => {

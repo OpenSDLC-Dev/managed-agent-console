@@ -1691,7 +1691,16 @@ test("native-issued human and service keys preserve SDK actors and current autho
           redacted_by: actor,
         });
         await expect
-          .poll(() => receipt().publicRequests.slice(start).length)
+          .poll(() => {
+            try {
+              return receipt().publicRequests.slice(start).length;
+            } catch (error) {
+              // The runtime can be between truncating and writing its receipt.
+              // An incomplete sample must retry, never satisfy the count.
+              if (error instanceof SyntaxError) return undefined;
+              throw error;
+            }
+          })
           .toBe(6);
         const observed = receipt().publicRequests.slice(start);
         expect(
@@ -1825,6 +1834,10 @@ test("native-issued human and service keys preserve SDK actors and current autho
         expect(retained.redacted_at).toBeNull();
         expect(retained.redacted_by).toBeNull();
         expect(retained.content).toBe("");
+        expect(retained.content_size_bytes).toBe(0);
+        expect(retained.content_sha256).toBe(
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
       }
       // Only humans have the user role; an SA's role range is admin/developer.
       if (kind === "human") {
