@@ -533,24 +533,26 @@ for (const status of [0, 23]) {
     status: null,
     signal: null,
   };
-  for (const [name, withMetadata, faultIndex, expected] of [
-    ["valid direct", false, -1, [prepare, runtime, artifacts, cleanup]],
+  for (const [name, withMetadata, faultIndex, expected, unavailable] of [
+    ["valid direct", false, -1, [prepare, runtime, artifacts, cleanup], false],
     [
       "valid metadata",
       true,
       -1,
       [prepare, metadata, runtimePrepare, runtime, artifacts, cleanup],
+      false,
     ],
-    ["first read", false, 0, [runtime, artifacts, cleanup]],
-    ["runtime end", false, 2, [prepare, cleanup]],
-    ["metadata end", true, 2, [prepare, runtime, artifacts, cleanup]],
+    ["first read", false, 0, [runtime, artifacts, cleanup], true],
+    ["runtime end", false, 2, [prepare, cleanup], true],
+    ["metadata end", true, 2, [prepare, runtime, artifacts, cleanup], true],
     [
       "metadata runtime end",
       true,
       4,
       [prepare, metadata, runtimePrepare, cleanup],
+      true,
     ],
-    ["sink failure", false, -1, [prepare, cleanup]],
+    ["sink failure", false, -1, [prepare, cleanup], true],
   ]) {
     const faults =
       faultIndex < 0
@@ -597,6 +599,11 @@ for (const status of [0, 23]) {
         const emissions = [];
         let attempts = 0;
         const result = Object.freeze({ status, signal: null });
+        const evidence = {
+          boundaries: [],
+          unavailable: false,
+          overflow: false,
+        };
         const observe = createPhaseObserver(
           "telemetry",
           "direct Node",
@@ -612,6 +619,7 @@ for (const status of [0, 23]) {
               throw new Error("unavailable sink");
             emissions.push(args);
           },
+          evidence,
         );
         assert.doesNotThrow(() => {
           if (withMetadata) {
@@ -631,6 +639,7 @@ for (const status of [0, 23]) {
         assert.equal(reads, readings.length);
         assert.equal(exhausted, false);
         assert.equal(coercions, 0);
+        assert.equal(evidence.unavailable, unavailable);
         assert.deepEqual(result, { status, signal: null });
         assert.ok(
           emissions.every(
@@ -673,6 +682,91 @@ test("phase observer preserves the original exception identity", () => {
   );
   assert.equal(reads, 2);
   assert.deepEqual(emissions, []);
+
+  // Valid clocks expose API outcomes even when the OS operation did not succeed.
+  for (const [result, expected] of [
+    [undefined, { outcome: "threw", code: null, status: null, signal: null }],
+    [
+      Object.freeze({
+        error: Object.freeze({ code: "ENOENT" }),
+        status: null,
+        signal: null,
+      }),
+      { outcome: "returned", code: "ENOENT", status: null, signal: null },
+    ],
+    [
+      Object.freeze({
+        error: Object.freeze({ code: "private code" }),
+        status: "23",
+        signal: null,
+      }),
+      { outcome: "returned", code: "other", status: null, signal: null },
+    ],
+    [
+      Object.freeze({ status: null, signal: "SIGTERM" }),
+      { outcome: "returned", code: null, status: null, signal: "SIGTERM" },
+    ],
+    [
+      Object.freeze({
+        status: Number.MAX_SAFE_INTEGER + 1,
+        signal: "private signal",
+      }),
+      { outcome: "returned", code: null, status: null, signal: "other" },
+    ],
+  ]) {
+    const samples = [0, 10, 20];
+    const records = [];
+    const evidence = { boundaries: [], unavailable: false, overflow: false };
+    const observe = createPhaseObserver(
+      "telemetry",
+      "direct Node",
+      () => samples.shift(),
+      (...args) => records.push(args),
+      evidence,
+    );
+    observe("runtime");
+    let caught;
+    try {
+      if (result === undefined) throw original;
+    } catch (error) {
+      caught = error;
+    } finally {
+      observe("artifacts", result);
+    }
+    assert.equal(caught, result === undefined ? original : undefined);
+    assert.deepEqual(samples, []);
+    assert.equal(evidence.unavailable, false);
+    assert.deepEqual(
+      records.map(([marker, record]) => [marker, JSON.parse(record)]),
+      [
+        [
+          "native-environment-timing",
+          {
+            case: "telemetry",
+            launcher: "direct Node",
+            phase: "prepare",
+            elapsedMs: 10,
+            api: null,
+            outcome: "observed",
+            code: null,
+            status: null,
+            signal: null,
+          },
+        ],
+        [
+          "native-environment-timing",
+          {
+            case: "telemetry",
+            launcher: "direct Node",
+            phase: "runtime",
+            elapsedMs: 10,
+            api: "spawnSync",
+            ...expected,
+          },
+        ],
+      ],
+    );
+  }
 });
 
 for (const launcher of ["direct Node", "pnpm --dir"]) {
