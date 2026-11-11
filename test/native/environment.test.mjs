@@ -19,36 +19,40 @@ const root = resolve(import.meta.dirname, "../..");
 let pnpmCLI = process.env.npm_config_user_agent?.startsWith("pnpm/")
   ? process.env.npm_execpath
   : undefined;
-function probe(
+function createPhaseObserver(
   caseId,
-  selectors = { DOCKER_HOST: "unix:///verified-A.sock" },
-  {
-    blocked = false,
-    nodeOnly = false,
-    launcher = "direct Node",
-    homeLocal = false,
-    literalPath = false,
-  } = {},
+  launcher,
+  now = () => performance.now(),
+  emit = (...args) => console.log(...args),
+  evidence,
 ) {
   let phase = "prepare";
   let started = Number.NaN;
   try {
-    started = performance.now();
+    const reading = now();
+    started = Number.isFinite(reading) ? reading : Number.NaN;
   } catch {
     // Diagnostics must not prevent the original call.
   }
+  if (evidence && !Number.isFinite(started)) evidence.unavailable = true;
   function observe(nextPhase, result) {
+    // Structural evidence survives unavailable diagnostics and missing durations.
+    if (evidence) {
+      if (evidence.boundaries.length < 6) evidence.boundaries.push(nextPhase);
+      else evidence.overflow = true;
+    }
     // Boundaries include helper work between launches. A spawnSync return is
     // not success: its error code, status and signal carry the API outcome.
     try {
-      const now = performance.now();
-      const elapsedMs = now - started;
-      started = now;
+      const reading = now();
+      const boundary = Number.isFinite(reading) ? reading : Number.NaN;
+      const elapsedMs = boundary - started;
+      started = boundary;
       const launch = phase === "metadata" || phase === "runtime";
       const code = result?.error?.code;
       const signal = result?.signal;
       if (Number.isFinite(elapsedMs) && elapsedMs >= 0)
-        console.log(
+        emit(
           "native-environment-timing",
           JSON.stringify({
             case: caseId,
@@ -85,12 +89,42 @@ function probe(
                   : "other",
           }),
         );
+      else if (evidence) evidence.unavailable = true;
     } catch {
       started = Number.NaN;
+      if (evidence) evidence.unavailable = true;
       // Diagnostics must not replace the original error or assertion.
     }
     phase = nextPhase;
   }
+  return observe;
+}
+
+function probe(
+  caseId,
+  selectors = { DOCKER_HOST: "unix:///verified-A.sock" },
+  {
+    blocked = false,
+    nodeOnly = false,
+    launcher = "direct Node",
+    homeLocal = false,
+    literalPath = false,
+  } = {},
+) {
+  const timing = {
+    boundaries: [],
+    unavailable: false,
+    overflow: false,
+  };
+  const observe = createPhaseObserver(
+    caseId,
+    launcher,
+    undefined,
+    (...args) => {
+      console.log(...args);
+    },
+    timing,
+  );
   const dir = mkdtempSync(join(tmpdir(), "env-"));
   const calls = join(dir, "calls.jsonl");
   // A copy makes the invoking and Console directories genuinely distinct even
@@ -334,6 +368,8 @@ syncBuiltinESMExports();
       stderr: result.stderr,
       operations,
       receipt,
+      // Keep the reference: finally records cleanup after this return is prepared.
+      timing,
     };
   } finally {
     observe("cleanup");
@@ -345,8 +381,320 @@ syncBuiltinESMExports();
   }
 }
 
+function assertProbeTiming(
+  timing,
+  observedOutput,
+  caseId,
+  launcher,
+  status,
+  withMetadata,
+) {
+  assert.ok(timing !== undefined, "real probe timing evidence is required");
+  assert.equal(timing.overflow, false, "real probe timing evidence overflowed");
+  const boundaries = withMetadata
+    ? ["metadata", "runtime-prepare", "runtime", "artifacts", "cleanup", "end"]
+    : ["runtime", "artifacts", "cleanup", "end"];
+  assert.ok(
+    timing.boundaries.length === boundaries.length &&
+      timing.boundaries.every((phase, index) => phase === boundaries[index]),
+    "real probe timing boundaries must match the actual path",
+  );
+  assert.equal(typeof timing.unavailable, "boolean");
+  assert.ok(
+    !observedOutput.invalid,
+    "real probe timing must use bounded fixed-marker records",
+  );
+  if (timing.unavailable) return;
+
+  const phases = withMetadata
+    ? [
+        "prepare",
+        "metadata",
+        "runtime-prepare",
+        "runtime",
+        "artifacts",
+        "cleanup",
+      ]
+    : ["prepare", "runtime", "artifacts", "cleanup"];
+  assert.equal(
+    observedOutput.records.length,
+    phases.length,
+    "available real probe timing must emit every phase",
+  );
+  for (const [index, text] of observedOutput.records.entries()) {
+    let record;
+    let parsed = false;
+    try {
+      record = JSON.parse(text);
+      parsed = true;
+    } catch {
+      // Report only a fixed message below, never the private parser preview.
+    }
+    assert.ok(parsed, "real probe timing record must be valid JSON");
+    assert.ok(
+      record !== null && typeof record === "object" && !Array.isArray(record),
+      "real probe timing record must be an object",
+    );
+    assert.ok(
+      Object.keys(record).sort().join(",") ===
+        "api,case,code,elapsedMs,launcher,outcome,phase,signal,status",
+      "real probe timing must use only the fixed fields",
+    );
+    const phase = phases[index];
+    const launch = phase === "runtime" || phase === "metadata";
+    assert.ok(
+      record.case === caseId &&
+        record.launcher === launcher &&
+        record.phase === phase,
+      "real probe timing identity and phase must match the actual path",
+    );
+    assert.ok(
+      Number.isFinite(record.elapsedMs) && record.elapsedMs >= 0,
+      "real probe timing duration must be finite and nonnegative",
+    );
+    assert.ok(
+      record.api === (launch ? "spawnSync" : null) &&
+        record.outcome === (launch ? "returned" : "observed") &&
+        record.status ===
+          (phase === "runtime" ? status : phase === "metadata" ? 0 : null) &&
+        record.code === null &&
+        record.signal === null,
+      "real probe timing must preserve the actual API outcome",
+    );
+  }
+}
+
+// These in-memory cases exercise the same observer as probe(), without launches
+// or global clock changes. The literal records check omission AND recovery.
+for (const status of [0, 23]) {
+  const prepare = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "prepare",
+    elapsedMs: 10,
+    api: null,
+    outcome: "observed",
+    code: null,
+    status: null,
+    signal: null,
+  };
+  const metadata = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "metadata",
+    elapsedMs: 10,
+    api: "spawnSync",
+    outcome: "returned",
+    code: null,
+    status: 0,
+    signal: null,
+  };
+  const runtimePrepare = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "runtime-prepare",
+    elapsedMs: 80,
+    api: null,
+    outcome: "observed",
+    code: null,
+    status: null,
+    signal: null,
+  };
+  const runtime = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "runtime",
+    elapsedMs: 1000,
+    api: "spawnSync",
+    outcome: "returned",
+    code: null,
+    status,
+    signal: null,
+  };
+  const artifacts = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "artifacts",
+    elapsedMs: 10,
+    api: null,
+    outcome: "observed",
+    code: null,
+    status: null,
+    signal: null,
+  };
+  const cleanup = {
+    case: "telemetry",
+    launcher: "direct Node",
+    phase: "cleanup",
+    elapsedMs: 10,
+    api: null,
+    outcome: "observed",
+    code: null,
+    status: null,
+    signal: null,
+  };
+  for (const [name, withMetadata, faultIndex, expected] of [
+    ["valid direct", false, -1, [prepare, runtime, artifacts, cleanup]],
+    [
+      "valid metadata",
+      true,
+      -1,
+      [prepare, metadata, runtimePrepare, runtime, artifacts, cleanup],
+    ],
+    ["first read", false, 0, [runtime, artifacts, cleanup]],
+    ["runtime end", false, 2, [prepare, cleanup]],
+    ["metadata end", true, 2, [prepare, runtime, artifacts, cleanup]],
+    [
+      "metadata runtime end",
+      true,
+      4,
+      [prepare, metadata, runtimePrepare, cleanup],
+    ],
+    ["sink failure", false, -1, [prepare, cleanup]],
+  ]) {
+    const faults =
+      faultIndex < 0
+        ? ["none"]
+        : [
+            "throw",
+            "null",
+            "string",
+            "true",
+            "false",
+            "NaN",
+            "Infinity",
+            "-Infinity",
+            "undefined",
+            "object",
+          ];
+    for (const fault of faults) {
+      test(`phase observer ${name} ${fault} status ${status}`, () => {
+        let coercions = 0;
+        const clockFailure = new Error("unavailable clock");
+        const invalid = {
+          throw: clockFailure,
+          null: null,
+          string: "100",
+          true: true,
+          false: false,
+          NaN: Number.NaN,
+          Infinity,
+          "-Infinity": -Infinity,
+          undefined,
+          object: {
+            [Symbol.toPrimitive]() {
+              coercions++;
+              return 100;
+            },
+          },
+        };
+        const readings = withMetadata
+          ? [0, 10, 20, 100, 1100, 1110, 1120]
+          : [90, 100, 1100, 1110, 1120];
+        if (faultIndex >= 0) readings[faultIndex] = invalid[fault];
+        let reads = 0,
+          exhausted = false;
+        const emissions = [];
+        let attempts = 0;
+        const result = Object.freeze({ status, signal: null });
+        const observe = createPhaseObserver(
+          "telemetry",
+          "direct Node",
+          () => {
+            if (reads >= readings.length) exhausted = true;
+            const reading = readings[reads++];
+            if (reading === clockFailure) throw clockFailure;
+            return reading;
+          },
+          (...args) => {
+            attempts++;
+            if (name === "sink failure" && attempts === 2)
+              throw new Error("unavailable sink");
+            emissions.push(args);
+          },
+        );
+        assert.doesNotThrow(() => {
+          if (withMetadata) {
+            observe("metadata");
+            observe(
+              "runtime-prepare",
+              Object.freeze({ status: 0, signal: null }),
+            );
+          }
+          observe("runtime");
+          observe("artifacts", result);
+          observe("cleanup");
+          observe("end");
+        });
+        // Assertions must stay outside the diagnostic catch, including those
+        // about the clock script and sink arguments.
+        assert.equal(reads, readings.length);
+        assert.equal(exhausted, false);
+        assert.equal(coercions, 0);
+        assert.deepEqual(result, { status, signal: null });
+        assert.ok(
+          emissions.every(
+            (args) =>
+              args.length === 2 && args[0] === "native-environment-timing",
+          ),
+        );
+        assert.deepEqual(
+          emissions.map((args) => JSON.parse(args[1])),
+          expected,
+        );
+      });
+    }
+  }
+}
+
+test("phase observer preserves the original exception identity", () => {
+  const original = new Error("original failure");
+  const clockFailure = new Error("unavailable clock");
+  let reads = 0;
+  const emissions = [];
+  const observe = createPhaseObserver(
+    "telemetry",
+    "direct Node",
+    () => {
+      reads++;
+      throw clockFailure;
+    },
+    (...args) => emissions.push(args),
+  );
+  assert.throws(
+    () => {
+      try {
+        throw original;
+      } finally {
+        observe("artifacts");
+      }
+    },
+    (error) => error === original,
+  );
+  assert.equal(reads, 2);
+  assert.deepEqual(emissions, []);
+});
+
 for (const launcher of ["direct Node", "pnpm --dir"]) {
-  test(`native Docker refuses relative configuration before dispatch through ${launcher}`, () => {
+  test(`native Docker refuses relative configuration before dispatch through ${launcher}`, (t) => {
+    const observedOutput = { records: [], invalid: false };
+    const originalLog = console.log;
+    t.after(() => {
+      console.log = originalLog;
+    });
+    console.log = function (...args) {
+      const result = originalLog.apply(console, args);
+      if (
+        args.length === 2 &&
+        args[0] === "native-environment-timing" &&
+        typeof args[1] === "string" &&
+        args[1].length <= 1024 &&
+        observedOutput.records.length < 6
+      )
+        observedOutput.records.push(args[1]);
+      else observedOutput.invalid = true;
+      return result;
+    };
     for (const [caseId, selectors] of [
       ["relative-config", { DOCKER_CONFIG: "relative-config" }],
       [
@@ -361,9 +709,16 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
         { DOCKER_CONFIG: "relative-config", DOCKER_CONTEXT: "verified-A" },
       ],
     ]) {
-      const { operations, receipt, status, stderr } = probe(caseId, selectors, {
-        launcher,
-      });
+      observedOutput.records.length = 0;
+      observedOutput.invalid = false;
+      const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
+      const { operations, receipt, status, stderr, timing } = probe(
+        caseId,
+        selectors,
+        {
+          launcher,
+        },
+      );
       assert.deepEqual(
         {
           status,
@@ -383,6 +738,14 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
       );
       assert.equal(receipt.dockerTarget, undefined);
       assert.equal(receipt.cleaned, true);
+      assertProbeTiming(
+        timing,
+        observedOutput,
+        caseId,
+        launcher,
+        status,
+        withMetadata,
+      );
     }
   });
 
@@ -467,8 +830,28 @@ test("native environment contracts need only portable Node executable dispatch",
   assert.equal(receipt.cleaned, true);
 });
 
-test("native child environments disable Next telemetry", () => {
-  const { operations, receipt, status } = probe("telemetry");
+test("native child environments disable Next telemetry", (t) => {
+  const observedOutput = { records: [], invalid: false };
+  const originalLog = console.log;
+  t.after(() => {
+    console.log = originalLog;
+  });
+  console.log = function (...args) {
+    const result = originalLog.apply(console, args);
+    if (
+      args.length === 2 &&
+      args[0] === "native-environment-timing" &&
+      typeof args[1] === "string" &&
+      args[1].length <= 1024 &&
+      observedOutput.records.length < 6
+    )
+      observedOutput.records.push(args[1]);
+    else observedOutput.invalid = true;
+    return result;
+  };
+  const launcher = "direct Node";
+  const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
+  const { operations, receipt, status, timing } = probe("telemetry");
   assert.ok(operations.length > 0);
   assert.ok(
     operations.every((call) => call.telemetryDisabled),
@@ -479,6 +862,14 @@ test("native child environments disable Next telemetry", () => {
     assert.equal(receipt.environment[kind].telemetryDisabled, true);
     assert.deepEqual(receipt.environment[kind].unsafeNames, []);
   }
+  assertProbeTiming(
+    timing,
+    observedOutput,
+    "telemetry",
+    launcher,
+    status,
+    withMetadata,
+  );
 });
 
 test("native Docker uses the preflighted local daemon", () => {
