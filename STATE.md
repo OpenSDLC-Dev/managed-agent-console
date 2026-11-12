@@ -19,7 +19,7 @@ Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 ### Platform plan 69 slice 3
 
 Principal-owned key behavior and the Task 3 review repairs are independently verified.
-Native client acceptance is independently verified. The directory Retry, role-cache and contract review follow-ups await fresh independent verification and source review.
+Native client acceptance and the review follow-ups passed fresh independent checks. Committed-source review and companion delivery remain pending.
 Slice 2 [PR #246](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246) merged. Its published-image acceptance and limits are in the [platform history](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/HISTORY.md#plan-69-slice-2-browser-acceptance).
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 

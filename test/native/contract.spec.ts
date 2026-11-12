@@ -1532,6 +1532,8 @@ test("native-issued human and service keys preserve SDK actors and current autho
   browser,
 }) => {
   test.setTimeout(150_000);
+  // Capture only the immutable path before requests can trigger receipt rewrites.
+  const sdkClient = receipt().sdkClient;
   const keys = `${org}/workspaces/default/api_keys`;
   const resource = "/api/organizations/default/proxy/v1";
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
@@ -1570,7 +1572,7 @@ test("native-issued human and service keys preserve SDK actors and current autho
       );
     });
   function sdk(key: string, header: "x-api-key" | "bearer") {
-    const child = spawnSync(receipt().sdkClient, [], {
+    const child = spawnSync(sdkClient, [], {
       input: JSON.stringify({
         base_url: "http://127.0.0.1:38200",
         key,
