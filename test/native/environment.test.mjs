@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { performance } from "node:perf_hooks";
+import { Script } from "node:vm";
 
 const root = resolve(import.meta.dirname, "../..");
 let pnpmCLI = process.env.npm_config_user_agent?.startsWith("pnpm/")
@@ -100,6 +101,88 @@ function createPhaseObserver(
   return observe;
 }
 
+// Serialized into the existing preload; no additional process or operation stub.
+// Static imports precede this body. Later exit handlers and output cost follow it.
+function startPreloadWindow(
+  now = () => performance.now(),
+  emit = (...args) => console.log(...args),
+) {
+  let started;
+  try {
+    started = now();
+  } catch {
+    // A clock failure must not stop preload dispatch.
+  }
+  let finished = false;
+  return () => {
+    if (finished) return;
+    finished = true;
+    let elapsedMs = null;
+    try {
+      const ended = now();
+      if (
+        Number.isFinite(started) &&
+        Number.isFinite(ended) &&
+        ended >= started
+      ) {
+        const elapsed = ended - started;
+        if (Number.isFinite(elapsed) && elapsed <= Number.MAX_SAFE_INTEGER)
+          elapsedMs = elapsed;
+      }
+    } catch {
+      // Missing samples are unavailable, never an inferred duration.
+    }
+    try {
+      emit("native-environment-preload-window", JSON.stringify({ elapsedMs }));
+    } catch {
+      // Output failure must not change exit or runtime cleanup.
+    }
+  };
+}
+
+function reportPreloadWindow(
+  caseId,
+  launcher,
+  stdout,
+  emit = (...args) => console.log(...args),
+) {
+  let elapsedMs = null;
+  try {
+    // Read only a small captured payload. Never forward arbitrary child output.
+    const prefix = "native-environment-preload-window ";
+    const records =
+      typeof stdout === "string" && stdout.length <= 1024
+        ? stdout.split(/\r?\n/).filter((line) => line.startsWith(prefix))
+        : [];
+    if (records.length === 1) {
+      const record = JSON.parse(records[0].slice(prefix.length));
+      if (
+        record !== null &&
+        Object.keys(record).join(",") === "elapsedMs" &&
+        Number.isFinite(record.elapsedMs) &&
+        record.elapsedMs >= 0 &&
+        record.elapsedMs <= Number.MAX_SAFE_INTEGER
+      )
+        elapsedMs = record.elapsedMs;
+    }
+  } catch {
+    // A missing exit callback, broken clock or truncated output is uncertain.
+  }
+  try {
+    emit(
+      "native-environment-preload-window",
+      JSON.stringify({
+        case: caseId,
+        launcher,
+        available: elapsedMs !== null,
+        elapsedMs,
+      }),
+    );
+  } catch {
+    // This observation must not replace the original launch result or error.
+  }
+}
+
 function probe(
   caseId,
   selectors = { DOCKER_HOST: "unix:///verified-A.sock" },
@@ -173,6 +256,8 @@ import { resolve } from "node:path";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { syncBuiltinESMExports } from "node:module";
+const finishPreloadWindow = (${startPreloadWindow.toString()})();
+process.once("exit", finishPreloadWindow);
 const spawn = cp.spawn;
 cp.spawn = (cmd, args, options) => {
   if (cmd === process.execPath && args[0] === "-e") return spawn(cmd, args, options);
@@ -307,6 +392,7 @@ syncBuiltinESMExports();
       });
     } finally {
       observe("artifacts", result);
+      reportPreloadWindow(caseId, launcher, result?.stdout);
     }
     const diagnostic = JSON.stringify({
       status: result.status,
@@ -368,6 +454,9 @@ syncBuiltinESMExports();
       stderr: result.stderr,
       operations,
       receipt,
+      // Snapshot actual child artifacts before cleanup; never publish them.
+      preloadStdout: result.stdout,
+      preloadSource: readFileSync(preload, "utf8"),
       // Keep the reference: finally records cleanup after this return is prepared.
       timing,
     };
@@ -767,17 +856,153 @@ test("phase observer preserves the original exception identity", () => {
       ],
     );
   }
+
+  // These controls exercise the same body serialized into the preload.
+  let coercions = 0;
+  const coercible = {
+    [Symbol.toPrimitive]() {
+      coercions++;
+      return 100;
+    },
+  };
+  for (const samples of [
+    [10, 25],
+    [10, 10],
+    [25, 10],
+    ...[
+      null,
+      "10",
+      true,
+      false,
+      NaN,
+      Infinity,
+      -Infinity,
+      undefined,
+      coercible,
+      clockFailure,
+    ].flatMap((value) => [
+      [value, 25],
+      [10, value],
+    ]),
+    [-Number.MAX_VALUE, Number.MAX_VALUE],
+  ]) {
+    const records = [];
+    let reads = 0;
+    const finish = startPreloadWindow(
+      () => {
+        const value = samples[reads++];
+        if (value === clockFailure) throw clockFailure;
+        return value;
+      },
+      (...args) => records.push(args),
+    );
+    assert.throws(
+      () => {
+        try {
+          throw original;
+        } finally {
+          finish();
+        }
+      },
+      (error) => error === original,
+    );
+    finish();
+    assert.equal(reads, 2);
+    assert.deepEqual(records, [
+      [
+        "native-environment-preload-window",
+        JSON.stringify({
+          elapsedMs:
+            samples[0] === 10 && samples[1] === 25
+              ? 15
+              : samples[0] === 10 && samples[1] === 10
+                ? 0
+                : null,
+        }),
+      ],
+    ]);
+  }
+  assert.equal(coercions, 0);
+  const prefix = "native-environment-preload-window ";
+  for (const [stdout, elapsedMs] of [
+    [prefix + '{"elapsedMs":15}\n', 15],
+    [prefix + '{"elapsedMs":0}\r\n', 0],
+    [undefined, null],
+    ["", null],
+    [prefix + '{"elapsedMs":null}', null],
+    [prefix + '{"elapsedMs":"15"}', null],
+    [prefix + '{"elapsedMs":-1}', null],
+    [prefix + '{"elapsedMs":1e999}', null],
+    [prefix + '{"elapsedMs":9007199254740992}', null],
+    [prefix + '{"elapsedMs":15,"private":"not-for-output"}', null],
+    [prefix + "private-invalid-json", null],
+    [(prefix + '{"elapsedMs":15}\n').repeat(2), null],
+    ["x".repeat(1025), null],
+  ]) {
+    const output = [];
+    reportPreloadWindow("telemetry", "direct Node", stdout, (...args) =>
+      output.push(args),
+    );
+    assert.deepEqual(output, [
+      [
+        "native-environment-preload-window",
+        JSON.stringify({
+          case: "telemetry",
+          launcher: "direct Node",
+          available: elapsedMs !== null,
+          elapsedMs,
+        }),
+      ],
+    ]);
+  }
+  // Neither child nor parent diagnostic sinks may replace API outcomes.
+  for (const result of [
+    Object.freeze({ status: 0, signal: null }),
+    Object.freeze({ status: 23, signal: null }),
+    Object.freeze({ status: null, signal: "SIGTERM" }),
+    Object.freeze({
+      status: null,
+      signal: "SIGTERM",
+      error: Object.freeze({ code: "ETIMEDOUT" }),
+    }),
+    undefined,
+  ]) {
+    const finish = startPreloadWindow(
+      () => 10,
+      () => {
+        throw clockFailure;
+      },
+    );
+    const run = () => {
+      try {
+        if (result === undefined) throw original;
+        return result;
+      } finally {
+        finish();
+        reportPreloadWindow("telemetry", "direct Node", undefined, () => {
+          throw clockFailure;
+        });
+      }
+    };
+    if (result === undefined) assert.throws(run, (error) => error === original);
+    else assert.equal(run(), result);
+  }
 });
 
 for (const launcher of ["direct Node", "pnpm --dir"]) {
   test(`native Docker refuses relative configuration before dispatch through ${launcher}`, (t) => {
     const observedOutput = { records: [], invalid: false };
+    const observedWindow = [];
     const originalLog = console.log;
     t.after(() => {
       console.log = originalLog;
     });
     console.log = function (...args) {
       const result = originalLog.apply(console, args);
+      if (args[0] === "native-environment-preload-window") {
+        observedWindow.push(args);
+        return result;
+      }
       if (
         args.length === 2 &&
         args[0] === "native-environment-timing" &&
@@ -803,16 +1028,14 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
         { DOCKER_CONFIG: "relative-config", DOCKER_CONTEXT: "verified-A" },
       ],
     ]) {
+      observedWindow.length = 0;
       observedOutput.records.length = 0;
       observedOutput.invalid = false;
       const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
-      const { operations, receipt, status, stderr, timing } = probe(
-        caseId,
-        selectors,
-        {
+      const { operations, receipt, status, stderr, timing, preloadStdout } =
+        probe(caseId, selectors, {
           launcher,
-        },
-      );
+        });
       assert.deepEqual(
         {
           status,
@@ -832,6 +1055,25 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
       );
       assert.equal(receipt.dockerTarget, undefined);
       assert.equal(receipt.cleaned, true);
+      assert.equal(
+        observedWindow.length,
+        1,
+        "real refusal preload output is required",
+      );
+      assert.equal(observedWindow[0].length, 2);
+      const childWindow =
+        /^native-environment-preload-window \{"elapsedMs":(\d+(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
+          preloadStdout,
+        );
+      assert.ok(childWindow, "actual child preload payload is required");
+      const window = JSON.parse(observedWindow[0][1]);
+      assert.deepEqual(window, {
+        case: caseId,
+        launcher,
+        available: true,
+        elapsedMs: Number(childWindow[1]),
+      });
+      assert.ok(Number.isFinite(window.elapsedMs) && window.elapsedMs >= 0);
       assertProbeTiming(
         timing,
         observedOutput,
@@ -926,12 +1168,17 @@ test("native environment contracts need only portable Node executable dispatch",
 
 test("native child environments disable Next telemetry", (t) => {
   const observedOutput = { records: [], invalid: false };
+  const observedWindow = [];
   const originalLog = console.log;
   t.after(() => {
     console.log = originalLog;
   });
   console.log = function (...args) {
     const result = originalLog.apply(console, args);
+    if (args[0] === "native-environment-preload-window") {
+      observedWindow.push(args);
+      return result;
+    }
     if (
       args.length === 2 &&
       args[0] === "native-environment-timing" &&
@@ -945,7 +1192,8 @@ test("native child environments disable Next telemetry", (t) => {
   };
   const launcher = "direct Node";
   const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
-  const { operations, receipt, status, timing } = probe("telemetry");
+  const { operations, receipt, status, timing, preloadStdout, preloadSource } =
+    probe("telemetry");
   assert.ok(operations.length > 0);
   assert.ok(
     operations.every((call) => call.telemetryDisabled),
@@ -955,6 +1203,69 @@ test("native child environments disable Next telemetry", (t) => {
   for (const kind of ["command", "start"]) {
     assert.equal(receipt.environment[kind].telemetryDisabled, true);
     assert.deepEqual(receipt.environment[kind].unsafeNames, []);
+  }
+  assert.equal(
+    observedWindow.length,
+    1,
+    "real preload window output is required",
+  );
+  assert.equal(observedWindow[0].length, 2);
+  const [marker, text] = observedWindow[0];
+  assert.equal(marker, "native-environment-preload-window");
+  const childWindow =
+    /^native-environment-preload-window \{"elapsedMs":(\d+(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
+      preloadStdout,
+    );
+  assert.ok(childWindow, "actual child preload payload is required");
+  const window = JSON.parse(text);
+  assert.deepEqual(window, {
+    case: "telemetry",
+    launcher: "direct Node",
+    available: true,
+    elapsedMs: Number(childWindow[1]),
+  });
+  assert.ok(Number.isFinite(window.elapsedMs) && window.elapsedMs >= 0);
+  // Evaluate the artifact the real child loaded, not a second copy of its factory.
+  // Imports are omitted so only isolated bindings can observe clocks or exits.
+  for (const [samples, elapsedMs] of [
+    [[10, 25], 15],
+    [[100.25, 137.75], 37.5],
+    [[12, 12], 0],
+  ]) {
+    let reads = 0;
+    const exits = [];
+    const output = [];
+    try {
+      new Script(
+        preloadSource.replace(/^import .+ from "node:[^"]+";\n/gm, ""),
+        {
+          filename: "native-preload-fixture.js",
+        },
+      ).runInNewContext({
+        performance: { now: () => samples[reads++] },
+        console: { log: (...args) => output.push(args) },
+        process: { once: (...args) => exits.push(args) },
+        cp: {},
+        syncBuiltinESMExports() {},
+      });
+    } catch {
+      // Never print the generated source, which includes private fixture paths.
+      assert.fail("actual generated preload must evaluate in isolation");
+    }
+    assert.equal(reads, 1, "generated preload must sample its entry clock");
+    assert.deepEqual(output, []);
+    assert.deepEqual(
+      exits.map(([event]) => event),
+      ["exit"],
+    );
+    assert.equal(exits[0].length, 2);
+    assert.equal(typeof exits[0][1], "function");
+    exits[0][1]();
+    exits[0][1]();
+    assert.equal(reads, 2, "generated preload must sample its exit clock once");
+    assert.deepEqual(output, [
+      ["native-environment-preload-window", JSON.stringify({ elapsedMs })],
+    ]);
   }
   assertProbeTiming(
     timing,
