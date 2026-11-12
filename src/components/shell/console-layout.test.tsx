@@ -182,7 +182,13 @@ it("probe: actual layout prevents A-private population before a held initial 503
   expect.soft(mounts).toBe(0);
   expect.soft(screen.queryByTestId("private-page")).toBeNull();
   expect.soft(state.client!.getQueryData(["private-members"])).toBeUndefined();
-  expect.soft(state.client!.getQueryData(["surfaces"])).toBeUndefined();
+  expect
+    .soft(
+      state
+        .client!.getQueriesData({ queryKey: ["surfaces"] })
+        .filter(([, data]) => data !== undefined),
+    )
+    .toHaveLength(0);
   expect
     .soft(
       fetcher.mock.calls.filter(
@@ -253,7 +259,11 @@ it("keeps the initial boundary through persistent unmarked errors and recovers t
   );
   await screen.findByText("metadata unavailable");
   expect(mounts).toBe(0);
-  expect(state.client!.getQueryData(["surfaces"])).toBeUndefined();
+  expect(
+    state
+      .client!.getQueriesData({ queryKey: ["surfaces"] })
+      .filter(([, data]) => data !== undefined),
+  ).toHaveLength(0);
   expect(screen.queryByTestId("unavailable-surface")).toBeNull();
   expect(assign).not.toHaveBeenCalled();
   metadata = async () => Response.json(actor);

@@ -48,7 +48,7 @@ function createPhaseObserver(
       const reading = now();
       const boundary = Number.isFinite(reading) ? reading : Number.NaN;
       const elapsedMs = boundary - started;
-      started = boundary;
+      started = boundary < started ? Number.NaN : boundary;
       const launch = phase === "metadata" || phase === "runtime";
       const code = result?.error?.code;
       const signal = result?.signal;
@@ -209,25 +209,26 @@ function probe(
     timing,
   );
   const dir = mkdtempSync(join(tmpdir(), "env-"));
-  const calls = join(dir, "calls.jsonl");
-  // A copy makes the invoking and Console directories genuinely distinct even
-  // when the suite runs from Console. Neither HOME nor the process cwd changes.
-  const consoleRoot = join(
-    dir,
-    literalPath ? "console %NATIVE_LITERAL_PATH% with spaces" : "console",
-  );
-  mkdirSync(join(consoleRoot, "test/native"), { recursive: true });
-  const runtime = join(consoleRoot, "test/native/runtime.mjs");
-  writeFileSync(runtime, readFileSync(join(root, "test/native/runtime.mjs")));
-  // This cwd fixture runs only Node builtins, not application dependencies.
-  writeFileSync(
-    join(consoleRoot, "package.json"),
-    JSON.stringify({ private: true }),
-  );
-  const nodeGuard = join(dir, "node-only.mjs");
-  writeFileSync(
-    nodeGuard,
-    `
+  try {
+    const calls = join(dir, "calls.jsonl");
+    // A copy makes the invoking and Console directories genuinely distinct even
+    // when the suite runs from Console. Neither HOME nor the process cwd changes.
+    const consoleRoot = join(
+      dir,
+      literalPath ? "console %NATIVE_LITERAL_PATH% with spaces" : "console",
+    );
+    mkdirSync(join(consoleRoot, "test/native"), { recursive: true });
+    const runtime = join(consoleRoot, "test/native/runtime.mjs");
+    writeFileSync(runtime, readFileSync(join(root, "test/native/runtime.mjs")));
+    // This cwd fixture runs only Node builtins, not application dependencies.
+    writeFileSync(
+      join(consoleRoot, "package.json"),
+      JSON.stringify({ private: true }),
+    );
+    const nodeGuard = join(dir, "node-only.mjs");
+    writeFileSync(
+      nodeGuard,
+      `
 import cp from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { appendFileSync } from "node:fs";
@@ -242,14 +243,14 @@ cp.spawn = (cmd, args, options) => {
 };
 syncBuiltinESMExports();
 `,
-  );
-  // Intercept the real runtime spawn boundary, as native-runtime.test.mts does.
-  // Only Node is dispatched: no shell, shebang, PATH separator or real Docker.
-  // HOME stays untouched; its synthetic default B is never read or contacted.
-  const preload = join(dir, "docker.mjs");
-  writeFileSync(
-    preload,
-    `
+    );
+    // Intercept the real runtime spawn boundary, as native-runtime.test.mts does.
+    // Only Node is dispatched: no shell, shebang, PATH separator or real Docker.
+    // HOME stays untouched; its synthetic default B is never read or contacted.
+    const preload = join(dir, "docker.mjs");
+    writeFileSync(
+      preload,
+      `
 import cp from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -286,8 +287,7 @@ cp.spawn = (cmd, args, options) => {
 };
 syncBuiltinESMExports();
 `,
-  );
-  try {
+    );
     const env = { ...process.env };
     for (const key of Object.keys(env))
       if (key.startsWith("DOCKER_")) delete env[key];
@@ -857,6 +857,44 @@ test("phase observer preserves the original exception identity", () => {
     );
   }
 
+  // A backward boundary cannot become the next phase's start. Recovery can
+  // establish a new boundary, but cannot invent the intervening phase's cost.
+  const recoverySamples = [90, 100, 80, 1110, 1120];
+  const recoveryRecords = [];
+  const recoveryEvidence = {
+    boundaries: [],
+    unavailable: false,
+    overflow: false,
+  };
+  const recover = createPhaseObserver(
+    "telemetry",
+    "direct Node",
+    () => recoverySamples.shift(),
+    (marker, record) => recoveryRecords.push([marker, JSON.parse(record)]),
+    recoveryEvidence,
+  );
+  recover("runtime");
+  recover("artifacts", Object.freeze({ status: 0, signal: null }));
+  recover("cleanup");
+  recover("end");
+  assert.deepEqual(recoverySamples, []);
+  assert.deepEqual(recoveryEvidence, {
+    boundaries: ["runtime", "artifacts", "cleanup", "end"],
+    unavailable: true,
+    overflow: false,
+  });
+  assert.deepEqual(
+    recoveryRecords.map(([marker, record]) => [
+      marker,
+      record.phase,
+      record.elapsedMs,
+    ]),
+    [
+      ["native-environment-timing", "prepare", 10],
+      ["native-environment-timing", "cleanup", 10],
+    ],
+  );
+
   // These controls exercise the same body serialized into the preload.
   let coercions = 0;
   const coercible = {
@@ -986,6 +1024,61 @@ test("phase observer preserves the original exception identity", () => {
     };
     if (result === undefined) assert.throws(run, (error) => error === original);
     else assert.equal(run(), result);
+  }
+
+  // Run the actual helper in-process. Only the failing write and dispatch
+  // boundary are replaced; the owned directory and other file operations are real.
+  const initializationFailure = Object.assign(new Error("synthetic ENOSPC"), {
+    code: "ENOSPC",
+  });
+  let ownedRoot;
+  let launches = 0;
+  const initialize = new Script(`(${probe.toString()})`, {
+    filename: "native-probe-initialization.js",
+  }).runInNewContext({
+    createPhaseObserver,
+    startPreloadWindow,
+    root,
+    join,
+    resolve,
+    tmpdir,
+    mkdirSync,
+    readFileSync,
+    rmSync,
+    process,
+    console: { log() {} },
+    mkdtempSync(prefix) {
+      ownedRoot = mkdtempSync(prefix);
+      return ownedRoot;
+    },
+    writeFileSync(file, ...args) {
+      if (file === join(ownedRoot, "docker.mjs")) throw initializationFailure;
+      return writeFileSync(file, ...args);
+    },
+    spawnSync() {
+      launches++;
+      throw new Error("initialization must not dispatch");
+    },
+  });
+  try {
+    assert.throws(
+      () => initialize("telemetry", undefined, { launcher: "pnpm --dir" }),
+      (error) => error === initializationFailure,
+    );
+    assert.equal(
+      launches,
+      0,
+      "initialization must launch neither metadata nor runtime",
+    );
+    assert.ok(ownedRoot, "initialization must create an owned directory");
+    assert.equal(
+      existsSync(ownedRoot),
+      false,
+      "failed probe initialization must remove its exact owned directory",
+    );
+  } finally {
+    // A broken cleanup mutation must not leak the directory it demonstrates.
+    if (ownedRoot) rmSync(ownedRoot, { recursive: true, force: true });
   }
 });
 
