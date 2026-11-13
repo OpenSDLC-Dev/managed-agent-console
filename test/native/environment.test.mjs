@@ -154,7 +154,14 @@ function reportPreloadWindow(
       typeof stdout === "string" && stdout.length <= 1024
         ? stdout.split(/\r?\n/).filter((line) => line.startsWith(prefix))
         : [];
-    if (records.length === 1) {
+    // Accept only the producer's single numeric member. Check that shape before
+    // parsing, which would erase duplicate members (even equal ones).
+    if (
+      records.length === 1 &&
+      /^\s*\{\s*"elapsedMs"\s*:\s*-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\s*\}\s*$/.test(
+        records[0].slice(prefix.length),
+      )
+    ) {
       const record = JSON.parse(records[0].slice(prefix.length));
       if (
         record !== null &&
@@ -468,6 +475,37 @@ syncBuiltinESMExports();
       observe("end");
     }
   }
+}
+
+function observeProbeOutput(t) {
+  const observedOutput = { records: [], invalid: false };
+  const observedWindow = [];
+  const originalLog = console.log;
+  t.after(() => {
+    console.log = originalLog;
+  });
+  console.log = function (...args) {
+    if (args[0] === "native-environment-preload-window") {
+      if (
+        args.length === 2 &&
+        typeof args[1] === "string" &&
+        args[1].length <= 1024 &&
+        observedWindow.length < 1
+      )
+        observedWindow.push(args);
+      else observedOutput.invalid = true;
+    } else if (
+      args.length === 2 &&
+      args[0] === "native-environment-timing" &&
+      typeof args[1] === "string" &&
+      args[1].length <= 1024 &&
+      observedOutput.records.length < 6
+    )
+      observedOutput.records.push(args[1]);
+    else observedOutput.invalid = true;
+    return originalLog.apply(this, args);
+  };
+  return { observedOutput, observedWindow };
 }
 
 function assertProbeTiming(
@@ -870,7 +908,7 @@ test("phase observer preserves the original exception identity", () => {
     "telemetry",
     "direct Node",
     () => recoverySamples.shift(),
-    (marker, record) => recoveryRecords.push([marker, JSON.parse(record)]),
+    (marker, record) => recoveryRecords.push([marker, record]),
     recoveryEvidence,
   );
   recover("runtime");
@@ -884,11 +922,10 @@ test("phase observer preserves the original exception identity", () => {
     overflow: false,
   });
   assert.deepEqual(
-    recoveryRecords.map(([marker, record]) => [
-      marker,
-      record.phase,
-      record.elapsedMs,
-    ]),
+    recoveryRecords.map(([marker, text]) => {
+      const record = JSON.parse(text);
+      return [marker, record.phase, record.elapsedMs];
+    }),
     [
       ["native-environment-timing", "prepare", 10],
       ["native-environment-timing", "cleanup", 10],
@@ -965,6 +1002,10 @@ test("phase observer preserves the original exception identity", () => {
   for (const [stdout, elapsedMs] of [
     [prefix + '{"elapsedMs":15}\n', 15],
     [prefix + '{"elapsedMs":0}\r\n', 0],
+    [prefix + '{"elapsedMs":0.125}', 0.125],
+    [prefix + '{"elapsedMs":1.5e+2}', 150],
+    [prefix + '{"elapsedMs":15,"elapsedMs":0}', null],
+    [prefix + '{"elapsedMs":15,"elapsedMs":15}', null],
     [undefined, null],
     ["", null],
     [prefix + '{"elapsedMs":null}', null],
@@ -1080,33 +1121,113 @@ test("phase observer preserves the original exception identity", () => {
     // A broken cleanup mutation must not leak the directory it demonstrates.
     if (ownedRoot) rmSync(ownedRoot, { recursive: true, force: true });
   }
+
+  // Exercise the same installer used by both real callers, without new output
+  // or processes. Malformed records must stay invalid after a valid record.
+  const windowMarker = "native-environment-preload-window";
+  const validWindow = [windowMarker, '{"elapsedMs":0}'];
+  const originalLog = console.log;
+  try {
+    for (const [calls, windows, phases, invalid] of [
+      [[validWindow], 1, 0, false],
+      [[[windowMarker, " ".repeat(1009) + '{"elapsedMs":0}']], 1, 0, false],
+      [
+        [[windowMarker, " ".repeat(1025) + '{"elapsedMs":0}'], validWindow],
+        1,
+        0,
+        true,
+      ],
+      [[[windowMarker], validWindow], 1, 0, true],
+      [[[windowMarker, {}], validWindow], 1, 0, true],
+      [[[...validWindow, "extra"], validWindow], 1, 0, true],
+      [[validWindow, validWindow], 1, 0, true],
+      [Array(6).fill(["native-environment-timing", "{}"]), 0, 6, false],
+      [Array(7).fill(["native-environment-timing", "{}"]), 0, 6, true],
+    ]) {
+      const restorations = [];
+      console.log = () => {};
+      const { observedOutput, observedWindow } = observeProbeOutput({
+        after: (restore) => restorations.push(restore),
+      });
+      try {
+        for (const args of calls) console.log(...args);
+        assert.equal(observedWindow.length, windows);
+        assert.equal(observedOutput.records.length, phases);
+        assert.equal(observedOutput.invalid, invalid);
+      } finally {
+        for (const restore of restorations) restore();
+      }
+    }
+    for (const completion of ["normal", "assertion", "exception"]) {
+      const restorations = [];
+      const receiver = {};
+      const returned = {};
+      const forwarded = [];
+      const logger = function (...args) {
+        forwarded.push({ receiver: this, args });
+        return returned;
+      };
+      console.log = logger;
+      observeProbeOutput({ after: (restore) => restorations.push(restore) });
+      let caught;
+      try {
+        assert.equal(console.log.call(receiver, ...validWindow), returned);
+        assert.deepEqual(forwarded, [{ receiver, args: validWindow }]);
+        if (completion === "assertion") assert.fail("synthetic assertion");
+        if (completion === "exception") throw original;
+      } catch (error) {
+        caught = error;
+      } finally {
+        for (const restore of restorations) restore();
+      }
+      assert.equal(restorations.length, 1);
+      assert.equal(console.log, logger);
+      if (completion === "assertion") {
+        assert.equal(caught?.code, "ERR_ASSERTION");
+        assert.equal(caught?.message, "synthetic assertion");
+      } else
+        assert.equal(caught, completion === "exception" ? original : undefined);
+    }
+
+    // The real formatter can throw before writing. The diagnostic caller catches
+    // that error, so classification must already have marked the input invalid.
+    console.log = originalLog;
+    const restorations = [];
+    const { observedOutput, observedWindow } = observeProbeOutput({
+      after: (restore) => restorations.push(restore),
+    });
+    let inspections = 0;
+    try {
+      assert.throws(
+        () =>
+          console.log(windowMarker, {
+            [Symbol.for("nodejs.util.inspect.custom")]() {
+              inspections++;
+              throw original;
+            },
+          }),
+        (error) => error === original,
+      );
+      assert.equal(inspections, 1, "the original formatter must run once");
+      assert.equal(
+        observedOutput.invalid,
+        true,
+        "a formatter exception must not bypass output classification",
+      );
+      assert.deepEqual(observedOutput.records, []);
+      assert.deepEqual(observedWindow, []);
+    } finally {
+      for (const restore of restorations) restore();
+    }
+    assert.equal(console.log, originalLog);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 for (const launcher of ["direct Node", "pnpm --dir"]) {
   test(`native Docker refuses relative configuration before dispatch through ${launcher}`, (t) => {
-    const observedOutput = { records: [], invalid: false };
-    const observedWindow = [];
-    const originalLog = console.log;
-    t.after(() => {
-      console.log = originalLog;
-    });
-    console.log = function (...args) {
-      const result = originalLog.apply(console, args);
-      if (args[0] === "native-environment-preload-window") {
-        observedWindow.push(args);
-        return result;
-      }
-      if (
-        args.length === 2 &&
-        args[0] === "native-environment-timing" &&
-        typeof args[1] === "string" &&
-        args[1].length <= 1024 &&
-        observedOutput.records.length < 6
-      )
-        observedOutput.records.push(args[1]);
-      else observedOutput.invalid = true;
-      return result;
-    };
+    const { observedOutput, observedWindow } = observeProbeOutput(t);
     for (const [caseId, selectors] of [
       ["relative-config", { DOCKER_CONFIG: "relative-config" }],
       [
@@ -1260,29 +1381,7 @@ test("native environment contracts need only portable Node executable dispatch",
 });
 
 test("native child environments disable Next telemetry", (t) => {
-  const observedOutput = { records: [], invalid: false };
-  const observedWindow = [];
-  const originalLog = console.log;
-  t.after(() => {
-    console.log = originalLog;
-  });
-  console.log = function (...args) {
-    const result = originalLog.apply(console, args);
-    if (args[0] === "native-environment-preload-window") {
-      observedWindow.push(args);
-      return result;
-    }
-    if (
-      args.length === 2 &&
-      args[0] === "native-environment-timing" &&
-      typeof args[1] === "string" &&
-      args[1].length <= 1024 &&
-      observedOutput.records.length < 6
-    )
-      observedOutput.records.push(args[1]);
-    else observedOutput.invalid = true;
-    return result;
-  };
+  const { observedOutput, observedWindow } = observeProbeOutput(t);
   const launcher = "direct Node";
   const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
   const { operations, receipt, status, timing, preloadStdout, preloadSource } =

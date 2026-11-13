@@ -18,6 +18,8 @@ import {
 import { useApiKeys } from "@/lib/platform/queries";
 import type { NativeSession, ServiceAccount } from "@/lib/platform/native";
 import ApiKeysPage from "@/app/(console)/api-keys/page";
+import DashboardPage from "@/app/(console)/dashboard/page";
+import type { ReactNode } from "react";
 
 const KEYS = "/api/console/organizations/default/workspaces/default/api_keys";
 
@@ -543,7 +545,7 @@ const ownedKey = (id: string, manage?: boolean, status = "active") =>
     created_by: { type: "user", id: session.id },
     ...(manage === undefined ? {} : { can_manage: manage }),
   });
-function nativeView(initial = session, shortcut = false) {
+function nativeView(initial = session, shortcut = false, page?: ReactNode) {
   document.documentElement.dataset.consoleAuth = "platform";
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -566,7 +568,7 @@ function nativeView(initial = session, shortcut = false) {
       <ConsoleSessionContext.Provider
         value={{ data } as ReturnType<typeof useConsoleSession>}
       >
-        {shortcut ? <Listing /> : <ApiKeysPage />}
+        {page ?? (shortcut ? <Listing /> : <ApiKeysPage />)}
       </ConsoleSessionContext.Provider>
     </QueryClientProvider>
   );
@@ -602,6 +604,7 @@ function nativeFetch(
     reject?: boolean;
     pageFail?: boolean;
     firstPageFail?: boolean;
+    singlePage?: boolean;
   } = {},
 ) {
   let current = session;
@@ -622,7 +625,7 @@ function nativeFetch(
           {
             error: { type: "api_error", message: "Directory page unavailable" },
           },
-          500,
+          503,
         );
       return json(
         url.searchParams.get("page") === "page-two"
@@ -632,7 +635,7 @@ function nativeFetch(
             }
           : {
               data: firstPage,
-              next_page: "page-two",
+              next_page: options.singlePage ? null : "page-two",
             },
       );
     }
@@ -871,18 +874,118 @@ it.each([false, true])(
   },
 );
 
-it("native first-page Retry stays disabled while a key is being issued", async () => {
-  const mock = nativeFetch({ firstPageFail: true, pending: true });
-  nativeView();
-  await userEvent.click(screen.getByRole("button", { name: "Create key" }));
-  await screen.findByRole("alert");
-  await userEvent.type(screen.getByLabelText("Name"), "self-during-outage");
-  await userEvent.click(screen.getByRole("button", { name: "Add" }));
-  await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
-  expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
-  mock.settle();
-  await screen.findByTestId("revealed-api-key");
-});
+it.each([false, true])(
+  "native cached owner directory retries in place after reopening (shortcut=%s)",
+  async (shortcut) => {
+    const options = { singlePage: true, firstPageFail: false };
+    const { fetcher } = nativeFetch(options);
+    const { client } = nativeView(
+      session,
+      shortcut,
+      shortcut ? <DashboardPage /> : undefined,
+    );
+    if (shortcut)
+      expect(
+        screen.getByRole("heading", { name: "Dashboard" }),
+      ).toBeInTheDocument();
+    client.setQueryData(["unrelated-public-cache"], "retained");
+    const open = () =>
+      userEvent.click(
+        screen.getByRole("button", {
+          name: shortcut ? "Get API key" : "Create key",
+        }),
+      );
+    await open();
+    await screen.findByRole("option", { name: /First service/ });
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    options.firstPageFail = true;
+    await open();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Directory page unavailable",
+    );
+    const owner = screen.getByLabelText("Owner");
+    const name = screen.getByLabelText("Name");
+    const form = name.closest("form");
+    await userEvent.selectOptions(owner, "svac_first");
+    await userEvent.type(name, "cached-draft");
+    await userEvent.selectOptions(screen.getByLabelText("Expires"), "custom");
+    await userEvent.type(
+      screen.getByLabelText("Custom expiry"),
+      "2099-05-06T10:30",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Load more service accounts" }),
+    ).toBeNull();
+    const retry = screen.getByRole("button", { name: "Retry" });
+    expect(retry).toHaveAttribute("type", "button");
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const directory = fetcher.getMockImplementation()!;
+    fetcher.mockImplementationOnce(async (...args) => {
+      await held;
+      return directory(...args);
+    });
+    options.firstPageFail = false;
+    try {
+      await userEvent.click(retry);
+      await waitFor(() => expect(retry).toBeDisabled());
+      expect(screen.getByRole("button", { name: "Retry" })).toBe(retry);
+      expect(screen.getByLabelText("Name").closest("form")).toBe(form);
+      await userEvent.click(retry);
+      expect(postOf(fetcher)).toBeUndefined();
+    } finally {
+      release();
+    }
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByLabelText("Name")).toBe(name);
+    expect(name).toHaveValue("cached-draft");
+    expect(screen.getByLabelText("Expires")).toHaveValue("custom");
+    expect(screen.getByLabelText("Custom expiry")).toHaveValue(
+      "2099-05-06T10:30",
+    );
+    expect(screen.getByLabelText("Owner")).toBe(owner);
+    expect(owner).toHaveValue("svac_first");
+    expect(postOf(fetcher)).toBeUndefined();
+    expect(
+      fetcher.mock.calls
+        .map(([url]) => new URL(String(url), "http://console.test"))
+        // Dashboard's surface probe uses limit=1, not the owner's directory.
+        .filter(
+          (url) =>
+            url.pathname.endsWith("/service_accounts") &&
+            url.searchParams.get("limit") === "100",
+        )
+        .map((url) => url.searchParams.get("page")),
+    ).toEqual([null, null, null]);
+    expect(client.getQueryData(["unrelated-public-cache"])).toBe("retained");
+  },
+);
+
+it.each([false, true])(
+  "native first-page Retry stays disabled while a key is being issued (cached=%s)",
+  async (cached) => {
+    const options = { firstPageFail: !cached, pending: true, singlePage: true };
+    const mock = nativeFetch(options);
+    nativeView();
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    if (cached) {
+      await screen.findByRole("option", { name: /First service/ });
+      await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      options.firstPageFail = true;
+      await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    }
+    await screen.findByRole("alert");
+    await userEvent.type(screen.getByLabelText("Name"), "self-during-outage");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+    mock.settle();
+    await screen.findByTestId("revealed-api-key");
+  },
+);
 
 it("native owner pagination failure remains visible and page two can retry", async () => {
   const options = { pageFail: true };

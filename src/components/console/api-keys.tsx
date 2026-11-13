@@ -428,9 +428,10 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                       {accounts.error.message}
                     </p>
                   )}
-                  {/* Refetch clears error before the first page arrives. Keep
-                      the recovery action mounted and disabled while it loads. */}
-                  {accounts.isFetched && !accounts.data && (
+                  {/* A cold retry clears error; a cached refetch retains it.
+                      Keep recovery mounted and disabled during either request. */}
+                  {((accounts.isFetched && !accounts.data) ||
+                    accounts.isRefetchError) && (
                     <Button
                       type="button"
                       variant="outline"
