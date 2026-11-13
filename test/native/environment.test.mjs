@@ -508,6 +508,144 @@ function observeProbeOutput(t) {
   return { observedOutput, observedWindow };
 }
 
+function assertPreloadWindow(observedWindow, preloadStdout, caseId, launcher) {
+  assert.equal(
+    observedWindow.length,
+    1,
+    "real preload window output is required",
+  );
+  assert.equal(observedWindow[0].length, 2);
+  const [marker, text] = observedWindow[0];
+  assert.equal(marker, "native-environment-preload-window");
+  const childWindow =
+    typeof preloadStdout === "string" &&
+    preloadStdout.length <= 1024 &&
+    /^native-environment-preload-window \{"elapsedMs":(null|(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
+      preloadStdout,
+    );
+  assert.ok(childWindow, "actual child preload payload is required");
+  const elapsedMs = childWindow[1] === "null" ? null : Number(childWindow[1]);
+  assert.ok(
+    elapsedMs === null ||
+      (Number.isFinite(elapsedMs) &&
+        elapsedMs >= 0 &&
+        elapsedMs <= Number.MAX_SAFE_INTEGER),
+    "actual child preload duration must be finite, nonnegative and safe",
+  );
+  assert.ok(
+    typeof text === "string" && text.length <= 1024,
+    "preload metadata must be bounded text",
+  );
+  let window;
+  let parsed = false;
+  try {
+    window = JSON.parse(text);
+    parsed = true;
+  } catch {
+    // Never include the parser's preview of captured output in a failure.
+  }
+  assert.ok(parsed, "preload metadata must be valid JSON");
+  // The expected metadata below has four primitive fields, not nested objects.
+  assert.ok(
+    text.replace(/"(?:\\.|[^"\\])*"/g, "").split(":").length === 5,
+    "preload metadata must not contain duplicate members",
+  );
+  assert.deepEqual(window, {
+    case: caseId,
+    launcher,
+    available: elapsedMs !== null,
+    elapsedMs,
+  });
+  assert.ok(
+    window.elapsedMs === null ||
+      (Number.isFinite(window.elapsedMs) && window.elapsedMs >= 0),
+  );
+}
+
+function assertWrittenPreloadWindows(preloadSource, caseId, launcher) {
+  const clockFailure = new Error("unavailable preload clock");
+  // Evaluate the artifact the real child loaded, not a second copy of its factory.
+  // Imports are omitted so only isolated bindings can observe clocks or exits.
+  for (const [samples, elapsedMs] of [
+    [[10, 25], 15],
+    [[100.25, 137.75], 37.5],
+    [[12, 12], 0],
+    [[25, 10], null],
+    [[-Number.MAX_VALUE, Number.MAX_VALUE], null],
+    [[0, Number.MAX_SAFE_INTEGER + 1], null],
+    ...[
+      clockFailure,
+      NaN,
+      Infinity,
+      -Infinity,
+      undefined,
+      null,
+      "10",
+      true,
+      false,
+    ].flatMap((value) => [
+      [[value, 25], null],
+      [[10, value], null],
+    ]),
+  ]) {
+    let reads = 0;
+    const exits = [];
+    const output = [];
+    try {
+      new Script(
+        preloadSource.replace(/^import .+ from "node:[^"]+";\n/gm, ""),
+        {
+          filename: "native-preload-fixture.js",
+        },
+      ).runInNewContext({
+        performance: {
+          now: () => {
+            const value = samples[reads++];
+            if (value === clockFailure) throw clockFailure;
+            return value;
+          },
+        },
+        console: { log: (...args) => output.push(args) },
+        process: { once: (...args) => exits.push(args) },
+        cp: {},
+        syncBuiltinESMExports() {},
+      });
+    } catch {
+      // Never print the generated source, which includes private fixture paths.
+      assert.fail("actual generated preload must evaluate in isolation");
+    }
+    assert.equal(reads, 1, "generated preload must sample its entry clock");
+    assert.deepEqual(output, []);
+    assert.deepEqual(
+      exits.map(([event]) => event),
+      ["exit"],
+    );
+    assert.equal(exits[0].length, 2);
+    assert.equal(typeof exits[0][1], "function");
+    exits[0][1]();
+    exits[0][1]();
+    assert.equal(reads, 2, "generated preload must sample its exit clock once");
+    assert.deepEqual(output, [
+      ["native-environment-preload-window", JSON.stringify({ elapsedMs })],
+    ]);
+    const stdout = output.map((args) => args.join(" ") + "\n").join("");
+    const originalLog = console.log;
+    const restorations = [];
+    console.log = () => {};
+    const { observedWindow, observedOutput } = observeProbeOutput({
+      after: (restore) => restorations.push(restore),
+    });
+    try {
+      reportPreloadWindow(caseId, launcher, stdout);
+      assert.equal(observedOutput.invalid, false);
+      assertPreloadWindow(observedWindow, stdout, caseId, launcher);
+    } finally {
+      for (const restore of restorations) restore();
+      console.log = originalLog;
+    }
+  }
+}
+
 function assertProbeTiming(
   timing,
   observedOutput,
@@ -566,6 +704,12 @@ function assertProbeTiming(
       Object.keys(record).sort().join(",") ===
         "api,case,code,elapsedMs,launcher,outcome,phase,signal,status",
       "real probe timing must use only the fixed fields",
+    );
+    // These nine fields are flat primitives. Strip complete JSON strings so
+    // colons in values and escaped member names cannot hide duplicate members.
+    assert.ok(
+      text.replace(/"(?:\\.|[^"\\])*"/g, "").split(":").length === 10,
+      "real probe timing must not contain duplicate members",
     );
     const phaseIndex = phases.indexOf(record.phase);
     const phase = phases[phaseIndex];
@@ -805,6 +949,61 @@ for (const status of [0, 23]) {
             );
           assert.doesNotThrow(() => validate([]));
           assert.doesNotThrow(() => validate([JSON.stringify(runtime)]));
+          const acceptedDuplicates = [];
+          for (const unavailable of [false, true]) {
+            const check = (text, identity = "telemetry") =>
+              assertProbeTiming(
+                { ...evidence, unavailable },
+                {
+                  records: unavailable
+                    ? [text]
+                    : [prepare, runtime, artifacts, cleanup].map((record) =>
+                        record === runtime
+                          ? text
+                          : JSON.stringify({ ...record, case: identity }),
+                      ),
+                  invalid: false,
+                },
+                identity,
+                "direct Node",
+                status,
+                false,
+              );
+            const identity = 'telemetry "elapsedMs":0, \\"case": value';
+            assert.doesNotThrow(() =>
+              check(JSON.stringify({ ...runtime, case: identity }), identity),
+            );
+            for (const [field, value] of Object.entries(runtime)) {
+              const escaped = `"\\u${field.charCodeAt(0).toString(16).padStart(4, "0")}${field.slice(1)}"`;
+              const text = JSON.stringify(runtime);
+              assert.doesNotThrow(() =>
+                check(text.replace(JSON.stringify(field), escaped)),
+              );
+              for (const key of [JSON.stringify(field), escaped]) {
+                for (const first of [
+                  value,
+                  field === "elapsedMs" ? -1 : 'wrong "key": value',
+                ]) {
+                  let caught;
+                  try {
+                    check(`{${key}:${JSON.stringify(first)},${text.slice(1)}`);
+                  } catch (error) {
+                    caught = error;
+                  }
+                  if (
+                    caught?.code !== "ERR_ASSERTION" ||
+                    !caught.message.includes("duplicate members")
+                  )
+                    acceptedDuplicates.push({ field, key, first, unavailable });
+                }
+              }
+            }
+          }
+          assert.deepEqual(
+            acceptedDuplicates,
+            [],
+            "raw phase duplicates must be rejected",
+          );
           for (const [records, message] of [
             [["{synthetic private payload"], "must be valid JSON"],
             [["null"], "must be an object"],
@@ -1139,6 +1338,111 @@ test("phase observer preserves the original exception identity", () => {
       ],
     ]);
   }
+  // Parent metadata is raw captured evidence too: JSON.parse must not erase
+  // duplicate members, even when the child's clock is legitimately unavailable.
+  const acceptedWindowDuplicates = [];
+  for (const elapsedMs of [15, null]) {
+    const stdout = prefix + JSON.stringify({ elapsedMs }) + "\n";
+    const parent = {
+      case: 'telemetry "elapsedMs":0, \\"case": value',
+      launcher: "direct Node",
+      available: elapsedMs !== null,
+      elapsedMs,
+    };
+    const text = JSON.stringify(parent);
+    const check = (raw) =>
+      assertPreloadWindow(
+        [["native-environment-preload-window", raw]],
+        stdout,
+        parent.case,
+        parent.launcher,
+      );
+    for (const raw of [
+      ...[
+        { case: "other" },
+        { launcher: "pnpm --dir" },
+        { available: !parent.available },
+        { elapsedMs: elapsedMs === null ? 0 : null },
+        { extra: true },
+      ].map((change) => JSON.stringify({ ...parent, ...change })),
+      "null",
+      "[]",
+      " ".repeat(1025) + text,
+    ])
+      assert.throws(() => check(raw), { code: "ERR_ASSERTION" });
+    assert.throws(
+      () => check("{synthetic private payload"),
+      (error) =>
+        error.code === "ERR_ASSERTION" &&
+        error.message.includes("must be valid JSON") &&
+        !error.message.includes("synthetic private payload"),
+    );
+    for (const [field, value] of Object.entries(parent)) {
+      const escaped = `"\\u${field.charCodeAt(0).toString(16).padStart(4, "0")}${field.slice(1)}"`;
+      assert.doesNotThrow(() =>
+        check(text.replace(JSON.stringify(field), escaped)),
+      );
+      for (const key of [JSON.stringify(field), escaped]) {
+        for (const first of [value, 'wrong "key": value']) {
+          let caught;
+          try {
+            assertPreloadWindow(
+              [
+                [
+                  "native-environment-preload-window",
+                  `{${key}:${JSON.stringify(first)},${text.slice(1)}`,
+                ],
+              ],
+              stdout,
+              parent.case,
+              parent.launcher,
+            );
+          } catch (error) {
+            caught = error;
+          }
+          if (
+            caught?.code !== "ERR_ASSERTION" ||
+            !caught.message.includes("duplicate members")
+          )
+            acceptedWindowDuplicates.push({ field, key, first, elapsedMs });
+        }
+      }
+    }
+  }
+  assert.deepEqual(
+    acceptedWindowDuplicates,
+    [],
+    "raw preload metadata duplicates must be rejected",
+  );
+  for (const child of [
+    '{"elapsedMs":15,"elapsedMs":15}',
+    '{"elapsedMs":-1,"elapsedMs":15}',
+    '{"elapsedMs":null,"elapsedMs":null}',
+    '{"elapsedMs":15,"elapsedMs":null}',
+    '{"elapsedMs":"15"}',
+    '{"elapsedMs":-1}',
+    '{"elapsedMs":1e999}',
+    '{"elapsedMs":9007199254740992}',
+    '{"elapsedMs":0,"extra":true}',
+    "{synthetic private payload",
+    "null",
+    "[]",
+    " ".repeat(1025) + '{"elapsedMs":0}',
+    '{"elapsedMs":0}\nnative-environment-preload-window {"elapsedMs":0}',
+  ]) {
+    const stdout = prefix + child + "\n";
+    const output = [];
+    reportPreloadWindow("telemetry", "direct Node", stdout, (...args) =>
+      output.push(args),
+    );
+    assert.throws(
+      () => assertPreloadWindow(output, stdout, "telemetry", "direct Node"),
+      (error) =>
+        error.code === "ERR_ASSERTION" &&
+        error.message.includes("child preload") &&
+        !error.message.includes("synthetic private payload"),
+    );
+  }
   // Neither child nor parent diagnostic sinks may replace API outcomes.
   for (const result of [
     Object.freeze({ status: 0, signal: null }),
@@ -1351,10 +1655,15 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
       observedOutput.records.length = 0;
       observedOutput.invalid = false;
       const withMetadata = launcher === "pnpm --dir" && !pnpmCLI;
-      const { operations, receipt, status, stderr, timing, preloadStdout } =
-        probe(caseId, selectors, {
-          launcher,
-        });
+      const {
+        operations,
+        receipt,
+        status,
+        stderr,
+        timing,
+        preloadStdout,
+        preloadSource,
+      } = probe(caseId, selectors, { launcher });
       assert.deepEqual(
         {
           status,
@@ -1374,25 +1683,8 @@ for (const launcher of ["direct Node", "pnpm --dir"]) {
       );
       assert.equal(receipt.dockerTarget, undefined);
       assert.equal(receipt.cleaned, true);
-      assert.equal(
-        observedWindow.length,
-        1,
-        "real refusal preload output is required",
-      );
-      assert.equal(observedWindow[0].length, 2);
-      const childWindow =
-        /^native-environment-preload-window \{"elapsedMs":(\d+(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
-          preloadStdout,
-        );
-      assert.ok(childWindow, "actual child preload payload is required");
-      const window = JSON.parse(observedWindow[0][1]);
-      assert.deepEqual(window, {
-        case: caseId,
-        launcher,
-        available: true,
-        elapsedMs: Number(childWindow[1]),
-      });
-      assert.ok(Number.isFinite(window.elapsedMs) && window.elapsedMs >= 0);
+      assertPreloadWindow(observedWindow, preloadStdout, caseId, launcher);
+      assertWrittenPreloadWindows(preloadSource, caseId, launcher);
       assertProbeTiming(
         timing,
         observedOutput,
@@ -1501,69 +1793,8 @@ test("native child environments disable Next telemetry", (t) => {
     assert.equal(receipt.environment[kind].telemetryDisabled, true);
     assert.deepEqual(receipt.environment[kind].unsafeNames, []);
   }
-  assert.equal(
-    observedWindow.length,
-    1,
-    "real preload window output is required",
-  );
-  assert.equal(observedWindow[0].length, 2);
-  const [marker, text] = observedWindow[0];
-  assert.equal(marker, "native-environment-preload-window");
-  const childWindow =
-    /^native-environment-preload-window \{"elapsedMs":(\d+(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
-      preloadStdout,
-    );
-  assert.ok(childWindow, "actual child preload payload is required");
-  const window = JSON.parse(text);
-  assert.deepEqual(window, {
-    case: "telemetry",
-    launcher: "direct Node",
-    available: true,
-    elapsedMs: Number(childWindow[1]),
-  });
-  assert.ok(Number.isFinite(window.elapsedMs) && window.elapsedMs >= 0);
-  // Evaluate the artifact the real child loaded, not a second copy of its factory.
-  // Imports are omitted so only isolated bindings can observe clocks or exits.
-  for (const [samples, elapsedMs] of [
-    [[10, 25], 15],
-    [[100.25, 137.75], 37.5],
-    [[12, 12], 0],
-  ]) {
-    let reads = 0;
-    const exits = [];
-    const output = [];
-    try {
-      new Script(
-        preloadSource.replace(/^import .+ from "node:[^"]+";\n/gm, ""),
-        {
-          filename: "native-preload-fixture.js",
-        },
-      ).runInNewContext({
-        performance: { now: () => samples[reads++] },
-        console: { log: (...args) => output.push(args) },
-        process: { once: (...args) => exits.push(args) },
-        cp: {},
-        syncBuiltinESMExports() {},
-      });
-    } catch {
-      // Never print the generated source, which includes private fixture paths.
-      assert.fail("actual generated preload must evaluate in isolation");
-    }
-    assert.equal(reads, 1, "generated preload must sample its entry clock");
-    assert.deepEqual(output, []);
-    assert.deepEqual(
-      exits.map(([event]) => event),
-      ["exit"],
-    );
-    assert.equal(exits[0].length, 2);
-    assert.equal(typeof exits[0][1], "function");
-    exits[0][1]();
-    exits[0][1]();
-    assert.equal(reads, 2, "generated preload must sample its exit clock once");
-    assert.deepEqual(output, [
-      ["native-environment-preload-window", JSON.stringify({ elapsedMs })],
-    ]);
-  }
+  assertPreloadWindow(observedWindow, preloadStdout, "telemetry", launcher);
+  assertWrittenPreloadWindows(preloadSource, "telemetry", launcher);
   assertProbeTiming(
     timing,
     observedOutput,

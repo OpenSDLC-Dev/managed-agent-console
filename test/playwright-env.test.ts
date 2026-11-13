@@ -59,6 +59,49 @@ it("aggregate clock never coerces an object", () => {
   try {
     expect(() => validate([])).not.toThrow();
     expect(() => validate([JSON.stringify(valid)])).not.toThrow();
+    const acceptedDuplicates = [];
+    for (const unavailable of [false, true]) {
+      const check = (text: string) => {
+        if (unavailable) return validate([text]);
+        // Exercise the real available caller's serialized output, without a
+        // second emission that would fail only the record-count guard.
+        const stringify = vi.spyOn(JSON, "stringify").mockReturnValueOnce(text);
+        try {
+          validate([], false);
+        } finally {
+          stringify.mockRestore();
+        }
+      };
+      for (const [field, value] of Object.entries(valid)) {
+        const escaped = `"\\u${field.charCodeAt(0).toString(16).padStart(4, "0")}${field.slice(1)}"`;
+        const text = JSON.stringify(valid);
+        expect(() =>
+          check(text.replace(JSON.stringify(field), escaped)),
+        ).not.toThrow();
+        for (const key of [JSON.stringify(field), escaped]) {
+          for (const first of [
+            value,
+            field === "elapsedMs" ? -1 : 'wrong "key": value',
+          ]) {
+            let caught: unknown;
+            try {
+              check(`{${key}:${JSON.stringify(first)},${text.slice(1)}`);
+            } catch (error) {
+              caught = error;
+            }
+            if (!(
+              caught instanceof Error &&
+              caught.message.includes("duplicate members")
+            ))
+              acceptedDuplicates.push({ field, key, first, unavailable });
+          }
+        }
+      }
+    }
+    expect(
+      acceptedDuplicates,
+      "raw aggregate duplicates must be rejected",
+    ).toEqual([]);
     for (const [records, message] of [
       [["{synthetic private payload"], "must be valid JSON"],
       [["null"], "must be an object"],
@@ -558,6 +601,13 @@ function assertNativeEnvironmentContracts(
     Object.keys(fields).sort().join(",") ===
       "api,case,code,elapsedMs,launcher,outcome,phase,signal,status",
     "aggregate timing must use only the fixed fields",
+  ).toBe(true);
+  // These nine fields are flat primitives; complete JSON strings may contain
+  // colons or escaped member names, so count separators only outside them.
+  expect(
+    observedOutput.records[0].replace(/"(?:\\.|[^"\\])*"/g, "").split(":")
+      .length === 10,
+    "aggregate timing must not contain duplicate members",
   ).toBe(true);
   expect(
     fields.case === "aggregate" &&
