@@ -520,7 +520,7 @@ function assertPreloadWindow(observedWindow, preloadStdout, caseId, launcher) {
   const childWindow =
     typeof preloadStdout === "string" &&
     preloadStdout.length <= 1024 &&
-    /^native-environment-preload-window \{"elapsedMs":(null|(?:0|[1-9]\d*)(?:\.\d+)?(?:e[+-]?\d+)?)\}\r?\n$/i.exec(
+    /^native-environment-preload-window \{"elapsedMs":(null|(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)\}\r?\n$/.exec(
       preloadStdout,
     );
   assert.ok(childWindow, "actual child preload payload is required");
@@ -1537,6 +1537,65 @@ test("phase observer preserves the original exception identity", () => {
   const validWindow = [windowMarker, '{"elapsedMs":0}'];
   const originalLog = console.log;
   try {
+    // The reporter sanitizes rejected child frames to null. The caller must not
+    // mistake that metadata for a valid null frame with different casing.
+    const acceptedCaseVariants = [];
+    for (const [name, stdout, elapsedMs, valid] of [
+      ["valid null", prefix + '{"elapsedMs":null}\n', null, true],
+      ["lowercase exponent", prefix + '{"elapsedMs":1.5e+2}\n', 150, true],
+      ["uppercase exponent", prefix + '{"elapsedMs":1.5E+2}\n', 150, true],
+      ["wrong-case field", prefix + '{"ELAPSEDMS":null}\n', null, false],
+      [
+        "wrong-case marker",
+        'NATIVE-ENVIRONMENT-PRELOAD-WINDOW {"elapsedMs":null}\n',
+        null,
+        false,
+      ],
+    ]) {
+      const restorations = [];
+      console.log = () => {};
+      const { observedOutput, observedWindow } = observeProbeOutput({
+        after: (restore) => restorations.push(restore),
+      });
+      try {
+        reportPreloadWindow("telemetry", "direct Node", stdout);
+        assert.deepEqual(observedOutput, { records: [], invalid: false });
+        assert.deepEqual(observedWindow, [
+          [
+            windowMarker,
+            JSON.stringify({
+              case: "telemetry",
+              launcher: "direct Node",
+              available: elapsedMs !== null,
+              elapsedMs,
+            }),
+          ],
+        ]);
+        try {
+          assertPreloadWindow(
+            observedWindow,
+            stdout,
+            "telemetry",
+            "direct Node",
+          );
+          if (!valid) acceptedCaseVariants.push(name);
+        } catch (error) {
+          assert.equal(valid, false, name);
+          assert.equal(error.code, "ERR_ASSERTION");
+          assert.equal(
+            error.message,
+            "actual child preload payload is required",
+          );
+        }
+      } finally {
+        for (const restore of restorations) restore();
+      }
+    }
+    assert.deepEqual(
+      acceptedCaseVariants,
+      [],
+      "captured wrong-case preload frames must be rejected",
+    );
     for (const [calls, windows, phases, invalid] of [
       [[validWindow], 1, 0, false],
       [[[windowMarker, " ".repeat(1009) + '{"elapsedMs":0}']], 1, 0, false],
