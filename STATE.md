@@ -27,4 +27,4 @@ Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a r
 
 - [x] Verify the Task 3 review repairs, including [native checks](./test/native/contract.spec.ts) and [failure controls](./test/native/failure-artifacts.test.mjs).
 - [x] Complete Task 3 committed source review at `e9a383a`.
-- [ ] Verify the review follow-ups, then complete prepublication source review and companion delivery. The [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/STATE.md) tracks final source/image pairing and packaged acceptance.
+- [ ] Complete prepublication source review and companion delivery. The [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/STATE.md) tracks final source/image pairing and packaged acceptance.

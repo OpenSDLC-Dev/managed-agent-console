@@ -409,6 +409,12 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                       You ·{" "}
                       {session?.name || session?.login_name || session?.id}
                     </option>
+                    {owner !== session?.id &&
+                      !services.some((account) => account.id === owner) && (
+                        <option value={owner} disabled>
+                          Selected account not in current list · {owner}
+                        </option>
+                      )}
                     {services.map((account) => (
                       <option key={account.id} value={account.id}>
                         Service account · {account.name || account.id}

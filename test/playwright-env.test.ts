@@ -32,6 +32,88 @@ it("aggregate clock never coerces an object", () => {
   };
   expect(readClock(() => reading)).toBeNaN();
   expect(coercions).toBe(0);
+
+  const valid = {
+    case: "aggregate",
+    launcher: "direct Node",
+    phase: "suite",
+    elapsedMs: 0,
+    api: "execFileSync",
+    outcome: "returned",
+    code: null,
+    status: null,
+    signal: null,
+  };
+  const originalLog = console.log;
+  // In-process controls share the real caller's capture and assertion boundary.
+  // The unavailable clock suppresses its own duration, not the captured content.
+  console.log = () => {};
+  const validate = (records: string[], unavailable = true) =>
+    assertNativeEnvironmentContracts(
+      () => {
+        for (const record of records)
+          console.log("native-environment-timing", record);
+      },
+      () => (unavailable ? Number.NaN : 100),
+    );
+  try {
+    expect(() => validate([])).not.toThrow();
+    expect(() => validate([JSON.stringify(valid)])).not.toThrow();
+    for (const [records, message] of [
+      [["{synthetic private payload"], "must be valid JSON"],
+      [["null"], "must be an object"],
+      [["[]"], "must be an object"],
+      [[JSON.stringify({ ...valid, extra: true })], "only the fixed fields"],
+      ...[
+        { case: "other" },
+        { launcher: "pnpm --dir" },
+        { phase: "runtime" },
+      ].map(
+        (change) =>
+          [
+            [JSON.stringify({ ...valid, ...change })],
+            "identity and phase",
+          ] as const,
+      ),
+      ...[{ elapsedMs: -1 }, { elapsedMs: "0" }, { elapsedMs: null }].map(
+        (change) =>
+          [
+            [JSON.stringify({ ...valid, ...change })],
+            "finite and nonnegative",
+          ] as const,
+      ),
+      ...[
+        { api: "spawnSync" },
+        { outcome: "threw" },
+        { code: "ETIMEDOUT" },
+        { status: 0 },
+        { signal: "SIGTERM" },
+      ].map(
+        (change) =>
+          [
+            [JSON.stringify({ ...valid, ...change })],
+            "actual API success contract",
+          ] as const,
+      ),
+      [[JSON.stringify(valid), JSON.stringify(valid)], "bounded fixed-marker"],
+    ] as const) {
+      let caught: unknown;
+      try {
+        validate([...records]);
+      } catch (error) {
+        caught = error;
+      }
+      expect(
+        caught instanceof Error &&
+          caught.message.includes(message) &&
+          !caught.message.includes("synthetic private payload"),
+        `unavailable aggregate evidence must reject ${message}`,
+      ).toBe(true);
+    }
+    expect(() => validate([], false)).not.toThrow();
+  } finally {
+    console.log = originalLog;
+  }
 });
 it("aggregate clock preserves a reading exception", () => {
   const original = new Error("unavailable clock");
@@ -40,6 +122,93 @@ it("aggregate clock preserves a reading exception", () => {
       throw original;
     }),
   ).toThrow(original);
+
+  const originalLog = console.log;
+  let inspections = 0;
+  // The actual default formatter throws before writing. The real caller catches
+  // that diagnostic error, but must still reject the invalid captured argument.
+  const stringify = vi.spyOn(JSON, "stringify").mockImplementationOnce(
+    () =>
+      ({
+        [Symbol.for("nodejs.util.inspect.custom")]() {
+          inspections++;
+          throw original;
+        },
+      }) as unknown as string,
+  );
+  try {
+    expect(() =>
+      assertNativeEnvironmentContracts(
+        () => {},
+        () => 100,
+      ),
+    ).toThrow("aggregate timing must use a bounded fixed-marker record");
+  } finally {
+    stringify.mockRestore();
+  }
+  expect(inspections).toBe(1);
+  expect(console.log).toBe(originalLog);
+
+  const record = JSON.stringify({
+    case: "aggregate",
+    launcher: "direct Node",
+    phase: "suite",
+    elapsedMs: 0,
+    api: "execFileSync",
+    outcome: "returned",
+    code: null,
+    status: null,
+    signal: null,
+  });
+  for (const completion of [
+    "normal",
+    "forwarding throw",
+    "assertion",
+    "operation throw",
+  ]) {
+    const receiver = {};
+    const returned = {};
+    const forwarded: { receiver: unknown; args: unknown[] }[] = [];
+    let result: unknown;
+    let caught: unknown;
+    const args = [
+      "native-environment-timing",
+      completion === "assertion" ? "{" : record,
+    ];
+    const logger = function (this: unknown, ...values: unknown[]) {
+      forwarded.push({ receiver: this, args: values });
+      if (completion === "forwarding throw") throw original;
+      return returned;
+    };
+    console.log = logger;
+    try {
+      const run = () =>
+        assertNativeEnvironmentContracts(
+          () => {
+            try {
+              result = console.log.apply(receiver, args);
+            } catch (error) {
+              caught = error;
+            }
+            if (completion === "operation throw") throw original;
+          },
+          () => Number.NaN,
+        );
+      if (completion === "assertion") expect(run).toThrow("must be valid JSON");
+      else if (completion === "operation throw") expect(run).toThrow();
+      else expect(run).not.toThrow();
+      expect(forwarded).toEqual([{ receiver, args }]);
+      expect(result).toBe(
+        completion === "forwarding throw" ? undefined : returned,
+      );
+      expect(caught).toBe(
+        completion === "forwarding throw" ? original : undefined,
+      );
+      expect(console.log).toBe(logger);
+    } finally {
+      console.log = originalLog;
+    }
+  }
 });
 
 function runNativeEnvironmentContracts(
@@ -332,7 +501,10 @@ it.each([
   },
 );
 
-it("native runtime environment contracts (no resources)", () => {
+function assertNativeEnvironmentContracts(
+  run?: () => void,
+  now?: () => unknown,
+) {
   const observedOutput: { records: string[]; invalid: boolean } = {
     records: [],
     invalid: false,
@@ -340,7 +512,6 @@ it("native runtime environment contracts (no resources)", () => {
   const evidence = { unavailable: false };
   const originalLog = console.log;
   console.log = function (...args) {
-    const result = originalLog.apply(console, args);
     if (
       args.length === 2 &&
       args[0] === "native-environment-timing" &&
@@ -350,11 +521,11 @@ it("native runtime environment contracts (no resources)", () => {
     )
       observedOutput.records.push(args[1]);
     else observedOutput.invalid = true;
-    return result;
+    return originalLog.apply(this, args);
   };
   try {
     expect(() =>
-      runNativeEnvironmentContracts(undefined, undefined, undefined, evidence),
+      runNativeEnvironmentContracts(run, now, undefined, evidence),
     ).not.toThrow();
   } finally {
     console.log = originalLog;
@@ -363,11 +534,12 @@ it("native runtime environment contracts (no resources)", () => {
     !observedOutput.invalid,
     "aggregate timing must use a bounded fixed-marker record",
   ).toBe(true);
-  if (evidence.unavailable) return;
-  expect(
-    observedOutput.records.length === 1,
-    "available aggregate timing must emit once",
-  ).toBe(true);
+  if (!evidence.unavailable)
+    expect(
+      observedOutput.records.length === 1,
+      "available aggregate timing must emit once",
+    ).toBe(true);
+  if (observedOutput.records.length === 0) return;
   let record: unknown;
   let parsed = false;
   try {
@@ -407,6 +579,10 @@ it("native runtime environment contracts (no resources)", () => {
       fields.signal === null,
     "aggregate timing must preserve the actual API success contract",
   ).toBe(true);
+}
+
+it("native runtime environment contracts (no resources)", () => {
+  assertNativeEnvironmentContracts();
 });
 import { ensureLoopbackProxyBypass } from "./playwright-env";
 

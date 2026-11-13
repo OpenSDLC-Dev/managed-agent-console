@@ -531,8 +531,6 @@ function assertProbeTiming(
     !observedOutput.invalid,
     "real probe timing must use bounded fixed-marker records",
   );
-  if (timing.unavailable) return;
-
   const phases = withMetadata
     ? [
         "prepare",
@@ -543,12 +541,14 @@ function assertProbeTiming(
         "cleanup",
       ]
     : ["prepare", "runtime", "artifacts", "cleanup"];
-  assert.equal(
-    observedOutput.records.length,
-    phases.length,
-    "available real probe timing must emit every phase",
-  );
-  for (const [index, text] of observedOutput.records.entries()) {
+  if (!timing.unavailable)
+    assert.equal(
+      observedOutput.records.length,
+      phases.length,
+      "available real probe timing must emit every phase",
+    );
+  let previousPhase = -1;
+  for (const text of observedOutput.records) {
     let record;
     let parsed = false;
     try {
@@ -567,14 +567,16 @@ function assertProbeTiming(
         "api,case,code,elapsedMs,launcher,outcome,phase,signal,status",
       "real probe timing must use only the fixed fields",
     );
-    const phase = phases[index];
+    const phaseIndex = phases.indexOf(record.phase);
+    const phase = phases[phaseIndex];
     const launch = phase === "runtime" || phase === "metadata";
     assert.ok(
       record.case === caseId &&
         record.launcher === launcher &&
-        record.phase === phase,
+        phaseIndex > previousPhase,
       "real probe timing identity and phase must match the actual path",
     );
+    previousPhase = phaseIndex;
     assert.ok(
       Number.isFinite(record.elapsedMs) && record.elapsedMs >= 0,
       "real probe timing duration must be finite and nonnegative",
@@ -778,6 +780,109 @@ for (const status of [0, 23]) {
           emissions.map((args) => JSON.parse(args[1])),
           expected,
         );
+        const output = {
+          records: emissions.map((args) => args[1]),
+          invalid: false,
+        };
+        assertProbeTiming(
+          evidence,
+          output,
+          "telemetry",
+          "direct Node",
+          status,
+          withMetadata,
+        );
+        if (name === "first read" && fault === "throw" && status === 0) {
+          // Unavailability permits missing durations, never malformed evidence.
+          const validate = (records) =>
+            assertProbeTiming(
+              evidence,
+              { records, invalid: false },
+              "telemetry",
+              "direct Node",
+              status,
+              false,
+            );
+          assert.doesNotThrow(() => validate([]));
+          assert.doesNotThrow(() => validate([JSON.stringify(runtime)]));
+          for (const [records, message] of [
+            [["{synthetic private payload"], "must be valid JSON"],
+            [["null"], "must be an object"],
+            [["[]"], "must be an object"],
+            [
+              [JSON.stringify({ ...runtime, extra: true })],
+              "only the fixed fields",
+            ],
+            [
+              [JSON.stringify({ ...runtime, case: "other" })],
+              "identity and phase",
+            ],
+            [
+              [JSON.stringify({ ...runtime, launcher: "pnpm --dir" })],
+              "identity and phase",
+            ],
+            [
+              [JSON.stringify({ ...runtime, phase: "unknown" })],
+              "identity and phase",
+            ],
+            [[JSON.stringify(metadata)], "identity and phase"],
+            [
+              [JSON.stringify({ ...runtime, elapsedMs: -1 })],
+              "finite and nonnegative",
+            ],
+            [
+              [JSON.stringify({ ...runtime, elapsedMs: "10" })],
+              "finite and nonnegative",
+            ],
+            [
+              [JSON.stringify({ ...runtime, elapsedMs: null })],
+              "finite and nonnegative",
+            ],
+            ...[
+              { api: null },
+              { outcome: "threw" },
+              { status: 23 },
+              { code: "ETIMEDOUT" },
+              { signal: "SIGTERM" },
+            ].map((change) => [
+              [JSON.stringify({ ...runtime, ...change })],
+              "actual API outcome",
+            ]),
+            [
+              [JSON.stringify(runtime), JSON.stringify(runtime)],
+              "identity and phase",
+            ],
+            [
+              [JSON.stringify(cleanup), JSON.stringify(runtime)],
+              "identity and phase",
+            ],
+            // Validate later records too, not just the first captured phase.
+            [
+              [JSON.stringify(runtime), "{synthetic private payload"],
+              "must be valid JSON",
+            ],
+          ]) {
+            assert.throws(
+              () => validate(records),
+              (error) =>
+                error.code === "ERR_ASSERTION" &&
+                error.message.includes(message) &&
+                !error.message.includes("synthetic private payload"),
+            );
+          }
+          assert.throws(
+            () =>
+              assertProbeTiming(
+                { ...evidence, unavailable: false },
+                { records: output.records, invalid: false },
+                "telemetry",
+                "direct Node",
+                status,
+                false,
+              ),
+            /must emit every phase/,
+          );
+        }
       });
     }
   }
