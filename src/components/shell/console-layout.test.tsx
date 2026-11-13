@@ -182,7 +182,13 @@ it("probe: actual layout prevents A-private population before a held initial 503
   expect.soft(mounts).toBe(0);
   expect.soft(screen.queryByTestId("private-page")).toBeNull();
   expect.soft(state.client!.getQueryData(["private-members"])).toBeUndefined();
-  expect.soft(state.client!.getQueryData(["surfaces"])).toBeUndefined();
+  expect
+    .soft(
+      state
+        .client!.getQueriesData({ queryKey: ["surfaces"] })
+        .filter(([, data]) => data !== undefined),
+    )
+    .toHaveLength(0);
   expect
     .soft(
       fetcher.mock.calls.filter(
@@ -253,7 +259,11 @@ it("keeps the initial boundary through persistent unmarked errors and recovers t
   );
   await screen.findByText("metadata unavailable");
   expect(mounts).toBe(0);
-  expect(state.client!.getQueryData(["surfaces"])).toBeUndefined();
+  expect(
+    state
+      .client!.getQueriesData({ queryKey: ["surfaces"] })
+      .filter(([, data]) => data !== undefined),
+  ).toHaveLength(0);
   expect(screen.queryByTestId("unavailable-surface")).toBeNull();
   expect(assign).not.toHaveBeenCalled();
   metadata = async () => Response.json(actor);
@@ -339,6 +349,7 @@ it.each([false, true])(
       await screen.findByText("Sensitive A row");
       await screen.findByText("Actor A");
       expect(mounts).toBe(1);
+      const client = state.client;
       fireEvent.click(screen.getByTestId("sign-out"));
       await waitFor(() =>
         expect(fetcher).toHaveBeenCalledWith(
@@ -362,6 +373,7 @@ it.each([false, true])(
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 30));
       });
+      expect(state.client).toBe(client);
       expect(
         state.client!.getQueryData<{ id: string }>(["console-session"])?.id,
       ).toBe(actor.id);
@@ -377,7 +389,8 @@ it.each([false, true])(
         const signOut = screen.queryByTestId("sign-out");
         if (signOut) expect.soft(signOut).toBeDisabled();
       } else {
-        expect(screen.getByText("Sensitive A row")).toBeVisible();
+        expect(screen.queryByText("Sensitive A row")).toBeNull();
+        expect(screen.queryByTestId("private-page")).toBeNull();
         expect(screen.getByText("Renamed A")).toBeVisible();
         expect(screen.getByTestId("sign-out")).toBeDisabled();
       }

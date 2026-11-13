@@ -1,7 +1,54 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import DashboardPage from "@/app/(console)/dashboard/page";
+import type { NativeSession } from "./native";
 import type { ReactNode } from "react";
+import {
+  ConsoleSessionContext,
+  useConsoleSession,
+} from "@/components/shell/console-session";
+
+it.each(["developer", "user"])(
+  "native %s surface probes do not fetch admin directories",
+  async (role) => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ data: [] }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { result } = renderHook(useSurfaces, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <ConsoleSessionContext.Provider
+            value={
+              {
+                data: { signed_in: true, id: "user_self", role },
+              } as ReturnType<typeof useConsoleSession>
+            }
+          >
+            {children}
+          </ConsoleSessionContext.Provider>
+        </QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current).toBeDefined());
+    expect(
+      fetcher.mock.calls.some((call) =>
+        /members|service_accounts/.test(String(call[0])),
+      ),
+    ).toBe(false);
+  },
+);
 import { PlatformError } from "./http";
 import {
   SURFACES,
@@ -71,6 +118,8 @@ function stubProbes(status: (surface: string) => number) {
 }
 
 afterEach(() => {
+  cleanup();
+  delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -175,6 +224,92 @@ describe("surfaceOfPath", () => {
 });
 
 describe("useSurfaces", () => {
+  it.each([
+    ["admin", "developer"],
+    ["admin", "user"],
+    ["developer", "admin"],
+    ["user", "admin"],
+  ] as const)(
+    "native same-ID role refresh replaces %s navigation with %s authority",
+    async (before, after) => {
+      document.documentElement.dataset.consoleAuth = "platform";
+      let current: NativeSession = {
+        signed_in: true,
+        id: "user_self",
+        role: before,
+        role_source: "local",
+        email: "self@example.test",
+        name: "Operator",
+        expires_at: "2099-01-01T00:00:00Z",
+        csrf_token: "synthetic-csrf",
+      };
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(String(input), "http://console.test");
+        return Response.json(
+          url.pathname === "/api/auth/session" ? current : { data: [] },
+        );
+      });
+      vi.stubGlobal("fetch", fetcher);
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      function CurrentSession() {
+        const session = useConsoleSession();
+        return (
+          <ConsoleSessionContext.Provider value={session}>
+            <output data-testid="current-role">{session.data?.role}</output>
+            {session.data && <DashboardPage />}
+          </ConsoleSessionContext.Provider>
+        );
+      }
+      const view = render(
+        <QueryClientProvider client={client}>
+          <CurrentSession />
+        </QueryClientProvider>,
+      );
+      const directoryLinks = () =>
+        Array.from(view.container.querySelectorAll("a"))
+          .map((link) => link.getAttribute("href"))
+          .filter((href) =>
+            ["/members", "/service-accounts"].includes(href ?? ""),
+          );
+      try {
+        await waitFor(() =>
+          expect(screen.getByTestId("current-role").textContent).toBe(before),
+        );
+        await waitFor(() => {
+          expect(
+            client.getQueriesData({ queryKey: ["surfaces"] })[0]?.[1],
+          ).toBeDefined();
+          expect(client.isFetching({ queryKey: ["surfaces"] })).toBe(0);
+        });
+        expect(directoryLinks()).toEqual(
+          before === "admin" ? ["/members", "/service-accounts"] : [],
+        );
+        fetcher.mockClear();
+        current = { ...current, role: after };
+        // Only refresh the real session observer, never surfaces or focus.
+        await client.invalidateQueries({ queryKey: ["console-session"] });
+        await waitFor(() =>
+          expect(screen.getByTestId("current-role").textContent).toBe(after),
+        );
+        await waitFor(() =>
+          expect(directoryLinks()).toEqual(
+            after === "admin" ? ["/members", "/service-accounts"] : [],
+          ),
+        );
+        expect(
+          fetcher.mock.calls.filter(([url]) =>
+            /members|service_accounts/.test(String(url)),
+          ),
+        ).toHaveLength(after === "admin" ? 2 : 0);
+      } finally {
+        view.unmount();
+        client.clear();
+      }
+    },
+  );
+
   it("probe: distinguishes denied reads, absence and uncertain failures", async () => {
     stubProbes(
       (surface) =>

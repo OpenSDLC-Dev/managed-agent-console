@@ -228,7 +228,9 @@ it.each([
     </QueryClientProvider>,
   );
   await waitFor(() =>
-    expect(client.getQueryState(["surfaces"])?.status).toBe("success"),
+    expect(
+      client.getQueryState(["surfaces", undefined, undefined])?.status,
+    ).toBe("success"),
   );
   expect(document.querySelectorAll("[data-dashboard-card]").length).toBe(
     status === 503 ? 13 : 0,

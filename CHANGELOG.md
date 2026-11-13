@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Native key forms can retry an unavailable owner directory.** Retry keeps the name, expiry and owner draft in both API Keys and the Dashboard shortcut.
+- **Native navigation follows confirmed same-account role changes.** Once session metadata confirms the role, surface discovery replaces old administrator links or refusals without waiting for its next poll.
 - **CI retains Playwright evidence after a successful retry** (#249). Reports,
   failed-attempt traces and screenshots are uploaded even when the job passes.
 - **Deployment editor mapping tests avoid per-character timer waits** (#244).
@@ -29,6 +31,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   path prefix. One-level lists keep `depth=1`.
 
 ### Added
+
+- **Principal-owned API keys in native mode** (platform plan 69 slice 3). Developers issue keys for themselves; administrators can also select active service accounts. Owner and creator stay separate, and row permissions govern lifecycle controls. Reopened owner pickers refresh the directory. Principal changes and newly learned role changes discard drafts and one-time reveals. Owned-key model access remains unavailable. Empty caller summaries describe only visible keys, including legacy sessions without a role. Legacy issuance leaves ownership to the platform's issuing identity. Native fixtures require a nonempty Docker configuration path to be absolute before dispatch, including through pnpm. Their synthetic Docker contracts use portable Node interception. Native fixtures and both Docker stages disable Next telemetry. Native failure diagnostics redact issued keys before output. Browser-issued human and service-account keys drive a test-only pinned Go SDK probe; independent cookie reads check Memory actors and nullable versions. Lifecycle checks cover current roles, owner removal and restoration without reviving keys. Published-image pairing and packaged Compose acceptance remain pending in the platform.
 
 - **Native platform browser login**, selected at runtime with `CONSOLE_AUTH_MODE=platform`.
   The platform owns the opaque cookie, current role and CSRF checks. Setup, member administration

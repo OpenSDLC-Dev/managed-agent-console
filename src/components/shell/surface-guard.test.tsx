@@ -239,7 +239,7 @@ it.each(["members", "service-accounts"] as const)(
           .getAll()
           .map((q) => q.queryKey),
       )
-      .toEqual([["surfaces"]]);
+      .toEqual([["surfaces", undefined, undefined]]);
     await act(async () => {
       settle();
     });
@@ -300,7 +300,9 @@ it.each([403, 404, 503] as const)(
       settle();
     });
     await waitFor(() =>
-      expect(client.getQueryData(["surfaces"])).toBeDefined(),
+      expect(
+        client.getQueryData(["surfaces", undefined, undefined]),
+      ).toBeDefined(),
     );
     expect(
       screen.queryByRole("button", { name: "Create service account" }),

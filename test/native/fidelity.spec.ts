@@ -1,7 +1,7 @@
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
-import { test, expect } from "@playwright/test";
+import { nativeDocker } from "./docker";
+import { test, expect } from "./test";
 import { selectNativeSurfaces } from "../fidelity/native-surfaces";
 const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
 const org = "/api/console/organizations/default";
@@ -66,23 +66,19 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     },
   });
   expect([200, 409]).toContain(addMapped.status());
-  const mapped = spawnSync(
-    "docker",
-    [
-      "exec",
-      receipt.container,
-      "psql",
-      "-U",
-      "postgres",
-      "-d",
-      "native_password",
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-c",
-      "UPDATE principals SET role_source='idp' WHERE subject='shot-mapped'",
-    ],
-    { encoding: "utf8" },
-  );
+  const mapped = nativeDocker([
+    "exec",
+    receipt.container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "UPDATE principals SET role_source='idp' WHERE subject='shot-mapped'",
+  ]);
   expect(mapped.status, mapped.stderr).toBe(0);
   const addAccount = await request.post(`${org}/service_accounts`, {
     headers,
@@ -111,6 +107,23 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
       })
     ).status(),
   ).toBe(200);
+  const keyPath = `${org}/workspaces/default/api_keys`;
+  const service = allAccounts.data.find(
+    (account: { name: string }) => account.name === "release-bot",
+  );
+  for (const [name, principal_id] of [
+    ["human", session.id],
+    ["service", service.id],
+  ]) {
+    const created = await request.post(keyPath, {
+      headers,
+      data: { name: `shot-owned-${name}-${info.project.name}`, principal_id },
+    });
+    expect(created.status()).toBe(200);
+    // The raw field is not needed to arrange a metadata screenshot.
+    await created.dispose();
+  }
+  const walked: string[] = [];
   for (const surface of selected) {
     await test.step(surface.id, async () => {
       let releaseWrite: (() => void) | undefined;
@@ -229,7 +242,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               headers: { origin: "http://127.0.0.1:38200" },
               data: { login_name: "shot-user", password },
             });
-            expect(signedIn.status(), await signedIn.text()).toBe(200);
+            expect(signedIn.status()).toBe(200);
           }
           await page.goto(surface.route);
           if (surface.route === "/login" || surface.route === "/setup")
@@ -239,6 +252,47 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               ),
             ).toBeVisible();
           else await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+          if (surface.id === "native-owned-key-list") {
+            await expect(
+              page.locator(`[data-owner-id="${session.id}"]`).first(),
+            ).toBeVisible();
+            await expect(
+              page.locator(`[data-owner-id="${service.id}"]`).first(),
+            ).toBeVisible();
+          } else if (surface.id === "native-owned-key-form") {
+            await page
+              .getByRole("button", { name: "Create key", exact: true })
+              .click();
+          } else if (surface.id === "native-owned-key-dashboard-form") {
+            await page
+              .getByRole("button", { name: "Get API key", exact: true })
+              .click();
+          } else if (surface.id === "native-owned-key-owner-picker") {
+            await page
+              .getByRole("button", { name: "Create key", exact: true })
+              .click();
+            await expect(
+              page.getByLabel("Owner").locator(`option[value="${service.id}"]`),
+            ).toHaveCount(1);
+            await page.getByLabel("Owner").selectOption(service.id);
+            await page.getByLabel("Owner").focus();
+          } else if (surface.id === "native-owned-key-reveal") {
+            await page
+              .getByRole("button", { name: "Create key", exact: true })
+              .click();
+            await page
+              .getByLabel("Name", { exact: true })
+              .fill(`shot-reveal-${info.project.name}`);
+            const issuance = page.waitForResponse(
+              (response) =>
+                response.url().endsWith(keyPath) &&
+                response.request().method() === "POST",
+            );
+            await page
+              .getByRole("button", { name: "Add", exact: true })
+              .click();
+            expect((await issuance).status()).toBe(200);
+          }
           if (surface.id === "native-login-keyboard-error") {
             await page.getByLabel("Login name").fill("unknown-shot");
             await page.getByLabel("Password").fill(password);
@@ -415,6 +469,60 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(page.getByRole("dialog")).toBeVisible();
           }
         }
+        // These assertions are independent of the interaction branches above.
+        // Removing an interaction must fail, not produce a mislabeled list shot.
+        switch (surface.id) {
+          case "native-owned-key-list":
+            await expect(
+              page.getByRole("columnheader", { name: "Owner", exact: true }),
+            ).toBeVisible();
+            await expect(
+              page.getByRole("columnheader", {
+                name: "Created by",
+                exact: true,
+              }),
+            ).toBeVisible();
+            break;
+          case "native-owned-key-form":
+          case "native-owned-key-dashboard-form":
+            await expect(
+              page.getByRole("dialog", { name: "Create API key" }),
+            ).toBeVisible();
+            await expect(page.getByLabel("Owner")).toHaveValue(session.id);
+            break;
+          case "native-owned-key-owner-picker":
+            await expect(page.getByLabel("Owner")).toHaveValue(service.id);
+            await expect(
+              page.getByLabel("Owner").locator(`option[value="${retired.id}"]`),
+            ).toHaveCount(0);
+            break;
+          case "native-owned-key-reveal":
+            expect(
+              await page.getByTestId("revealed-api-key").evaluate((element) => {
+                const dialog = element.closest('[role="dialog"]')!;
+                return (
+                  element.getBoundingClientRect().right <=
+                    dialog.getBoundingClientRect().right &&
+                  element.scrollWidth <= element.clientWidth
+                );
+              }),
+            ).toBe(true);
+            await expect(
+              page.getByRole("dialog", { name: "Save your API key" }),
+            ).toBeVisible();
+            // Boolean projection only: assertion diagnostics cannot print plaintext.
+            expect(
+              await page
+                .getByTestId("revealed-api-key")
+                .evaluate((element) =>
+                  /^sk-map-api01-.+/.test(element.textContent ?? ""),
+                ),
+            ).toBe(true);
+            break;
+          default:
+            if (surface.id.startsWith("native-owned-key-"))
+              throw new Error(`Unwalked owned-key surface: ${surface.id}`);
+        }
         await page.evaluate(async () => {
           await document.fonts.ready;
           await Promise.all(
@@ -436,7 +544,11 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         await page.screenshot({
           path: join(dir, `${surface.id}.png`),
           fullPage: true,
+          mask: [page.getByTestId("revealed-api-key")],
         });
+        walked.push(surface.id);
+        if (surface.id === "native-owned-key-reveal")
+          await page.getByTestId("close-revealed-api-key").click();
         if (releaseWrite) {
           releaseWrite();
           await expect(
@@ -455,4 +567,19 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
       }
     });
   }
+  expect(walked).toEqual(selected.map((surface) => surface.id));
+  writeFileSync(
+    join(dir, "walked.json"),
+    JSON.stringify(
+      {
+        browser: "chrome",
+        theme: info.project.name,
+        surfaces: walked,
+        revealMasked: true,
+        horizontalOverflow: false,
+      },
+      null,
+      2,
+    ),
+  );
 });

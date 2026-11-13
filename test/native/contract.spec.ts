@@ -7,10 +7,14 @@ import {
 } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
-import { test, expect, type Page, type Request } from "@playwright/test";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import type { Page, Request } from "@playwright/test";
+import { test, expect } from "./test";
 import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
+import { nativeDocker } from "./docker";
 const org = "/api/console/organizations/default";
 const password = "native-test-password-123";
 type StreamReceipt = {
@@ -131,13 +135,15 @@ import { PassThrough } from "node:stream";
 import { syncBuiltinESMExports } from "node:module";
 import { writeFileSync } from "node:fs";
 const id = "1".padStart(64, "0");
-cp.spawn = (command, args) => {
+const originalSpawn = cp.spawn;
+cp.spawn = (command, args, options) => {
+  if (command === process.execPath) return originalSpawn(command, args, options);
   if (command !== "docker" && command !== "go") throw Error("unexpected spawn " + command);
   if (command === "docker" && args[0] === "create") writeFileSync(args[args.indexOf("--cidfile") + 1], id);
   const child = new EventEmitter();
   child.stdout = new PassThrough(); child.stderr = new PassThrough();
   child.exitCode = command === "go" ? 1 : 0; child.signalCode = null;
-  const stdout = args[0] === "inspect" ? "[]" : args[0] === "rm" ? id : args[0] === "port" ? "127.0.0.1:54321" : "";
+  const stdout = args[0] === "context" ? (args[1] === "show" ? "fake-local" : "unix:///fake-local.sock") : args[0] === "inspect" ? "[]" : args[0] === "rm" ? id : args[0] === "port" ? "127.0.0.1:54321" : "";
   queueMicrotask(() => {
     child.stdout.end(stdout); child.stderr.end(command === "go" ? "path captured" : "");
     child.emit("close", child.exitCode, null);
@@ -481,23 +487,19 @@ test("real native password/setup, current authority, management, private bytes/S
   }, resource);
   expect(uploaded.status).toBe(200);
   // Fresh uploads are not downloadable; seed the output flag as the executor would.
-  const downloadable = spawnSync(
-    "docker",
-    [
-      "exec",
-      receipt().container,
-      "psql",
-      "-U",
-      "postgres",
-      "-d",
-      "native_password",
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-c",
-      `UPDATE files SET downloadable=true,scope_type='session',scope_id='${sid}' WHERE id='${uploaded.body.id}'`,
-    ],
-    { encoding: "utf8" },
-  );
+  const downloadable = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `UPDATE files SET downloadable=true,scope_type='session',scope_id='${sid}' WHERE id='${uploaded.body.id}'`,
+  ]);
   expect(downloadable.status, downloadable.stderr).toBe(0);
   const binary = await page.request.get(
     `${resource}/files/${uploaded.body.id}/content`,
@@ -509,23 +511,19 @@ test("real native password/setup, current authority, management, private bytes/S
   const child = `sthr_${token[0] === "0" ? "1" : "0"}${token.slice(1)}`;
   const primary = `sthr_${sid.split("_")[1]}`;
   const sql = `INSERT INTO session_threads(id,session_id,parent_thread_id,agent,agent_name,status) VALUES ('${child}','${sid}','${primary}','{"id":"agent_child","type":"agent","version":1,"name":"worker","model":{"id":"unused-model"},"system":"","tools":[],"mcp_servers":[],"skills":[]}','worker','idle')`;
-  const seeded = spawnSync(
-    "docker",
-    [
-      "exec",
-      receipt().container,
-      "psql",
-      "-U",
-      "postgres",
-      "-d",
-      "native_password",
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-c",
-      sql,
-    ],
-    { encoding: "utf8" },
-  );
+  const seeded = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    sql,
+  ]);
   expect(seeded.status, seeded.stderr).toBe(0);
   const urls: string[] = [];
   page.on("request", (r) => {
@@ -1326,4 +1324,799 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
   expect(
     (await context.cookies()).some((cookie) => cookie.name === "map_session"),
   ).toBe(false);
+});
+
+test("native owned keys preserve owner creator permissions and credential isolation", async ({
+  page,
+  browser,
+}) => {
+  const keysPath = `${org}/workspaces/default/api_keys`;
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "owned-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) await login(page, "new-person");
+  else await page.goto("/dashboard");
+  const admin = await (await page.request.get("/api/auth/session")).json();
+  const offered: string[] = [];
+  page.on("request", (request) =>
+    offered.push(
+      ...credentialHeaders(
+        "http://127.0.0.1:38200",
+        request.url(),
+        request.headers(),
+      ),
+    ),
+  );
+  // The picker must follow the server's real cursor, not a partial directory.
+  for (let n = 0; n < 101; n++) {
+    const created = await write(page, `${org}/service_accounts`, {
+      name: `owned-picker-${n}`,
+    });
+    expect(created.status).toBe(200);
+  }
+  const retired = await write(page, `${org}/service_accounts`, {
+    name: "owned-picker-retired",
+  });
+  expect(retired.status).toBe(200);
+  expect(
+    (await write(page, `${org}/service_accounts/${retired.body.id}/archive`))
+      .status,
+  ).toBe(200);
+  const first = await (
+    await page.request.get(`${org}/service_accounts?limit=100`)
+  ).json();
+  expect(Boolean(first.next_page)).toBe(true);
+  const second = await (
+    await page.request.get(
+      `${org}/service_accounts?limit=100&page=${encodeURIComponent(first.next_page)}`,
+    )
+  ).json();
+  const service = second.data[0];
+  expect(Boolean(service?.id)).toBe(true);
+  await page.goto("/api-keys");
+  await page.getByRole("button", { name: "Create key", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("native-owned-service");
+  await expect(
+    page.getByLabel("Owner").locator(`option[value="${retired.body.id}"]`),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Load more service accounts" })
+    .click();
+  await expect(
+    page.getByLabel("Owner").locator(`option[value="${service.id}"]`),
+  ).toHaveCount(1);
+  await page.getByLabel("Owner").selectOption(service.id);
+  const issuance = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(keysPath) &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const response = await issuance;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toMatchObject({
+    principal_id: service.id,
+  });
+  const issued = await response.json();
+  expect(issued.principal).toEqual({
+    type: "service_account_actor",
+    service_account_id: service.id,
+  });
+  expect(issued.created_by).toEqual({ type: "user", id: admin.id });
+  expect(Object.hasOwn(issued, "can_manage")).toBe(false);
+  expect(issued.workspace_id).toBeNull();
+  expect(Object.hasOwn(issued, "scope")).toBe(false);
+  const reveal = page.getByTestId("revealed-api-key");
+  await expect(reveal).toBeVisible();
+  expect(
+    await reveal.evaluate((element) =>
+      /^sk-map-api01-.+/.test(element.textContent ?? ""),
+    ),
+  ).toBe(true);
+  const noStoredKey = await page.evaluate(
+    (secret) =>
+      ![localStorage, sessionStorage].some((storage) =>
+        Object.values(storage).some((value) => String(value).includes(secret)),
+      ),
+    issued.raw_key,
+  );
+  expect(noStoredKey).toBe(true);
+  await page.getByTestId("close-revealed-api-key").click();
+  expect((await page.content()).includes(issued.raw_key)).toBe(false);
+  // Never retain plaintext in test evidence or pass it into any transport.
+  delete issued.raw_key;
+  const listed = await (await page.request.get(keysPath)).json();
+  expect(
+    listed.every(
+      (key: { can_manage?: boolean }) => typeof key.can_manage === "boolean",
+    ),
+  ).toBe(true);
+  const row = page.getByRole("row").filter({ hasText: "native-owned-service" });
+  await expect(row.locator("[data-owner-id]")).toHaveAttribute(
+    "data-owner-id",
+    service.id,
+  );
+  await expect(row.locator("[data-created-by]")).toHaveAttribute(
+    "data-created-by",
+    admin.id,
+  );
+  await expect(
+    row.getByRole("button", { name: "Model access", exact: true }),
+  ).toHaveCount(0);
+  await row.getByRole("button", { name: "Disable", exact: true }).click();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "inactive",
+  );
+  // The Dashboard shortcut uses the exact session ID, without manufacturing aliases.
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Get API key", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("native-owned-self");
+  const selfIssuance = page.waitForResponse(
+    (answer) =>
+      answer.url().endsWith(keysPath) && answer.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const selfResponse = await selfIssuance;
+  expect(selfResponse.status()).toBe(200);
+  expect(selfResponse.request().postDataJSON()).toMatchObject({
+    principal_id: admin.id,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Save your API key" }),
+  ).toBeVisible();
+  await page.getByTestId("close-revealed-api-key").click();
+  expect(offered).toEqual([]);
+  const member = await write(page, `${org}/members`, {
+    login_name: "owned-developer",
+    password,
+    role: "developer",
+  });
+  expect(member.status).toBe(200);
+  const developerContext = await browser.newContext({
+    baseURL: "http://127.0.0.1:38200",
+  });
+  try {
+    const developer = await developerContext.newPage();
+    const directory: string[] = [];
+    developer.on("request", (request) => {
+      if (/\/members|\/service_accounts/.test(new URL(request.url()).pathname))
+        directory.push(request.method());
+    });
+    await login(developer, "owned-developer");
+    await developer
+      .getByRole("button", { name: "Get API key", exact: true })
+      .click();
+    await developer
+      .getByLabel("Name", { exact: true })
+      .fill("native-owned-developer");
+    const developerIssuance = developer.waitForResponse(
+      (answer) =>
+        answer.url().endsWith(keysPath) && answer.request().method() === "POST",
+    );
+    await developer.getByRole("button", { name: "Add", exact: true }).click();
+    expect((await developerIssuance).status()).toBe(200);
+    await expect(
+      developer.getByRole("heading", { name: "Save your API key" }),
+    ).toBeVisible();
+    await developer.getByTestId("close-revealed-api-key").click();
+    await developer.goto("/api-keys");
+    await expect(
+      developer.getByText("native-owned-developer", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      developer.getByText("native-owned-service", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      developer.getByRole("button", { name: "Model access", exact: true }),
+    ).toHaveCount(0);
+    expect(directory).toEqual([]);
+    const own = await (await developer.request.get(keysPath)).json();
+    expect(own.length).toBe(1);
+    expect(own[0].can_manage).toBe(true);
+    expect(own[0].principal).toEqual({
+      type: "user_actor",
+      user_id: member.body.id,
+    });
+  } finally {
+    await developerContext.close();
+  }
+});
+
+// A key-owner shortcut in memoryActor, cached mint-time authority, or an unowned
+// retry must fail this real UI -> SDK -> independent cookie-readback contract.
+test("native-issued human and service keys preserve SDK actors and current authority", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  // Capture only the immutable path before requests can trigger receipt rewrites.
+  const sdkClient = receipt().sdkClient;
+  const keys = `${org}/workspaces/default/api_keys`;
+  const resource = "/api/organizations/default/proxy/v1";
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "sdk-root", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) await login(page, "new-person");
+  else await page.goto("/dashboard");
+  const creator = await (await page.request.get("/api/auth/session")).json();
+  const human = await write(page, `${org}/members`, {
+    login_name: "sdk-human",
+    password,
+    role: "admin",
+  });
+  expect(human.status).toBe(200);
+  const service = await write(page, `${org}/service_accounts`, {
+    name: "sdk-service",
+    organization_role: "admin",
+  });
+  expect(service.status).toBe(200);
+  const humanContext = await browser.newContext({
+    baseURL: "http://127.0.0.1:38200",
+  });
+  const humanPage = await humanContext.newPage();
+  const evidence: unknown[] = [];
+  const browserHeaders: string[] = [];
+  for (const actorPage of [page, humanPage])
+    actorPage.on("request", (request) => {
+      browserHeaders.push(
+        ...credentialHeaders(
+          "http://127.0.0.1:38200",
+          request.url(),
+          request.headers(),
+        ),
+      );
+    });
+  function sdk(key: string, header: "x-api-key" | "bearer") {
+    const child = spawnSync(sdkClient, [], {
+      input: JSON.stringify({
+        base_url: "http://127.0.0.1:38200",
+        key,
+        header,
+      }),
+      encoding: "utf8",
+      timeout: 40_000,
+      env: {
+        NODE_ENV: "test",
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+        SystemRoot: process.env.SystemRoot,
+        TMPDIR: process.env.TMPDIR,
+        NEXT_TELEMETRY_DISABLED: "1",
+      },
+    });
+    // Never use child output or the raw value as a matcher diagnostic.
+    expect(child.status, "pinned SDK probe exited successfully").toBe(0);
+    expect(child.stderr.length, "SDK stderr is empty").toBe(0);
+    expect(
+      child.stdout.includes(key),
+      "SDK output excludes the credential",
+    ).toBe(false);
+    try {
+      return JSON.parse(child.stdout);
+    } catch {
+      throw new Error("SDK probe did not return safe JSON");
+    }
+  }
+  async function bare(
+    key: string,
+    header: "x-api-key" | "bearer",
+    path = "/v1/agents",
+    method = "GET",
+    body?: unknown,
+  ) {
+    // Node's fetch is not the cookie-bearing Playwright context.
+    const response = await fetch(`http://127.0.0.1:38200${path}`, {
+      method,
+      redirect: "error",
+      headers: {
+        "content-type": "application/json",
+        ...(header === "bearer"
+          ? { authorization: `Bearer ${key}` }
+          : { "x-api-key": key }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  async function read(path: string) {
+    const response = await page.request.get(`${resource}${path}`);
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  try {
+    await login(humanPage, "sdk-human");
+    for (const [kind, owner, actorPage] of [
+      ["human", human.body.id, humanPage],
+      ["service", service.body.id, page],
+    ] as const) {
+      await actorPage.goto("/dashboard");
+      await actorPage
+        .getByRole("button", { name: "Get API key", exact: true })
+        .click();
+      await actorPage.getByLabel("Name", { exact: true }).fill(`sdk-${kind}`);
+      if (kind === "service")
+        await actorPage.getByLabel("Owner").selectOption(owner);
+      const pending = actorPage.waitForResponse(
+        (response) =>
+          response.url().endsWith(keys) &&
+          response.request().method() === "POST",
+      );
+      await actorPage.getByRole("button", { name: "Add", exact: true }).click();
+      const response = await pending;
+      expect(response.status()).toBe(200);
+      const issued = await response.json();
+      const reveal = actorPage.getByTestId("revealed-api-key");
+      await expect(reveal).toBeVisible();
+      let key = (await reveal.textContent())!;
+      expect(
+        key === issued.raw_key,
+        "one-time UI reveal is the issued credential",
+      ).toBe(true);
+      delete issued.raw_key;
+      await actorPage.getByTestId("close-revealed-api-key").click();
+      expect(
+        response.request().postDataJSON().principal_id,
+        "native form explicitly assigns its selected owner",
+      ).toBe(owner);
+      expect(issued.principal).toEqual(
+        kind === "human"
+          ? { type: "user_actor", user_id: owner }
+          : { type: "service_account_actor", service_account_id: owner },
+      );
+      expect(issued.created_by).toEqual({
+        type: "user",
+        id: kind === "human" ? owner : creator.id,
+      });
+      expect(issued.workspace_id).toBeNull();
+      expect(Object.hasOwn(issued, "scope")).toBe(false);
+      expect(Object.hasOwn(issued, "can_manage")).toBe(false);
+      const actor = { type: "api_actor", api_key_id: issued.id };
+      for (const header of ["x-api-key", "bearer"] as const) {
+        const start = receipt().publicRequests?.length ?? 0;
+        const result = sdk(key, header);
+        expect(result.status).toEqual({
+          agents: 200,
+          store: 200,
+          create: 200,
+          update: 200,
+          redact: 200,
+          readback: 200,
+        });
+        expect(result.actors).toEqual({
+          created_by: actor,
+          redacted_by: actor,
+        });
+        await expect
+          .poll(() => {
+            try {
+              return receipt().publicRequests.slice(start).length;
+            } catch (error) {
+              // The runtime can be between truncating and writing its receipt.
+              // An incomplete sample must retry, never satisfy the count.
+              if (error instanceof SyntaxError) return undefined;
+              throw error;
+            }
+          })
+          .toBe(6);
+        const observed = receipt().publicRequests.slice(start);
+        expect(
+          observed.map((request: { method: string }) => request.method),
+        ).toEqual(["GET", "POST", "POST", "POST", "POST", "GET"]);
+        expect(
+          observed.every(
+            (request: { headerNames: string[]; status: number }) =>
+              JSON.stringify(request.headerNames) ===
+                JSON.stringify([
+                  header === "bearer" ? "authorization" : "x-api-key",
+                ]) && request.status === 200,
+          ),
+        ).toBe(true);
+        const base = `/memory_stores/${result.store_id}`;
+        const version = await read(
+          `${base}/memory_versions/${result.version_id}`,
+        );
+        expect(version.created_by).toEqual(actor);
+        expect(version.redacted_by).toEqual(actor);
+        for (const field of [
+          "path",
+          "content",
+          "content_size_bytes",
+          "content_sha256",
+        ]) {
+          expect(
+            Object.hasOwn(version, field),
+            `redacted ${field} remains present`,
+          ).toBe(true);
+          expect(version[field]).toBeNull();
+        }
+        expect(typeof version.redacted_at).toBe("string");
+        const updated = await read(
+          `${base}/memory_versions/${result.updated_version_id}`,
+        );
+        expect(updated.created_by).toEqual(actor);
+        expect(updated.content).toBe("second version");
+        // Bare HTTP and browser credentials must produce different actors.
+        const empty = await bare(key, header, `/v1${base}/memories`, "POST", {
+          path: "/empty.md",
+          content: "",
+        });
+        expect(empty.status).toBe(200);
+        const emptyPath = `${base}/memory_versions/${empty.body.memory_version_id}`;
+        const full = await read(`${emptyPath}?view=full`);
+        expect(full.created_by).toEqual(actor);
+        expect(full).toMatchObject({
+          content: "",
+          content_size_bytes: 0,
+          content_sha256:
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        });
+        const basic = await read(`${emptyPath}?view=basic`);
+        expect(Object.hasOwn(basic, "content")).toBe(true);
+        expect(basic.content).toBeNull();
+        expect(basic.content_size_bytes).toBe(0);
+        const cookieWrite = await write(page, `${resource}${base}/memories`, {
+          path: "/cookie.md",
+          content: "browser",
+        });
+        expect(cookieWrite.status).toBe(200);
+        const cookieVersion = await read(
+          `${base}/memory_versions/${cookieWrite.body.memory_version_id}`,
+        );
+        expect(cookieVersion.created_by).toEqual({
+          type: "user_actor",
+          // The existing cookie Memory actor carries the internal principal ID;
+          // private member/session JSON uses its user_ alias instead.
+          user_id: creator.id.replace(/^user_/, "principal_"),
+        });
+        expect(
+          (
+            await bare(
+              key,
+              header,
+              `/v1${base}/memories/${empty.body.id}`,
+              "DELETE",
+            )
+          ).status,
+        ).toBe(200);
+        const versions = await read(
+          `${base}/memory_versions?memory_id=${empty.body.id}&view=full`,
+        );
+        const deleted = versions.data.find(
+          (row: { operation: string }) => row.operation === "deleted",
+        );
+        expect(deleted).toBeDefined();
+        expect(deleted.created_by).toEqual(actor);
+        expect(deleted.path).toBe("/empty.md");
+        for (const field of [
+          "content",
+          "content_size_bytes",
+          "content_sha256",
+        ]) {
+          expect(Object.hasOwn(deleted, field)).toBe(true);
+          expect(deleted[field]).toBeNull();
+        }
+        evidence.push({
+          kind,
+          header,
+          key_id: issued.id,
+          owner_id: owner,
+          ...result,
+          observed,
+        });
+      }
+      const ownerPath =
+        kind === "human"
+          ? `${org}/members/${owner}`
+          : `${org}/service_accounts/${owner}`;
+      const roleBody = (role: string) =>
+        kind === "human" ? { role } : { organization_role: role };
+      expect((await write(page, ownerPath, roleBody("developer"))).status).toBe(
+        200,
+      );
+      for (const header of ["x-api-key", "bearer"] as const) {
+        const denied = sdk(key, header);
+        expect(denied.status).toEqual({
+          agents: 200,
+          store: 200,
+          create: 200,
+          update: 200,
+          redact: 403,
+          readback: 200,
+        });
+        const retained = await read(
+          `/memory_stores/${denied.store_id}/memory_versions/${denied.version_id}`,
+        );
+        expect(retained.created_by).toEqual(actor);
+        expect(retained.redacted_at).toBeNull();
+        expect(retained.redacted_by).toBeNull();
+        expect(retained.content).toBe("");
+        expect(retained.content_size_bytes).toBe(0);
+        expect(retained.content_sha256).toBe(
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
+      }
+      // Only humans have the user role; an SA's role range is admin/developer.
+      if (kind === "human") {
+        expect((await write(page, ownerPath, { role: "user" })).status).toBe(
+          200,
+        );
+        for (const header of ["x-api-key", "bearer"] as const)
+          expect(sdk(key, header).status).toEqual({ agents: 403 });
+      }
+      expect((await write(page, ownerPath, roleBody("admin"))).status).toBe(
+        200,
+      );
+      expect(
+        (await write(page, `${keys}/${issued.id}`, { status: "inactive" }))
+          .status,
+      ).toBe(200);
+      for (const header of ["x-api-key", "bearer"] as const)
+        expect(sdk(key, header).status).toEqual({ agents: 401 });
+      expect(
+        (await write(page, `${keys}/${issued.id}`, { status: "active" }))
+          .status,
+      ).toBe(200);
+      for (const header of ["x-api-key", "bearer"] as const)
+        expect((await bare(key, header)).status).toBe(200);
+      expect(
+        (
+          await write(
+            page,
+            kind === "human" ? ownerPath : `${ownerPath}/archive`,
+            undefined,
+            kind === "human" ? "DELETE" : "POST",
+          )
+        ).status,
+      ).toBe(200);
+      const rows = await (await page.request.get(keys)).json();
+      expect(
+        rows.find((row: { id: string }) => row.id === issued.id).status,
+      ).toBe("archived");
+      for (const header of ["x-api-key", "bearer"] as const)
+        expect(sdk(key, header).status).toEqual({ agents: 401 });
+      expect(
+        (await write(page, `${keys}/${issued.id}`, { status: "active" }))
+          .status,
+      ).toBe(400);
+      evidence.push({
+        kind,
+        key_id: issued.id,
+        developer_redaction: 403,
+        user_role: kind === "human" ? 403 : null,
+        inactive: 401,
+        reactivated: 200,
+        removed_or_archived: 401,
+        terminal_key_restore: 400,
+      });
+      // Operator SQL recovery of this disposable owner is not key issuance.
+      // Restoring the owner must not undo the key tombstone.
+      expect(/^(user|svac)_[a-z0-9]+$/.test(owner)).toBe(true);
+      const restored = nativeDocker([
+        "exec",
+        receipt().container,
+        "psql",
+        "-U",
+        "postgres",
+        "-d",
+        "native_password",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        `UPDATE principals SET status='active' WHERE id='${owner.replace(/^(user|svac)_/, "principal_")}'`,
+      ]);
+      expect(restored.status, "disposable owner SQL recovery succeeds").toBe(0);
+      for (const header of ["x-api-key", "bearer"] as const)
+        expect(sdk(key, header).status).toEqual({ agents: 401 });
+      expect(
+        (await (await page.request.get(keys)).json()).find(
+          (row: { id: string }) => row.id === issued.id,
+        ).status,
+      ).toBe("archived");
+      evidence.push({
+        kind,
+        owner_sql_restored: true,
+        key_still_archived: true,
+        status: 401,
+      });
+      key = "";
+    }
+    expect(browserHeaders).toEqual([]);
+    writeFileSync(
+      join(process.env.NATIVE_EVIDENCE_DIR!, "owned-key-sdk-browser.json"),
+      JSON.stringify(
+        { evidence, browserCredentialHeaders: browserHeaders },
+        null,
+        2,
+      ),
+      { mode: 0o600 },
+    );
+  } finally {
+    await humanContext.close();
+  }
+});
+
+test("SDK stdin probe refuses non-loopback and ambiguous inputs before requests", () => {
+  for (const input of [
+    {
+      base_url: "https://127.0.0.1:1",
+      key: "synthetic-probe",
+      header: "x-api-key",
+    },
+    {
+      base_url: "http://192.0.2.1",
+      key: "synthetic-probe",
+      header: "x-api-key",
+    },
+    {
+      base_url: "http://user:pass@127.0.0.1:1",
+      key: "synthetic-probe",
+      header: "x-api-key",
+    },
+    {
+      base_url: "http://127.0.0.1:1/other",
+      key: "synthetic-probe",
+      header: "x-api-key",
+    },
+    {
+      base_url: "http://127.0.0.1:1",
+      key: "synthetic-probe",
+      header: "cookie",
+    },
+  ]) {
+    const result = spawnSync(receipt().sdkClient, [], {
+      input: JSON.stringify(input),
+      encoding: "utf8",
+      timeout: 2000,
+      env: {
+        NODE_ENV: "test",
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+        SystemRoot: process.env.SystemRoot,
+        NEXT_TELEMETRY_DISABLED: "1",
+      },
+    });
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toBe("");
+  }
+});
+
+for (const mode of [
+  "local",
+  "remote",
+  "changed-local",
+  "foreign",
+  "wrong-id",
+] as const) {
+  test(`native SQL preflight ${mode} protects the actual Docker dispatch`, () => {
+    const dir = mkdtempSync(
+      join(process.env.NATIVE_EVIDENCE_DIR!, "sql-preflight-"),
+    );
+    const id = "a".repeat(64);
+    writeFileSync(
+      join(dir, "task6-native-receipt.json"),
+      JSON.stringify({
+        container: id,
+        dockerTarget: { endpoint: "unix:///fixture.sock" },
+      }),
+    );
+    const script = `
+import cp from 'node:child_process';
+import {syncBuiltinESMExports} from 'node:module';
+let execs=0, safe=true;
+cp.spawnSync = (program,args,options) => {
+  safe &&= program === 'docker' && options.env.NEXT_TELEMETRY_DISABLED === '1' && !Object.keys(options.env).some(k=>/^(RUN_LIVE_|MODEL_|ANTHROPIC_|AWS_|GOOGLE_|OTEL_)/.test(k));
+  if(args[0] === 'exec') execs++;
+  const stdout=args[0] === 'context' ? (args[1] === 'show' ? 'fixture' : ${JSON.stringify(mode === "remote" ? "tcp://127.0.0.1:2375" : mode === "changed-local" ? "unix:///different.sock" : "unix:///fixture.sock")}) : args[0] === 'ps' && ${JSON.stringify(mode)} === 'foreign' ? 'foreign-container' : '';
+  return {status:0, stdout, stderr:''};
+};
+syncBuiltinESMExports();
+const {nativeDocker} = await import(${JSON.stringify(pathToFileURL(join(process.cwd(), "test/native/docker.ts")).href)});
+let refused=false;
+try { nativeDocker(['exec', ${JSON.stringify(mode === "wrong-id" ? "b".repeat(64) : id)}, 'true']); } catch {refused=true;}
+console.log(JSON.stringify({execs,safe,refused}));`;
+    try {
+      const child = spawnSync(
+        process.execPath,
+        ["--input-type=module", "-e", script],
+        {
+          encoding: "utf8",
+          timeout: 10_000,
+          env: {
+            NODE_ENV: "test",
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+            SystemRoot: process.env.SystemRoot,
+            NATIVE_EVIDENCE_DIR: dir,
+            NEXT_TELEMETRY_DISABLED: "1",
+          },
+        },
+      );
+      expect(child.status).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual({
+        execs: mode === "local" ? 1 : 0,
+        safe: true,
+        refused: mode !== "local",
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("SDK probe refuses to emit a credential reflected in a response ID", async () => {
+  const key = "synthetic-reflected-credential-not-an-issued-key";
+  const server = createServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    const path = new URL(request.url!, "http://fixture").pathname;
+    if (path === "/v1/agents")
+      response.end(JSON.stringify({ data: [], has_more: false }));
+    else if (path === "/v1/memory_stores")
+      response.end(JSON.stringify({ id: key }));
+    else {
+      response.writeHead(403);
+      response.end(
+        JSON.stringify({
+          error: { type: "permission_error", message: "fixture refusal" },
+        }),
+      );
+    }
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("fixture listener missing");
+  const child = spawn(receipt().sdkClient, [], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      NODE_ENV: "test",
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+      SystemRoot: process.env.SystemRoot,
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
+  });
+  const exited = once(child, "close");
+  let stdout = "",
+    stderr = "";
+  child.stdout.on("data", (data) => {
+    stdout += data;
+  });
+  child.stderr.on("data", (data) => {
+    stderr += data;
+  });
+  child.stdin.end(
+    JSON.stringify({
+      base_url: `http://127.0.0.1:${address.port}`,
+      key,
+      header: "x-api-key",
+    }),
+  );
+  try {
+    const [status] = await exited;
+    expect(
+      stdout.includes(key),
+      "SDK output must not echo a reflected credential",
+    ).toBe(false);
+    expect(status).toBe(3);
+    expect(stdout.length).toBe(0);
+    expect(stderr.length).toBe(0);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL");
+      await exited;
+    }
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });

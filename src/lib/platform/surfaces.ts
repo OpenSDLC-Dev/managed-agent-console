@@ -1,6 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useContext } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { isNativeConsole } from "./http";
 import { nativeGet, ORGANIZATION } from "./native";
@@ -99,8 +101,8 @@ export const SURFACES = {
   // the other BFF. The rule above still holds and for the same reason — this is
   // a collection route whose only variable segments are constants this console
   // sends, so a 404 cannot be about a missing id.
-  // A non-admin's collection read answers 403. That refusal hides the entry
-  // point, not the feature: direct routes still explain the platform's denial.
+  // Developers can read their owned keys. A user's 403 hides navigation;
+  // direct routes still explain the platform's refusal.
   "api-keys": {
     path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
     label: "API Keys",
@@ -198,12 +200,16 @@ export function isSurfaceVisible(
 /**
  * Collection reads, probed once per session in parallel. A permission_error
  * keeps its refusal for direct routes; it never means the feature is absent.
- * This consumes the platform's answer, not a role or a promise of write access.
+ * Resource admission consumes the collection answer, not a promise of writes.
+ * Native admin directories additionally use the current platform session role.
  * Network, intermediary and 5xx failures stay visible and error on the page.
  */
 export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
+  const session = useContext(ConsoleSessionContext)?.data;
   return useQuery({
-    queryKey: ["surfaces"],
+    queryKey: isNativeConsole()
+      ? ["surfaces", session?.id, session?.role]
+      : ["surfaces"],
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(
         async (surface): Promise<[Surface, SurfaceState]> => {
@@ -215,6 +221,22 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
             if ("api" in entry && entry.api === "native") {
               if (!isNativeConsole())
                 return [surface, { status: "unimplemented" }];
+              // The backend session supplies current authority. Never fetch
+              // admin directories merely to enrich a developer's key form.
+              if (session?.role && session.role !== "admin")
+                return [
+                  surface,
+                  {
+                    status: "denied",
+                    error: new PlatformError(403, {
+                      type: "error",
+                      error: {
+                        type: "permission_error",
+                        message: "This directory requires the admin role.",
+                      },
+                    }),
+                  },
+                ];
               await nativeGet(entry.path, { limit: 1 });
             } else if (!("api" in entry))
               await platformGet<unknown>(entry.path, { limit: 1 });
@@ -242,7 +264,7 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
     },
     staleTime: isNativeConsole() ? 0 : Infinity,
     refetchInterval: isNativeConsole() ? 15_000 : false,
-    gcTime: Infinity,
+    gcTime: isNativeConsole() ? 0 : Infinity,
     // A 404 is definitive and a probe failure is not fatal — neither is worth
     // a second round trip.
     retry: false,

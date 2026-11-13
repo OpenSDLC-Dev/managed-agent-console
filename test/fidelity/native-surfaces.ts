@@ -2,6 +2,39 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-owned-key-list",
+    route: "/api-keys",
+    fixture: "human and service-owned keys",
+    description:
+      "Owner and creator stay separate; current row authority controls lifecycle.",
+  },
+  {
+    id: "native-owned-key-form",
+    route: "/api-keys",
+    fixture: "native self-owned creation",
+    description: "Self ownership and owner-role/deactivation-aware copy.",
+  },
+  {
+    id: "native-owned-key-owner-picker",
+    route: "/api-keys",
+    fixture: "active service-account selection",
+    description:
+      "Admin selects an existing active account; archived accounts stay absent.",
+  },
+  {
+    id: "native-owned-key-reveal",
+    route: "/api-keys",
+    fixture: "successful real issuance, plaintext masked",
+    description:
+      "Reveal once with clipboard-only copy; the screenshot never retains the key.",
+  },
+  {
+    id: "native-owned-key-dashboard-form",
+    route: "/dashboard",
+    fixture: "Dashboard key shortcut",
+    description: "The same native owned-key dialog from Dashboard.",
+  },
+  {
     id: "native-identity-loading",
     route: "/members",
     fixture: "held initial session metadata",

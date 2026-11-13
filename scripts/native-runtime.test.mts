@@ -40,6 +40,7 @@ import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const original = cp.spawn, sync = cp.spawnSync;
 const servers = new Map();
+let readinessStarted = false;
 const timeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms, ...args) => timeout(fn, kind.startsWith("status-") && ms === 250 ? 0 : ms, ...args);
 function synthetic(name) {
@@ -63,6 +64,7 @@ function result(command, args, options) {
   }
   if (command !== "docker") throw Error("unexpected command " + command);
   switch (args[0]) {
+    case "context": return { status: 0, stdout: args[1] === "show" ? "fake-local" : "unix:///fake-local.sock" };
     case "create":
       writeFileSync(args[args.indexOf("--cidfile") + 1], id);
       return { status: 0, stdout: id };
@@ -87,6 +89,7 @@ cp.spawnSync = (command, args, options) => {
   return { stdout: "", stderr: "", ...result(command, args, options) };
 };
 cp.spawn = (command, args, options) => {
+  if (command === process.execPath && args[0] === "-e") return original(command, args, options);
   if (command === "docker" || command === "go") {
     if (command === "docker" && args[0] === "create" && kind === "create-no-receipt") {
       log({ command, args, held: true });
@@ -105,12 +108,26 @@ cp.spawn = (command, args, options) => {
       return child;
     }
     const value = result(command, args, options);
+    // Status rows test readiness and real cleanup, not canned startup responses.
+    if (kind.startsWith("status-") && !readinessStarted) {
+      const child = synthetic("command");
+      queueMicrotask(() => {
+        child.stdout.end(value.stdout || ""); child.stderr.end(value.stderr || "");
+        child.finish(value.status);
+      });
+      return child;
+    }
     if (command === "docker" && args[0] === "create" && kind === "create-blocked") {
       const child = original(process.execPath, ["-e", "setInterval(()=>{},1000);setTimeout(()=>process.exit(0),10000)"], options);
       log({ held: true, pid: child.pid });
       return child;
     }
-    return original(process.execPath, ["-e", "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
+    if (kind.startsWith("status-")) log({ responseChild: readinessStarted ? "cleanup" : "startup", operation: args[0] });
+    // The child records execution; pre-spawn labels alone also admit synthetic children.
+    const executed = kind.startsWith("status-")
+      ? "require('node:fs').appendFileSync(" + JSON.stringify(${JSON.stringify(calls)}) + ", " + JSON.stringify(JSON.stringify({ responseExecuted: args[0] }) + "\\n") + ");"
+      : "";
+    return original(process.execPath, ["-e", executed + "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
   }
   if (command.endsWith("native-platform")) {
     if (["ready", "repeat-signals", "post-ready-close", "dead-200", "dead-before-announce"].includes(kind) || kind.startsWith("status-")) return synthetic("platform");
@@ -162,6 +179,7 @@ http.createServer = () => {
   return server;
 };
 globalThis.fetch = async (url, { signal } = {}) => {
+  readinessStarted = true;
   if (kind === "dead-200" && !servers.get("platform").exitCode) servers.get("platform").finish();
   const status = kind.startsWith("status-") ? Number(kind.split("-")[1]) : 200;
   if (!kind.startsWith("held-")) { log({ readiness: url, status }); return new Response("{}", { status }); }
@@ -329,6 +347,7 @@ it.skipIf(process.platform === "win32").each(["held-headers", "held-body"])(
       expect(commands.filter((c) => c.readinessCancelled)).toHaveLength(1);
       expect(commands.filter((c) => c.server)).toHaveLength(1);
       expect(receipt.started.map((c: { name: string }) => c.name)).toEqual([
+        "environment-probe",
         "platform",
       ]);
       expect(receipt.listeners.map((c: { port: number }) => c.port)).toEqual([
@@ -393,11 +412,99 @@ it.each([401, 404, 503])(
         encoding: "utf8",
         timeout: 5000,
       });
+      if (result.error) {
+        // This fixture intercepts every command. Report only its safe output
+        // and allowlisted progress, never arguments, environments or receipts.
+        const progress = {
+          callsReadable: false,
+          commands: [] as { command: string; phase: string }[],
+          readinessChecks: 0,
+          receiptReadable: false,
+          started: [] as string[],
+          cleaned: false,
+        };
+        try {
+          const calls = readFileSync(f.calls, "utf8")
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line));
+          progress.commands = calls.flatMap((call) => {
+            const command = ["docker", "go"].find(
+              (name) => name === call?.command,
+            );
+            const phase = [
+              "context",
+              "ps",
+              "volume",
+              "create",
+              "inspect",
+              "start",
+              "port",
+              "exec",
+              "build",
+              "rm",
+            ].find((name) => name === call?.args?.[0]);
+            return command && phase ? [{ command, phase }] : [];
+          });
+          progress.readinessChecks = calls.filter(
+            (call) => typeof call?.readiness === "string",
+          ).length;
+          progress.callsReadable = true;
+        } catch {
+          // A missing or partial trace must not replace the process failure.
+        }
+        try {
+          const receipt = JSON.parse(
+            readFileSync(join(f.evidence, "task6-native-receipt.json"), "utf8"),
+          );
+          progress.started = [
+            "environment-probe",
+            "platform",
+            "console",
+          ].filter((name) =>
+            receipt.started?.some(
+              (child: { name?: string }) => child?.name === name,
+            ),
+          );
+          progress.cleaned = receipt.cleaned === true;
+          progress.receiptReadable = true;
+        } catch {
+          // Receipt creation or writing may be the phase that failed.
+        }
+        // A cleanup timeout may follow a readiness error containing its URL.
+        console.error(
+          "native readiness child failure",
+          JSON.stringify({
+            status: result.status,
+            signal: result.signal,
+            errorCode: (result.error as NodeJS.ErrnoException).code,
+            stdout: result.stdout?.replace(
+              /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+              "[redacted-url]",
+            ),
+            stderr: result.stderr?.replace(
+              /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi,
+              "[redacted-url]",
+            ),
+            ...progress,
+          }),
+        );
+      }
       expect(result.error).toBeUndefined();
       expect(result.status, result.stderr).toBe(1);
       expect(result.stderr).toContain("runtime did not become ready");
       expect(result.stdout).not.toContain("native runtime ready");
-      assertClean(f);
+      const { commands } = assertClean(f);
+      expect(commands.filter((call) => call.readiness).length).toBe(240);
+      expect(
+        commands.filter((call) => call.responseChild === "startup").length,
+      ).toBe(0);
+      const executed = commands.filter((call) => call.responseExecuted);
+      expect(executed.length).toBe(5);
+      for (const operation of ["rm", "ps", "volume"])
+        expect(
+          executed.filter((call) => call.responseExecuted === operation).length,
+        ).toBeGreaterThan(0);
     } finally {
       rmSync(f.dir, { recursive: true, force: true });
     }
@@ -447,12 +554,90 @@ it.skipIf(process.platform === "win32").each(["SIGTERM", "SIGINT"] as const)(
     });
     const closed = once(child, "close");
     let output = "";
+    let stderr = "";
     child.stdout.on("data", (data) => {
       output += data;
+    });
+    child.stderr.on("data", (data) => {
+      stderr += data;
     });
     try {
       for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
         await new Promise((r) => setTimeout(r, 10));
+      if (!output.includes("native runtime ready")) {
+        const progress = {
+          callsReadable: false,
+          recordedCommands: [] as string[],
+          readinessChecks: 0,
+          receiptReadable: false,
+          recordedStarts: [] as string[],
+        };
+        try {
+          const calls = readFileSync(f.calls, "utf8")
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line));
+          // Presence only: fixture records do not prove command completion.
+          progress.recordedCommands = [
+            "docker context",
+            "docker ps",
+            "docker volume",
+            "docker create",
+            "docker inspect",
+            "docker start",
+            "docker port",
+            "docker exec",
+            "docker rm",
+            "go build",
+          ].filter((entry) => {
+            const [command, operation] = entry.split(" ");
+            return calls.some(
+              (call) =>
+                call?.command === command && call?.args?.[0] === operation,
+            );
+          });
+          progress.readinessChecks = calls.filter(
+            (call) => typeof call?.readiness === "string",
+          ).length;
+          progress.callsReadable = true;
+        } catch {
+          // Missing or partial progress must not mask the readiness failure.
+        }
+        try {
+          const receipt = JSON.parse(
+            readFileSync(join(f.evidence, "task6-native-receipt.json"), "utf8"),
+          );
+          progress.recordedStarts = [
+            "environment-probe",
+            "platform",
+            "console",
+          ].filter((name) =>
+            receipt.started?.some(
+              (child: { name?: string }) => child?.name === name,
+            ),
+          );
+          progress.receiptReadable = true;
+        } catch {
+          // Do not print parser errors, which may quote private artifact data.
+        }
+        // These intercepted fixture outputs are not arbitrary credential logs.
+        console.error(
+          "native repeated-signal readiness failure",
+          JSON.stringify({
+            pid: child.pid,
+            status: child.exitCode,
+            signal: child.signalCode,
+            stdout: output
+              .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[redacted-url]")
+              .slice(0, 2000),
+            stderr: stderr
+              .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[redacted-url]")
+              .slice(0, 2000),
+            ...progress,
+          }),
+        );
+      }
       expect(output).toContain("native runtime ready");
       child.kill(signal);
       for (

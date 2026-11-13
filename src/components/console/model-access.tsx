@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { ShieldOff } from "lucide-react";
 import { ConfirmIconButton } from "@/components/console/archive-button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ import {
 } from "@/lib/platform/gateway-queries";
 import { useApiKeys } from "@/lib/platform/queries";
 import type { ApiKey, GatewayKeyPolicy } from "@/lib/platform/types";
-import { wireInteger } from "@/lib/platform/http";
+import { isNativeConsole, wireInteger } from "@/lib/platform/http";
 
 /**
  * A key's grant on the model gateway (auth.go authenticate): its policy when
@@ -44,6 +45,10 @@ export function accessOf(
   key: ApiKey,
   policy: GatewayKeyPolicy | undefined,
 ): Access {
+  // Owned credentials are not admitted by the gateway in this slice, even if
+  // a stale legacy policy names the key. Do not advertise future inference.
+  if (key.principal)
+    return { models: "none", rpm: null, tpm: null, builtIn: false };
   if (policy)
     return {
       models: policy.aliases === null ? "all" : policy.aliases.length,
@@ -93,13 +98,21 @@ export function grantLine(a: Access): string {
 }
 
 /**
- * The active keys that may call `alias` — what the gateway would admit
+ * The visible active keys that may call `alias` — what the gateway would admit
  * (auth.go): a key's policy naming it or every model, or the built-in grant.
  * A key that is not active calls nothing, so it is not listed.
  */
 export function ModelKeys({ alias }: { alias: string }) {
+  const session = useContext(ConsoleSessionContext)?.data;
   const keys = useApiKeys();
   const policies = useGatewayKeyPolicies();
+  if (isNativeConsole() && session?.role === "developer")
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        Your list includes only your owned keys. Model access is not available
+        for owned keys yet. Ask an administrator to check other callers.
+      </p>
+    );
   if (!keys.data || !policies.data)
     return (
       <p className="text-[13px] text-muted-foreground">
@@ -107,7 +120,7 @@ export function ModelKeys({ alias }: { alias: string }) {
       </p>
     );
   const callers = keys.data.flatMap((key) => {
-    if (key.status !== "active") return [];
+    if (key.status !== "active" || key.principal) return [];
     const policy = policies.data.data.find((p) => p.api_key_id === key.id);
     const access = accessOf(key, policy);
     const may = access.models === "all" || !!policy?.aliases?.includes(alias);
@@ -116,7 +129,7 @@ export function ModelKeys({ alias }: { alias: string }) {
   if (callers.length === 0)
     return (
       <p className="text-[13px] text-muted-foreground">
-        No active key can call it. Grant one on API Keys.
+        No visible active key can call this model.
       </p>
     );
   return (
@@ -146,6 +159,12 @@ export function ModelAccessCell({
   policies: GatewayKeyPolicy[] | undefined;
   loading: boolean;
 }) {
+  if (apiKey.principal)
+    return (
+      <span className="text-muted-foreground" data-models="none">
+        Not available for owned keys
+      </span>
+    );
   if (!policies)
     return (
       <span className="text-muted-foreground" data-models="unknown">
@@ -187,6 +206,9 @@ export function ModelAccessButton({
   policy: GatewayKeyPolicy | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  const session = useContext(ConsoleSessionContext)?.data;
+  if (apiKey.principal || (isNativeConsole() && session?.role !== "admin"))
+    return null;
   return (
     <>
       <Button
@@ -220,6 +242,9 @@ export function ModelAccessButton({
  */
 export function RemovePolicyButton({ apiKey }: { apiKey: ApiKey }) {
   const remove = useDeleteGatewayKeyPolicy(apiKey.id, { errorToast: true });
+  const session = useContext(ConsoleSessionContext)?.data;
+  if (apiKey.principal || (isNativeConsole() && session?.role !== "admin"))
+    return null;
   return (
     <ConfirmIconButton
       label={`Remove model policy from ${apiKey.name}`}
