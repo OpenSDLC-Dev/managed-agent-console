@@ -20,7 +20,7 @@ Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 
 Organization model limits, principal usage and current owner-role inference access.
 Slice 3 [PR #254](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/254) merged.
-The reviewed companion is ready; paired delivery is tracked in the [platform's STATE.md](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/STATE.md).
+The reviewed Console companion is ready for platform slice 4 integration.
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
 ## Tasks
