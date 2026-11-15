@@ -19,11 +19,12 @@ Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 ### Platform plan 69 slice 5
 
 Administrator selection of a service account for future scheduled deployment sessions.
-Implementation and verification are in progress; slice 4 merged in PR #255.
+Local source checks passed; [PR #259](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/259) is in review and CI.
+Evidence: [native acceptance](./docs/HISTORY.md#platform-plan-69-slice-5--local-source-checks).
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
 ## Tasks
 
-- [ ] Add the native administrator-only deployment initiator setting.
-- [ ] Verify cookie/CSRF writes, persistence, pause state and manual-run authority.
+- [x] Add the native administrator-only deployment initiator setting.
+- [x] Verify cookie/CSRF writes, persistence, pause state and manual-run authority.
 - [ ] Complete local checks, native light/dark shots, independent review and CI.

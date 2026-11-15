@@ -37,7 +37,9 @@ export async function seedDeployment(request: APIRequestContext) {
   await post(`${resource}/deployments/${deployment.id}/pause`);
   const account = await post(
     "/api/console/organizations/default/service_accounts",
-    { name: `schedule-bot-${deployment.id}` },
+    {
+      name: `schedule-bot-${deployment.id.replaceAll("_", "-").toLowerCase()}`,
+    },
   );
   return { deployment, account, session };
 }

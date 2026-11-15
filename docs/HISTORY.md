@@ -4,6 +4,33 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 69 slice 5 — local source checks
+
+On 2026-11-15, [PR #259](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/259)'s
+candidate ran against the matching platform slice 5 working-tree snapshot based on `f28e2c9`.
+All 21 model-free native tests passed. The new scenario checked the private cookie write,
+persisted initiator after reload, unchanged pause state and the manual session's caller attribution.
+The first run exposed an invalid service-account fixture name: deployment IDs contain an
+underscore, which that API refuses. The fixture now uses lowercase letters, digits and hyphens.
+
+The production build, typecheck, formatting, source lint, 210 mock browser tests and
+2,114 unit tests passed. Coverage was 93.35% statements, 87.40% branches, 91.54% functions
+and 94.65% lines. Three child-start probes exceeded their 5-second deadlines in the initial
+parallel coverage run; an isolated run and the complete two-worker run passed unchanged.
+Source lint excluded unrelated, untracked `.claude` artifacts already in the checkout.
+
+Native startup stalled while WSL read the Windows checkout. The run used a Git archive of
+the committed Console candidate, with the fixture correction, in an ext4 temporary directory.
+Dependencies came from the frozen lockfile; the production build and canonical native commands
+ran there. The platform verifier compared its candidate snapshot file-by-file with the working tree.
+Runtime receipts confirmed cleanup of all owned processes, containers and volumes.
+
+Chrome walked `native-deployment-initiator` and `native-deployment-initiator-form` in light and
+dark themes. All four images were inspected; both themes' failure-artifact controls passed.
+The authenticated reference's deployment form structure was inspected separately. Its Create
+form has no initiator selector, so these shots verify the documented local extension, not a
+pixel-identical reference screen or a published-image deployment.
+
 ## Platform plan 69 slice 4 — local source checks
 
 On 2026-11-15, [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255)'s
