@@ -4,6 +4,25 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 69 slice 4 — local source checks
+
+On 2026-11-15, [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255)'s
+candidate used local platform slice 4 source based on `14985f8`.
+The owned, model-free native fixture passed all 20 tests with real PostgreSQL and Chrome.
+It confirmed limit persistence after reload, separate principal totals and retained credential IDs.
+Existing SDK actor, revocation, cookie-boundary and failure-artifact checks also passed.
+The runtime receipts confirmed removal of every owned process, container and volume.
+
+Chrome walked five native surfaces in both themes: model limits, the limit form,
+principal usage, principal requests and the owned-key list. All ten images were inspected.
+The four affected mock surfaces were also re-shot in both themes.
+Authenticated reference capture remained unavailable; these are local checks, not current reference fidelity or published-image acceptance.
+
+The native run exposed two fixture errors that mock checks did not catch.
+The provider profile is `anthropic-generic`; using the protocol name returned 400.
+The added scenario exhausted the shared login window before the later SDK scenario.
+It now starts a fresh window in the owned fixture database; the login-throttle assertions remain intact.
+
 ## Platform plan 69 slice 3 — prepublication checks
 
 The 2026-11-08 local candidate used platform `158aa61e` and Console source based

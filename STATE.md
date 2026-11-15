@@ -24,7 +24,7 @@ Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a r
 
 ## Tasks
 
-- [ ] Separate principal totals and retain each request's credential attribution.
-- [ ] Show owner-role model access and cookie-only organization model budgets.
-- [ ] Complete checks, native browser acceptance, light/dark surface shots and independent review.
-- [ ] Deliver the companion PR with the [platform slice 4](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/codex/plan-69-slice-4/STATE.md), settle CI and review threads, then squash merge.
+- [x] Separate principal totals and retain each request's credential attribution.
+- [x] Show owner-role model access and cookie-only organization model budgets.
+- [x] Complete local checks, native browser acceptance and light/dark surface shots ([record](./docs/HISTORY.md#platform-plan-69-slice-4--local-source-checks)).
+- [ ] Finish review and CI for [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255), deliver with platform slice 4, then squash merge. Platform verification and pinned Claude review remain blocked.

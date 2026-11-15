@@ -1334,6 +1334,22 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
 test("native model limits persist and principal usage keeps credential attribution", async ({
   page,
 }) => {
+  // This scenario has its own login window. Earlier login/throttle scenarios
+  // consume the shared account's five attempts; keep their assertions intact.
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "limits-admin", password },

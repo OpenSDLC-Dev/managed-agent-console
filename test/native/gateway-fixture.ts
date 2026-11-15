@@ -24,7 +24,7 @@ export async function seedGateway(
   if (!aliases.data.some((a: { name: string }) => a.name === model)) {
     const provider = await post("providers", {
       name: "slice4-provider",
-      profile: "anthropic",
+      profile: "anthropic-generic",
       endpoints: { anthropic: "https://example.invalid" },
     });
     const deployment = await post("deployments", {
