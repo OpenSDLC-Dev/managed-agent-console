@@ -84,7 +84,8 @@ function InitiatorSetting({ id, actor }: { id: string; actor: string }) {
               path={path}
               busy={busy}
               setBusy={setBusy}
-              onSaved={(value) => {
+              onSaved={async (value) => {
+                await client.cancelQueries({ queryKey: key, exact: true });
                 client.setQueryData(key, value);
                 setEditing(false);
               }}
@@ -107,7 +108,7 @@ function InitiatorForm({
 }: {
   actor: string;
   path: string;
-  onSaved: (value: Initiator) => void;
+  onSaved: (value: Initiator) => Promise<void>;
   onCancel: () => void;
   busy: boolean;
   setBusy: (busy: boolean) => void;
@@ -136,7 +137,9 @@ function InitiatorForm({
     setBusy(true);
     setError(undefined);
     try {
-      onSaved(await nativeWrite<Initiator>(path, { principal_id: selected }));
+      await onSaved(
+        await nativeWrite<Initiator>(path, { principal_id: selected }),
+      );
     } catch (error) {
       setError(
         error instanceof Error

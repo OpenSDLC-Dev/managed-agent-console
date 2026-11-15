@@ -1354,7 +1354,35 @@ test("native deployment initiator changes persist without unpausing or changing 
     data: { code: code(), login_name: "deployment-admin", password },
   });
   expect([200, 409]).toContain(setup.status());
-  if (setup.status() === 409) await login(page, "new-person");
+  if (setup.status() === 409) {
+    const credentials = { login_name: "deployment-admin", password };
+    const headers = { origin: "http://127.0.0.1:38200" };
+    const existing = await page.request.post("/api/auth/login", {
+      headers,
+      data: credentials,
+    });
+    if (existing.status() !== 200) {
+      expect(existing.status()).toBe(401);
+      // The full suite already bootstrapped new-person. Give this scenario
+      // its own administrator; standalone retries reuse that same account.
+      const bootstrap = await page.request.post("/api/auth/login", {
+        headers,
+        data: { login_name: "new-person", password },
+      });
+      expect(bootstrap.status()).toBe(200);
+      const actor = await (await page.request.get("/api/auth/session")).json();
+      const create = await page.request.post(`${org}/members`, {
+        headers: { ...headers, "X-CSRF-Token": actor.csrf_token },
+        data: { ...credentials, role: "admin" },
+      });
+      expect(create.status()).toBe(200);
+      const dedicated = await page.request.post("/api/auth/login", {
+        headers,
+        data: credentials,
+      });
+      expect(dedicated.status()).toBe(200);
+    }
+  }
   const { deployment, account, session } = await seedDeployment(page.request);
   const offered: string[] = [];
   page.on("request", (r) =>

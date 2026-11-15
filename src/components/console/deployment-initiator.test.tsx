@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -29,6 +29,7 @@ function mount(role = "admin") {
   const rendered = render(view(role));
   return {
     ...rendered,
+    client,
     changeRole: (role: string) => rendered.rerender(view(role)),
   };
 }
@@ -184,4 +185,58 @@ it("keeps a dismissed pending write from opening a competing draft", async () =>
       screen.getByRole("button", { name: "Change initiator" }),
     ).toBeEnabled(),
   );
+});
+
+it("does not let a pre-save refetch replace the saved initiator", async () => {
+  document.documentElement.dataset.consoleAuth = "platform";
+  const fetcher = stub();
+  const original = fetcher.getMockImplementation()!;
+  let hold = false;
+  let captured = false;
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fetcher.mockImplementation(async (input, init) => {
+    const response = await original(input, init);
+    if (
+      hold &&
+      String(input).endsWith("/initiator") &&
+      init?.method !== "POST"
+    ) {
+      captured = true;
+      await pending;
+    }
+    return response;
+  });
+  const { client } = mount();
+  await screen.findByText("user_creator");
+  hold = true;
+  let refresh!: Promise<void>;
+  act(() => {
+    refresh = client.invalidateQueries({ queryKey: ["deployment-initiator"] });
+  });
+  await waitFor(() => expect(captured).toBe(true));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Change initiator" }),
+  );
+  await screen.findByRole("option", { name: "First worker" });
+  await userEvent.selectOptions(
+    screen.getByLabelText("Service account"),
+    "svac_first",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Save initiator" }));
+  await screen.findByText("svac_first");
+  await act(async () => {
+    release();
+    await refresh;
+  });
+  expect(
+    client.getQueryData(["deployment-initiator", "user_self", "depl_one"]),
+  ).toEqual({
+    principal_id: "svac_first",
+    api_key_id: null,
+  });
+  expect(screen.getByText("svac_first")).toBeInTheDocument();
+  expect(screen.queryByText("user_creator")).not.toBeInTheDocument();
 });
