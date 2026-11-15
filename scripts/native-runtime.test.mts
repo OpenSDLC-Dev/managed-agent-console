@@ -207,6 +207,8 @@ globalThis.fetch = async (url, { signal } = {}) => {
   return response;
 };
 syncBuiltinESMExports();
+// Shutdown assertions start after readiness, even on a slow process startup.
+if (["ready", "repeat-signals"].includes(kind)) await new Promise(resolve => timeout(resolve, 2400));
 `,
   );
   const args = [
@@ -565,7 +567,13 @@ it.skipIf(process.platform === "win32").each(["SIGTERM", "SIGINT"] as const)(
       stderr += data;
     });
     try {
-      for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
+      // CI can still be starting the environment probe after two seconds.
+      // Reserve five seconds of the test's 15-second budget for shutdown.
+      const readyDeadline = performance.now() + 10_000;
+      while (
+        !output.includes("native runtime ready") &&
+        performance.now() < readyDeadline
+      )
         await new Promise((r) => setTimeout(r, 10));
       if (!output.includes("native runtime ready")) {
         const progress = {
@@ -754,7 +762,12 @@ it.skipIf(process.platform === "win32")(
       output += data;
     });
     try {
-      for (let n = 0; n < 200 && !output.includes("native runtime ready"); n++)
+      // Keep five seconds of the test budget for shutdown after slow startup.
+      const readyDeadline = performance.now() + 10_000;
+      while (
+        !output.includes("native runtime ready") &&
+        performance.now() < readyDeadline
+      )
         await new Promise((r) => setTimeout(r, 10));
       expect(output).toContain("native runtime ready");
       child.kill("SIGTERM");
