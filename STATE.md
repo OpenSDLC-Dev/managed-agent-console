@@ -29,3 +29,4 @@ Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a r
 - [x] Show owner-role model access and cookie-only organization model budgets.
 - [x] Complete local checks, native browser acceptance and light/dark surface shots ([record](./docs/HISTORY.md#platform-plan-69-slice-4--local-source-checks)).
 - [x] Complete independent review and CI for [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255).
+- [x] Bound repeated-signal fixture startup separately from cleanup, with delayed-start controls for slow runners.
