@@ -31,6 +31,16 @@ The authenticated reference's deployment form structure was inspected separately
 form has no initiator selector, so these shots verify the documented local extension, not a
 pixel-identical reference screen or a published-image deployment.
 
+Review at `dd8f9ea` confirmed the stale-refetch regression: the old GET overwrote
+the saved cache value before the fix, and all five component contracts passed afterward.
+The old native fixture failed its second standalone repetition at the unrelated account's login.
+The corrected fixture passed both repetitions and all 21 native tests against platform `2f699e0`.
+Chrome repeated the two surfaces in both themes; four tests and visual inspection passed.
+All owned runtimes reported successful cleanup. The final Linux build and 2,125 unit tests passed,
+with the same coverage totals above. The probe ratchet covered 314 tests across 12 seams.
+Independent committed review found no remaining blocker, both PR review threads were resolved,
+and the source candidate passed three-OS CI, Docker/Trivy and CodeQL.
+
 ## Platform plan 69 slice 4 — local source checks
 
 On 2026-11-15, [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255)'s
