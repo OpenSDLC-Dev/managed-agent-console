@@ -4,6 +4,7 @@ import { nativeDocker } from "./docker";
 import { test, expect } from "./test";
 import { selectNativeSurfaces } from "../fidelity/native-surfaces";
 import { seedGateway, principals } from "./gateway-fixture";
+import { seedDeployment } from "./deployment-fixture";
 const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
 const org = "/api/console/organizations/default";
 const password = "native-shot-password-123";
@@ -125,6 +126,11 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     await created.dispose();
   }
   const walked: string[] = [];
+  const deploymentFixture = selected.some((s) =>
+    s.id.startsWith("native-deployment-initiator"),
+  )
+    ? await seedDeployment(request)
+    : undefined;
   if (
     selected.some(
       (s) =>
@@ -253,7 +259,11 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             });
             expect(signedIn.status()).toBe(200);
           }
-          await page.goto(surface.route);
+          await page.goto(
+            surface.id.startsWith("native-deployment-initiator")
+              ? `/deployments/${deploymentFixture!.deployment.id}`
+              : surface.route,
+          );
           if (surface.route === "/login" || surface.route === "/setup")
             await expect(
               page.getByLabel(
@@ -263,6 +273,14 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           else await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
           if (surface.id === "native-model-limits-form")
             await page.getByRole("button", { name: "Edit limits" }).click();
+          if (surface.id === "native-deployment-initiator-form") {
+            await page
+              .getByRole("button", { name: "Change initiator" })
+              .click();
+            await page
+              .getByLabel("Service account")
+              .selectOption(deploymentFixture!.account.id);
+          }
           if (surface.id === "native-principal-usage")
             await page
               .getByRole("button", { name: "Principal", exact: true })
@@ -487,6 +505,21 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         // These assertions are independent of the interaction branches above.
         // Removing an interaction must fail, not produce a mislabeled list shot.
         switch (surface.id) {
+          case "native-deployment-initiator":
+            await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
+              "data-initiator-id",
+              deploymentFixture!.session.id,
+            );
+            await page
+              .getByRole("heading", { name: "Scheduled run initiator" })
+              .scrollIntoViewIfNeeded();
+            break;
+          case "native-deployment-initiator-form":
+            await expect(page.getByRole("dialog")).toBeVisible();
+            await expect(page.getByLabel("Service account")).toHaveValue(
+              deploymentFixture!.account.id,
+            );
+            break;
           case "native-model-limits":
             await expect(
               page.locator("[data-limit=requests_per_minute]"),

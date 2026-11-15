@@ -15,6 +15,7 @@ import { test, expect } from "./test";
 import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
 import { nativeDocker } from "./docker";
+import { seedDeployment } from "./deployment-fixture";
 import {
   seedGateway,
   model as limitedModel,
@@ -1329,6 +1330,104 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
   expect(
     (await context.cookies()).some((cookie) => cookie.name === "map_session"),
   ).toBe(false);
+});
+
+test("native deployment initiator changes persist without unpausing or changing manual authority", async ({
+  page,
+}) => {
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "deployment-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) {
+    const credentials = { login_name: "deployment-admin", password };
+    const headers = { origin: "http://127.0.0.1:38200" };
+    const existing = await page.request.post("/api/auth/login", {
+      headers,
+      data: credentials,
+    });
+    if (existing.status() !== 200) {
+      expect(existing.status()).toBe(401);
+      // The full suite already bootstrapped new-person. Give this scenario
+      // its own administrator; standalone retries reuse that same account.
+      const bootstrap = await page.request.post("/api/auth/login", {
+        headers,
+        data: { login_name: "new-person", password },
+      });
+      expect(bootstrap.status()).toBe(200);
+      const actor = await (await page.request.get("/api/auth/session")).json();
+      const create = await page.request.post(`${org}/members`, {
+        headers: { ...headers, "X-CSRF-Token": actor.csrf_token },
+        data: { ...credentials, role: "admin" },
+      });
+      expect(create.status()).toBe(200);
+      const dedicated = await page.request.post("/api/auth/login", {
+        headers,
+        data: credentials,
+      });
+      expect(dedicated.status()).toBe(200);
+    }
+  }
+  const { deployment, account, session } = await seedDeployment(page.request);
+  const offered: string[] = [];
+  page.on("request", (r) =>
+    offered.push(
+      ...credentialHeaders("http://127.0.0.1:38200", r.url(), r.headers()),
+    ),
+  );
+  await page.goto(`/deployments/${deployment.id}`);
+  await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
+    "data-initiator-id",
+    session.id,
+  );
+  await page.getByRole("button", { name: "Change initiator" }).click();
+  await page.getByLabel("Service account").selectOption(account.id);
+  await page.getByRole("button", { name: "Save initiator" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
+    "data-initiator-id",
+    account.id,
+  );
+  await expect(page.locator("[data-status=paused]").first()).toBeVisible();
+  expect(offered).toEqual([]);
+  const run = await write(
+    page,
+    `/api/organizations/default/proxy/v1/deployments/${deployment.id}/run`,
+    {},
+  );
+  expect(run.status).toBe(200);
+  const result = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-At",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `SELECT replace(initiator_principal_id,'principal_','user_') FROM sessions WHERE id='${run.body.session_id}'`,
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout.trim()).toBe(session.id);
 });
 
 test("native model limits persist and principal usage keeps credential attribution", async ({

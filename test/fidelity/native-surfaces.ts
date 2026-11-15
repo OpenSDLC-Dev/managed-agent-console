@@ -2,6 +2,20 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-deployment-initiator",
+    route: "/deployments/{fixture}",
+    fixture: "real paused deployment with creator initiator",
+    description:
+      "Administrator sees the identity for future scheduled sessions.",
+  },
+  {
+    id: "native-deployment-initiator-form",
+    route: "/deployments/{fixture}",
+    fixture: "active service account selection",
+    description:
+      "A private scheduling setting preserves existing sessions and pause state.",
+  },
+  {
     id: "native-model-limits",
     route: "/models?model=slice4%2Fmodel",
     fixture: "real organization model limits",
