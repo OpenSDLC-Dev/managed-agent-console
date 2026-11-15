@@ -15,6 +15,7 @@ import type {
   GatewayDailyUsage,
   GatewayDeployment,
   GatewayKeyPolicy,
+  GatewayModelLimit,
   GatewayKind,
   GatewayProfile,
   GatewayProtocol,
@@ -395,9 +396,28 @@ export function useDeleteGatewayKeyPolicy(
   });
 }
 
+/** Cookie-only organization budgets (admin/model_limits.go). */
+export function useGatewayModelLimits() {
+  return useQuery({
+    queryKey: ["gateway", "rate_limits"],
+    queryFn: () => gatewayGet<List<GatewayModelLimit>>("rate_limits"),
+  });
+}
+
+export function usePutGatewayModelLimit(model: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Omit<GatewayModelLimit, "model">) =>
+      gatewayPost<GatewayModelLimit>(`rate_limits/${model}`, body),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["gateway", "rate_limits"] }),
+  });
+}
+
 /** The filters both usage reads take (usage.go usageFilter). */
 export interface GatewayUsageFilter {
   api_key_id?: string;
+  principal_id?: string;
   alias?: string;
   deployment_id?: string;
 }

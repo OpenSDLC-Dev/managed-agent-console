@@ -30,7 +30,7 @@ it("probe: owned keys cannot write legacy model policies", async () => {
   });
   renderTable([owned]);
   await waitFor(() =>
-    expect(access(owned)).toHaveAttribute("data-models", "none"),
+    expect(access(owned)).toHaveAttribute("data-models", "owner"),
   );
   expect(screen.queryByRole("button", { name: "Model access" })).toBeNull();
   expect(
@@ -226,7 +226,7 @@ it.each(["legacy machine", "native unknown", "native admin"])(
   },
 );
 
-it("owned keys cannot appear as gateway callers even with a stale legacy policy", async () => {
+it("does not infer owned-key authority from a stale legacy policy", async () => {
   const owned = Object.assign(apiKey({ id: "apikey_ci01" }), {
     principal: {
       type: "service_account_actor",
@@ -248,7 +248,7 @@ it("owned keys cannot appear as gateway callers even with a stale legacy policy"
       <ModelKeys alias="agent-default" />
     </QueryClientProvider>,
   );
-  await screen.findByText(/No visible active key/);
+  await screen.findByText(/No visible active legacy key/);
   expect(document.querySelector("[data-key-id]")).toBeNull();
 });
 
@@ -324,7 +324,9 @@ describe("accessLine", () => {
     expect(accessLine(accessOf(CI, policy({ aliases: ["a"], rpm: 60 })))).toBe(
       "1 model · 60 RPM",
     );
-    expect(accessLine(accessOf(CI, policy({})))).toBe("All models · no limit");
+    expect(accessLine(accessOf(CI, policy({})))).toBe(
+      "All models · no key limit",
+    );
     expect(accessLine(accessOf(FRESH, undefined))).toBe("No model access");
     expect(accessLine(accessOf(BOOTSTRAP, undefined))).toBe(
       "All models · built-in",
@@ -389,7 +391,7 @@ describe("ModelKeys", () => {
       document.querySelector(`[data-key-id=${id}] span + span`)?.textContent;
     expect(note("apikey_ci01")).toBe("granted · 60 RPM");
     expect(note("apikey_bootstrap01")).toBe("built-in");
-    expect(note("apikey_all01")).toBe("all models · no limit");
+    expect(note("apikey_all01")).toBe("all models · no key limit");
   });
 
   it("leaves out a key whose policy names other models", async () => {

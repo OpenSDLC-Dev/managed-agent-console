@@ -76,7 +76,7 @@ function sum(rows: GatewayDailyUsage[]): Totals {
 }
 
 const BY = [
-  ["api_key_id", "Key"],
+  ["principal_id", "Principal"],
   ["alias", "Model"],
   ["deployment_id", "Upstream model"],
 ] as const;
@@ -144,11 +144,15 @@ export default function UsagePage() {
       .slice(0, 10);
     return { day, cost: sum(byDay.get(day) ?? []).cost };
   });
-  const groups = [...groupBy(rows, (r) => r[by])]
+  const groups = [
+    ...groupBy(rows, (r) =>
+      by === "principal_id" ? r.principal_id || r.api_key_id : r[by],
+    ),
+  ]
     .map(([id, group]) => ({ id, ...sum(group) }))
     .sort((a, b) => b.cost - a.cost || b.requests - a.requests);
   const groupName = (id: string) =>
-    by === "api_key_id"
+    by === "principal_id"
       ? names.keyName(id)
       : by === "deployment_id"
         ? names.upstreamName(id)
@@ -249,6 +253,12 @@ export default function UsagePage() {
               ))}
             </span>
           </div>
+          {by === "principal_id" && (
+            <p className="pb-2 text-xs text-muted-foreground">
+              Owned keys share their principal&apos;s totals. Historical and
+              unowned calls remain under their key.
+            </p>
+          )}
           {groups.length === 0 ? (
             <EmptyState
               title="No model calls in this period"
@@ -284,7 +294,7 @@ export default function UsagePage() {
                       <td
                         className={cn(
                           "py-2 pr-3",
-                          by !== "api_key_id" && "font-mono text-[13px]",
+                          by !== "principal_id" && "font-mono text-[13px]",
                         )}
                       >
                         {groupName(g.id)}

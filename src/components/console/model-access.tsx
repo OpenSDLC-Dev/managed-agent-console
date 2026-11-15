@@ -35,7 +35,7 @@ import { isNativeConsole, wireInteger } from "@/lib/platform/http";
  * which, and an inactive key's grant applies again once it is reactivated.
  */
 export interface Access {
-  models: "all" | "none" | number;
+  models: "all" | "none" | "owner" | number;
   rpm: number | null;
   tpm: number | null;
   builtIn: boolean;
@@ -45,10 +45,10 @@ export function accessOf(
   key: ApiKey,
   policy: GatewayKeyPolicy | undefined,
 ): Access {
-  // Owned credentials are not admitted by the gateway in this slice, even if
-  // a stale legacy policy names the key. Do not advertise future inference.
+  // The key list does not carry the owner's current role or status. A legacy
+  // policy cannot tell us an owned credential's current inference authority.
   if (key.principal)
-    return { models: "none", rpm: null, tpm: null, builtIn: false };
+    return { models: "owner", rpm: null, tpm: null, builtIn: false };
   if (policy)
     return {
       models: policy.aliases === null ? "all" : policy.aliases.length,
@@ -75,11 +75,12 @@ function limits(a: Access): string[] {
     ...(a.rpm === null ? [] : [`${compact.format(a.rpm)} RPM`]),
     ...(a.tpm === null ? [] : [`${compact.format(a.tpm)} TPM`]),
   ];
-  return set.length ? set : ["no limit"];
+  return set.length ? set : ["no key limit"];
 }
 
 /** "3 models · 120 RPM · 400K TPM", "All models · no limit", "No model access". */
 export function accessLine(a: Access): string {
+  if (a.models === "owner") return "Owner's role · organization limits";
   if (a.models === "none") return "No model access";
   const models =
     a.models === "all"
@@ -109,8 +110,9 @@ export function ModelKeys({ alias }: { alias: string }) {
   if (isNativeConsole() && session?.role === "developer")
     return (
       <p className="text-[13px] text-muted-foreground">
-        Your list includes only your owned keys. Model access is not available
-        for owned keys yet. Ask an administrator to check other callers.
+        Your list includes only your owned keys. Active developer and admin
+        owners can call every model within organization limits. Ask an
+        administrator to check other callers.
       </p>
     );
   if (!keys.data || !policies.data)
@@ -129,7 +131,7 @@ export function ModelKeys({ alias }: { alias: string }) {
   if (callers.length === 0)
     return (
       <p className="text-[13px] text-muted-foreground">
-        No visible active key can call this model.
+        No visible active legacy key can call this model.
       </p>
     );
   return (
@@ -161,8 +163,8 @@ export function ModelAccessCell({
 }) {
   if (apiKey.principal)
     return (
-      <span className="text-muted-foreground" data-models="none">
-        Not available for owned keys
+      <span className="text-muted-foreground" data-models="owner">
+        {accessLine(accessOf(apiKey, undefined))}
       </span>
     );
   if (!policies)
@@ -325,7 +327,8 @@ function ModelAccessDialog({
           </DialogTitle>
           <DialogDescription>
             Which models this key may call through the gateway, and how fast.
-            Management rights do not change.
+            Organization model limits also apply. Management rights do not
+            change.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

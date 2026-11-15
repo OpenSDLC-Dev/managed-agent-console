@@ -69,6 +69,46 @@ afterEach(() => {
 });
 
 describe("Usage overview", () => {
+  it("keeps principal rollups separate when their key field is empty", async () => {
+    const rows = [
+      { ...daily[0], principal_id: "principal_one", api_key_id: "", cost: 2 },
+      { ...daily[0], principal_id: "principal_two", api_key_id: "", cost: 3 },
+      { ...daily[0], principal_id: null, api_key_id: "apikey_ci01", cost: 1 },
+    ];
+    const fetchMock = stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json(KEYS)
+        : rest === "usage/daily"
+          ? Response.json({ data: rows })
+          : undefined,
+    );
+    renderPage(<UsagePage />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Principal" }),
+    );
+    expect(document.querySelectorAll("[data-group]")).toHaveLength(3);
+    expect(
+      document.querySelector("[data-group=principal_one] [data-cost]"),
+    ).toHaveAttribute("data-cost", "2");
+    expect(
+      document.querySelector("[data-group=principal_two] [data-cost]"),
+    ).toHaveAttribute("data-cost", "3");
+    expect(
+      document.querySelector("[data-group=apikey_ci01]"),
+    ).toHaveTextContent("ci-deploy");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Principal" }),
+      "principal_two",
+    );
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/daily")
+          .at(-1)
+          ?.searchParams.get("principal_id"),
+      ).toBe("principal_two"),
+    );
+  });
+
   it("sums the rollups into tiles, a bar a day, and a table by model", async () => {
     stub();
     renderPage(<UsagePage />);
@@ -167,11 +207,11 @@ describe("Usage overview", () => {
     }
   });
 
-  it("groups by key under the key's name", async () => {
+  it("keeps legacy key names when grouping by principal", async () => {
     stub();
     renderPage(<UsagePage />);
-    await screen.findByRole("button", { name: "Key" });
-    await userEvent.click(screen.getByRole("button", { name: "Key" }));
+    await screen.findByRole("button", { name: "Principal" });
+    await userEvent.click(screen.getByRole("button", { name: "Principal" }));
     const row = await waitFor(() => {
       const r = document.querySelector("[data-group=apikey_ci01]");
       expect(r).not.toBeNull();
@@ -246,6 +286,44 @@ describe("Usage overview", () => {
 });
 
 describe("Usage requests", () => {
+  it("retains the credential beside the stored principal and filters by principal", async () => {
+    const fetchMock = stubGatewayFetch((_method, rest) =>
+      rest === "usage/requests"
+        ? Response.json({
+            data: [
+              {
+                ...ledger[0],
+                principal_id: "principal_one",
+                api_key_id: "apikey_ci01",
+              },
+            ],
+            has_more: false,
+          })
+        : rest.endsWith("/api_keys")
+          ? Response.json(KEYS)
+          : undefined,
+    );
+    renderPage(<UsageRequestsPage />);
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-principal-id=principal_one]"),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      document.querySelector("[data-api-key-id=apikey_ci01]"),
+    ).toHaveTextContent("ci-deploy");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Principal" }),
+      "principal_one",
+    );
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/requests")
+          .at(-1)
+          ?.searchParams.get("principal_id"),
+      ).toBe("principal_one"),
+    );
+  });
   it("lists the ledger newest first, linking each session", async () => {
     navigation.pathname = "/usage/requests";
     stub();

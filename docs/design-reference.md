@@ -5,6 +5,15 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Model limits and principal usage — 2026-11-15
+
+Fresh Chrome reference access timed out before the page could be inspected. This iteration reuses the recorded design system; it does not claim current authenticated-reference fidelity.
+
+The model inspector's organization budget editor is a self-hosting extension of platform `internal/modelgateway/admin/model_limits.go`. It uses the existing dialog and form controls. Developers read; admins write. The public model alias is the shared budget dimension, including `*`.
+
+Usage follows `admin/usage.go`: daily rows group by stored principal, with legacy key attribution retained. The ledger shows both principal and credential. The directory exposes different public IDs, so the console displays stored principal IDs without inventing name mappings.
+The new states are enumerated in `test/fidelity/native-surfaces.ts`.
+
 ## Owned API keys — checked 2026-11-08
 
 The [published ownership summary](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/a7fa9c0715c92f85ffbdf6f9d595e7d014d6a4d8/2026-11-07-owned-key-memory-actors/README.md) distinguishes the user/service-account owner from the human creator.
@@ -16,7 +25,7 @@ Self-hosting departures follow platform `internal/api/consoleapikeys.go`:
 
 - Workspace stays a null seam; there is no `scope` or workspace selector API.
 - Developers manage only their own owned keys. Admins may assign an active service account, never another human.
-- Owned keys have no model-inference grant in this slice. Legacy unowned-key policy controls remain separate. Empty caller summaries describe only the visible inventory, including legacy sessions that expose no role.
+- Slice 4 follows current owner-role authority for inference. Legacy unowned-key policy controls remain separate. Empty legacy caller summaries describe only visible inventory, including legacy sessions that expose no role.
 
 The lower-human-role policy is conservative and local. Reference evidence remains open in [recordings #40](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/40).
 `test/fidelity/native-surfaces.ts` and its real-platform Chrome walker cover the list, form, owner selection, masked reveal and Dashboard form in both themes.

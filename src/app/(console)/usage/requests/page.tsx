@@ -81,6 +81,18 @@ function Ledger() {
       ),
     },
     {
+      key: "principal",
+      header: "Principal",
+      cell: (r) => (
+        <span
+          className="font-mono text-[13px]"
+          data-principal-id={r.principal_id ?? ""}
+        >
+          {r.principal_id || "—"}
+        </span>
+      ),
+    },
+    {
       key: "key",
       header: "Key",
       cell: (r) => (

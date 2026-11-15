@@ -16,15 +16,15 @@ Reference facts and capability boundaries: [docs/design-reference.md](./docs/des
 
 Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 
-### Platform plan 69 slice 3
+### Platform plan 69 slice 4
 
-Principal-owned key behavior and the Task 3 review repairs are independently verified.
-Native client acceptance and the review follow-ups passed independent checks. Companion delivery remains pending.
-Slice 2 [PR #246](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/246) merged. Its published-image acceptance and limits are in the [platform history](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/HISTORY.md#plan-69-slice-2-browser-acceptance).
+Organization model limits, principal usage and current owner-role inference access.
+Slice 3 [PR #254](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/254) merged.
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
 ## Tasks
 
-- [x] Verify the Task 3 review repairs, including [native checks](./test/native/contract.spec.ts) and [failure controls](./test/native/failure-artifacts.test.mjs).
-- [x] Complete Task 3 committed source review at `e9a383a`.
-- [ ] Complete prepublication source review and companion delivery. The [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/STATE.md) tracks final source/image pairing and packaged acceptance.
+- [ ] Separate principal totals and retain each request's credential attribution.
+- [ ] Show owner-role model access and cookie-only organization model budgets.
+- [ ] Complete checks, native browser acceptance, light/dark surface shots and independent review.
+- [ ] Deliver the companion PR with the [platform slice 4](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/codex/plan-69-slice-4/STATE.md), settle CI and review threads, then squash merge.
