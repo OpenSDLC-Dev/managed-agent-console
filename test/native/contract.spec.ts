@@ -15,6 +15,11 @@ import { test, expect } from "./test";
 import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
 import { nativeDocker } from "./docker";
+import {
+  seedGateway,
+  model as limitedModel,
+  principals as usagePrincipals,
+} from "./gateway-fixture";
 const org = "/api/console/organizations/default";
 const password = "native-test-password-123";
 type StreamReceipt = {
@@ -1324,6 +1329,67 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
   expect(
     (await context.cookies()).some((cookie) => cookie.name === "map_session"),
   ).toBe(false);
+});
+
+test("native model limits persist and principal usage keeps credential attribution", async ({
+  page,
+}) => {
+  // This scenario has its own login window. Earlier login/throttle scenarios
+  // consume the shared account's five attempts; keep their assertions intact.
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "limits-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) await login(page, "new-person");
+  await seedGateway(page.request, receipt().container);
+  await page.goto(`/models?model=${encodeURIComponent(limitedModel)}`);
+  await page.getByRole("button", { name: "Edit limits" }).click();
+  await page.getByLabel("Requests per minute").fill("23");
+  await page.getByLabel("Input tokens per minute").fill("");
+  await page.getByLabel("Output tokens per minute").fill("700");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.locator("[data-limit=requests_per_minute]"),
+  ).toHaveAttribute("data-value", "23");
+  await expect(
+    page.locator("[data-limit=input_tokens_per_minute]"),
+  ).toHaveAttribute("data-value", "");
+  await expect(
+    page.locator("[data-limit=output_tokens_per_minute]"),
+  ).toHaveAttribute("data-value", "700");
+  await page.goto("/usage");
+  await page.getByRole("button", { name: "Principal", exact: true }).click();
+  for (const id of usagePrincipals)
+    await expect(page.locator(`[data-group=${id}]`)).toBeVisible();
+  await expect(page.locator("[data-group=apikey_historical]")).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Principal", exact: true })
+    .selectOption(usagePrincipals[0]);
+  await expect(page.locator("[data-group]")).toHaveCount(1);
+  await page.goto("/usage/requests");
+  await expect(
+    page.locator(`[data-principal-id=${usagePrincipals[0]}]`),
+  ).toBeVisible();
+  await expect(
+    page.locator("[data-api-key-id=apikey_browser_one]"),
+  ).toBeVisible();
 });
 
 test("native owned keys preserve owner creator permissions and credential isolation", async ({

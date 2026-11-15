@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { nativeDocker } from "./docker";
 import { test, expect } from "./test";
 import { selectNativeSurfaces } from "../fidelity/native-surfaces";
+import { seedGateway, principals } from "./gateway-fixture";
 const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
 const org = "/api/console/organizations/default";
 const password = "native-shot-password-123";
@@ -124,6 +125,14 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     await created.dispose();
   }
   const walked: string[] = [];
+  if (
+    selected.some(
+      (s) =>
+        s.id.startsWith("native-model-limits") ||
+        s.id.startsWith("native-principal-"),
+    )
+  )
+    await seedGateway(request, receipt.container);
   for (const surface of selected) {
     await test.step(surface.id, async () => {
       let releaseWrite: (() => void) | undefined;
@@ -252,6 +261,12 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               ),
             ).toBeVisible();
           else await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+          if (surface.id === "native-model-limits-form")
+            await page.getByRole("button", { name: "Edit limits" }).click();
+          if (surface.id === "native-principal-usage")
+            await page
+              .getByRole("button", { name: "Principal", exact: true })
+              .click();
           if (surface.id === "native-owned-key-list") {
             await expect(
               page.locator(`[data-owner-id="${session.id}"]`).first(),
@@ -472,6 +487,27 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         // These assertions are independent of the interaction branches above.
         // Removing an interaction must fail, not produce a mislabeled list shot.
         switch (surface.id) {
+          case "native-model-limits":
+            await expect(
+              page.locator("[data-limit=requests_per_minute]"),
+            ).toHaveAttribute("data-value", "120");
+            break;
+          case "native-model-limits-form":
+            await expect(page.getByRole("dialog")).toBeVisible();
+            await expect(page.getByLabel("Requests per minute")).toHaveValue(
+              "120",
+            );
+            break;
+          case "native-principal-usage":
+            for (const id of principals)
+              await expect(page.locator(`[data-group=${id}]`)).toBeVisible();
+            break;
+          case "native-principal-requests":
+            for (const id of principals)
+              await expect(
+                page.locator(`[data-principal-id=${id}]`),
+              ).toBeVisible();
+            break;
           case "native-owned-key-list":
             await expect(
               page.getByRole("columnheader", { name: "Owner", exact: true }),

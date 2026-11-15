@@ -138,7 +138,9 @@ export function UsageFilters({
 }: {
   filter: GatewayUsageFilter;
   onChange: (filter: GatewayUsageFilter) => void;
-  seen: Required<GatewayUsageFilter>[];
+  seen: (Omit<Required<GatewayUsageFilter>, "principal_id"> & {
+    principal_id?: string | null;
+  })[];
   children?: React.ReactNode;
 }) {
   const names = useUsageNames();
@@ -178,6 +180,9 @@ export function UsageFilters({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pb-4">
       {children}
+      {(filter.principal_id ||
+        seen.some((r) => r.principal_id !== undefined)) &&
+        field("Principal", "principal_id", "All principals", [])}
       {field(
         "Key",
         "api_key_id",

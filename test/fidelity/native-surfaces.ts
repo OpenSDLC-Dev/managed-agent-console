@@ -2,6 +2,32 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-model-limits",
+    route: "/models?model=slice4%2Fmodel",
+    fixture: "real organization model limits",
+    description: "Public alias budgets shared across all callers.",
+  },
+  {
+    id: "native-model-limits-form",
+    route: "/models?model=slice4%2Fmodel",
+    fixture: "admin edits all three limits",
+    description:
+      "Blank fields clear limits; completed-token accounting is explained.",
+  },
+  {
+    id: "native-principal-usage",
+    route: "/usage",
+    fixture: "two principals and one historical key",
+    description: "Principal daily totals stay distinct despite empty key IDs.",
+  },
+  {
+    id: "native-principal-requests",
+    route: "/usage/requests",
+    fixture: "stored principal and credential attribution",
+    description:
+      "The request ledger retains each credential beside its principal.",
+  },
+  {
     id: "native-owned-key-list",
     route: "/api-keys",
     fixture: "human and service-owned keys",

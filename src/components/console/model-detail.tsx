@@ -14,6 +14,7 @@ import type { GatewayAlias } from "@/lib/platform/types";
 import { ModelKeys } from "./model-access";
 import { ModelDialog } from "./model-dialog";
 import { RoutingTiers } from "./model-routing";
+import { ModelRateLimits } from "./model-rate-limits";
 
 /**
  * The models inspector. It reads the model from the list the page already
@@ -92,11 +93,14 @@ function Model({
           providers={providers.data?.data}
         />
       </section>
+      <ModelRateLimits model={alias.name} />
       <section className="pt-5">
-        <h4 className="pb-1.5 text-[15px] font-medium">
-          Keys that can call it
-        </h4>
+        <h4 className="pb-1.5 text-[15px] font-medium">Legacy key grants</h4>
         <ModelKeys alias={alias.name} />
+        <p className="pt-2 text-[13px] text-muted-foreground">
+          Owned keys follow their owner&apos;s current role. Active developer
+          and admin owners can call every model within organization limits.
+        </p>
       </section>
       {editing && (
         <ModelDialog alias={alias} onClose={() => setEditing(false)} />

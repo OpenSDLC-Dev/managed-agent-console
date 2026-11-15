@@ -1009,7 +1009,7 @@ export const SURFACES: Surface[] = [
     route: "/usage/requests",
     fixture: "4 ledger rows: a session, an embedding, a 429 and a 502",
     description:
-      "The per-request ledger: key, model and upstream, session link, route, status, tokens, cost and timings.",
+      "The per-request ledger: principal, key, model and upstream, session link, route, status, tokens, cost and timings.",
     setup: async (page) => {
       await page.locator("[data-status]").first().waitFor();
     },
@@ -1035,7 +1035,7 @@ export const SURFACES: Surface[] = [
     route: "/models?model=agent-default",
     fixture: "agent-default: a 3:1 primary tier and one fallback",
     description:
-      "Non-modal model inspector: kind, actions, the routing tiers with each target's provider and share, and the keys that can call it.",
+      "Non-modal model inspector: kind, routing tiers with provider and share, legacy grants, and current owner-role authority.",
     setup: async (page) => {
       await page.locator("[data-callers]").waitFor();
     },

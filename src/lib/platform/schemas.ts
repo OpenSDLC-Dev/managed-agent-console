@@ -900,10 +900,19 @@ export const GatewayKeyPolicySchema = z.object({
   updated_at: z.string(),
 });
 
-/** usage.go dailyUsageView — one UTC day (`YYYY-MM-DD`) per key, alias and deployment. */
+/** Private admin/model_limits.go modelLimitView; null means no limit. */
+export const GatewayModelLimitSchema = z.object({
+  model: z.string(),
+  requests_per_minute: z.number().nullable(),
+  input_tokens_per_minute: z.number().nullable(),
+  output_tokens_per_minute: z.number().nullable(),
+});
+
+/** usage.go dailyUsageView — one UTC day per principal (or legacy key), alias and deployment. */
 export const GatewayDailyUsageSchema = z.object({
   day: z.string(),
   api_key_id: z.string(),
+  principal_id: z.string().nullish(),
   alias: z.string(),
   deployment_id: z.string(),
   requests: z.number(),
@@ -925,6 +934,7 @@ export const GatewayUsageRowSchema = z.object({
   request_id: z.string(),
   created_at: z.string(),
   api_key_id: z.string(),
+  principal_id: z.string().nullish(),
   model: z.string(),
   alias: z.string(),
   deployment_id: z.string(),
@@ -1014,5 +1024,6 @@ export type GatewayDeployment = z.infer<typeof GatewayDeploymentSchema>;
 export type GatewayAlias = z.infer<typeof GatewayAliasSchema>;
 export type GatewayKeyPolicy = z.infer<typeof GatewayKeyPolicySchema>;
 export type GatewayDailyUsage = z.infer<typeof GatewayDailyUsageSchema>;
+export type GatewayModelLimit = z.infer<typeof GatewayModelLimitSchema>;
 export type GatewayUsageRow = z.infer<typeof GatewayUsageRowSchema>;
 export type GatewayUsagePage = z.infer<typeof GatewayUsagePageSchema>;
