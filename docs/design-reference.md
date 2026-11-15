@@ -5,6 +5,14 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Deployment initiator (platform plan 69 slice 5)
+
+On 2026-11-15, Chrome showed the authenticated reference's Deployments list and Create deployment form.
+The form groups General, Trigger and Resources in two-column sections with compact controls and a fixed save footer.
+No initiator selector was present in that form. This platform adds an administrator-only setting under Trigger for existing deployments.
+It uses the platform's private cookie API because plan 69 binds scheduled execution to a retained identity.
+The native fidelity manifest covers the setting and its service-account dialog in light and dark themes.
+
 ## Model limits and principal usage — 2026-11-15
 
 Fresh Chrome reference access timed out before the page could be inspected. This iteration reuses the recorded design system; it does not claim current authenticated-reference fidelity.

@@ -33,7 +33,10 @@ A signed-in `user` has no resource reads. Its account, setup and sign-out contro
 Service-account creation does not issue a key. On API Keys, developers issue and manage their own owned keys.
 Administrators can also select an active service account and manage non-preset keys.
 Owned keys use their owner's current role on the public control-plane API. Deactivating the owner revokes access.
-They do not yet authorize model inference or legacy gateway policies. Browser calls keep using the native cookie, never a revealed key.
+Owned keys also authorize model inference while their owner is a developer or admin. Legacy gateway policies remain for unowned keys only.
+Browser calls keep using the native cookie, never a revealed key.
+With platform plan 69 slice 5, administrators can select an active service account as a deployment's scheduled-run initiator.
+The change applies to future scheduled sessions. It does not resume a paused deployment or change a manual run's caller.
 
 Shallow `/api/health` remains console-owned. Native deep health reports `checked:false` with status 503;
 it cannot check a person's resource access without their cookie and never spends a leftover key.
@@ -146,7 +149,7 @@ NATIVE_EVIDENCE_DIR=/absolute/path/to/scratch \
 pnpm test:e2e:native
 ```
 
-The platform source must implement plan 69 slice 3 owned-key issuance. The tier needs Docker and that checkout's Go toolchain.
+The platform source must implement plan 69 slice 5's private deployment initiator API and the earlier owned-key issuance API. The tier needs Docker and that checkout's Go toolchain.
 A test-only client builds against the platform's pinned Go SDK. Human and service-account keys come from the browser's one-time reveal, then reach the client through stdin.
 Independent cookie reads check persisted Memory actors, redacted nulls and current authority. No `ant` checkout is needed by this automated tier.
 The separate real-`ant` check must run against a fresh packaged Compose install after immutable source/image pairing.

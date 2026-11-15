@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Breadcrumb } from "@/components/console/breadcrumb";
 import { DeploymentActions } from "@/components/console/deployment-actions";
+import { DeploymentInitiator } from "@/components/console/deployment-initiator";
 import {
   DeploymentEditor,
   formFromDeployment,
@@ -177,7 +178,12 @@ export default function DeploymentDetailPage({
           initial={formFromDeployment(item)}
           initialResources={item.resources}
           deploymentId={id}
-          scheduleDetails={<UpcomingRuns deployment={item} />}
+          scheduleDetails={
+            <>
+              <UpcomingRuns deployment={item} />
+              {!item.archived_at && <DeploymentInitiator id={id} />}
+            </>
+          }
           onSaved={() => toast.success("Saved deployment configuration.")}
         />
       </div>
