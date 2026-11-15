@@ -42,7 +42,10 @@ const original = cp.spawn, sync = cp.spawnSync;
 const servers = new Map();
 let readinessStarted = false;
 const timeout = globalThis.setTimeout;
-globalThis.setTimeout = (fn, ms, ...args) => timeout(fn, kind.startsWith("status-") && ms === 250 ? 0 : ms, ...args);
+// setTimeout(0) still costs a Windows timer tick: 240 retries took 3.64 s,
+// leaving too little of the 5 s child deadline for real cleanup processes.
+// Yield each simulated retry without wall-clock delay; keep cleanup timers real.
+globalThis.setTimeout = (fn, ms, ...args) => kind.startsWith("status-") && ms === 250 ? setImmediate(fn, ...args) : timeout(fn, ms, ...args);
 function synthetic(name) {
   const child = new EventEmitter();
   child.pid = 424242; child.exitCode = null; child.signalCode = null;

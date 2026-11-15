@@ -8,6 +8,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- **Native fixture checks tolerate Windows scheduling.** Simulated retry waits yield to the event loop, preserving all 240 checks and real cleanup subprocess assertions. The environment-suite wrapper now allows its child's existing 30-second deadline to finish.
 - **Gateway usage keeps principals separate** (platform plan 69 slice 4). Daily totals combine an owner's keys without merging different owners. Principal filtering and the request ledger retain stored attribution; historical calls remain under their original key. Owned-key model access now explains current owner-role authority.
 - **Native key forms can retry an unavailable owner directory.** Retry keeps the name, expiry and owner draft in both API Keys and the Dashboard shortcut.
 - **Native navigation follows confirmed same-account role changes.** Once session metadata confirms the role, surface discovery replaces old administrator links or refusals without waiting for its next poll.

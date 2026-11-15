@@ -631,9 +631,11 @@ function assertNativeEnvironmentContracts(
   ).toBe(true);
 }
 
+// The child contract suite has its own 30 s deadline. The default 15 s unit
+// deadline can expire after that suite succeeds (15.9 s measured on Windows).
 it("native runtime environment contracts (no resources)", () => {
   assertNativeEnvironmentContracts();
-});
+}, 35_000);
 import { ensureLoopbackProxyBypass } from "./playwright-env";
 
 vi.mock("./e2e-live/env", () => ({
