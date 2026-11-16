@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { Script } from "node:vm";
+import { parse } from "yaml";
 import { describe, expect, it, vi } from "vitest";
 import {
   APPLY_STEP,
@@ -160,6 +162,36 @@ describe("the couplings to deploy.yml", () => {
   const deploy = readFileSync(`.github/workflows/${DEPLOY_WORKFLOW}`, "utf8");
   const alert = readFileSync(".github/workflows/deploy-alert.yml", "utf8");
   const steps = [...deploy.matchAll(/^ {6}- name: (.+)$/gm)].map((m) => m[1]);
+
+  it("admits legacy deployment only for a confirmed dispatch from main", () => {
+    const workflow = parse(deploy);
+    expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
+    expect(
+      workflow.on.workflow_dispatch.inputs.confirm_legacy_rollback,
+    ).toMatchObject({
+      type: "boolean",
+      required: true,
+      default: false,
+    });
+    const gate = new Script(workflow.jobs.deploy.if);
+    for (const [event, ref, confirmed, allowed] of [
+      ["workflow_dispatch", "refs/heads/main", true, true],
+      ["workflow_dispatch", "refs/heads/main", false, false],
+      ["workflow_dispatch", "refs/heads/main", undefined, false],
+      ["workflow_dispatch", "refs/heads/feature", true, false],
+      ["workflow_dispatch", "refs/tags/main", true, false],
+      ["push", "refs/heads/main", true, false],
+      ["pull_request", "refs/heads/main", true, false],
+    ]) {
+      expect(
+        gate.runInNewContext({
+          github: { event_name: event, ref },
+          inputs: { confirm_legacy_rollback: confirmed },
+        }),
+        `${event} ${ref} confirmed=${confirmed}`,
+      ).toBe(allowed);
+    }
+  });
 
   it("names steps deploy.yml has", () => {
     expect(steps).toContain(APPLY_STEP);

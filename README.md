@@ -37,6 +37,8 @@ Owned keys also authorize model inference while their owner is a developer or ad
 Browser calls keep using the native cookie, never a revealed key.
 With platform plan 69 slice 5, administrators can select an active service account as a deployment's scheduled-run initiator.
 The change applies to future scheduled sessions. It does not resume a paused deployment or change a manual run's caller.
+Administrators manage environment keys on each environment's detail page, including cloud and archived environments.
+Cloud keys do not let a worker poll for work. Removing the person who issued a key does not revoke it; revoke the environment key itself.
 
 Shallow `/api/health` remains console-owned. Native deep health reports `checked:false` with status 503;
 it cannot check a person's resource access without their cookie and never spends a leftover key.
@@ -106,9 +108,9 @@ Or with `docker run --network managed-agent-platform_default` and the same three
 
 ## Deploying to a cluster
 
-[deploy/k8s/](./deploy/k8s/) holds what the console needs beside a platform running in Kubernetes, and [docs/deploy-gcp.md](./docs/deploy-gcp.md) describes the pipeline that applies them — build → push → deploy → smoke, on every push to `main`, with no long-lived credential in this repository.
+Platform plan 69 slice 6 transfers automatic staging deployment to the [platform chart and deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/gcp), which serve native Console login through the application edge. Companion delivery is tracked in [STATE.md](./STATE.md).
 
-That deployment publishes the console on the public internet behind **Google sign-in restricted to one Workspace domain, enforced at the load balancer by GCP IAP**, so the pod runs with no `CONSOLE_PASSWORD` and no authentication code at all. None of that is baked into the published image, which behaves identically wherever it runs.
+[deploy/k8s/](./deploy/k8s/) retains the legacy IAP and credential-BFF topology through slice 6. Its workflow is a confirmed manual rollback from `main` only; Console pushes continue publishing SHA images but no longer deploy that topology. [docs/deploy-gcp.md](./docs/deploy-gcp.md) explains the ownership handover and rollback procedure.
 
 ## Development
 

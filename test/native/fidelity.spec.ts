@@ -126,6 +126,42 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     await created.dispose();
   }
   const walked: string[] = [];
+  const environmentFixtures: Record<string, string> = {};
+  if (
+    selected.some((surface) => surface.id.startsWith("native-environment-"))
+  ) {
+    const resource = "/api/organizations/default/proxy/v1/environments";
+    for (const [name, kind, archived] of [
+      ["cloud", "cloud", false],
+      ["archived-cloud", "cloud", true],
+      ["self-hosted", "self_hosted", false],
+    ] as const) {
+      const created = await request.post(resource, {
+        headers,
+        data: { name: `Key management — ${name}`, config: { type: kind } },
+      });
+      expect(created.status()).toBe(200);
+      const environment = await created.json();
+      environmentFixtures[name] = environment.id;
+      if (archived)
+        expect(
+          (
+            await request.post(`${resource}/${environment.id}/archive`, {
+              headers,
+            })
+          ).status(),
+        ).toBe(200);
+      const issued = await request.post(
+        `/api/oauth/organizations/default/environments/${environment.id}/tokens`,
+        {
+          headers,
+          data: { name: "shot-environment-key" },
+        },
+      );
+      expect(issued.status()).toBe(200);
+      await issued.dispose();
+    }
+  }
   const deploymentFixture = selected.some((s) =>
     s.id.startsWith("native-deployment-initiator"),
   )
@@ -262,7 +298,9 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           await page.goto(
             surface.id.startsWith("native-deployment-initiator")
               ? `/deployments/${deploymentFixture!.deployment.id}`
-              : surface.route,
+              : surface.id.startsWith("native-environment-")
+                ? `/environments/${environmentFixtures[surface.id.includes("archived-cloud") ? "archived-cloud" : surface.id.includes("self-hosted") ? "self-hosted" : "cloud"]}`
+                : surface.route,
           );
           if (surface.route === "/login" || surface.route === "/setup")
             await expect(
@@ -271,6 +309,37 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               ),
             ).toBeVisible();
           else await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+          if (
+            [
+              "native-environment-cloud-key-form",
+              "native-environment-cloud-key-reveal",
+            ].includes(surface.id)
+          ) {
+            await page
+              .getByRole("button", {
+                name: "Generate environment key",
+                exact: true,
+              })
+              .click();
+            if (surface.id.endsWith("reveal")) {
+              await page
+                .getByLabel("Name", { exact: true })
+                .fill(`shot-cloud-reveal-${info.project.name}`);
+              await page
+                .getByRole("button", {
+                  name: "Create environment key",
+                  exact: true,
+                })
+                .click();
+            }
+          }
+          if (surface.id === "native-environment-cloud-key-revoke")
+            await page
+              .getByRole("button", {
+                name: "Revoke environment key shot-environment-key",
+                exact: true,
+              })
+              .click();
           if (surface.id === "native-model-limits-form")
             await page.getByRole("button", { name: "Edit limits" }).click();
           if (surface.id === "native-deployment-initiator-form") {
@@ -505,6 +574,62 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         // These assertions are independent of the interaction branches above.
         // Removing an interaction must fail, not produce a mislabeled list shot.
         switch (surface.id) {
+          case "native-environment-cloud-keys":
+          case "native-environment-archived-cloud-keys":
+          case "native-environment-self-hosted-keys":
+            await expect(
+              page.getByRole("cell", {
+                name: "shot-environment-key",
+                exact: true,
+              }),
+            ).toBeVisible();
+            await expect(
+              page.getByRole("button", {
+                name: "Generate environment key",
+                exact: true,
+              }),
+            ).toBeVisible();
+            await expect(page.getByTestId("environment-key-setup")).toHaveCount(
+              surface.id.includes("self-hosted") ? 1 : 0,
+            );
+            await page.getByTestId("environment-keys").scrollIntoViewIfNeeded();
+            break;
+          case "native-environment-cloud-key-form":
+            await expect(
+              page.getByRole("dialog", { name: "Create environment key" }),
+            ).toBeVisible();
+            break;
+          case "native-environment-cloud-key-revoke":
+            await expect(
+              page.getByRole("dialog", { name: "Revoke environment key" }),
+            ).toBeVisible();
+            break;
+          case "native-environment-cloud-key-reveal":
+            await expect(
+              page.getByRole("dialog", { name: "Save your environment key" }),
+            ).toBeVisible();
+            expect(
+              await page.getByTestId("revealed-key").evaluate((element) => {
+                const dialog = element.closest('[role="dialog"]')!;
+                const keyBounds = element.getBoundingClientRect();
+                const dialogBounds = dialog.getBoundingClientRect();
+                return (
+                  keyBounds.left >= dialogBounds.left &&
+                  keyBounds.right <= dialogBounds.right &&
+                  keyBounds.top >= dialogBounds.top &&
+                  keyBounds.bottom <= dialogBounds.bottom &&
+                  element.scrollWidth <= element.clientWidth
+                );
+              }),
+            ).toBe(true);
+            expect(
+              await page
+                .getByTestId("revealed-key")
+                .evaluate((element) =>
+                  /^sk-map-env01-.+/.test(element.textContent ?? ""),
+                ),
+            ).toBe(true);
+            break;
           case "native-deployment-initiator":
             await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
               "data-initiator-id",
@@ -589,7 +714,10 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             ).toBe(true);
             break;
           default:
-            if (surface.id.startsWith("native-owned-key-"))
+            if (
+              surface.id.startsWith("native-owned-key-") ||
+              surface.id.startsWith("native-environment-")
+            )
               throw new Error(`Unwalked owned-key surface: ${surface.id}`);
         }
         await page.evaluate(async () => {
@@ -613,11 +741,16 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         await page.screenshot({
           path: join(dir, `${surface.id}.png`),
           fullPage: true,
-          mask: [page.getByTestId("revealed-api-key")],
+          mask: [
+            page.getByTestId("revealed-api-key"),
+            page.getByTestId("revealed-key"),
+          ],
         });
         walked.push(surface.id);
         if (surface.id === "native-owned-key-reveal")
           await page.getByTestId("close-revealed-api-key").click();
+        if (surface.id === "native-environment-cloud-key-reveal")
+          await page.getByTestId("close-revealed-key").click();
         if (releaseWrite) {
           releaseWrite();
           await expect(

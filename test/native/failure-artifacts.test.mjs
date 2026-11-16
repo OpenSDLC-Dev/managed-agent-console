@@ -28,8 +28,9 @@ function files(dir) {
   });
 }
 
-for (const mode of [process.env.NATIVE_FIDELITY ? "chrome" : "chromium"]) {
-  test(`native unexpected failure artifacts redact reveal before writing (${mode})`, () => {
+for (const prefix of ["api01", "env01"]) {
+  const mode = process.env.NATIVE_FIDELITY ? "chrome" : "chromium";
+  test(`native unexpected failure artifacts redact reveal before writing (${mode}, ${prefix})`, () => {
     const dir = mkdtempSync(
       join(process.env.NATIVE_EVIDENCE_DIR || tmpdir(), "failure-control-"),
     );
@@ -39,7 +40,7 @@ for (const mode of [process.env.NATIVE_FIDELITY ? "chrome" : "chromium"]) {
     const marker = [
       "sk",
       "map",
-      "api01",
+      prefix,
       `SYNTHETIC_NOT_A_CREDENTIAL_${randomUUID()}`,
     ].join("-");
     const spec = join(dir, "failure.spec.ts");

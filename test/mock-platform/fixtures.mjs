@@ -956,9 +956,8 @@ export const files = [
 /**
  * Console API (plan 07): environment keys, keyed by environment id.
  *
- * Only the self-hosted environment has any — the platform refuses to issue a
- * key for a cloud environment (internal/api/consoleapi.go:200-205), so a cloud
- * entry here would describe a state the platform cannot reach.
+ * The self-hosted fixture starts with keys; the cloud fixture starts empty.
+ * Both may issue keys (platform internal/api/consoleapi.go:createEnvironmentKey).
  *
  * `prod-runner-01` is live; `retired-laptop` is expired but unrevoked, which
  * the platform's listing deliberately still returns

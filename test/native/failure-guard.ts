@@ -13,7 +13,11 @@ type NativeTestInfo = TestInfo & {
   _failWithError: (error: unknown) => void;
 };
 const redact = (text: string) =>
-  text.replace(/sk-map-api01-[A-Za-z0-9_-]+/g, "[REDACTED issued API key]");
+  text.replace(
+    /sk-map-(api01|env01)-[A-Za-z0-9_-]+/g,
+    (_, prefix: string) =>
+      `[REDACTED issued ${prefix === "api01" ? "API" : "environment"} key]`,
+  );
 
 export function protectFailureDiagnostics(info: TestInfo, version: string) {
   const internal = info as NativeTestInfo;

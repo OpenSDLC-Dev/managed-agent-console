@@ -8,7 +8,9 @@ How a console release is cut. The reasoning behind each choice is
 ## Plan 69 release hold
 
 Do not merge a release-please PR, dispatch `release.yml` or cut a SemVer release until platform plan 69 slice 7.
-This hold does not change the existing staging deploy workflow. Use the receiver-only channel below for slice 2.
+The receiver-only SHA channel below remains automatic. Slice 6 transfers automatic staging
+deployment to the platform; the Console deploy workflow becomes a confirmed manual legacy
+rollback only ([deployment ownership](./deploy-gcp.md)).
 
 ## Non-release SHA channel
 

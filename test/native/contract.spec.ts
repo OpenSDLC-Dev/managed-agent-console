@@ -1491,6 +1491,127 @@ test("native model limits persist and principal usage keeps credential attributi
   ).toBeVisible();
 });
 
+test("native environment keys cover cloud and self-hosted lifecycles with cookie and CSRF", async ({
+  page,
+}) => {
+  const origin = "http://127.0.0.1:38200";
+  const credentials = { login_name: "environment-admin", password };
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin },
+    data: { code: code(), ...credentials },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) {
+    const own = await page.request.post("/api/auth/login", {
+      headers: { origin },
+      data: credentials,
+    });
+    if (own.status() !== 200) {
+      expect(own.status()).toBe(401);
+      await login(page, "new-person");
+    }
+  }
+  await page.goto("/dashboard");
+  const offered: string[] = [];
+  page.on("request", (request) =>
+    offered.push(
+      ...credentialHeaders(origin, request.url(), request.headers()),
+    ),
+  );
+  const resource = "/api/organizations/default/proxy/v1/environments";
+  for (const kind of ["cloud", "self_hosted"] as const) {
+    for (const archived of [false, true]) {
+      const created = await write(page, resource, {
+        name: `environment-keys-${kind}-${archived}`,
+        config: { type: kind },
+      });
+      expect(created.status).toBe(200);
+      const id = created.body.id;
+      if (archived)
+        expect((await write(page, `${resource}/${id}/archive`)).status).toBe(
+          200,
+        );
+      const tokens = `/api/oauth/organizations/default/environments/${id}/tokens`;
+      // A valid cookie alone does not authorize either mutation.
+      expect(
+        (
+          await page.request.post(tokens, {
+            headers: { origin },
+            data: { name: "missing-csrf" },
+          })
+        ).status(),
+      ).toBe(403);
+      await page.goto(`/environments/${id}`);
+      await expect(page.getByTestId("environment-keys")).toBeVisible();
+      await expect(page.getByTestId("environment-key-setup")).toHaveCount(
+        kind === "self_hosted" ? 1 : 0,
+      );
+      await page
+        .getByRole("button", { name: "Generate environment key", exact: true })
+        .click();
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("native-environment-key");
+      const issuance = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(tokens) &&
+          response.request().method() === "POST",
+      );
+      await page
+        .getByRole("button", { name: "Create environment key", exact: true })
+        .click();
+      expect((await issuance).status()).toBe(200);
+      const revealed = page.getByTestId("revealed-key");
+      await expect(revealed).toBeVisible();
+      expect(
+        await revealed.evaluate((element) => {
+          const dialog = element.closest('[role="dialog"]')!;
+          const keyBounds = element.getBoundingClientRect();
+          const dialogBounds = dialog.getBoundingClientRect();
+          return (
+            keyBounds.left >= dialogBounds.left &&
+            keyBounds.right <= dialogBounds.right &&
+            keyBounds.top >= dialogBounds.top &&
+            keyBounds.bottom <= dialogBounds.bottom &&
+            element.scrollWidth <= element.clientWidth
+          );
+        }),
+      ).toBe(true);
+      const secret = (await revealed.textContent()) ?? "";
+      expect(/^sk-map-env01-.+/.test(secret)).toBe(true);
+      await page.getByTestId("close-revealed-key").click();
+      expect((await page.content()).includes(secret)).toBe(false);
+      const listed = await (await page.request.get(tokens)).json();
+      expect(listed.data).toHaveLength(1);
+      expect(JSON.stringify(listed).includes(secret)).toBe(false);
+      const revoke = `${tokens}/${listed.data[0].id}/revoke`;
+      expect(
+        (await page.request.post(revoke, { headers: { origin } })).status(),
+      ).toBe(403);
+      const row = page
+        .getByRole("row")
+        .filter({ hasText: "native-environment-key" });
+      await row
+        .getByRole("button", {
+          name: "Revoke environment key native-environment-key",
+        })
+        .click();
+      const revocation = page.waitForResponse((response) =>
+        response.url().endsWith(revoke),
+      );
+      await page
+        .getByRole("button", { name: "Revoke environment key", exact: true })
+        .click();
+      expect((await revocation).status()).toBe(204);
+      await expect(row).toHaveCount(0);
+      expect((await (await page.request.get(tokens)).json()).data).toHaveLength(
+        0,
+      );
+    }
+  }
+  expect(offered).toEqual([]);
+});
+
 test("native owned keys preserve owner creator permissions and credential isolation", async ({
   page,
   browser,

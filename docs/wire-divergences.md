@@ -110,6 +110,13 @@ is a lie. The extra request runs only on that 404. Telling the two apart by mess
 rejected — both are `not_found_error`, and matching on platform prose is the guessing principle 1
 forbids.
 
+## Environment-key management includes cloud and archived environments
+
+Platform `internal/api/consoleapi.go:createEnvironmentKey` permits both environment kinds, including archived environments.
+Plan 69 slice 6 removes the Console's narrower presentation rule so credentials remain manageable when the private API becomes cookie-only in slice 7.
+The existing token dialect, admin authorization, reveal-once response and revocation response are unchanged.
+Cloud keys still cannot poll work; the setup guide remains specific to self-hosted environments.
+
 ## Legacy console identity uses local configuration (plan 08)
 
 With `CONSOLE_AUTH_MODE` unset, the console selects legacy RP, shared-password or

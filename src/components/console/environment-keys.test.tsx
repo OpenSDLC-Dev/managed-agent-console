@@ -1,11 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  ConsoleSessionContext,
+  type useConsoleSession,
+} from "@/components/shell/console-session";
+import {
   EnvironmentKeysSection,
-  canIssueEnvironmentKey,
   environmentKeyState,
 } from "./environment-keys";
 import type { Environment, EnvironmentKey } from "@/lib/platform/types";
@@ -24,7 +27,7 @@ const environment = (over?: Partial<Environment>): Environment => ({
   ...over,
 });
 
-/** A cloud environment — the arm that has no worker to hold a key. */
+/** Cloud credentials are manageable, but cannot authorize worker polling. */
 const cloudEnvironment = (): Environment =>
   environment({
     config: {
@@ -91,7 +94,7 @@ function stub(response: Response | (() => Response)) {
  */
 function stubRoutes(over?: {
   rows?: EnvironmentKey[];
-  issue?: () => Response;
+  issue?: () => Response | Promise<Response>;
   revoke?: () => Response;
 }) {
   let rows = over?.rows ?? [];
@@ -99,6 +102,8 @@ function stubRoutes(over?: {
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
       const method = init?.method ?? "GET";
+      if (url.pathname === "/api/auth/session")
+        return json({ csrf_token: "environment-key-csrf" });
       if (url.pathname === TOKENS && method === "GET") return json(page(rows));
       if (url.pathname === TOKENS && method === "POST") {
         if (over?.issue) return over.issue();
@@ -121,17 +126,42 @@ function stubRoutes(over?: {
 /** The plaintext the platform hands back once, and never again. */
 const SECRET = "sk-map-env01-thisisthesecretvalue0000";
 
-function renderSection(env = environment()) {
+type SessionData = Omit<
+  NonNullable<ReturnType<typeof useConsoleSession>["data"]>,
+  "signed_in"
+> & {
+  signed_in: boolean;
+};
+const adminSession: SessionData = {
+  signed_in: true,
+  id: "user_admin",
+  role: "admin",
+};
+
+function renderSection(
+  env = environment(),
+  session: SessionData | null = adminSession,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const view = (session: SessionData | null) => (
+    <QueryClientProvider client={client}>
+      <ConsoleSessionContext.Provider
+        value={
+          { data: session ?? undefined } as ReturnType<typeof useConsoleSession>
+        }
+      >
+        <EnvironmentKeysSection environment={env} />
+      </ConsoleSessionContext.Provider>
+    </QueryClientProvider>
+  );
+  const rendered = render(view(session));
   return {
     client,
-    ...render(
-      <QueryClientProvider client={client}>
-        <EnvironmentKeysSection environment={env} />
-      </QueryClientProvider>,
-    ),
+    ...rendered,
+    changeSession: (session: SessionData | null) =>
+      rendered.rerender(view(session)),
   };
 }
 
@@ -140,6 +170,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.clearAllMocks();
+  delete document.documentElement.dataset.consoleAuth;
 });
 
 describe("environmentKeyState", () => {
@@ -161,20 +192,43 @@ describe("environmentKeyState", () => {
   });
 });
 
-describe("canIssueEnvironmentKey", () => {
-  // The platform's two 400s, mirrored (consoleapi.go:200-205).
-  it("allows a live self-hosted environment only", () => {
-    expect(canIssueEnvironmentKey(environment())).toBe(true);
-    expect(
-      canIssueEnvironmentKey(
-        environment({ archived_at: "2026-08-10T00:00:00Z" }),
-      ),
-    ).toBe(false);
-    expect(canIssueEnvironmentKey(cloudEnvironment())).toBe(false);
-  });
-});
-
 describe("EnvironmentKeysSection", () => {
+  it("does not request admin-only cloud keys for a native developer", async () => {
+    document.documentElement.dataset.consoleAuth = "platform";
+    const fetchMock = stubRoutes();
+    const view = renderSection(cloudEnvironment(), {
+      ...adminSession,
+      role: "developer",
+    });
+    expect(view.container).toBeEmptyDOMElement();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["user", { ...adminSession, role: "user" }],
+    ["signed out", { ...adminSession, signed_in: false }],
+    ["pending", null],
+    ["missing principal", { signed_in: true, role: "admin" }],
+  ] satisfies [string, SessionData | null][])(
+    "does not request native keys while the session is %s",
+    async (_, session) => {
+      document.documentElement.dataset.consoleAuth = "platform";
+      const fetchMock = stubRoutes();
+      const view = renderSection(cloudEnvironment(), session);
+      expect(view.container).toBeEmptyDOMElement();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps legacy key listing independent of native session metadata", async () => {
+    stubRoutes({ rows: [key({ id: "envkey_legacy" })] });
+    renderSection(cloudEnvironment(), null);
+    await screen.findByText("prod-runner-01");
+    expect(
+      screen.getByRole("button", { name: "Generate environment key" }),
+    ).toBeEnabled();
+  });
+
   it("lists a key with its machine-readable state", async () => {
     const expires = fromNow(365);
     stub(json(page([key({ id: "envkey_live", expires_at: expires })])));
@@ -229,12 +283,15 @@ describe("EnvironmentKeysSection", () => {
     expect(note).toHaveTextContent("Showing the first 1 of 140 keys.");
   });
 
-  it("renders nothing for a cloud environment, and asks the platform nothing", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const { container } = renderSection(cloudEnvironment());
-    expect(container).toBeEmptyDOMElement();
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("lists cloud keys without offering a self-hosted worker setup", async () => {
+    stub(json(page([key({ id: "envkey_cloud" })])));
+    renderSection(cloudEnvironment());
+    await screen.findByText("prod-runner-01");
+    expect(document.querySelector("[data-token-id]")).toHaveAttribute(
+      "data-token-id",
+      "envkey_cloud",
+    );
+    expect(screen.queryByTestId("environment-key-setup")).toBeNull();
   });
 
   // An archived environment keeps its section: the platform still lists and
@@ -318,35 +375,54 @@ describe("issuing a key", () => {
     return screen.findByRole("dialog");
   };
 
-  it("issues with the typed name and reveals the key once", async () => {
-    const user = userEvent.setup();
-    const fetchMock = stubRoutes();
-    renderSection();
+  it.each([
+    ["self-hosted", environment()],
+    ["cloud", cloudEnvironment()],
+    [
+      "archived self-hosted",
+      environment({ archived_at: "2026-08-10T00:00:00Z" }),
+    ],
+    [
+      "archived cloud",
+      { ...cloudEnvironment(), archived_at: "2026-08-10T00:00:00Z" },
+    ],
+  ])(
+    "issues a %s key with the typed name and reveals it once",
+    async (_, env) => {
+      document.documentElement.dataset.consoleAuth = "platform";
+      const user = userEvent.setup();
+      const fetchMock = stubRoutes();
+      renderSection(env);
 
-    await openDialog(user);
-    await user.type(screen.getByLabelText("Name"), "prod-runner-07");
-    await user.click(
-      screen.getByRole("button", { name: "Create environment key" }),
-    );
-
-    // The create body is `{name}` and nothing else (consoleapi.go:74-79).
-    await waitFor(() => {
-      const post = fetchMock.mock.calls.find(
-        ([, init]) => init?.method === "POST",
+      await openDialog(user);
+      await user.type(screen.getByLabelText("Name"), "prod-runner-07");
+      await user.click(
+        screen.getByRole("button", { name: "Create environment key" }),
       );
-      expect(post).toBeDefined();
-      expect(JSON.parse(String(post![1]!.body))).toEqual({
-        name: "prod-runner-07",
+
+      // The create body is `{name}` and nothing else (consoleapi.go:74-79).
+      await waitFor(() => {
+        const post = fetchMock.mock.calls.find(
+          ([, init]) => init?.method === "POST",
+        );
+        expect(post).toBeDefined();
+        expect(JSON.parse(String(post![1]!.body))).toEqual({
+          name: "prod-runner-07",
+        });
+        expect(post![1]?.headers).toEqual({
+          "content-type": "application/json",
+          "X-CSRF-Token": "environment-key-csrf",
+        });
       });
-    });
 
-    await screen.findByText("Save your environment key");
-    expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
+      await screen.findByText("Save your environment key");
+      expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
 
-    // The response identifies no row, so the list must be re-read rather than
-    // rendered from the issuance response.
-    await screen.findByText("prod-runner-07");
-  });
+      // The response identifies no row, so the list must be re-read rather than
+      // rendered from the issuance response.
+      await screen.findByText("prod-runner-07");
+    },
+  );
 
   it("trims the name and refuses to submit an empty one", async () => {
     const user = userEvent.setup();
@@ -442,26 +518,89 @@ describe("issuing a key", () => {
     expect(screen.getByTestId("revealed-key")).toHaveTextContent(SECRET);
   });
 
-  it("hides the control for an environment the platform would refuse", async () => {
+  it("keeps issuance and the draining-worker guide on an archived self-hosted environment", async () => {
     stubRoutes();
-    const { rerender } = renderSection(
-      environment({ archived_at: "2026-08-10T00:00:00Z" }),
-    );
+    renderSection(environment({ archived_at: "2026-08-10T00:00:00Z" }));
     // The table is still there — archived keys stay revocable.
     await screen.findByText("No environment keys yet.");
     expect(
-      screen.queryByRole("button", { name: "Generate environment key" }),
-    ).toBeNull();
-    expect(screen.queryByTestId("environment-key-setup")).toBeNull();
-    void rerender;
+      screen.getByRole("button", { name: "Generate environment key" }),
+    ).toBeEnabled();
+    expect(screen.getByTestId("environment-key-setup")).toBeInTheDocument();
   });
 });
 
+describe("native environment-key authority changes", () => {
+  it.each(["draft", "reveal", "pending"])(
+    "unmounts an admitted %s when the administrator becomes a developer",
+    async (phase) => {
+      document.documentElement.dataset.consoleAuth = "platform";
+      let release!: (response: Response) => void;
+      const pending = new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+      const fetchMock = stubRoutes(
+        phase === "pending" ? { issue: () => pending } : undefined,
+      );
+      const view = renderSection(cloudEnvironment());
+      const user = userEvent.setup();
+      await user.click(
+        await screen.findByRole("button", { name: "Generate environment key" }),
+      );
+      await user.type(screen.getByLabelText("Name"), "administrator-draft");
+      if (phase !== "draft") {
+        await user.click(
+          screen.getByRole("button", { name: "Create environment key" }),
+        );
+        await waitFor(() =>
+          expect(
+            fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+          ).toBe(true),
+        );
+        if (phase === "reveal")
+          expect(await screen.findByTestId("revealed-key")).toHaveTextContent(
+            SECRET,
+          );
+      }
+      view.changeSession({ ...adminSession, role: "developer" });
+      const requestsAtRevocation = fetchMock.mock.calls.length;
+      expect(view.container).toBeEmptyDOMElement();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      if (phase === "pending")
+        await act(async () =>
+          release(json({ access_token: SECRET, expires_in: 31536000 })),
+        );
+      await waitFor(() =>
+        expect(
+          JSON.stringify(view.client.getMutationCache().getAll()),
+        ).not.toContain(SECRET),
+      );
+      expect(fetchMock.mock.calls).toHaveLength(requestsAtRevocation);
+      expect(document.body.innerHTML).not.toContain(SECRET);
+      // Restoring the role does not restore the old draft or one-time secret.
+      view.changeSession(adminSession);
+      await user.click(
+        await screen.findByRole("button", { name: "Generate environment key" }),
+      );
+      expect(screen.getByLabelText("Name")).toHaveValue("");
+      expect(screen.queryByTestId("revealed-key")).toBeNull();
+    },
+  );
+});
+
 describe("revoking a key", () => {
-  it("revokes through the confirm dialog and drops the row", async () => {
+  it.each([
+    ["self-hosted", environment()],
+    ["cloud", cloudEnvironment()],
+    [
+      "archived cloud",
+      { ...cloudEnvironment(), archived_at: "2026-08-10T00:00:00Z" },
+    ],
+  ])("revokes a %s key with native CSRF and drops the row", async (_, env) => {
+    document.documentElement.dataset.consoleAuth = "platform";
     const user = userEvent.setup();
     const fetchMock = stubRoutes({ rows: [key({ id: "envkey_doomed" })] });
-    renderSection();
+    renderSection(env);
 
     await screen.findByText("prod-runner-01");
     await user.click(
@@ -469,9 +608,7 @@ describe("revoking a key", () => {
         name: "Revoke environment key prod-runner-01",
       }),
     );
-    // The reference's own copy, which is also the warning that matters: a
-    // running worker loses its connection.
-    await screen.findByText(/Workers using this key will no longer be able/);
+    await screen.findByText(/This action cannot be undone\./);
     // ConfirmIconButton labels its destructive action with the dialog title.
     await user.click(
       screen.getByRole("button", { name: "Revoke environment key" }),
@@ -485,6 +622,9 @@ describe("revoking a key", () => {
       expect(revoke![1]?.method).toBe("POST");
       // A bodiless POST — the revoke route takes no body.
       expect(revoke![1]?.body).toBeUndefined();
+      expect(revoke![1]?.headers).toEqual({
+        "X-CSRF-Token": "environment-key-csrf",
+      });
     });
     await waitFor(() =>
       expect(screen.queryByText("prod-runner-01")).toBeNull(),
