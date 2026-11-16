@@ -1,13 +1,12 @@
 name: deploy
 
-# Continuous delivery of the console to the staging GKE cluster.
+# Manual rollback to the legacy Console topology on the staging GKE cluster.
 #
-# The trigger is a push to `main` — there is one environment, so "deployed" and
-# "merged" are the same event and a separate promotion step would only be a
-# button somebody forgets to press. workflow_dispatch stays for re-deploying
-# without a commit (a rotated secret, a cluster rebuilt under the same name);
-# that works because the pod template carries a checksum of the platform API
-# key payload, so a rotation changes the Deployment and the pod actually rolls.
+# Platform plan 69 slice 6 transfers automatic deployment and the existing
+# console Ingress/certificate/IP to the platform chart's native application edge.
+# Keep this workflow for an explicitly confirmed legacy rollback from main only.
+# Coordinate ownership with the platform: concurrency groups are repository-local.
+# CI SHA publishing and release.yml remain the automatic image publishers.
 #
 # **No GitHub secret is involved.** The job mints a short-lived OIDC token,
 # Workload Identity Federation exchanges it for an impersonation of
@@ -25,9 +24,13 @@ name: deploy
 # secrets themselves) stays human-driven and interactive by design.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      confirm_legacy_rollback:
+        description: "Restore the legacy Console topology under coordinated platform rollback"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -60,6 +63,9 @@ env:
 
 jobs:
   deploy:
+    # Reject every other event/ref/confirmation before requesting OIDC credentials.
+    # The shared WIF provider independently requires the main branch.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.confirm_legacy_rollback == true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # `shell: bash` rather than the implicit `bash -e {0}`, for one word of
@@ -145,11 +151,11 @@ jobs:
           case ";$labels" in
             *";power-saved-"*)
               echo "POWERED_OFF=true" >> "$GITHUB_ENV"
-              echo "::notice::staging is parked ($labels) — nothing was deployed. Revive it with the platform's make gcp-env-start, then re-run this workflow to catch staging up to main."
+              echo "::notice::staging is parked ($labels) — nothing was deployed. To resume an agreed legacy rollback, revive it with the platform's make gcp-env-start, then dispatch this workflow with confirmation."
               {
                 echo "### staging is parked — nothing was deployed"
                 echo ""
-                echo "Labels: \`$labels\`. Revive it with the platform's \`make gcp-env-start\`, then re-run this workflow to catch staging up to \`main\`."
+                echo "Labels: \`$labels\`. To resume an agreed legacy rollback, revive it with the platform's \`make gcp-env-start\`, then dispatch this workflow with confirmation."
               } >> "$GITHUB_STEP_SUMMARY"
               ;;
           esac

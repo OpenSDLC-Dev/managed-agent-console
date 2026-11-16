@@ -2,6 +2,45 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-environment-cloud-keys",
+    route: "/environments/{fixture}",
+    fixture: "real cloud environment with an issued key",
+    description:
+      "Cloud credentials can be managed without a worker setup guide.",
+  },
+  {
+    id: "native-environment-cloud-key-form",
+    route: "/environments/{fixture}",
+    fixture: "cloud key naming dialog",
+    description:
+      "The existing environment-key form also issues cloud credentials.",
+  },
+  {
+    id: "native-environment-cloud-key-reveal",
+    route: "/environments/{fixture}",
+    fixture: "real cloud key issuance, plaintext masked",
+    description: "The one-time reveal is masked in the screenshot.",
+  },
+  {
+    id: "native-environment-cloud-key-revoke",
+    route: "/environments/{fixture}",
+    fixture: "cloud key revocation confirmation",
+    description:
+      "Revocation warns about credential authentication, not worker polling.",
+  },
+  {
+    id: "native-environment-archived-cloud-keys",
+    route: "/environments/{fixture}",
+    fixture: "archived cloud environment with an issued key",
+    description: "Archiving leaves issuance and revocation available.",
+  },
+  {
+    id: "native-environment-self-hosted-keys",
+    route: "/environments/{fixture}",
+    fixture: "self-hosted environment with an issued key",
+    description: "Self-hosted key management retains its worker setup guide.",
+  },
+  {
     id: "native-deployment-initiator",
     route: "/deployments/{fixture}",
     fixture: "real paused deployment with creator initiator",

@@ -35,6 +35,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Administrators can issue and revoke keys for cloud and self-hosted environments, including archived environments. Cloud key management omits worker setup instructions. Native non-admin pages omit key controls and their private requests; role changes discard open drafts and one-time reveals. One-time environment-key reveals are masked in native screenshots and failure diagnostics.
+
 - Native administrators can select an active service account for future scheduled deployment runs. Existing sessions retain their initiator, manual runs use the caller, and changing the setting leaves a paused deployment paused.
 
 - **Organization limits in the model inspector** (platform plan 69 slice 4). Native developers can read a public model alias's shared request, input-token and output-token limits; administrators can update or clear them. Role changes discard open drafts. This requires the companion platform slice 4.
@@ -89,6 +91,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   the management credential outside `/v1`.
 
 ### Changed
+
+- **Automatic staging deployment transfers to the companion platform chart** (platform plan 69 slice 6). The legacy Console deploy workflow accepts only a confirmed manual rollback from `main`; automatic SHA and release image publishing remain unchanged. Companion platform delivery is pending.
 
 - **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the
   connection state, and navigation labels are title case: `API Keys`, `Credential Vaults`,

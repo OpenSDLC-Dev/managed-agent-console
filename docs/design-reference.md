@@ -5,6 +5,16 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Environment keys (platform plan 69 slice 6)
+
+On 2026-11-16, Chrome reached the authenticated reference Dashboard and its Resources navigation entry.
+Resources navigation and the subsequent page read timed out. No environment detail or key dialog was observed in that visit.
+This slice reuses the established key table, name dialog, reveal-once dialog and revocation confirmation; it claims no new authenticated-reference comparison.
+
+The platform requires Console management for every environment's keys before removing legacy credentials.
+Cloud and archived environments therefore expose those controls. The cloud view omits the worker setup guide because its keys cannot poll work.
+The states for local light/dark verification are enumerated in `test/fidelity/native-surfaces.ts`.
+
 ## Deployment initiator (platform plan 69 slice 5)
 
 On 2026-11-15, Chrome showed the authenticated reference's Deployments list and Create deployment form.

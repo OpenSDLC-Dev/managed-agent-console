@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { Check, Copy, KeyRound, Trash2, X } from "lucide-react";
 import { DetailSection } from "@/components/console/detail";
 import { DataTable, type Column } from "@/components/console/data-table";
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { copyText } from "@/lib/copy-text";
 import { hasExpired } from "@/lib/platform/expiry";
-import { PlatformError } from "@/lib/platform/http";
+import { PlatformError, isNativeConsole } from "@/lib/platform/http";
 import {
   useCreateEnvironmentKey,
   useEnvironmentKeys,
@@ -51,23 +52,6 @@ export function environmentKeyState(
   now: number,
 ): "active" | "expired" {
   return hasExpired(expiresAt, now) ? "expired" : "active";
-}
-
-/**
- * Whether this console offers to issue this environment a key.
- *
- * The platform issues one on any environment, a `cloud` or an archived one
- * included, as the reference does (managed-agent-platform#820). The console
- * offers it only where a new key has a use. A `cloud` environment's work is run
- * by the platform's own executor, and the platform refuses that key its poll,
- * so the reference shows no key UI there either. An archived environment
- * starts no new sessions, so its keys are listed and revocable but not added
- * to. Both are presentation choices: the wire would accept the request.
- */
-export function canIssueEnvironmentKey(environment: Environment): boolean {
-  return (
-    environment.config.type === "self_hosted" && environment.archived_at == null
-  );
 }
 
 /**
@@ -110,7 +94,7 @@ function RevealKeyDialog({
             scroll box is a key half of them will paste truncated. */}
         <pre
           data-testid="revealed-key"
-          className="rounded-md border bg-secondary/40 p-3 font-mono text-[12px] break-all"
+          className="min-w-0 rounded-md border bg-secondary/40 p-3 font-mono text-[12px] break-all whitespace-pre-wrap"
         >
           {secret}
         </pre>
@@ -278,20 +262,37 @@ function GenerateKeyButton({ environmentId }: { environmentId: string }) {
 /**
  * The environment-key section of the environment detail page.
  *
- * Rendered only for `self_hosted` environments, matching the reference: a cloud
- * environment has no worker to hold a key. An *archived* self-hosted
- * environment still shows its section, because the platform still serves and
- * still revokes those keys (`consoleapi.go:122-126`) — an operator who archives
- * an environment needs the credentials it handed out to be revocable, not
- * invisible.
+ * Every environment exposes its issued credentials, including cloud and
+ * archived environments. The platform permits their creation and revocation
+ * (`internal/api/consoleapi.go`); cloud keys do not authorize worker polling.
  */
 export function EnvironmentKeysSection({
   environment,
 }: {
   environment: Environment;
 }) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const native = isNativeConsole();
+  if (
+    native &&
+    (!session?.signed_in || !session.id || session.role !== "admin")
+  )
+    return null;
+  return (
+    <EnvironmentKeyManagement
+      key={`${native ? session!.id : "legacy"}:${environment.id}`}
+      environment={environment}
+    />
+  );
+}
+
+function EnvironmentKeyManagement({
+  environment,
+}: {
+  environment: Environment;
+}) {
   const selfHosted = environment.config.type === "self_hosted";
-  const keys = useEnvironmentKeys(environment.id, selfHosted);
+  const keys = useEnvironmentKeys(environment.id);
   const revoke = useRevokeEnvironmentKey(environment.id);
   // The repo's existing clock, rather than a `Date.now()` in render: it keeps
   // this component pure, and a key that expires while the page sits open flips
@@ -313,14 +314,11 @@ export function EnvironmentKeysSection({
   // feature". So the 404 is not read as feature-absence until a re-read of the
   // environment confirms it is still there. The re-read runs only on that
   // 404, so a platform that serves the surface never pays for it.
-  const maybeUnimplemented =
-    selfHosted && keys.error != null && isUnimplemented(keys.error);
+  const maybeUnimplemented = keys.error != null && isUnimplemented(keys.error);
   const stillExists = useEnvironmentStillExists(
     environment.id,
     maybeUnimplemented,
   );
-
-  if (!selfHosted) return null;
 
   // Only a confirmed-live environment licenses hiding. A deleted one, or a
   // re-read that failed, keeps the error visible — the fail-safe direction,
@@ -375,7 +373,11 @@ export function EnvironmentKeysSection({
         <ConfirmIconButton
           label={`Revoke environment key ${k.name}`}
           title="Revoke environment key"
-          description="Are you sure you want to revoke this environment key? Workers using this key will no longer be able to connect. This action cannot be undone."
+          description={
+            selfHosted
+              ? "Are you sure you want to revoke this environment key? Workers using this key will no longer be able to connect. This action cannot be undone."
+              : "Are you sure you want to revoke this environment key? Requests using this key will no longer authenticate. This action cannot be undone."
+          }
           pending={revoke.isPending}
           onConfirm={() => revoke.mutate(k.id)}
         >
@@ -386,7 +388,6 @@ export function EnvironmentKeysSection({
   ];
 
   const page = keys.data;
-  const canIssue = canIssueEnvironmentKey(environment);
   return (
     <DetailSection title="Environment keys" testId="environment-keys">
       {/* Two columns, matching the reference: the table and its control on the
@@ -395,9 +396,9 @@ export function EnvironmentKeysSection({
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <p className="pb-3 text-[13px] text-muted-foreground">
-            An environment key lets a runner on your infrastructure connect to
-            this environment and pull jobs. Generate one per host so you can
-            revoke access individually.
+            {selfHosted
+              ? "An environment key lets a runner on your infrastructure connect to this environment and pull jobs. Generate one per host so you can revoke access individually."
+              : "Manage the keys issued for this environment. Cloud work runs on the platform; these keys cannot connect a worker."}
           </p>
           {keys.error && !deciding ? (
             <ErrorState error={keys.error} />
@@ -426,18 +427,13 @@ export function EnvironmentKeysSection({
                   {page.pagination.total} keys.
                 </p>
               )}
-              {/* Hidden for the two cases the platform refuses outright, so an
-                  operator does not discover the 400 by hitting it. An archived
-                  environment keeps its table and its revoke controls. */}
-              {canIssue && (
-                <div className="pt-3">
-                  <GenerateKeyButton environmentId={environment.id} />
-                </div>
-              )}
+              <div className="pt-3">
+                <GenerateKeyButton environmentId={environment.id} />
+              </div>
             </>
           )}
         </div>
-        {canIssue && (
+        {selfHosted && (
           <div className="w-full shrink-0 lg:max-w-md">
             <EnvironmentKeySetup environmentId={environment.id} />
           </div>

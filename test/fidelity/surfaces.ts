@@ -1096,7 +1096,8 @@ export const SURFACES: Surface[] = [
     id: "environment-cloud-detail",
     route: "/environments/env_egress000000000000001",
     fixture: "cloud environment",
-    description: "Structured networking, packages and metadata.",
+    description:
+      "Structured networking, packages, metadata and environment keys.",
   },
   {
     id: "environment-edit-inline",
@@ -1138,8 +1139,7 @@ export const SURFACES: Surface[] = [
     fixture: ENV,
     description:
       "The environment config union rendered as sections, plus the " +
-      "environment-key table — this fixture is the self-hosted arm, the only " +
-      "one that shows keys at all.",
+      "environment-key table and self-hosted worker setup guide.",
   },
   {
     id: "vault-detail",

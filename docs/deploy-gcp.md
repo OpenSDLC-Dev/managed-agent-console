@@ -1,12 +1,29 @@
-# Deploying to GCP
+# Legacy Console rollback on GCP
 
-How the console reaches the staging cluster, what proves a deployment worked, and what to do when
-one does not. The objects are [deploy/k8s/](../deploy/k8s/) — each field's reason is a comment beside
-it — and the pipeline is [.github/workflows/deploy.yml](../.github/workflows/deploy.yml).
+Platform plan 69 slice 6 transfers automatic staging deployment to the
+[platform deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/gcp).
+Its chart serves native Console login through the application edge and takes over the existing
+`console` Ingress, `console` managed certificate and `console-ip` static IP. The companion platform
+delivery is tracked in [STATE.md](../STATE.md); this document does not record a completed cloud rollout.
 
-This is deployment, not release: a release publishes a versioned multi-arch image to GHCR for anyone
-to pull ([docs/releasing.md](./releasing.md)); this pushes a commit-tagged image to a private
-Artifact Registry and rolls one cluster. Staging runs `main`, not the newest tag.
+The Console [deploy.yml](../.github/workflows/deploy.yml) is now **manual legacy rollback only**,
+retained through slice 6. It requires a dispatch from `main` with `confirm_legacy_rollback=true`;
+pushes to Console `main` do not deploy. Coordinate ownership with the platform before using it:
+the two repositories' concurrency groups do not serialize each other's deployments.
+
+The procedures below describe the legacy IAP and credential-BFF topology in
+[deploy/k8s/](../deploy/k8s/), including its own rollout checks and rollback. They do not operate the
+native platform chart. Use them only for a coordinated return to the compatible legacy topology,
+before slice 7 removes that path. For example, after that decision:
+
+```bash
+gh workflow run deploy.yml --ref main -F confirm_legacy_rollback=true
+```
+
+Image publication remains automatic: successful main CI publishes the receiver-only SHA image,
+and published releases use the separate [release workflow](./releasing.md). The SemVer release hold
+through slice 7 remains in force. This rollback workflow builds a commit-tagged image in the private
+Artifact Registry and rolls the legacy deployment.
 
 ## Where it goes
 
@@ -28,7 +45,7 @@ Identity Federation trust policy is what protects the deployment.
 | `PLATFORM_BASE_URL`       | the control plane's in-cluster Service URL                                     |
 | `MODEL_GATEWAY_BASE_URL`  | optional: the model gateway's in-cluster Service URL; unset hides its screens  |
 
-The workflow's **first step asserts every one but `MODEL_GATEWAY_BASE_URL` is set and
+After the dispatch guard admits the rollback, its **first step asserts every one but `MODEL_GATEWAY_BASE_URL` is set and
 non-empty**, before it authenticates or builds. An unset variable renders as the empty string, and
 `gcloud --project ""`, `kubectl -n ""` and an image tag with no repository all fail late and confusingly.
 
@@ -40,18 +57,19 @@ argv, shredded on exit.
 
 ## The pipeline
 
-Push to `main` plus `workflow_dispatch`. With one environment, "merged" and "deployed" are the same
-event; a manual promotion step would only be a button somebody forgets. Runs are serialized and
-**never cancelled** — killing one mid-rollout leaves the cluster holding half of each revision.
+Only `workflow_dispatch` can start the legacy rollback. The deploy job checks the event, the exact
+`refs/heads/main` ref and the boolean confirmation before any OIDC authentication. Its runs are
+serialized and **never cancelled** — killing one mid-rollout leaves the cluster holding half of each
+revision. Normal native deployments belong to the platform workflow.
 
 **A parked cluster is skipped, not failed.** While the platform's `make gcp-env-stop` holds staging at
 zero nodes, its `power-saved-*` cluster labels make the run finish green, deploying nothing and saying so
-in a notice and the run summary. To catch staging up to `main`, revive it with the platform's
-`make gcp-env-start`, then dispatch this workflow by hand.
+in a notice and the run summary. To resume an agreed legacy rollback, revive it with the platform's
+`make gcp-env-start`, then dispatch this workflow again with the confirmation. Use the platform
+workflow to resume normal native deployment.
 
-**A failed run opens an issue.** A deploy runs after the merge, so its failure blocks nothing. From
-2026-09-02 every run failed for a month, and staging kept an August revision until 2026-10-16.
-[deploy-alert.yml](../.github/workflows/deploy-alert.yml) now keeps one issue labelled `cd-failure`
+**A failed rollback run opens an issue.**
+[deploy-alert.yml](../.github/workflows/deploy-alert.yml) keeps one issue labelled `cd-failure`
 open while runs on `main` fail. The issue is assigned to the run's actor and gets one comment per
 new failing run. The next run that deploys closes it. A parked run neither opens nor closes it.
 
@@ -62,7 +80,8 @@ Secret Manager's `controlplane-api-key`, the same value the platform chart insta
 **single line**, and the job strips a trailing newline before writing: `--data-file=-` stores the
 Enter you pressed, and that byte rides in as an `x-api-key` Node refuses to send at all.
 
-The WIF provider only accepts tokens from repositories owned by `OpenSDLC-Dev`, and the deploy
+The shared WIF provider only accepts tokens from repositories owned by `OpenSDLC-Dev` on the
+`main` branch (`refs/heads/main`, ref type `branch`), and the deploy
 identity holds exactly what CD needs — push images, drive the cluster, read secrets — and notably
 **not** permissions to change infrastructure. **CD does not run Terraform**: the cluster, registry,
 WIF pool, service account and secrets are human-driven on purpose.
@@ -130,7 +149,10 @@ Two things it deliberately does not prove: **that the platform can run anything*
 platform pipeline's gate), and **that the UI renders** (Playwright's job, on the PR, before the merge
 that deploys).
 
-## Rolling back
+## Rolling back a legacy rollout
+
+These commands address the legacy `deployment/console`; use the platform's rollout procedures for
+the native chart. Do not use either deployment owner concurrently with the other.
 
 **The pipeline rolls itself back, to a revision it named before it started.** Readiness is the
 shallow check, so a revision with a rejected key passes `rollout status` while the RollingUpdate
@@ -172,8 +194,9 @@ Deployment still holds, and any commit sha ever built is addressable whether or 
 kubectl set image deployment/console console="$CONSOLE_IMAGE_REPO:<sha>" -n "$K8S_NAMESPACE"
 ```
 
-Either way the next push to `main` deploys over it — a rollback buys time to fix forward, it does not
-pin anything.
+Console pushes no longer overwrite a rollback. Returning to native staging requires a coordinated
+platform deployment, which restores chart ownership of the shared ingress resources. A legacy
+rollback is temporary and must end before slice 7 removes the legacy authentication path.
 
 ## The public address, and who may reach it
 
