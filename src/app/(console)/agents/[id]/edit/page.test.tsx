@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -137,7 +138,7 @@ describe("EditAgentPage", () => {
   it("shows the detail skeleton while the agent loads", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -148,13 +149,15 @@ describe("EditAgentPage", () => {
   it("surfaces the platform error envelope", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json(
-          {
-            type: "error",
-            error: { type: "not_found_error", message: "agent not found" },
-          },
-          404,
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "agent not found" },
+            },
+            404,
+          ),
         ),
       ),
     );
@@ -165,14 +168,18 @@ describe("EditAgentPage", () => {
   it("renders the edit-mode editor seeded from the loaded agent", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(String(input), "http://console.test");
-        if (url.pathname === "/api/platform/v1/agents/agt_1")
-          return json(agent);
-        if (url.pathname === "/api/platform/v1/skills")
-          return json({ data: [] });
-        throw new Error(`unmatched fetch: ${url.pathname}`);
-      }),
+      withTestSession(
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(String(input), "http://console.test");
+          if (
+            url.pathname === "/api/organizations/default/proxy/v1/agents/agt_1"
+          )
+            return json(agent);
+          if (url.pathname === "/api/organizations/default/proxy/v1/skills")
+            return json({ data: [] });
+          throw new Error(`unmatched fetch: ${url.pathname}`);
+        }),
+      ),
     );
     renderPage();
 
@@ -210,7 +217,7 @@ it("preserves the draft and optimistic version until an explicit reload", async 
         : json({ data: [] });
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const { client } = renderPage();
   const name = await screen.findByLabelText("Name", { exact: true });
   fireEvent.change(name, { target: { value: "Keep my draft" } });

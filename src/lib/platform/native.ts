@@ -1,4 +1,4 @@
-import { assertOk, csrfHeaders, isNativeConsole, queryString } from "./http";
+import { assertOk, csrfHeaders, queryString } from "./http";
 
 export type Role = "user" | "developer" | "admin";
 export type AuthConfig = {
@@ -107,7 +107,6 @@ export async function readAccount(): Promise<
   (Partial<NativeSession> & { signed_in: boolean }) | null
 > {
   const response = await fetch("/api/auth/session", { cache: "no-store" });
-  if (!isNativeConsole() && response.status === 404) return null;
   await assertOk(response);
   return response.json();
 }

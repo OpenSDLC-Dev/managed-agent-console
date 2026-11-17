@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
@@ -55,7 +56,7 @@ function setup(
     if (path.endsWith(`/vaults/${vaults[0].id}`)) return json(vaults[0]);
     throw new Error(`Unexpected request: ${path}`);
   });
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });

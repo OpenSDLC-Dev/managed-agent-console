@@ -7,7 +7,6 @@ import {
   UnavailableSurface,
 } from "@/components/console/bits";
 import { PageHeader } from "./page-header";
-import { isNativeConsole } from "@/lib/platform/http";
 import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
 
 /**
@@ -35,12 +34,7 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       </div>
     );
   const entry = SURFACES[surface];
-  if (
-    isNativeConsole() &&
-    "api" in entry &&
-    entry.api === "native" &&
-    state?.status !== "available"
-  )
+  if ("api" in entry && entry.api === "native" && state?.status !== "available")
     return (
       <div>
         <PageHeader title={entry.label} />

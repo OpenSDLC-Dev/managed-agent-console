@@ -71,12 +71,10 @@ it("optional setup session ignores only an expected missing session, not a platf
   );
   await expect(setupSession()).rejects.toBeInstanceOf(PlatformError);
 });
-it("legacy absent identity is optional, but native session 404 is a configuration failure", async () => {
+it("a missing platform session route is a configuration failure", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response(null, { status: 404 })),
   );
-  expect(await readAccount()).toBeNull();
-  document.documentElement.dataset.consoleAuth = "platform";
   await expect(readAccount()).rejects.toBeInstanceOf(PlatformError);
 });

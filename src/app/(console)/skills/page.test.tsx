@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -111,7 +112,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -178,7 +179,7 @@ describe("SkillsPage", () => {
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     const { container } = renderPage();
     expect(screen.getByText("Skills")).toBeInTheDocument();

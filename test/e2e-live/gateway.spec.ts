@@ -1,6 +1,7 @@
+import { nativeRequest, privateHeaders } from "./native-request";
+import { LIVE_BROWSER_ORIGIN } from "./env";
 import {
   expect,
-  request as pwRequest,
   test,
   type APIRequestContext,
   type Page,
@@ -10,7 +11,7 @@ import { signIn } from "./sign-in";
 
 /**
  * Plan 10 slice 6: the gateway screens against the compose stack's REAL model
- * gateway, through the console's `/api/gateway` BFF.
+ * gateway, through the console's `/admin/v1` native edge.
  *
  * This file spends no model tokens. The vendor key is a dummy, the endpoint is
  * the discard port, and nothing here makes a model call. What the test makes
@@ -18,12 +19,13 @@ import { signIn } from "./sign-in";
  * a failure left behind.
  */
 
-const { baseUrl, apiKey, gatewayUrl } = resolveLiveEnv();
+const { gatewayUrl } = resolveLiveEnv();
 const RUN = `live-e2e-${Date.now().toString(36)}`;
 const UPSTREAM = `${RUN}-upstream`;
 const KEYS = "organizations/default/workspaces/default/api_keys";
 
 let api: APIRequestContext;
+let nativeHeaders: Record<string, string>;
 
 test.beforeAll(async () => {
   if (!gatewayUrl)
@@ -31,22 +33,26 @@ test.beforeAll(async () => {
       "RUN_LIVE_CONSOLE_TESTS=1 is set but MODEL_GATEWAY_BASE_URL is missing. " +
         "The gateway spec fails rather than skips — point it at the stack's gateway (port 8090).",
     );
-  api = await pwRequest.newContext();
+  ({ api, headers: nativeHeaders } = await nativeRequest());
 });
 
 /** One call through the console's own proxy, as the screens make it. */
 async function bff(page: Page, method: string, path: string, data?: unknown) {
-  const res = await page.request.fetch(`/api/${path}`, { method, data });
+  const res = await page.request.fetch(path, {
+    method,
+    data,
+    headers: await privateHeaders(page),
+  });
   expect(res.ok(), `${method} ${path}: ${await res.text()}`).toBe(true);
   return res.json();
 }
 
-test("a model made through the gateway BFF reaches the console's screens", async ({
+test("a model made through the gateway native edge reaches the console's screens", async ({
   page,
 }) => {
   await signIn(page);
   const gw = (method: string, path: string, data?: unknown) =>
-    bff(page, method, `gateway/admin/v1/${path}`, data);
+    bff(page, method, `/admin/v1/${path}`, data);
 
   const provider = await gw("POST", "providers", {
     name: RUN,
@@ -94,45 +100,9 @@ test("a model made through the gateway BFF reaches the console's screens", async
   ).toBeVisible();
   await page.keyboard.press("Escape");
 
-  // A key the console mints can be granted it, and API Keys shows the grant.
-  const key = await bff(page, "POST", `console/${KEYS}`, { name: RUN });
-  await gw("POST", `key_policies/${key.id}`, {
-    aliases: [RUN],
-    rpm: 60,
-    tpm: null,
-  });
-  await page.goto("/api-keys");
-  const access = page
-    .getByRole("row")
-    .filter({ hasText: RUN })
-    .locator("[data-models]");
-  await expect(access).toHaveAttribute("data-models", "1");
-  await expect(access).toHaveAttribute("data-rpm", "60");
-
   // Usage reads the real rollups.
   await page.goto("/usage");
   await expect(page.locator("[data-requests]")).toBeVisible();
-
-  // Archiving leaves the policy, which blocks deleting the model it names
-  // (store/aliases.go DeleteAlias); the archived key offers only its removal.
-  await bff(page, "POST", `console/${KEYS}/${key.id}`, { status: "archived" });
-  const blocked = await page.request.delete(
-    `/api/gateway/admin/v1/aliases/${encodeURIComponent(RUN)}`,
-  );
-  expect(blocked.status()).toBe(409);
-  await page.goto("/api-keys");
-  const row = page.getByRole("row").filter({ hasText: RUN });
-  await row
-    .getByRole("button", { name: `Remove model policy from ${RUN}` })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Remove model policy" })
-    .click();
-  await expect(access).toHaveAttribute("data-models", "none");
-  await expect(row.getByRole("button", { name: "Model access" })).toHaveCount(
-    0,
-  );
 
   await gw("DELETE", `aliases/${encodeURIComponent(RUN)}`);
   await gw("DELETE", `deployments/${deployment.id}`);
@@ -147,7 +117,7 @@ test("a model made through the gateway BFF reaches the console's screens", async
 test.afterAll(async () => {
   // beforeAll refused to start, so this run made nothing to sweep.
   if (!api) return;
-  const headers = { "x-api-key": apiKey };
+  const headers = nativeHeaders;
   const failures: string[] = [];
   const send = async (
     what: string,
@@ -163,8 +133,8 @@ test.afterAll(async () => {
       failures.push(`${what}: ${String(error)}`);
     }
   };
-  const admin = `${gatewayUrl}/admin/v1`;
-  const keysUrl = `${baseUrl}/api/console/${KEYS}`;
+  const admin = `${LIVE_BROWSER_ORIGIN}/admin/v1`;
+  const keysUrl = `${LIVE_BROWSER_ORIGIN}/api/console/${KEYS}`;
 
   const keys = ((await send("listing keys", "GET", keysUrl)) ?? []) as {
     id: string;
@@ -172,16 +142,6 @@ test.afterAll(async () => {
     status?: string;
   }[];
   const ours = keys.filter((k) => k?.name === RUN);
-  const policies = ((
-    await send("listing policies", "GET", `${admin}/key_policies`)
-  )?.data ?? []) as { api_key_id: string }[];
-  for (const p of policies)
-    if (ours.some((k) => k.id === p.api_key_id))
-      await send(
-        `deleting policy ${p.api_key_id}`,
-        "DELETE",
-        `${admin}/key_policies/${p.api_key_id}`,
-      );
   const aliases = ((await send("listing models", "GET", `${admin}/aliases`))
     ?.data ?? []) as { name: string }[];
   for (const a of aliases)

@@ -78,11 +78,14 @@ for (const owner of ["session", "deployment"] as const) {
       const uploadGate = new Promise<void>((resolve) => {
         releaseUpload = resolve;
       });
-      await page.route("**/api/platform/v1/files", async (route) => {
-        if (route.request().method() !== "POST") return route.continue();
-        await uploadGate;
-        await route.continue();
-      });
+      await page.route(
+        "**/api/organizations/default/proxy/v1/files",
+        async (route) => {
+          if (route.request().method() !== "POST") return route.continue();
+          await uploadGate;
+          await route.continue();
+        },
+      );
       await resource.click();
       const chooser = page.waitForEvent("filechooser");
       await page.getByRole("menuitem", { name: "File", exact: true }).click();
@@ -116,7 +119,9 @@ for (const owner of ["session", "deployment"] as const) {
       const submitted = page.waitForRequest(
         (request) =>
           request.method() === "POST" &&
-          request.url().endsWith("/api/platform/v1/" + owner + "s"),
+          request
+            .url()
+            .endsWith("/api/organizations/default/proxy/v1/" + owner + "s"),
       );
       await submit.click();
       expect((await submitted).postDataJSON().resources).toEqual([

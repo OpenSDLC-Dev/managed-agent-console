@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -52,7 +53,7 @@ describe("VaultEditor", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderEditor();
 
     fireEvent.change(screen.getByLabelText("Display name"), {
@@ -77,7 +78,7 @@ describe("VaultEditor", () => {
 
   it("reports invalid metadata without sending", async () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderEditor();
     fireEvent.change(screen.getByLabelText("Metadata (JSON object)"), {
       target: { value: "[" },

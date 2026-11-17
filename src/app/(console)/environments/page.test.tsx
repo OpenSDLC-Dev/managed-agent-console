@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -107,7 +108,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -133,7 +134,7 @@ describe("EnvironmentsPage", () => {
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     const { container } = renderPage();
     expect(screen.getByText("Environments")).toBeInTheDocument();
@@ -354,7 +355,9 @@ it("does not archive rows which are already archived", async () => {
     screen.getByRole("button", { name: "Archive environments" }),
   );
   await waitFor(() =>
-    expect(requests).toEqual(["/api/platform/v1/environments/env_1/archive"]),
+    expect(requests).toEqual([
+      "/api/organizations/default/proxy/v1/environments/env_1/archive",
+    ]),
   );
   await waitFor(() =>
     expect(

@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,7 +24,7 @@ describe("ConnectionStatus (remaining branches)", () => {
   it("shows the checking state while the probe is in flight", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderWidget();
     expect(screen.getByText("Checking Platform…")).toBeDefined();
@@ -36,22 +37,26 @@ describe("ConnectionStatus (remaining branches)", () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ data: [] })),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderWidget();
     await waitFor(() =>
       expect(
         screen.getByTestId("connection-dot").getAttribute("data-state"),
       ).toBe("up"),
     );
-    expect(fetchMock).toHaveBeenCalledWith("/api/platform/v1/agents?limit=1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/organizations/default/proxy/v1/agents?limit=1",
+    );
   });
 
   it("reports the console server unreachable when fetch itself rejects", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => {
-        throw new TypeError("Failed to fetch");
-      }),
+      withTestSession(
+        vi.fn(async () => {
+          throw new TypeError("Failed to fetch");
+        }),
+      ),
     );
     renderWidget();
     await waitFor(() =>
@@ -64,12 +69,14 @@ describe("ConnectionStatus (remaining branches)", () => {
   it("falls back to the HTTP status when the error envelope has no message", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({}), {
-            status: 500,
-            headers: { "request-id": "req_fallback" },
-          }),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({}), {
+              status: 500,
+              headers: { "request-id": "req_fallback" },
+            }),
+        ),
       ),
     );
     renderWidget();
@@ -80,7 +87,9 @@ describe("ConnectionStatus (remaining branches)", () => {
   it("falls back to the HTTP status when the error body is not JSON", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("bad gateway", { status: 502 })),
+      withTestSession(
+        vi.fn(async () => new Response("bad gateway", { status: 502 })),
+      ),
     );
     renderWidget();
     await waitFor(() => expect(screen.getByText("HTTP 502")).toBeDefined());

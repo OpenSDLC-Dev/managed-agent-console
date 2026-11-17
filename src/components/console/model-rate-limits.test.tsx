@@ -140,9 +140,9 @@ it.each([404, 500])(
     expect(screen.queryByRole("button", { name: "Edit limits" })).toBeNull();
   },
 );
-it("legacy sessions never request the cookie-only limits endpoint", async () => {
+it("user sessions never request the limits endpoint", async () => {
   const fetchMock = stub();
-  mount();
+  mount("user");
   expect(fetchMock).not.toHaveBeenCalled();
 });
 it("discards the open editor when the current admin is demoted", async () => {

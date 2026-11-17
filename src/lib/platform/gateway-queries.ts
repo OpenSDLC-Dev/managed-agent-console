@@ -14,7 +14,6 @@ import type {
   GatewayCredential,
   GatewayDailyUsage,
   GatewayDeployment,
-  GatewayKeyPolicy,
   GatewayModelLimit,
   GatewayKind,
   GatewayProfile,
@@ -25,7 +24,7 @@ import type {
 
 /**
  * Query hooks for the model gateway's admin API (plan 10), apart from
- * `queries.ts` because they talk to another server through another BFF. Every
+ * `queries.ts` because the application edge routes them to another server. Every
  * key starts with `gateway`, so one invalidation can refresh the whole surface.
  *
  * The admin API's lists are unpaged `{data}` envelopes
@@ -336,10 +335,6 @@ export function useUpdateGatewayAlias(name: string) {
   });
 }
 
-/**
- * Refused with a 409 while a key policy grants the model (store/aliases.go);
- * the toast carries the gateway's message, which names the keys.
- */
 export function useDeleteGatewayAlias(name: string) {
   const client = useQueryClient();
   return useMutation({
@@ -347,52 +342,6 @@ export function useDeleteGatewayAlias(name: string) {
     mutationFn: () =>
       gatewayDelete<{ type: "alias_deleted"; name: string }>(aliasPath(name)),
     onSuccess: () => aliasChanged(client),
-  });
-}
-
-/**
- * Each key's model grant (keypolicies.go). A key without a row calls no model,
- * except the bootstrap and brain keys, which the gateway knows by value.
- */
-export function useGatewayKeyPolicies() {
-  return useQuery({
-    queryKey: ["gateway", "key_policies"],
-    queryFn: () => gatewayGet<List<GatewayKeyPolicy>>("key_policies"),
-  });
-}
-
-/** keypolicies.go putKeyPolicy: written whole, so each field is named. */
-export type GatewayKeyPolicyWrite = Pick<
-  GatewayKeyPolicy,
-  "aliases" | "rpm" | "tpm"
->;
-
-/** The dialog shows the gateway's refusal itself, so no toast behind it. */
-export function usePutGatewayKeyPolicy(apiKeyId: string) {
-  const client = useQueryClient();
-  return useMutation({
-    meta: { errorToast: false },
-    mutationFn: (body: GatewayKeyPolicyWrite) =>
-      gatewayPost<GatewayKeyPolicy>(`key_policies/${apiKeyId}`, body),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["gateway", "key_policies"] }),
-  });
-}
-
-/** Revokes the grant. The gateway answers 404 for a key that has none. */
-export function useDeleteGatewayKeyPolicy(
-  apiKeyId: string,
-  { errorToast = false } = {},
-) {
-  const client = useQueryClient();
-  return useMutation({
-    meta: errorToast ? { errorTitle: "Removal failed" } : { errorToast: false },
-    mutationFn: () =>
-      gatewayDelete<{ type: "key_policy_deleted"; api_key_id: string }>(
-        `key_policies/${apiKeyId}`,
-      ),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["gateway", "key_policies"] }),
   });
 }
 

@@ -1,31 +1,11 @@
-/**
- * How the BFF tells the browser that the operator's console session is over.
- *
- * **The status code alone cannot say it.** A 401 also arrives when the platform
- * refuses the *management* key — a mistyped `PLATFORM_API_KEY` on a deployment
- * with identity off — and bouncing that operator to `/login` would walk them
- * through a sign-in that cannot fix it, or around a redirect loop on a
- * deployment whose `/login` is the password form. So the BFF marks the one case
- * it authored, and the browser reads the marker rather than inferring from the
- * status.
- *
- * **A header rather than a body field**, because the proxy streams upstream
- * bodies through untouched — SSE depends on that — so the trace reader sees
- * response headers and never a parsed envelope. One signal both call sites read.
- *
- * This is the only module under `src/lib/identity/` without `server-only`: it is
- * the contract *between* the two runtimes rather than a piece of either.
- */
+/** The platform marks lost sessions; an unmarked 401 or role refusal is not sign-out. */
 
-export const SIGNED_OUT_HEADER = "x-console-signed-out";
+export const SIGNED_OUT_HEADER = "x-platform-signed-out";
 
 export function isSignedOut(response: {
   headers: { get(name: string): string | null };
 }): boolean {
-  return (
-    response.headers.get(SIGNED_OUT_HEADER) !== null ||
-    response.headers.get("x-platform-signed-out") === "1"
-  );
+  return response.headers.get(SIGNED_OUT_HEADER) === "1";
 }
 
 /**
@@ -42,7 +22,7 @@ let bouncing = false;
  * Whether the operator asked to leave, as opposed to being sent.
  *
  * Set *before* the request that signs them out, because that request is what
- * makes the race possible: destroying the session turns every BFF call still in
+ * makes the race possible: destroying the session turns every private call still in
  * flight into a marked 401, and the first one back would otherwise bounce —
  * carrying a `return_to` for the very page the operator chose to leave, so the
  * next sign-in would land them back on it. Their intent outranks that inference.

@@ -451,9 +451,9 @@ describe("useSessionTrace", () => {
     await flush();
     expect(result.current.connection).toBe("live");
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1/events?limit=1000",
     ]);
     unmount();
   });
@@ -487,9 +487,9 @@ describe("useSessionTrace", () => {
     );
     await flush();
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
-      "/api/platform/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1%2F..%2Fother%3Fx%3D1%23frag/events?limit=1000",
     ]);
     unmount();
   });
@@ -510,10 +510,10 @@ describe("useSessionTrace", () => {
     ]);
     // Seed pagination and the stream attach hit the BFF with the wire params.
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
-      "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc",
-      "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc&page=tok_2",
-      "/api/platform/v1/sessions/sess_1/events/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
-      "/api/platform/v1/sessions/sess_1/events?limit=1000&order=asc",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events?limit=1000&order=asc",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events?limit=1000&order=asc&page=tok_2",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events/stream?event_deltas[]=agent.message&event_deltas[]=agent.thinking",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events?limit=1000&order=asc",
     ]);
     expect(fetchMock.mock.calls[2][1]).toMatchObject({
       headers: { accept: "text/event-stream" },

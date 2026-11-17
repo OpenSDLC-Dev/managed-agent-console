@@ -157,9 +157,7 @@ describe("ModelsPage", () => {
     const deleted = fetchMock.mock.calls.find(
       ([, init]) => init?.method === "DELETE",
     );
-    expect(String(deleted?.[0])).toBe(
-      "/api/gateway/admin/v1/aliases/agent-default",
-    );
+    expect(String(deleted?.[0])).toBe("/admin/v1/aliases/agent-default");
   });
 
   it("says so when the inspected model does not exist", async () => {
@@ -191,7 +189,7 @@ describe("ModelsPage", () => {
   });
 
   it("probe: stands in for the page on a console that runs without a gateway", async () => {
-    // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
+    // The private route is absent when this deployment has no gateway.
     stubGatewayFetch(() =>
       Response.json(
         { type: "error", error: { type: "not_found_error", message: "x" } },

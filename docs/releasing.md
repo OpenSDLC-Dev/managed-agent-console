@@ -8,9 +8,8 @@ How a console release is cut. The reasoning behind each choice is
 ## Plan 69 release hold
 
 Do not merge a release-please PR, dispatch `release.yml` or cut a SemVer release until platform plan 69 slice 7.
-The receiver-only SHA channel below remains automatic. Slice 6 transfers automatic staging
-deployment to the platform; the Console deploy workflow becomes a confirmed manual legacy
-rollback only ([deployment ownership](./deploy-gcp.md)).
+The SHA channel below remains automatic. The platform owns staging deployment and rollback;
+this repository publishes images only ([deployment ownership](./deploy-gcp.md)).
 
 ## Non-release SHA channel
 
@@ -85,7 +84,7 @@ matches what the tag says.
 
 - **The GHCR package must be public** — done 2026-08-08. A container package is private on first
   publish even when its repository is public, and there is no REST endpoint for it: package page →
-  Package settings → Change visibility → Public. Until then the README's `docker run` fails for
+  Package settings → Change visibility → Public. Until then image pulls fail for
   everyone outside the org. Verify from a shell with no GHCR credentials:
   `docker buildx imagetools inspect ghcr.io/opensdlc-dev/managed-agent-console:X.Y.Z`.
 - **The release automation runs as a GitHub App** (`RELEASE_BOT_APP_ID` variable,

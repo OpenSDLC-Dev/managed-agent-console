@@ -1,3 +1,4 @@
+import { browserPost } from "./browser-write";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
@@ -63,7 +64,7 @@ test("Agent version paging retains its selection after an error and retries from
   let versions: unknown[] = [];
   let allowOlder = false;
   await page.route(
-    "**/api/platform/v1/agents/agent_researcher00000000001/versions?*",
+    "**/api/organizations/default/proxy/v1/agents/agent_researcher00000000001/versions?*",
     async (route) => {
       if (!new URL(route.request().url()).searchParams.has("page")) {
         const response = await route.fetch();
@@ -122,21 +123,24 @@ test("resource edits submit full replacements and a failed save retains the draf
   await page
     .getByLabel("Memory instructions (optional)")
     .fill("Keep this draft");
-  await page.route("**/api/platform/v1/deployments/" + ID, async (route) => {
-    if (route.request().method() === "POST")
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({
-          type: "error",
-          error: {
-            type: "invalid_request_error",
-            message: "Resource rejected",
-          },
-        }),
-      });
-    else await route.continue();
-  });
+  await page.route(
+    "**/api/organizations/default/proxy/v1/deployments/" + ID,
+    async (route) => {
+      if (route.request().method() === "POST")
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            type: "error",
+            error: {
+              type: "invalid_request_error",
+              message: "Resource rejected",
+            },
+          }),
+        });
+      else await route.continue();
+    },
+  );
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator("form").getByRole("alert")).toContainText(
     "Resource rejected",
@@ -144,7 +148,7 @@ test("resource edits submit full replacements and a failed save retains the draf
   await expect(page.getByLabel("Memory instructions (optional)")).toHaveValue(
     "Keep this draft",
   );
-  await page.unroute("**/api/platform/v1/deployments/" + ID);
+  await page.unroute("**/api/organizations/default/proxy/v1/deployments/" + ID);
   const post = page.waitForRequest(
     (req) =>
       req.method() === "POST" && req.url().endsWith("/v1/deployments/" + ID),
@@ -218,7 +222,10 @@ test("run pagination survives selection and closes without changing the cursor",
     expect(
       (
         await request.post(`http://127.0.0.1:18080/v1/deployments/${ID}/run`, {
-          headers: { "x-api-key": "test-key" },
+          headers: {
+            "x-api-key":
+              "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+          },
         })
       ).ok(),
     ).toBe(true);
@@ -267,7 +274,10 @@ test("narrow configuration keeps its save bar visible and archived values remain
   await page.getByRole("button", { name: "Discard", exact: true }).click();
   expect(
     (
-      await page.request.post(`/api/platform/v1/deployments/${ID}/archive`)
+      await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/deployments/${ID}/archive`,
+      )
     ).ok(),
   ).toBe(true);
   await page.reload();

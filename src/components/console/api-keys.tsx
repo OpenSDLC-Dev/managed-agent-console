@@ -31,17 +31,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ResourceActions } from "@/components/console/resource-actions";
-import {
-  ModelAccessButton,
-  RemovePolicyButton,
-  ModelAccessCell,
-} from "@/components/console/model-access";
+import { ModelAccessCell } from "@/components/console/model-access";
 import { copyText } from "@/lib/copy-text";
 import { cn } from "@/lib/utils";
-import { PlatformError, isNativeConsole } from "@/lib/platform/http";
+import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
-import { useGatewayKeyPolicies } from "@/lib/platform/gateway-queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
 import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import type { ApiKeyListItem } from "@/lib/platform/types";
 
@@ -178,27 +172,21 @@ function RevealKeyDialog({
  */
 export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
   const session = useContext(ConsoleSessionContext)?.data;
-  const native = isNativeConsole();
   if (
-    native &&
-    (!session?.signed_in ||
-      !session.id ||
-      !["admin", "developer"].includes(session.role ?? ""))
+    !session?.signed_in ||
+    !session.id ||
+    !["admin", "developer"].includes(session.role ?? "")
   )
     return null;
   // A replaced principal (or changed role) cannot retain a draft, picker,
   // mutation observer or one-time reveal from the previous authority.
   return (
-    <KeyCreation
-      key={native ? `${session?.id}:${session?.role}` : "legacy"}
-      shortcut={shortcut}
-    />
+    <KeyCreation key={`${session.id}:${session.role}`} shortcut={shortcut} />
   );
 }
 
 function KeyCreation({ shortcut }: { shortcut: boolean }) {
   const session = useContext(ConsoleSessionContext)?.data;
-  const native = isNativeConsole();
   const queryClient = useQueryClient();
   const active = useRef(true);
   useEffect(() => {
@@ -226,7 +214,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_page ?? undefined,
-    enabled: native && session?.role === "admin" && open,
+    enabled: session?.role === "admin" && open,
     gcTime: 0,
     // This observer stays mounted while closed. Re-enable must read the directory
     // again: an account can be created or archived without leaving this page.
@@ -266,36 +254,34 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
     const trimmed = name.trim();
     if (!trimmed || customIsIncomplete(choice, custom)) return;
     let principalId: string | undefined;
-    if (native) {
-      setChecking(true);
-      setSessionError(null);
-      try {
-        const current = await nativeGet<NativeSession>("/api/auth/session");
-        if (!active.current) return;
-        if (
-          !current.signed_in ||
-          current.id !== session?.id ||
-          current.role !== session?.role
-        ) {
-          setOpen(false);
-          resetDraft();
-          queryClient.setQueryData(["console-session"], current);
-          return;
-        }
-        if (
-          current.role === "user" ||
-          (owner !== current.id && current.role !== "admin")
-        )
-          throw new Error(
-            "Your role changed. Reopen the form to select an owner.",
-          );
-        principalId = owner || current.id;
-      } catch (error) {
-        if (active.current) setSessionError(error);
+    setChecking(true);
+    setSessionError(null);
+    try {
+      const current = await nativeGet<NativeSession>("/api/auth/session");
+      if (!active.current) return;
+      if (
+        !current.signed_in ||
+        current.id !== session?.id ||
+        current.role !== session?.role
+      ) {
+        setOpen(false);
+        resetDraft();
+        queryClient.setQueryData(["console-session"], current);
         return;
-      } finally {
-        if (active.current) setChecking(false);
       }
+      if (
+        current.role === "user" ||
+        (owner !== current.id && current.role !== "admin")
+      )
+        throw new Error(
+          "Your role changed. Reopen the form to select an owner.",
+        );
+      principalId = owner || current.id;
+    } catch (error) {
+      if (active.current) setSessionError(error);
+      return;
+    } finally {
+      if (active.current) setChecking(false);
     }
     const expiresAt = expiryInstant(choice, custom, Date.now());
     create.mutate(
@@ -378,9 +364,8 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
             <DialogHeader>
               <DialogTitle>Create API key</DialogTitle>
               <DialogDescription>
-                {native
-                  ? "An owned key uses its owner’s current role. Deactivating the owner revokes access."
-                  : "The platform assigns ownership from the issuing identity. Owned keys use their owner’s current role; unowned keys retain legacy authority."}
+                An owned key uses its owner’s current role. Deactivating the
+                owner revokes access.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
@@ -395,70 +380,67 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                   disabled
                 />
               </div>
-              {native && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="api-key-owner">Owner</Label>
-                  <select
-                    id="api-key-owner"
-                    className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
-                    value={owner}
-                    onChange={(event) => setOwner(event.target.value)}
-                    disabled={pending || session?.role !== "admin"}
-                  >
-                    <option value={session?.id}>
-                      You ·{" "}
-                      {session?.name || session?.login_name || session?.id}
-                    </option>
-                    {owner !== session?.id &&
-                      !services.some((account) => account.id === owner) && (
-                        <option value={owner} disabled>
-                          Selected account not in current list · {owner}
-                        </option>
-                      )}
-                    {services.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        Service account · {account.name || account.id}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="api-key-owner">Owner</Label>
+                <select
+                  id="api-key-owner"
+                  className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
+                  value={owner}
+                  onChange={(event) => setOwner(event.target.value)}
+                  disabled={pending || session?.role !== "admin"}
+                >
+                  <option value={session?.id}>
+                    You · {session?.name || session?.login_name || session?.id}
+                  </option>
+                  {owner !== session?.id &&
+                    !services.some((account) => account.id === owner) && (
+                      <option value={owner} disabled>
+                        Selected account not in current list · {owner}
                       </option>
-                    ))}
-                  </select>
-                  {accounts.isFetching && (
-                    <p
-                      role="status"
-                      className="text-[13px] text-muted-foreground"
-                    >
-                      Loading service accounts…
-                    </p>
-                  )}
-                  {accounts.error && (
-                    <p role="alert" className="text-[13px] text-destructive">
-                      {accounts.error.message}
-                    </p>
-                  )}
-                  {/* A cold retry clears error; a cached refetch retains it.
+                    )}
+                  {services.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      Service account · {account.name || account.id}
+                    </option>
+                  ))}
+                </select>
+                {accounts.isFetching && (
+                  <p
+                    role="status"
+                    className="text-[13px] text-muted-foreground"
+                  >
+                    Loading service accounts…
+                  </p>
+                )}
+                {accounts.error && (
+                  <p role="alert" className="text-[13px] text-destructive">
+                    {accounts.error.message}
+                  </p>
+                )}
+                {/* A cold retry clears error; a cached refetch retains it.
                       Keep recovery mounted and disabled during either request. */}
-                  {((accounts.isFetched && !accounts.data) ||
-                    accounts.isRefetchError) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={accounts.isFetching || pending}
-                      onClick={() => void accounts.refetch()}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                  {accounts.hasNextPage && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={accounts.isFetching || pending}
-                      onClick={() => void accounts.fetchNextPage()}
-                    >
-                      Load more service accounts
-                    </Button>
-                  )}
-                </div>
-              )}
+                {((accounts.isFetched && !accounts.data) ||
+                  accounts.isRefetchError) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={accounts.isFetching || pending}
+                    onClick={() => void accounts.refetch()}
+                  >
+                    Retry
+                  </Button>
+                )}
+                {accounts.hasNextPage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={accounts.isFetching || pending}
+                    onClick={() => void accounts.fetchNextPage()}
+                  >
+                    Load more service accounts
+                  </Button>
+                )}
+              </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="api-key-name">Name</Label>
                 <Input
@@ -494,9 +476,8 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                     data-testid="never-expires-warning"
                     className="text-[13px] text-destructive"
                   >
-                    {native
-                      ? "No time limit. Disabling or deleting this key, or deactivating its owner, revokes access."
-                      : "No time limit. Disabling or deleting this key revokes access."}
+                    No time limit. Disabling or deleting this key, or
+                    deactivating its owner, revokes access.
                   </p>
                 )}
                 {choice === "custom" && (
@@ -572,14 +553,7 @@ export function ApiKeysTable({
   loading: boolean;
   error: unknown;
 }) {
-  const session = useContext(ConsoleSessionContext)?.data;
-  const canWritePolicies = !isNativeConsole() || session?.role === "admin";
   const update = useUpdateApiKey();
-  // Model access is the model gateway's (plan 10); a console without one
-  // answers 404 and the column goes. While unknown, it shows.
-  const policies = useGatewayKeyPolicies();
-  const gateway = !isUnimplemented(policies.error);
-  const policyList = policies.data?.data;
 
   const columns: Column<ApiKeyListItem>[] = [
     {
@@ -650,21 +624,11 @@ export function ApiKeysTable({
         </span>
       ),
     },
-    ...(gateway
-      ? [
-          {
-            key: "model_access",
-            header: "Model access",
-            cell: (k: ApiKeyListItem) => (
-              <ModelAccessCell
-                apiKey={k}
-                policies={policyList}
-                loading={policies.isPending}
-              />
-            ),
-          },
-        ]
-      : []),
+    {
+      key: "model_access",
+      header: "Model access",
+      cell: (key) => <ModelAccessCell apiKey={key} />,
+    },
     {
       key: "created",
       header: "Created",
@@ -696,42 +660,16 @@ export function ApiKeysTable({
       key: "actions",
       header: "Actions",
       cell: (k) => {
-        // A key the control plane manages has no issuer, and the platform
-        // refuses every mutation on it: its lifecycle is rotation-by-restart.
-        // Showing controls that are guaranteed to 400 would be a worse lie than
-        // showing none, and this is a mirror of the wire rather than a rule
-        // stricter than it. A gateway policy on such a key is not the key,
-        // and stays removable.
-        const policy = policyList?.find((p) => p.api_key_id === k.id);
-        const policyControl = gateway && canWritePolicies && !k.principal;
-        const manageable = k.can_manage ?? (!k.principal && !!k.created_by);
-        if (!k.created_by)
-          return policyControl && policy ? (
-            <span className="flex justify-end">
-              <RemovePolicyButton apiKey={k} />
-            </span>
-          ) : null;
+        // Permission comes from the list response, including historical rows.
+        // Absence of the hint is not permission to change the credential.
+        if (!k.can_manage || !k.created_by) return null;
         // Archived is terminal on this surface, and an expired key admits
         // exactly one operation — archiving it. Both are the platform's rules,
-        // stated in its refusals. Archiving leaves the gateway's policy, which
-        // blocks deleting any model it names, so its removal stays offered;
-        // neither key is offered a grant, which could only block that.
-        if (!manageable) return null;
-        if (k.status === "archived")
-          return policyControl && policy ? (
-            <span className="flex justify-end">
-              <RemovePolicyButton apiKey={k} />
-            </span>
-          ) : null;
+        // stated in its refusals.
+        if (k.status === "archived") return null;
         const expired = k.status === "expired";
         return (
           <span className="flex items-center justify-end gap-1">
-            {policyControl && policyList && !expired && (
-              <ModelAccessButton apiKey={k} policy={policy} />
-            )}
-            {policyControl && expired && policy && (
-              <RemovePolicyButton apiKey={k} />
-            )}
             {!expired && (
               <Button
                 variant="ghost"
@@ -774,12 +712,6 @@ export function ApiKeysTable({
         loading={loading}
         empty={<EmptyState title="No API keys yet." />}
       />
-      {keys.some((key) => !key.created_by) && (
-        <p className="mt-3 text-[13px] text-muted-foreground">
-          Keys managed by the control plane cannot be deleted here. Rotate them
-          in the deployment configuration.
-        </p>
-      )}
     </>
   );
 }

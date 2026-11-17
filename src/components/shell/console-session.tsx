@@ -3,7 +3,6 @@
 import { createContext, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DetailSkeleton, ErrorState } from "@/components/console/bits";
-import { isNativeConsole } from "@/lib/platform/http";
 import { readAccount } from "@/lib/platform/native";
 import {
   hasBouncedToLogin,
@@ -17,13 +16,13 @@ export function useConsoleSession() {
     queryKey: ["console-session"],
     queryFn: readAccount,
     // Native authority can change while this document remains open.
-    staleTime: isNativeConsole() ? 0 : Infinity,
-    gcTime: isNativeConsole() ? 0 : Infinity,
-    refetchInterval: isNativeConsole() ? 15_000 : false,
+    staleTime: 0,
+    gcTime: 0,
+    refetchInterval: 15_000,
     retry: 1,
   });
   useEffect(() => {
-    if (isNativeConsole() && session.data?.signed_in && session.data.id) {
+    if (session.data?.signed_in && session.data.id) {
       leaveIfPrincipalChanged(session.data.id, () => leave.setDirty(false));
     }
   }, [session.data?.signed_in, session.data?.id, leave]);
@@ -36,17 +35,10 @@ export const ConsoleSessionContext = createContext<ReturnType<
 
 export function ConsoleSessionBoundary({
   children,
-  native,
 }: {
   children: React.ReactNode;
-  native: boolean;
 }) {
-  // Legacy pages intentionally do not wait for optional account metadata.
-  return native ? (
-    <NativeSessionBoundary>{children}</NativeSessionBoundary>
-  ) : (
-    children
-  );
+  return <NativeSessionBoundary>{children}</NativeSessionBoundary>;
 }
 
 function NativeSessionBoundary({ children }: { children: React.ReactNode }) {

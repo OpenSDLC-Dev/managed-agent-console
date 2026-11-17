@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
@@ -124,13 +125,20 @@ function setup(
   } = { deleteStatus: 200 };
   const fetch = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>(
     async (input, init) => {
-      if (input.startsWith("/api/platform/v1/files?"))
+      if (input.startsWith("/api/organizations/default/proxy/v1/files?"))
         return list.status === 200
           ? reply({ data: list.files, next_page: null })
           : refusal(list.status, "Gone.");
-      if (input === `/api/platform/v1/sessions/${session.id}` && !init?.method)
+      if (
+        input ===
+          `/api/organizations/default/proxy/v1/sessions/${session.id}` &&
+        !init?.method
+      )
         return replies.session?.() ?? reply(session);
-      const deleted = /^\/api\/platform\/v1\/files\/([^/]+)$/.exec(input)?.[1];
+      const deleted =
+        /^\/api\/organizations\/default\/proxy\/v1\/files\/([^/]+)$/.exec(
+          input,
+        )?.[1];
       if (init?.method === "DELETE" && deleted) {
         await replies.deleteGate;
         if (replies.deleteStatus !== 200)
@@ -145,7 +153,7 @@ function setup(
       return reply(repository);
     },
   );
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, ...(live ? { staleTime: Infinity } : {}) },
@@ -165,12 +173,13 @@ function setup(
   const writes = () => fetch.mock.calls.filter(([, init]) => init?.method);
   const lists = () =>
     fetch.mock.calls.filter(([url]) =>
-      url.startsWith("/api/platform/v1/files?scope_id="),
+      url.startsWith("/api/organizations/default/proxy/v1/files?scope_id="),
     ).length;
   const sessionReads = () =>
     fetch.mock.calls.filter(
       ([url, init]) =>
-        url === `/api/platform/v1/sessions/${session.id}` && !init?.method,
+        url === `/api/organizations/default/proxy/v1/sessions/${session.id}` &&
+        !init?.method,
     ).length;
   return {
     fetch,
@@ -205,7 +214,7 @@ it("lists the session's own files: a mount's size from its copy, then outputs an
   );
   expect(panel()).toHaveAttribute("data-session-file-count", "3");
   expect(fetch.mock.calls[0]).toEqual([
-    `/api/platform/v1/files?scope_id=${sessions[0].id}&limit=1000`,
+    `/api/organizations/default/proxy/v1/files?scope_id=${sessions[0].id}&limit=1000`,
     { headers: { "anthropic-beta": "managed-agents-2026-04-01" } },
   ]);
 
@@ -235,7 +244,7 @@ it("lists the session's own files: a mount's size from its copy, then outputs an
   });
   expect(download).toHaveAttribute(
     "href",
-    "/api/platform/v1/files/file_output/content",
+    "/api/organizations/default/proxy/v1/files/file_output/content",
   );
   expect(download).toHaveAttribute("download", "reports/summary.csv");
   const leftoverRow = document.querySelector(
@@ -377,10 +386,7 @@ it("says no resources are attached only when the session has no files either", a
 
 it("claims no empty tab while the session's files are loading or failed, and announces each through the shell's region", async () => {
   const pending = held<Response>();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(() => pending.promise),
-  );
+  vi.stubGlobal("fetch", withTestSession(vi.fn(() => pending.promise)));
   const session = { ...sessions[0], resources: [] } as unknown as Session;
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -508,8 +514,8 @@ it.each([
     );
     await waitFor(() => expect(writes()).toHaveLength(1));
     expect(writes()[0]).toEqual([
-      `/api/platform/v1/files/${file.id}`,
-      { method: "DELETE" },
+      `/api/organizations/default/proxy/v1/files/${file.id}`,
+      { method: "DELETE", headers: { "X-CSRF-Token": "test-session-csrf" } },
     ]);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     // The dialog closed only once the list was read again, the row gone.
@@ -877,7 +883,7 @@ it("attaches an existing file and refreshes the platform session", async () => {
   );
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(writes()[0]).toEqual([
-    `/api/platform/v1/sessions/${session.id}/resources`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/resources`,
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
@@ -930,7 +936,7 @@ it("offers Remove on a file resource alone: a memory store has no id to remove, 
   );
   await waitFor(() => expect(writes()).toHaveLength(1));
   expect(writes()[0]).toEqual([
-    `/api/platform/v1/sessions/${session.id}/resources/${fileResource.id}`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/resources/${fileResource.id}`,
     expect.objectContaining({ method: "DELETE" }),
   ]);
 });
@@ -948,7 +954,7 @@ it("submits replacement tokens only in the write request and clears the input", 
   );
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(writes()[0]).toEqual([
-    `/api/platform/v1/sessions/${session.id}/resources/sesrsc_repo`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/resources/sesrsc_repo`,
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ authorization_token: "test-only-replacement" }),

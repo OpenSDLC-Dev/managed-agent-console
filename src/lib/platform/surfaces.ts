@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useContext } from "react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
-import { isNativeConsole } from "./http";
 import { nativeGet, ORGANIZATION } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
@@ -96,9 +95,8 @@ export const SURFACES = {
     blurb:
       "Uploads available as session mounts. A session lists its own files.",
   },
-  // The one surface that is not on the wire: management keys live in the
-  // platform's off-wire console namespace (plan 07), so its probe goes through
-  // the other BFF. The rule above still holds and for the same reason — this is
+  // Management keys live in the platform's private console namespace.
+  // The rule above still holds and for the same reason — this is
   // a collection route whose only variable segments are constants this console
   // sends, so a 404 cannot be about a missing id.
   // Developers can read their owned keys. A user's 403 hides navigation;
@@ -113,10 +111,9 @@ export const SURFACES = {
     blurb: "Management credentials for this deployment.",
   },
   // The model gateway's admin API (plan 10), a server of its own reached
-  // through the `/api/gateway` BFF. The rule above holds there too: the BFF
-  // answers every path `404 not_found_error` while MODEL_GATEWAY_BASE_URL is
-  // unset, and the gateway's own catch-all answers the same for a path it does
-  // not serve (`internal/modelgateway/admin/admin.go` routes). A collection
+  // through the application edge. The rule above holds there too: the edge
+  // preserves the gateway's `404 not_found_error` for paths it does not
+  // serve (`internal/modelgateway/admin/admin.go` routes). A collection
   // route carries no id, so its 404 means the surface is absent.
   models: {
     path: "aliases",
@@ -189,7 +186,7 @@ export function isSurfaceVisible(
     "api" in SURFACES[surface] &&
     SURFACES[surface].api === "native"
   )
-    return isNativeConsole() && state?.status === "available";
+    return state?.status === "available";
   return (
     state === undefined ||
     state.status === "available" ||
@@ -207,9 +204,7 @@ export function isSurfaceVisible(
 export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
   const session = useContext(ConsoleSessionContext)?.data;
   return useQuery({
-    queryKey: isNativeConsole()
-      ? ["surfaces", session?.id, session?.role]
-      : ["surfaces"],
+    queryKey: ["surfaces", session?.id, session?.role],
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(
         async (surface): Promise<[Surface, SurfaceState]> => {
@@ -219,8 +214,6 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
             // params, so it is asked for the whole (short) list rather than for
             // a page of one. The gateway's lists are unpaged too.
             if ("api" in entry && entry.api === "native") {
-              if (!isNativeConsole())
-                return [surface, { status: "unimplemented" }];
               // The backend session supplies current authority. Never fetch
               // admin directories merely to enrich a developer's key form.
               if (session?.role && session.role !== "admin")
@@ -262,12 +255,12 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
         SurfaceState
       >;
     },
-    staleTime: isNativeConsole() ? 0 : Infinity,
-    refetchInterval: isNativeConsole() ? 15_000 : false,
-    gcTime: isNativeConsole() ? 0 : Infinity,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    gcTime: 0,
     // A 404 is definitive and a probe failure is not fatal — neither is worth
     // a second round trip.
     retry: false,
-    refetchOnWindowFocus: isNativeConsole(),
+    refetchOnWindowFocus: true,
   }).data;
 }

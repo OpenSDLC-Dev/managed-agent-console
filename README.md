@@ -6,121 +6,78 @@ This console is the operator-facing frontend for a platform deployment you run y
 
 **Status: v0.8.2 — the v1 feature set is complete.** Changes are in [CHANGELOG.md](./CHANGELOG.md); active work is in [STATE.md](./STATE.md) and the [issue tracker](https://github.com/OpenSDLC-Dev/managed-agent-console/issues).
 
-## Authentication modes
+## Platform login
 
-The same production build selects its mode at runtime. The management key never reaches browser JavaScript.
-
-### Native platform login (unreleased)
-
-Set `CONSOLE_AUTH_MODE=platform` behind the platform's one-origin application edge.
-The platform owns the HttpOnly cookie, current role, CSRF checks and sign-in method.
-The console needs no `PLATFORM_API_KEY`, `CONSOLE_PASSWORD` or console-local OIDC settings in this mode.
-It refuses local credential routes and BFF calls rather than falling back to an old key.
+The platform owns login, the HttpOnly session cookie, current roles and CSRF checks.
+Serve this Console behind the platform's one-origin application edge. Next.js serves pages, assets and shallow health only.
+It holds no management key, login password or OIDC client secret.
 
 ```mermaid
 flowchart LR
-  Browser -->|native auth, setup, members, service accounts and private resources| Edge[Application edge]
-  Browser -->|native gateway administration| Edge
-  Edge --> Controlplane[Platform control plane]
-  Edge --> Gateway[Model gateway]
-  Edge -->|pages, assets and shallow health| Console[Console server]
-  Browser -->|legacy mode only| BFF[Console credential BFF]
+  Browser -->|cookie and CSRF| Edge[Application edge]
+  Edge -->|auth, setup and private resources| Controlplane[Platform control plane]
+  Edge -->|model administration| Gateway[Model gateway]
+  Edge -->|pages, assets and health| Console[Console server]
+  Client[SDK or CLI] -->|issued owned API key| Edge
+  Edge -->|public API| Controlplane
 ```
 
 Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
-`/setup` offers code redemption; the platform decides eligibility. Administrators can manage members and service accounts.
-A signed-in `user` has no resource reads. Its account, setup and sign-out controls remain available.
-Service-account creation does not issue a key. On API Keys, developers issue and manage their own owned keys.
-Administrators can also select an active service account and manage non-preset keys.
-Owned keys use their owner's current role on the public control-plane API. Deactivating the owner revokes access.
-Owned keys also authorize model inference while their owner is a developer or admin. Legacy gateway policies remain for unowned keys only.
-Browser calls keep using the native cookie, never a revealed key.
-With platform plan 69 slice 5, administrators can select an active service account as a deployment's scheduled-run initiator.
-The change applies to future scheduled sessions. It does not resume a paused deployment or change a manual run's caller.
-Administrators manage environment keys on each environment's detail page, including cloud and archived environments.
-Cloud keys do not let a worker poll for work. Removing the person who issued a key does not revoke it; revoke the environment key itself.
+`/setup` offers code redemption; the platform decides eligibility. Administrators manage members and service accounts.
+A signed-in `user` has no resource reads but keeps account, setup and sign-out controls.
+Developers issue and manage their own API keys. Administrators can also issue keys for active service accounts.
+Each key uses its owner's current role; deactivating the owner revokes access.
+Browser calls keep using the session cookie, never a revealed key.
 
-Shallow `/api/health` remains console-owned. Native deep health reports `checked:false` with status 503;
-it cannot check a person's resource access without their cookie and never spends a leftover key.
-The application edge must route native API calls to their owner, not to the console's legacy BFF.
+Administrators manage every environment's keys, including cloud and archived environments.
+Cloud keys cannot poll for work. Removing the issuer does not revoke an environment key; revoke the key itself.
+Administrators can assign an active service account to initiate future scheduled deployment runs.
+This neither resumes a paused deployment nor changes a manual run's caller.
+Model inference uses the owner's current role and organization limits shared by public model alias.
 
+Shallow `/api/health` remains Console-owned. Deep health reports `checked:false` with status 503;
+it cannot check a person's resource access without their cookie and never spends a service credential.
+
+**Upgrade boundary:** this source requires the platform's native login and application edge from plan 69 slice 6 or later.
+See [the upgrade procedure](./docs/deploy-gcp.md#upgrade-boundary) before replacing a legacy installation.
 **Release hold:** do not cut a SemVer release until platform plan 69 slice 7.
-The non-release SHA image procedure is in [docs/releasing.md](./docs/releasing.md#non-release-sha-channel).
-No new owned-key-compatible published image is claimed by these source changes. Prior native delivery is recorded in the platform history linked from [STATE.md](./STATE.md).
+The [SHA image channel](./docs/releasing.md#non-release-sha-channel) delivers this work without changing a release tag.
 
-### Legacy deployments (default)
+## Running the Console
 
-With `CONSOLE_AUTH_MODE` unset, calls and SSE go through the console's thin server-side proxy.
-With platform plan 69 slice 3, human issuance is self-owned; no-identity management-key issuance remains unowned.
-The legacy key form leaves that assignment to the platform.
+Use the [platform Compose stack](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/compose) for local setup.
+It includes the Console and the application edge at `http://localhost:3000`.
+Retrieve the restricted first-admin code using that stack's instructions, open `/setup`, and issue a key through API Keys.
+Use that issued key for SDK or CLI access. The browser needs no key configuration.
 
-**Upgrade boundary:** platform plan 69 slice 3 refuses human IdP tokens on public `/v1`.
-Legacy SSO resource requests therefore fail, even after sign-in.
-Deploy native mode (`CONSOLE_AUTH_MODE=platform`) and validate its cookie routing before this change.
-Check sign-in and private resource access on the deployed origin. There is no management-key fallback.
-The no-identity management-key lane remains available until slice 7's cutover.
-
-The two credentials below are never sent together:
-
-- **No identity configured** — the server attaches the management key (`PLATFORM_API_KEY`). A shared-password gate (`CONSOLE_PASSWORD`) is built in; unset, the console is open, which is fine for `localhost` and for nothing else, since anyone who reaches an ungated console can drive the platform with a full-power key. **Something must stand in front of the console on any deployment reachable by anyone else**, and this gate is the option that needs no infrastructure.
-- **Identity configured (older control planes)** — the console signs the operator in against the deployment's provider and forwards **their own token**, never the management key ([docs/plan/08](./docs/plan/08_console-sso-rbac.md)). Without a session it fails closed. `PLATFORM_API_KEY` stays only as the deep health check's service credential, which no browser request can spend.
-
-| Variable            | Required | Meaning                                                |
-| ------------------- | -------- | ------------------------------------------------------ |
-| `PLATFORM_BASE_URL` | yes      | Control-plane base URL, e.g. `http://localhost:8080`   |
-| `PLATFORM_API_KEY`  | yes\*\*  | The platform's management key (`CONTROLPLANE_API_KEY`) |
-| `CONSOLE_PASSWORD`  | no\*     | Enables the login gate when set; unset ⇒ no gate       |
-
-\* Optional only on `localhost`, or where something else authenticates in front of the console — as
-on the GKE deployment below. Otherwise mandatory. \*\* Required in no-identity legacy mode.
-In legacy identity mode, an optional key serves only the deep health check; the upgrade boundary above still applies.
-
-## Quickstart (Docker)
+To build a candidate image from this checkout:
 
 ```bash
-docker run --rm -p 3000:3000 \
-  -e PLATFORM_BASE_URL=http://host.docker.internal:8080 \
-  -e PLATFORM_API_KEY=your-controlplane-api-key \
-  -e CONSOLE_PASSWORD=choose-a-password \
-  ghcr.io/opensdlc-dev/managed-agent-console:0.8.2
+docker build -t managed-agent-console:local .
 ```
 
-Then open http://localhost:3000. Images are multi-arch (`linux/amd64`, `linux/arm64`); pin a version as above, `latest` follows the newest release. Building from a checkout works too — `docker build -t managed-agent-console .` — and is what CI gates on every PR.
-
-### Next to the platform's compose stack
-
-Join the platform's network and talk to the `controlplane` service directly:
-
-```yaml
-console:
-  image: ghcr.io/opensdlc-dev/managed-agent-console:0.8.2
-  ports:
-    - "127.0.0.1:3000:3000"
-  environment:
-    PLATFORM_BASE_URL: http://controlplane:8080
-    PLATFORM_API_KEY: ${CONTROLPLANE_API_KEY:?set CONTROLPLANE_API_KEY in .env}
-    CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:-}
-  depends_on:
-    - controlplane
-```
-
-Or with `docker run --network managed-agent-platform_default` and the same three variables.
+Select that image for the platform's Console service. Keep the application edge in front of it;
+exposing the Next.js container alone does not provide platform APIs or login.
+Published images support `linux/amd64` and `linux/arm64`. Pin the verified image digest for deployments.
 
 ## Deploying to a cluster
 
-Platform plan 69 slice 6 transfers automatic staging deployment to the [platform chart and deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/gcp), which serve native Console login through the application edge. Companion delivery is tracked in [STATE.md](./STATE.md).
-
-[deploy/k8s/](./deploy/k8s/) retains the legacy IAP and credential-BFF topology through slice 6. Its workflow is a confirmed manual rollback from `main` only; Console pushes continue publishing SHA images but no longer deploy that topology. [docs/deploy-gcp.md](./docs/deploy-gcp.md) explains the ownership handover and rollback procedure.
+The [platform chart and deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/tree/main/deploy/gcp)
+own the Console, application edge, login configuration and rollout checks.
+This repository publishes Console images. It no longer deploys a separate credential proxy or IAP backend.
+[docs/deploy-gcp.md](./docs/deploy-gcp.md) describes the ownership and upgrade boundary.
 
 ## Development
 
 ```bash
 pnpm install
-cp .env.example .env.local   # fill in PLATFORM_BASE_URL / PLATFORM_API_KEY
-pnpm dev                     # console on http://localhost:3000
+pnpm dev                     # page server on http://localhost:3000
 ```
 
-Checks — the default suites spend no money and need no network:
+For manual development, route the application edge's page backend to this server while keeping its API routes on the platform.
+Direct page-server access cannot sign in. `.env.example` documents optional test inputs, not Console deployment credentials.
+
+Checks — the default suites make no vendor API calls:
 
 ```bash
 pnpm test       # Vitest unit/component tests
@@ -155,7 +112,7 @@ The platform source must implement plan 69 slice 5's private deployment initiato
 A test-only client builds against the platform's pinned Go SDK. Human and service-account keys come from the browser's one-time reveal, then reach the client through stdin.
 Independent cookie reads check persisted Memory actors, redacted nulls and current authority. No `ant` checkout is needed by this automated tier.
 The separate real-`ant` check must run against a fresh packaged Compose install after immutable source/image pairing.
-Native fixtures and a local candidate image do not satisfy that deployment check; the [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/feat/plan-69-slice-3-owned-keys/STATE.md) tracks it.
+Native fixtures and a local candidate image do not satisfy that deployment check; the [platform state](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/STATE.md) tracks it.
 It accepts only a local Unix Docker endpoint and refuses to start beside platform test-fixture containers.
 A nonempty `DOCKER_CONFIG` must be an absolute path; the runtime refuses relative paths before any Docker command.
 The runtime checks its effective child environment, retains the Docker selectors and disables Next telemetry before starting resources.

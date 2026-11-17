@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -68,7 +69,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -105,9 +106,12 @@ function routes(over?: {
       const handled = over.onMutate(url, init);
       if (handled) return handled;
     }
-    if (url.pathname === "/api/platform/v1/skills/skl_1/versions")
+    if (
+      url.pathname ===
+      "/api/organizations/default/proxy/v1/skills/skl_1/versions"
+    )
       return over?.versions ?? json({ data: [version({ id: "sklv_1" })] });
-    if (url.pathname === "/api/platform/v1/skills/skl_1")
+    if (url.pathname === "/api/organizations/default/proxy/v1/skills/skl_1")
       return json(over?.skill ?? skill());
     return undefined;
   });
@@ -177,7 +181,7 @@ describe("SkillDetailPage", () => {
   it("shows the detail skeleton while the skill loads", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -212,7 +216,7 @@ describe("SkillDetailPage", () => {
     expect(screen.getByText("Split and merge PDFs")).toBeInTheDocument();
     expect(screen.getByLabelText("Download version sklv_1")).toHaveAttribute(
       "href",
-      "/api/platform/v1/skills/skl_1/versions/sklv_1/content",
+      "/api/organizations/default/proxy/v1/skills/skl_1/versions/sklv_1/content",
     );
     expect(
       screen.getByRole("button", { name: /New version/ }),
@@ -245,7 +249,9 @@ describe("SkillDetailPage", () => {
     });
 
     await waitFor(() => expect(posts).toHaveLength(1));
-    expect(posts[0][0].pathname).toBe("/api/platform/v1/skills/skl_1/versions");
+    expect(posts[0][0].pathname).toBe(
+      "/api/organizations/default/proxy/v1/skills/skl_1/versions",
+    );
     const form = posts[0][1].body as FormData;
     expect(form.getAll("files[]").map((f) => (f as File).name)).toEqual([
       "SKILL.md",
@@ -277,7 +283,7 @@ describe("SkillDetailPage", () => {
 
     await waitFor(() => expect(deletes).toHaveLength(1));
     expect(deletes[0].pathname).toBe(
-      "/api/platform/v1/skills/skl_1/versions/sklv_1",
+      "/api/organizations/default/proxy/v1/skills/skl_1/versions/sklv_1",
     );
   });
 
@@ -303,7 +309,9 @@ describe("SkillDetailPage", () => {
     );
 
     await waitFor(() => expect(deletes).toHaveLength(1));
-    expect(deletes[0].pathname).toBe("/api/platform/v1/skills/skl_1");
+    expect(deletes[0].pathname).toBe(
+      "/api/organizations/default/proxy/v1/skills/skl_1",
+    );
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/skills"));
   });
 

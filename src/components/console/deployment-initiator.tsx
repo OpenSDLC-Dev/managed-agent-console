@@ -18,7 +18,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ErrorState } from "./bits";
-import { isNativeConsole } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import {
   ORGANIZATION,
@@ -32,8 +31,7 @@ type Initiator = { principal_id: string | null; api_key_id: string | null };
 
 export function DeploymentInitiator({ id }: { id: string }) {
   const session = useContext(ConsoleSessionContext)?.data;
-  if (!isNativeConsole() || !session?.signed_in || session.role !== "admin")
-    return null;
+  if (!session?.signed_in || session.role !== "admin") return null;
   return (
     <InitiatorSetting key={`${session.id}:${id}`} id={id} actor={session.id!} />
   );

@@ -1,9 +1,8 @@
 import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 
 /**
- * Browser transports share one runtime-selected resource lane. Legacy calls
- * use credential BFFs; native calls use cookie-authenticated edge-owned routes.
- * Neither lane exposes a management key or provider token to JavaScript.
+ * Browser transports use cookie-authenticated, edge-owned private routes.
+ * No API key or provider token is exposed to JavaScript.
  */
 
 export interface ErrorEnvelope {
@@ -50,7 +49,7 @@ export interface OffsetPage<T> {
 /**
  * Throws `PlatformError` unless the response is 2xx.
  *
- * A response the BFF marked as signed-out also sends the browser to the login
+ * A response the platform marked as signed-out also sends the browser to the login
  * page. It still throws: the navigation is asynchronous, and a caller left
  * waiting on a promise that never settles would render a spinner over the whole
  * departure.
@@ -83,7 +82,7 @@ export async function platformGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
   signal?: AbortSignal,
-  // Only the `anthropic-*` headers the BFF forwards (platform-proxy.ts).
+  // Protocol headers forwarded by the private resource proxy.
   headers?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(
@@ -117,7 +116,7 @@ export async function platformPostForm<T>(
 ): Promise<T> {
   const response = await fetch(resourceURL(path), {
     method: "POST",
-    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
+    headers: await csrfHeaders(),
     body: form,
   });
   await assertOk(response);
@@ -130,7 +129,7 @@ export async function platformDelete<T>(
 ): Promise<T> {
   const response = await fetch(`${resourceURL(path)}${queryString(params)}`, {
     method: "DELETE",
-    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
+    headers: await csrfHeaders(),
   });
   await assertOk(response);
   return (await response.json()) as T;
@@ -206,21 +205,16 @@ export async function consolePostNoContent(
 ): Promise<void> {
   const response = await fetch(`/api/oauth/${path}`, {
     method: "POST",
-    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
-    ...(body === undefined
-      ? {}
-      : {
-          headers: {
-            "content-type": "application/json",
-            ...(await csrfHeaders()),
-          },
-          body: JSON.stringify(body),
-        }),
+    headers: {
+      ...(await csrfHeaders()),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   await assertOk(response);
 }
 
-// ---- the model gateway's admin API (`/api/gateway/...`), plan 10
+// ---- the model gateway's private admin API (`/admin/v1/...`), plan 10
 //
 // A fourth namespace on a server of its own, so a fourth set of helpers for the
 // reason the console-API pair gives. Paths are relative to `admin/v1/`, the
@@ -235,7 +229,7 @@ export async function consolePostNoContent(
 // separators; a name's own slashes are the gateway's separators too.
 
 const gatewayUrl = (path: string) =>
-  `${isNativeConsole() ? "" : "/api/gateway"}/admin/v1/${path.split("/").map(encodeURIComponent).join("/")}`;
+  `/admin/v1/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 export async function gatewayGet<T>(
   path: string,
@@ -295,30 +289,21 @@ export async function gatewayPost<T>(path: string, body: unknown): Promise<T> {
 export async function gatewayDelete<T>(path: string): Promise<T> {
   const response = await fetch(gatewayUrl(path), {
     method: "DELETE",
-    ...(isNativeConsole() ? { headers: await csrfHeaders() } : {}),
+    headers: await csrfHeaders(),
   });
   await assertOk(response);
   return (await response.json()) as T;
 }
 
-/** Request-time mode stamped by the server, never a build-frozen public env. */
-export function isNativeConsole(): boolean {
-  return (
-    typeof document !== "undefined" &&
-    document.documentElement.dataset.consoleAuth === "platform"
-  );
-}
-
 /** The only resource lane selector, shared by JSON, bytes, downloads and SSE. */
 export function resourceURL(path: string): string {
-  return `${isNativeConsole() ? "/api/organizations/default/proxy" : "/api/platform"}/${path}`;
+  return `/api/organizations/default/proxy/${path}`;
 }
 
 /** Read metadata only. The browser owns the opaque HttpOnly cookie. */
 export async function csrfHeaders(
   signal?: AbortSignal,
 ): Promise<Record<string, string>> {
-  if (!isNativeConsole()) return {};
   const response = await fetch("/api/auth/session", {
     cache: "no-store",
     ...(signal ? { signal } : {}),

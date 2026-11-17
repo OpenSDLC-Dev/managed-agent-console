@@ -10,7 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiKeysTable, CreateKeyButton, expiryInstant } from "./api-keys";
-import type { ApiKey } from "@/lib/platform/types";
+import type { ApiKey, ApiKeyListItem } from "@/lib/platform/types";
 import {
   ConsoleSessionContext,
   useConsoleSession,
@@ -23,10 +23,12 @@ import type { ReactNode } from "react";
 
 const KEYS = "/api/console/organizations/default/workspaces/default/api_keys";
 
-/** The plaintext the platform hands back once — root on this platform. */
+/** A synthetic owned credential, revealed once. */
 const SECRET = "sk-map-api01-thisisthemanagementsecret";
 
-const apiKey = (over: Partial<ApiKey> & { id: string }): ApiKey => ({
+const apiKey = (
+  over: Partial<ApiKeyListItem> & { id: string },
+): ApiKeyListItem => ({
   type: "api_key",
   name: "ci-deploy",
   workspace_id: null,
@@ -35,7 +37,8 @@ const apiKey = (over: Partial<ApiKey> & { id: string }): ApiKey => ({
   partial_key_hint: "sk-map-api01-Cid...ploy",
   status: "active",
   expires_at: null,
-  principal: null,
+  principal: { type: "user_actor", user_id: "user_verbatim-self" },
+  can_manage: true,
   ...over,
 });
 
@@ -45,8 +48,24 @@ const json = (payload: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 
-function renderTable(keys: ApiKey[], fetchMock?: ReturnType<typeof vi.fn>) {
-  if (fetchMock) vi.stubGlobal("fetch", fetchMock);
+function renderTable(
+  keys: ApiKey[],
+  fetchMock?: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => Promise<Response>,
+) {
+  vi.stubGlobal(
+    "fetch",
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input), "http://console.test").pathname;
+      if (path === "/api/auth/session") return json(session);
+      if (path.endsWith("/service_accounts"))
+        return json({ data: [], next_page: null });
+      if (fetchMock) return fetchMock(input, init);
+      throw new Error(`unexpected request: ${path}`);
+    },
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -56,14 +75,18 @@ function renderTable(keys: ApiKey[], fetchMock?: ReturnType<typeof vi.fn>) {
     // page header, top-right, and the table below it.
     ...render(
       <QueryClientProvider client={client}>
-        <CreateKeyButton />
-        <ApiKeysTable keys={keys} loading={false} error={null} />
+        <ConsoleSessionContext.Provider
+          value={{ data: session } as ReturnType<typeof useConsoleSession>}
+        >
+          <CreateKeyButton />
+          <ApiKeysTable keys={keys} loading={false} error={null} />
+        </ConsoleSessionContext.Provider>
       </QueryClientProvider>,
     ),
   };
 }
 
-/** The one write a test made. The table also reads the gateway's key policies. */
+/** The one write a test made. */
 const postOf = (fetchMock: ReturnType<typeof vi.fn>) =>
   fetchMock.mock.calls.find(
     ([, init]) => (init as RequestInit | undefined)?.method === "POST",
@@ -131,17 +154,21 @@ describe("ApiKeysTable", () => {
     ).toBe("principal_op01");
   });
 
-  // A key nobody issued belongs to CONTROLPLANE_API_KEY, and the platform
-  // refuses every mutation on it. Offering controls that are guaranteed to 400
-  // would teach the operator to distrust the ones that work.
-  it("offers no controls on a key the control plane manages", () => {
-    renderTable([apiKey({ id: "apikey_boot", created_by: null })]);
+  it("offers no controls on a historical key without an issuer", () => {
+    renderTable([
+      apiKey({
+        id: "apikey_boot",
+        created_by: null,
+        principal: null,
+        can_manage: false,
+      }),
+    ]);
     expect(screen.getByText("Control plane")).toBeInTheDocument();
     expect(screen.queryByTestId("toggle-apikey_boot")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
-    expect(screen.getByText(/cannot be deleted here/)).toBeInTheDocument();
+    expect(screen.queryByText(/Rotate them/)).toBeNull();
   });
 
   it("offers nothing on an archived key, which is terminal", () => {
@@ -283,72 +310,6 @@ describe("creating a key", () => {
     await userEvent.type(screen.getByLabelText("Name"), "ci-deploy");
   };
 
-  it.each(["human SSO", "management key"])(
-    "legacy %s issuance leaves ownership to the platform and omits assignment",
-    async (lane) => {
-      const issued = apiKey({
-        id: "apikey_new",
-        principal:
-          lane === "human SSO"
-            ? { type: "user_actor", user_id: "user_issuer" }
-            : null,
-      });
-      const fetchMock = vi.fn(async (_input, init?: RequestInit) =>
-        init?.method === "POST"
-          ? json({ ...issued, raw_key: SECRET })
-          : json([]),
-      );
-      vi.stubGlobal("fetch", fetchMock);
-      const client = new QueryClient({
-        defaultOptions: { mutations: { retry: false } },
-      });
-      render(
-        <QueryClientProvider client={client}>
-          <ConsoleSessionContext.Provider
-            value={
-              {
-                data:
-                  lane === "human SSO"
-                    ? {
-                        signed_in: true,
-                        name: "Legacy operator",
-                        email: "operator@example.test",
-                      }
-                    : null,
-              } as ReturnType<typeof useConsoleSession>
-            }
-          >
-            <CreateKeyButton />
-          </ConsoleSessionContext.Provider>
-        </QueryClientProvider>,
-      );
-      await openDialog();
-      expect(
-        screen.queryByText(
-          /An unowned key carries legacy management authority/,
-        ),
-      ).toBeNull();
-      expect(screen.getByRole("dialog")).toHaveTextContent(
-        /platform assigns ownership from the issuing identity/i,
-      );
-      expect(screen.queryByLabelText("Owner")).toBeNull();
-      await userEvent.click(screen.getByRole("button", { name: "Add" }));
-      await screen.findByTestId("revealed-api-key");
-      const posts = fetchMock.mock.calls.filter(
-        ([, init]) => init?.method === "POST",
-      );
-      expect(posts).toHaveLength(1);
-      expect(JSON.parse(String(posts[0][1]?.body))).not.toHaveProperty(
-        "principal_id",
-      );
-      expect(
-        fetchMock.mock.calls.some(([url]) =>
-          /service_accounts|auth\/session/.test(String(url)),
-        ),
-      ).toBe(false);
-    },
-  );
-
   it("sends the chosen lifetime as an absolute instant", async () => {
     const fetchMock = stubCreate();
     renderTable([], fetchMock);
@@ -385,7 +346,10 @@ describe("creating a key", () => {
 
     await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
     const [, init] = postOf(fetchMock)!;
-    expect(Object.keys(JSON.parse(String(init.body)))).toEqual(["name"]);
+    expect(JSON.parse(String(init.body))).toEqual({
+      name: "ci-deploy",
+      principal_id: session.id,
+    });
   });
 
   // Cancel used to set `open` directly, which does not run Radix's
@@ -465,7 +429,7 @@ describe("creating a key", () => {
 
   // The platform mints the key the moment the POST lands, so a dismissal
   // mid-flight would detach the handler that captures the plaintext and leave a
-  // live root credential nobody has ever seen (PR #91's finding, on the other
+  // live credential nobody has ever seen (PR #91's finding, on the other
   // surface).
   it("probe: refuses dismissal while the key is being minted", async () => {
     let settle: (value: Response) => void = () => {};
@@ -543,7 +507,7 @@ const ownedKey = (id: string, manage?: boolean, status = "active") =>
   Object.assign(apiKey({ id, name: id, status }), {
     principal: { type: "user_actor", user_id: session.id },
     created_by: { type: "user", id: session.id },
-    ...(manage === undefined ? {} : { can_manage: manage }),
+    can_manage: manage,
   });
 function nativeView(initial = session, shortcut = false, page?: ReactNode) {
   document.documentElement.dataset.consoleAuth = "platform";
@@ -673,7 +637,7 @@ function nativeFetch(
     }
     if (url.pathname === KEYS)
       return json([ownedKey(`apikey_${current.id}`, true)]);
-    if (url.pathname.includes("key_policies")) return json({ data: [] });
+
     throw new Error(`unexpected request: ${url.pathname}`);
   });
   vi.stubGlobal("fetch", fetcher);
@@ -1183,17 +1147,16 @@ it("probe: key controls obey row permission and lifecycle", async () => {
       ownedKey("archived", true, "archived"),
       ownedKey("expired", true, "expired"),
       ownedKey("allowed", true),
-      apiKey({ id: "old" }),
+      apiKey({ id: "old", principal: null, can_manage: false }),
       { ...ownedKey("preset", true), created_by: null },
     ],
     vi.fn(async () => json({ data: [] })),
   );
-  for (const id of ["denied", "missing", "archived", "preset"]) {
+  for (const id of ["denied", "missing", "archived", "preset", "old"]) {
     const row = document.querySelector(`[data-key-id="${id}"]`)!.closest("tr")!;
     expect(within(row).queryByRole("button")).toBeNull();
   }
   expect(screen.getByTestId("toggle-allowed")).toBeInTheDocument();
-  expect(screen.getByTestId("toggle-old")).toBeInTheDocument();
   expect(screen.queryByTestId("toggle-expired")).toBeNull();
   await userEvent.click(
     screen.getByRole("button", { name: "More actions for expired" }),
@@ -1286,7 +1249,7 @@ it.each([
         <CurrentSession />
       </QueryClientProvider>,
     );
-    await screen.findByRole("button", { name: "Model access" });
+    await screen.findByRole("button", { name: "Create key" });
     await userEvent.click(screen.getByRole("button", { name: "Create key" }));
     await screen.findByRole("option", { name: /First service/ });
     await userEvent.selectOptions(screen.getByLabelText("Owner"), owner);

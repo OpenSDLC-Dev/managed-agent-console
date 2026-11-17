@@ -7,8 +7,7 @@ import { useApiKeys } from "@/lib/platform/queries";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 
 /**
- * Management keys — the credential the console itself runs on when identity is
- * off, and the one an operator hands to a CLI or a CI job.
+ * Owned API keys for a CLI, SDK or CI job. Browser calls use the session cookie.
  *
  * The server scopes native developer lists to their own owned rows; admins
  * list all. SurfaceGuard preserves the server's refusal at direct URLs.
@@ -22,7 +21,7 @@ export default function ApiKeysPage() {
     <div>
       <PageHeader
         title="API Keys"
-        subtitle="Owned keys use their owner’s current role and stop working when the owner is deactivated. Unowned keys retain legacy authority."
+        subtitle="Owned keys use their owner’s current role and stop working when the owner is deactivated."
         actions={<CreateKeyButton />}
       />
       <ApiKeysTable

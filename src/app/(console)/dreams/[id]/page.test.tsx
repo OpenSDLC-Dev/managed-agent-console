@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -17,8 +18,11 @@ vi.mock("next/link", () => ({
 function renderPage(index = 0) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () => new Response(JSON.stringify(dreams[index]), { status: 200 }),
+    withTestSession(
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify(dreams[index]), { status: 200 }),
+      ),
     ),
   );
   const client = new QueryClient({

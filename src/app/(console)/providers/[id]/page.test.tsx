@@ -123,7 +123,7 @@ describe("ProviderDetailPage", () => {
       fetchMock.mock.calls.some(
         ([url, init]) =>
           init?.method === "DELETE" &&
-          String(url) === "/api/gateway/admin/v1/providers/gwprov_vllmlocal1",
+          String(url) === "/admin/v1/providers/gwprov_vllmlocal1",
       ),
     ).toBe(true);
   });

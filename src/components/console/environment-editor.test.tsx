@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -176,7 +177,7 @@ function stubFetch(respond: () => Response = () => json(selfHostedEnv)) {
     if (init?.method === "POST") return respond();
     throw new Error(`unexpected fetch: ${String(input)}`);
   });
-  vi.stubGlobal("fetch", mock);
+  vi.stubGlobal("fetch", withTestSession(mock));
   return mock;
 }
 
@@ -306,8 +307,11 @@ describe("EnvironmentEditor", () => {
     );
 
     const [url, init] = postCalls(mock)[0];
-    expect(url).toBe("/api/platform/v1/environments");
-    expect(init?.headers).toEqual({ "content-type": "application/json" });
+    expect(url).toBe("/api/organizations/default/proxy/v1/environments");
+    expect(init?.headers).toEqual({
+      "content-type": "application/json",
+      "X-CSRF-Token": "test-session-csrf",
+    });
     expect(JSON.parse(init?.body as string)).toEqual({
       name: "Prod",
       description: "Main env",
@@ -386,7 +390,7 @@ describe("EnvironmentEditor", () => {
     );
 
     const [url, init] = postCalls(mock)[0];
-    expect(url).toBe("/api/platform/v1/environments/env_1");
+    expect(url).toBe("/api/organizations/default/proxy/v1/environments/env_1");
     expect(JSON.parse(init?.body as string)).toEqual({
       name: "Prod",
       description: "Main",
@@ -427,7 +431,7 @@ describe("EnvironmentEditor", () => {
     );
 
     const [url, init] = postCalls(mock)[0];
-    expect(url).toBe("/api/platform/v1/environments/env_2");
+    expect(url).toBe("/api/organizations/default/proxy/v1/environments/env_2");
     const body = JSON.parse(init?.body as string) as Record<string, unknown>;
     expect(body).toEqual({ name: "Rack", description: "On-prem" });
     expect("config" in body).toBe(false);

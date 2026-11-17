@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -61,7 +62,7 @@ it("selects a child thread and archives an idle child", async () => {
         headers: { "content-type": "application/json" },
       }),
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const onSelect = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -117,13 +118,13 @@ it("selects a child thread and archives an idle child", async () => {
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   const [url, init] = fetchMock.mock.calls[0];
   expect(String(url)).toBe(
-    "/api/platform/v1/sessions/sess_1/threads/sthr_child/archive",
+    "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_child/archive",
   );
   expect(init?.method).toBe("POST");
 });
 
 it("renders a never-run thread's null usage as pending instead of throwing", () => {
-  vi.stubGlobal("fetch", vi.fn());
+  vi.stubGlobal("fetch", withTestSession(vi.fn()));
   const fresh = neverRunThread as SessionThread;
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -159,7 +160,7 @@ it("renders a never-run thread's null usage as pending instead of throwing", () 
 });
 
 it.each([404, 501])("hides the optional surface on HTTP %s", (status) => {
-  vi.stubGlobal("fetch", vi.fn());
+  vi.stubGlobal("fetch", withTestSession(vi.fn()));
   const client = new QueryClient();
   const { container } = render(
     <QueryClientProvider client={client}>

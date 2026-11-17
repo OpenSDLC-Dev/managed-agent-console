@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -47,7 +48,7 @@ describe("CreateVaultButton", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
 
@@ -68,7 +69,7 @@ describe("CreateVaultButton", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("/api/platform/v1/vaults");
+    expect(url).toBe("/api/organizations/default/proxy/v1/vaults");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       display_name: "Prod",
@@ -89,15 +90,17 @@ describe("CreateVaultButton", () => {
   it("surfaces the platform error message and keeps the dialog open", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: { type: "invalid_request_error", message: "name taken" },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: { type: "invalid_request_error", message: "name taken" },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            ),
+        ),
       ),
     );
     const user = userEvent.setup();
@@ -114,7 +117,7 @@ describe("CreateVaultButton", () => {
   });
 
   it("cancel closes the dialog", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     const user = userEvent.setup();
     renderButton();
 
@@ -125,7 +128,7 @@ describe("CreateVaultButton", () => {
   });
 
   it("dismissing the dialog resets the form for the next open", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     const user = userEvent.setup();
     renderButton();
 
@@ -159,7 +162,7 @@ it("retries a failed first credential against the same vault and then opens the 
         )
       : new Response(JSON.stringify({ id: "vcred_new" }));
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const user = userEvent.setup();
   renderButton();
   await user.click(screen.getByRole("button", { name: "Create vault" }));
@@ -191,8 +194,8 @@ it("retries a failed first credential against the same vault and then opens the 
   );
   await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_new"));
   expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-    "/api/platform/v1/vaults",
-    "/api/platform/v1/vaults/vlt_new/credentials",
-    "/api/platform/v1/vaults/vlt_new/credentials",
+    "/api/organizations/default/proxy/v1/vaults",
+    "/api/organizations/default/proxy/v1/vaults/vlt_new/credentials",
+    "/api/organizations/default/proxy/v1/vaults/vlt_new/credentials",
   ]);
 });

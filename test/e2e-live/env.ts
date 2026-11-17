@@ -13,6 +13,8 @@ const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 export function resolveLiveEnv(): {
   baseUrl: string;
   apiKey: string;
+  loginName: string;
+  loginPassword: string;
   /** Optional for the tier; gateway.spec.ts fails without it. */
   gatewayUrl?: string;
 } {
@@ -24,11 +26,13 @@ export function resolveLiveEnv(): {
   }
   loadEnvConfig(process.cwd());
   const baseUrl = process.env.PLATFORM_BASE_URL;
-  const apiKey = process.env.PLATFORM_API_KEY;
-  if (!baseUrl || !apiKey) {
+  const apiKey = process.env.TEST_API_KEY;
+  const loginName = process.env.LIVE_LOGIN_NAME;
+  const loginPassword = process.env.LIVE_LOGIN_PASSWORD;
+  if (!baseUrl || !apiKey || !loginName || !loginPassword) {
     throw new Error(
-      "RUN_LIVE_CONSOLE_TESTS=1 is set but PLATFORM_BASE_URL / PLATFORM_API_KEY " +
-        "are missing (environment or .env.local). The live tier fails rather than skips — configure both.",
+      "RUN_LIVE_CONSOLE_TESTS=1 is set but PLATFORM_BASE_URL / TEST_API_KEY / LIVE_LOGIN_NAME / LIVE_LOGIN_PASSWORD " +
+        "are missing (environment or .env.local). The live tier fails rather than skips — configure all four.",
     );
   }
   // This suite creates, mutates, and spends. A mistyped base URL must not
@@ -46,8 +50,7 @@ export function resolveLiveEnv(): {
       );
     }
   }
-  return { baseUrl, apiKey, gatewayUrl };
+  return { baseUrl, apiKey, gatewayUrl, loginName, loginPassword };
 }
 
-/** The password the live config gives the spawned console instance. */
-export const LIVE_CONSOLE_PASSWORD = "live-test-password";
+export const LIVE_BROWSER_ORIGIN = "http://127.0.0.1:3200";

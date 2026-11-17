@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -74,7 +75,10 @@ function setup({
     if (url.pathname.includes("/environments/"))
       return Response.json(environments[1]);
     if (url.pathname.includes("/vaults/")) return Response.json(vaults[0]);
-    if (url.pathname === `/api/platform/v1/files/${mountedCopy.file_id}`)
+    if (
+      url.pathname ===
+      `/api/organizations/default/proxy/v1/files/${mountedCopy.file_id}`
+    )
       return Response.json({
         id: mountedCopy.file_id,
         type: "file",
@@ -95,7 +99,7 @@ function setup({
       );
     return Response.json(session);
   });
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

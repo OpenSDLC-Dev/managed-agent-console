@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -80,9 +81,11 @@ describe("NewEnvironmentPage", () => {
     // No network guarantee: any request this page issues fails loudly.
     vi.stubGlobal(
       "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        throw new Error(`unexpected fetch: ${String(input)}`);
-      }),
+      withTestSession(
+        vi.fn((input: RequestInfo | URL) => {
+          throw new Error(`unexpected fetch: ${String(input)}`);
+        }),
+      ),
     );
     const client = new QueryClient({
       defaultOptions: {

@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -48,10 +49,7 @@ afterEach(() => {
 
 describe("EditVaultPage", () => {
   it("loads the vault into the editor", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json(vault)),
-    );
+    vi.stubGlobal("fetch", withTestSession(vi.fn(async () => json(vault))));
     renderPage();
     expect(await screen.findByText("Edit Production")).toBeInTheDocument();
     expect(screen.getByLabelText("Display name")).toHaveValue("Production");
@@ -60,8 +58,10 @@ describe("EditVaultPage", () => {
   it("rejects direct editing of an archived vault", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json({ ...vault, archived_at: "2026-09-02T00:00:00Z" }),
+      withTestSession(
+        vi.fn(async () =>
+          json({ ...vault, archived_at: "2026-09-02T00:00:00Z" }),
+        ),
       ),
     );
     renderPage();
@@ -73,13 +73,15 @@ describe("EditVaultPage", () => {
   it("renders platform errors", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json(
-          {
-            type: "error",
-            error: { type: "not_found_error", message: "vault gone" },
-          },
-          404,
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "vault gone" },
+            },
+            404,
+          ),
         ),
       ),
     );

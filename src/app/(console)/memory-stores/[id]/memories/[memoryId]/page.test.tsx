@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -42,7 +43,7 @@ it("shows full content and deletes with the loaded digest", async () => {
       { status: 200 },
     );
   });
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

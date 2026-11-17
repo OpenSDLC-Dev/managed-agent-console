@@ -90,9 +90,16 @@ it("guards internal links and clears the browser unload guard after saving", asy
 it("does not destroy the sign-in session while an operator chooses Stay", async () => {
   const fetchMock = vi.fn(
     async () =>
-      new Response(JSON.stringify({ signed_in: true, name: "Operator" }), {
-        status: 200,
-      }),
+      new Response(
+        JSON.stringify({
+          signed_in: true,
+          name: "Operator",
+          csrf_token: "test-csrf",
+        }),
+        {
+          status: 200,
+        },
+      ),
   );
   vi.stubGlobal("fetch", fetchMock);
   const client = new QueryClient({
@@ -114,7 +121,7 @@ it("does not destroy the sign-in session while an operator chooses Stay", async 
   expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
   await user.click(screen.getByRole("button", { name: "Sign out" }));
   await user.click(await screen.findByRole("button", { name: "Leave" }));
-  expect(fetchMock.mock.calls).toHaveLength(2);
+  expect(fetchMock.mock.calls).toHaveLength(3);
   const unloading = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(unloading);
   expect(unloading.defaultPrevented).toBe(false);

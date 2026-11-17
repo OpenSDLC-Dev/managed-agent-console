@@ -253,19 +253,6 @@ const ALIASES = [
   ),
 ];
 
-/** Keyed by the mock platform's own API key ids (server.mjs API_KEYS_SEED). */
-const KEY_POLICIES = [
-  {
-    type: "key_policy",
-    api_key_id: "apikey_ci01",
-    aliases: ["deepseek-flash", "minimax-m3"],
-    rpm: 60,
-    tpm: null,
-    created_at: "2026-10-10T08:00:00Z",
-    updated_at: "2026-10-10T08:00:00Z",
-  },
-];
-
 const DAY = 86_400_000;
 
 /**
@@ -402,7 +389,6 @@ let providers;
 let credentials;
 let deployments;
 let aliases;
-let keyPolicies;
 let daily;
 let ledger;
 let counter;
@@ -413,7 +399,6 @@ export function resetGateway() {
   credentials = structuredClone(CREDENTIALS);
   deployments = structuredClone(DEPLOYMENTS);
   aliases = structuredClone(ALIASES);
-  keyPolicies = structuredClone(KEY_POLICIES);
   daily = dailySeed(new Date());
   ledger = ledgerSeed();
   counter = 1;
@@ -426,7 +411,6 @@ export function emptyGateway() {
   credentials = [];
   deployments = [];
   aliases = [];
-  keyPolicies = [];
 }
 
 /** The seeded collections, for the conformance suite. */
@@ -436,7 +420,6 @@ export const gatewayFixtures = () => ({
   credentials: CREDENTIALS,
   deployments: DEPLOYMENTS,
   aliases: ALIASES,
-  keyPolicies: KEY_POLICIES,
   daily: dailySeed(new Date()),
   ledger: ledgerSeed(),
 });
@@ -815,62 +798,8 @@ export function gatewayRoute(method, rest, params, body = {}) {
       return ok(apply(found, body));
     }
     if (method === "DELETE") {
-      const keys = keyPolicies
-        .filter((k) => k.aliases?.includes(name))
-        .map((k) => k.api_key_id);
-      if (keys.length > 0) {
-        return conflict(
-          `alias "${name}" is granted to api keys (${keys.join(", ")}); remove it from their policies first`,
-        );
-      }
       aliases = aliases.filter((a) => a.name !== name);
       return ok({ type: "alias_deleted", name });
-    }
-  }
-
-  if (head === "key_policies" && segments.length === 1 && method === "GET") {
-    return list(keyPolicies);
-  }
-
-  if (head === "key_policies" && segments.length === 2) {
-    const found = keyPolicies.find((k) => k.api_key_id === id);
-    if (method === "GET") {
-      return found ? ok(found) : notFound(`api key "${id}" has no policy`);
-    }
-    if (method === "POST") {
-      // keypolicies.go putKeyPolicy: written whole, each field named.
-      for (const field of ["aliases", "rpm", "tpm"]) {
-        if (!(field in body)) {
-          return invalid(
-            `${field} is required; null grants every alias or sets no limit`,
-          );
-        }
-      }
-      const unknown = (body.aliases ?? []).find(
-        (n) => !aliases.some((a) => a.name === n),
-      );
-      if (unknown !== undefined) {
-        return invalid(`alias "${unknown}" does not exist`);
-      }
-      const written = {
-        type: "key_policy",
-        api_key_id: id,
-        aliases: body.aliases,
-        rpm: body.rpm,
-        tpm: body.tpm,
-        created_at: found?.created_at ?? nowIso(),
-        updated_at: nowIso(),
-      };
-      keyPolicies = [
-        ...keyPolicies.filter((k) => k.api_key_id !== id),
-        written,
-      ];
-      return ok(written);
-    }
-    if (method === "DELETE") {
-      if (!found) return notFound(`api key "${id}" has no policy`);
-      keyPolicies = keyPolicies.filter((k) => k.api_key_id !== id);
-      return ok({ type: "key_policy_deleted", api_key_id: id });
     }
   }
 

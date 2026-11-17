@@ -59,7 +59,7 @@ function renderPage(page: React.ReactNode) {
 const reads = (fetchMock: ReturnType<typeof stub>, path: string) =>
   fetchMock.mock.calls
     .map(([url]) => new URL(String(url), "http://console"))
-    .filter((u) => u.pathname === `/api/gateway/admin/v1/${path}`);
+    .filter((u) => u.pathname === `/admin/v1/${path}`);
 
 afterEach(() => {
   cleanup();

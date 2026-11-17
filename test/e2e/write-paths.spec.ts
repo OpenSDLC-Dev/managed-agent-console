@@ -9,7 +9,9 @@ test("mock vault updates reject malformed or invalid requests atomically", async
   request,
 }) => {
   const base = "http://127.0.0.1:18080/v1";
-  const headers = { "x-api-key": "test-key" };
+  const headers = {
+    "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+  };
   const vault = await (
     await request.post(`${base}/vaults`, {
       headers,
@@ -139,7 +141,9 @@ test("deleting an environment a deployment and its sessions hold surfaces each r
   const moved = await request.post(
     "http://127.0.0.1:18080/v1/deployments/depl_weekresearch00000001",
     {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: { environment_id: "env_byoc0000000000000001" },
     },
   );

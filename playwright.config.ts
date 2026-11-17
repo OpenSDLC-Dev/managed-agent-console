@@ -8,6 +8,7 @@ ensureLoopbackProxyBypass();
 
 const CONSOLE_PORT = 3100;
 const MOCK_PORT = 18080;
+const NEXT_PORT = 3090;
 // The model gateway double, in the mock's process on a port of its own
 // (test/fidelity/consoles.ts GATEWAY_PORT gives the reason).
 const GATEWAY_PORT = 18070;
@@ -33,13 +34,12 @@ export default defineConfig({
   webServer: [
     {
       command: "node test/mock-platform/server.mjs",
-      url: `http://127.0.0.1:${MOCK_PORT}/v1/agents`,
+      url: `http://127.0.0.1:${MOCK_PORT}/api/auth/config`,
       // The probe URL 401s without a key; any response means the server is up.
       ignoreHTTPSErrors: true,
       reuseExistingServer: false,
       env: {
         MOCK_PLATFORM_PORT: String(MOCK_PORT),
-        MOCK_PLATFORM_KEY: "test-key",
         MOCK_GATEWAY_PORT: String(GATEWAY_PORT),
       },
     },
@@ -47,16 +47,20 @@ export default defineConfig({
       // Production server: dev-mode cold compiles are slow enough on some
       // machines that hydration outruns the test timeout, and prod is what
       // ships anyway. The build runs in the test:e2e script, before this.
-      command: `pnpm exec next start --port ${CONSOLE_PORT}`,
-      url: `http://127.0.0.1:${CONSOLE_PORT}/login`,
+      command: `pnpm exec next start --port ${NEXT_PORT}`,
+      url: `http://127.0.0.1:${NEXT_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
+    },
+    {
+      command: "node test/mock-platform/edge.mjs",
+      url: `http://127.0.0.1:${CONSOLE_PORT}/api/auth/config`,
+      reuseExistingServer: false,
       env: {
-        CONSOLE_AUTH_MODE: "",
-        PLATFORM_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`,
-        PLATFORM_API_KEY: "test-key",
-        MODEL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
-        CONSOLE_PASSWORD: "test-password",
+        MOCK_EDGE_PORT: String(CONSOLE_PORT),
+        MOCK_CONSOLE_PORT: String(NEXT_PORT),
+        MOCK_PLATFORM_PORT: String(MOCK_PORT),
+        MOCK_GATEWAY_PORT: String(GATEWAY_PORT),
       },
     },
   ],

@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -49,7 +50,7 @@ describe("UploadSkillButton", () => {
       async () =>
         new Response(JSON.stringify({ id: "skill_folder" }), { status: 200 }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderButton();
     await userEvent.click(screen.getByRole("button", { name: "Upload skill" }));
     const file = skillMd();
@@ -81,7 +82,7 @@ describe("UploadSkillButton", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
 
@@ -105,7 +106,7 @@ describe("UploadSkillButton", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("/api/platform/v1/skills");
+    expect(url).toBe("/api/organizations/default/proxy/v1/skills");
     expect(init.method).toBe("POST");
     const form = init.body as FormData;
     expect(form).toBeInstanceOf(FormData);
@@ -127,7 +128,7 @@ describe("UploadSkillButton", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
 
@@ -151,7 +152,9 @@ describe("UploadSkillButton", () => {
     let resolveFetch!: (r: Response) => void;
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>((r) => (resolveFetch = r))),
+      withTestSession(
+        vi.fn(() => new Promise<Response>((r) => (resolveFetch = r))),
+      ),
     );
     const user = userEvent.setup();
     renderButton();
@@ -182,18 +185,20 @@ describe("UploadSkillButton", () => {
   it("surfaces the platform error and stays open", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "zip exceeds 32 MiB",
-              },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "zip exceeds 32 MiB",
+                },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            ),
+        ),
       ),
     );
     const user = userEvent.setup();
@@ -212,7 +217,7 @@ describe("UploadSkillButton", () => {
   });
 
   it("dismissing the dialog clears title and file selection", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     const user = userEvent.setup();
     renderButton();
 
@@ -231,7 +236,7 @@ describe("UploadSkillButton", () => {
 
   it("cancel closes the dialog without uploading", async () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
 

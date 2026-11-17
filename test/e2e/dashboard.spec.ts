@@ -196,9 +196,23 @@ test("reserved characters in agent lookup cannot select a different upstream rou
   ]) {
     await page.goto("/agents");
     await page.getByRole("textbox", { name: "Find agent by ID" }).fill(id);
+    const rejected = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith(
+        `/agents/${encodeURIComponent(id)}`,
+      ),
+    );
     await page.getByRole("button", { name: "Open", exact: true }).click();
+    const response = await rejected;
+    expect(new URL(response.url()).search).toBe("");
+    expect(response.status()).toBe(id.includes("/") ? 401 : 400);
+    expect(response.headers()["x-platform-signed-out"]).toBeUndefined();
     await expect(
-      page.getByText("unsupported proxy path", { exact: false }),
+      page.getByText(
+        id.includes("/")
+          ? "a browser session cookie is required"
+          : "Invalid agent ID.",
+        { exact: false },
+      ),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Agents", exact: true }).last(),

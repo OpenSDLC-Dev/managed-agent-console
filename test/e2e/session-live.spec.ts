@@ -1,3 +1,4 @@
+import { browserPost } from "./browser-write";
 import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 
@@ -178,12 +179,16 @@ test("outcome evaluations and their trace events have dedicated rendering", asyn
  * refuses an outcome until the ask is answered (CheckWhileAwaiting).
  */
 async function idleSession(page: Page) {
-  const created = await page.request.post("/api/platform/v1/sessions", {
-    data: {
-      agent: "agent_researcher00000000001",
-      environment_id: "env_egress000000000000001",
+  const created = await browserPost(
+    page,
+    "/api/organizations/default/proxy/v1/sessions",
+    {
+      data: {
+        agent: "agent_researcher00000000001",
+        environment_id: "env_egress000000000000001",
+      },
     },
-  });
+  );
   expect(created.ok()).toBe(true);
   return ((await created.json()) as { id: string }).id;
 }
@@ -223,32 +228,40 @@ test("defines an outcome on an idle session", async ({ page }) => {
 test("file rubric size limit counts content bytes", async ({ page }) => {
   await signIn(page);
   const upload = async (name: string, size: number) => {
-    const response = await page.request.post("/api/platform/v1/files", {
-      multipart: {
-        file: {
-          name,
-          mimeType: "text/plain",
-          buffer: Buffer.alloc(size, "x"),
+    const response = await browserPost(
+      page,
+      "/api/organizations/default/proxy/v1/files",
+      {
+        multipart: {
+          file: {
+            name,
+            mimeType: "text/plain",
+            buffer: Buffer.alloc(size, "x"),
+          },
         },
       },
-    });
+    );
     expect(response.ok()).toBe(true);
     return (await response.json()) as { id: string; size_bytes: number };
   };
 
   const session = await idleSession(page);
   const define = (description: string, fileId: string) =>
-    page.request.post(`/api/platform/v1/sessions/${session}/events`, {
-      data: {
-        events: [
-          {
-            type: "user.define_outcome",
-            description,
-            rubric: { type: "file", file_id: fileId },
-          },
-        ],
+    browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/sessions/${session}/events`,
+      {
+        data: {
+          events: [
+            {
+              type: "user.define_outcome",
+              description,
+              rubric: { type: "file", file_id: fileId },
+            },
+          ],
+        },
       },
-    });
+    );
   // The oversized file first: once one outcome is accepted, the next is
   // refused for that, whatever its rubric.
   const rejectedFile = await upload("rubric-over-256k.txt", 256 * 1024 + 1);

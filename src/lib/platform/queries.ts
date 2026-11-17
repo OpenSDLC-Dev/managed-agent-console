@@ -11,7 +11,6 @@ import {
 } from "@tanstack/react-query";
 import {
   PlatformError,
-  isNativeConsole,
   consoleGet,
   consoleKeysGet,
   consoleKeysPost,
@@ -1367,11 +1366,10 @@ const KEYS_PATH = `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/
 /** The listing is a bare array: no envelope, no paging (consoleapikeys.go). */
 export function useApiKeys() {
   const session = useContext(ConsoleSessionContext)?.data;
-  const native = isNativeConsole();
   return useQuery({
-    queryKey: native ? ["api-keys", session?.id, session?.role] : ["api-keys"],
+    queryKey: ["api-keys", session?.id, session?.role],
     queryFn: () => consoleKeysGet<ApiKeyListItem[]>(KEYS_PATH),
-    ...(native ? { gcTime: 0 } : {}),
+    gcTime: 0,
   });
 }
 

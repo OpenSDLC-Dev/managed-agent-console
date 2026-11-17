@@ -117,27 +117,18 @@ Plan 69 slice 6 removes the Console's narrower presentation rule so credentials 
 The existing token dialect, admin authorization, reveal-once response and revocation response are unchanged.
 Cloud keys still cannot poll work; the setup guide remains specific to self-hosted environments.
 
-## Legacy console identity uses local configuration (plan 08)
+## Platform-owned browser identity
 
-With `CONSOLE_AUTH_MODE` unset, the console selects legacy RP, shared-password or
-open mode from its own configuration (`src/lib/identity/`), not a platform probe.
-This configuration determines the BFF credential and login page. `/api/health`
-reports the legacy identity mode as `identity.mode`.
+The Console reads the platform's anonymous `/api/auth/config` and authenticated `/api/auth/session`.
+The application edge routes those endpoints, the callback and private resource paths to the platform.
+Next.js does not implement an OIDC relying party or substitute a key for a missing cookie.
+These browser routes are platform-specific; they do not establish Anthropic public API compatibility.
+See platform `internal/api/loginauth.go`, `internal/api/server.go` and `internal/login` for their implemented contract.
 
-The current platform exposes anonymous `GET /api/auth/config` even without native
-login. A verifier-only OIDC deployment returns `mode: "oidc"` and
-`native_login: false`. The legacy console does not use that endpoint to select
-its mode. For native login, see [README.md](../README.md#native-platform-login-unreleased).
-
-[Plan 08](./plan/08_console-sso-rbac.md) records the original feature-detection
-rationale. A 403 still means a permission denial, not an absent surface.
-
-In legacy RP mode, the issuer must match the platform's configured issuer. The
-console's client id must match `IDENTITY_OIDC_AUDIENCE` on the platform. The URL
-rules follow the platform's verifier to avoid configurations that the console
-accepts but the platform rejects. Legacy mode **refuses**
-`IDENTITY_MODE=trusted_proxy`; treating it as "identity off" could admit operators
-without authentication.
+Model grants and per-key policy controls are retired under platform plan 69 slice 7.
+Owned-key access uses current owner roles and organization budgets by public model alias.
+Historical key and usage attribution remains nullable. Removing an authentication path does not erase historical wire fields.
+A 403 remains a permission denial, not an absent surface.
 
 ## Reference surfaces the platform has deferred
 

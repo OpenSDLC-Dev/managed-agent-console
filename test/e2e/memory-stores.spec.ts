@@ -73,7 +73,9 @@ test("memory writes keep history, enforce preconditions and redact old versions"
   const conflict = await request.post(
     `${MOCK}/v1/memory_stores/${storeId}/memories/${memoryId}?view=full`,
     {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         content: "Stale overwrite",
         precondition: { type: "content_sha256", content_sha256: "stale" },

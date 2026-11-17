@@ -14,7 +14,9 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
   // Seed 120 agents so the options list spans two pages (limit 100/page).
   for (let i = 0; i < 120; i++) {
     await request.post(`${MOCK}/v1/agents`, {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         name: `Fleet agent ${String(i).padStart(3, "0")}`,
         model: "claude-sonnet-4-8",
@@ -27,7 +29,7 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
   // The options query itself must include archived agents.
   const optionsRequest = page.waitForRequest(
     (req) =>
-      req.url().includes("/api/platform/v1/agents") &&
+      req.url().includes("/api/organizations/default/proxy/v1/agents") &&
       req.url().includes("include_archived=true") &&
       req.url().includes("limit=100"),
   );
@@ -88,7 +90,7 @@ test("created presets bound sessions and agents lists serverside", async ({
   ).toBeVisible();
   const boundedSessions = page.waitForRequest(
     (req) =>
-      req.url().includes("/api/platform/v1/sessions") &&
+      req.url().includes("/api/organizations/default/proxy/v1/sessions") &&
       req.url().includes("created_at%5Bgte%5D="),
   );
   await page.getByRole("combobox", { name: "Created filter" }).click();

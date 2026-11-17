@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import mockConfig from "../playwright.config";
+import fidelityConfig from "../playwright.fidelity.config";
+import liveConfig from "../playwright.live.config";
 
 function readClock(now: () => unknown = () => performance.now()): number {
   const reading = now();
@@ -639,7 +642,6 @@ it("native runtime environment contracts (no resources)", () => {
 import { ensureLoopbackProxyBypass } from "./playwright-env";
 
 vi.mock("./e2e-live/env", () => ({
-  LIVE_CONSOLE_PASSWORD: "synthetic-password",
   resolveLiveEnv: () => ({
     baseUrl: "http://127.0.0.1:9",
     apiKey: "synthetic-key",
@@ -647,25 +649,23 @@ vi.mock("./e2e-live/env", () => ({
 }));
 afterEach(() => vi.unstubAllEnvs());
 
-it("probe: legacy browser fixtures cannot inherit native runtime mode from the invoking shell", async () => {
-  vi.stubEnv("CONSOLE_AUTH_MODE", "platform");
-  const configs = [
-    (await import("../playwright.config")).default,
-    (await import("../playwright.fidelity.config")).default,
-    (await import("../playwright.live.config")).default,
-  ];
-  let consoles = 0;
+it("probe: browser fixtures give Next no authority and route private calls through an edge", () => {
+  const configs = [mockConfig, fidelityConfig, liveConfig];
   for (const config of configs) {
     const servers = Array.isArray(config.webServer)
       ? config.webServer
       : [config.webServer];
-    for (const server of servers) {
-      if (!server?.command.includes("next start")) continue;
-      consoles++;
-      expect(server.env?.CONSOLE_AUTH_MODE, server.command).toBe("");
-    }
+    expect(
+      servers.some((server) =>
+        server?.command.includes("mock-platform/edge.mjs"),
+      ),
+    ).toBe(true);
+    const consoles = servers.filter((server) =>
+      server?.command.includes("next start"),
+    );
+    expect(consoles).toHaveLength(1);
+    expect(consoles[0]?.env ?? {}).toEqual({});
   }
-  expect(consoles).toBe(4);
 });
 
 describe("ensureLoopbackProxyBypass", () => {

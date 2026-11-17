@@ -10,10 +10,10 @@ if (process.env.RUN_LIVE_CONTRACT_TESTS !== "1") {
 const runModelContracts = process.env.RUN_LIVE_MODEL_CONTRACT_TESTS === "1";
 loadEnvConfig(process.cwd());
 const baseURL = process.env.PLATFORM_BASE_URL;
-const key = process.env.PLATFORM_API_KEY;
+const key = process.env.TEST_API_KEY;
 if (!baseURL || !key)
   throw new Error(
-    "Set PLATFORM_BASE_URL and PLATFORM_API_KEY for the local platform.",
+    "Set PLATFORM_BASE_URL and TEST_API_KEY for the local platform.",
   );
 if (!["localhost", "127.0.0.1", "[::1]"].includes(new URL(baseURL).hostname)) {
   throw new Error("Contract tests only target a local platform.");
