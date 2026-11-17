@@ -25,7 +25,7 @@ Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a r
 
 ## Tasks
 
-- [ ] Keep only platform cookie/CSRF login and transport; remove legacy model grants and key-policy controls.
-- [ ] Migrate mock, native, live and fidelity fixtures; retain streaming, downloads and current-authority checks.
-- [ ] Retire the separate deployment owner and update operator guidance; preserve image publication.
+- [x] Keep only platform cookie/CSRF login and transport; remove legacy model grants and key-policy controls.
+- [x] Migrate mock, native, live and fidelity fixtures; retain streaming, downloads and current-authority checks.
+- [x] Retire the separate deployment owner and update operator guidance; preserve image publication.
 - [ ] Complete coverage, Chrome fidelity, independent review, CI and companion platform delivery.
