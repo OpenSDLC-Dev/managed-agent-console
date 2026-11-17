@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { copyText } from "@/lib/copy-text";
 import { hasExpired } from "@/lib/platform/expiry";
-import { PlatformError, isNativeConsole } from "@/lib/platform/http";
+import { PlatformError } from "@/lib/platform/http";
 import {
   useCreateEnvironmentKey,
   useEnvironmentKeys,
@@ -272,15 +272,11 @@ export function EnvironmentKeysSection({
   environment: Environment;
 }) {
   const session = useContext(ConsoleSessionContext)?.data;
-  const native = isNativeConsole();
-  if (
-    native &&
-    (!session?.signed_in || !session.id || session.role !== "admin")
-  )
+  if (!session?.signed_in || !session.id || session.role !== "admin")
     return null;
   return (
     <EnvironmentKeyManagement
-      key={`${native ? session!.id : "legacy"}:${environment.id}`}
+      key={`${session.id}:${environment.id}`}
       environment={environment}
     />
   );

@@ -57,6 +57,9 @@ function synthetic(name) {
   return child;
 }
 const dir = ${JSON.stringify(dir)}, kind = ${JSON.stringify(kind)};
+// Readiness probes do not test CLI startup. Thirty Node command responses
+// spent 4.8s of the 5s deadline on Windows; cleanup must still use real children.
+const isolatedStartup = kind.startsWith("status-") || ["post-ready-close", "dead-before-announce", "dead-200"].includes(kind);
 const id = "1".padStart(64, "0");
 const log = (value) => appendFileSync(${JSON.stringify(calls)}, JSON.stringify(value) + "\\n");
 function result(command, args, options) {
@@ -111,8 +114,8 @@ cp.spawn = (command, args, options) => {
       return child;
     }
     const value = result(command, args, options);
-    // Status rows test readiness and real cleanup, not canned startup responses.
-    if (kind.startsWith("status-") && !readinessStarted) {
+    // These rows test readiness and real cleanup, not CLI startup latency.
+    if (isolatedStartup && !readinessStarted) {
       const child = synthetic("command");
       queueMicrotask(() => {
         child.stdout.end(value.stdout || ""); child.stderr.end(value.stderr || "");
@@ -125,9 +128,9 @@ cp.spawn = (command, args, options) => {
       log({ held: true, pid: child.pid });
       return child;
     }
-    if (kind.startsWith("status-")) log({ responseChild: readinessStarted ? "cleanup" : "startup", operation: args[0] });
+    if (isolatedStartup) log({ responseChild: readinessStarted ? "cleanup" : "startup", operation: args[0] });
     // The child records execution; pre-spawn labels alone also admit synthetic children.
-    const executed = kind.startsWith("status-")
+    const executed = isolatedStartup
       ? "require('node:fs').appendFileSync(" + JSON.stringify(${JSON.stringify(calls)}) + ", " + JSON.stringify(JSON.stringify({ responseExecuted: args[0] }) + "\\n") + ");"
       : "";
     return original(process.execPath, ["-e", executed + "process.stdout.write(" + JSON.stringify(value.stdout || "") + "); process.stderr.write(" + JSON.stringify(value.stderr || "") + "); process.exit(" + value.status + ")"], options);
@@ -527,7 +530,12 @@ it("probe: an already closed named child cannot be ready even with HTTP 200", ()
     expect(result.status, result.stderr).toBe(1);
     expect(result.stderr).toMatch(/owned process .* exited/);
     expect(result.stdout).not.toContain("native runtime ready");
-    assertClean(f);
+    const { commands } = assertClean(f);
+    expect(
+      commands
+        .filter((call) => call.responseExecuted)
+        .map((call) => call.responseExecuted),
+    ).toEqual(["context", "context", "rm", "ps", "volume"]);
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }
@@ -544,7 +552,15 @@ it("probe: an unexpected long-lived child close after readiness fails and cleans
     expect(result.status, result.stderr).toBe(1);
     expect(result.stdout).toContain("native runtime ready");
     expect(result.stderr).toMatch(/owned process .* exited/);
-    assertClean(f);
+    const { commands } = assertClean(f);
+    expect(commands.filter((call) => call.responseChild === "startup")).toEqual(
+      [],
+    );
+    expect(
+      commands
+        .filter((call) => call.responseExecuted)
+        .map((call) => call.responseExecuted),
+    ).toEqual(["context", "context", "rm", "ps", "volume"]);
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }
@@ -743,7 +759,15 @@ it("probe: a child closing between health and the final ready announcement fails
     expect(result.status, result.stderr).toBe(1);
     expect(result.stderr).toMatch(/owned process .* exited/);
     expect(result.stdout).not.toContain("native runtime ready");
-    assertClean(f);
+    const { commands } = assertClean(f);
+    expect(commands.filter((call) => call.responseChild === "startup")).toEqual(
+      [],
+    );
+    expect(
+      commands
+        .filter((call) => call.responseExecuted)
+        .map((call) => call.responseExecuted),
+    ).toEqual(["context", "context", "rm", "ps", "volume"]);
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }

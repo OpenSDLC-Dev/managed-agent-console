@@ -1,12 +1,8 @@
 "use client";
-import {
-  downloadResource,
-  isNativeConsole,
-  resourceURL,
-} from "@/lib/platform/http";
+import { downloadResource, resourceURL } from "@/lib/platform/http";
 import { toastPlatformError } from "@/lib/platform/toast-error";
 
-/** Native downloads inspect admission before saving bytes. Legacy links stay unchanged. */
+/** Downloads inspect session admission before saving bytes. */
 export function ResourceDownload({
   path,
   filename,
@@ -24,7 +20,7 @@ export function ResourceDownload({
       download={filename}
       onClick={(event) => {
         onClick?.(event);
-        if (event.defaultPrevented || !isNativeConsole()) return;
+        if (event.defaultPrevented) return;
         event.preventDefault();
         void downloadResource(path, filename).catch((error) =>
           toastPlatformError(error, "Download failed"),

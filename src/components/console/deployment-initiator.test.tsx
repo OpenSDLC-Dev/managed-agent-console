@@ -120,12 +120,9 @@ it("admin selects a paginated active service account with a cookie and CSRF", as
   ).toBe(false);
 });
 
-it("permission changes close the draft and legacy or non-admin pages make no private requests", async () => {
+it("permission changes close the draft and non-admin pages make no private requests", async () => {
   const fetcher = stub();
-  const view = mount();
-  expect(fetcher).not.toHaveBeenCalled();
-  document.documentElement.dataset.consoleAuth = "platform";
-  view.changeRole("developer");
+  const view = mount("developer");
   expect(fetcher).not.toHaveBeenCalled();
   view.changeRole("admin");
   await userEvent.click(

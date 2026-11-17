@@ -218,7 +218,7 @@ describe("native principal document boundary", () => {
     client.clear();
   });
 
-  it("does not treat legacy metadata ids as native principal replacement", async () => {
+  it("probe: principal replacement still leaves when no document mode is stamped", async () => {
     const { assign, fetchMock, client, mount, refresh } = nativeBlock();
     delete document.documentElement.dataset.consoleAuth;
     mount();
@@ -226,7 +226,7 @@ describe("native principal document boundary", () => {
     fetchMock.mockImplementation(answers(accountB));
     await refresh();
     await screen.findByText("New account");
-    expect(assign).not.toHaveBeenCalled();
+    expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/");
     client.clear();
   });
 
@@ -296,7 +296,7 @@ describe("SignedInAs", () => {
   // A deployment without identity answers 404 here, and the sidebar it had
   // before this component existed is the right thing to keep showing.
   it.each([
-    ["a deployment with no identity", { signed_in: false }, 404],
+    ["a missing session endpoint", { signed_in: false }, 404],
     ["a browser that is not signed in", { signed_in: false }, 200],
   ])("renders nothing for %s", async (_label, body, status) => {
     vi.stubGlobal("fetch", answers(body, status));
@@ -304,7 +304,7 @@ describe("SignedInAs", () => {
     await waitFor(() => expect(container.firstChild).toBeNull());
   });
 
-  // Only 404 means "no identity here". Read that way, a transient failure would
+  // Reading a transient failure as absent identity would
   // be cached as absence for the life of the page — taking the account block,
   // and the only Sign out control, away until a full reload.
   it("probe: a transient failure is not read as a deployment without identity", async () => {
@@ -315,7 +315,13 @@ describe("SignedInAs", () => {
         calls += 1;
         return calls === 1
           ? new Response("<html>bad gateway</html>", { status: 502 })
-          : new Response(JSON.stringify({ signed_in: true, name: "Operator" }));
+          : new Response(
+              JSON.stringify({
+                signed_in: true,
+                name: "Operator",
+                csrf_token: "sign-out-csrf",
+              }),
+            );
       }),
     );
     renderBlock();
@@ -328,7 +334,13 @@ describe("SignedInAs", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
       String(input).includes("logout")
         ? new Response(JSON.stringify({ ok: true }))
-        : new Response(JSON.stringify({ signed_in: true, name: "Operator" })),
+        : new Response(
+            JSON.stringify({
+              signed_in: true,
+              name: "Operator",
+              csrf_token: "sign-out-csrf",
+            }),
+          ),
     );
     vi.stubGlobal("fetch", fetchMock);
     renderBlock();
@@ -338,6 +350,7 @@ describe("SignedInAs", () => {
     await waitFor(() => expect(hasBouncedToLogin()).toBe(true));
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", {
       method: "POST",
+      headers: { "X-CSRF-Token": "sign-out-csrf" },
       // Bounded, so a server that accepts and never answers cannot strand the
       // operator here — see the probe below.
       signal: expect.any(AbortSignal),
@@ -357,7 +370,11 @@ describe("SignedInAs", () => {
       async (input: RequestInfo | URL, init?: RequestInit) => {
         if (!String(input).includes("logout")) {
           return new Response(
-            JSON.stringify({ signed_in: true, name: "Operator" }),
+            JSON.stringify({
+              signed_in: true,
+              name: "Operator",
+              csrf_token: "sign-out-csrf",
+            }),
           );
         }
         // Accepted, then answered by nobody: settles only if the caller gives up.
@@ -437,7 +454,11 @@ describe("SignedInAs", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).includes("logout")) throw new TypeError("offline");
       return new Response(
-        JSON.stringify({ signed_in: true, name: "Operator" }),
+        JSON.stringify({
+          signed_in: true,
+          name: "Operator",
+          csrf_token: "sign-out-csrf",
+        }),
       );
     });
     vi.stubGlobal("fetch", fetchMock);

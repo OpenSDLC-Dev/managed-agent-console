@@ -192,7 +192,9 @@ test("Interrupt from a running child stops the Session and both children; Archiv
     .poll(async () =>
       (
         await (
-          await page.request.get(`/api/platform/v1/sessions/${session}/threads`)
+          await page.request.get(
+            `/api/organizations/default/proxy/v1/sessions/${session}/threads`,
+          )
         ).json()
       ).data
         .filter(
@@ -242,7 +244,7 @@ for (const status of [404, 501]) {
         childRequests++;
     });
     await page.route(
-      `**/api/platform/v1/sessions/${session}/threads?*`,
+      `**/api/organizations/default/proxy/v1/sessions/${session}/threads?*`,
       (route) =>
         route.fulfill({
           status,

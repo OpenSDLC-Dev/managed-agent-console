@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -27,7 +28,7 @@ const posts = (fetchMock: ReturnType<typeof stubGatewayFetch>) =>
   fetchMock.mock.calls
     .filter(([, init]) => init?.method === "POST")
     .map(([url, init]) => [
-      String(url).replace("/api/gateway/admin/v1/", ""),
+      String(url).replace("/admin/v1/", ""),
       JSON.parse(String(init!.body)),
     ]);
 
@@ -120,19 +121,22 @@ describe("ModelSetupDialog", () => {
         { type: "error", error: { type: "api_error", message: "reset" } },
         { status: 502 },
       );
-    vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
-      const answer = await fetchMock(input, init);
-      if (!input.endsWith(`/${path}`)) return answer;
-      if (init?.method === "POST" && !lostWrite) {
-        lostWrite = true;
-        return lost();
-      }
-      if (!init?.method && lostWrite && reads > 0) {
-        reads--;
-        return lost();
-      }
-      return answer;
-    });
+    vi.stubGlobal(
+      "fetch",
+      withTestSession(async (input: string, init?: RequestInit) => {
+        const answer = await fetchMock(input, init);
+        if (!input.endsWith(`/${path}`)) return answer;
+        if (init?.method === "POST" && !lostWrite) {
+          lostWrite = true;
+          return lost();
+        }
+        if (!init?.method && lostWrite && reads > 0) {
+          reads--;
+          return lost();
+        }
+        return answer;
+      }),
+    );
     return fetchMock;
   }
   const writes = (fetchMock: ReturnType<typeof stubGatewayFetch>) =>

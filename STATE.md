@@ -16,17 +16,16 @@ Reference facts and capability boundaries: [docs/design-reference.md](./docs/des
 
 Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.
 
-### Platform plan 69 slice 6
+### Platform plan 69 slice 7
 
-Issue and revoke keys for every environment, including cloud and archived environments.
-Transfer automatic staging deployment to the platform chart; companion delivery remains pending.
-Contract: [platform plan 69](../managed-agent-platform/docs/plan/69_principal-bound-auth.md), decisions 3/5 and slice 6.
-Prior slice: [PR #259](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/259).
+Remove Console-local authentication, credential proxying and obsolete model-key policy controls.
+Slice 6 companion delivery passed independent live acceptance on 2026-11-17 ([platform PR #1046](https://github.com/OpenSDLC-Dev/managed-agent-platform/pull/1046)).
+Contract: [platform plan 69](../managed-agent-platform/docs/plan/69_principal-bound-auth.md), decisions 3/5 and slice 7.
 Release hold: no SemVer release until platform plan 69 slice 7. Do not merge a release-please PR or dispatch release.yml.
 
 ## Tasks
 
-- [x] Enable cloud and archived environment key management with focused component tests.
-- [x] Restrict the legacy deploy workflow to a confirmed manual rollback from `main`; keep image publication automatic.
-- [x] Verify real cookie/CSRF issuance and revocation, one-time reveals and native light/dark shots.
-- [ ] Complete full checks, independent review, CI and companion platform delivery.
+- [x] Keep only platform cookie/CSRF login and transport; remove legacy model grants and key-policy controls.
+- [x] Migrate mock, native, live and fidelity fixtures; retain streaming, downloads and current-authority checks.
+- [x] Retire the separate deployment owner and update operator guidance; preserve image publication.
+- [ ] Complete coverage, Chrome fidelity, independent review, CI and companion platform delivery.

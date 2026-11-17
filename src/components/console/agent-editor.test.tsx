@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   cleanup,
@@ -168,11 +169,13 @@ function stubFetch({
     const gateway = noGateway(input);
     if (gateway) return gateway;
     if (init?.method === "POST") return save();
-    if (url.startsWith("/api/platform/v1/skills")) return json(skills);
-    if (url.startsWith("/api/platform/v1/agents")) return json(agents);
+    if (url.startsWith("/api/organizations/default/proxy/v1/skills"))
+      return json(skills);
+    if (url.startsWith("/api/organizations/default/proxy/v1/agents"))
+      return json(agents);
     throw new Error(`unexpected fetch: ${url}`);
   });
-  vi.stubGlobal("fetch", mock);
+  vi.stubGlobal("fetch", withTestSession(mock));
   return mock;
 }
 
@@ -318,19 +321,21 @@ describe("AgentEditor", () => {
     let attempts = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.startsWith("/api/platform/v1/skills"))
-          return json({ data: [] });
-        if (url.startsWith("/api/platform/v1/agents")) {
-          if (attempts++ === 0)
-            return new Promise<Response>((resolve) => {
-              resolveAgents = resolve;
-            });
-          return json({ data: [worker] });
-        }
-        throw new Error(`unexpected fetch: ${url}`);
-      }),
+      withTestSession(
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          if (url.startsWith("/api/organizations/default/proxy/v1/skills"))
+            return json({ data: [] });
+          if (url.startsWith("/api/organizations/default/proxy/v1/agents")) {
+            if (attempts++ === 0)
+              return new Promise<Response>((resolve) => {
+                resolveAgents = resolve;
+              });
+            return json({ data: [worker] });
+          }
+          throw new Error(`unexpected fetch: ${url}`);
+        }),
+      ),
     );
     const user = userEvent.setup();
     const saved = [{ type: "agent" as const, id: worker.id, version: 3 }];
@@ -476,8 +481,11 @@ describe("AgentEditor", () => {
     );
 
     const [url, init] = postCalls(mock)[0];
-    expect(url).toBe("/api/platform/v1/agents");
-    expect(init?.headers).toEqual({ "content-type": "application/json" });
+    expect(url).toBe("/api/organizations/default/proxy/v1/agents");
+    expect(init?.headers).toEqual({
+      "content-type": "application/json",
+      "X-CSRF-Token": "test-session-csrf",
+    });
     expect(JSON.parse(init?.body as string)).toEqual({
       name: "My Agent",
       model: { id: "claude-opus-4-2", speed: "fast" },
@@ -620,11 +628,11 @@ describe("AgentEditor", () => {
     expect(block).toHaveTextContent(
       'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
     );
-    expect(block).toHaveTextContent("x-api-key: $PLATFORM_API_KEY");
+    expect(block).toHaveTextContent("x-api-key: $ISSUED_API_KEY");
 
     await user.click(within(block).getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining("$PLATFORM_API_KEY"),
+      expect.stringContaining("$ISSUED_API_KEY"),
     );
     expect(
       await within(block).findByRole("button", { name: "Copied" }),
@@ -1171,7 +1179,7 @@ describe("AgentEditor", () => {
     ).toBeInTheDocument();
 
     const [url, init] = postCalls(mock)[0];
-    expect(url).toBe("/api/platform/v1/agents/agent_1");
+    expect(url).toBe("/api/organizations/default/proxy/v1/agents/agent_1");
     const body = JSON.parse(init?.body as string) as Record<string, unknown>;
     expect(body.version).toBe(3);
     expect(body.model).toEqual({ id: "claude-sonnet-4-8", speed: "standard" });

@@ -60,19 +60,21 @@ test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {
 test("a failed archive surfaces the standardized envelope toast", async ({
   page,
 }) => {
-  await page.route("**/api/platform/v1/agents/*/archive", (route) =>
-    route.fulfill({
-      status: 400,
-      contentType: "application/json",
-      body: JSON.stringify({
-        type: "error",
-        request_id: "req_toast_e2e_1",
-        error: {
-          type: "invalid_request_error",
-          message: "archive refused by test",
-        },
+  await page.route(
+    "**/api/organizations/default/proxy/v1/agents/*/archive",
+    (route) =>
+      route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          type: "error",
+          request_id: "req_toast_e2e_1",
+          error: {
+            type: "invalid_request_error",
+            message: "archive refused by test",
+          },
+        }),
       }),
-    }),
   );
 
   await signIn(page, "/agents");

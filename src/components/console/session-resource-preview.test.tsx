@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import {
@@ -61,11 +62,14 @@ function setup(
     const url = new URL(String(input), "http://console.test");
     const custom = options.get?.(url.pathname);
     if (custom) return custom;
-    if (url.pathname === `/api/platform/v1/files/${files[0].id}`)
+    if (
+      url.pathname ===
+      `/api/organizations/default/proxy/v1/files/${files[0].id}`
+    )
       return json({ ...files[0], ...options.file });
     if (
       url.pathname ===
-      `/api/platform/v1/memory_stores/${memoryResources[0].memory_store_id}/memories`
+      `/api/organizations/default/proxy/v1/memory_stores/${memoryResources[0].memory_store_id}/memories`
     ) {
       expect(url.searchParams.get("depth")).toBe("1");
       expect(url.searchParams.get("path_prefix")).toBe("/");
@@ -88,10 +92,15 @@ function setup(
   });
   // The tab also lists the session's own files on mount; `fetch` counts only
   // what a preview reads.
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) =>
-    String(input).startsWith("/api/platform/v1/files?scope_id=")
-      ? json({ data: [], next_page: null })
-      : fetch(input),
+  vi.stubGlobal(
+    "fetch",
+    withTestSession(async (input: RequestInfo | URL) =>
+      String(input).startsWith(
+        "/api/organizations/default/proxy/v1/files?scope_id=",
+      )
+        ? json({ data: [], next_page: null })
+        : fetch(input),
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -238,7 +247,7 @@ it("loads downloadable text only on request, escapes HTML and supports retry aft
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
     "href",
-    `/api/platform/v1/files/${files[0].id}/content`,
+    `/api/organizations/default/proxy/v1/files/${files[0].id}/content`,
   );
   await userEvent.click(
     screen.getByRole("button", { name: "Preview content" }),

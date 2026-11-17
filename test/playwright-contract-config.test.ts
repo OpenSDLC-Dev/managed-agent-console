@@ -10,7 +10,7 @@ beforeEach(() => {
   vi.stubEnv("RUN_LIVE_CONTRACT_TESTS", "1");
   vi.stubEnv("RUN_LIVE_MODEL_CONTRACT_TESTS", undefined);
   vi.stubEnv("PLATFORM_BASE_URL", "http://127.0.0.1:8080");
-  vi.stubEnv("PLATFORM_API_KEY", "config-test-only");
+  vi.stubEnv("TEST_API_KEY", "config-test-only");
 });
 
 afterEach(() => vi.unstubAllEnvs());

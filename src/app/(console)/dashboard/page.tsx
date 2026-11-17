@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { isNativeConsole } from "@/lib/platform/http";
 import { ArrowRight, BookOpen, Waypoints } from "lucide-react";
 import { CreateKeyButton } from "@/components/console/api-keys";
 import { buttonVariants } from "@/components/ui/button";
@@ -93,8 +92,7 @@ export default function DashboardPage() {
           )}
         </div>
       </header>
-      {isNativeConsole() &&
-        sections.length === 0 &&
+      {sections.length === 0 &&
         Object.values(surfaces ?? {}).some(
           (probe) => probe.status === "denied",
         ) && (

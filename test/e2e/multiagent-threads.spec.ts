@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
+import { browserPost } from "./browser-write";
 import { chooseModel } from "./choose-model";
 
 test.beforeEach(async ({ request }) => {
@@ -60,41 +61,32 @@ test("switches to a child trace and archives the idle child", async ({
   ).toHaveCount(1);
   await page.getByRole("button", { name: "All", exact: true }).click();
 
-  const childMessageStatus = await page.evaluate(async () => {
-    const response = await fetch(
-      "/api/platform/v1/sessions/sesn_research0000000000001/events",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          events: [
-            {
-              type: "user.message",
-              content: [{ type: "text", text: "Route this to the child." }],
-              session_thread_id: "sthr_taskrunnerresearch0001",
-            },
-          ],
-        }),
-      },
-    );
-    return response.status;
+  const eventsPath =
+    "/api/organizations/default/proxy/v1/sessions/sesn_research0000000000001/events";
+  const childMessage = await browserPost(page, eventsPath, {
+    data: {
+      events: [
+        {
+          type: "user.message",
+          content: [{ type: "text", text: "Route this to the child." }],
+          session_thread_id: "sthr_taskrunnerresearch0001",
+        },
+      ],
+    },
   });
-  expect(childMessageStatus).toBe(400);
+  expect(childMessage.status()).toBe(400);
 
-  await page.evaluate(async () => {
-    await fetch("/api/platform/v1/sessions/sesn_research0000000000001/events", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        events: [
-          {
-            type: "user.interrupt",
-            session_thread_id: "sthr_taskrunnerresearch0001",
-          },
-        ],
-      }),
-    });
+  const interrupt = await browserPost(page, eventsPath, {
+    data: {
+      events: [
+        {
+          type: "user.interrupt",
+          session_thread_id: "sthr_taskrunnerresearch0001",
+        },
+      ],
+    },
   });
+  expect(interrupt.ok()).toBe(true);
   await expect(page.locator('[data-event-type="user.interrupt"]')).toHaveCount(
     1,
   );
@@ -109,32 +101,26 @@ test("switches to a child trace and archives the idle child", async ({
     "data-status",
     "running",
   );
-  const terminatedThreadStatus = await page.evaluate(async () => {
-    const response = await fetch(
-      "/api/platform/v1/sessions/sesn_research0000000000001/events",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          events: [
-            {
-              type: "user.interrupt",
-              session_thread_id: "sthr_taskrunnerresearch0001",
-            },
-          ],
-        }),
-      },
-    );
-    return response.status;
+  const terminatedThread = await browserPost(page, eventsPath, {
+    data: {
+      events: [
+        {
+          type: "user.interrupt",
+          session_thread_id: "sthr_taskrunnerresearch0001",
+        },
+      ],
+    },
   });
-  expect(terminatedThreadStatus).toBe(400);
+  expect(terminatedThread.status()).toBe(400);
 });
 
 test("rejects malformed roster members without crashing the mock", async ({
   request,
 }) => {
   const response = await request.post("http://127.0.0.1:18080/v1/agents", {
-    headers: { "x-api-key": "test-key" },
+    headers: {
+      "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+    },
     data: {
       name: "Malformed coordinator",
       model: "claude-sonnet-4-8",
@@ -144,7 +130,9 @@ test("rejects malformed roster members without crashing the mock", async ({
   expect(response.status()).toBe(400);
 
   const stillAlive = await request.get("http://127.0.0.1:18080/v1/agents", {
-    headers: { "x-api-key": "test-key" },
+    headers: {
+      "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+    },
   });
   expect(stillAlive.status()).toBe(200);
 });

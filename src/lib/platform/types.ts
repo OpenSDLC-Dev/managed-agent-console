@@ -36,7 +36,6 @@ export type {
   GatewayCredential,
   GatewayDailyUsage,
   GatewayDeployment,
-  GatewayKeyPolicy,
   GatewayModelLimit,
   GatewayKind,
   GatewayProfile,

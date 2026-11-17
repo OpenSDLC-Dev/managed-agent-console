@@ -101,7 +101,6 @@ const refresh = () =>
   });
 beforeEach(() => {
   resetSignedOutBounceForTests();
-  vi.stubEnv("CONSOLE_AUTH_MODE", "platform");
   mounts = 0;
   actor = accountA;
   document.documentElement.dataset.consoleAuth = "platform";
@@ -435,20 +434,8 @@ it("retains the document principal across actual layout remounts", async () => {
   );
   expect(mounts).toBe(1);
 });
-it("preserves legacy pending-metadata admission", async () => {
-  delete document.documentElement.dataset.consoleAuth;
-  vi.stubEnv("CONSOLE_AUTH_MODE", "");
-  metadata = () => new Promise(() => {});
-  render(
-    <ConsoleLayout>
-      <PrivatePage />
-    </ConsoleLayout>,
-  );
-  await screen.findByTestId("private-page");
-  expect(mounts).toBe(1);
-});
 
-it("server-selected native mode withholds private markup before hydration", () => {
+it("the session boundary withholds private markup before hydration", () => {
   delete document.documentElement.dataset.consoleAuth;
   const markup = renderToString(
     <ConsoleLayout>

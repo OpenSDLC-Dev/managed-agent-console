@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -33,16 +34,18 @@ describe("ConnectionStatus", () => {
   it("probe: a platform read refusal is not an outage or a sign-out", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json(
-          {
-            type: "error",
-            error: {
-              type: "permission_error",
-              message: "this route requires the developer role",
+      withTestSession(
+        vi.fn(async () =>
+          Response.json(
+            {
+              type: "error",
+              error: {
+                type: "permission_error",
+                message: "this route requires the developer role",
+              },
             },
-          },
-          { status: 403, headers: { "request-id": "req_read_denied" } },
+            { status: 403, headers: { "request-id": "req_read_denied" } },
+          ),
         ),
       ),
     );
@@ -72,7 +75,7 @@ describe("ConnectionStatus", () => {
     async (body) => {
       vi.stubGlobal(
         "fetch",
-        vi.fn(async () => new Response(body, { status: 403 })),
+        withTestSession(vi.fn(async () => new Response(body, { status: 403 }))),
       );
       renderWidget();
       await waitFor(() =>
@@ -88,7 +91,9 @@ describe("ConnectionStatus", () => {
   it("shows connected when the probe succeeds", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ data: [] }))),
+      withTestSession(
+        vi.fn(async () => new Response(JSON.stringify({ data: [] }))),
+      ),
     );
     renderWidget();
     await waitFor(() =>
@@ -99,18 +104,20 @@ describe("ConnectionStatus", () => {
   it("surfaces the platform error envelope and request id", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "authentication_error",
-                message: "invalid x-api-key",
-              },
-            }),
-            { status: 401, headers: { "request-id": "req_test1" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "authentication_error",
+                  message: "invalid x-api-key",
+                },
+              }),
+              { status: 401, headers: { "request-id": "req_test1" } },
+            ),
+        ),
       ),
     );
     renderWidget();
@@ -131,12 +138,14 @@ describe("ConnectionStatus", () => {
   it("probe: sends the operator to sign in when the console session has ended", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ type: "error" }), {
-            status: 401,
-            headers: { [SIGNED_OUT_HEADER]: "1" },
-          }),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ type: "error" }), {
+              status: 401,
+              headers: { [SIGNED_OUT_HEADER]: "1" },
+            }),
+        ),
       ),
     );
     renderWidget();

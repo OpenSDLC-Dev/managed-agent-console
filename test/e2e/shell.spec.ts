@@ -4,53 +4,43 @@ import { expect, test, type Page } from "@playwright/test";
 async function openLogin(page: Page) {
   await page.goto("/login");
   await page.locator("form[data-hydrated]").waitFor();
+  await page.getByLabel("Login name").fill("operator");
 }
 
 test("unauthenticated visits redirect to the login gate", async ({ page }) => {
   await page.goto("/agents");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?return_to=%2Fagents$/);
 });
 
-test("the BFF refuses unauthenticated API calls with the platform envelope shape", async ({
+test("the private API refuses unauthenticated API calls with the platform envelope shape", async ({
   request,
 }) => {
-  const response = await request.get("/api/platform/v1/agents");
+  const response = await request.get(
+    "/api/organizations/default/proxy/v1/agents",
+  );
   expect(response.status()).toBe(401);
   const body = await response.json();
   expect(body.type).toBe("error");
   expect(body.error.type).toBe("authentication_error");
 });
 
-// The `/api/auth/` exemption in src/proxy.ts is the one place the gate is
-// deliberately opened, and it has to be: nobody holds a session before signing
-// in, so a gated `/api/auth/login` would bounce the browser to `/login` and a
-// gated callback would drop the provider's redirect on the password form. This
-// deployment sets a password and no identity, which is exactly the
-// configuration where a mistake here would be invisible — the route is
-// reachable, and answers "this surface does not exist" rather than the gate's
-// 401 or, worse, starting a flow.
-test("the /api/auth namespace is outside the gate, and absent without identity", async ({
+test("native auth metadata is public and legacy login routes are absent", async ({
   request,
 }) => {
-  for (const path of ["/api/auth/login", "/api/auth/callback"]) {
-    const response = await request.get(path, { maxRedirects: 0 });
-    expect(response.status(), path).toBe(404);
-    expect((await response.json()).error.type, path).toBe("not_found_error");
+  const config = await request.get("/api/auth/config");
+  expect(await config.json()).toEqual({ mode: "password", native_login: true });
+  for (const path of ["/api/login", "/api/platform/v1/agents"]) {
+    const response = await request.get(path);
+    expect(response.status()).toBe(404);
+    expect(response.headers()["set-cookie"]).toBeUndefined();
   }
-});
-
-test("a route merely starting with api/auth stays inside the gate", async ({
-  request,
-}) => {
-  const response = await request.get("/api/authorize", { maxRedirects: 0 });
-  expect(response.status()).toBe(401);
 });
 
 test("the login page reports no SSO on a password-only deployment", async ({
   page,
 }) => {
   await page.goto("/login");
-  await expect(page.locator("[data-sso]")).toHaveAttribute("data-sso", "false");
+  await expect(page.getByLabel("Login name")).toBeVisible();
   await expect(page.getByTestId("sso-sign-in")).toHaveCount(0);
 });
 
@@ -58,9 +48,11 @@ test("wrong password is rejected; the right one lands on the Dashboard", async (
   page,
 }) => {
   await openLogin(page);
-  await page.getByLabel("Password").fill("wrong");
+  await page.getByLabel("Password").fill("not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("Wrong password.")).toBeVisible();
+  await expect(page.getByText("invalid login name or password")).toBeVisible();
+  await expect(page.getByLabel("Password")).toHaveValue("");
+  await page.getByLabel("Login name").fill("operator");
 
   await page.getByLabel("Password").fill("test-password");
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -97,7 +89,7 @@ test("the shell shows all resources and a live platform connection", async ({
     ).toBeVisible();
   }
 
-  // The probe goes through the BFF to the mock platform and comes back green.
+  // The probe goes through the application edge to the mock platform and comes back green.
   await expect(page.getByTestId("connection-dot")).toHaveAttribute(
     "data-state",
     "up",

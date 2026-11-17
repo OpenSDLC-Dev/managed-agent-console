@@ -220,13 +220,11 @@ describe("EnvironmentKeysSection", () => {
     },
   );
 
-  it("keeps legacy key listing independent of native session metadata", async () => {
-    stubRoutes({ rows: [key({ id: "envkey_legacy" })] });
-    renderSection(cloudEnvironment(), null);
-    await screen.findByText("prod-runner-01");
-    expect(
-      screen.getByRole("button", { name: "Generate environment key" }),
-    ).toBeEnabled();
+  it("probe: missing session metadata never grants environment-key access", () => {
+    const fetchMock = stubRoutes({ rows: [key({ id: "envkey_previous" })] });
+    const view = renderSection(cloudEnvironment(), null);
+    expect(view.container).toBeEmptyDOMElement();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("lists a key with its machine-readable state", async () => {
@@ -315,7 +313,10 @@ describe("EnvironmentKeysSection", () => {
       vi.fn(async (input: RequestInfo | URL) => {
         const url = new URL(String(input), "http://console.test");
         if (url.pathname === TOKENS) return notFound("Not found");
-        if (url.pathname === "/api/platform/v1/environments/env_1") {
+        if (
+          url.pathname ===
+          "/api/organizations/default/proxy/v1/environments/env_1"
+        ) {
           if (environmentExists === "unreachable")
             return json(
               { type: "error", error: { type: "api_error", message: "down" } },

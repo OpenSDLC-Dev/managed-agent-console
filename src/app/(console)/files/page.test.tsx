@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -60,7 +61,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -85,7 +86,7 @@ describe("FilesPage", () => {
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     const { container } = renderPage();
     expect(screen.getByText("Files")).toBeInTheDocument();
@@ -175,7 +176,10 @@ describe("FilesPage", () => {
 
   it("uploads a picked file as multipart form data", async () => {
     const fetchMock = stubFetch((url, init) => {
-      if (init?.method === "POST" && url.pathname === "/api/platform/v1/files")
+      if (
+        init?.method === "POST" &&
+        url.pathname === "/api/organizations/default/proxy/v1/files"
+      )
         return json(file({ id: "file_9", filename: "new.txt" }));
       return json(filePage([]));
     });
@@ -193,7 +197,7 @@ describe("FilesPage", () => {
       const post = fetchMock.mock.calls.find(([, init]) => init?.method);
       expect(post).toBeDefined();
       const [url, init] = post!;
-      expect(String(url)).toBe("/api/platform/v1/files");
+      expect(String(url)).toBe("/api/organizations/default/proxy/v1/files");
       const form = init?.body as FormData;
       expect((form.get("file") as File).name).toBe("new.txt");
     });
@@ -238,7 +242,9 @@ describe("FilesPage", () => {
       const del = fetchMock.mock.calls.find(
         ([, init]) => init?.method === "DELETE",
       );
-      expect(String(del?.[0])).toBe("/api/platform/v1/files/file_1");
+      expect(String(del?.[0])).toBe(
+        "/api/organizations/default/proxy/v1/files/file_1",
+      );
     });
   });
 

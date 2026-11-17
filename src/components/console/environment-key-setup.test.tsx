@@ -49,8 +49,8 @@ describe("EnvironmentKeySetup", () => {
     expect(text).not.toContain("sk-ant-oat01-");
 
     // The worker needs to be told where this platform is; the console cannot
-    // fill the value in, because PLATFORM_BASE_URL is server-side config that
-    // /api/health withholds on purpose.
+    // fill the value in, because the worker may use a different network than
+    // the browser.
     expect(text).toContain("ANTHROPIC_BASE_URL");
     expect(text).toContain("$PLATFORM_BASE_URL");
 

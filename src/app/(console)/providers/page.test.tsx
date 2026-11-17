@@ -67,7 +67,7 @@ describe("ProvidersPage", () => {
   });
 
   it("probe: stands in for the page on a console that runs without a gateway", async () => {
-    // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
+    // The private route is absent when this deployment has no gateway.
     stubGatewayFetch(
       () =>
         new Response(

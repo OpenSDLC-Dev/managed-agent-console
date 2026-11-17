@@ -29,7 +29,7 @@ test("issue a key, see it once, then disable and delete it", async ({
 
   // The seeded rows: one issued by a person, one the control plane manages.
   await expect(page.getByText("ci-deploy")).toBeVisible();
-  await expect(page.getByText("control-plane")).toBeVisible();
+  await expect(page.getByText("historical-unowned")).toBeVisible();
 
   await page.getByRole("button", { name: "Create key" }).click();
   await page.getByLabel("Name").fill("e2e-key");
@@ -124,19 +124,16 @@ test("a refused deletion keeps the key and reports the platform error", async ({
   ).toBeEnabled();
 });
 
-// A key nobody issued belongs to CONTROLPLANE_API_KEY and the platform refuses
-// every mutation on it. The row is still listed — hiding it would be the worse
-// lie — but it carries no controls that are guaranteed to 400.
-test("the control-plane's own key is listed and not mutable", async ({
+// Historical attribution survives, but an unowned key has no authority.
+test("an unowned historical key is listed without mutation controls", async ({
   page,
 }) => {
   await signIn(page);
   await page.goto("/api-keys");
-  const row = page.locator("tr", { hasText: "control-plane" });
+  const row = page.locator("tr", { hasText: "historical-unowned" });
   await expect(row).toBeVisible();
-  await expect(row.getByText("Control plane")).toBeVisible();
+  await expect(row.getByText("No owner")).toBeVisible();
   await expect(row.getByRole("button")).toHaveCount(0);
-  await expect(page.getByText(/cannot be deleted here/)).toBeVisible();
 });
 
 // A deployment predating the surface answers 404 through its router catch-all,
@@ -182,13 +179,13 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   ).toBeVisible();
 });
 
-test("legacy Dashboard key shortcut never assigns a principal", async ({
-  page,
-}) => {
+test("Dashboard key shortcut assigns the current user", async ({ page }) => {
   await signIn(page, "/dashboard");
   await page.getByRole("button", { name: "Get API key", exact: true }).click();
-  await expect(page.getByLabel("Owner", { exact: true })).toHaveCount(0);
-  await page.getByLabel("Name", { exact: true }).fill("legacy-shortcut");
+  await expect(page.getByLabel("Owner", { exact: true })).toHaveValue(
+    "user_mockadmin01",
+  );
+  await page.getByLabel("Name", { exact: true }).fill("owned-shortcut");
   const issuance = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api_keys") &&
@@ -197,7 +194,10 @@ test("legacy Dashboard key shortcut never assigns a principal", async ({
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const response = await issuance;
   expect(response.status()).toBe(200);
-  expect(response.request().postDataJSON()).not.toHaveProperty("principal_id");
+  expect(response.request().postDataJSON()).toHaveProperty(
+    "principal_id",
+    "user_mockadmin01",
+  );
   await expect(
     page.getByRole("heading", { name: "Save your API key" }),
   ).toBeVisible();

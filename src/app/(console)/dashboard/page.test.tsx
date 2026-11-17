@@ -1,9 +1,14 @@
+import { TEST_SESSION, withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import DashboardPage from "./page";
+import {
+  ConsoleSessionContext,
+  type useConsoleSession,
+} from "@/components/shell/console-session";
 import { SURFACES } from "@/lib/platform/surfaces";
 
 vi.mock("next/link", () => ({
@@ -22,45 +27,51 @@ vi.mock("next/link", () => ({
 function renderDashboard(unimplemented?: string[], status = 404) {
   vi.stubGlobal(
     "fetch",
-    vi.fn((input: string) => {
-      if (unimplemented === undefined) return new Promise<Response>(() => {});
-      const absent = unimplemented.some((s) =>
-        s === "api-keys"
-          ? String(input).includes("/api/console/")
-          : s === "model-gateway"
-            ? String(input).includes("/api/gateway/")
-            : String(input).includes(`/v1/${s}?`),
-      );
-      return Promise.resolve(
-        new Response(
-          JSON.stringify(
-            absent
-              ? {
-                  type: "error",
-                  error: {
-                    type:
-                      status === 403 ? "permission_error" : "not_found_error",
-                    message:
-                      status === 403
-                        ? String(input).includes("/api/console/")
-                          ? "this route requires the admin role"
-                          : "this route requires the developer role"
-                        : "Not found",
-                  },
-                }
-              : { data: [] },
+    withTestSession(
+      vi.fn((input: string) => {
+        if (unimplemented === undefined) return new Promise<Response>(() => {});
+        const absent = unimplemented.some((s) =>
+          s === "api-keys"
+            ? String(input).includes("/api/console/")
+            : s === "model-gateway"
+              ? String(input).includes("/admin/v1/")
+              : String(input).includes(`/v1/${s}?`),
+        );
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              absent
+                ? {
+                    type: "error",
+                    error: {
+                      type:
+                        status === 403 ? "permission_error" : "not_found_error",
+                      message:
+                        status === 403
+                          ? String(input).includes("/api/console/")
+                            ? "this route requires the admin role"
+                            : "this route requires the developer role"
+                          : "Not found",
+                    },
+                  }
+                : { data: [] },
+            ),
+            { status: absent ? status : 200 },
           ),
-          { status: absent ? status : 200 },
-        ),
-      );
-    }),
+        );
+      }),
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <DashboardPage />
+      <ConsoleSessionContext.Provider
+        value={{ data: TEST_SESSION } as ReturnType<typeof useConsoleSession>}
+      >
+        <DashboardPage />
+      </ConsoleSessionContext.Provider>
     </QueryClientProvider>,
   );
 }
@@ -162,6 +173,7 @@ describe("DashboardPage", () => {
     await waitFor(() => expect(headings()).not.toContain("Build"));
     expect(headings()).toEqual([
       "Manage",
+      "Organization",
       "Model Gateway",
       "Managed Agents",
       "Analytics",
@@ -204,23 +216,25 @@ it.each([
   });
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string) => {
-      const code = mixed && url.includes("/members?") ? 403 : status;
-      return Response.json(
-        {
-          error: {
-            type:
-              code === 403
-                ? "permission_error"
-                : code === 404
-                  ? "not_found_error"
-                  : "api_error",
-            message: "probe refused",
+    withTestSession(
+      vi.fn(async (url: string) => {
+        const code = mixed && url.includes("/members?") ? 403 : status;
+        return Response.json(
+          {
+            error: {
+              type:
+                code === 403
+                  ? "permission_error"
+                  : code === 404
+                    ? "not_found_error"
+                    : "api_error",
+              message: "probe refused",
+            },
           },
-        },
-        { status: code },
-      );
-    }),
+          { status: code },
+        );
+      }),
+    ),
   );
   render(
     <QueryClientProvider client={client}>

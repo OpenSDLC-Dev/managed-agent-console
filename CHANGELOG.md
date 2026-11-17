@@ -6,6 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Changed
+
+- **Console uses platform login exclusively** (platform plan 69 slice 7). Resource requests, streaming and downloads use the platform session and CSRF contract. The shared-password gate, Console-local OIDC client and credential proxy are removed. API keys retain current owner-role authority; obsolete model grants and per-key policy controls are removed. The platform now owns deployment and rollback; this repository continues publishing Console images. Upgrade the platform application edge before deploying this build.
+
 ### Fixed
 
 - **Native shutdown probes wait for slow fixture startup.** A bounded readiness window leaves time for the original normal-shutdown and repeated-signal cleanup checks. Slow-start controls prevent a two-second startup assumption from returning.

@@ -129,7 +129,9 @@ test("stale inline saves retain the draft and report the platform precondition f
   const external = await request.post(
     `http://127.0.0.1:18080/v1/memory_stores/${store}/memories/${memory}?view=full`,
     {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: { content: "External edit" },
     },
   );
@@ -168,7 +170,9 @@ test("rendering agent-written Markdown does not fetch remote images", async ({
       memory +
       "?view=full",
     {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         content: "![diagram](https://memory-assets.example/diagram.png)",
       },

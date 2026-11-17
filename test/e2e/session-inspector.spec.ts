@@ -50,7 +50,9 @@ test("inspecting a row on page two retains its cursor when selecting and closing
 }) => {
   for (let index = 0; index < 21; index++) {
     const created = await request.post(MOCK + "/v1/sessions", {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         agent: "agent_taskrunner0000000001",
         environment_id: "env_egress000000000000001",

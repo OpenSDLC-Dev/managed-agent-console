@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -44,7 +45,7 @@ const okEvents = () =>
 
 const sentEvents = (fetchMock: ReturnType<typeof vi.fn>) => {
   const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-  expect(url).toBe("/api/platform/v1/sessions/ses_1/events");
+  expect(url).toBe("/api/organizations/default/proxy/v1/sessions/ses_1/events");
   expect(init.method).toBe("POST");
   return (JSON.parse(init.body as string) as { events: unknown[] }).events;
 };
@@ -61,7 +62,7 @@ describe("ApprovalBanner", () => {
   });
 
   it("lists each pending tool with its name and input", () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderBanner([
       toolUse("sevt_t1"),
       toolUse("sevt_t2", { name: "WebFetch", input: { url: "https://x" } }),
@@ -76,14 +77,14 @@ describe("ApprovalBanner", () => {
   });
 
   it("uses the singular headline for one pending approval", () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderBanner([toolUse("sevt_t1")]);
     expect(screen.getByText("Waiting on 1 tool approval")).toBeDefined();
   });
 
   it("allow sends a user.tool_confirmation for that tool_use id", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
@@ -100,7 +101,7 @@ describe("ApprovalBanner", () => {
 
   it("keeps confirmation controls disabled after acceptance while the stream catches up", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
     await user.click(screen.getByRole("button", { name: "Approve" }));
@@ -116,7 +117,7 @@ describe("ApprovalBanner", () => {
 
   it("lets the platform resolve the child from the confirmed tool ID", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1", { session_thread_id: "sthr_event" })]);
 
@@ -133,7 +134,7 @@ describe("ApprovalBanner", () => {
 
   it("deny with a reason includes deny_message", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
@@ -157,7 +158,7 @@ describe("ApprovalBanner", () => {
 
   it("deny submits immediately without a reason dialog or deny_message", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
@@ -176,7 +177,7 @@ describe("ApprovalBanner", () => {
 
   it("cancel discards the reason before a later direct denial", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);
 
@@ -205,18 +206,20 @@ describe("ApprovalBanner", () => {
   it("surfaces the platform error message on a failed confirmation", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "tool_use already resolved",
-              },
-            }),
-            { status: 409, headers: { "content-type": "application/json" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "tool_use already resolved",
+                },
+              }),
+              { status: 409, headers: { "content-type": "application/json" } },
+            ),
+        ),
       ),
     );
     const user = userEvent.setup();
@@ -229,7 +232,7 @@ describe("ApprovalBanner", () => {
   it("falls back to a generic label when the failure is not an Error", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => Promise.reject("wire dropped")),
+      withTestSession(vi.fn(() => Promise.reject("wire dropped"))),
     );
     const user = userEvent.setup();
     renderBanner([toolUse("sevt_t1")]);

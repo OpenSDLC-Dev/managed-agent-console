@@ -74,7 +74,7 @@ function wrapper() {
  *
  * Three prefixes, because two surfaces are not on the wire: management keys
  * live in the platform's off-wire console namespace (`/api/console/...`), and
- * the model gateway's admin API is a server of its own (`/api/gateway/...`).
+ * the model gateway's admin API is a server of its own (`/admin/v1/...`).
  * Collapsing all three to a name here keeps every test below written in
  * surfaces rather than in URLs.
  */
@@ -85,9 +85,9 @@ function stubProbes(status: (surface: string) => number) {
       const { pathname } = new URL(input, "http://console");
       const surface = pathname.startsWith("/api/console/")
         ? "api-keys"
-        : pathname.startsWith("/api/gateway/")
-          ? pathname.replace("/api/gateway/admin/v1/", "")
-          : pathname.replace("/api/platform/v1/", "");
+        : pathname.startsWith("/admin/v1/")
+          ? pathname.replace("/admin/v1/", "")
+          : pathname.replace("/api/organizations/default/proxy/v1/", "");
       const code = status(surface);
       return Promise.resolve(
         new Response(
@@ -373,8 +373,8 @@ describe("useSurfaces", () => {
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     expect(result.current).toEqual({
-      members: { status: "unimplemented" },
-      "service-accounts": { status: "unimplemented" },
+      members: { status: "available" },
+      "service-accounts": { status: "available" },
       agents: { status: "available" },
       sessions: { status: "available" },
       deployments: { status: "available" },
@@ -391,8 +391,7 @@ describe("useSurfaces", () => {
     });
   });
 
-  // The gateway BFF answers this exact envelope for every path while
-  // MODEL_GATEWAY_BASE_URL is unset (src/app/api/gateway): the screens hide
+  // The edge can report an absent gateway with this envelope: the screens hide
   // rather than error on a deployment that runs no gateway.
   it("probe: hides the gateway surfaces when the console runs without a gateway", async () => {
     stubProbes((surface) =>
@@ -431,27 +430,24 @@ describe("useSurfaces", () => {
     expect(result.current?.files).toEqual({ status: "unknown" });
   });
 
-  it("probes each collection once, through the BFF its namespace belongs to", async () => {
+  it("probes each collection once, through its private namespace", async () => {
     stubProbes(() => 200);
     const { result } = renderHook(() => useSurfaces(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current).toBeDefined());
     const calls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
-    expect(calls).toHaveLength(
-      Object.values(SURFACES).filter((e) => !("api" in e) || e.api !== "native")
-        .length,
-    );
-    for (const entry of Object.values(SURFACES).filter(
-      (e) => !("api" in e) || e.api !== "native",
-    )) {
+    expect(calls).toHaveLength(Object.values(SURFACES).length);
+    for (const entry of Object.values(SURFACES)) {
       // The wire surfaces ask for a page of one; the console namespace and the
       // gateway serve unpaged lists, so they are asked plainly — but for the
       // gateway's ledger, which pages, asked for one row.
       expect(calls).toContain(
         !("api" in entry)
-          ? `/api/platform/${entry.path}?limit=1`
+          ? `/api/organizations/default/proxy/${entry.path}?limit=1`
           : entry.api === "gateway"
-            ? `/api/gateway/admin/v1/${entry.path}${"query" in entry ? "?limit=1" : ""}`
-            : `/api/console/${entry.path}`,
+            ? `/admin/v1/${entry.path}${"query" in entry ? "?limit=1" : ""}`
+            : entry.api === "native"
+              ? `${entry.path}?limit=1`
+              : `/api/console/${entry.path}`,
       );
     }
   });
@@ -463,5 +459,5 @@ it("native-only administration stays hidden until its collection read succeeds",
   expect(isSurfaceVisible({ status: "unknown" }, "members")).toBe(false);
   expect(isSurfaceVisible({ status: "available" }, "members")).toBe(true);
   delete document.documentElement.dataset.consoleAuth;
-  expect(isSurfaceVisible({ status: "available" }, "members")).toBe(false);
+  expect(isSurfaceVisible({ status: "available" }, "members")).toBe(true);
 });

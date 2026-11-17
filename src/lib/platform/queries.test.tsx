@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -89,7 +90,7 @@ function stubFetch(payload: unknown) {
   const fetchMock = vi.fn<
     (input: string, init?: RequestInit) => Promise<Response>
   >(async () => jsonResponse(payload));
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -132,7 +133,7 @@ const queryCases: QueryCase[] = [
   {
     name: "useAgents (defaults)",
     useHook: () => useAgents({}),
-    path: "/api/platform/v1/agents",
+    path: "/api/organizations/default/proxy/v1/agents",
     search: { limit: "20" },
   },
   {
@@ -144,7 +145,7 @@ const queryCases: QueryCase[] = [
         limit: 5,
         "created_at[gte]": "2026-08-01T00:00:00.000Z",
       }),
-    path: "/api/platform/v1/agents",
+    path: "/api/organizations/default/proxy/v1/agents",
     search: {
       limit: "5",
       page: "cur_1",
@@ -155,37 +156,37 @@ const queryCases: QueryCase[] = [
   {
     name: "useAgent",
     useHook: () => useAgent("agt_1"),
-    path: "/api/platform/v1/agents/agt_1",
+    path: "/api/organizations/default/proxy/v1/agents/agt_1",
     search: {},
   },
   {
     name: "useAgent with reserved ID characters",
     useHook: () => useAgent("agent/id?x#y"),
-    path: "/api/platform/v1/agents/agent%2Fid%3Fx%23y",
+    path: "/api/organizations/default/proxy/v1/agents/agent%2Fid%3Fx%23y",
     search: {},
   },
   {
     name: "useAgentVersions (with page)",
     useHook: () => useAgentVersions("agt_1", "cur_2"),
-    path: "/api/platform/v1/agents/agt_1/versions",
+    path: "/api/organizations/default/proxy/v1/agents/agt_1/versions",
     search: { limit: "20", page: "cur_2" },
   },
   {
     name: "useAgentVersions (no page)",
     useHook: () => useAgentVersions("agt_1"),
-    path: "/api/platform/v1/agents/agt_1/versions",
+    path: "/api/organizations/default/proxy/v1/agents/agt_1/versions",
     search: { limit: "20" },
   },
   {
     name: "useEnvironments",
     useHook: () => useEnvironments({}),
-    path: "/api/platform/v1/environments",
+    path: "/api/organizations/default/proxy/v1/environments",
     search: { limit: "20" },
   },
   {
     name: "useEnvironment",
     useHook: () => useEnvironment("env_1"),
-    path: "/api/platform/v1/environments/env_1",
+    path: "/api/organizations/default/proxy/v1/environments/env_1",
     search: {},
   },
   {
@@ -198,7 +199,7 @@ const queryCases: QueryCase[] = [
         include_archived: true,
         "created_at[gte]": "2026-08-01T00:00:00.000Z",
       }),
-    path: "/api/platform/v1/sessions",
+    path: "/api/organizations/default/proxy/v1/sessions",
     search: {
       limit: "20",
       statuses: ["running", "idle"],
@@ -211,13 +212,13 @@ const queryCases: QueryCase[] = [
   {
     name: "useSessions (defaults)",
     useHook: () => useSessions({}),
-    path: "/api/platform/v1/sessions",
+    path: "/api/organizations/default/proxy/v1/sessions",
     search: { limit: "20" },
   },
   {
     name: "useSession",
     useHook: () => useSession("sess_1"),
-    path: "/api/platform/v1/sessions/sess_1",
+    path: "/api/organizations/default/proxy/v1/sessions/sess_1",
     search: {},
   },
   {
@@ -230,7 +231,7 @@ const queryCases: QueryCase[] = [
         limit: 5,
         "created_at[gte]": "2026-08-01T00:00:00Z",
       }),
-    path: "/api/platform/v1/deployments",
+    path: "/api/organizations/default/proxy/v1/deployments",
     search: {
       limit: "5",
       page: "cur_d",
@@ -242,7 +243,7 @@ const queryCases: QueryCase[] = [
   {
     name: "useDeployment",
     useHook: () => useDeployment("depl_1"),
-    path: "/api/platform/v1/deployments/depl_1",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1",
     search: {},
   },
   {
@@ -253,7 +254,7 @@ const queryCases: QueryCase[] = [
         trigger_type: "schedule",
         has_error: true,
       }),
-    path: "/api/platform/v1/deployment_runs",
+    path: "/api/organizations/default/proxy/v1/deployment_runs",
     search: {
       limit: "20",
       deployment_id: "depl_1",
@@ -264,7 +265,7 @@ const queryCases: QueryCase[] = [
   {
     name: "useDeploymentRun",
     useHook: () => useDeploymentRun("drun_1"),
-    path: "/api/platform/v1/deployment_runs/drun_1",
+    path: "/api/organizations/default/proxy/v1/deployment_runs/drun_1",
     search: {},
   },
   {
@@ -276,7 +277,7 @@ const queryCases: QueryCase[] = [
         include_archived: true,
         limit: 5,
       }),
-    path: "/api/platform/v1/dreams",
+    path: "/api/organizations/default/proxy/v1/dreams",
     search: {
       limit: "5",
       page: "cur_dream",
@@ -288,13 +289,13 @@ const queryCases: QueryCase[] = [
     name: "useMemoryStores",
     useHook: () =>
       useMemoryStores({ page: "cur_m", include_archived: true, limit: 5 }),
-    path: "/api/platform/v1/memory_stores",
+    path: "/api/organizations/default/proxy/v1/memory_stores",
     search: { limit: "5", page: "cur_m", include_archived: "true" },
   },
   {
     name: "useMemoryStore",
     useHook: () => useMemoryStore("memstore_1"),
-    path: "/api/platform/v1/memory_stores/memstore_1",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1",
     search: {},
   },
   {
@@ -305,7 +306,7 @@ const queryCases: QueryCase[] = [
         path_prefix: "/notes/",
         depth: 1,
       }),
-    path: "/api/platform/v1/memory_stores/memstore_1/memories",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories",
     search: {
       limit: "20",
       page: "cur_mem",
@@ -316,7 +317,7 @@ const queryCases: QueryCase[] = [
   {
     name: "useMemory",
     useHook: () => useMemory("memstore_1", "mem_1"),
-    path: "/api/platform/v1/memory_stores/memstore_1/memories/mem_1",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories/mem_1",
     search: { view: "full" },
   },
   {
@@ -327,7 +328,7 @@ const queryCases: QueryCase[] = [
         operation: "modified",
         view: "full",
       }),
-    path: "/api/platform/v1/memory_stores/memstore_1/memory_versions",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memory_versions",
     search: {
       limit: "20",
       memory_id: "mem_1",
@@ -338,25 +339,25 @@ const queryCases: QueryCase[] = [
   {
     name: "useMemoryVersion",
     useHook: () => useMemoryVersion("memstore_1", "memver_1"),
-    path: "/api/platform/v1/memory_stores/memstore_1/memory_versions/memver_1",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memory_versions/memver_1",
     search: { view: "full" },
   },
   {
     name: "useSessionThreads",
     useHook: () => useSessionThreads("sess_1"),
-    path: "/api/platform/v1/sessions/sess_1/threads",
+    path: "/api/organizations/default/proxy/v1/sessions/sess_1/threads",
     search: { limit: "1000" },
   },
   {
     name: "useVaults",
     useHook: () => useVaults({}),
-    path: "/api/platform/v1/vaults",
+    path: "/api/organizations/default/proxy/v1/vaults",
     search: { limit: "20" },
   },
   {
     name: "useVault",
     useHook: () => useVault("vlt_1"),
-    path: "/api/platform/v1/vaults/vlt_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1",
     search: {},
   },
   {
@@ -366,43 +367,43 @@ const queryCases: QueryCase[] = [
         page: "cur_3",
         include_archived: true,
       }),
-    path: "/api/platform/v1/vaults/vlt_1/credentials",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials",
     search: { limit: "20", page: "cur_3", include_archived: "true" },
   },
   {
     name: "useVaultCredential",
     useHook: () => useVaultCredential("vlt_1", "vcred_1"),
-    path: "/api/platform/v1/vaults/vlt_1/credentials/vcred_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/vcred_1",
     search: {},
   },
   {
     name: "useSkills",
     useHook: () => useSkills({ source: "custom" }),
-    path: "/api/platform/v1/skills",
+    path: "/api/organizations/default/proxy/v1/skills",
     search: { limit: "20", source: "custom" },
   },
   {
     name: "useSkill",
     useHook: () => useSkill("skl_1"),
-    path: "/api/platform/v1/skills/skl_1",
+    path: "/api/organizations/default/proxy/v1/skills/skl_1",
     search: {},
   },
   {
     name: "useSkillVersions",
     useHook: () => useSkillVersions("skl_1", "cur_4"),
-    path: "/api/platform/v1/skills/skl_1/versions",
+    path: "/api/organizations/default/proxy/v1/skills/skl_1/versions",
     search: { limit: "20", page: "cur_4" },
   },
   {
     name: "useFiles (with page)",
     useHook: () => useFiles("opaque+/cursor="),
-    path: "/api/platform/v1/files",
+    path: "/api/organizations/default/proxy/v1/files",
     search: { limit: "20", page: "opaque+/cursor=" },
   },
   {
     name: "useFiles (first page)",
     useHook: () => useFiles(),
-    path: "/api/platform/v1/files",
+    path: "/api/organizations/default/proxy/v1/files",
     search: { limit: "20" },
   },
 ];
@@ -419,7 +420,7 @@ it("loads skill options incrementally using the platform cursor", async () => {
         { headers: { "content-type": "application/json" } },
       ),
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -466,7 +467,7 @@ describe("query hooks", () => {
         ],
       }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useDreams({}), { wrapper });
     await vi.waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -489,7 +490,7 @@ describe("useAgentOptions", () => {
           : { data: [{ id: "agt_1" }], next_page: "cur_2" },
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useAgentOptions(), { wrapper });
 
@@ -514,7 +515,7 @@ describe("useAgentOptions", () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ data: [{ id: "agt_x" }], next_page: "again" }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useAgentOptions(), { wrapper });
 
@@ -535,7 +536,7 @@ describe("useDeploymentOptions", () => {
           : { data: [{ id: "depl_1" }], next_page: "cur_2" },
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useDeploymentOptions(), { wrapper });
 
@@ -560,7 +561,7 @@ describe("useDeploymentOptions", () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ data: [{ id: "depl_x" }], next_page: "again" }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useDeploymentOptions(), { wrapper });
 
@@ -581,7 +582,7 @@ describe("useMemoryStoreOptions", () => {
           : { data: [{ id: "memstore_1" }], next_page: "cur_2" },
       );
     });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useMemoryStoreOptions(), { wrapper });
 
@@ -602,7 +603,7 @@ describe("useMemoryStoreOptions", () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ data: [{ id: "memstore_x" }], next_page: "again" }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useMemoryStoreOptions(), { wrapper });
 
@@ -627,7 +628,7 @@ describe("useSessionFiles", () => {
     expect(result.current.data?.data).toEqual([{ id: "file_copy" }]);
     const [url, init] = fetchMock.mock.calls[0];
     expect(new URL(url, "http://console.test").pathname).toBe(
-      "/api/platform/v1/files",
+      "/api/organizations/default/proxy/v1/files",
     );
     expect(searchOf(url)).toEqual({ scope_id: "sesn_1", limit: "1000" });
     expect(init?.headers).toEqual(BETA);
@@ -647,7 +648,7 @@ describe("useSessionFiles", () => {
             { status, headers: { "content-type": "application/json" } },
           ),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { wrapper } = createClient();
     const { result } = renderHook(() => useSessionFiles("sesn_1", false), {
       wrapper,
@@ -671,17 +672,19 @@ describe("useSessionFiles", () => {
     const live = { id: "sesn_1", type: "session", archived_at: null };
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) =>
       jsonResponse(
-        input.startsWith("/api/platform/v1/files")
+        input.startsWith("/api/organizations/default/proxy/v1/files")
           ? { data: [] }
           : init?.method === "POST"
             ? { ...live, archived_at: "2026-10-03T00:00:00Z" }
             : live,
       ),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const lists = () =>
       fetchMock.mock.calls.filter(([url]) =>
-        url.startsWith("/api/platform/v1/files?scope_id=sesn_1"),
+        url.startsWith(
+          "/api/organizations/default/proxy/v1/files?scope_id=sesn_1",
+        ),
       ).length;
     const { wrapper } = createClient();
     // The Resources tab's own wiring: the session's archive state, read from
@@ -756,7 +759,7 @@ describe("useFileOptions", () => {
       { data: [{ id: "file_copy" }] },
       { data: [{ id: "file_1" }], next_page: "more-files" },
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { client, wrapper } = createClient();
     const { result } = renderHook(() => useFileOptions("sesn_1", false), {
       wrapper,
@@ -788,7 +791,7 @@ describe("useFileOptions", () => {
 
   it("reuses the session's list its Resources tab already read", async () => {
     const fetchMock = listing({ data: [] }, { data: [] });
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const { client, wrapper } = createClient();
     client.setQueryData(["session-files", "sesn_1"], {
       data: [{ id: "file_copy" }],
@@ -805,7 +808,9 @@ describe("useFileOptions", () => {
   it("keeps the uploads when the session's list fails", async () => {
     vi.stubGlobal(
       "fetch",
-      listing(500, { data: [{ id: "file_1" }], next_page: null }),
+      withTestSession(
+        listing(500, { data: [{ id: "file_1" }], next_page: null }),
+      ),
     );
     const { wrapper } = createClient();
     const { result } = renderHook(() => useFileOptions("sesn_1", false), {
@@ -878,7 +883,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateMemoryStore",
     useHook: () => useCreateMemoryStore(),
     variables: { name: "Notes", metadata: { owner: "console" } },
-    path: "/api/platform/v1/memory_stores",
+    path: "/api/organizations/default/proxy/v1/memory_stores",
     method: "POST",
     jsonBody: { name: "Notes", metadata: { owner: "console" } },
     meta: { errorToast: false },
@@ -889,7 +894,7 @@ const mutationCases: MutationCase[] = [
     name: "useUpdateMemoryStore",
     useHook: () => useUpdateMemoryStore("memstore_1"),
     variables: { description: "Updated", metadata: { old: null } },
-    path: "/api/platform/v1/memory_stores/memstore_1",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1",
     method: "POST",
     jsonBody: { description: "Updated", metadata: { old: null } },
     meta: { errorToast: false },
@@ -899,7 +904,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveMemoryStore",
     useHook: () => useArchiveMemoryStore("memstore_1"),
-    path: "/api/platform/v1/memory_stores/memstore_1/archive",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive memory store failed" },
@@ -909,7 +914,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useDeleteMemoryStore",
     useHook: () => useDeleteMemoryStore("memstore_1"),
-    path: "/api/platform/v1/memory_stores/memstore_1",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1",
     method: "DELETE",
     meta: { errorTitle: "Delete memory store failed" },
     invalidates: [["memory-stores"]],
@@ -919,7 +924,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateMemory",
     useHook: () => useCreateMemory("memstore_1"),
     variables: { path: "/brief.md", content: "Draft" },
-    path: "/api/platform/v1/memory_stores/memstore_1/memories?view=full",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories?view=full",
     method: "POST",
     jsonBody: { path: "/brief.md", content: "Draft" },
     meta: { errorToast: false },
@@ -935,7 +940,7 @@ const mutationCases: MutationCase[] = [
       content: "Final",
       precondition: { type: "content_sha256", content_sha256: "abc" },
     },
-    path: "/api/platform/v1/memory_stores/memstore_1/memories/mem_1?view=full",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories/mem_1?view=full",
     method: "POST",
     jsonBody: {
       content: "Final",
@@ -952,7 +957,7 @@ const mutationCases: MutationCase[] = [
     name: "useDeleteMemory",
     useHook: () => useDeleteMemory("memstore_1", "mem_1"),
     variables: "abc",
-    path: "/api/platform/v1/memory_stores/memstore_1/memories/mem_1?expected_content_sha256=abc",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories/mem_1?expected_content_sha256=abc",
     method: "DELETE",
     meta: { errorTitle: "Delete memory failed" },
     invalidates: [
@@ -965,7 +970,7 @@ const mutationCases: MutationCase[] = [
     name: "useRedactMemoryVersion",
     useHook: () => useRedactMemoryVersion("memstore_1", "memver_1"),
     response: { id: "memver_1", memory_id: "mem_1" },
-    path: "/api/platform/v1/memory_stores/memstore_1/memory_versions/memver_1/redact",
+    path: "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memory_versions/memver_1/redact",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Redact memory version failed" },
@@ -980,7 +985,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateDeployment",
     useHook: () => useCreateDeployment(),
     variables: { name: "Daily run" },
-    path: "/api/platform/v1/deployments",
+    path: "/api/organizations/default/proxy/v1/deployments",
     method: "POST",
     jsonBody: { name: "Daily run" },
     meta: { errorToast: false },
@@ -991,7 +996,7 @@ const mutationCases: MutationCase[] = [
     name: "useUpdateDeployment",
     useHook: () => useUpdateDeployment("depl_1"),
     variables: { description: "updated" },
-    path: "/api/platform/v1/deployments/depl_1",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1",
     method: "POST",
     jsonBody: { description: "updated" },
     meta: { errorToast: false },
@@ -1001,7 +1006,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveDeployment",
     useHook: () => useArchiveDeployment("depl_1"),
-    path: "/api/platform/v1/deployments/depl_1/archive",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive deployment failed" },
@@ -1011,7 +1016,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "usePauseDeployment",
     useHook: () => usePauseDeployment("depl_1"),
-    path: "/api/platform/v1/deployments/depl_1/pause",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1/pause",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Pause deployment failed" },
@@ -1021,7 +1026,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useUnpauseDeployment",
     useHook: () => useUnpauseDeployment("depl_1"),
-    path: "/api/platform/v1/deployments/depl_1/unpause",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1/unpause",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Resume deployment failed" },
@@ -1031,7 +1036,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useRunDeployment",
     useHook: () => useRunDeployment("depl_1"),
-    path: "/api/platform/v1/deployments/depl_1/run",
+    path: "/api/organizations/default/proxy/v1/deployments/depl_1/run",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Run deployment failed" },
@@ -1041,7 +1046,7 @@ const mutationCases: MutationCase[] = [
     name: "useArchiveSessionThread",
     useHook: () => useArchiveSessionThread("sess_1"),
     variables: "sthr_1",
-    path: "/api/platform/v1/sessions/sess_1/threads/sthr_1/archive",
+    path: "/api/organizations/default/proxy/v1/sessions/sess_1/threads/sthr_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive thread failed" },
@@ -1054,7 +1059,7 @@ const mutationCases: MutationCase[] = [
     name: "useSendEvents",
     useHook: () => useSendEvents("sess_1"),
     variables: [{ type: "user.interrupt" }],
-    path: "/api/platform/v1/sessions/sess_1/events",
+    path: "/api/organizations/default/proxy/v1/sessions/sess_1/events",
     method: "POST",
     jsonBody: { events: [{ type: "user.interrupt" }] },
     meta: { errorToast: false },
@@ -1067,7 +1072,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateAgent",
     useHook: () => useCreateAgent(),
     variables: { name: "Support agent" },
-    path: "/api/platform/v1/agents",
+    path: "/api/organizations/default/proxy/v1/agents",
     method: "POST",
     jsonBody: { name: "Support agent" },
     meta: { errorToast: false },
@@ -1077,7 +1082,7 @@ const mutationCases: MutationCase[] = [
     name: "useUpdateAgent",
     useHook: () => useUpdateAgent("agt_1"),
     variables: { name: "Renamed", version: 3 },
-    path: "/api/platform/v1/agents/agt_1",
+    path: "/api/organizations/default/proxy/v1/agents/agt_1",
     method: "POST",
     jsonBody: { name: "Renamed", version: 3 },
     meta: { errorToast: false },
@@ -1087,7 +1092,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveAgent",
     useHook: () => useArchiveAgent("agt_1"),
-    path: "/api/platform/v1/agents/agt_1/archive",
+    path: "/api/organizations/default/proxy/v1/agents/agt_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
@@ -1098,7 +1103,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateEnvironment",
     useHook: () => useCreateEnvironment(),
     variables: { name: "Default" },
-    path: "/api/platform/v1/environments",
+    path: "/api/organizations/default/proxy/v1/environments",
     method: "POST",
     jsonBody: { name: "Default" },
     meta: { errorToast: false },
@@ -1108,7 +1113,7 @@ const mutationCases: MutationCase[] = [
     name: "useUpdateEnvironment",
     useHook: () => useUpdateEnvironment("env_1"),
     variables: { description: "updated" },
-    path: "/api/platform/v1/environments/env_1",
+    path: "/api/organizations/default/proxy/v1/environments/env_1",
     method: "POST",
     jsonBody: { description: "updated" },
     meta: { errorToast: false },
@@ -1118,7 +1123,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveEnvironment",
     useHook: () => useArchiveEnvironment("env_1"),
-    path: "/api/platform/v1/environments/env_1/archive",
+    path: "/api/organizations/default/proxy/v1/environments/env_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
@@ -1128,7 +1133,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useDeleteEnvironment",
     useHook: () => useDeleteEnvironment("env_1"),
-    path: "/api/platform/v1/environments/env_1",
+    path: "/api/organizations/default/proxy/v1/environments/env_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["environments"]],
@@ -1138,7 +1143,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateSession",
     useHook: () => useCreateSession(),
     variables: { agent: "agt_1", environment_id: "env_1", title: "Run" },
-    path: "/api/platform/v1/sessions",
+    path: "/api/organizations/default/proxy/v1/sessions",
     method: "POST",
     jsonBody: { agent: "agt_1", environment_id: "env_1", title: "Run" },
     meta: { errorToast: false },
@@ -1147,7 +1152,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveSession",
     useHook: () => useArchiveSession("sesn_1"),
-    path: "/api/platform/v1/sessions/sesn_1/archive",
+    path: "/api/organizations/default/proxy/v1/sessions/sesn_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
@@ -1160,7 +1165,7 @@ const mutationCases: MutationCase[] = [
     name: "useDeleteFile (a session's own file)",
     useHook: () => useDeleteFile({ sessionId: "sesn_1", errorToast: false }),
     variables: "file_output",
-    path: "/api/platform/v1/files/file_output",
+    path: "/api/organizations/default/proxy/v1/files/file_output",
     method: "DELETE",
     meta: { errorToast: false },
     invalidates: [["files"], ["file-options"], ["session-files", "sesn_1"]],
@@ -1168,7 +1173,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useDeleteSession",
     useHook: () => useDeleteSession("sesn_1"),
-    path: "/api/platform/v1/sessions/sesn_1",
+    path: "/api/organizations/default/proxy/v1/sessions/sesn_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["sessions"]],
@@ -1181,7 +1186,7 @@ const mutationCases: MutationCase[] = [
     name: "useUploadFile",
     useHook: () => useUploadFile(),
     variables: new File(["hello"], "notes.txt", { type: "text/plain" }),
-    path: "/api/platform/v1/files",
+    path: "/api/organizations/default/proxy/v1/files",
     method: "POST",
     formEntries: [["file", "notes.txt"]],
     meta: { errorToast: false },
@@ -1191,7 +1196,7 @@ const mutationCases: MutationCase[] = [
     name: "useCreateVault",
     useHook: () => useCreateVault(),
     variables: { display_name: "Prod", metadata: { team: "agents" } },
-    path: "/api/platform/v1/vaults",
+    path: "/api/organizations/default/proxy/v1/vaults",
     method: "POST",
     jsonBody: { display_name: "Prod", metadata: { team: "agents" } },
     meta: { errorToast: false },
@@ -1202,7 +1207,7 @@ const mutationCases: MutationCase[] = [
     name: "useUpdateVault",
     useHook: () => useUpdateVault("vlt_1"),
     variables: { display_name: "Prod 2", metadata: { old: null } },
-    path: "/api/platform/v1/vaults/vlt_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1",
     method: "POST",
     jsonBody: { display_name: "Prod 2", metadata: { old: null } },
     meta: { errorToast: false },
@@ -1212,7 +1217,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useArchiveVault",
     useHook: () => useArchiveVault("vlt_1"),
-    path: "/api/platform/v1/vaults/vlt_1/archive",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
@@ -1222,7 +1227,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useDeleteVault",
     useHook: () => useDeleteVault("vlt_1"),
-    path: "/api/platform/v1/vaults/vlt_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["vaults"]],
@@ -1232,7 +1237,7 @@ const mutationCases: MutationCase[] = [
     name: "useAddCredential",
     useHook: () => useAddCredential("vlt_1"),
     variables: { display_name: "GitHub", auth: { token: "t" } },
-    path: "/api/platform/v1/vaults/vlt_1/credentials",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials",
     method: "POST",
     jsonBody: { display_name: "GitHub", auth: { token: "t" } },
     meta: { errorToast: false },
@@ -1246,7 +1251,7 @@ const mutationCases: MutationCase[] = [
       auth: { type: "static_bearer", token: "new" },
       metadata: { owner: "ops" },
     },
-    path: "/api/platform/v1/vaults/vlt_1/credentials/crd_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/crd_1",
     method: "POST",
     jsonBody: {
       display_name: null,
@@ -1261,7 +1266,7 @@ const mutationCases: MutationCase[] = [
     name: "useArchiveCredential",
     useHook: () => useArchiveCredential("vlt_1"),
     variables: "crd_1",
-    path: "/api/platform/v1/vaults/vlt_1/credentials/crd_1/archive",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/crd_1/archive",
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
@@ -1272,7 +1277,7 @@ const mutationCases: MutationCase[] = [
     name: "useDeleteCredential",
     useHook: () => useDeleteCredential("vlt_1"),
     variables: "crd_1",
-    path: "/api/platform/v1/vaults/vlt_1/credentials/crd_1",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/crd_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["vault-credentials", "vlt_1"]],
@@ -1282,7 +1287,7 @@ const mutationCases: MutationCase[] = [
     name: "useValidateOAuthCredential",
     useHook: () => useValidateOAuthCredential("vlt_1"),
     variables: "crd_1",
-    path: "/api/platform/v1/vaults/vlt_1/credentials/crd_1/mcp_oauth_validate",
+    path: "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/crd_1/mcp_oauth_validate",
     method: "POST",
     jsonBody: {},
     meta: { errorToast: false },
@@ -1295,7 +1300,7 @@ const mutationCases: MutationCase[] = [
       files: [skillMd(), new File(["print()"], "run.py")],
       displayName: "My skill",
     },
-    path: "/api/platform/v1/skills",
+    path: "/api/organizations/default/proxy/v1/skills",
     method: "POST",
     formEntries: [
       ["files[]", "SKILL.md"],
@@ -1309,7 +1314,7 @@ const mutationCases: MutationCase[] = [
     name: "useUploadSkill (no display title)",
     useHook: () => useUploadSkill(),
     variables: { files: [skillMd()] },
-    path: "/api/platform/v1/skills",
+    path: "/api/organizations/default/proxy/v1/skills",
     method: "POST",
     formEntries: [["files[]", "SKILL.md"]],
     meta: { errorToast: false },
@@ -1319,7 +1324,7 @@ const mutationCases: MutationCase[] = [
     name: "useUploadSkillVersion",
     useHook: () => useUploadSkillVersion("skl_1"),
     variables: [skillMd()],
-    path: "/api/platform/v1/skills/skl_1/versions",
+    path: "/api/organizations/default/proxy/v1/skills/skl_1/versions",
     method: "POST",
     formEntries: [["files[]", "SKILL.md"]],
     meta: { errorTitle: "Upload failed" },
@@ -1332,7 +1337,7 @@ const mutationCases: MutationCase[] = [
     name: "useDeleteSkillVersion",
     useHook: () => useDeleteSkillVersion("skl_1"),
     variables: "1759178010641556",
-    path: "/api/platform/v1/skills/skl_1/versions/1759178010641556",
+    path: "/api/organizations/default/proxy/v1/skills/skl_1/versions/1759178010641556",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [
@@ -1343,7 +1348,7 @@ const mutationCases: MutationCase[] = [
   {
     name: "useDeleteSkill",
     useHook: () => useDeleteSkill("skl_1"),
-    path: "/api/platform/v1/skills/skl_1",
+    path: "/api/organizations/default/proxy/v1/skills/skl_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["skills"]],
@@ -1353,7 +1358,7 @@ const mutationCases: MutationCase[] = [
     name: "useDeleteFile",
     useHook: () => useDeleteFile(),
     variables: "file_1",
-    path: "/api/platform/v1/files/file_1",
+    path: "/api/organizations/default/proxy/v1/files/file_1",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
     invalidates: [["files"], ["file-options"]],
@@ -1382,7 +1387,10 @@ describe("mutation hooks", () => {
       expect(url).toBe(mutation.path);
       expect(init?.method).toBe(mutation.method);
       if (mutation.jsonBody !== undefined) {
-        expect(init?.headers).toEqual({ "content-type": "application/json" });
+        expect(init?.headers).toEqual({
+          "content-type": "application/json",
+          "X-CSRF-Token": "test-session-csrf",
+        });
         expect(JSON.parse(init?.body as string)).toEqual(mutation.jsonBody);
       }
       if (mutation.formEntries) {

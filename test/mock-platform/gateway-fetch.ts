@@ -2,7 +2,7 @@ import { vi } from "vitest";
 import { gatewayRoute, resetGateway } from "./gateway.mjs";
 
 /**
- * A `fetch` for component tests that answers `/api/gateway/admin/v1/...` from
+ * A `fetch` for component tests that answers `/admin/v1/...` from
  * the mock gateway's own routes, with fresh seeds. The data is the same the e2e
  * tier and the conformance suite use, so a component test cannot drift onto a
  * shape the gateway does not render. `override` answers a path first, for the
@@ -14,7 +14,18 @@ export function stubGatewayFetch(
   resetGateway();
   const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
     const url = new URL(String(input), "http://console");
-    const rest = url.pathname.replace("/api/gateway/admin/v1/", "");
+    if (url.pathname === "/api/auth/session")
+      return Response.json({
+        signed_in: true,
+        id: "user_mockadmin01",
+        role: "admin",
+        role_source: "manual",
+        email: "operator@example.com",
+        name: "Test Operator",
+        expires_at: "2099-01-01T00:00:00Z",
+        csrf_token: "mock-unit-csrf",
+      });
+    const rest = url.pathname.replace("/admin/v1/", "");
     const method = init?.method ?? "GET";
     const custom = override?.(method, rest, url);
     if (custom) return custom;
@@ -47,13 +58,11 @@ export function sentBody(
 /**
  * What the BFF answers a gateway path while `MODEL_GATEWAY_BASE_URL` is unset,
  * for a test stub that answers every other path itself. Undefined for a path
- * outside `/api/gateway/`.
+ * outside `/admin/v1/`.
  */
 export function noGateway(input: RequestInfo | URL): Response | undefined {
   if (
-    !new URL(String(input), "http://console").pathname.startsWith(
-      "/api/gateway/",
-    )
+    !new URL(String(input), "http://console").pathname.startsWith("/admin/v1/")
   )
     return undefined;
   return Response.json(

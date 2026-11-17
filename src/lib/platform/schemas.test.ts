@@ -94,7 +94,6 @@ import {
   GatewayCredentialSchema,
   GatewayDailyUsageSchema,
   GatewayDeploymentSchema,
-  GatewayKeyPolicySchema,
   GatewayProfileSchema,
   GatewayProviderSchema,
   GatewayUsagePageSchema,
@@ -363,8 +362,22 @@ describe("probe: the conformance gate catches lies, not only truths", () => {
   });
 });
 
+async function signInMock(base: string) {
+  const response = await fetch(`${base}/api/auth/login`, {
+    method: "POST",
+    headers: { origin: base, "content-type": "application/json" },
+    body: JSON.stringify({ login_name: "operator", password: "test-password" }),
+  });
+  expect(response.status).toBe(200);
+  const session = (await response.json()) as { csrf_token: string };
+  const cookie = response.headers.get("set-cookie")?.split(";")[0];
+  expect(cookie).toBeTruthy();
+  return { cookie: cookie!, "X-CSRF-Token": session.csrf_token, origin: base };
+}
+
 describe("the mock's constructed write-path responses conform too", () => {
   let base: string;
+  let browserHeaders: Awaited<ReturnType<typeof signInMock>>;
 
   const call = async (
     path: string,
@@ -385,6 +398,23 @@ describe("the mock's constructed write-path responses conform too", () => {
       headers: { "content-type": "application/json" },
     });
 
+  const browserCall = async (path: string, init: RequestInit) => {
+    const response = await fetch(`${base}${path}`, {
+      ...init,
+      headers: { ...browserHeaders, ...(init.headers ?? {}) },
+    });
+    expect(response.ok, `${init.method} ${path} -> ${response.status}`).toBe(
+      true,
+    );
+    return response.json();
+  };
+  const browserPostJSON = (path: string, body: unknown) =>
+    browserCall(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    });
+
   // The mock parses multipart with regexes rather than a real parser, so a
   // hand-rolled body is enough — and is what the console's proxy sends.
   const postMultipart = (path: string, body: string) =>
@@ -399,6 +429,7 @@ describe("the mock's constructed write-path responses conform too", () => {
       server.listen(0, "127.0.0.1", resolve),
     );
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    browserHeaders = await signInMock(base);
   });
 
   afterAll(async () => {
@@ -412,10 +443,10 @@ describe("the mock's constructed write-path responses conform too", () => {
     const envId = "env_byoc0000000000000001";
     const path = `/api/oauth/organizations/default/environments/${envId}/tokens`;
 
-    const before = await call(path, { method: "GET" });
+    const before = await browserCall(path, { method: "GET" });
     expectConforms(EnvironmentKeyPageSchema, before, `GET ${path}`);
 
-    const issued = await postJSON(path, { name: "conformance-runner" });
+    const issued = await browserPostJSON(path, { name: "conformance-runner" });
     expectConforms(EnvironmentKeyIssuedSchema, issued, `POST ${path}`);
     // The issuance response identifies no row — that is why the console has to
     // re-read the list rather than render from it (consoleapi.go:74-79).
@@ -424,7 +455,7 @@ describe("the mock's constructed write-path responses conform too", () => {
       "expires_in",
     ]);
 
-    const after = await call(path, { method: "GET" });
+    const after = await browserCall(path, { method: "GET" });
     expectConforms(EnvironmentKeyPageSchema, after, `GET ${path} (after)`);
     const rows = (after as { data: unknown[] }).data;
     expect(rows.length).toBe((before as { data: unknown[] }).data.length + 1);
@@ -436,7 +467,7 @@ describe("the mock's constructed write-path responses conform too", () => {
     const revoking = (id: string) =>
       fetch(`${base}${path}/${id}/revoke`, {
         method: "POST",
-        headers: { "x-api-key": API_KEY },
+        headers: browserHeaders,
       });
 
     const revoke = await revoking(newest.id);
@@ -448,7 +479,7 @@ describe("the mock's constructed write-path responses conform too", () => {
     // environment and coalesces the timestamp (envkeys.go:161-168); the row
     // leaves the listing because the SELECTs filter `revoked_at IS NULL`
     // (envkeys.go:121,133). Only 404 distinguishes "never issued here".
-    const afterRevoke = await call(path, { method: "GET" });
+    const afterRevoke = await browserCall(path, { method: "GET" });
     const remaining = (afterRevoke as { data: { id: string }[] }).data;
     expect(remaining.map((k) => k.id)).not.toContain(newest.id);
     expect(
@@ -471,27 +502,27 @@ describe("the mock's constructed write-path responses conform too", () => {
   // environment-key one on purpose: the two surfaces answer issuance with
   // *different* shapes, and a test that only ever saw one of them would let the
   // console quietly grow a single "console key" abstraction over both.
-  it("management keys: list, issue, then disable and archive", async () => {
+  it("owned API keys: list, issue, then disable and archive", async () => {
     const path =
       "/api/console/organizations/default/workspaces/default/api_keys";
 
-    const before = await call(path, { method: "GET" });
+    const before = await browserCall(path, { method: "GET" });
     expectConforms(ApiKeyListSchema, before, `GET ${path}`);
     // A bare array — neither the wire's keyset envelope nor files' classic one.
     expect(Array.isArray(before)).toBe(true);
 
     // `noStore(...)` wraps this route and only this one: it is the single
     // response in the console that carries a plaintext credential, and the
-    // proxy's response-header allowlist exists to carry that directive through.
+    // application edge preserves that directive.
     const issuing = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      headers: { ...browserHeaders, "content-type": "application/json" },
       body: JSON.stringify({ name: "no-store-check" }),
     });
     expect(issuing.headers.get("cache-control")).toBe("no-store");
     await issuing.json();
 
-    const issued = await postJSON(path, { name: "conformance-key" });
+    const issued = await browserPostJSON(path, { name: "conformance-key" });
     expectConforms(ApiKeyIssuedSchema, issued, `POST ${path}`);
     // The whole resource plus the plaintext, unlike the environment-key
     // surface's `{access_token, expires_in}`.
@@ -500,42 +531,35 @@ describe("the mock's constructed write-path responses conform too", () => {
     // "Never" is the absence of the field, and the response says so.
     expect((issued as { expires_at: string | null }).expires_at).toBe(null);
 
-    const after = await call(path, { method: "GET" });
+    const after = await browserCall(path, { method: "GET" });
     each(ApiKeySchema, after as unknown[], "issued listing");
     expect((after as { id: string }[]).map((k) => k.id)).toContain(id);
 
-    const disabled = await postJSON(`${path}/${id}`, { status: "inactive" });
+    const disabled = await browserPostJSON(`${path}/${id}`, {
+      status: "inactive",
+    });
     expectConforms(ApiKeySchema, disabled, `POST ${path}/${id}`);
     expect((disabled as { status: string }).status).toBe("inactive");
 
-    const archived = await postJSON(`${path}/${id}`, { status: "archived" });
+    const archived = await browserPostJSON(`${path}/${id}`, {
+      status: "archived",
+    });
     expect((archived as { status: string }).status).toBe("archived");
 
     // Archived is terminal: nothing may be patched onto it, the repeated
     // archive included.
     const again = await fetch(`${base}${path}/${id}`, {
       method: "POST",
-      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      headers: { ...browserHeaders, "content-type": "application/json" },
       body: JSON.stringify({ status: "archived" }),
     });
     expect(again.status).toBe(400);
 
-    // A key nobody issued belongs to the control plane's own environment
-    // variable, and this surface does not get to touch it — but it is still
-    // listed, because hiding it would be the worse lie.
-    const bootstrap = (after as { id: string; created_by: unknown }[]).find(
-      (k) => k.created_by === null,
-    );
-    expect(bootstrap).toBeDefined();
-    const refused = await fetch(`${base}${path}/${bootstrap!.id}`, {
-      method: "POST",
-      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
-      body: JSON.stringify({ status: "inactive" }),
-    });
-    expect(refused.status).toBe(400);
-    expect(await refused.json()).toMatchObject({
-      error: { message: expect.stringContaining("CONTROLPLANE_API_KEY") },
-    });
+    // Historical rows retain nullable attribution without new credential authority.
+    const historical = (
+      after as { created_by: unknown; principal: unknown }[]
+    ).find((key) => key.created_by === null);
+    expect(historical).toMatchObject({ principal: null });
   });
 
   it("agents: create, update, archive", async () => {
@@ -2217,97 +2241,76 @@ describe("the mock's constructed write-path responses conform too", () => {
     expect((await read(`/v1/skills/${id}/versions`)).status).toBe(404);
   });
 
-  // The mock's credential dispatch mirrors internal/api/server.go's, because
-  // the console's BFF is written against that ordering: a mock that
-  // authenticated more loosely would let a console bug through, and one that
-  // authenticated more strictly would fail a console that is right.
-  //
-  // These are the assertions that keep the two aligned. Nothing in the default
-  // e2e run reaches the human lane — that needs an identity provider, which is
-  // plan 08 slice 5's — so this is where it is exercised until then.
-  describe("credential dispatch", () => {
-    /** Header and payload are decoded, never verified: this is a mock, and shape is what routes. */
-    const jwt = (payload: object) => {
-      const part = (value: object) =>
-        Buffer.from(JSON.stringify(value)).toString("base64url");
-      return `${part({ alg: "RS256" })}.${part(payload)}.c2ln`;
-    };
-    const live = () =>
-      jwt({ sub: "u1", exp: Math.floor(Date.now() / 1000) + 60 });
-
-    const get = (headers: Record<string, string>) =>
+  describe("native credential boundaries", () => {
+    const publicGet = (headers: Record<string, string>) =>
       fetch(`${base}/v1/agents`, { headers });
+    const privatePath =
+      "/api/console/organizations/default/workspaces/default/api_keys";
 
-    it("accepts the management key, as it always has", async () => {
-      expect((await get({ "x-api-key": API_KEY })).status).toBe(200);
-      const wrong = await get({ "x-api-key": "nope" });
-      expect(wrong.status).toBe(401);
-      expect((await wrong.json()).error.message).toBe("invalid x-api-key");
+    it.each(["x-api-key", "bearer"])(
+      "accepts an owned fixture key on public API (%s)",
+      async (scheme) => {
+        const headers: Record<string, string> =
+          scheme === "x-api-key"
+            ? { "x-api-key": API_KEY }
+            : { authorization: `Bearer ${API_KEY}` };
+        expect((await publicGet(headers)).status).toBe(200);
+        expect((await fetch(`${base}${privatePath}`, { headers })).status).toBe(
+          401,
+        );
+      },
+    );
+
+    it("rejects human bearer tokens and browser cookies on public API", async () => {
+      expect(
+        (
+          await publicGet({
+            authorization: "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2ln",
+          })
+        ).status,
+      ).toBe(401);
+      const browser = await signInMock(base);
+      expect((await publicGet({ cookie: browser.cookie })).status).toBe(401);
     });
 
-    it("accepts a JWT-shaped Bearer on the human lane", async () => {
-      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
-        200,
-      );
-    });
-
-    // server.go dispatchManagementAuth: a non-empty x-api-key wins outright and
-    // the Bearer is never read. The console's BFF must therefore never send
-    // both — this is the mock half of that assertion.
-    it("gives a request carrying both to the management lane", async () => {
-      const both = await get({
-        "x-api-key": "nope",
-        authorization: `Bearer ${live()}`,
+    it("requires browser CSRF for private writes and refuses an expired session", async () => {
+      const browser = await signInMock(base);
+      const response = await fetch(`${base}${privatePath}`, {
+        method: "POST",
+        headers: {
+          cookie: browser.cookie,
+          origin: base,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "missing-csrf" }),
       });
-      expect(both.status).toBe(401);
-      expect((await both.json()).error.message).toBe("invalid x-api-key");
-    });
-
-    // identitylane.go: a Bearer without the JWT silhouette is left for the
-    // environment-key lane, which on a management path, for a key no
-    // environment issued, falls through to requireAPIKey and its unchanged
-    // message (envauth.go answerEnvironmentKey, #840). An unauthenticated
-    // caller learns nothing about whether SSO is configured.
-    it("does not read a non-JWT Bearer as a human credential", async () => {
-      const key = await get({ authorization: "Bearer sk-map-env01-abc" });
-      expect(key.status).toBe(401);
-      expect((await key.json()).error.message).toBe(
-        "x-api-key header is required",
-      );
-    });
-
-    it("refuses an expired token, and one this platform has stopped accepting", async () => {
-      const expired = await get({
-        authorization: `Bearer ${jwt({ sub: "u1", exp: 1 })}`,
+      expect(response.status).toBe(403);
+      await fetch(`${base}/__expire-identity`, { method: "POST" });
+      const expired = await fetch(`${base}${privatePath}`, {
+        headers: browser,
       });
       expect(expired.status).toBe(401);
-      expect((await expired.json()).error.message).toBe(
-        "authentication failed",
-      );
-
-      await fetch(`${base}/__expire-identity`, { method: "POST" });
-      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
-        401,
-      );
-      // …and the hook is undone by the reset every spec already runs.
+      expect(expired.headers.get("x-platform-signed-out")).toBe("1");
       resetStore();
-      expect((await get({ authorization: `Bearer ${live()}` })).status).toBe(
-        200,
-      );
     });
   });
 });
-
 // The model gateway double (plan 10) on its own server, as the real gateway is
 // one. Its seeds and the shapes it constructs on writes are checked here for
 // the reason the platform's are above.
 describe("the mock model gateway conforms to the admin API's views", () => {
   let base: string;
+  let platformBase: string;
+  let browserHeaders: Awaited<ReturnType<typeof signInMock>>;
 
   const send = (method: string, path: string, body?: unknown) =>
     fetch(`${base}/admin/v1/${path}`, {
       method,
-      headers: { "x-api-key": API_KEY, "content-type": "application/json" },
+      headers: {
+        ...browserHeaders,
+        origin: base,
+        "content-type": "application/json",
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
 
@@ -2325,12 +2328,20 @@ describe("the mock model gateway conforms to the admin API's views", () => {
       gatewayServer.listen(0, "127.0.0.1", resolve),
     );
     base = `http://127.0.0.1:${(gatewayServer.address() as AddressInfo).port}`;
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    platformBase = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    browserHeaders = await signInMock(platformBase);
   });
 
   afterAll(async () => {
     resetStore();
     await new Promise<void>((resolve, reject) =>
       gatewayServer.close((error) => (error ? reject(error) : resolve())),
+    );
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
     );
   });
 
@@ -2341,7 +2352,6 @@ describe("the mock model gateway conforms to the admin API's views", () => {
     each(GatewayCredentialSchema, seed.credentials, "credentials");
     each(GatewayDeploymentSchema, seed.deployments, "deployments");
     each(GatewayAliasSchema, seed.aliases, "aliases");
-    each(GatewayKeyPolicySchema, seed.keyPolicies, "keyPolicies");
     each(GatewayDailyUsageSchema, seed.daily, "daily");
     each(GatewayUsageRowSchema, seed.ledger, "ledger");
   });
@@ -2351,11 +2361,6 @@ describe("the mock model gateway conforms to the admin API's views", () => {
     each(GatewayProviderSchema, await data("providers"), "GET providers");
     each(GatewayDeploymentSchema, await data("deployments"), "GET deployments");
     each(GatewayAliasSchema, await data("aliases"), "GET aliases");
-    each(
-      GatewayKeyPolicySchema,
-      await data("key_policies"),
-      "GET key_policies",
-    );
     each(GatewayDailyUsageSchema, await data("usage/daily"), "GET usage/daily");
     expectConforms(
       GatewayUsagePageSchema,
@@ -2364,7 +2369,7 @@ describe("the mock model gateway conforms to the admin API's views", () => {
     );
   });
 
-  it("a provider through to a key policy, then torn down in reverse", async () => {
+  it("a provider through to a model, then torn down in reverse", async () => {
     const provider = (await call("POST", "providers", {
       name: "Conformance",
       profile: "openai-generic",
@@ -2403,16 +2408,8 @@ describe("the mock model gateway conforms to the admin API's views", () => {
       "GET aliases/{name}",
     );
 
-    const policy = await call("POST", "key_policies/apikey_new", {
-      aliases: ["conformance/model"],
-      rpm: null,
-      tpm: 1000,
-    });
-    expectConforms(GatewayKeyPolicySchema, policy, "POST key_policies/{id}");
-
     // The store's rules: each delete is refused while something names it.
     for (const [path, named] of [
-      ["aliases/conformance/model", "is granted to api keys"],
       [`deployments/${deployment.id}`, "is a target of aliases"],
       [`providers/${provider.id}`, "has deployments"],
     ]) {
@@ -2423,10 +2420,6 @@ describe("the mock model gateway conforms to the admin API's views", () => {
       );
     }
 
-    expect(await call("DELETE", "key_policies/apikey_new")).toEqual({
-      type: "key_policy_deleted",
-      api_key_id: "apikey_new",
-    });
     expect(await call("DELETE", "aliases/conformance/model")).toEqual({
       type: "alias_deleted",
       name: "conformance/model",
@@ -2458,19 +2451,11 @@ describe("the mock model gateway conforms to the admin API's views", () => {
   });
 
   it("probe: answers only on its own port, never the platform's", async () => {
-    // The platform double serves no /admin/v1 route, so a console that sent
-    // its gateway calls to PLATFORM_BASE_URL fails e2e instead of passing.
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
-    try {
-      const port = (server.address() as AddressInfo).port;
-      const res = await fetch(`http://127.0.0.1:${port}/admin/v1/aliases`, {
-        headers: { "x-api-key": API_KEY },
-      });
-      expect(res.status).toBe(404);
-    } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
+    // The platform double serves no /admin/v1 route; an edge routing mistake
+    // must not pass through the control plane.
+    const res = await fetch(`${platformBase}/admin/v1/aliases`, {
+      headers: { "x-api-key": API_KEY },
+    });
+    expect(res.status).toBe(404);
   });
 });

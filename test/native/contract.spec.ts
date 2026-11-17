@@ -309,8 +309,22 @@ test("real native password/setup, current authority, management, private bytes/S
   ).toEqual({ local: [], session: [] });
   for (const path of ["/api/login", "/api/platform/v1/agents"]) {
     const response = await page.request.get(path);
-    expect(response.status()).toBe(path === "/api/login" ? 405 : 404);
+    expect(response.status()).toBe(404);
     expect(response.headers()["set-cookie"]).toBeUndefined();
+  }
+  // The page server itself owns neither a browser RP nor a credential BFF.
+  // A cookie sent directly to Next must not recover any removed authority.
+  for (const path of [
+    "/api/auth/session",
+    "/api/auth/login",
+    "/api/auth/callback",
+    "/api/console/organizations/default/workspaces/default/api_keys",
+    "/api/oauth/organizations/default/environments/env_absent/tokens",
+    "/api/gateway/admin/v1/profiles",
+  ]) {
+    const response = await page.request.get(`http://127.0.0.1:38100${path}`);
+    expect(response.status(), path).toBe(404);
+    expect(response.headers()["set-cookie"], path).toBeUndefined();
   }
   expect(
     (await page.request.post("/api/login", { data: { password } })).status(),

@@ -238,27 +238,17 @@ for (const theme of ["light", "dark"] as const) {
  * looking perfectly correct on screen. The assertions below are the linkage
  * itself; the axe pass is what catches breaking it from the other end.
  */
-test("a rejected password marks and names its field", async ({ page }) => {
+test("a refused native login is announced accessibly", async ({ page }) => {
   await page.goto("/login");
   await page.locator("form[data-hydrated]").waitFor();
-  const field = page.getByLabel("Password");
-  await expect(field).toHaveAttribute("aria-invalid", "false");
-
-  await field.fill("not-the-password");
+  await page.getByLabel("Login name").fill("operator");
+  await page.getByLabel("Password").fill("not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  // By id, not by role: Next mounts its own empty `role="alert"` route
-  // announcer on every page, so `getByRole("alert")` is always ambiguous here.
-  const message = page.locator("#password-error");
-  await expect(message).toHaveText("Wrong password.");
-  await expect(message).toHaveAttribute("role", "alert");
-  await expect(field).toHaveAttribute("aria-invalid", "true");
-  await expect(field).toHaveAttribute("aria-describedby", "password-error");
+  const message = page
+    .getByRole("alert")
+    .filter({ hasText: "invalid login name or password" });
+  await expect(message).toBeVisible();
   await expectNoViolations(page);
-
-  // Typing retracts the verdict, so the field does not stay announced invalid
-  // while it is being corrected.
-  await field.fill("t");
-  await expect(field).toHaveAttribute("aria-invalid", "false");
 });
 
 test("an unparseable raw agent config marks and names its textarea", async ({

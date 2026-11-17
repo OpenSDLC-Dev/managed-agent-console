@@ -43,9 +43,6 @@ func main() {
 			log.Fatal(err)
 		}
 		defer pool.Close()
-		if err := api.EnsureAPIKey(ctx, pool, "bootstrap", "native-test-bootstrap"); err != nil {
-			log.Fatal(err)
-		}
 		origin, addr := "http://127.0.0.1:38200", "127.0.0.1:38110"
 		if mode == login.ModeOIDC {
 			origin, addr = "http://127.0.0.1:38201", "127.0.0.1:38111"
@@ -89,7 +86,7 @@ func main() {
 			}
 		}()
 		{
-			gateway, err := admin.New(admin.Config{Store: mgstore.New(pool), Cipher: cipher, BootstrapKey: "native-test-bootstrap", Login: manager, Prober: noModels{}})
+			gateway, err := admin.New(admin.Config{Store: mgstore.New(pool), Cipher: cipher, Login: manager, Prober: noModels{}})
 			if err != nil {
 				log.Fatal(err)
 			}

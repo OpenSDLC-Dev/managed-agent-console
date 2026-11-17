@@ -52,7 +52,7 @@ test("create an agent from a starter template", async ({ page }) => {
     'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
   );
   await expect(page.getByTestId("curl-block")).toContainText(
-    "x-api-key: $PLATFORM_API_KEY",
+    "x-api-key: $ISSUED_API_KEY",
   );
 
   // The template names a model the gateway lacks, so the select starts empty.
@@ -155,10 +155,13 @@ test("archive an agent from its detail page", async ({ page }) => {
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/api/platform/v1/agents/*/archive", async (route) => {
-    await gate;
-    await route.continue();
-  });
+  await page.route(
+    "**/api/organizations/default/proxy/v1/agents/*/archive",
+    async (route) => {
+      await gate;
+      await route.continue();
+    },
+  );
   const actions = page
     .getByRole("main")
     .getByRole("button", { name: "More actions" });
@@ -223,7 +226,9 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
   });
   await page.getByRole("radio", { name: "rendered" }).click();
   const submitted = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith("/api/platform/v1/agents"),
+    (r) =>
+      r.method() === "POST" &&
+      r.url().endsWith("/api/organizations/default/proxy/v1/agents"),
   );
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
   expect((await submitted).postDataJSON()).toEqual(config);

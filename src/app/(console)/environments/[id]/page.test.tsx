@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -75,7 +76,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -116,7 +117,7 @@ describe("EnvironmentDetailPage", () => {
   it("shows the detail skeleton while the environment loads", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -228,7 +229,7 @@ describe("EnvironmentDetailPage", () => {
         ([, init]) => init?.method === "POST",
       );
       expect(String(post?.[0])).toBe(
-        "/api/platform/v1/environments/env_1/archive",
+        "/api/organizations/default/proxy/v1/environments/env_1/archive",
       );
     });
   });
@@ -253,7 +254,9 @@ describe("EnvironmentDetailPage", () => {
       const del = fetchMock.mock.calls.find(
         ([, init]) => init?.method === "DELETE",
       );
-      expect(String(del?.[0])).toBe("/api/platform/v1/environments/env_1");
+      expect(String(del?.[0])).toBe(
+        "/api/organizations/default/proxy/v1/environments/env_1",
+      );
     });
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/environments"));
   });

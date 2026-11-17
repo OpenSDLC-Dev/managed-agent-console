@@ -1,3 +1,4 @@
+import { browserPost, browserDelete } from "./browser-write";
 import { statSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
@@ -18,7 +19,11 @@ test("Resources lists the session's own files with the reference's request, offe
 }) => {
   await signIn(page);
   const listed = page.waitForRequest((request) =>
-    request.url().includes(`/api/platform/v1/files?scope_id=${RESEARCH}`),
+    request
+      .url()
+      .includes(
+        `/api/organizations/default/proxy/v1/files?scope_id=${RESEARCH}`,
+      ),
   );
   await page.goto(`/sessions/${RESEARCH}?inspector=resources`);
   const request = await listed;
@@ -50,7 +55,7 @@ test("Resources lists the session's own files with the reference's request, offe
   });
   await expect(download).toHaveAttribute(
     "href",
-    "/api/platform/v1/files/file_output000000000001/content",
+    "/api/organizations/default/proxy/v1/files/file_output000000000001/content",
   );
   await expect(download).toHaveAttribute("download", "summary.xlsx");
   await expect(panel.getByRole("link", { name: /^Download/ })).toHaveCount(1);
@@ -78,7 +83,7 @@ test("the files note is announced through the shell's region, in the document be
   let release = () => {};
   await page.route(
     (url) =>
-      url.pathname === "/api/platform/v1/files" &&
+      url.pathname === "/api/organizations/default/proxy/v1/files" &&
       url.searchParams.has("scope_id"),
     async (route) => {
       await new Promise<void>((resolve) => (release = resolve));
@@ -112,8 +117,9 @@ test("a deployment fire mints its session's copy, shown in that session's Resour
 }) => {
   await signIn(page);
   const run = (await (
-    await page.request.post(
-      "/api/platform/v1/deployments/depl_weekresearch00000001/run",
+    await browserPost(
+      page,
+      "/api/organizations/default/proxy/v1/deployments/depl_weekresearch00000001/run",
       { data: {} },
     )
   ).json()) as { session_id: string };
@@ -172,7 +178,7 @@ test("a copy's content is refused as not downloadable, as the platform refuses a
 }) => {
   await signIn(page);
   const copy = await page.request.get(
-    "/api/platform/v1/files/file_researchcopy0000001/content",
+    "/api/organizations/default/proxy/v1/files/file_researchcopy0000001/content",
   );
   expect(copy.status()).toBe(400);
   expect((await copy.json()).error).toEqual({
@@ -182,7 +188,7 @@ test("a copy's content is refused as not downloadable, as the platform refuses a
     details: { error_code: "file_not_downloadable" },
   });
   const missing = await page.request.get(
-    "/api/platform/v1/files/file_absent000000000001/content",
+    "/api/organizations/default/proxy/v1/files/file_absent000000000001/content",
   );
   expect(missing.status()).toBe(404);
   expect((await missing.json()).error.message).toBe(
@@ -233,7 +239,10 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
   const mount = { type: "file", file_id: UPLOAD };
   const goneBy = {
     deleted: (page: Page) =>
-      page.request.delete(`/api/platform/v1/files/${UPLOAD}`),
+      browserDelete(
+        page,
+        `/api/organizations/default/proxy/v1/files/${UPLOAD}`,
+      ),
     expired: (page: Page) =>
       page.request.post(`http://127.0.0.1:18080/__expire-file?id=${UPLOAD}`),
   };
@@ -245,20 +254,29 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
       expect((await gone(page)).ok()).toBe(true);
       const list = async (path: string) =>
         (
-          (await (await page.request.get(`/api/platform/v1/${path}`)).json())
-            .data as { id: string }[]
+          (
+            await (
+              await page.request.get(
+                `/api/organizations/default/proxy/v1/${path}`,
+              )
+            ).json()
+          ).data as { id: string }[]
         ).map((row) => row.id);
       const gated = "sesn_gatedbash00000000001";
       const sessionsBefore = await list("sessions?limit=100");
 
       // sessions.go requestWording: the reference's sentence.
-      const created = await page.request.post("/api/platform/v1/sessions", {
-        data: {
-          agent: "agent_researcher00000000001",
-          environment_id: "env_egress000000000000001",
-          resources: [mount],
+      const created = await browserPost(
+        page,
+        "/api/organizations/default/proxy/v1/sessions",
+        {
+          data: {
+            agent: "agent_researcher00000000001",
+            environment_id: "env_egress000000000000001",
+            resources: [mount],
+          },
         },
-      });
+      );
       expect(created.status()).toBe(404);
       expect((await created.json()).error).toEqual({
         type: "not_found_error",
@@ -266,8 +284,9 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
       });
 
       // sessionresources.go errFileGone, in the platform's own words.
-      const added = await page.request.post(
-        `/api/platform/v1/sessions/${gated}/resources`,
+      const added = await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/sessions/${gated}/resources`,
         { data: mount },
       );
       expect(added.status()).toBe(404);
@@ -277,8 +296,9 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
       });
 
       // deploymentruns.go runDeployment: a failed run, not a session.
-      const fired = await page.request.post(
-        "/api/platform/v1/deployments/depl_weekresearch00000001/run",
+      const fired = await browserPost(
+        page,
+        "/api/organizations/default/proxy/v1/deployments/depl_weekresearch00000001/run",
         { data: {} },
       );
       expect(fired.status()).toBe(200);
@@ -291,7 +311,7 @@ test.describe("a mount whose source is gone is refused as the platform refuses i
       const runs = (
         await (
           await page.request.get(
-            "/api/platform/v1/deployment_runs?deployment_id=depl_weekresearch00000001",
+            "/api/organizations/default/proxy/v1/deployment_runs?deployment_id=depl_weekresearch00000001",
           )
         ).json()
       ).data;
@@ -311,21 +331,30 @@ test("a deployment fire is refused by its first resource gone, in its order", as
   const store = "memstore_projectnotes000001";
   const memory = { type: "memory_store", memory_store_id: store };
   const deploy = async (name: string, resources: object[]) => {
-    const created = await page.request.post("/api/platform/v1/deployments", {
-      data: {
-        name,
-        agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
-        environment_id: "env_egress000000000000001",
-        initial_events: [{ type: "user.message", content: "Fixture only" }],
-        resources,
+    const created = await browserPost(
+      page,
+      "/api/organizations/default/proxy/v1/deployments",
+      {
+        data: {
+          name,
+          agent: {
+            type: "agent",
+            id: "agent_taskrunner0000000001",
+            version: 1,
+          },
+          environment_id: "env_egress000000000000001",
+          initial_events: [{ type: "user.message", content: "Fixture only" }],
+          resources,
+        },
       },
-    });
+    );
     expect(created.ok()).toBe(true);
     return ((await created.json()) as { id: string }).id;
   };
   const fire = async (id: string) => {
-    const fired = await page.request.post(
-      `/api/platform/v1/deployments/${id}/run`,
+    const fired = await browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/deployments/${id}/run`,
       { data: {} },
     );
     expect(fired.status()).toBe(200);
@@ -346,11 +375,19 @@ test("a deployment fire is refused by its first resource gone, in its order", as
   // (materializeResourceInputs), the store in runWording's sentence.
   expect(
     (
-      await page.request.post(`/api/platform/v1/memory_stores/${store}/archive`)
+      await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/memory_stores/${store}/archive`,
+      )
     ).ok(),
   ).toBe(true);
   expect(
-    (await page.request.delete(`/api/platform/v1/files/${UPLOAD}`)).ok(),
+    (
+      await browserDelete(
+        page,
+        `/api/organizations/default/proxy/v1/files/${UPLOAD}`,
+      )
+    ).ok(),
   ).toBe(true);
   expect(await fire(storeFirst)).toEqual({
     type: "memory_store_archived_error",
@@ -363,7 +400,12 @@ test("a deployment fire is refused by its first resource gone, in its order", as
   });
   // A store deleted outright is a resource not found.
   expect(
-    (await page.request.delete(`/api/platform/v1/memory_stores/${store}`)).ok(),
+    (
+      await browserDelete(
+        page,
+        `/api/organizations/default/proxy/v1/memory_stores/${store}`,
+      )
+    ).ok(),
   ).toBe(true);
   expect(await fire(storeFirst)).toEqual({
     type: "session_resource_not_found_error",
@@ -374,8 +416,9 @@ test("a deployment fire is refused by its first resource gone, in its order", as
 
 /** Answers a resources add with its status and, refused, the platform's words. */
 async function addResource(page: Page, session: string, data: unknown) {
-  const response = await page.request.post(
-    `/api/platform/v1/sessions/${session}/resources`,
+  const response = await browserPost(
+    page,
+    `/api/organizations/default/proxy/v1/sessions/${session}/resources`,
     { data: data as object },
   );
   const body = await response.json();
@@ -395,19 +438,31 @@ async function freshSession(
   const agent = tools
     ? (
         (await (
-          await page.request.post("/api/platform/v1/agents", {
-            data: { name: "Fixture agent", model: "claude-sonnet-4-8", tools },
-          })
+          await browserPost(
+            page,
+            "/api/organizations/default/proxy/v1/agents",
+            {
+              data: {
+                name: "Fixture agent",
+                model: "claude-sonnet-4-8",
+                tools,
+              },
+            },
+          )
         ).json()) as { id: string }
       ).id
     : "agent_researcher00000000001";
-  const created = await page.request.post("/api/platform/v1/sessions", {
-    data: {
-      agent,
-      environment_id: "env_egress000000000000001",
-      resources,
+  const created = await browserPost(
+    page,
+    "/api/organizations/default/proxy/v1/sessions",
+    {
+      data: {
+        agent,
+        environment_id: "env_egress000000000000001",
+        resources,
+      },
     },
-  });
+  );
   expect(created.ok()).toBe(true);
   return ((await created.json()) as { id: string }).id;
 }
@@ -507,7 +562,9 @@ test("resources add judges the body before the session, in the platform's order 
   expect(
     (
       await (
-        await page.request.get(`/api/platform/v1/files?scope_id=${gated}`)
+        await page.request.get(
+          `/api/organizations/default/proxy/v1/files?scope_id=${gated}`,
+        )
       ).json()
     ).data,
   ).toEqual([]);
@@ -523,9 +580,13 @@ test("session create and a deployment's create and update decode the body as res
     ["deployments", "name is required"],
   ] as const;
   const refused = async (path: string, data: unknown) => {
-    const response = await page.request.post(`/api/platform/v1/${path}`, {
-      data: data as object,
-    });
+    const response = await browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/${path}`,
+      {
+        data: data as object,
+      },
+    );
     return [response.status(), (await response.json()).error?.message];
   };
   for (const [path, first] of routes) {
@@ -563,9 +624,13 @@ test("session create and a deployment's create and update decode the body as res
   expect(
     await refused(update, Buffer.from('{"name":"\xff"}', "latin1")),
   ).toEqual([400, "request body must be valid UTF-8"]);
-  const unchanged = await page.request.post(`/api/platform/v1/${update}`, {
-    data: Buffer.from("null"),
-  });
+  const unchanged = await browserPost(
+    page,
+    `/api/organizations/default/proxy/v1/${update}`,
+    {
+      data: Buffer.from("null"),
+    },
+  );
   expect(unchanged.status()).toBe(200);
   expect((await unchanged.json()).name).toBe("Manual task runner");
 });
@@ -580,25 +645,29 @@ test("a deployment judges a repository as session create does, in the deployment
     authorization_token: "test-only-token",
   };
   const deploy = (resources: unknown[], id?: string) =>
-    page.request.post(`/api/platform/v1/deployments${id ? `/${id}` : ""}`, {
-      data: {
-        ...(id
-          ? {}
-          : {
-              name: "Repositories",
-              agent: {
-                type: "agent",
-                id: "agent_taskrunner0000000001",
-                version: 1,
-              },
-              environment_id: "env_egress000000000000001",
-              initial_events: [
-                { type: "user.message", content: "Fixture only" },
-              ],
-            }),
-        resources,
+    browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/deployments${id ? `/${id}` : ""}`,
+      {
+        data: {
+          ...(id
+            ? {}
+            : {
+                name: "Repositories",
+                agent: {
+                  type: "agent",
+                  id: "agent_taskrunner0000000001",
+                  version: 1,
+                },
+                environment_id: "env_egress000000000000001",
+                initial_events: [
+                  { type: "user.message", content: "Fixture only" },
+                ],
+              }),
+          resources,
+        },
       },
-    });
+    );
   const refused = async (resources: unknown[], id?: string) => {
     const response = await deploy(resources, id);
     return [response.status(), (await response.json()).error?.message];
@@ -703,12 +772,15 @@ test("a repository's token rotation judges the body, then the ids' shapes, the s
   ]);
   const [repoId, fileId] = (
     (await (
-      await page.request.get(`/api/platform/v1/sessions/${session}`)
+      await page.request.get(
+        `/api/organizations/default/proxy/v1/sessions/${session}`,
+      )
     ).json()) as { resources: { id: string }[] }
   ).resources.map((resource) => resource.id);
   const rotate = async (data: unknown, target = session, resource = repoId) => {
-    const response = await page.request.post(
-      `/api/platform/v1/sessions/${target}/resources/${resource}`,
+    const response = await browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/sessions/${target}/resources/${resource}`,
       { data: data as object },
     );
     const body = await response.json();
@@ -747,8 +819,9 @@ test("a repository's token rotation judges the body, then the ids' shapes, the s
   // malformed session id, then checkResourceID's for any id but a sesrsc_
   // one, in the platform's envelope and words.
   const shaped = async (target: string, resource: string) => {
-    const response = await page.request.post(
-      `/api/platform/v1/sessions/${target}/resources/${resource}`,
+    const response = await browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/sessions/${target}/resources/${resource}`,
       { data: token },
     );
     return [response.status(), (await response.json()).error];
@@ -795,9 +868,13 @@ test("a repository's token rotation judges the body, then the ids' shapes, the s
   const archived = await freshSession(page, undefined, [repo]);
   expect(
     (
-      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
-        data: {},
-      })
+      await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/sessions/${archived}/archive`,
+        {
+          data: {},
+        },
+      )
     ).ok(),
   ).toBe(true);
   expect(await rotate(token, archived, "sesrsc_absent0000000000001")).toEqual([
@@ -825,9 +902,13 @@ test("resources add then refuses an archived session, one a dream holds, and an 
   const archived = await freshSession(page);
   expect(
     (
-      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
-        data: {},
-      })
+      await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/sessions/${archived}/archive`,
+        {
+          data: {},
+        },
+      )
     ).ok(),
   ).toBe(true);
   expect(await refused(archived, { ...mount, mount_path: 42 })).toEqual([
@@ -869,7 +950,9 @@ test("resources add then refuses an archived session, one a dream holds, and an 
   expect(
     (
       await (
-        await page.request.get(`/api/platform/v1/files?scope_id=${bashOnly}`)
+        await page.request.get(
+          `/api/organizations/default/proxy/v1/files?scope_id=${bashOnly}`,
+        )
       ).json()
     ).data,
   ).toEqual([]);
@@ -916,7 +999,9 @@ test("resources add stores the resolved mount path, and refuses one taken or abo
   // The session stores what the add answered.
   const stored = (
     (await (
-      await page.request.get(`/api/platform/v1/sessions/${session}`)
+      await page.request.get(
+        `/api/organizations/default/proxy/v1/sessions/${session}`,
+      )
     ).json()) as { resources: { mount_path: string }[] }
   ).resources.map((resource) => resource.mount_path);
   expect(stored).toEqual(
@@ -953,13 +1038,17 @@ test("session create resolves and judges each mount as resources add does, in it
 }) => {
   await signIn(page);
   const create = async (resources: object[]) => {
-    const response = await page.request.post("/api/platform/v1/sessions", {
-      data: {
-        agent: "agent_researcher00000000001",
-        environment_id: "env_egress000000000000001",
-        resources,
+    const response = await browserPost(
+      page,
+      "/api/organizations/default/proxy/v1/sessions",
+      {
+        data: {
+          agent: "agent_researcher00000000001",
+          environment_id: "env_egress000000000000001",
+          resources,
+        },
       },
-    });
+    );
     const body = await response.json();
     return {
       status: response.status(),
@@ -985,7 +1074,11 @@ test("session create resolves and judges each mount as resources add does, in it
     ...(mountPath === undefined ? {} : { mount_path: mountPath }),
   });
   const sessionsBefore = (
-    await (await page.request.get("/api/platform/v1/sessions?limit=100")).json()
+    await (
+      await page.request.get(
+        "/api/organizations/default/proxy/v1/sessions?limit=100",
+      )
+    ).json()
   ).data.length;
 
   // parseFileResource, in session create's words where the reference was
@@ -1028,7 +1121,9 @@ test("session create resolves and judges each mount as resources add does, in it
   expect(
     (
       await (
-        await page.request.get("/api/platform/v1/sessions?limit=100")
+        await page.request.get(
+          "/api/organizations/default/proxy/v1/sessions?limit=100",
+        )
       ).json()
     ).data.length,
   ).toBe(sessionsBefore);
@@ -1049,7 +1144,7 @@ test("a deployment echoes a file's mount path as given, judged resolved, and its
 }) => {
   await signIn(page);
   const deploy = (resources: object[]) =>
-    page.request.post("/api/platform/v1/deployments", {
+    browserPost(page, "/api/organizations/default/proxy/v1/deployments", {
       data: {
         name: "Mounts",
         agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
@@ -1083,13 +1178,16 @@ test("a deployment echoes a file's mount path as given, judged resolved, and its
   };
   expect(deployment.resources[0].mount_path).toBe("/uploads/notes.md");
   const run = (await (
-    await page.request.post(
-      `/api/platform/v1/deployments/${deployment.id}/run`,
+    await browserPost(
+      page,
+      `/api/organizations/default/proxy/v1/deployments/${deployment.id}/run`,
       { data: {} },
     )
   ).json()) as { session_id: string };
   const session = (await (
-    await page.request.get(`/api/platform/v1/sessions/${run.session_id}`)
+    await page.request.get(
+      `/api/organizations/default/proxy/v1/sessions/${run.session_id}`,
+    )
   ).json()) as { resources: { mount_path: string }[] };
   expect(session.resources.map((resource) => resource.mount_path)).toEqual([
     "/mnt/session/uploads/notes.md",
@@ -1101,8 +1199,9 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
 }) => {
   await signIn(page);
   const remove = async (session: string, resource: string) => {
-    const response = await page.request.delete(
-      `/api/platform/v1/sessions/${session}/resources/${resource}`,
+    const response = await browserDelete(
+      page,
+      `/api/organizations/default/proxy/v1/sessions/${session}/resources/${resource}`,
     );
     const body = await response.json();
     return [response.status(), body.error?.message ?? body.type];
@@ -1116,8 +1215,9 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
   const withStore = await freshSession(page, undefined, [
     { type: "memory_store", memory_store_id: store },
   ]);
-  const refused = await page.request.delete(
-    `/api/platform/v1/sessions/${withStore}/resources/${store}`,
+  const refused = await browserDelete(
+    page,
+    `/api/organizations/default/proxy/v1/sessions/${withStore}/resources/${store}`,
   );
   expect(refused.status()).toBe(404);
   expect((await refused.json()).error).toEqual({
@@ -1127,7 +1227,9 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
   // The element stays, as the recording's next read
   // (`session.resources.list.after-delete-attempt`) has it.
   const kept = (await (
-    await page.request.get(`/api/platform/v1/sessions/${withStore}`)
+    await page.request.get(
+      `/api/organizations/default/proxy/v1/sessions/${withStore}`,
+    )
   ).json()) as { resources: { type: string; memory_store_id?: string }[] };
   expect(kept.resources).toEqual([
     expect.objectContaining({ type: "memory_store", memory_store_id: store }),
@@ -1138,8 +1240,9 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
   ]);
   // checkID comes first: a malformed session id is the session's 404. It
   // reads the shape alone, so any known prefix passes it, an agent's too.
-  const malformed = await page.request.delete(
-    `/api/platform/v1/sessions/undefined/resources/${store}`,
+  const malformed = await browserDelete(
+    page,
+    `/api/organizations/default/proxy/v1/sessions/undefined/resources/${store}`,
   );
   expect(malformed.status()).toBe(404);
   expect((await malformed.json()).error).toEqual({
@@ -1179,7 +1282,9 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
   ]);
   const repoId = (
     (await (
-      await page.request.get(`/api/platform/v1/sessions/${withRepo}`)
+      await page.request.get(
+        `/api/organizations/default/proxy/v1/sessions/${withRepo}`,
+      )
     ).json()) as { resources: { id: string }[] }
   ).resources[0].id;
   expect(await remove(withRepo, repoId)).toEqual([
@@ -1207,9 +1312,13 @@ test("resources remove refuses any id but a sesrsc_ one first, then reads the se
   const archived = await freshSession(page);
   expect(
     (
-      await page.request.post(`/api/platform/v1/sessions/${archived}/archive`, {
-        data: {},
-      })
+      await browserPost(
+        page,
+        `/api/organizations/default/proxy/v1/sessions/${archived}/archive`,
+        {
+          data: {},
+        },
+      )
     ).ok(),
   ).toBe(true);
   expect(await remove(archived, "sesrsc_absent0000000000001")).toEqual([
@@ -1229,9 +1338,13 @@ test("a session create and a deployment's fire suffix the mounts of stores that 
   const store = async (name: string) =>
     (
       (await (
-        await page.request.post("/api/platform/v1/memory_stores", {
-          data: { name },
-        })
+        await browserPost(
+          page,
+          "/api/organizations/default/proxy/v1/memory_stores",
+          {
+            data: { name },
+          },
+        )
       ).json()) as { id: string }
     ).id;
   // The fixture's "Project notes" claims project-notes first; "Project
@@ -1254,25 +1367,32 @@ test("a session create and a deployment's fire suffix the mounts of stores that 
   const mounts = async (session: string) =>
     (
       (await (
-        await page.request.get(`/api/platform/v1/sessions/${session}`)
+        await page.request.get(
+          `/api/organizations/default/proxy/v1/sessions/${session}`,
+        )
       ).json()) as { resources: { mount_path: string }[] }
     ).resources.map((resource) => resource.mount_path);
 
   expect(await mounts(await freshSession(page, undefined, memory))).toEqual(
     expected,
   );
-  const deployment = await page.request.post("/api/platform/v1/deployments", {
-    data: {
-      name: "Slugs alike",
-      agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
-      environment_id: "env_egress000000000000001",
-      initial_events: [{ type: "user.message", content: "Fixture only" }],
-      resources: memory,
+  const deployment = await browserPost(
+    page,
+    "/api/organizations/default/proxy/v1/deployments",
+    {
+      data: {
+        name: "Slugs alike",
+        agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },
+        environment_id: "env_egress000000000000001",
+        initial_events: [{ type: "user.message", content: "Fixture only" }],
+        resources: memory,
+      },
     },
-  });
+  );
   expect(deployment.ok()).toBe(true);
-  const fired = await page.request.post(
-    `/api/platform/v1/deployments/${((await deployment.json()) as { id: string }).id}/run`,
+  const fired = await browserPost(
+    page,
+    `/api/organizations/default/proxy/v1/deployments/${((await deployment.json()) as { id: string }).id}/run`,
     { data: {} },
   );
   const run = (await fired.json()) as { session_id: string };
@@ -1284,8 +1404,9 @@ test("a file's delete and a file rubric answer a missing or expired file in the 
 }) => {
   await signIn(page);
   // files.go deleteFile: checkFileID's words.
-  const gone = await page.request.delete(
-    "/api/platform/v1/files/file_absent000000000001",
+  const gone = await browserDelete(
+    page,
+    "/api/organizations/default/proxy/v1/files/file_absent000000000001",
   );
   expect(gone.status()).toBe(404);
   expect((await gone.json()).error).toEqual({
@@ -1307,8 +1428,9 @@ test("a file's delete and a file rubric answer a missing or expired file in the 
     rubric: { type: "file", file_id: UPLOAD },
   };
   const send = async (events: object[]) => {
-    const response = await page.request.post(
-      "/api/platform/v1/sessions/sesn_gatedbash00000000001/events",
+    const response = await browserPost(
+      page,
+      "/api/organizations/default/proxy/v1/sessions/sesn_gatedbash00000000001/events",
       { data: { events } },
     );
     return [response.status(), (await response.json()).error?.message];
@@ -1341,7 +1463,7 @@ test("a file's delete and a file rubric answer a missing or expired file in the 
   const events = (
     await (
       await page.request.get(
-        "/api/platform/v1/sessions/sesn_gatedbash00000000001/events?limit=100",
+        "/api/organizations/default/proxy/v1/sessions/sesn_gatedbash00000000001/events?limit=100",
       )
     ).json()
   ).data as { type: string }[];

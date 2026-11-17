@@ -1,5 +1,5 @@
 import { defineConfig } from "@playwright/test";
-import { LIVE_CONSOLE_PASSWORD, resolveLiveEnv } from "./test/e2e-live/env";
+import { resolveLiveEnv } from "./test/e2e-live/env";
 import { ensureLoopbackProxyBypass } from "./test/playwright-env";
 
 ensureLoopbackProxyBypass();
@@ -12,7 +12,7 @@ ensureLoopbackProxyBypass();
  * Run with: RUN_LIVE_CONSOLE_TESTS=1 pnpm test:e2e:live
  */
 const CONSOLE_PORT = 3200;
-const { baseUrl, apiKey, gatewayUrl } = resolveLiveEnv();
+const { baseUrl, gatewayUrl } = resolveLiveEnv();
 
 export default defineConfig({
   testDir: "test/e2e-live",
@@ -32,16 +32,20 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `pnpm exec next start --port ${CONSOLE_PORT}`,
-      url: `http://127.0.0.1:${CONSOLE_PORT}/login`,
+      command: `pnpm exec next start --port 3190`,
+      url: "http://127.0.0.1:3190/api/health",
       reuseExistingServer: false,
       timeout: 60_000,
+    },
+    {
+      command: "node test/mock-platform/edge.mjs",
+      url: `http://127.0.0.1:${CONSOLE_PORT}/api/auth/config`,
+      reuseExistingServer: false,
       env: {
-        CONSOLE_AUTH_MODE: "",
-        PLATFORM_BASE_URL: baseUrl,
-        PLATFORM_API_KEY: apiKey,
-        CONSOLE_PASSWORD: LIVE_CONSOLE_PASSWORD,
-        ...(gatewayUrl ? { MODEL_GATEWAY_BASE_URL: gatewayUrl } : {}),
+        MOCK_EDGE_PORT: String(CONSOLE_PORT),
+        MOCK_CONSOLE_PORT: "3190",
+        MOCK_PLATFORM_URL: baseUrl,
+        MOCK_GATEWAY_URL: gatewayUrl ?? baseUrl,
       },
     },
   ],

@@ -666,13 +666,7 @@ startupDone = (async () => {
       process.execPath,
       ["node_modules/next/dist/bin/next", "start", "--port", "38100"],
       "console",
-      {
-        CONSOLE_AUTH_MODE: "platform",
-        PLATFORM_API_KEY: "",
-        CONSOLE_PASSWORD: "",
-        IDENTITY_MODE: "",
-        PLATFORM_BASE_URL: "",
-      },
+      {},
     );
     await wait("http://127.0.0.1:38100/api/health");
     await edge(38200, 38110);

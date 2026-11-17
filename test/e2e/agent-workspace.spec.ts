@@ -281,16 +281,22 @@ test("failed session creation keeps the Agent draft and its navigation protectio
     .getByRole("combobox", { name: "Environment", exact: true })
     .click();
   await page.getByRole("option").first().click();
-  await page.route("**/api/platform/v1/sessions", async (route) => {
-    if (route.request().method() === "POST")
-      await route.fulfill({
-        status: 500,
-        json: {
-          error: { type: "api_error", message: "Session creation unavailable" },
-        },
-      });
-    else await route.continue();
-  });
+  await page.route(
+    "**/api/organizations/default/proxy/v1/sessions",
+    async (route) => {
+      if (route.request().method() === "POST")
+        await route.fulfill({
+          status: 500,
+          json: {
+            error: {
+              type: "api_error",
+              message: "Session creation unavailable",
+            },
+          },
+        });
+      else await route.continue();
+    },
+  );
   await dialog
     .getByRole("button", { name: "Create session", exact: true })
     .click();

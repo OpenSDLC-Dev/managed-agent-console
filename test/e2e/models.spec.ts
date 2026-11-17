@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 /**
  * Plan 10 slice 3: the model gateway's models (its aliases), through the
- * `/api/gateway` BFF to the mock gateway on its own port.
+ * `/admin/v1` native edge to the mock gateway on its own port.
  */
 test("add a model with a fallback tier, edit its routing, then delete it", async ({
   page,
@@ -64,18 +64,6 @@ test("add a model with a fallback tier, edit its routing, then delete it", async
   );
 });
 
-test("the gateway's refusal to delete a model a key is granted reaches the operator", async ({
-  page,
-}) => {
-  await signIn(page, "/models?model=deepseek-flash");
-  const panel = page.getByRole("region", { name: "Model details" });
-  await panel.getByRole("button", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete model" }).click();
-  // The store's own words name the keys in the way.
-  await expect(page.getByText(/is granted to api keys/)).toBeVisible();
-  await expect(panel).toBeVisible();
-});
-
 test("a model name with a slash routes to its own path", async ({ page }) => {
   await signIn(page, "/models");
   await page.getByRole("button", { name: "Add model" }).first().click();
@@ -120,37 +108,4 @@ test("a fresh gateway's first model, set up in one form", async ({
   await page.goto("/providers");
   const provider = page.getByRole("row").filter({ hasText: "DeepSeek" });
   await expect(provider.locator("[data-count]")).toHaveText(["1", "1"]);
-});
-
-test("grant a key one model, and see it among the model's callers", async ({
-  page,
-}) => {
-  await signIn(page, "/api-keys");
-  const ci = page.getByRole("row").filter({ hasText: "ci-deploy" });
-  await expect(ci.locator("[data-models]")).toHaveAttribute("data-models", "2");
-  // The control plane's own key is built in and offers no control.
-  const control = page.getByRole("row").filter({ hasText: "control-plane" });
-  await expect(control.locator("[data-built-in]")).toBeVisible();
-  await expect(
-    control.getByRole("button", { name: "Model access" }),
-  ).toHaveCount(0);
-
-  await ci.getByRole("button", { name: "Model access" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.locator("[data-alias=minimax-m3] input").uncheck();
-  await dialog.locator("[data-alias=agent-default] input").check();
-  await dialog.locator("[data-alias=deepseek-flash] input").uncheck();
-  await dialog.getByLabel("Tokens per minute").fill("400000");
-  await dialog.getByRole("button", { name: "Save" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(ci.locator("[data-models]")).toHaveAttribute("data-models", "1");
-  await expect(ci.locator("[data-models]")).toHaveAttribute(
-    "data-tpm",
-    "400000",
-  );
-
-  await page.goto("/models?model=agent-default");
-  const panel = page.getByRole("region", { name: "Model details" });
-  await expect(panel.locator("[data-key-id=apikey_ci01]")).toBeVisible();
-  await expect(panel.locator("[data-key-id=apikey_bootstrap01]")).toBeVisible();
 });

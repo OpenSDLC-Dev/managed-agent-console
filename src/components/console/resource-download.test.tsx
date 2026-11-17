@@ -104,7 +104,7 @@ it.each([401, 403])(
     expect(save).not.toHaveBeenCalled();
   },
 );
-it("legacy downloads keep their original BFF link and download attribute", () => {
+it("download links name the private resource and requested filename", () => {
   render(
     <ResourceDownload path="v1/skills/skill_a/content" filename="skill.zip">
       Download
@@ -112,7 +112,7 @@ it("legacy downloads keep their original BFF link and download attribute", () =>
   );
   expect(screen.getByRole("link")).toHaveAttribute(
     "href",
-    "/api/platform/v1/skills/skill_a/content",
+    "/api/organizations/default/proxy/v1/skills/skill_a/content",
   );
   expect(screen.getByRole("link")).toHaveAttribute("download", "skill.zip");
 });
@@ -140,20 +140,3 @@ it.each([false, true])(
     expect(fetcher).not.toHaveBeenCalled();
   },
 );
-it("legacy non-cancelling callback preserves default link navigation without fetch interception", () => {
-  const onClick = vi.fn();
-  const fetcher = vi.fn();
-  vi.stubGlobal("fetch", fetcher);
-  render(
-    <ResourceDownload
-      path="v1/files/file_a/content"
-      filename="output.bin"
-      onClick={onClick}
-    >
-      Download
-    </ResourceDownload>,
-  );
-  expect(fireEvent.click(screen.getByRole("link"))).toBe(true);
-  expect(onClick).toHaveBeenCalledTimes(1);
-  expect(fetcher).not.toHaveBeenCalled();
-});

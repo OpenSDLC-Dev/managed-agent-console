@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -113,7 +114,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -138,7 +139,7 @@ describe("AgentsPage", () => {
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     const { container } = renderPage();
     expect(screen.getByText("Agents")).toBeInTheDocument();
@@ -224,7 +225,7 @@ describe("AgentsPage", () => {
       String(fetchMock.mock.calls[0][0]),
       "http://console.test",
     );
-    expect(url.pathname).toBe("/api/platform/v1/agents");
+    expect(url.pathname).toBe("/api/organizations/default/proxy/v1/agents");
     expect(url.searchParams.get("limit")).toBe("20");
     expect(url.searchParams.get("include_archived")).toBeNull();
 
@@ -318,7 +319,7 @@ describe("AgentsPage", () => {
 
 it("opens an exact ID outside the current list and safely encodes its route segment", async () => {
   const fetchMock = stubFetch((url) =>
-    url.pathname === "/api/platform/v1/agents"
+    url.pathname === "/api/organizations/default/proxy/v1/agents"
       ? json({ data: [] })
       : json(
           { error: { type: "not_found_error", message: "Agent not found" } },

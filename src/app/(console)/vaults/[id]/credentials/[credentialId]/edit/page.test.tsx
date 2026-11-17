@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -50,7 +51,7 @@ describe("EditCredentialPage", () => {
   it("loads the credential into the editor", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(credential)),
+      withTestSession(vi.fn(async () => json(credential))),
     );
     renderPage();
     expect(await screen.findByText("Edit GitHub token")).toBeInTheDocument();
@@ -62,8 +63,10 @@ describe("EditCredentialPage", () => {
   it("rejects direct editing of an archived credential", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json({ ...credential, archived_at: "2026-09-02T00:00:00Z" }),
+      withTestSession(
+        vi.fn(async () =>
+          json({ ...credential, archived_at: "2026-09-02T00:00:00Z" }),
+        ),
       ),
     );
     renderPage();

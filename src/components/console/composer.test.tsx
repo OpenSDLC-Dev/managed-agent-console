@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -40,7 +41,7 @@ const textarea = () => screen.getByLabelText("Message to the session");
 
 const sentEvents = (fetchMock: ReturnType<typeof vi.fn>, call = 0) => {
   const [url, init] = fetchMock.mock.calls[call] as [string, RequestInit];
-  expect(url).toBe("/api/platform/v1/sessions/ses_1/events");
+  expect(url).toBe("/api/organizations/default/proxy/v1/sessions/ses_1/events");
   expect(init.method).toBe("POST");
   return (JSON.parse(init.body as string) as { events: unknown[] }).events;
 };
@@ -53,7 +54,7 @@ afterEach(() => {
 describe("Composer", () => {
   it("sends a user.message batch and clears the textarea on success", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer();
 
@@ -73,7 +74,7 @@ describe("Composer", () => {
 
   it("Enter sends when idle; Shift+Enter and empty Enter do not", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer();
 
@@ -100,7 +101,7 @@ describe("Composer", () => {
 
   it("Enter is inert while the session is running", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer({ running: true });
 
@@ -116,7 +117,7 @@ describe("Composer", () => {
 
   it("sends a bare user.interrupt while running", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer({ running: true });
 
@@ -127,7 +128,7 @@ describe("Composer", () => {
 
   it("keeps a child read-only and interrupts the whole Session", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer({
       running: true,
@@ -149,7 +150,7 @@ describe("Composer", () => {
 
   it("interrupt & send batches the interrupt with the new message and clears text", async () => {
     const fetchMock = vi.fn(async () => okEvents());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderComposer({ running: true });
 
@@ -172,7 +173,7 @@ describe("Composer", () => {
   });
 
   it("hides both interrupt controls when the session is idle", () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderComposer({ running: false });
     expect(
       screen.getByPlaceholderText("Send a message to this session…"),
@@ -183,18 +184,20 @@ describe("Composer", () => {
   it("shows the platform error and keeps the text for retry", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "session closed",
-              },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "session closed",
+                },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            ),
+        ),
       ),
     );
     const user = userEvent.setup();
@@ -208,7 +211,7 @@ describe("Composer", () => {
   });
 
   it("the disabled prop disables the textarea and all buttons", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderComposer({ running: true, disabled: true });
     expect(textarea()).toBeDisabled();
     expect(screen.getByRole("button", { name: /Interrupt$/ })).toBeDisabled();

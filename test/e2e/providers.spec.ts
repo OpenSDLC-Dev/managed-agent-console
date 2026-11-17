@@ -8,8 +8,8 @@ test.beforeEach(async ({ request }) => {
 });
 
 /**
- * Plan 10 slice 2: the model gateway's providers, through the `/api/gateway`
- * BFF to the mock gateway on its own port (playwright.config.ts).
+ * Plan 10 slice 2: the model gateway's providers, through the `/admin/v1`
+ * application edge to the mock gateway on its own port (playwright.config.ts).
  */
 test("add a provider from a vendor's published hosts, then disable it", async ({
   page,

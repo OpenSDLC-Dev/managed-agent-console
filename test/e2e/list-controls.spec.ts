@@ -12,7 +12,9 @@ test("memory lookup reaches archived records and creation filtering resets pagin
 }) => {
   for (let i = 0; i < 21; i++)
     await request.post("http://127.0.0.1:18080/v1/memory_stores", {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: { name: "Page " + i },
     });
   await signIn(page, "/memory-stores");
@@ -114,8 +116,11 @@ test("deployment Agent filter submits the server predicate and lookup encodes pa
       response.url().includes("depl_bad") && response.status() === 404,
   );
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  expect(await (await rejected).json()).toMatchObject({
-    error: { type: "invalid_request_error" },
+  const refusal = await rejected;
+  expect(new URL(refusal.url()).search).toBe("");
+  expect(new URL(refusal.url()).pathname).toContain("depl_bad%3Flimit%3D100");
+  expect(await refusal.json()).toMatchObject({
+    error: { type: "not_found_error" },
   });
   await expect(page.getByRole("alert")).toBeVisible();
 });

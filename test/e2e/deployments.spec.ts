@@ -118,7 +118,11 @@ test("mock deployment endpoints reject malformed collection and schedule inputs"
 
   const paused = await request.post(
     `http://127.0.0.1:18080/v1/deployments/${DEPLOYMENT}/pause`,
-    { headers: { "x-api-key": "test-key" } },
+    {
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
+    },
   );
   expect(paused.status()).toBe(200);
 
@@ -132,7 +136,13 @@ test("mock deployment endpoints reject malformed collection and schedule inputs"
   ]) {
     const response = await request.post(
       "http://127.0.0.1:18080/v1/deployments",
-      { headers: { "x-api-key": "test-key" }, data: body },
+      {
+        headers: {
+          "x-api-key":
+            "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+        },
+        data: body,
+      },
     );
     expect(response.status()).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
