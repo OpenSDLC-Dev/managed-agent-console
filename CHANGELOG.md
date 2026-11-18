@@ -6,114 +6,15 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-### Changed
-
-- **Console uses platform login exclusively** (platform plan 69 slice 7). Resource requests, streaming and downloads use the platform session and CSRF contract. The shared-password gate, Console-local OIDC client and credential proxy are removed. API keys retain current owner-role authority; obsolete model grants and per-key policy controls are removed. The platform now owns deployment and rollback; this repository continues publishing Console images. Upgrade the platform application edge before deploying this build.
-
 ### Fixed
 
 - Tool approvals show the execution inputs and MCP server. Console documents deny framing.
-- Account changes block stale writes. Sign-out hides private content and offers a retry until the platform confirms logout.
+- Account changes block stale writes. Sign-out hides private content and offers recovery if revocation is unconfirmed.
 - Live browser tests suppress credential-bearing diagnostics. Release jobs publish only a verified release commit from `main`.
-- **Native shutdown probes wait for slow fixture startup.** A bounded readiness window leaves time for the original normal-shutdown and repeated-signal cleanup checks. Slow-start controls prevent a two-second startup assumption from returning.
-- **Native fixture checks tolerate Windows scheduling.** Simulated retry waits yield to the event loop, preserving all 240 checks and real cleanup subprocess assertions. The environment-suite wrapper now allows its child's existing 30-second deadline to finish.
-- **Gateway usage keeps principals separate** (platform plan 69 slice 4). Daily totals combine an owner's keys without merging different owners. Principal filtering and the request ledger retain stored attribution; historical calls remain under their original key. Owned-key model access now explains current owner-role authority.
-- **Native key forms can retry an unavailable owner directory.** Retry keeps the name, expiry and owner draft in both API Keys and the Dashboard shortcut.
-- **Native navigation follows confirmed same-account role changes.** Once session metadata confirms the role, surface discovery replaces old administrator links or refusals without waiting for its next poll.
-- **CI retains Playwright evidence after a successful retry** (#249). Reports,
-  failed-attempt traces and screenshots are uploaded even when the job passes.
-- **Deployment editor mapping tests avoid per-character timer waits** (#244).
-  They retain field editability, request values and write-only credential checks.
-- **Denied-read navigation tests wait for link removal** (#242). A slow accessibility
-  scan no longer consumes the probe's wait timeout under coverage load.
-- **API Keys names permanent revocation Delete in the row menu.** Confirmation identifies
-  the key and warns that clients lose access immediately. Control-plane-managed keys explain
-  why they must be rotated in deployment configuration.
-- **Control names include their visible labels.** Search, calendar days, vault selectors,
-  resource previews and timeline zoom now keep their labels available to voice control.
-- **Resource entry points follow confirmed read refusals** (platform plan 69 slice 1). Navigation,
-  Dashboard and Search omit surfaces whose collection read returns `403 permission_error`.
-  Direct bookmarks explain the refusal, not feature absence. A refused connection probe reports access
-  denied rather than an outage. Read access does not imply write access.
-- **Memory browsing tolerates the platform's terminal empty page** (#236). The tree and list
-  name the end of the walk and keep Previous available. Clearing the path box omits `path_prefix`.
-- **Recursive memory lists omit `depth`** (#234). The platform refuses `depth=0` beside a
-  path prefix. One-level lists keep `depth=1`.
-
-### Added
-
-- Administrators can issue and revoke keys for cloud and self-hosted environments, including archived environments. Cloud key management omits worker setup instructions. Native non-admin pages omit key controls and their private requests; role changes discard open drafts and one-time reveals. One-time environment-key reveals are masked in native screenshots and failure diagnostics.
-
-- Native administrators can select an active service account for future scheduled deployment runs. Existing sessions retain their initiator, manual runs use the caller, and changing the setting leaves a paused deployment paused.
-
-- **Organization limits in the model inspector** (platform plan 69 slice 4). Native developers can read a public model alias's shared request, input-token and output-token limits; administrators can update or clear them. Role changes discard open drafts. This requires the companion platform slice 4.
-- **Principal-owned API keys in native mode** (platform plan 69 slice 3). Developers issue keys for themselves; administrators can also select active service accounts. Owner and creator stay separate, and row permissions govern lifecycle controls. Reopened owner pickers refresh the directory. Principal changes and newly learned role changes discard drafts and one-time reveals. Empty caller summaries describe only visible keys, including legacy sessions without a role. Legacy issuance leaves ownership to the platform's issuing identity. Native fixtures require a nonempty Docker configuration path to be absolute before dispatch, including through pnpm. Their synthetic Docker contracts use portable Node interception. Native fixtures and both Docker stages disable Next telemetry. Native failure diagnostics redact issued keys before output. Browser-issued human and service-account keys drive a test-only pinned Go SDK probe; independent cookie reads check Memory actors and nullable versions. Lifecycle checks cover current roles, owner removal and restoration without reviving keys. Published-image pairing and packaged Compose acceptance remain pending in the platform.
-
-- **Native platform browser login**, selected at runtime with `CONSOLE_AUTH_MODE=platform`.
-  The platform owns the opaque cookie, current role and CSRF checks. Setup, member administration
-  and service-account lifecycle use direct edge-owned routes. Resource requests, downloads and both
-  Session stream paths share the private proxy. Legacy password, OIDC and key deployments keep their existing routes.
-- **A non-release full-SHA image channel**, gated on trusted-main CI and scanned native builds for both architectures.
-  It publishes no release, version alias or `latest` tag. SemVer releases stay on hold through platform plan 69 slice 7.
-
-- **`MODEL_GATEWAY_BASE_URL` connects the console to the platform's model gateway**
-  ([plan 10](docs/plan/10_model-gateway.md)). The console proxies the gateway's admin API under
-  `/api/gateway/`, with the same credential rules as the control plane. No screen uses it yet. When
-  the variable is unset, every gateway path answers 404.
-- **Model Gateway → Providers.** The list shows each vendor account's site, endpoint protocols, key
-  and upstream-model counts, and state. A dialog adds a provider from the vendor's published hosts.
-  The detail page shows its overview and can disable or delete it. A console without a gateway hides
-  the group.
-- **A provider's keys and upstream models.** The provider page adds write-only vendor keys, with
-  their protocols and weights, and upstream models with limits, prices and the models that route to
-  them. An Edit dialog changes the name, extra headers, stall timeout and trace context. The
-  console keeps no copy of a vendor key once the gateway has it.
-- **Model Gateway → Models.** The list shows each name agents send, with its kind and the upstream
-  models it routes to. The inspector shows the routing tiers and each target's share. A dialog adds
-  a model or edits its routing: tiers of upstream models with weights, tried in order. An embedding
-  model keeps its one upstream model.
-- **First-run setup for an empty gateway.** While the gateway has no models, Models says that every
-  agent's model call fails. While it also has no provider, Models offers one form. The form makes a
-  provider, its key, an upstream model and a model, in that order. A refused step stops the form and
-  keeps what was made, and Continue resumes at that step.
-- **Model access on API Keys.** A column shows each key's grant on the gateway, and a dialog
-  grants no models, every model, or selected models, with per-minute limits. The control
-  plane's own keys show their built-in grant, and offer only to remove a policy someone wrote on
-  one. An archived or expired key offers only to remove a policy it still has, since a policy blocks
-  deleting the models it names. A model's inspector lists the active keys that can call it.
-- **Analytics → Usage.** Overview totals the gateway's model calls over 7, 30 or 90 days: requests,
-  errors, tokens and cost, a daily cost chart, and a table by key, model or upstream model. Requests
-  lists each call, newest first, with its route, status, tokens, cost and latency, and links the
-  session that made it. Both filter by key, model and upstream model. Cost has no currency: it is
-  the prices the operator entered.
-- **A failed deploy on `main` opens an issue** (#228). `deploy-alert.yml` keeps one `cd-failure`
-  issue open, assigned to the run's actor, while staging deploys fail, and closes it on the next
-  run that deploys. Before this, every deploy failed for a month and no one knew.
-
-### Security
-
-- **The BFF percent-encodes each path segment it forwards, and refuses one that holds a control
-  character.** The URL parser deletes tabs, LFs and CRs before it resolves dot segments. A segment
-  such as `..%09` passed the dot-segment check and was sent as `..`, so a crafted link could take
-  the management credential outside `/v1`.
-
-### Changed
-
-- **Automatic staging deployment transfers to the companion platform chart** (platform plan 69 slice 6). The legacy Console deploy workflow accepts only a confirmed manual rollback from `main`; automatic SHA and release image publishing remain unchanged. Companion platform delivery is pending.
-
-- **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the
-  connection state, and navigation labels are title case: `API Keys`, `Credential Vaults`,
-  `Memory Stores`, and `Platform Connected` / `Platform Unreachable` / `Checking Platform…`.
-- **The agent and Dream model field lists the gateway's chat models.** With a gateway, the field is a
-  select of its chat models by name. A saved name the gateway lacks shows empty. The agent editor
-  then sends nothing on Save and says why on the field; the Dream form waits for a model, as for its
-  other required fields. Without a gateway, or when the gateway cannot be read, the field stays a
-  text box. The Raw tab and the API still take any name.
-- **The k8s manifest passes `MODEL_GATEWAY_BASE_URL`** from an optional repository variable of that
-  name. Unset keeps the gateway screens hidden.
 
 ## Released
 
+- [0.9.0](docs/changelog/0.9.0.md) — 2026-11-18 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.2...v0.9.0)
 - [0.8.2](docs/changelog/0.8.2.md) — 2026-10-12 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.1...v0.8.2)
 - [0.8.1](docs/changelog/0.8.1.md) — 2026-10-04 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.0...v0.8.1)
 - [0.8.0](docs/changelog/0.8.0.md) — 2026-10-04 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.7.0...v0.8.0)
@@ -125,4 +26,4 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - [0.2.0](docs/changelog/0.2.0.md) — 2026-08-08 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.1.0...v0.2.0)
 - [0.1.0](docs/changelog/0.1.0.md) — 2026-08-07 · [tag](https://github.com/OpenSDLC-Dev/managed-agent-console/releases/tag/v0.1.0)
 
-[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.9.0...HEAD
