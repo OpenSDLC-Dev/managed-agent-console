@@ -5,13 +5,14 @@ How a console release is cut. The reasoning behind each choice is
 [release-please.yml](../.github/workflows/release-please.yml),
 [release.yml](../.github/workflows/release.yml) and [scripts/changelog.mjs](../scripts/changelog.mjs).
 
-## Plan 69 release hold
-
-Do not merge a release-please PR, dispatch `release.yml` or cut a SemVer release until platform plan 69 slice 7.
-The SHA channel below remains automatic. The platform owns staging deployment and rollback;
-this repository publishes images only ([deployment ownership](./deploy-gcp.md)).
-
 ## Non-release SHA channel
+
+Check the platform's [active release holds](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/STATE.md)
+before merging a release-please PR, cutting a SemVer release or dispatching
+`release.yml`, including for an existing tag. While a hold applies, wait.
+
+The platform owns staging deployment and rollback. This repository publishes
+the Console image. See [deployment ownership](./deploy-gcp.md).
 
 On a trusted repository push to `main`, `ci.yml` waits for both `ci-ok` and the Docker vulnerability gate.
 It builds amd64 and arm64 on native runners, labels the full checked-out source SHA, and scans each child before push.
