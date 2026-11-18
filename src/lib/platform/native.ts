@@ -69,12 +69,13 @@ export async function nativeWrite<T>(
   body?: unknown,
   method = "POST",
   anonymous = false,
+  expectedPrincipalId?: string,
 ): Promise<T> {
   const response = await fetch(path, {
     method,
     headers: {
       "content-type": "application/json",
-      ...(anonymous ? {} : await csrfHeaders()),
+      ...(anonymous ? {} : await csrfHeaders({ expectedPrincipalId })),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     cache: "no-store",

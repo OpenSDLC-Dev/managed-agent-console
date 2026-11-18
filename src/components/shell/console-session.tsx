@@ -9,6 +9,7 @@ import {
   leaveIfPrincipalChanged,
 } from "@/lib/identity/signed-out";
 import { useLeaveConfirmation } from "./unsaved-changes";
+import { SignOutStatus, useSignOutState } from "./sign-out";
 
 export function useConsoleSession() {
   const leave = useLeaveConfirmation();
@@ -22,7 +23,11 @@ export function useConsoleSession() {
     retry: 1,
   });
   useEffect(() => {
-    if (session.data?.signed_in && session.data.id) {
+    if (
+      session.data?.signed_in === true &&
+      typeof session.data.id === "string" &&
+      session.data.id
+    ) {
       leaveIfPrincipalChanged(session.data.id, () => leave.setDirty(false));
     }
   }, [session.data?.signed_in, session.data?.id, leave]);
@@ -43,19 +48,32 @@ export function ConsoleSessionBoundary({
 
 function NativeSessionBoundary({ children }: { children: React.ReactNode }) {
   const session = useConsoleSession();
+  const signOutState = useSignOutState();
   const [boundId, setBoundId] = useState<string>();
   const data = session.data;
   useEffect(() => {
     // The observer above confirms the document id before private children mount.
     // Keep this boundary mounted through errors, including the initial retry.
-    // Keep the initial id even when deliberate sign-out suppresses automatic departure.
     // Admission needs a committed effect after the external document identity check.
-    if (data?.signed_in && data.id && !hasBouncedToLogin()) {
+    if (
+      data?.signed_in === true &&
+      typeof data.id === "string" &&
+      data.id &&
+      !hasBouncedToLogin()
+    ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setBoundId((initial) => initial ?? data.id);
     }
   }, [data?.signed_in, data?.id]);
-  if (!boundId || boundId !== data?.id || hasBouncedToLogin()) {
+  if (signOutState !== "idle") {
+    return <SignOutStatus state={signOutState} />;
+  }
+  if (
+    !boundId ||
+    data?.signed_in !== true ||
+    boundId !== data.id ||
+    hasBouncedToLogin()
+  ) {
     return (
       <main
         className="px-4 py-6 sm:px-8"

@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -337,6 +338,7 @@ describe("SignedInAs", () => {
         : new Response(
             JSON.stringify({
               signed_in: true,
+              id: "user_operator",
               name: "Operator",
               csrf_token: "sign-out-csrf",
             }),
@@ -351,20 +353,12 @@ describe("SignedInAs", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/logout", {
       method: "POST",
       headers: { "X-CSRF-Token": "sign-out-csrf" },
-      // Bounded, so a server that accepts and never answers cannot strand the
-      // operator here — see the probe below.
+      redirect: "error",
       signal: expect.any(AbortSignal),
     });
   });
 
-  // A refusal settles; a connection accepted and then answered by nobody does
-  // not. Without a bound on the request the operator waits on the console they
-  // asked to leave, with the button they used now disabled — the same failure
-  // as below, reached by waiting rather than by erroring.
-  it("probe: leaves when the sign-out request never answers", async () => {
-    // The clock is driven by hand rather than waited on: the point is that five
-    // seconds of silence ends in a departure, and a test that spent five real
-    // seconds proving it would be its own kind of hang.
+  it("probe: lets the operator retry when the sign-out request times out", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -372,6 +366,7 @@ describe("SignedInAs", () => {
           return new Response(
             JSON.stringify({
               signed_in: true,
+              id: "user_operator",
               name: "Operator",
               csrf_token: "sign-out-csrf",
             }),
@@ -401,7 +396,10 @@ describe("SignedInAs", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
-    expect(hasBouncedToLogin()).toBe(true);
+    expect(hasBouncedToLogin()).toBe(false);
+    expect(
+      screen.getByRole("button", { name: "Retry sign out" }),
+    ).toBeEnabled();
   });
 
   it("probe: native sign-out also bounds a stalled CSRF metadata read", async () => {
@@ -419,6 +417,7 @@ describe("SignedInAs", () => {
         if (++reads === 1)
           return Response.json({
             signed_in: true,
+            id: "user_operator",
             login_name: "local-admin",
             role: "admin",
             csrf_token: "synthetic",
@@ -440,32 +439,70 @@ describe("SignedInAs", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(5_000);
       });
-      expect(hasBouncedToLogin()).toBe(true);
-      expect(assign).toHaveBeenCalledExactlyOnceWith("/login");
+      expect(hasBouncedToLogin()).toBe(false);
+      expect(assign).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("button", { name: "Retry sign out" }),
+      ).toBeEnabled();
     } finally {
       delete document.documentElement.dataset.consoleAuth;
     }
   });
 
-  // Staying on a console the operator asked to leave — in front of whoever is
-  // next at the keyboard — is worse than leaving with the server session
-  // possibly still alive, which the login page lets them retry.
-  it("probe: leaves even when the sign-out request fails", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).includes("logout")) throw new TypeError("offline");
-      return new Response(
-        JSON.stringify({
-          signed_in: true,
-          name: "Operator",
-          csrf_token: "sign-out-csrf",
-        }),
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderBlock();
-    await waitFor(() => expect(screen.getByTestId("sign-out")).toBeDefined());
+  it.each([
+    ["a network failure", () => Promise.reject(new TypeError("offline"))],
+    ["a platform outage", () => Response.json({}, { status: 503 })],
+    ["an unmarked refusal", () => Response.json({}, { status: 403 })],
+    ["an unconfirmed success", () => Response.json({ ok: false })],
+  ])(
+    "probe: reports unconfirmed sign-out after %s and allows retry",
+    async (_name, fail) => {
+      let attempts = 0;
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("logout"))
+          return ++attempts === 1 ? fail() : Response.json({ ok: true });
+        return new Response(
+          JSON.stringify({
+            signed_in: true,
+            id: "user_operator",
+            name: "Operator",
+            csrf_token: "sign-out-csrf",
+          }),
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      renderBlock();
+      await waitFor(() => expect(screen.getByTestId("sign-out")).toBeDefined());
 
+      await userEvent.click(screen.getByTestId("sign-out"));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "could not confirm sign-out",
+      );
+      expect(hasBouncedToLogin()).toBe(false);
+      expect(screen.queryByText("Operator")).toBeNull();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Retry sign out" }),
+      );
+      await waitFor(() => expect(hasBouncedToLogin()).toBe(true));
+      expect(attempts).toBe(2);
+    },
+  );
+
+  it("leaves without a logout POST when the platform confirms the session is gone", async () => {
+    const { assign, fetchMock, mount } = nativeBlock();
+    mount();
+    await screen.findByText("Old account");
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(null, {
+          status: 401,
+          headers: { "x-platform-signed-out": "1" },
+        }),
+    );
     await userEvent.click(screen.getByTestId("sign-out"));
-    await waitFor(() => expect(hasBouncedToLogin()).toBe(true));
+    await waitFor(() =>
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/login"),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -3,6 +3,8 @@ import { resolveLiveEnv } from "./test/e2e-live/env";
 import { ensureLoopbackProxyBypass } from "./test/playwright-env";
 
 ensureLoopbackProxyBypass();
+// Worker hooks also sanitize matcher snapshots and step diagnostics.
+process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 
 /**
  * Live tier: the console's production build against a REAL platform stack
@@ -13,6 +15,8 @@ ensureLoopbackProxyBypass();
  */
 const CONSOLE_PORT = 3200;
 const { baseUrl, gatewayUrl } = resolveLiveEnv();
+if (process.env.DEBUG || (process.env.PWDEBUG && process.env.PWDEBUG !== "0"))
+  throw new Error("Live tests require DEBUG and PWDEBUG logging to be off");
 
 export default defineConfig({
   testDir: "test/e2e-live",
@@ -28,7 +32,9 @@ export default defineConfig({
   use: {
     baseURL: `http://127.0.0.1:${CONSOLE_PORT}`,
     locale: "en-US",
-    trace: "retain-on-failure",
+    trace: "off",
+    screenshot: "off",
+    video: "off",
   },
   webServer: [
     {

@@ -27,22 +27,49 @@ let bouncing = false;
  * carrying a `return_to` for the very page the operator chose to leave, so the
  * next sign-in would land them back on it. Their intent outranks that inference.
  */
-let leavingDeliberately = false;
+export type SignOutState =
+  "idle" | "pending" | "unconfirmed" | "account-changed";
+let signOutState: SignOutState = "idle";
+const signOutListeners = new Set<() => void>();
+
+export function subscribeToSignOut(listener: () => void): () => void {
+  signOutListeners.add(listener);
+  return () => signOutListeners.delete(listener);
+}
+
+export function getSignOutState(): SignOutState {
+  return signOutState;
+}
+
+function setSignOutState(state: SignOutState): void {
+  signOutState = state;
+  for (const listener of signOutListeners) listener();
+}
 
 // The account observer can remount or share its query with another consumer.
 // Keep the confirmed native principal for this document, not for one observer.
 let confirmedPrincipalId: string | undefined;
 
+export function getDocumentPrincipalId(): string | undefined {
+  return confirmedPrincipalId;
+}
+
 /** Test seam — the flags above outlive a single test otherwise. */
 export function resetSignedOutBounceForTests(): void {
   bouncing = false;
-  leavingDeliberately = false;
+  setSignOutState("idle");
   confirmedPrincipalId = undefined;
 }
 
 /** Records the operator's intent before the sign-out request goes out. */
-export function beginSignOut(): void {
-  leavingDeliberately = true;
+export function beginSignOut(): boolean {
+  if (signOutState !== "idle" && signOutState !== "unconfirmed") return false;
+  setSignOutState("pending");
+  return true;
+}
+
+export function signOutUnconfirmed(accountChanged: boolean): void {
+  setSignOutState(accountChanged ? "account-changed" : "unconfirmed");
 }
 
 /**
@@ -69,7 +96,8 @@ export function hasBouncedToLogin(): boolean {
  * threading one through every call site that can fail.
  */
 export function bounceToLogin(): void {
-  if (typeof window === "undefined" || bouncing || leavingDeliberately) return;
+  if (typeof window === "undefined" || bouncing || signOutState !== "idle")
+    return;
   const { pathname, search } = window.location;
   if (pathname === "/login") return;
   leave(`/login?return_to=${encodeURIComponent(`${pathname}${search}`)}`);
@@ -97,7 +125,8 @@ export function leaveIfPrincipalChanged(
   id: string,
   discardDraft: () => void,
 ): void {
-  if (typeof window === "undefined" || bouncing || leavingDeliberately) return;
+  if (typeof window === "undefined" || bouncing || signOutState !== "idle")
+    return;
   if (confirmedPrincipalId === undefined) {
     confirmedPrincipalId = id;
     return;

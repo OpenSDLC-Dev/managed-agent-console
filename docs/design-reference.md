@@ -634,6 +634,10 @@ Platform internal/events/toolflow.go permits confirmations only for ask-gated
 built-in/MCP calls. A custom call in requires_action needs a custom result, not
 a confirmation; answered calls must not keep approval controls or badges.
 
+The self-hosted console discloses the MCP server and complete call arguments at
+approval time. MCP tool names can match built-in names, and operators need to
+distinguish the source before authorizing a call.
+
 CI on macOS exposed two browser-test timing gaps: axe sampled the unsaved-dialog
 entry fade (reproduced by slowing that animation); rapid Created-filter reopen
 filled the still-mounted closing form before its draft reset (confirmed in trace).

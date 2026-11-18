@@ -70,7 +70,7 @@ describe("ApprovalBanner", () => {
     expect(screen.getByText("Waiting on 2 tool approvals")).toBeDefined();
     expect(screen.getByText("Bash")).toBeDefined();
     expect(
-      screen.getByText(JSON.stringify({ command: "rm -rf /tmp/scratch" })),
+      screen.getByText(/"command": "rm -rf \/tmp\/scratch"/),
     ).toBeDefined();
     expect(screen.getByText("WebFetch")).toBeDefined();
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);

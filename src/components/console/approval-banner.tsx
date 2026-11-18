@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { WARNING_BOX, WARNING_MUTED } from "@/components/console/bits";
+import { WARNING_BOX } from "@/components/console/bits";
+import { ToolUseSource } from "@/components/console/tool-use-source";
 import { useSendEvents } from "@/lib/platform/queries";
 import type { SessionEvent } from "@/lib/platform/types";
 
@@ -66,13 +67,21 @@ function PendingTool({
 
   return (
     <li className="flex flex-wrap items-center gap-2 text-[13px]">
+      {/* The transcript card shows the same call above its inline controls. */}
       {!compact && (
-        <>
-          <span className="font-mono">{event.name}</span>
-          <span className={cn("min-w-0 flex-1 truncate", WARNING_MUTED)}>
-            {JSON.stringify(event.input)}
-          </span>
-        </>
+        <div className="w-full min-w-0 space-y-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 break-all">
+            <span className="font-mono">{event.name}</span>
+            <span className="text-xs text-muted-foreground">
+              <ToolUseSource event={event} />
+            </span>
+          </div>
+          <pre className="whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
+            {event.input === undefined
+              ? "Input unavailable"
+              : JSON.stringify(event.input, null, 2)}
+          </pre>
+        </div>
       )}
       {denying ? (
         <span className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">

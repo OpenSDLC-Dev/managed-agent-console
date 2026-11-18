@@ -6,7 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- Tool approvals show the execution inputs and MCP server. Console documents deny framing.
+- Account changes block stale writes. Sign-out hides private content and offers recovery if revocation is unconfirmed.
+- Live browser tests suppress credential-bearing diagnostics. Release jobs publish only a verified release commit from `main`.
 
 ## Released
 

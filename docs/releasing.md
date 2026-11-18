@@ -62,24 +62,25 @@ release-please owns the version, the tag and the Release, and never touches `CHA
 
 3. **Merge release-please's release PR** — it bumps the version files, tags, and publishes the
    Release.
-4. Publishing runs `release.yml` in two independent halves: **notes** replaces the release body with
-   `docs/changelog/X.Y.Z.md` (it depends on nothing, so a release whose image fails to build still
-   says what it is), and **build → publish** builds both architectures on native runners, each
-   trivy-gated **before** anything is pushed, joined into one manifest list. Both halves are
-   idempotent.
+4. The published Release starts [the read-only request workflow](../.github/workflows/release-request.yml).
+   The publisher runs from protected `main` and verifies that the published `vX.Y.Z` tag points
+   to a commit on `main` with the same package version. It pins that commit for notes and image
+   builds. Notes run independently of the image build. Both native architecture builds must pass
+   the Trivy gate before the publisher joins the images into one manifest list.
 
 ## If a release exists but has no image
 
 The workflow triggers on a release being published, and a run can always be repeated:
 
 ```bash
-gh workflow run release.yml -f tag=vX.Y.Z
+gh workflow run release-request.yml --ref main -f tag=vX.Y.Z
 ```
 
-A backfill publishes only its immutable `X.Y.Z`. The rolling `latest` and `X.Y` aliases move only
-when the version being published really is the newest, so republishing an old tag cannot silently
-downgrade whoever pulls `latest`. The build uses the tag's own tree, which is the point — the image
-matches what the tag says.
+Use this dispatch for historical releases. GitHub reruns use the original workflow revision.
+
+A backfill publishes the existing release's `X.Y.Z` image from the validated tag commit.
+The rolling `latest` and `X.Y` aliases advance only if the release is still the newest stable tag
+overall or in its minor version, respectively.
 
 ## One-time setup
 

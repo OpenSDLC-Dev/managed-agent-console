@@ -93,6 +93,7 @@ it("does not destroy the sign-in session while an operator chooses Stay", async 
       new Response(
         JSON.stringify({
           signed_in: true,
+          id: "user_operator",
           name: "Operator",
           csrf_token: "test-csrf",
         }),

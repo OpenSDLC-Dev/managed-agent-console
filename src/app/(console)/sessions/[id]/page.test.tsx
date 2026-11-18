@@ -688,6 +688,66 @@ describe("SessionDetailPage", () => {
     },
   );
 
+  it.each([
+    {
+      type: "agent.tool_use",
+      fields: {
+        input: { command: "printf hello", restart: true, timeout_ms: 250 },
+      },
+      source: "Platform tool",
+    },
+    {
+      type: "agent.mcp_tool_use",
+      fields: {
+        input: {
+          command: "printf hello",
+          options: { description: "x".repeat(400) },
+        },
+        mcp_server_name: "tool-lab",
+      },
+      source: "MCP server tool-lab",
+    },
+  ])(
+    "shows the complete $type call beside approval controls in every view",
+    async ({ type, fields, source }) => {
+      setTrace("live", [
+        ev("tu_details", type, {
+          name: "bash",
+          ...fields,
+          evaluated_permission: "ask",
+        }),
+        ev("sevt_2", "session.status_idle", {
+          stop_reason: { type: "requires_action", event_ids: ["tu_details"] },
+        }),
+      ]);
+      stubFetch();
+      renderPage();
+      const banner = await screen.findByTestId("approval-banner");
+      const inlineCard = banner.closest('[data-testid="event-row"]');
+      expect(inlineCard).toHaveAttribute("data-event-id", "tu_details");
+      expect(inlineCard).toHaveTextContent(source);
+      expect(inlineCard?.textContent).toContain(
+        JSON.stringify(fields.input, null, 2),
+      );
+      expect(
+        within(banner).getByRole("button", { name: "Approve" }),
+      ).toBeEnabled();
+
+      for (const view of ["Messages", "Debug"]) {
+        await userEvent.click(screen.getByRole("button", { name: view }));
+        const standalone = screen.getByTestId("approval-banner");
+        expect(within(standalone).getByText("bash")).toBeVisible();
+        expect(within(standalone).getByText(source)).toBeVisible();
+        expect(standalone.textContent).toContain(
+          JSON.stringify(fields.input, null, 2),
+        );
+        expect(
+          within(standalone).getByRole("button", { name: "Approve" }),
+        ).toBeEnabled();
+      }
+    },
+  );
+
   it.each([404, 501])(
     "hides unavailable Threads and falls back from its deep link (%s)",
     async (threadsStatus) => {

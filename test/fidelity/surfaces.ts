@@ -1610,6 +1610,21 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "session-debug-pending-approval",
+    route: `/sessions/${GATED}`,
+    fixture: GATED,
+    description:
+      "Debug tab with a standalone approval banner showing the tool and its full input.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByRole("button", { name: "Debug", exact: true }).click();
+      await page
+        .locator('[data-testid="events-toolbar"][data-tab="debug"]')
+        .waitFor();
+      await page.getByTestId("approval-banner").waitFor();
+    },
+  },
+  {
     id: "session-resources",
     route: `/sessions/${GATED}?inspector=resources`,
     fixture: `${GATED} with an attached file`,
@@ -2595,6 +2610,51 @@ export const SURFACES: Surface[] = [
   },
 
   // ---- the one route outside the console shell --------------------------
+  {
+    id: "sign-out-unconfirmed",
+    route: "/members",
+    fixture: "unavailable logout endpoint",
+    description:
+      "Retry sign-out surface when the platform cannot confirm revocation. Private console content is hidden.",
+    setup: async (page) => {
+      await page.route("**/api/auth/logout", (route) =>
+        route.fulfill({ status: 503 }),
+      );
+      await page.getByTestId("sign-out").click();
+      await page
+        .locator('[data-native-identity="sign-out-unconfirmed"]')
+        .waitFor();
+    },
+  },
+  {
+    id: "sign-out-account-changed",
+    route: "/members",
+    fixture: "replacement account metadata",
+    description:
+      "Reopen console action after the active account changes during sign-out.",
+    setup: async (page) => {
+      await page.evaluate(() => {
+        const fetcher = window.fetch;
+        window.fetch = (input, init) => {
+          // The sign-out metadata check has a timeout signal. Leave the
+          // console's background session query on the signed-in fixture.
+          if (input === "/api/auth/session" && init?.signal)
+            return Promise.resolve(
+              Response.json({
+                signed_in: true,
+                id: "user_replacement_fixture",
+                csrf_token: "unused-fidelity-fixture",
+              }),
+            );
+          return fetcher(input, init);
+        };
+      });
+      await page.getByTestId("sign-out").click();
+      await page
+        .locator('[data-native-identity="sign-out-account-changed"]')
+        .waitFor();
+    },
+  },
   {
     id: "login",
     route: "/login",

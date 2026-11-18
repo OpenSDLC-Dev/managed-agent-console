@@ -103,7 +103,11 @@ function stubRoutes(over?: {
       const url = new URL(String(input), "http://console.test");
       const method = init?.method ?? "GET";
       if (url.pathname === "/api/auth/session")
-        return json({ csrf_token: "environment-key-csrf" });
+        return json({
+          signed_in: true,
+          id: "user_test",
+          csrf_token: "environment-key-csrf",
+        });
       if (url.pathname === TOKENS && method === "GET") return json(page(rows));
       if (url.pathname === TOKENS && method === "POST") {
         if (over?.issue) return over.issue();

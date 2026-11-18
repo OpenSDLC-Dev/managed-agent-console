@@ -1135,14 +1135,14 @@ test("real native password/setup, current authority, management, private bytes/S
       expect(pending.oldPrivateCacheRetained).toBe(true);
       expect(pending.replacementRenders).toEqual([]);
       await expect(
-        page.locator('[data-native-identity="loading"]'),
+        page.locator('[data-native-identity="signing-out"]'),
       ).toBeVisible();
       await expect(page.getByLabel("Role for first-admin")).toHaveCount(0);
       await expect(
         page.getByRole("button", { name: "Create local member" }),
       ).toHaveCount(0);
       await expect(page.getByTestId("signed-in-as")).toHaveCount(0);
-      await expect(page.getByTestId("sign-out")).toHaveCount(0);
+      await expect(page.getByTestId("sign-out")).toBeDisabled();
       expect(navigations).toEqual([]);
       release();
       await expect(page).toHaveURL(/\/login$/);

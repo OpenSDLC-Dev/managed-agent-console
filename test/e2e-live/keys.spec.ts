@@ -1,8 +1,9 @@
 import { nativeRequest } from "./native-request";
 import { LIVE_BROWSER_ORIGIN } from "./env";
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import { resolveLiveEnv } from "./env";
 import { signIn } from "./sign-in";
+import { expect, test } from "./test";
 
 /**
  * Plan 07 slice 5 — acceptance for the two credentials the console issues,
@@ -65,8 +66,8 @@ test.afterAll(async () => {
     try {
       const res = await send();
       if (!res.ok()) failures.push(`${what}: HTTP ${res.status()}`);
-    } catch (error) {
-      failures.push(`${what}: ${String(error)}`);
+    } catch {
+      failures.push(`${what}: request or response read failed`);
     }
   };
 
@@ -80,8 +81,8 @@ test.afterAll(async () => {
       const res = await api.get(url, { headers });
       if (res.ok()) return await res.json();
       failures.push(`${what}: HTTP ${res.status()}`);
-    } catch (error) {
-      failures.push(`${what}: ${String(error)}`);
+    } catch {
+      failures.push(`${what}: request or response read failed`);
     }
     return undefined;
   };
@@ -184,11 +185,17 @@ test("a console-issued environment key drives the real worker lane, and revoking
   // The platform's own prefix, deliberately not an Anthropic look-alike — a
   // key that reads like one invites being pasted into ANTHROPIC_API_KEY
   // (platform docs/DIVERGENCES.md).
-  expect(environmentKey).toMatch(/^sk-map-env01-/);
+  expect(
+    environmentKey.startsWith("sk-map-env01-"),
+    "environment key prefix",
+  ).toBe(true);
   await page.getByTestId("close-revealed-key").click();
   // Closing is final. Real platform, real secret: it must be gone from the
   // document, not merely hidden.
-  expect(await page.content()).not.toContain(environmentKey);
+  expect(
+    (await page.content()).includes(environmentKey),
+    "closed environment key is absent from the document",
+  ).toBe(false);
 
   const row = page.getByRole("row").filter({ hasText: `live-e2e-host-${RUN}` });
   await expect(row.locator("[data-key-state]")).toHaveAttribute(
@@ -206,7 +213,7 @@ test("a console-issued environment key drives the real worker lane, and revoking
       },
     });
   const accepted = await poll();
-  expect(accepted.status(), await accepted.text()).toBe(200);
+  expect(accepted.status()).toBe(200);
 
   // Proof by the platform's own bookkeeping rather than by silence:
   // Queue.RecordPoll fires only on the *authenticated* poll path, so a
@@ -254,9 +261,15 @@ test("a console-issued management key drives the real wire API, and Disable stop
   const revealed = page.getByTestId("revealed-api-key");
   await expect(revealed).toBeVisible();
   const managementKey = ((await revealed.textContent()) ?? "").trim();
-  expect(managementKey).toMatch(/^sk-map-api01-/);
+  expect(
+    managementKey.startsWith("sk-map-api01-"),
+    "management key prefix",
+  ).toBe(true);
   await page.getByTestId("close-revealed-api-key").click();
-  expect(await page.content()).not.toContain(managementKey);
+  expect(
+    (await page.content()).includes(managementKey),
+    "closed management key is absent from the document",
+  ).toBe(false);
 
   const row = page.locator("tr", { hasText: `live-e2e-mgmt-${RUN}` });
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
@@ -266,7 +279,12 @@ test("a console-issued management key drives the real wire API, and Disable stop
 
   // The listing identifies the key that was just minted — the property that
   // makes a lost plaintext recoverable rather than an orphan (PR #97).
-  await expect(row).toContainText(managementKey.slice(-4));
+  await expect
+    .poll(
+      async () => (await row.textContent())?.includes(managementKey.slice(-4)),
+      { message: "the management key row shows its suffix" },
+    )
+    .toBe(true);
 
   // A management credential, so the claim is against the management wire.
   const call = () =>
@@ -274,7 +292,7 @@ test("a console-issued management key drives the real wire API, and Disable stop
       headers: { "x-api-key": managementKey },
     });
   const accepted = await call();
-  expect(accepted.status(), await accepted.text()).toBe(200);
+  expect(accepted.status()).toBe(200);
 
   await row.getByRole("button", { name: "Disable" }).click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(

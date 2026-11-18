@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { Announcer } from "./announcer";
+import { useSignOutState } from "./sign-out";
 import { PlatformError } from "@/lib/platform/http";
 import { toastPlatformError } from "@/lib/platform/toast-error";
 
@@ -56,6 +57,7 @@ export function retryUnlessSettled(
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const signOutState = useSignOutState();
   const [client] = useState(
     () =>
       new QueryClient({
@@ -74,7 +76,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <Announcer>{children}</Announcer>
-      <Toaster position="bottom-right" />
+      {signOutState === "idle" && <Toaster position="bottom-right" />}
     </QueryClientProvider>
   );
 }

@@ -12,13 +12,18 @@ import {
   gatewayPost,
   gatewayDelete,
   PlatformError,
+  csrfHeaders,
 } from "./http";
 
 it("owned issuance stays cookie-authenticated and preserves a role refusal without credential fallback", async () => {
   document.documentElement.dataset.consoleAuth = "platform";
   const fetcher = vi.fn<typeof fetch>(async (url, init) => {
     if (url === "/api/auth/session")
-      return Response.json({ csrf_token: "synthetic-csrf", signed_in: true });
+      return Response.json({
+        csrf_token: "synthetic-csrf",
+        signed_in: true,
+        id: "user_test",
+      });
     if (init?.method === "POST")
       return Response.json(
         {
@@ -64,11 +69,17 @@ it("owned issuance stays cookie-authenticated and preserves a role refusal witho
     expect(new Headers(init?.headers).has("authorization")).toBe(false);
   }
 });
-import { isSignedOut } from "@/lib/identity/signed-out";
+import {
+  beginSignOut,
+  isSignedOut,
+  leaveIfPrincipalChanged,
+  resetSignedOutBounceForTests,
+} from "@/lib/identity/signed-out";
 
 afterEach(() => {
   delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
+  resetSignedOutBounceForTests();
 });
 it("uses the private resource proxy with no deployment mode switch", async () => {
   document.documentElement.dataset.consoleAuth = "platform";
@@ -88,7 +99,11 @@ it("probe: adds header-only CSRF to every native unsafe family including multipa
   document.documentElement.dataset.consoleAuth = "platform";
   const fetcher = vi.fn(async (url: string) =>
     url === "/api/auth/session"
-      ? Response.json({ csrf_token: "csrf-test", signed_in: true })
+      ? Response.json({
+          csrf_token: "csrf-test",
+          signed_in: true,
+          id: "user_test",
+        })
       : url.includes("revoke")
         ? new Response(null, { status: 204 })
         : Response.json({}),
@@ -140,4 +155,60 @@ it("probe: recognizes platform session markers, but not role-only 403", () => {
     ),
   ).toBe(true);
   expect(isSignedOut(new Response(null, { status: 403 }))).toBe(false);
+});
+
+it("probe: CSRF permits a token refresh for the bound account and rejects a different account", async () => {
+  leaveIfPrincipalChanged("user_document", vi.fn());
+  const fetcher = vi.fn(async () =>
+    Response.json({
+      signed_in: true,
+      id: "user_document",
+      csrf_token: "current-session-token",
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(csrfHeaders()).resolves.toEqual({
+    "X-CSRF-Token": "current-session-token",
+  });
+  fetcher.mockResolvedValueOnce(
+    Response.json({
+      signed_in: true,
+      id: "user_other",
+      csrf_token: "different-session-token",
+    }),
+  );
+  await expect(csrfHeaders()).rejects.toThrow("signed-in account changed");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("probe: a CSRF read finishing during sign-out cannot authorize a private write", async () => {
+  leaveIfPrincipalChanged("user_document", vi.fn());
+  const fetcher = vi.fn(async () => {
+    beginSignOut();
+    return Response.json({
+      signed_in: true,
+      id: "user_document",
+      csrf_token: "current-session-token",
+    });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  await expect(csrfHeaders()).rejects.toThrow("console session is ending");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("checks the account observed by authenticated setup outside the console", async () => {
+  const fetcher = vi.fn(async () =>
+    Response.json({
+      signed_in: true,
+      id: "user_setup",
+      csrf_token: "setup-session-token",
+    }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(
+    csrfHeaders({ expectedPrincipalId: "user_setup" }),
+  ).resolves.toEqual({ "X-CSRF-Token": "setup-session-token" });
+  await expect(
+    csrfHeaders({ expectedPrincipalId: "user_previous" }),
+  ).rejects.toThrow("signed-in account changed");
 });

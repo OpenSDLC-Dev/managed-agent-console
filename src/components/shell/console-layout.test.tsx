@@ -381,18 +381,11 @@ it.each([false, true])(
         JSON.stringify(state.client!.getQueriesData({ queryKey: ["members"] })),
       ).toContain("Sensitive A row");
       expect(assign).not.toHaveBeenCalled();
-      if (different) {
-        expect.soft(screen.queryByText("Sensitive A row")).toBeNull();
-        expect.soft(screen.queryByTestId("private-page")).toBeNull();
-        expect.soft(screen.queryByText("Actor B")).toBeNull();
-        const signOut = screen.queryByTestId("sign-out");
-        if (signOut) expect.soft(signOut).toBeDisabled();
-      } else {
-        expect(screen.queryByText("Sensitive A row")).toBeNull();
-        expect(screen.queryByTestId("private-page")).toBeNull();
-        expect(screen.getByText("Renamed A")).toBeVisible();
-        expect(screen.getByTestId("sign-out")).toBeDisabled();
-      }
+      expect(screen.queryByText("Sensitive A row")).toBeNull();
+      expect(screen.queryByTestId("private-page")).toBeNull();
+      expect(screen.queryByText("Actor B")).toBeNull();
+      expect(screen.queryByText("Renamed A")).toBeNull();
+      expect(screen.getByTestId("sign-out")).toBeDisabled();
       expect.soft(mounts).toBe(1);
     } finally {
       await act(async () => {
@@ -413,6 +406,63 @@ it.each([false, true])(
     ).toHaveLength(1);
   },
 );
+
+it("keeps the private console offscreen until a sign-out retry is confirmed", async () => {
+  const originalFetch = fetcher.getMockImplementation()! as typeof fetch;
+  const logout = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({}, { status: 503 }))
+    .mockResolvedValueOnce(Response.json({ ok: true }));
+  fetcher.mockImplementation(async (input, init) =>
+    String(input) === "/api/auth/logout"
+      ? logout()
+      : originalFetch(input, init),
+  );
+  render(
+    <ConsoleLayout>
+      <PrivatePage />
+    </ConsoleLayout>,
+  );
+  await screen.findByTestId("private-page");
+  fireEvent.click(screen.getByTestId("sign-out"));
+  const retry = await screen.findByRole("button", { name: "Retry sign out" });
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  expect(screen.queryByTestId("signed-in-as")).toBeNull();
+  expect(assign).not.toHaveBeenCalled();
+  await refresh();
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  fireEvent.click(retry);
+  await waitFor(() => expect(assign).toHaveBeenCalledExactlyOnceWith("/login"));
+  expect(logout).toHaveBeenCalledTimes(2);
+});
+
+it("offers a fresh console when the active account changes during sign-out", async () => {
+  render(
+    <ConsoleLayout>
+      <PrivatePage />
+    </ConsoleLayout>,
+  );
+  await screen.findByTestId("private-page");
+  await screen.findByText("Actor A");
+  actor = accountB;
+  fireEvent.click(screen.getByTestId("sign-out"));
+  const reopen = await screen.findByRole("button", { name: "Reopen console" });
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "The signed-in account changed",
+  );
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  expect(screen.queryByTestId("signed-in-as")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+  expect(assign).not.toHaveBeenCalled();
+  await refresh();
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  expect(assign).not.toHaveBeenCalled();
+  fireEvent.click(reopen);
+  expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/");
+  expect(fetcher.mock.calls.some(([path]) => path === "/api/auth/logout")).toBe(
+    false,
+  );
+});
 
 it("retains the document principal across actual layout remounts", async () => {
   const first = render(

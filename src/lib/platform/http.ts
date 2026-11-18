@@ -1,4 +1,10 @@
-import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
+import {
+  bounceToLogin,
+  getDocumentPrincipalId,
+  getSignOutState,
+  hasBouncedToLogin,
+  isSignedOut,
+} from "@/lib/identity/signed-out";
 
 /**
  * Browser transports use cookie-authenticated, edge-owned private routes.
@@ -15,12 +21,24 @@ export class PlatformError extends Error {
   readonly status: number;
   readonly errorType: string;
   readonly requestId?: string;
+  readonly signedOut: boolean;
 
-  constructor(status: number, envelope: ErrorEnvelope | null) {
-    super(envelope?.error.message ?? `HTTP ${status}`);
+  constructor(
+    status: number,
+    envelope: ErrorEnvelope | null,
+    signedOut = false,
+  ) {
+    super(envelope?.error?.message ?? `HTTP ${status}`);
     this.status = status;
-    this.errorType = envelope?.error.type ?? "api_error";
+    this.errorType = envelope?.error?.type ?? "api_error";
     this.requestId = envelope?.request_id;
+    this.signedOut = signedOut;
+  }
+}
+
+export class SessionPrincipalChangedError extends Error {
+  constructor() {
+    super("Your signed-in account changed. Reopen this page to continue.");
   }
 }
 
@@ -56,11 +74,12 @@ export interface OffsetPage<T> {
  */
 export async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
-  if (isSignedOut(response)) bounceToLogin();
+  const signedOut = isSignedOut(response);
+  if (signedOut) bounceToLogin();
   const envelope = (await response
     .json()
     .catch(() => null)) as ErrorEnvelope | null;
-  throw new PlatformError(response.status, envelope);
+  throw new PlatformError(response.status, envelope, signedOut);
 }
 
 export function queryString(
@@ -302,16 +321,45 @@ export function resourceURL(path: string): string {
 
 /** Read metadata only. The browser owns the opaque HttpOnly cookie. */
 export async function csrfHeaders(
-  signal?: AbortSignal,
+  options: { expectedPrincipalId?: string; logoutSignal?: AbortSignal } = {},
 ): Promise<Record<string, string>> {
+  const { expectedPrincipalId, logoutSignal } = options;
+  const ensureActive = () => {
+    if (
+      !logoutSignal &&
+      (hasBouncedToLogin() || getSignOutState() !== "idle")
+    ) {
+      throw new Error("This console session is ending.");
+    }
+  };
+  ensureActive();
   const response = await fetch("/api/auth/session", {
     cache: "no-store",
-    ...(signal ? { signal } : {}),
+    ...(logoutSignal ? { signal: logoutSignal } : {}),
   });
   await assertOk(response);
-  const session = (await response.json()) as { csrf_token?: string };
-  if (!session.csrf_token)
+  const session = (await response.json()) as {
+    signed_in?: boolean;
+    id?: string;
+    csrf_token?: string;
+  } | null;
+  ensureActive();
+  if (typeof session?.csrf_token !== "string" || !session.csrf_token)
     throw new Error("The platform session has no CSRF token.");
+  if (
+    session.signed_in !== true ||
+    typeof session.id !== "string" ||
+    !session.id
+  )
+    throw new Error("The platform session has no signed-in account.");
+  const boundId = getDocumentPrincipalId();
+  // Use the principal and token from the same response. If the cookie changes
+  // after this read, the platform rejects the old session's token.
+  if (
+    (boundId && session.id !== boundId) ||
+    (expectedPrincipalId && session.id !== expectedPrincipalId)
+  )
+    throw new SessionPrincipalChangedError();
   return { "X-CSRF-Token": session.csrf_token };
 }
 

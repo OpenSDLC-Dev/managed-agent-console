@@ -44,6 +44,28 @@ test("the login page reports no SSO on a password-only deployment", async ({
   await expect(page.getByTestId("sso-sign-in")).toHaveCount(0);
 });
 
+test("console documents deny framing", async ({ page }) => {
+  const login = await page.goto("/login");
+  expect(login?.status()).toBe(200);
+  expect(login?.headers()["content-security-policy"]).toBe(
+    "frame-ancestors 'none'",
+  );
+  expect(login?.headers()["x-frame-options"]).toBe("DENY");
+
+  await page.locator("form[data-hydrated]").waitFor();
+  await page.getByLabel("Login name").fill("operator");
+  await page.getByLabel("Password").fill("test-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  const dashboard = await page.goto("/dashboard");
+  expect(dashboard?.status()).toBe(200);
+  expect(dashboard?.headers()["content-security-policy"]).toBe(
+    "frame-ancestors 'none'",
+  );
+  expect(dashboard?.headers()["x-frame-options"]).toBe("DENY");
+});
+
 test("wrong password is rejected; the right one lands on the Dashboard", async ({
   page,
 }) => {
