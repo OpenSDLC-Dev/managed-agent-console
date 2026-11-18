@@ -1,9 +1,4 @@
-import {
-  expect,
-  request as pwRequest,
-  test,
-  type APIRequestContext,
-} from "@playwright/test";
+import { request as pwRequest, type APIRequestContext } from "@playwright/test";
 import type { z } from "zod";
 import {
   AgentSchema,
@@ -13,6 +8,7 @@ import {
 } from "../../src/lib/platform/schemas";
 import { resolveLiveEnv } from "./env";
 import { signIn } from "./sign-in";
+import { expect, test } from "./test";
 
 /**
  * Live tier: the console against a REAL platform stack (deploy/compose in
@@ -193,8 +189,8 @@ test.afterAll(async () => {
         data: {},
       });
       if (!res.ok()) failures.push(`${path}: HTTP ${res.status()}`);
-    } catch (error) {
-      failures.push(`${path}: ${String(error)}`);
+    } catch {
+      failures.push(`${path}: request failed`);
     }
   };
   for (const id of createdAgentIds) {
@@ -562,12 +558,23 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
     .poll(() => idleRows.count(), { timeout: turnTimeout })
     .toBeGreaterThan(idleCountAtDeny);
 
-  // Copy all serializes the real trace.
-  await page.getByRole("button", { name: "Copy all" }).click();
-  await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
-  const copied = JSON.parse(
-    await page.evaluate(() => navigator.clipboard.readText()),
-  ) as { type: string }[];
+  // Copy all serializes the real trace. Clear the browser clipboard even if
+  // the assertion or JSON parse fails.
+  let copied: { type: string }[];
+  try {
+    await page.getByRole("button", { name: "Copy all" }).click();
+    await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
+    copied = await page.evaluate(async () => {
+      const text = await navigator.clipboard.readText();
+      try {
+        return JSON.parse(text) as { type: string }[];
+      } catch {
+        throw new Error("Copied session events are not valid JSON");
+      }
+    });
+  } finally {
+    await page.evaluate(() => navigator.clipboard.writeText(""));
+  }
   // Link B for events: "Copy all" serializes the raw wire events the console
   // holds, so this is the real platform's event stream — the one shape the two
   // helpers above never see, since the trace arrives over SSE.

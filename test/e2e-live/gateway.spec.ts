@@ -1,13 +1,9 @@
 import { nativeRequest, privateHeaders } from "./native-request";
 import { LIVE_BROWSER_ORIGIN } from "./env";
-import {
-  expect,
-  test,
-  type APIRequestContext,
-  type Page,
-} from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
 import { resolveLiveEnv } from "./env";
 import { signIn } from "./sign-in";
+import { expect, test } from "./test";
 
 /**
  * Plan 10 slice 6: the gateway screens against the compose stack's REAL model
@@ -43,7 +39,7 @@ async function bff(page: Page, method: string, path: string, data?: unknown) {
     data,
     headers: await privateHeaders(page),
   });
-  expect(res.ok(), `${method} ${path}: ${await res.text()}`).toBe(true);
+  expect(res.ok(), `${method} ${path}: HTTP ${res.status()}`).toBe(true);
   return res.json();
 }
 
@@ -129,8 +125,8 @@ test.afterAll(async () => {
       const res = await api.fetch(url, { method, headers, data });
       if (!res.ok()) failures.push(`${what}: HTTP ${res.status()}`);
       return res.ok() ? await res.json() : undefined;
-    } catch (error) {
-      failures.push(`${what}: ${String(error)}`);
+    } catch {
+      failures.push(`${what}: request or response read failed`);
     }
   };
   const admin = `${LIVE_BROWSER_ORIGIN}/admin/v1`;

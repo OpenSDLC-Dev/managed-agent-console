@@ -1610,6 +1610,21 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "session-debug-pending-approval",
+    route: `/sessions/${GATED}`,
+    fixture: GATED,
+    description:
+      "Debug tab with a standalone approval banner showing the tool and its full input.",
+    setup: async (page) => {
+      await traceLive(page);
+      await page.getByRole("button", { name: "Debug", exact: true }).click();
+      await page
+        .locator('[data-testid="events-toolbar"][data-tab="debug"]')
+        .waitFor();
+      await page.getByTestId("approval-banner").waitFor();
+    },
+  },
+  {
     id: "session-resources",
     route: `/sessions/${GATED}?inspector=resources`,
     fixture: `${GATED} with an attached file`,
@@ -2595,6 +2610,22 @@ export const SURFACES: Surface[] = [
   },
 
   // ---- the one route outside the console shell --------------------------
+  {
+    id: "sign-out-unconfirmed",
+    route: "/members",
+    fixture: "unavailable logout endpoint",
+    description:
+      "Retry sign-out surface when the platform cannot confirm revocation. Private console content is hidden.",
+    setup: async (page) => {
+      await page.route("**/api/auth/logout", (route) =>
+        route.fulfill({ status: 503 }),
+      );
+      await page.getByTestId("sign-out").click();
+      await page
+        .locator('[data-native-identity="sign-out-unconfirmed"]')
+        .waitFor();
+    },
+  },
   {
     id: "login",
     route: "/login",

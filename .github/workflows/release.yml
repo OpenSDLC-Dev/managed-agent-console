@@ -1,27 +1,17 @@
 name: release
 
-# Publishes the console image for a release, and gives that release its notes.
-#
-# The trigger is the GitHub Release, not a tag push: release-please creates the
-# release through the API, which fires no push event, and a bare tag with no
-# release is not a release. workflow_dispatch stays because tag-push triggers
-# never fire retroactively — it is how v0.1.0 got an image at all.
+# workflow_run loads this publisher from the default branch, even when the
+# request was created by a release-tag workflow or a dispatch-selected ref.
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing tag to build and publish, e.g. v0.1.0"
-        required: true
-        type: string
+  workflow_run:
+    workflows: [release request]
+    types: [completed]
 
 permissions:
   contents: read
 
-# Publishes mutate rolling tags, so they run one at a time — queued, never
-# cancelled: dropping a publish would leave an architecture image pushed with
-# no manifest list pointing at it.
+# Publishes mutate rolling tags. Serialize them and keep the active publish
+# running until it can join the architecture images into a manifest.
 concurrency:
   group: release-publish
   cancel-in-progress: false
@@ -30,11 +20,72 @@ env:
   IMAGE: ghcr.io/opensdlc-dev/managed-agent-console
 
 jobs:
+  validate:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.ref_protected &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.id == github.event.repository.id &&
+      (github.event.workflow_run.path == '.github/workflows/release-request.yml' ||
+       startsWith(github.event.workflow_run.path, '.github/workflows/release-request.yml@')) &&
+      (github.event.workflow_run.event == 'release' ||
+       (github.event.workflow_run.event == 'workflow_dispatch' &&
+        github.event.workflow_run.head_branch == 'main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      revision: ${{ steps.release.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the published release to a protected main commit
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUEST_TITLE: ${{ github.event.workflow_run.display_title }}
+          REQUEST_EVENT: ${{ github.event.workflow_run.event }}
+          REQUEST_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          tag="${REQUEST_TITLE#Release request }"
+          if [[ "$REQUEST_TITLE" != "Release request $tag" ||
+                ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Expected a stable vX.Y.Z release tag"
+            exit 1
+          fi
+          revision="$(git rev-parse --verify "refs/tags/$tag^{commit}")"
+          if ! git merge-base --is-ancestor "$revision" HEAD; then
+            echo "::error::The requested release commit is outside protected main"
+            exit 1
+          fi
+          if [[ "$REQUEST_EVENT" == release && "$revision" != "$REQUEST_SHA" ]]; then
+            echo "::error::The requested release tag no longer points to the release event commit"
+            exit 1
+          fi
+          if [[ "$REQUEST_EVENT" == workflow_dispatch ]]; then
+            git merge-base --is-ancestor "$REQUEST_SHA" HEAD
+          fi
+          version="${tag#v}"
+          gh release view "$tag" --json tagName,isDraft,isPrerelease,publishedAt |
+            jq -e --arg tag "$tag" '.tagName == $tag and .isDraft == false and .isPrerelease == false and .publishedAt != null' >/dev/null
+          git show "$revision:package.json" |
+            jq -e --arg version "$version" '.version == $version' >/dev/null
+          printf 'tag=%s\nversion=%s\nrevision=%s\n' "$tag" "$version" "$revision" >> "$GITHUB_OUTPUT"
+
   # The narrative half, deliberately independent of the image. release-please
   # writes a release body from commit subjects; the version's own changelog file
   # is the narrative that body should have been — and a release whose image build
   # fails must still say what it is rather than keep the placeholder.
   notes:
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -42,19 +93,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ needs.validate.outputs.revision }}
           persist-credentials: false
 
       - name: Replace the release body with its changelog file
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          TAG: ${{ needs.validate.outputs.tag }}
         run: |
           version="${TAG#v}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::warning::no GitHub Release for $TAG — no notes to write"
-            exit 0
-          fi
           if node scripts/changelog.mjs notes "$version" > "$RUNNER_TEMP/notes.md"; then
             gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
             echo "release body taken from docs/changelog/$version.md"
@@ -68,6 +115,7 @@ jobs:
   # repositories. Each leg scans before it pushes, so nothing reaches the
   # registry that the gate has not already cleared.
   build:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -84,54 +132,44 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ needs.validate.outputs.revision }}
           persist-credentials: false
 
-      # The tag is the version. Disagreeing with package.json means the release
-      # was cut wrong, and a published image is the worst place to find out.
-      - name: Resolve version
-        id: version
-        run: |
-          ref="${{ inputs.tag || github.event.release.tag_name }}"
-          version="${ref#v}"
-          pkg="$(node -p "require('./package.json').version")"
-          if [ "$version" != "$pkg" ]; then
-            echo "::error::tag $ref says $version, package.json says $pkg"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          # Not github.sha: on the dispatch path that is the sha of the ref the
-          # run was launched from (the default branch), not the tag checked out
-          # above — which would label the image with an unrelated commit.
-          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
       - name: Build
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          REVISION: ${{ needs.validate.outputs.revision }}
+          ARCH: ${{ matrix.arch }}
         run: |
           docker build \
-            --build-arg VERSION="${{ steps.version.outputs.version }}" \
-            --build-arg REVISION="${{ steps.version.outputs.revision }}" \
-            -t "$IMAGE:${{ steps.version.outputs.version }}-${{ matrix.arch }}" .
+            --build-arg VERSION="$VERSION" \
+            --build-arg REVISION="$REVISION" \
+            -t "$IMAGE:$VERSION-$ARCH" .
 
       - name: Scan image (trivy, HIGH/CRITICAL gate)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          image-ref: ${{ env.IMAGE }}:${{ needs.validate.outputs.version }}-${{ matrix.arch }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
 
       - name: Push architecture image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker push "$IMAGE:${{ steps.version.outputs.version }}-${{ matrix.arch }}"
+          printf '%s\n' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$VERSION-$ARCH"
 
   # Joins the two scanned architecture images into one manifest list. buildx
   # ships on the runner, so this needs no third-party action.
   publish:
     # `notes` too, so the image block is appended to the body it will keep:
     # the two jobs would otherwise race for the same field.
-    needs: [build, notes]
+    needs: [validate, build, notes]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -140,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ needs.validate.outputs.revision }}
           # Rolling-tag decisions below read the full tag list.
           fetch-depth: 0
           persist-credentials: false
@@ -150,51 +188,43 @@ jobs:
       # otherwise a backfill of an older tag (the documented dispatch recovery,
       # or two runs finishing out of order) would quietly downgrade whoever
       # pulls `latest`.
-      - name: Resolve version and rolling aliases
-        id: version
-        run: |
-          ref="${{ inputs.tag || github.event.release.tag_name }}"
-          version="${ref#v}"
-          minor="${version%.*}"
-          newest="$(git tag -l 'v[0-9]*' | sed 's/^v//' | sort -V | tail -1)"
-          newest_in_minor="$(git tag -l "v$minor.*" | sed 's/^v//' | sort -V | tail -1)"
-          tags="-t $IMAGE:$version"
-          if [ "$version" = "$newest_in_minor" ]; then
-            tags="$tags -t $IMAGE:$minor"
-          else
-            echo "$version is not the newest $minor.x — leaving $IMAGE:$minor where it is"
-          fi
-          if [ "$version" = "$newest" ]; then
-            tags="$tags -t $IMAGE:latest"
-          else
-            echo "$version is not the newest release ($newest) — leaving $IMAGE:latest where it is"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$ref" >> "$GITHUB_OUTPUT"
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-
       - name: Create the manifest list
         id: manifest
         env:
-          V: ${{ steps.version.outputs.version }}
-          TAGS: ${{ steps.version.outputs.tags }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ needs.validate.outputs.version }}
+        shell: bash
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          # $TAGS is a built-here list of -t flags; word splitting is the point.
-          # shellcheck disable=SC2086
-          docker buildx imagetools create $TAGS \
+          minor="${V%.*}"
+          # Rolling aliases consider stable SemVer tags, as does admission.
+          stable_versions="$(git tag -l | awk '/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/ {print substr($0, 2)}' | sort -V)"
+          newest="$(tail -1 <<< "$stable_versions")"
+          newest_in_minor="$(awk -F. -v minor="$minor" '($1 "." $2) == minor' <<< "$stable_versions" | tail -1)"
+          tags=("$IMAGE:$V")
+          if [[ "$V" == "$newest_in_minor" ]]; then
+            tags+=("$IMAGE:$minor")
+          fi
+          if [[ "$V" == "$newest" ]]; then
+            tags+=("$IMAGE:latest")
+          fi
+          args=()
+          for tag in "${tags[@]}"; do
+            args+=(-t "$tag")
+          done
+          printf '%s\n' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create "${args[@]}" \
             "$IMAGE:$V-amd64" "$IMAGE:$V-arm64"
           digest="$(docker buildx imagetools inspect "$IMAGE:$V" --format '{{.Manifest.Digest}}')"
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::The registry did not return a valid manifest digest"
+            exit 1
+          fi
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
           {
             echo "### Published"
             echo
             echo '```'
-            # Echo the aliases actually moved, not the ones a release usually
-            # moves — a backfill publishes fewer, and the summary should say so.
-            for t in $TAGS; do
-              [ "$t" = "-t" ] || echo "$t"
-            done
+            printf '%s\n' "${tags[@]}"
             echo
             echo "digest: $digest"
             echo '```'
@@ -205,14 +235,11 @@ jobs:
       - name: Record the image on the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
-          V: ${{ steps.version.outputs.version }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          V: ${{ needs.validate.outputs.version }}
           DIGEST: ${{ steps.manifest.outputs.digest }}
+        shell: bash
         run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::warning::no GitHub Release for $TAG — image published, nothing to record it on"
-            exit 0
-          fi
           gh release view "$TAG" --json body --jq .body \
             | awk '/^<!-- image -->/{exit} {print}' > "$RUNNER_TEMP/notes.md"
           printf '\n<!-- image -->\n\n## Image\n\n```\ndocker pull %s:%s\n```\n\nMulti-arch (`linux/amd64`, `linux/arm64`), digest `%s`.\n' \

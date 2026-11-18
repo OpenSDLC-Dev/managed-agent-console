@@ -118,7 +118,6 @@ export function Time({ iso }: { iso: string | null | undefined }) {
  */
 export const WARNING_BOX =
   "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200";
-export const WARNING_MUTED = "text-amber-700 dark:text-amber-300";
 
 const SESSION_STATUS_STYLE: Record<string, string> = {
   succeeded:

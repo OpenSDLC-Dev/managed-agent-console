@@ -128,7 +128,7 @@ model tokens:
 RUN_LIVE_CONSOLE_TESTS=1 pnpm test:e2e:live
 ```
 
-Once opted in, missing configuration **fails** rather than skips. It creates `live-e2e-`-prefixed resources, archives its agents on the way out, and runs exactly one model-driven session.
+Once opted in, missing configuration **fails** rather than skips. It creates `live-e2e-`-prefixed resources, archives its agents on the way out, and runs exactly one model-driven session. The live tier disables automatic browser captures and Playwright debug logging because it uses real credentials.
 
 ## Contributing
 

@@ -84,6 +84,7 @@ export function NativeAuth({ setup = false }: { setup?: boolean }) {
         body,
         "POST",
         !setup || config?.mode === "password",
+        session?.id,
       );
       enterConsole();
     } catch (error) {
@@ -98,7 +99,7 @@ export function NativeAuth({ setup = false }: { setup?: boolean }) {
   }
 
   const password = config?.mode === "password";
-  const canSetup = password || session !== null;
+  const canSetup = password || (session?.signed_in === true && !!session.id);
   return (
     <main
       className="flex min-h-screen items-center justify-center bg-background px-6 py-10"

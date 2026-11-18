@@ -84,7 +84,9 @@ for (const surface of SURFACES.filter((s) => s.mode !== "platform")) {
     // Setups may reload the page to verify persisted navigation preferences.
     if (surface.route !== "/login") {
       await page
-        .locator('[data-testid="connection-dot"]:not([data-state="checking"])')
+        .locator(
+          '[data-testid="connection-dot"]:not([data-state="checking"]), [data-native-identity="sign-out-unconfirmed"]',
+        )
         .waitFor({ state: "attached" });
     }
 

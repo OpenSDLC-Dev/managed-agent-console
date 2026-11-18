@@ -1,7 +1,7 @@
 import { inspect } from "node:util";
 import type { TestInfo } from "@playwright/test";
 
-// Playwright 1.64.1 serializes matcherResult.ariaSnapshot in BOTH step.complete
+// Playwright 1.65.1 serializes matcherResult.ariaSnapshot in BOTH step.complete
 // and _failWithError, before reporter IPC and error-context.md. NO_COPY_PROMPT
 // controls only the separate page snapshot. No public matcher redaction hook
 // exists at this pin. Keep this narrow seam pinned and fail before browser use
@@ -9,10 +9,13 @@ import type { TestInfo } from "@playwright/test";
 type Failure = { error?: unknown; softError?: unknown };
 type Step = { complete: (result: Failure) => void };
 type NativeTestInfo = TestInfo & {
-  _addStep: (data: { title: string; subtitle?: string }, parent?: Step) => Step;
+  _addStep: (
+    data: { title: string; subtitle?: string; params?: unknown },
+    parent?: Step,
+  ) => Step;
   _failWithError: (error: unknown) => void;
 };
-const redact = (text: string) =>
+export const redactIssuedKeys = (text: string) =>
   text.replace(
     /sk-map-(api01|env01)-[A-Za-z0-9_-]+/g,
     (_, prefix: string) =>
@@ -20,19 +23,38 @@ const redact = (text: string) =>
   );
 
 export function protectFailureDiagnostics(info: TestInfo, version: string) {
+  if (version !== "1.65.1")
+    throw new Error(
+      "Native failure guard requires the verified Playwright 1.65.1 error hooks",
+    );
+  guardFailureSerialization(
+    info,
+    redactIssuedKeys,
+    false,
+    "Native failure guard requires the verified Playwright 1.65.1 error hooks",
+  );
+}
+
+const guarded = new WeakSet<TestInfo>();
+
+export function guardFailureSerialization(
+  info: TestInfo,
+  redact: (text: string) => string,
+  omitStepParameters: boolean,
+  incompatibleMessage: string,
+) {
+  if (guarded.has(info)) return;
   const internal = info as NativeTestInfo;
   if (
-    version !== "1.64.1" ||
     typeof internal._addStep !== "function" ||
     internal._addStep.length !== 2 ||
     typeof internal._failWithError !== "function" ||
     internal._failWithError.length !== 1 ||
     !Array.isArray(info.errors)
   )
-    throw new Error(
-      "Native failure guard requires the verified Playwright 1.64.1 error hooks",
-    );
+    throw new Error(incompatibleMessage);
 
+  guarded.add(info);
   const seen = new WeakSet<Error>();
   function error(value: unknown): unknown {
     if (!(value instanceof Error))
@@ -57,6 +79,7 @@ export function protectFailureDiagnostics(info: TestInfo, version: string) {
         ...data,
         title: redact(data.title),
         subtitle: data.subtitle && redact(data.subtitle),
+        ...(omitStepParameters ? { params: undefined } : {}),
       },
       parent,
     );

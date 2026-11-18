@@ -10,6 +10,7 @@ import type { SessionEvent } from "@/lib/platform/types";
 import type { PreviewState } from "@/lib/session-trace/store";
 import { Time, WARNING_BOX } from "@/components/console/bits";
 import { JsonBlock } from "@/components/console/detail";
+import { ToolUseSource } from "@/components/console/tool-use-source";
 import { durationLabel } from "@/lib/session-trace/timing";
 import {
   isKnownEventType,
@@ -235,7 +236,12 @@ export function TranscriptCard({
     threadMessage ||
     event.type === "user.message" ||
     event.type === "agent.message";
-  const tool = event.input !== undefined || event.type.includes("tool_result");
+  const toolUse =
+    event.type === "agent.tool_use" ||
+    event.type === "agent.mcp_tool_use" ||
+    event.type === "agent.custom_tool_use";
+  const tool =
+    toolUse || event.input !== undefined || event.type.includes("tool_result");
   const conversational = message || tool || event.type === "agent.thinking";
   if (!conversational) {
     return (
@@ -265,13 +271,16 @@ export function TranscriptCard({
       </button>
     );
   }
+  const input = event.input;
   const command =
+    event.type === "agent.tool_use" &&
     event.name === "bash" &&
-    typeof event.input === "object" &&
-    event.input !== null &&
-    "command" in event.input &&
-    typeof event.input.command === "string"
-      ? event.input.command
+    typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    Object.keys(input).length === 1
+      ? input.command
       : undefined;
   const displayActor = event.type.startsWith("user.")
     ? "User"
@@ -330,13 +339,20 @@ export function TranscriptCard({
             {event.type}
           </span>
           {event.name !== undefined && (
-            <span className="block font-medium">{String(event.name)}</span>
+            <span className="block break-all font-medium">{event.name}</span>
           )}
-          {event.input !== undefined && (
+          {toolUse && (
+            <span className="block break-all text-xs text-muted-foreground">
+              <ToolUseSource event={event} />
+            </span>
+          )}
+          {(toolUse || input !== undefined) && (
             <span className="block whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
               {command !== undefined
                 ? "$ " + command
-                : JSON.stringify(event.input, null, 2)}
+                : input === undefined
+                  ? "Input unavailable"
+                  : JSON.stringify(input, null, 2)}
             </span>
           )}
           {content?.map((block, index) => (
@@ -353,7 +369,7 @@ export function TranscriptCard({
                 : JSON.stringify(block, null, 2)}
             </span>
           ))}
-          {!content?.length && event.input === undefined && (
+          {!content?.length && !toolUse && input === undefined && (
             <span
               className="block whitespace-pre-wrap break-words"
               data-testid={

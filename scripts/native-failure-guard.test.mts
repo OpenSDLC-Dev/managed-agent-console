@@ -21,14 +21,14 @@ it("native failure guard refuses an unverified version or missing serialization 
   const { info, serialized } = fixture();
   expect(() =>
     protectFailureDiagnostics(info as unknown as TestInfo, "1.65.0"),
-  ).toThrow("verified Playwright 1.64.1");
+  ).toThrow("verified Playwright 1.65.1");
   for (const name of ["_addStep", "_failWithError"]) {
     expect(() =>
       protectFailureDiagnostics(
         { ...info, [name]: undefined } as unknown as TestInfo,
-        "1.64.1",
+        "1.65.1",
       ),
-    ).toThrow("verified Playwright 1.64.1");
+    ).toThrow("verified Playwright 1.65.1");
   }
   expect(serialized).toEqual([]);
 });
@@ -40,7 +40,7 @@ it.each([
   "native failure guard protects %s soft, aggregate and non-Error diagnostics before serialization",
   (prefix, label) => {
     const { info, serialized } = fixture();
-    protectFailureDiagnostics(info as unknown as TestInfo, "1.64.1");
+    protectFailureDiagnostics(info as unknown as TestInfo, "1.65.1");
     const marker = ["sk", "map", prefix, "synthetic"].join("-");
     const failure = Object.assign(new Error(`ordinary detail ${marker}`), {
       matcherResult: {
@@ -74,7 +74,7 @@ it("native failure guard refuses an incompatible step before completion", () => 
     void _parent;
     return { complete: undefined } as never;
   };
-  protectFailureDiagnostics(info as unknown as TestInfo, "1.64.1");
+  protectFailureDiagnostics(info as unknown as TestInfo, "1.65.1");
   expect(() => info._addStep({ title: "ordinary step" }, undefined)).toThrow(
     "cannot protect this Playwright step",
   );
