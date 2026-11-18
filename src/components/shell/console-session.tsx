@@ -66,7 +66,7 @@ function NativeSessionBoundary({ children }: { children: React.ReactNode }) {
     }
   }, [data?.signed_in, data?.id]);
   if (signOutState !== "idle") {
-    return <SignOutStatus pending={signOutState === "pending"} />;
+    return <SignOutStatus state={signOutState} />;
   }
   if (
     !boundId ||

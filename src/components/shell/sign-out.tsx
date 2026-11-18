@@ -6,10 +6,17 @@ import {
   beginSignOut,
   getSignOutState,
   leaveAfterSignOut,
+  type SignOutState,
   signOutUnconfirmed,
   subscribeToSignOut,
 } from "@/lib/identity/signed-out";
-import { assertOk, csrfHeaders, PlatformError } from "@/lib/platform/http";
+import {
+  assertOk,
+  csrfHeaders,
+  PlatformError,
+  SessionPrincipalChangedError,
+} from "@/lib/platform/http";
+import { enterConsole } from "@/lib/platform/native";
 
 const SIGN_OUT_TIMEOUT_MS = 5_000;
 
@@ -37,7 +44,7 @@ export async function signOut() {
     if (result?.ok !== true) throw new Error("Logout was not confirmed.");
   } catch (error) {
     if (!(error instanceof PlatformError && error.signedOut)) {
-      signOutUnconfirmed();
+      signOutUnconfirmed(error instanceof SessionPrincipalChangedError);
       return;
     }
   } finally {
@@ -46,28 +53,51 @@ export async function signOut() {
   leaveAfterSignOut();
 }
 
-export function SignOutStatus({ pending }: { pending: boolean }) {
+export function SignOutStatus({
+  state,
+}: {
+  state: Exclude<SignOutState, "idle">;
+}) {
+  const pending = state === "pending";
+  const accountChanged = state === "account-changed";
   return (
     <main
       className="flex min-h-screen flex-col items-start justify-center gap-4 self-center px-6 py-10"
-      data-native-identity={pending ? "signing-out" : "sign-out-unconfirmed"}
+      data-native-identity={
+        pending
+          ? "signing-out"
+          : accountChanged
+            ? "sign-out-account-changed"
+            : "sign-out-unconfirmed"
+      }
     >
       {pending ? (
         <p role="status">Signing out…</p>
+      ) : accountChanged ? (
+        <p role="alert">
+          The signed-in account changed before sign-out could be confirmed.
+          Reopen the console to review the current account.
+        </p>
       ) : (
         <p role="alert">
           The platform could not confirm sign-out. Retry before leaving this
           device unattended.
         </p>
       )}
-      <Button
-        type="button"
-        disabled={pending}
-        data-testid="sign-out"
-        onClick={() => void signOut()}
-      >
-        {pending ? "Sign out" : "Retry sign out"}
-      </Button>
+      {accountChanged ? (
+        <Button type="button" onClick={enterConsole}>
+          Reopen console
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          disabled={pending}
+          data-testid="sign-out"
+          onClick={() => void signOut()}
+        >
+          {pending ? "Sign out" : "Retry sign out"}
+        </Button>
+      )}
     </main>
   );
 }

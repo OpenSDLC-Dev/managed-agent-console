@@ -436,6 +436,34 @@ it("keeps the private console offscreen until a sign-out retry is confirmed", as
   expect(logout).toHaveBeenCalledTimes(2);
 });
 
+it("offers a fresh console when the active account changes during sign-out", async () => {
+  render(
+    <ConsoleLayout>
+      <PrivatePage />
+    </ConsoleLayout>,
+  );
+  await screen.findByTestId("private-page");
+  await screen.findByText("Actor A");
+  actor = accountB;
+  fireEvent.click(screen.getByTestId("sign-out"));
+  const reopen = await screen.findByRole("button", { name: "Reopen console" });
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "The signed-in account changed",
+  );
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  expect(screen.queryByTestId("signed-in-as")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Retry sign out" })).toBeNull();
+  expect(assign).not.toHaveBeenCalled();
+  await refresh();
+  expect(screen.queryByTestId("private-page")).toBeNull();
+  expect(assign).not.toHaveBeenCalled();
+  fireEvent.click(reopen);
+  expect(assign).toHaveBeenCalledExactlyOnceWith("http://localhost/");
+  expect(fetcher.mock.calls.some(([path]) => path === "/api/auth/logout")).toBe(
+    false,
+  );
+});
+
 it("retains the document principal across actual layout remounts", async () => {
   const first = render(
     <ConsoleLayout>

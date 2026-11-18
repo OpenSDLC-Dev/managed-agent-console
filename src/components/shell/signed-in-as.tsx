@@ -16,7 +16,7 @@ function ObservedAccount() {
   return signOutState === "idle" ? (
     <Account session={session} />
   ) : (
-    <SignOutStatus pending={signOutState === "pending"} />
+    <SignOutStatus state={signOutState} />
   );
 }
 

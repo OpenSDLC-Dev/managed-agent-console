@@ -27,7 +27,8 @@ let bouncing = false;
  * carrying a `return_to` for the very page the operator chose to leave, so the
  * next sign-in would land them back on it. Their intent outranks that inference.
  */
-type SignOutState = "idle" | "pending" | "unconfirmed";
+export type SignOutState =
+  "idle" | "pending" | "unconfirmed" | "account-changed";
 let signOutState: SignOutState = "idle";
 const signOutListeners = new Set<() => void>();
 
@@ -62,13 +63,13 @@ export function resetSignedOutBounceForTests(): void {
 
 /** Records the operator's intent before the sign-out request goes out. */
 export function beginSignOut(): boolean {
-  if (signOutState === "pending") return false;
+  if (signOutState !== "idle" && signOutState !== "unconfirmed") return false;
   setSignOutState("pending");
   return true;
 }
 
-export function signOutUnconfirmed(): void {
-  setSignOutState("unconfirmed");
+export function signOutUnconfirmed(accountChanged: boolean): void {
+  setSignOutState(accountChanged ? "account-changed" : "unconfirmed");
 }
 
 /**

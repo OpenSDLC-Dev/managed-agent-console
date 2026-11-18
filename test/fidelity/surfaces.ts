@@ -2627,6 +2627,35 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "sign-out-account-changed",
+    route: "/members",
+    fixture: "replacement account metadata",
+    description:
+      "Reopen console action after the active account changes during sign-out.",
+    setup: async (page) => {
+      await page.evaluate(() => {
+        const fetcher = window.fetch;
+        window.fetch = (input, init) => {
+          // The sign-out metadata check has a timeout signal. Leave the
+          // console's background session query on the signed-in fixture.
+          if (input === "/api/auth/session" && init?.signal)
+            return Promise.resolve(
+              Response.json({
+                signed_in: true,
+                id: "user_replacement_fixture",
+                csrf_token: "unused-fidelity-fixture",
+              }),
+            );
+          return fetcher(input, init);
+        };
+      });
+      await page.getByTestId("sign-out").click();
+      await page
+        .locator('[data-native-identity="sign-out-account-changed"]')
+        .waitFor();
+    },
+  },
+  {
     id: "login",
     route: "/login",
     fixture: "n/a",

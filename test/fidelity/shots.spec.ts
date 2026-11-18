@@ -85,7 +85,7 @@ for (const surface of SURFACES.filter((s) => s.mode !== "platform")) {
     if (surface.route !== "/login") {
       await page
         .locator(
-          '[data-testid="connection-dot"]:not([data-state="checking"]), [data-native-identity="sign-out-unconfirmed"]',
+          '[data-testid="connection-dot"]:not([data-state="checking"]), [data-native-identity^="sign-out-"]',
         )
         .waitFor({ state: "attached" });
     }

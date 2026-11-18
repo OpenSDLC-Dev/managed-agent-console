@@ -36,6 +36,12 @@ export class PlatformError extends Error {
   }
 }
 
+export class SessionPrincipalChangedError extends Error {
+  constructor() {
+    super("Your signed-in account changed. Reopen this page to continue.");
+  }
+}
+
 /** Keyset-cursor list envelope; sessions additionally carry prev_page. */
 export interface Page<T> {
   data: T[];
@@ -353,9 +359,7 @@ export async function csrfHeaders(
     (boundId && session.id !== boundId) ||
     (expectedPrincipalId && session.id !== expectedPrincipalId)
   )
-    throw new Error(
-      "Your signed-in account changed. Reopen this page to continue.",
-    );
+    throw new SessionPrincipalChangedError();
   return { "X-CSRF-Token": session.csrf_token };
 }
 
