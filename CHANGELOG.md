@@ -6,14 +6,11 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-### Fixed
-
-- Tool approvals show the execution inputs and MCP server. Console documents deny framing.
-- Account changes block stale writes. Sign-out hides private content and offers recovery if revocation is unconfirmed.
-- Live browser tests suppress credential-bearing diagnostics. Release jobs publish only a verified release commit from `main`.
+Nothing yet.
 
 ## Released
 
+- [0.9.1](docs/changelog/0.9.1.md) — 2026-11-19 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.9.0...v0.9.1)
 - [0.9.0](docs/changelog/0.9.0.md) — 2026-11-18 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.2...v0.9.0)
 - [0.8.2](docs/changelog/0.8.2.md) — 2026-10-12 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.1...v0.8.2)
 - [0.8.1](docs/changelog/0.8.1.md) — 2026-10-04 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.8.0...v0.8.1)
@@ -26,4 +23,4 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - [0.2.0](docs/changelog/0.2.0.md) — 2026-08-08 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.1.0...v0.2.0)
 - [0.1.0](docs/changelog/0.1.0.md) — 2026-08-07 · [tag](https://github.com/OpenSDLC-Dev/managed-agent-console/releases/tag/v0.1.0)
 
-[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.9.1...HEAD
