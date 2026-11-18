@@ -4,6 +4,15 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 69 native-only Console acceptance
+
+[PR #261](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/261) published
+the Console image from revision `8158c6a`. The [platform deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/actions/runs/44195903669)
+served that image through the staging HTTPS edge. The owner signed in again
+with Google and opened Models and Service accounts. A new Console session
+received a model reply. The Usage page showed the initiating principal, session
+and token counts for the same request.
+
 ## Platform plan 69 slice 5 — local source checks
 
 On 2026-11-15, [PR #259](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/259)'s

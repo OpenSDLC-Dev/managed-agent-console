@@ -40,8 +40,7 @@ it cannot check a person's resource access without their cookie and never spends
 
 **Upgrade boundary:** this source requires the platform's native login and application edge from plan 69 slice 6 or later.
 See [the upgrade procedure](./docs/deploy-gcp.md#upgrade-boundary) before replacing a legacy installation.
-**Release hold:** do not cut a SemVer release until platform plan 69 slice 7.
-The [SHA image channel](./docs/releasing.md#non-release-sha-channel) delivers this work without changing a release tag.
+The [SHA image channel](./docs/releasing.md#non-release-sha-channel) publishes images for staging.
 
 ## Running the Console
 
