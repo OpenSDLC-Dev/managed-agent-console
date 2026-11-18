@@ -8,8 +8,11 @@ How a console release is cut. The reasoning behind each choice is
 ## Non-release SHA channel
 
 Check the platform's [active release holds](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/STATE.md)
-before cutting a SemVer release. The platform also owns staging deployment and
-rollback. This repository publishes the Console image. See [deployment ownership](./deploy-gcp.md).
+before merging a release-please PR, cutting a SemVer release or dispatching
+`release.yml`, including for an existing tag. While a hold applies, wait.
+
+The platform owns staging deployment and rollback. This repository publishes
+the Console image. See [deployment ownership](./deploy-gcp.md).
 
 On a trusted repository push to `main`, `ci.yml` waits for both `ci-ok` and the Docker vulnerability gate.
 It builds amd64 and arm64 on native runners, labels the full checked-out source SHA, and scans each child before push.
