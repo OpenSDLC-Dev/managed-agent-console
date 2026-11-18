@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -134,7 +135,7 @@ describe("EditEnvironmentPage", () => {
   it("shows the detail skeleton while the environment loads", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -145,13 +146,15 @@ describe("EditEnvironmentPage", () => {
   it("surfaces the platform error envelope", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json(
-          {
-            type: "error",
-            error: { type: "not_found_error", message: "environment gone" },
-          },
-          404,
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "environment gone" },
+            },
+            404,
+          ),
         ),
       ),
     );
@@ -162,7 +165,7 @@ describe("EditEnvironmentPage", () => {
   it("renders the edit-mode editor seeded from the loaded environment", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(environment)),
+      withTestSession(vi.fn(async () => json(environment))),
     );
     renderPage();
 

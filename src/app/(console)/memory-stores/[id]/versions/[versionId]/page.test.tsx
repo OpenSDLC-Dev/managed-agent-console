@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -23,8 +24,15 @@ function paramsFor(versionId: string) {
   } as unknown as Promise<typeof value>;
 }
 
-function renderPage(fetch: ReturnType<typeof vi.fn>, versionId: string) {
-  vi.stubGlobal("fetch", fetch);
+function renderPage(
+  fetch: ReturnType<
+    typeof vi.fn<
+      (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+    >
+  >,
+  versionId: string,
+) {
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

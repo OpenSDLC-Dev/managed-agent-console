@@ -4,6 +4,52 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 69 native-only Console acceptance
+
+[PR #261](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/261) published
+the Console image from revision `8158c6a`. The [platform deployment](https://github.com/OpenSDLC-Dev/managed-agent-platform/actions/runs/44195903669)
+served that image through the staging HTTPS edge. The owner signed in again
+with Google and opened Models and Service accounts. A new Console session
+received a model reply. The Usage page showed the initiating principal, session
+and token counts for the same request.
+
+## Platform plan 69 slice 5 — local source checks
+
+On 2026-11-15, [PR #259](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/259)'s
+candidate ran against the matching platform slice 5 working-tree snapshot based on `f28e2c9`.
+All 21 model-free native tests passed. The new scenario checked the private cookie write,
+persisted initiator after reload, unchanged pause state and the manual session's caller attribution.
+The first run exposed an invalid service-account fixture name: deployment IDs contain an
+underscore, which that API refuses. The fixture now uses lowercase letters, digits and hyphens.
+
+The production build, typecheck, formatting, source lint, 210 mock browser tests and
+2,114 unit tests passed. Coverage was 93.35% statements, 87.40% branches, 91.54% functions
+and 94.65% lines. Three child-start probes exceeded their 5-second deadlines in the initial
+parallel coverage run; an isolated run and the complete two-worker run passed unchanged.
+Source lint excluded unrelated, untracked `.claude` artifacts already in the checkout.
+
+Native startup stalled while WSL read the Windows checkout. The run used a Git archive of
+the committed Console candidate, with the fixture correction, in an ext4 temporary directory.
+Dependencies came from the frozen lockfile; the production build and canonical native commands
+ran there. The platform verifier compared its candidate snapshot file-by-file with the working tree.
+Runtime receipts confirmed cleanup of all owned processes, containers and volumes.
+
+Chrome walked `native-deployment-initiator` and `native-deployment-initiator-form` in light and
+dark themes. All four images were inspected; both themes' failure-artifact controls passed.
+The authenticated reference's deployment form structure was inspected separately. Its Create
+form has no initiator selector, so these shots verify the documented local extension, not a
+pixel-identical reference screen or a published-image deployment.
+
+Review at `dd8f9ea` confirmed the stale-refetch regression: the old GET overwrote
+the saved cache value before the fix, and all five component contracts passed afterward.
+The old native fixture failed its second standalone repetition at the unrelated account's login.
+The corrected fixture passed both repetitions and all 21 native tests against platform `2f699e0`.
+Chrome repeated the two surfaces in both themes; four tests and visual inspection passed.
+All owned runtimes reported successful cleanup. The final Linux build and 2,125 unit tests passed,
+with the same coverage totals above. The probe ratchet covered 314 tests across 12 seams.
+Independent committed review found no remaining blocker, both PR review threads were resolved,
+and the source candidate passed three-OS CI, Docker/Trivy and CodeQL.
+
 ## Platform plan 69 slice 4 — local source checks
 
 On 2026-11-15, [PR #255](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/255)'s

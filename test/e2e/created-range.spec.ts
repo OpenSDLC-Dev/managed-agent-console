@@ -35,8 +35,11 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
       .fill("2026-08-02");
     const sent = page.waitForRequest(
       (req) =>
-        req.url().includes(`/api/platform/v1/${route.replaceAll("-", "_")}?`) &&
-        new URL(req.url()).searchParams.has("created_at[lte]"),
+        req
+          .url()
+          .includes(
+            `/api/organizations/default/proxy/v1/${route.replaceAll("-", "_")}?`,
+          ) && new URL(req.url()).searchParams.has("created_at[lte]"),
     );
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const params = new URL((await sent).url()).searchParams;
@@ -68,7 +71,11 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
     await page.getByRole("textbox", { name: "Start", exact: true }).fill("");
     const oneSided = page.waitForRequest(
       (req) =>
-        req.url().includes(`/api/platform/v1/${route.replaceAll("-", "_")}?`) &&
+        req
+          .url()
+          .includes(
+            `/api/organizations/default/proxy/v1/${route.replaceAll("-", "_")}?`,
+          ) &&
         new URL(req.url()).searchParams.has("created_at[lte]") &&
         !new URL(req.url()).searchParams.has("created_at[gte]"),
     );

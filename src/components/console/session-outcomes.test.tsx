@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -51,7 +52,7 @@ afterEach(() => {
 
 describe("SessionOutcomes", () => {
   it("renders evaluation state and exposes its raw result and iteration", () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderOutcomes([outcome()]);
 
     const list = screen.getByTestId("session-outcomes");
@@ -65,7 +66,7 @@ describe("SessionOutcomes", () => {
   });
 
   it("disables defining another outcome while one is active", () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderOutcomes([
       outcome({ result: "evaluating", completed_at: null, explanation: "" }),
     ]);
@@ -81,7 +82,7 @@ describe("SessionOutcomes", () => {
 
   it("stops an open dialog from submitting after an outcome becomes active", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     const client = new QueryClient({
       defaultOptions: {
@@ -128,7 +129,7 @@ describe("SessionOutcomes", () => {
 
   it("posts the exact text-rubric event and resets after success", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderOutcomes();
 
@@ -152,7 +153,9 @@ describe("SessionOutcomes", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("/api/platform/v1/sessions/sesn_1/events");
+    expect(url).toBe(
+      "/api/organizations/default/proxy/v1/sessions/sesn_1/events",
+    );
     expect(JSON.parse(init.body as string)).toEqual({
       events: [
         {
@@ -211,7 +214,7 @@ describe("SessionOutcomes", () => {
             next_page: null,
           }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderOutcomes();
 
@@ -246,10 +249,12 @@ describe("SessionOutcomes", () => {
     expect(
       fetchMock.mock.calls
         .map(([url]) => String(url))
-        .filter((url) => url.startsWith("/api/platform/v1/files")),
+        .filter((url) =>
+          url.startsWith("/api/organizations/default/proxy/v1/files"),
+        ),
     ).toEqual([
-      "/api/platform/v1/files?limit=1000",
-      "/api/platform/v1/files?scope_id=sesn_1&limit=1000",
+      "/api/organizations/default/proxy/v1/files?limit=1000",
+      "/api/organizations/default/proxy/v1/files?scope_id=sesn_1&limit=1000",
     ]);
     expect(
       screen.getByText("Choose a suggestion by filename or paste a file ID."),
@@ -288,10 +293,12 @@ describe("SessionOutcomes", () => {
     ) {
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (input: string) => {
-          const answer = input.includes("scope_id=") ? scoped : uploads;
-          return typeof answer === "number" ? failure(answer) : json(answer);
-        }),
+        withTestSession(
+          vi.fn(async (input: string) => {
+            const answer = input.includes("scope_id=") ? scoped : uploads;
+            return typeof answer === "number" ? failure(answer) : json(answer);
+          }),
+        ),
       );
       const user = userEvent.setup();
       renderOutcomes();
@@ -368,12 +375,14 @@ describe("SessionOutcomes", () => {
       };
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (input: string) => {
-          const answer = input.includes("scope_id=")
-            ? answers.scoped
-            : answers.uploads;
-          return typeof answer === "number" ? failure(answer) : json(answer);
-        }),
+        withTestSession(
+          vi.fn(async (input: string) => {
+            const answer = input.includes("scope_id=")
+              ? answers.scoped
+              : answers.uploads;
+            return typeof answer === "number" ? failure(answer) : json(answer);
+          }),
+        ),
       );
       const user = userEvent.setup();
       renderOutcomes();
@@ -411,10 +420,14 @@ describe("SessionOutcomes", () => {
       };
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (input: string) => {
-          if (input.includes("scope_id=")) return json({ data: [] });
-          return typeof uploads === "number" ? failure(uploads) : json(uploads);
-        }),
+        withTestSession(
+          vi.fn(async (input: string) => {
+            if (input.includes("scope_id=")) return json({ data: [] });
+            return typeof uploads === "number"
+              ? failure(uploads)
+              : json(uploads);
+          }),
+        ),
       );
       const user = userEvent.setup();
       renderOutcomes();

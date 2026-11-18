@@ -29,16 +29,18 @@ test("memory creation cancels without navigation and retains drafts after a plat
   await dialog
     .getByLabel("Description", { exact: true })
     .fill("First line\nSecond line");
-  await page.route("**/api/platform/v1/memory_stores", (route) =>
-    route.request().method() === "POST"
-      ? route.fulfill({
-          status: 409,
-          json: {
-            type: "error",
-            error: { type: "conflict_error", message: "Try another name" },
-          },
-        })
-      : route.continue(),
+  await page.route(
+    "**/api/organizations/default/proxy/v1/memory_stores",
+    (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({
+            status: 409,
+            json: {
+              type: "error",
+              error: { type: "conflict_error", message: "Try another name" },
+            },
+          })
+        : route.continue(),
   );
   await dialog
     .getByRole("button", { name: "Create memory store", exact: true })
@@ -59,7 +61,7 @@ test("memory creation cancels without navigation and retains drafts after a plat
   expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
     true,
   );
-  await page.unroute("**/api/platform/v1/memory_stores");
+  await page.unroute("**/api/organizations/default/proxy/v1/memory_stores");
   await dialog.getByLabel("Name", { exact: true }).press("Enter");
   await expect(page).toHaveURL(/\/memory-stores\/memstore_mock/);
   await expect(
@@ -152,7 +154,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   const submitted = page.waitForRequest(
     (request) =>
       request.method() === "POST" &&
-      request.url().endsWith("/api/platform/v1/deployments"),
+      request.url().endsWith("/api/organizations/default/proxy/v1/deployments"),
   );
   await dialog
     .getByRole("button", { name: "Create deployment", exact: true })

@@ -202,7 +202,7 @@ describe("ModelField", () => {
   });
 
   it("probe: stays a text box on a console without a gateway", async () => {
-    // What the BFF answers every path while MODEL_GATEWAY_BASE_URL is unset.
+    // The private route is absent when this deployment has no gateway.
     const fetchMock = stubGatewayFetch(() =>
       Response.json(
         { type: "error", error: { type: "not_found_error", message: "" } },
@@ -233,7 +233,8 @@ describe("ModelField", () => {
 describe("the agent editor's model", () => {
   it("sends nothing until a listed model is chosen, and says why on the field", async () => {
     const fetchMock = stubGatewayFetch((method, rest) => {
-      if (!rest.startsWith("/api/platform/")) return undefined;
+      if (!rest.startsWith("/api/organizations/default/proxy/"))
+        return undefined;
       return method === "POST"
         ? Response.json({ id: "agent_1", version: 2 })
         : Response.json({ data: [] });
@@ -274,7 +275,8 @@ describe("the agent editor's model", () => {
     const fetchMock = stubGatewayFetch((method, rest) => {
       if (method === "GET" && rest === "aliases")
         return new Promise<Response>(() => {}) as unknown as Response;
-      if (!rest.startsWith("/api/platform/")) return undefined;
+      if (!rest.startsWith("/api/organizations/default/proxy/"))
+        return undefined;
       return Response.json({ data: [] });
     });
     renderWith(

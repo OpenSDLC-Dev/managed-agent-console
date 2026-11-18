@@ -13,13 +13,23 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
 }) => {
   const runResponse = await request.post(
     MOCK + "/v1/deployments/depl_weekresearch00000001/run",
-    { headers: { "x-api-key": "test-key" }, data: {} },
+    {
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
+      data: {},
+    },
   );
   expect(runResponse.ok()).toBe(true);
   const run = await runResponse.json();
   await request.post(
     MOCK + "/v1/deployments/depl_weekresearch00000001/archive",
-    { headers: { "x-api-key": "test-key" }, data: {} },
+    {
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
+      data: {},
+    },
   );
   await signIn(page, "/sessions");
   await page.getByRole("combobox", { name: "Deployment filter" }).click();
@@ -93,7 +103,12 @@ test("status multi-select defaults to active and Created sorts on the server", a
     (r) => r.url().includes("sesn_missing") && r.status() === 404,
   );
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  expect(await (await rejected).json()).toMatchObject({
-    error: { type: "invalid_request_error" },
+  const refusal = await rejected;
+  expect(new URL(refusal.url()).search).toBe("");
+  expect(new URL(refusal.url()).pathname).toContain(
+    "sesn_missing%3Flimit%3D100",
+  );
+  expect(await refusal.json()).toMatchObject({
+    error: { type: "not_found_error" },
   });
 });

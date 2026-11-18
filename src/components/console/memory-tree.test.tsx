@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -14,7 +15,7 @@ function setup(reply: (url: URL) => Response, revealPath?: string) {
   const fetch = vi.fn(async (input: RequestInfo | URL) =>
     reply(new URL(String(input), location.origin)),
   );
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const onSelect = vi.fn();
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

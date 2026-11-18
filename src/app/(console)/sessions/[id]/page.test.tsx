@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { useTestSearchParams } from "../../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -143,9 +144,14 @@ function stubFetch(over?: {
         const handled = over.onPost(url, init);
         if (handled) return handled;
       }
-      if (url.pathname === "/api/platform/v1/sessions/sess_1")
+      if (
+        url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_1"
+      )
         return json(over?.session ?? session());
-      if (url.pathname === "/api/platform/v1/sessions/sess_1/threads")
+      if (
+        url.pathname ===
+        "/api/organizations/default/proxy/v1/sessions/sess_1/threads"
+      )
         return over?.threadsStatus
           ? json(
               {
@@ -161,7 +167,7 @@ function stubFetch(over?: {
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -205,7 +211,7 @@ describe("SessionDetailPage", () => {
     setTrace("connecting");
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -217,13 +223,15 @@ describe("SessionDetailPage", () => {
     setTrace("connecting");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json(
-          {
-            type: "error",
-            error: { type: "not_found_error", message: "session not found" },
-          },
-          404,
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "session not found" },
+            },
+            404,
+          ),
         ),
       ),
     );
@@ -611,7 +619,7 @@ describe("SessionDetailPage", () => {
     );
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0][0].pathname).toBe(
-      "/api/platform/v1/sessions/sess_1/events",
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events",
     );
     expect(JSON.parse(posts[0][1].body as string)).toEqual({
       events: [
@@ -1053,7 +1061,8 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
       if (
-        url.pathname === "/api/platform/v1/sessions/sesn_1/events" &&
+        url.pathname ===
+          "/api/organizations/default/proxy/v1/sessions/sesn_1/events" &&
         init?.method === "POST"
       ) {
         outcomes = [
@@ -1071,7 +1080,9 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
       }
       if (
         ["session_1", "sesn_1"].some(
-          (id) => url.pathname === `/api/platform/v1/sessions/${id}`,
+          (id) =>
+            url.pathname ===
+            `/api/organizations/default/proxy/v1/sessions/${id}`,
         )
       )
         return json(session({ id: "sesn_1", outcome_evaluations: outcomes }));
@@ -1080,7 +1091,7 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   traceMock.sessionIds.clear();
   const view = renderPage("session_1");
   // The router navigates after the effect that asked, as Next's does.
@@ -1126,7 +1137,7 @@ it("moves a legacy-addressed session to its canonical id, query kept, so a defin
         return url.pathname + url.search;
       })
       .filter((request) => request.includes("session_1")),
-  ).toEqual(["/api/platform/v1/sessions/session_1"]);
+  ).toEqual(["/api/organizations/default/proxy/v1/sessions/session_1"]);
   // Its event history and stream were never asked for.
   expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
 });
@@ -1138,11 +1149,13 @@ it("reads any address without the sesn_ prefix before the workspace, and moves t
   window.history.replaceState(null, "", "/sessions/sess_alias");
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://console.test");
-    if (url.pathname === "/api/platform/v1/sessions/sess_alias")
+    if (
+      url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_alias"
+    )
       return json(session({ id: "sesn_1" }));
     throw new Error(`unmatched fetch: ${url.pathname}`);
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   traceMock.sessionIds.clear();
   renderPage("sess_alias");
 
@@ -1153,7 +1166,7 @@ it("reads any address without the sesn_ prefix before the workspace, and moves t
     fetchMock.mock.calls.map(
       ([input]) => new URL(String(input), "http://console.test").pathname,
     ),
-  ).toEqual(["/api/platform/v1/sessions/sess_alias"]);
+  ).toEqual(["/api/organizations/default/proxy/v1/sessions/sess_alias"]);
   expect([...traceMock.sessionIds]).toEqual([]);
   expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
 });
@@ -1165,15 +1178,15 @@ it("mounts the workspace where it stands when an alias answers with an id that i
   window.history.replaceState(null, "", "/sessions/sess_a");
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://console.test");
-    if (url.pathname === "/api/platform/v1/sessions/sess_a")
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_a")
       return json(session({ id: "sess_b" }));
-    if (url.pathname === "/api/platform/v1/sessions/sess_b")
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_b")
       return json(session({ id: "sess_a" }));
     if (url.pathname.endsWith("/threads"))
       return json({ data: [], next_page: null });
     throw new Error(`unmatched fetch: ${url.pathname}`);
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   traceMock.sessionIds.clear();
   renderPage("sess_a");
 
@@ -1187,13 +1200,16 @@ it("starts a canonical session's trace and threads beside its read, not after it
   const read = Promise.withResolvers<Response>();
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://console.test");
-    if (url.pathname === "/api/platform/v1/sessions/sesn_1")
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sesn_1")
       return read.promise;
-    if (url.pathname === "/api/platform/v1/sessions/sesn_1/threads")
+    if (
+      url.pathname ===
+      "/api/organizations/default/proxy/v1/sessions/sesn_1/threads"
+    )
       return json({ data: [], next_page: null });
     throw new Error(`unmatched fetch: ${url.pathname}`);
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   traceMock.sessionIds.clear();
   renderPage("sesn_1");
 
@@ -1205,8 +1221,8 @@ it("starts a canonical session's trace and threads beside its read, not after it
       ),
     ).toEqual(
       expect.arrayContaining([
-        "/api/platform/v1/sessions/sesn_1",
-        "/api/platform/v1/sessions/sesn_1/threads",
+        "/api/organizations/default/proxy/v1/sessions/sesn_1",
+        "/api/organizations/default/proxy/v1/sessions/sesn_1/threads",
       ]),
     ),
   );

@@ -13,11 +13,9 @@ import { copyText } from "@/lib/copy-text";
  *  - our key prefix, `sk-map-env01-`, not `sk-ant-oat01-`;
  *  - an `ANTHROPIC_BASE_URL` export the reference has no need for, because its
  *    worker already knows where its one platform is and ours does not;
- *  - `$PLATFORM_BASE_URL` as the placeholder for that value, matching the
- *    agent editor's curl block. The console genuinely cannot fill it in: the
- *    base URL is server-side configuration and `/api/health` withholds it on
- *    purpose, so a guide that printed a real URL would be a guide that leaked
- *    one to whatever can read this page.
+ *  - `$PLATFORM_BASE_URL` as the placeholder for the worker-reachable origin,
+ *    matching the agent editor's curl block. The worker can run outside the
+ *    browser's network, so the operator supplies its reachable address.
  */
 
 const DISMISSED_KEY = "console:environment-key-setup-dismissed";
@@ -184,7 +182,7 @@ export function EnvironmentKeySetup({
           The key authorizes the worker to poll for work; the base URL is what
           points it at this platform rather than a hosted one. Substitute the{" "}
           <code className="font-mono text-[12px]">PLATFORM_BASE_URL</code> this
-          console is configured with.
+          worker can reach.
           <CodeBlock
             label="Copy the environment variables"
             code={`export ANTHROPIC_ENVIRONMENT_KEY='sk-map-env01-…'

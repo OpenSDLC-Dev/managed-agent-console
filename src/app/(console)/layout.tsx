@@ -11,9 +11,7 @@ export default function ConsoleLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <Providers>
-      <ConsoleSessionBoundary
-        native={process.env.CONSOLE_AUTH_MODE === "platform"}
-      >
+      <ConsoleSessionBoundary>
         <ConsoleShell
           version={<ConsoleVersion />}
           footer={

@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -79,7 +80,7 @@ describe("memory store editor", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderEditor(
       <MemoryStoreEditor
         mode="edit"
@@ -104,7 +105,7 @@ describe("memory store editor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "/api/platform/v1/memory_stores/memstore_1",
+      "/api/organizations/default/proxy/v1/memory_stores/memstore_1",
     );
     expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
       name: "Notes",

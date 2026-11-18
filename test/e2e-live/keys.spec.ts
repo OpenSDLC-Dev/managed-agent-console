@@ -1,9 +1,6 @@
-import {
-  expect,
-  request as pwRequest,
-  test,
-  type APIRequestContext,
-} from "@playwright/test";
+import { nativeRequest } from "./native-request";
+import { LIVE_BROWSER_ORIGIN } from "./env";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 import { resolveLiveEnv } from "./env";
 import { signIn } from "./sign-in";
 
@@ -34,13 +31,14 @@ const { baseUrl, apiKey } = resolveLiveEnv();
 const RUN = Date.now().toString(36);
 
 let api: APIRequestContext;
+let nativeHeaders: Record<string, string>;
 let createdEnvironmentId: string | undefined;
 
 /** A worker identifies itself with this header; the platform attributes the poll to it. */
 const WORKER_ID = `live-e2e-worker-${RUN}`;
 
 test.beforeAll(async () => {
-  api = await pwRequest.newContext();
+  ({ api, headers: nativeHeaders } = await nativeRequest());
 });
 
 /**
@@ -73,9 +71,13 @@ test.afterAll(async () => {
   };
 
   /** Reads a listing; a failure is recorded and answered with nothing. */
-  const read = async (what: string, url: string): Promise<unknown> => {
+  const read = async (
+    what: string,
+    url: string,
+    headers: Record<string, string> = mgmt,
+  ): Promise<unknown> => {
     try {
-      const res = await api.get(url, { headers: mgmt });
+      const res = await api.get(url, { headers });
       if (res.ok()) return await res.json();
       failures.push(`${what}: HTTP ${res.status()}`);
     } catch (error) {
@@ -88,8 +90,12 @@ test.afterAll(async () => {
   // Sharing one `try` would let a single surprising row — a null name, say —
   // abort the sweep before it reached the credential this run is responsible
   // for, which is the one outcome the sweep exists to prevent.
-  const keysPath = `${baseUrl}/api/console/organizations/default/workspaces/default/api_keys`;
-  const keys = ((await read("listing management keys", keysPath)) ?? []) as {
+  const keysPath = `${LIVE_BROWSER_ORIGIN}/api/console/organizations/default/workspaces/default/api_keys`;
+  const keys = ((await read(
+    "listing management keys",
+    keysPath,
+    nativeHeaders,
+  )) ?? []) as {
     id: string;
     name?: string | null;
     status?: string;
@@ -98,7 +104,7 @@ test.afterAll(async () => {
     if (!row?.name?.endsWith(RUN) || row.status === "archived") continue;
     await call(`archiving key ${row.name}`, () =>
       api.post(`${keysPath}/${row.id}`, {
-        headers: mgmt,
+        headers: nativeHeaders,
         data: { status: "archived" },
       }),
     );
@@ -121,14 +127,15 @@ test.afterAll(async () => {
   for (const id of environments) {
     // Archiving an environment does not retire its keys — plan 07 slice 3 kept
     // them revocable on purpose — so the worker credentials go first.
-    const tokens = `${baseUrl}/api/oauth/organizations/default/environments/${id}/tokens`;
+    const tokens = `${LIVE_BROWSER_ORIGIN}/api/oauth/organizations/default/environments/${id}/tokens`;
     const page = (await read(
       `listing keys of ${id}`,
       `${tokens}?limit=100`,
+      nativeHeaders,
     )) as { data?: { id: string }[] } | undefined;
     for (const row of page?.data ?? []) {
       await call(`revoking ${row.id}`, () =>
-        api.post(`${tokens}/${row.id}/revoke`, { headers: mgmt }),
+        api.post(`${tokens}/${row.id}/revoke`, { headers: nativeHeaders }),
       );
     }
     await call(`archiving ${id}`, () =>

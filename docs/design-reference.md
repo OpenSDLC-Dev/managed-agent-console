@@ -5,6 +5,31 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Native-only Console — checked 2026-11-17
+
+Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.
+No authenticated model, key or account surface was available. This change preserves the established native layouts and claims no new authenticated-reference comparison.
+The model inspector retains organization limits; the retired per-key model-access editor has no replacement because the platform removes that policy dimension.
+The fidelity manifests record the surviving login, account, key and model states. Their local screenshots remain distinct from reference-access evidence.
+
+## Environment keys (platform plan 69 slice 6)
+
+On 2026-11-16, Chrome reached the authenticated reference Dashboard and its Resources navigation entry.
+Resources navigation and the subsequent page read timed out. No environment detail or key dialog was observed in that visit.
+This slice reuses the established key table, name dialog, reveal-once dialog and revocation confirmation; it claims no new authenticated-reference comparison.
+
+The platform requires Console management for every environment's keys before removing legacy credentials.
+Cloud and archived environments therefore expose those controls. The cloud view omits the worker setup guide because its keys cannot poll work.
+The states for local light/dark verification are enumerated in `test/fidelity/native-surfaces.ts`.
+
+## Deployment initiator (platform plan 69 slice 5)
+
+On 2026-11-15, Chrome showed the authenticated reference's Deployments list and Create deployment form.
+The form groups General, Trigger and Resources in two-column sections with compact controls and a fixed save footer.
+No initiator selector was present in that form. This platform adds an administrator-only setting under Trigger for existing deployments.
+It uses the platform's private cookie API because plan 69 binds scheduled execution to a retained identity.
+The native fidelity manifest covers the setting and its service-account dialog in light and dark themes.
+
 ## Model limits and principal usage — 2026-11-15
 
 Fresh Chrome reference access timed out before the page could be inspected. This iteration reuses the recorded design system; it does not claim current authenticated-reference fidelity.
@@ -25,7 +50,7 @@ Self-hosting departures follow platform `internal/api/consoleapikeys.go`:
 
 - Workspace stays a null seam; there is no `scope` or workspace selector API.
 - Developers manage only their own owned keys. Admins may assign an active service account, never another human.
-- Slice 4 follows current owner-role authority for inference. Legacy unowned-key policy controls remain separate. Empty legacy caller summaries describe only visible inventory, including legacy sessions that expose no role.
+- Slice 4 follows current owner-role authority for inference. Slice 7 removes unowned-key policy controls and keeps historical attribution.
 
 The lower-human-role policy is conservative and local. Reference evidence remains open in [recordings #40](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/40).
 `test/fidelity/native-surfaces.ts` and its real-platform Chrome walker cover the list, form, owner selection, masked reveal and Dashboard form in both themes.
@@ -38,8 +63,7 @@ Chrome shows `Actions` → `More actions for …` → `Delete API key`, followed
 The console reuses its shared Delete menu and confirmation. It also warns that clients
 lose access immediately. Platform `internal/api/consoleapikeys.go:updateAPIKeyIn`
 implements this as `status: archived`; the retained row keeps its wire status.
-Control-plane-managed keys have no Delete action because the platform refuses updates.
-The console explains their deployment-configuration rotation beside the list.
+Historical unowned keys have no Delete action because the platform refuses updates.
 
 ## Memory pagination — checked 2026-10-24 (#236)
 
@@ -248,23 +272,13 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
 - **The setup guide's commands are ours**, with three substitutions forced by self-hosting: the
   `sk-map-env01-` prefix (so a leaked key of ours can never be mistaken for an Anthropic credential),
   an exported `ANTHROPIC_BASE_URL` telling the worker where this platform is, and that value written
-  as `$PLATFORM_BASE_URL` rather than filled in, because it is server-side configuration.
-- **The legacy login page has no reference counterpart** and offers up to two ways in. A deployment can run
-  both gates at once, and they do different jobs: SSO is primary, and the shared password sits below
-  it under a line saying plainly that it admits you to the console and authorizes nothing on the
-  platform. Without that line, two controls read as two ways to the same place.
-- **The legacy signed-in account block names no role and no organization.** Ours copies the reference's
-  placement and type scale (14px/500 name over a 12px/17px muted line, re-measured 2026-08-15) and
-  parts company on what the second line says: the role is unavailable (no `me` route, and inferring
-  one would be the second copy of the authority rules principle 5 forbids), and single-tenant v1 has
-  no organization to name — so it carries the email. **Sign out** is explicit rather than behind a
-  menu, because it is the only item that menu would hold — where the reference's block is a menu
-  trigger holding seven items, and its email sits in that menu's header rather than in the block.
+  as `$PLATFORM_BASE_URL` for the operator to set to an address the worker can reach.
+- **Native login follows the platform's configured sign-in method.** Named password accounts and setup-code redemption are self-hosting extensions. The Console does not add a second shared gate.
+- **The signed-in account block includes the backend's current role.** It keeps the reference's placement and type scale, with the user's email and explicit Sign out. It does not infer roles from identity-provider claims or invent a workspace selector.
 - **The account block is a plain block, not the reference's inset button.** Theirs is a borderless
   8px-radius button inset 12px in the sidebar, with a leading org avatar and a trailing chevron;
   ours is full-bleed with neither ornament, under the single rule that closes the sidebar off where
-  the reference's footer draws none. That follows from the bullet above rather than being chosen
-  separately: a block that opens nothing should not wear the frame of a control that does, and an
+  the reference's footer draws none. This reflects its behavior: a block that opens nothing should not wear the frame of a control that does, and an
   avatar would stand for an organization we do not have. The rule belongs to the footer group and
   not to the blocks in it ([#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107)):
   owned per block, the sidebar ended in however many blocks happened to render — one without
@@ -311,7 +325,7 @@ No authenticated member, service-account or account-menu state was available. Do
 
 Native pages reuse this repository's tokens, tables, dialogs, form controls and recorded account-block type scale.
 Self-hosting requires named local development accounts, operator setup codes, backend role metadata and explicit last-admin refusals.
-Unlike the legacy account block above, the native block shows the role returned by `/api/auth/session`, never a role inferred from claims.
+The native block shows the role returned by `/api/auth/session`, never a role inferred from claims.
 A signed-in user without resource authority keeps account and setup controls. IdP-managed roles are labelled, not hand-editable.
 
 `test/fidelity/native-surfaces.ts` names the native light/dark states; `test/native/fidelity.spec.ts` walks them against real platform handlers.
@@ -458,8 +472,8 @@ Re-shot in both themes: `dashboard`, `dashboard-compact`, `dashboard-mobile`,
 `dashboard-group-collapsed`, `dashboard-nav-flyout`, `agents-list` and
 `agents-lookup-missing`.
 
-The BFF rejects decoded path delimiters in exact-ID input before forwarding, so
-reserved characters cannot turn a detail lookup into a different upstream route.
+The private resource transport rejects path delimiters in exact-ID input before forwarding, so
+reserved characters cannot turn a detail lookup into a different route.
 
 ## Environments — checked 2026-09-11
 
@@ -713,7 +727,7 @@ Platform #578 (`d339a1c9`) mints a session-scoped copy for every file mount and 
 - **Recorded:** an open Session polls `GET /v1/files?beta=true&scope_id=<session>&limit=1000` under `anthropic-beta: managed-agents-2026-04-01`, about every 10s, from load until archive (`ui-network` idx 36–303). Copies come back `downloadable: false`, scoped, with the upload's name, size and type, the name kept when the mount renames the file (idx 243, 274, 292).
 - **Recorded:** the Resources tab shows a mounted file as a `Path`/`Size` row whose size is its copy's (88B in frames 49 and 63; nothing else was fetched after idx 288's attach). Details show Type, Size, Attached, the copy's File ID and the Resource ID (frames 50, 63).
 - **Ours:** the same request and header, polled at the Session's 15s cadence while Resources (or the rubric picker) is open, from load until archive: an archived Session reads it once, and the archive reads it once more. The platform lists an unknown scope as empty, so a 404 means the list is not served: polling stops and the list hides, the rows it last listed included, as any absent surface does. A mounted file's row adds its copy's size in this tab's `88 B` memory-size format. The session's files are rows of the tab, so the tab is not called empty while their list loads (an announced status says so) or has failed; a filter matching none of the rows it has says so either way.
-- **Recorded, the header's reach:** the reference does not send `anthropic-beta: managed-agents-2026-04-01` on every `/v1` call, so the BFF does not stamp it on all of them. Across the eleven `ui-network` recordings, `/v1/skills` calls, the upload (`POST /v1/files`, console-141 idx 63) and file metadata (`GET /v1/files/{id}`, idx 236, 269) carry none; `/v1/environments` mostly carries `environments-2026-03-01,environments-package-support-2025-12-09`, `/v1/models` `server-side-fallback-2026-06-01`, and the event streams add `managed-agents-vnext`. The console sends it on the one request recorded with it here, the scoped list; the platform accepts and ignores it.
+- **Recorded, the header's reach:** the reference does not send `anthropic-beta: managed-agents-2026-04-01` on every `/v1` call, so the resource transport does not stamp it on all of them. Across the eleven `ui-network` recordings, `/v1/skills` calls, the upload (`POST /v1/files`, console-141 idx 63) and file metadata (`GET /v1/files/{id}`, idx 236, 269) carry none; `/v1/environments` mostly carries `environments-2026-03-01,environments-package-support-2025-12-09`, `/v1/models` `server-side-fallback-2026-06-01`, and the event streams add `managed-agents-vnext`. The console sends it on the one request recorded with it here, the scoped list; the platform accepts and ignores it.
 - **Inferred (unrecorded):** no recorded list carries an output (`downloadable: true`), so their placement is ours. Rows no resource names follow the resources: an output labelled `Output` with the only Download, and a copy whose resource was removed labelled `Upload`, the reference's word for a mounted copy. The rubric picker suggests the session's files beside uploads, labelled `session file`, from the same cached list; a file both lists carry (outputs, before #578) is offered once, as the session's, and either list failing or cut is named on its own.
 - **Inferred (unrecorded):** each of those rows offers Delete, confirmed first. No recorded Resources row has a delete (frames 49, 50, 63), but `files.go:deleteFile` takes an output or a copy as it takes an upload, whatever the session's archive state, and before #578 the Files page offered Delete on outputs; without it they could only go with their Session. A mounted copy's row keeps Remove resource instead. The dialog stays open until the delete settles, the platform's refusal shown in it; one closed while the delete is out has the refusal toasted. An expired output shows `Expired` where Download was, its content being gone.
 - **Ours, no client-side refusal:** which rows offer Delete is how the current data reads them — listed, and no mount in the Session as read — not a check on confirm. `files.go:deleteFile` deletes a mounted copy with a 200 like any other row, so refusing one in the console would be validation stricter than the wire's (CLAUDE.md principle 4). Rejected: re-reading the Session on confirm and refusing a copy a mount had just named. The list and the Session poll apart, so a copy can list for a moment before the Session names its mount; Attach file reads the Session before the list to keep that window short, and a delete inside it is the platform's to answer.

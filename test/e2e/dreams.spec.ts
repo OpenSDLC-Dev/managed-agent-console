@@ -69,7 +69,9 @@ test("creates, cancels and archives a pending dream", async ({ page }) => {
 test("mock dream endpoints enforce the input and lifecycle contract", async ({
   request,
 }) => {
-  const headers = { "x-api-key": "test-key" };
+  const headers = {
+    "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+  };
   const base = {
     inputs: [
       { type: "memory_store", memory_store_id: "memstore_projectnotes000001" },

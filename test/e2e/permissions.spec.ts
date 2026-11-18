@@ -1,3 +1,4 @@
+import { browserPost } from "./browser-write";
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
@@ -98,13 +99,13 @@ test("gateway read and write refusals use the platform's current messages", asyn
   await request.post(`${MOCK}/__forbid`, {
     data: { paths: ["admin/v1/providers"] },
   });
-  const read = await page.request.get("/api/gateway/admin/v1/providers");
+  const read = await page.request.get("/admin/v1/providers");
   expect(read.status()).toBe(403);
   expect((await read.json()).error).toEqual({
     type: "permission_error",
     message: "this request needs the developer role; yours is user",
   });
-  const write = await page.request.post("/api/gateway/admin/v1/providers", {
+  const write = await browserPost(page, "/admin/v1/providers", {
     data: {},
   });
   expect(write.status()).toBe(403);

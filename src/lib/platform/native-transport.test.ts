@@ -70,7 +70,7 @@ afterEach(() => {
   delete document.documentElement.dataset.consoleAuth;
   vi.unstubAllGlobals();
 });
-it("selects the native private resource proxy at runtime without a build-time public env", async () => {
+it("uses the private resource proxy with no deployment mode switch", async () => {
   document.documentElement.dataset.consoleAuth = "platform";
   const fetcher = vi.fn<typeof fetch>(async () => Response.json({ data: [] }));
   vi.stubGlobal("fetch", fetcher);
@@ -80,7 +80,9 @@ it("selects the native private resource proxy at runtime without a build-time pu
   );
   delete document.documentElement.dataset.consoleAuth;
   await platformGet("v1/agents");
-  expect(fetcher.mock.calls[1]?.[0]).toBe("/api/platform/v1/agents");
+  expect(fetcher.mock.calls[1]?.[0]).toBe(
+    "/api/organizations/default/proxy/v1/agents",
+  );
 });
 it("probe: adds header-only CSRF to every native unsafe family including multipart and bodiless revocation", async () => {
   document.documentElement.dataset.consoleAuth = "platform";

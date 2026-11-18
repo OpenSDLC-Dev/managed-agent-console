@@ -771,7 +771,7 @@ export const ApiKeyListSchema = z.array(ApiKeyListItemSchema);
 
 // ---- the model gateway's admin API (internal/modelgateway/admin/), plan 10
 //
-// A server of its own (`cmd/modelgateway`), reached through `/api/gateway/`.
+// A server of its own (`cmd/modelgateway`), reached through `/admin/v1/`.
 // Lists render `{data}` (admin.go listView) with `[]`, never null; the ledger
 // adds `has_more`. Ids are `gwprov_`/`gwcred_`/`gwdep_`; an alias is keyed by
 // its name. Usage rows name an alias and a deployment by value, so a row
@@ -882,20 +882,6 @@ export const GatewayAliasSchema = z.object({
   display_name: z.string(),
   kind: GatewayKindSchema,
   targets: z.array(GatewayTargetSchema),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-/**
- * keypolicies.go keyPolicyView — `aliases` null grants every alias; `rpm` or
- * `tpm` null sets no limit. A key without a policy has no row.
- */
-export const GatewayKeyPolicySchema = z.object({
-  type: z.literal("key_policy"),
-  api_key_id: z.string(),
-  aliases: z.array(z.string()).nullable(),
-  rpm: z.number().nullable(),
-  tpm: z.number().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -1022,7 +1008,6 @@ export type GatewayProvider = z.infer<typeof GatewayProviderSchema>;
 export type GatewayCredential = z.infer<typeof GatewayCredentialSchema>;
 export type GatewayDeployment = z.infer<typeof GatewayDeploymentSchema>;
 export type GatewayAlias = z.infer<typeof GatewayAliasSchema>;
-export type GatewayKeyPolicy = z.infer<typeof GatewayKeyPolicySchema>;
 export type GatewayDailyUsage = z.infer<typeof GatewayDailyUsageSchema>;
 export type GatewayModelLimit = z.infer<typeof GatewayModelLimitSchema>;
 export type GatewayUsageRow = z.infer<typeof GatewayUsageRowSchema>;

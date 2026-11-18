@@ -6,6 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Changed
+
+- **Console uses platform login exclusively** (platform plan 69 slice 7). Resource requests, streaming and downloads use the platform session and CSRF contract. The shared-password gate, Console-local OIDC client and credential proxy are removed. API keys retain current owner-role authority; obsolete model grants and per-key policy controls are removed. The platform now owns deployment and rollback; this repository continues publishing Console images. Upgrade the platform application edge before deploying this build.
+
 ### Fixed
 
 - **Native shutdown probes wait for slow fixture startup.** A bounded readiness window leaves time for the original normal-shutdown and repeated-signal cleanup checks. Slow-start controls prevent a two-second startup assumption from returning.
@@ -34,6 +38,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   path prefix. One-level lists keep `depth=1`.
 
 ### Added
+
+- Administrators can issue and revoke keys for cloud and self-hosted environments, including archived environments. Cloud key management omits worker setup instructions. Native non-admin pages omit key controls and their private requests; role changes discard open drafts and one-time reveals. One-time environment-key reveals are masked in native screenshots and failure diagnostics.
+
+- Native administrators can select an active service account for future scheduled deployment runs. Existing sessions retain their initiator, manual runs use the caller, and changing the setting leaves a paused deployment paused.
 
 - **Organization limits in the model inspector** (platform plan 69 slice 4). Native developers can read a public model alias's shared request, input-token and output-token limits; administrators can update or clear them. Role changes discard open drafts. This requires the companion platform slice 4.
 - **Principal-owned API keys in native mode** (platform plan 69 slice 3). Developers issue keys for themselves; administrators can also select active service accounts. Owner and creator stay separate, and row permissions govern lifecycle controls. Reopened owner pickers refresh the directory. Principal changes and newly learned role changes discard drafts and one-time reveals. Empty caller summaries describe only visible keys, including legacy sessions without a role. Legacy issuance leaves ownership to the platform's issuing identity. Native fixtures require a nonempty Docker configuration path to be absolute before dispatch, including through pnpm. Their synthetic Docker contracts use portable Node interception. Native fixtures and both Docker stages disable Next telemetry. Native failure diagnostics redact issued keys before output. Browser-issued human and service-account keys drive a test-only pinned Go SDK probe; independent cookie reads check Memory actors and nullable versions. Lifecycle checks cover current roles, owner removal and restoration without reviving keys. Published-image pairing and packaged Compose acceptance remain pending in the platform.
@@ -87,6 +95,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
   the management credential outside `/v1`.
 
 ### Changed
+
+- **Automatic staging deployment transfers to the companion platform chart** (platform plan 69 slice 6). The legacy Console deploy workflow accepts only a confirmed manual rollback from `main`; automatic SHA and release image publishing remain unchanged. Companion platform delivery is pending.
 
 - **The sidebar shows the console's version under the `Agent Console` wordmark**, not above the
   connection state, and navigation labels are title case: `API Keys`, `Credential Vaults`,

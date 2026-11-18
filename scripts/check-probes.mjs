@@ -36,13 +36,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SEAMS = [
   {
     dir: "src/lib/identity",
-    why: "native mode and local credential refusal",
-    modules: ["mode", "native-boundary"],
+    why: "platform sign-out markers and principal replacement",
+    modules: ["signed-out"],
   },
   {
     dir: "src/lib/platform",
     why: "native CSRF, private URL selection and marked sign-out",
-    modules: ["native"],
+    modules: ["native", "native-transport"],
   },
   {
     dir: "src/components/console",
@@ -85,54 +85,11 @@ const SEAMS = [
     // the dialog looks identical whether or not the value also leaked into an
     // attribute or the query cache — which is exactly what a probe is for.
     // `api-keys` is the same seam and a sharper case: an environment key admits
-    // a worker to one environment, a management key is root on the platform.
+    // a worker to one environment, an owned API key carries its owner's current authority.
     // `provider-keys` is the inbound twin: a vendor key the operator types
     // once, which the gateway seals and the console must not keep (plan 10).
     // `model-setup` takes the same key through a first-run form.
     modules: ["environment-keys", "api-keys", "provider-keys", "model-setup"],
-  },
-  {
-    dir: "src/lib/identity",
-    why: "identity configuration — its defects are reported to an anonymous caller",
-    // `config` parses operator-supplied values and hands its complaints to the
-    // health route, which answers a kubelet, a CD log, and anyone who can reach
-    // the port. A message that quotes what it refused publishes an issuer, a
-    // client id, or a secret — and every happy-path assertion here passes
-    // whether or not it does, because a working console never takes this path.
-    modules: ["config", "rp", "discovery", "session"],
-  },
-  {
-    dir: "src/app/api/platform/[...path]",
-    why: "credential dispatch — which credential a browser's request travels under",
-    // The BFF chooses between the management key and the signed-in operator's
-    // own token, and a request served with the wrong one succeeds: the platform
-    // gives a non-empty x-api-key the request outright and never reads the
-    // Bearer (internal/api/server.go), so an operator's role would evaporate
-    // with nothing failing. Every happy-path assertion here passes either way,
-    // and so does the one that matters most — that an anonymous browser is
-    // refused rather than served as root.
-    modules: ["route"],
-  },
-  {
-    dir: "src/app/api/auth/session",
-    why: "the only route that serializes anything about a session — where D2 could quietly stop being true",
-    // The ID token stays server-side and the browser holds an opaque handle
-    // (plan 08 D2). This route is the one place that turns a session into JSON,
-    // so a field added here for the shell's convenience is how the token, the
-    // refresh token or the subject would reach the browser — and every
-    // happy-path assertion passes whether or not it does, because the account
-    // block renders the same either way.
-    modules: ["route"],
-  },
-  {
-    dir: "src/app/api/auth/callback",
-    why: "the identity provider's redirect — every byte of it is attacker-authored",
-    // The callback URL is reachable by anyone and survives in history, in
-    // referrers and in the provider's logs. Its happy path looks identical
-    // whether or not the state cookie, the read-once pending record and the
-    // nonce are actually checked — which is the definition of a seam a probe
-    // has to hold rather than a happy-path assertion.
-    modules: ["route"],
   },
 ];
 

@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import {
@@ -41,7 +42,7 @@ function setup(archived = false, status = 200, compact = false) {
         { status, headers: { "content-type": "application/json" } },
       ),
   );
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", withTestSession(fetch));
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
@@ -93,7 +94,7 @@ it("sends title and a metadata patch and refreshes cached resources", async () =
   await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(fetch.mock.calls[0]).toEqual([
-    `/api/platform/v1/sessions/${session.id}`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}`,
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
@@ -141,7 +142,7 @@ it("archives directly, updates the cache and returns the full page to Sessions",
     expect(client.getQueryData(["session", session.id])).toEqual(saved),
   );
   expect(fetch.mock.calls[0][0]).toBe(
-    `/api/platform/v1/sessions/${session.id}/archive`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/archive`,
   );
   expect(push).toHaveBeenCalledWith("/sessions");
 });
@@ -180,7 +181,7 @@ it("keeps archived sessions read-only and allows confirmed deletion", async () =
   await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/sessions"));
   expect(fetch.mock.calls[0]).toEqual([
-    `/api/platform/v1/sessions/${session.id}`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}`,
     expect.objectContaining({ method: "DELETE" }),
   ]);
   expect(client.getQueryData(["session", session.id])).toBeUndefined();
@@ -194,7 +195,7 @@ it("offers a Session-wide interrupt in Actions", async () => {
   );
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   expect(fetch.mock.calls[0][0]).toBe(
-    `/api/platform/v1/sessions/${session.id}/events`,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/events`,
   );
   expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toEqual({
     events: [{ type: "user.interrupt" }],

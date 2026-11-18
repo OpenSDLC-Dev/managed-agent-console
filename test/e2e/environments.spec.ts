@@ -135,7 +135,9 @@ test("environment batch deletion keeps only failures selected and allows retry",
   // (environments.go environmentStillReferenced).
   const create = (name: string) =>
     request.post("http://127.0.0.1:18080/v1/environments", {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: { name, config: { type: "self_hosted" } },
     });
   const created = await create("Retry target");
@@ -144,7 +146,8 @@ test("environment batch deletion keeps only failures selected and allows retry",
   const target = await created.json();
   await signIn(page);
   await page.goto("/environments");
-  const pattern = "**/api/platform/v1/environments/" + target.id;
+  const pattern =
+    "**/api/organizations/default/proxy/v1/environments/" + target.id;
   // The platform's answer to a delete its sessions refuse (environments.go
   // environmentStillReferenced, #841), here made to fail one delete of two.
   const refusal =
@@ -203,7 +206,9 @@ test("deleting an inspected environment restores focus before a delayed list ref
   request,
 }) => {
   const created = await request.post("http://127.0.0.1:18080/v1/environments", {
-    headers: { "x-api-key": "test-key" },
+    headers: {
+      "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+    },
     data: { name: "Focus target", config: { type: "self_hosted" } },
   });
   expect(created.ok()).toBe(true);
@@ -220,10 +225,13 @@ test("deleting an inspected environment restores focus before a delayed list ref
   const refreshed = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route(/\/api\/platform\/v1\/environments\?/, async (route) => {
-    await refreshed;
-    await route.continue();
-  });
+  await page.route(
+    /\/api\/organizations\/default\/proxy\/v1\/environments\?/,
+    async (route) => {
+      await refreshed;
+      await route.continue();
+    },
+  );
   await panel.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await page
@@ -251,7 +259,9 @@ test("environment editor preserves package arguments and metadata through retry,
   await signIn(page);
   const created = await (
     await request.post("http://127.0.0.1:18080/v1/environments", {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         name: "Row editor",
         config: { type: "cloud" },
@@ -268,7 +278,8 @@ test("environment editor preserves package arguments and metadata through retry,
   await page.getByLabel("Package 2", { exact: true }).fill(" pkg -e ");
   await page.getByLabel("Metadata key 1").fill("Team");
   await page.getByLabel("Metadata value 1").fill("研发");
-  const endpoint = "**/api/platform/v1/environments/" + created.id;
+  const endpoint =
+    "**/api/organizations/default/proxy/v1/environments/" + created.id;
   await page.route(endpoint, async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     await route.fulfill({
@@ -321,7 +332,9 @@ test("environment editor preserves package arguments and metadata through retry,
   ).toBeVisible();
   const saved = await (
     await request.get("http://127.0.0.1:18080/v1/environments/" + created.id, {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
     })
   ).json();
   expect(saved.metadata).toEqual({});
@@ -342,7 +355,9 @@ test("unrelated environment edits retain stored empty metadata until its row is 
   page,
   request,
 }) => {
-  const headers = { "x-api-key": "test-key" };
+  const headers = {
+    "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+  };
   const created = await (
     await request.post("http://127.0.0.1:18080/v1/environments", {
       headers,

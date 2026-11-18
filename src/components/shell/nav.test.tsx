@@ -12,9 +12,7 @@ import type { ComponentProps } from "react";
 import { Nav } from "./nav";
 import { SURFACES } from "@/lib/platform/surfaces";
 
-const LEGACY_SURFACES = Object.values(SURFACES).filter(
-  (entry) => !("api" in entry) || entry.api !== "native",
-);
+const ALL_SURFACES = Object.values(SURFACES);
 
 const navState = vi.hoisted(() => ({ pathname: "/" }));
 
@@ -139,11 +137,9 @@ function renderNav(
         s === "api-keys"
           ? String(input).includes("/api/console/")
           : s === "providers" || s === "models" || s === "usage"
-            ? String(input).includes(
-                `/api/gateway/admin/v1/${SURFACES[s].path}`,
-              )
+            ? String(input).includes(`/admin/v1/${SURFACES[s].path}`)
             : String(input).includes(
-                `/api/platform/${SURFACES[s as keyof typeof SURFACES].path}?`,
+                `/api/organizations/default/proxy/${SURFACES[s as keyof typeof SURFACES].path}?`,
               ),
       );
       return Promise.resolve(
@@ -385,7 +381,7 @@ describe("Nav", () => {
     // One probe per platform surface and not one more: Dashboard is a console
     // page, so no answer from the platform can take it away.
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(ALL_SURFACES.length),
     );
     expect(link("Dashboard")).not.toBeNull();
     const probed = vi
@@ -399,7 +395,7 @@ describe("Nav", () => {
     navState.pathname = "/";
     renderNav([]);
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(ALL_SURFACES.length),
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
   });
@@ -448,7 +444,7 @@ describe("Nav", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(LEGACY_SURFACES.length),
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(ALL_SURFACES.length),
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
   });

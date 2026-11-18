@@ -18,7 +18,7 @@ import {
   useGatewayModelLimits,
   usePutGatewayModelLimit,
 } from "@/lib/platform/gateway-queries";
-import { isNativeConsole, wireInteger } from "@/lib/platform/http";
+import { wireInteger } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import type { GatewayModelLimit } from "@/lib/platform/types";
 
@@ -36,7 +36,6 @@ const EMPTY = {
 export function ModelRateLimits({ model }: { model: string }) {
   const session = useContext(ConsoleSessionContext)?.data;
   if (
-    !isNativeConsole() ||
     !session?.signed_in ||
     !["admin", "developer"].includes(session.role ?? "")
   )

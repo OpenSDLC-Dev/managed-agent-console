@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 /**
  * Plan 10 slice 5: Analytics → Usage, the gateway's daily rollups and its
- * per-request ledger, through the `/api/gateway` BFF.
+ * per-request ledger, through the `/admin/v1` native edge.
  */
 test("read the month's usage, grouped and filtered", async ({ page }) => {
   await signIn(page);

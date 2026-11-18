@@ -91,7 +91,9 @@ test("opening and closing a Deployment on page two retains the server cursor", a
 }) => {
   for (let index = 0; index < 21; index++) {
     const created = await request.post(MOCK + "/v1/deployments", {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: {
         name: "Inspector paging " + index,
         agent: { type: "agent", id: "agent_taskrunner0000000001", version: 1 },

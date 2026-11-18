@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SIGNED_OUT_HEADER,
@@ -56,17 +57,17 @@ describe("PlatformError", () => {
 describe("platformGet", () => {
   it("fetches the BFF path without a query when no params are set", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await expect(platformGet("v1/agents")).resolves.toEqual({ data: [] });
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/platform/v1/agents",
+      "/api/organizations/default/proxy/v1/agents",
       undefined,
     );
   });
 
   it("serializes scalars and arrays and skips undefined params", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await platformGet("v1/sessions", {
       limit: 1000,
       order: "asc",
@@ -75,7 +76,7 @@ describe("platformGet", () => {
       "event_types[]": ["user.message", "agent.message"],
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/platform/v1/sessions?limit=1000&order=asc&active=true" +
+      "/api/organizations/default/proxy/v1/sessions?limit=1000&order=asc&active=true" +
         "&event_types%5B%5D=user.message&event_types%5B%5D=agent.message",
       undefined,
     );
@@ -83,12 +84,12 @@ describe("platformGet", () => {
 
   it("sends the request headers it is given", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await platformGet("v1/files", { scope_id: "sesn_1" }, undefined, {
       "anthropic-beta": "managed-agents-2026-04-01",
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/platform/v1/files?scope_id=sesn_1",
+      "/api/organizations/default/proxy/v1/files?scope_id=sesn_1",
       {
         signal: undefined,
         headers: { "anthropic-beta": "managed-agents-2026-04-01" },
@@ -99,7 +100,7 @@ describe("platformGet", () => {
   it("throws a PlatformError carrying the error envelope", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 404)),
+      withTestSession(vi.fn(async () => json(envelope, 404))),
     );
     await expect(platformGet("v1/agents/missing")).rejects.toMatchObject({
       status: 404,
@@ -112,7 +113,9 @@ describe("platformGet", () => {
   it("throws a bare PlatformError when the error body is not JSON", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("bad gateway", { status: 502 })),
+      withTestSession(
+        vi.fn(async () => new Response("bad gateway", { status: 502 })),
+      ),
     );
     const rejection = expect(platformGet("v1/agents")).rejects;
     await rejection.toBeInstanceOf(PlatformError);
@@ -122,21 +125,27 @@ describe("platformGet", () => {
 describe("platformPost", () => {
   it("posts a JSON body and returns the parsed response", async () => {
     const fetchMock = vi.fn(async () => json({ id: "agent_1" }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await expect(
       platformPost("v1/agents", { name: "helper" }),
     ).resolves.toEqual({ id: "agent_1" });
-    expect(fetchMock).toHaveBeenCalledWith("/api/platform/v1/agents", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "helper" }),
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/organizations/default/proxy/v1/agents",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-CSRF-Token": "test-session-csrf",
+        },
+        body: JSON.stringify({ name: "helper" }),
+      },
+    );
   });
 
   it("throws a PlatformError on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 400)),
+      withTestSession(vi.fn(async () => json(envelope, 400))),
     );
     await expect(platformPost("v1/agents", {})).rejects.toMatchObject({
       status: 400,
@@ -147,7 +156,7 @@ describe("platformPost", () => {
   it("tolerates a non-JSON error body", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("boom", { status: 500 })),
+      withTestSession(vi.fn(async () => new Response("boom", { status: 500 }))),
     );
     await expect(platformPost("v1/agents", {})).rejects.toMatchObject({
       status: 500,
@@ -160,22 +169,26 @@ describe("platformPost", () => {
 describe("platformPostForm", () => {
   it("posts the FormData without forcing a content type", async () => {
     const fetchMock = vi.fn(async () => json({ id: "file_1" }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const form = new FormData();
     form.set("file", new Blob(["x"]), "notes.txt");
     await expect(platformPostForm("v1/files", form)).resolves.toEqual({
       id: "file_1",
     });
-    expect(fetchMock).toHaveBeenCalledWith("/api/platform/v1/files", {
-      method: "POST",
-      body: form,
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/organizations/default/proxy/v1/files",
+      {
+        method: "POST",
+        headers: { "X-CSRF-Token": "test-session-csrf" },
+        body: form,
+      },
+    );
   });
 
   it("throws a PlatformError on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 413)),
+      withTestSession(vi.fn(async () => json(envelope, 413))),
     );
     await expect(
       platformPostForm("v1/files", new FormData()),
@@ -185,7 +198,9 @@ describe("platformPostForm", () => {
   it("tolerates a non-JSON error body", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("too large", { status: 413 })),
+      withTestSession(
+        vi.fn(async () => new Response("too large", { status: 413 })),
+      ),
     );
     await expect(
       platformPostForm("v1/files", new FormData()),
@@ -196,20 +211,24 @@ describe("platformPostForm", () => {
 describe("platformDelete", () => {
   it("issues a DELETE and returns the parsed response", async () => {
     const fetchMock = vi.fn(async () => json({ id: "agent_1", deleted: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await expect(platformDelete("v1/agents/agent_1")).resolves.toEqual({
       id: "agent_1",
       deleted: true,
     });
-    expect(fetchMock).toHaveBeenCalledWith("/api/platform/v1/agents/agent_1", {
-      method: "DELETE",
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/organizations/default/proxy/v1/agents/agent_1",
+      {
+        method: "DELETE",
+        headers: { "X-CSRF-Token": "test-session-csrf" },
+      },
+    );
   });
 
   it("throws a PlatformError on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 404)),
+      withTestSession(vi.fn(async () => json(envelope, 404))),
     );
     await expect(platformDelete("v1/agents/missing")).rejects.toMatchObject({
       status: 404,
@@ -220,7 +239,7 @@ describe("platformDelete", () => {
   it("tolerates a non-JSON error body", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response("gone", { status: 502 })),
+      withTestSession(vi.fn(async () => new Response("gone", { status: 502 }))),
     );
     await expect(platformDelete("v1/agents/a")).rejects.toMatchObject({
       status: 502,
@@ -233,7 +252,7 @@ describe("platformDelete", () => {
 describe("console-API helpers", () => {
   it("consoleGet targets /api/oauth and carries query params", async () => {
     const fetchMock = vi.fn(async () => json({ data: [] }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await consoleGet("organizations/default/environments/env_1/tokens", {
       limit: 100,
     });
@@ -246,7 +265,7 @@ describe("console-API helpers", () => {
     const fetchMock = vi.fn(async () =>
       json({ access_token: "sk-map-env01-x", expires_in: 31536000 }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const issued = await consolePost<{ access_token: string }>(
       "organizations/default/environments/env_1/tokens",
       { name: "prod" },
@@ -256,7 +275,10 @@ describe("console-API helpers", () => {
       "/api/oauth/organizations/default/environments/env_1/tokens",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "X-CSRF-Token": "test-session-csrf",
+        },
         body: JSON.stringify({ name: "prod" }),
       },
     );
@@ -267,7 +289,7 @@ describe("console-API helpers", () => {
   it("consolePostNoContent resolves on a bodiless 204", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(null, { status: 204 })),
+      withTestSession(vi.fn(async () => new Response(null, { status: 204 }))),
     );
     await expect(
       consolePostNoContent(
@@ -278,20 +300,20 @@ describe("console-API helpers", () => {
 
   it("consolePostNoContent sends no body and no content-type", async () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await consolePostNoContent(
       "organizations/default/environments/e/tokens/k/revoke",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/oauth/organizations/default/environments/e/tokens/k/revoke",
-      { method: "POST" },
+      { method: "POST", headers: { "X-CSRF-Token": "test-session-csrf" } },
     );
   });
 
   it("consolePostNoContent still throws a PlatformError on a failure", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 404)),
+      withTestSession(vi.fn(async () => json(envelope, 404))),
     );
     await expect(
       consolePostNoContent(
@@ -302,24 +324,25 @@ describe("console-API helpers", () => {
 });
 
 describe("model gateway helpers", () => {
-  it("gatewayGet targets the admin API under /api/gateway with the query", async () => {
+  it("gatewayGet targets the private admin API with the query", async () => {
     const fetchMock = vi.fn(async () => json({ data: [], has_more: false }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await gatewayGet("usage/requests", { limit: 50, before: undefined });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/gateway/admin/v1/usage/requests?limit=50",
-    );
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/usage/requests?limit=50");
   });
 
   it("gatewayPost sends JSON and returns the parsed body", async () => {
     const fetchMock = vi.fn(async () => json({ id: "gwprov_1" }));
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await expect(
       gatewayPost("providers", { profile: "deepseek" }),
     ).resolves.toEqual({ id: "gwprov_1" });
-    expect(fetchMock).toHaveBeenCalledWith("/api/gateway/admin/v1/providers", {
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/providers", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "X-CSRF-Token": "test-session-csrf",
+      },
       body: JSON.stringify({ profile: "deepseek" }),
     });
   });
@@ -334,9 +357,9 @@ describe("model gateway helpers", () => {
     "probe: gatewayPost sends nothing when %s is not a finite number",
     async (field, value) => {
       const fetchMock = vi.fn(async () => json({}));
-      vi.stubGlobal("fetch", fetchMock);
+      vi.stubGlobal("fetch", withTestSession(fetchMock));
       await expect(
-        gatewayPost("key_policies/k", { targets: [{ [field]: value }] }),
+        gatewayPost("rate_limits/model", { targets: [{ [field]: value }] }),
       ).rejects.toThrow(field);
       expect(fetchMock).not.toHaveBeenCalled();
     },
@@ -369,15 +392,15 @@ describe("model gateway helpers", () => {
     const fetchMock = vi.fn(async () =>
       json({ type: "provider_deleted", id: "gwprov_1" }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await expect(gatewayDelete("providers/gwprov_1")).resolves.toEqual({
       type: "provider_deleted",
       id: "gwprov_1",
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/gateway/admin/v1/providers/gwprov_1",
-      { method: "DELETE" },
-    );
+    expect(fetchMock).toHaveBeenCalledWith("/admin/v1/providers/gwprov_1", {
+      method: "DELETE",
+      headers: { "X-CSRF-Token": "test-session-csrf" },
+    });
   });
 
   // A model name may hold `?`, `#` or `%` (checkAliasName). Raw, the browser
@@ -386,17 +409,15 @@ describe("model gateway helpers", () => {
     const fetchMock = vi.fn(async () =>
       json({ type: "alias_deleted", name: "x" }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     await gatewayDelete("aliases/Qwen/a?b#c%d");
     const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
-    expect(url).toBe("/api/gateway/admin/v1/aliases/Qwen/a%3Fb%23c%25d");
+    expect(url).toBe("/admin/v1/aliases/Qwen/a%3Fb%23c%25d");
     const parsed = new URL(url, "http://console");
     expect(parsed.search).toBe("");
     expect(parsed.hash).toBe("");
     expect(parsed.pathname.split("/").map(decodeURIComponent)).toEqual([
       "",
-      "api",
-      "gateway",
       "admin",
       "v1",
       "aliases",
@@ -408,16 +429,18 @@ describe("model gateway helpers", () => {
   it("throws a PlatformError with the gateway's envelope", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        json(
-          {
-            type: "error",
-            error: {
-              type: "invalid_request_error",
-              message: "provider has deployments",
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                message: "provider has deployments",
+              },
             },
-          },
-          409,
+            409,
+          ),
         ),
       ),
     );
@@ -453,10 +476,7 @@ describe("a session that ended", () => {
   });
 
   it("sends the browser to the login page", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => signedOut()),
-    );
+    vi.stubGlobal("fetch", withTestSession(vi.fn(async () => signedOut())));
     await expect(platformGet("v1/agents")).rejects.toBeInstanceOf(
       PlatformError,
     );
@@ -466,10 +486,7 @@ describe("a session that ended", () => {
   // The navigation is asynchronous. A caller left on a promise that never
   // settles would hold a spinner over the whole departure.
   it("still rejects, so no caller waits on a page that is leaving", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => signedOut()),
-    );
+    vi.stubGlobal("fetch", withTestSession(vi.fn(async () => signedOut())));
     await expect(platformDelete("v1/agents/a")).rejects.toBeInstanceOf(
       PlatformError,
     );
@@ -478,7 +495,7 @@ describe("a session that ended", () => {
   it("probe: an unmarked 401 does not bounce", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(envelope, 401)),
+      withTestSession(vi.fn(async () => json(envelope, 401))),
     );
     await expect(platformGet("v1/agents")).rejects.toBeInstanceOf(
       PlatformError,

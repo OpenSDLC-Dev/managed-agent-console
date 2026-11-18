@@ -240,7 +240,7 @@ function CurlBlock({
   const command = open
     ? [
         `curl -X POST "${url}" \\`,
-        `  -H "x-api-key: $PLATFORM_API_KEY" \\`,
+        `  -H "x-api-key: $ISSUED_API_KEY" \\`,
         `  -H "content-type: application/json" \\`,
         `  -d '${JSON.stringify(getBody(), null, 2).replace(/'/g, `'\\''`)}'`,
       ].join("\n")

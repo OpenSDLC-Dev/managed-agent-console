@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -104,7 +105,7 @@ afterEach(() => {
 describe("AddCredentialButton", () => {
   it("posts an environment_variable credential with limited networking", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -128,7 +129,9 @@ describe("AddCredentialButton", () => {
       string,
       RequestInit,
     ];
-    expect(url).toBe("/api/platform/v1/vaults/vlt_1/credentials");
+    expect(url).toBe(
+      "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials",
+    );
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       display_name: "GitHub",
@@ -152,7 +155,7 @@ describe("AddCredentialButton", () => {
     const secret = "cache-must-forget-this-secret";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => credentialResponse()),
+      withTestSession(vi.fn(async () => credentialResponse())),
     );
     const user = userEvent.setup();
     const { client } = renderButton();
@@ -173,7 +176,7 @@ describe("AddCredentialButton", () => {
 
   it("sends explicitly selected unrestricted networking and omits the empty name", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -202,7 +205,7 @@ describe("AddCredentialButton", () => {
 
   it("posts a static_bearer credential with server URL and token", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -235,7 +238,7 @@ describe("AddCredentialButton", () => {
 
   it("posts an mcp_oauth credential with access_token on the wire", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -268,7 +271,7 @@ describe("AddCredentialButton", () => {
 
   it("posts OAuth expiry, refresh configuration, and metadata", async () => {
     const fetchMock = vi.fn(async () => credentialResponse());
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -323,7 +326,7 @@ describe("AddCredentialButton", () => {
 
   it("rejects invalid metadata without posting", async () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -336,7 +339,7 @@ describe("AddCredentialButton", () => {
   });
 
   it("gates submit on the required fields of each arm", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     const user = userEvent.setup();
     renderButton();
     const dialog = await openDialog(user);
@@ -368,15 +371,17 @@ describe("AddCredentialButton", () => {
   it("shows the platform error and keeps the dialog open; cancel closes it", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              type: "error",
-              error: { type: "invalid_request_error", message: "bad secret" },
-            }),
-            { status: 400, headers: { "content-type": "application/json" } },
-          ),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                type: "error",
+                error: { type: "invalid_request_error", message: "bad secret" },
+              }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            ),
+        ),
       ),
     );
     const user = userEvent.setup();
@@ -395,7 +400,7 @@ describe("AddCredentialButton", () => {
   });
 
   it("resets the form when the dialog is dismissed", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     const user = userEvent.setup();
     renderButton();
     await openDialog(user);

@@ -25,7 +25,7 @@ test("edit metadata, archive and delete a session", async ({ page }) => {
   await expect(page.getByRole("dialog")).toBeHidden();
   const saved = await (
     await page.request.get(
-      "/api/platform/v1/sessions/sesn_gatedbash00000000001",
+      "/api/organizations/default/proxy/v1/sessions/sesn_gatedbash00000000001",
     )
   ).json();
   expect(saved.metadata).toEqual({ owner: "ops" });
@@ -80,7 +80,7 @@ test("direct archive preserves an inspector's filters and prevents duplicate pen
   });
   let calls = 0;
   await page.route(
-    `**/api/platform/v1/sessions/${id}/archive`,
+    `**/api/organizations/default/proxy/v1/sessions/${id}/archive`,
     async (route) => {
       calls++;
       await gate;
@@ -127,7 +127,9 @@ test("archive refusal stays on the Session and never interrupts it implicitly", 
     ),
   ).toBeVisible();
   await expect(page).toHaveURL(`/sessions/${id}`);
-  expect(writes).toEqual([`/api/platform/v1/sessions/${id}/archive`]);
+  expect(writes).toEqual([
+    `/api/organizations/default/proxy/v1/sessions/${id}/archive`,
+  ]);
   await expect(
     page.getByRole("button", { name: "Interrupt", exact: true }),
   ).toBeEnabled();
@@ -140,7 +142,9 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
   const output = "file_output000000000001";
   const copy = "file_researchcopy0000001";
   const status = async (path: string) =>
-    (await page.request.get(`/api/platform/v1/${path}`)).status();
+    (
+      await page.request.get(`/api/organizations/default/proxy/v1/${path}`)
+    ).status();
   await signIn(page);
   await page.goto(`/sessions/${id}`);
   await page.getByRole("button", { name: "Interrupt", exact: true }).click();
@@ -160,7 +164,10 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
     panel.getByRole("link", {
       name: "Download summary.xlsx (file_output000000000001)",
     }),
-  ).toHaveAttribute("href", `/api/platform/v1/files/${output}/content`);
+  ).toHaveAttribute(
+    "href",
+    `/api/organizations/default/proxy/v1/files/${output}/content`,
+  );
   expect(await status(`files/${output}`)).toBe(200);
   expect(await status(`files/${copy}`)).toBe(200);
 
@@ -175,7 +182,9 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
   expect(
     (
       await (
-        await page.request.get(`/api/platform/v1/files?scope_id=${id}`)
+        await page.request.get(
+          `/api/organizations/default/proxy/v1/files?scope_id=${id}`,
+        )
       ).json()
     ).data,
   ).toEqual([]);

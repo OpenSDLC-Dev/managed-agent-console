@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -24,7 +25,7 @@ function renderActions(index: number) {
     else response.archived_at = "2026-08-03T00:00:00Z";
     return new Response(JSON.stringify(response), { status: 200 });
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });

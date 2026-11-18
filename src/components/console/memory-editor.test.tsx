@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -42,7 +43,7 @@ it("updates full content with the loaded digest as its precondition", async () =
         headers: { "content-type": "application/json" },
       }),
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
@@ -58,7 +59,7 @@ it("updates full content with the loaded digest as its precondition", async () =
 
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   expect(fetchMock.mock.calls[0][0]).toBe(
-    "/api/platform/v1/memory_stores/memstore_1/memories/mem_1?view=full",
+    "/api/organizations/default/proxy/v1/memory_stores/memstore_1/memories/mem_1?view=full",
   );
   expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
     path: "/brief.md",

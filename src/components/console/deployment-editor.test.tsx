@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -106,57 +107,59 @@ function inlineEditor({
   let finishUpload: (() => void) | undefined;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.body instanceof FormData) {
-        if (holdUpload)
-          await new Promise<void>((resolve) => {
-            finishUpload = resolve;
-          });
-        return Response.json({ id: "file_uploaded", filename: "new.txt" });
-      }
-      if (init?.method === "POST") {
-        const body = JSON.parse(String(init.body)) as DeploymentWriteBody;
-        posts.push(body);
-        if (fail) {
-          fail = false;
-          return Response.json(
-            {
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "Repository token required",
-              },
-            },
-            { status: 400 },
-          );
+    withTestSession(
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.body instanceof FormData) {
+          if (holdUpload)
+            await new Promise<void>((resolve) => {
+              finishUpload = resolve;
+            });
+          return Response.json({ id: "file_uploaded", filename: "new.txt" });
         }
-        saved = {
-          ...saved,
-          ...body,
-          agent: {
-            ...saved.agent,
-            ...(body.agent as Partial<Deployment["agent"]>),
-          },
-          resources:
-            body.resources?.map((resource) => {
-              if (resource.type !== "github_repository") return resource;
-              const { authorization_token: _token, ...safe } = resource;
-              void _token;
-              return safe;
-            }) ?? saved.resources,
-        } as Deployment;
-        return Response.json(saved);
-      }
-      const data = url.includes("/versions")
-        ? [3, 2].map((version) => ({ ...agents[1], version }))
-        : url.includes("/agents")
-          ? agents
-          : url.includes("/environments")
-            ? environments
-            : [];
-      return Response.json({ data, next_page: null });
-    }),
+        if (init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as DeploymentWriteBody;
+          posts.push(body);
+          if (fail) {
+            fail = false;
+            return Response.json(
+              {
+                type: "error",
+                error: {
+                  type: "invalid_request_error",
+                  message: "Repository token required",
+                },
+              },
+              { status: 400 },
+            );
+          }
+          saved = {
+            ...saved,
+            ...body,
+            agent: {
+              ...saved.agent,
+              ...(body.agent as Partial<Deployment["agent"]>),
+            },
+            resources:
+              body.resources?.map((resource) => {
+                if (resource.type !== "github_repository") return resource;
+                const { authorization_token: _token, ...safe } = resource;
+                void _token;
+                return safe;
+              }) ?? saved.resources,
+          } as Deployment;
+          return Response.json(saved);
+        }
+        const data = url.includes("/versions")
+          ? [3, 2].map((version) => ({ ...agents[1], version }))
+          : url.includes("/agents")
+            ? agents
+            : url.includes("/environments")
+              ? environments
+              : [];
+        return Response.json({ data, next_page: null });
+      }),
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -334,38 +337,40 @@ describe("deployment editor wire mapping", () => {
     const posts: DeploymentWriteBody[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (init?.method === "POST") {
-          posts.push(JSON.parse(String(init.body)) as DeploymentWriteBody);
-          return new Response(
-            JSON.stringify({ id: "depl_1", type: "deployment" }),
-            { status: 200 },
-          );
-        }
-        const data = url.includes("/agents")
-          ? [
-              {
-                id: "agent_1",
-                name: "Task agent",
-                version: 3,
-                archived_at: null,
-              },
-            ]
-          : url.includes("/environments")
+      withTestSession(
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          if (init?.method === "POST") {
+            posts.push(JSON.parse(String(init.body)) as DeploymentWriteBody);
+            return new Response(
+              JSON.stringify({ id: "depl_1", type: "deployment" }),
+              { status: 200 },
+            );
+          }
+          const data = url.includes("/agents")
             ? [
                 {
-                  id: "env_1",
-                  name: "Workers",
-                  config: { type: "self_hosted" },
+                  id: "agent_1",
+                  name: "Task agent",
+                  version: 3,
                   archived_at: null,
                 },
               ]
-            : [];
-        return new Response(JSON.stringify({ data, next_page: null }), {
-          status: 200,
-        });
-      }),
+            : url.includes("/environments")
+              ? [
+                  {
+                    id: "env_1",
+                    name: "Workers",
+                    config: { type: "self_hosted" },
+                    archived_at: null,
+                  },
+                ]
+              : [];
+          return new Response(JSON.stringify({ data, next_page: null }), {
+            status: 200,
+          });
+        }),
+      ),
     );
     const client = new QueryClient({
       defaultOptions: {
@@ -426,68 +431,70 @@ describe("deployment editor wire mapping", () => {
     const posts: { url: string; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        if (init?.body instanceof FormData) {
-          return new Response(
-            JSON.stringify({
-              id: "file_uploaded",
-              type: "file",
-              filename: "brief.txt",
-              mime_type: "text/plain",
-              size_bytes: 5,
-              downloadable: false,
-              scope: null,
-              created_at: "2026-01-01T00:00:00Z",
-            }),
-            { status: 200 },
-          );
-        }
-        if (init?.method === "POST") {
-          posts.push({ url, body: JSON.parse(String(init.body)) });
-          return new Response(
-            JSON.stringify({ id: "depl_created", type: "deployment" }),
-            { status: 200 },
-          );
-        }
-        const data = url.includes("/agents")
-          ? [
-              {
-                id: "agent_1",
-                name: "Task agent",
-                version: 3,
-                archived_at: null,
-              },
-            ]
-          : url.includes("/environments")
+      withTestSession(
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          if (init?.body instanceof FormData) {
+            return new Response(
+              JSON.stringify({
+                id: "file_uploaded",
+                type: "file",
+                filename: "brief.txt",
+                mime_type: "text/plain",
+                size_bytes: 5,
+                downloadable: false,
+                scope: null,
+                created_at: "2026-01-01T00:00:00Z",
+              }),
+              { status: 200 },
+            );
+          }
+          if (init?.method === "POST") {
+            posts.push({ url, body: JSON.parse(String(init.body)) });
+            return new Response(
+              JSON.stringify({ id: "depl_created", type: "deployment" }),
+              { status: 200 },
+            );
+          }
+          const data = url.includes("/agents")
             ? [
                 {
-                  id: "env_1",
-                  name: "Workers",
-                  config: { type: "self_hosted" },
+                  id: "agent_1",
+                  name: "Task agent",
+                  version: 3,
                   archived_at: null,
                 },
               ]
-            : url.includes("/memory_stores")
+            : url.includes("/environments")
               ? [
                   {
-                    id: "mem_1",
-                    type: "memory_store",
-                    name: "Project notes",
+                    id: "env_1",
+                    name: "Workers",
+                    config: { type: "self_hosted" },
                     archived_at: null,
                   },
                 ]
-              : [
-                  {
-                    id: "vlt_1",
-                    display_name: "GitHub",
-                    archived_at: null,
-                  },
-                ];
-        return new Response(JSON.stringify({ data, next_page: null }), {
-          status: 200,
-        });
-      }),
+              : url.includes("/memory_stores")
+                ? [
+                    {
+                      id: "mem_1",
+                      type: "memory_store",
+                      name: "Project notes",
+                      archived_at: null,
+                    },
+                  ]
+                : [
+                    {
+                      id: "vlt_1",
+                      display_name: "GitHub",
+                      archived_at: null,
+                    },
+                  ];
+          return new Response(JSON.stringify({ data, next_page: null }), {
+            status: 200,
+          });
+        }),
+      ),
     );
     const client = new QueryClient({
       defaultOptions: {
@@ -578,7 +585,7 @@ describe("deployment editor wire mapping", () => {
 
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0]).toMatchObject({
-      url: "/api/platform/v1/deployments",
+      url: "/api/organizations/default/proxy/v1/deployments",
       body: {
         name: "Morning run",
         description: "Daily triage",
@@ -612,7 +619,7 @@ describe("deployment editor wire mapping", () => {
     const fetch = vi.fn<
       (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
     >(async () => new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("fetch", withTestSession(fetch));
     const client = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -659,7 +666,9 @@ it.each([
 it("round-trips plain message drafts between rendered and advanced views", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify({ data: [] }))),
+    withTestSession(
+      vi.fn(async () => new Response(JSON.stringify({ data: [] }))),
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

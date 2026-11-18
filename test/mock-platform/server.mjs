@@ -4,6 +4,13 @@
 // request-id header) as documented in docs/plan/01_v1-console.md § Ground
 // truth. Sessions carry a tiny state machine so e2e can exercise the HITL
 // approval round trip and streamed replies.
+import {
+  authenticateBrowser,
+  nativeAuthRoute,
+  resetSessions,
+  expireSessions,
+  MOCK_ACCOUNT,
+} from "./native-auth.mjs";
 import { isUtf8 } from "node:buffer";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
@@ -34,9 +41,10 @@ import {
   vaults,
 } from "./fixtures.mjs";
 import { emptyGateway, gatewayRoute, resetGateway } from "./gateway.mjs";
-import { PORT as OIDC_PORT, oidcServer, resetOidc } from "./oidc.mjs";
 
-const API_KEY = process.env.MOCK_PLATFORM_KEY ?? "test-key";
+const API_KEY =
+  process.env.MOCK_TEST_API_KEY ??
+  "sk-map-api01-mock-owned-test-key-00000000000000000000001";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
 /** The model gateway double (gateway.mjs) — its own port, see gatewayServer. */
 const GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 18070);
@@ -47,14 +55,7 @@ const UNIMPLEMENTED = (process.env.MOCK_PLATFORM_UNIMPLEMENTED ?? "")
   .filter(Boolean);
 /** Toggled per test via POST /__unimplemented; back to UNIMPLEMENTED on reset. */
 let unimplemented = [...UNIMPLEMENTED];
-/**
- * Set by POST /__expire-identity so a spec can watch the console react to a
- * token the platform stopped accepting — the case that cannot be produced by
- * waiting, and the one the sign-out bounce exists for. Declared up here with the
- * other mutable flags because `resetStore()` runs at module load and would find
- * a `let` further down still in its temporal dead zone.
- */
-let identityRejected = false;
+
 /**
  * Wire paths this run answers 403 on, as the platform does for a human whose
  * role does not reach a route (`requireRole`). Set by POST /__forbid; cleared by
@@ -136,7 +137,7 @@ const ISSUED_KEY_PREFIX = "sk-map-api01-";
  * The platform's own masking rule, transcribed (internal/api/auth.go,
  * `partialKeyHint`): an **issued** key publishes three characters of its body,
  * `...`, then four more, because its prefix is public by construction. An
- * **operator-chosen** `CONTROLPLANE_API_KEY` may hide anything, so nothing in
+ * Historical unowned credentials may hide anything, so nothing in
  * it is assumed public and only its last four characters are shown. Both refuse
  * to produce a hint at all below a length floor — a masked value that is mostly
  * the value is worse than an empty column, since `key_hash` is an unsalted
@@ -160,27 +161,17 @@ function partialKeyHint(key) {
   return `...${runes.slice(-tail).join("")}`;
 }
 
-/**
- * The seeded rows. The first has **no issuer**, which is the platform's mark of
- * a key managed by `CONTROLPLANE_API_KEY`: every mutation on it is refused,
- * because its lifecycle is rotation-by-restart. A fixture without one would let
- * the console ship a row of controls that always 400.
- */
+/** Historical unowned row plus an active service-account-owned credential. */
 const API_KEYS_SEED = [
   {
     id: "apikey_bootstrap01",
     type: "api_key",
-    name: "control-plane",
+    name: "historical-unowned",
     workspace_id: null,
     created_at: "2026-08-01T09:00:00Z",
     created_by: null,
-    // This row *is* the key this server authenticates, so its hint is derived
-    // from that value rather than written down: a fixed string would describe a
-    // credential the mock does not accept, and the default `test-key` is short
-    // enough that the platform's floor publishes **no hint at all** — a state
-    // the console has to render, and would otherwise never meet.
-    partial_key_hint: partialKeyHint(API_KEY),
-    status: "active",
+    partial_key_hint: "",
+    status: "inactive",
     expires_at: null,
     principal: null,
   },
@@ -190,22 +181,21 @@ const API_KEYS_SEED = [
     name: "ci-deploy",
     workspace_id: null,
     created_at: "2026-08-02T10:30:00Z",
-    created_by: { id: "principal_op01", type: "principal" },
-    partial_key_hint: "sk-map-api01-Cid...ploy",
+    created_by: { id: "user_mockadmin01", type: "user" },
+    partial_key_hint: partialKeyHint(API_KEY),
     status: "active",
     expires_at: "2026-12-01T00:00:00Z",
-    principal: null,
+    principal: {
+      type: "service_account_actor",
+      service_account_id: "svac_mockci01",
+    },
   },
 ];
 
 function resetStore() {
   unimplemented = [...UNIMPLEMENTED];
-  identityRejected = false;
+  resetSessions();
   forbidden = [];
-  // Authorization codes in flight, never the stub provider's signing key:
-  // rotating that mid-run would leave the console verifying against a key set
-  // jose refuses to refetch for thirty seconds (see oidc.mjs).
-  resetOidc();
   resetGateway();
   for (const state of store.values()) {
     for (const timer of state.timers ?? []) clearTimeout(timer);
@@ -1909,71 +1899,16 @@ function refuseOrganization(res, org) {
   return true;
 }
 
-// ---- credential dispatch -------------------------------------------------
-//
-// Mirrors internal/api/server.go's dispatchManagementAuth, because the console's
-// BFF is written against its ordering and a mock that authenticated differently
-// would let a console bug pass: **the machine key first and outright**, then the
-// human lane, then today's 401 whose message never says whether SSO is on.
-//
-// The JWT here is decoded, never verified — signature checking belongs to the
-// platform, and the console's job (the thing these tests exercise) is to send
-// the right credential in the right header and to act on the refusal.
-
-/** internal/identity.LooksLikeJWT: three non-empty base64url segments. */
-const looksLikeJwt = (s) =>
-  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(s);
-
-/** internal/api.apiKeyOffered: every field, and a repeat is ambiguous, not absent. */
-function apiKeyOffered(req) {
-  const raw = req.headers["x-api-key"];
-  if (Array.isArray(raw)) return true;
-  return typeof raw === "string" && raw !== "";
-}
-
+// Public fixture callers use an explicitly owned test key; browser routes only
+// accept their native cookie. Cookies never admit public /v1 requests.
 function authenticate(req, res) {
-  const deny = (message) => {
-    res.setHeader("content-type", "application/json");
-    res.writeHead(401);
-    res.end(envelope("authentication_error", message));
-    return false;
-  };
-
-  if (apiKeyOffered(req)) {
-    const key = req.headers["x-api-key"];
-    if (Array.isArray(key) || key !== API_KEY) return deny("invalid x-api-key");
-    return true;
-  }
-
-  const authorization = req.headers["authorization"] ?? "";
-  const bearer = /^Bearer (.+)$/.exec(String(authorization))?.[1];
-  if (bearer !== undefined && looksLikeJwt(bearer)) {
-    // identitylane.go: one constant string for every rejection, so a caller
-    // learns nothing about which check failed.
-    if (identityRejected) return deny("authentication failed");
-    let payload;
-    try {
-      payload = JSON.parse(
-        Buffer.from(bearer.split(".")[1], "base64url").toString("utf8"),
-      );
-    } catch {
-      return deny("authentication failed");
-    }
-    if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
-      return deny("authentication failed");
-    }
-    return true;
-  }
-
-  // Neither credential — including a Bearer that is not JWT-shaped, which the
-  // platform looks up as an environment key and, for one no environment
-  // issued, answers with exactly this message (auth.go requireAPIKey, the
-  // reference's words since #540). A minted key that was revoked, or a live
-  // one on GET /v1/agents, /v1/skills or /v1/skills/{id}, is refused in the
-  // reference's words instead (envauth.go answerEnvironmentKey, #840); the
-  // mock keeps no issued key's secret, so every key is one no environment
-  // issued here.
-  return deny("x-api-key header is required");
+  const key =
+    req.headers["x-api-key"] ??
+    /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ""))?.[1];
+  if (key === API_KEY) return true;
+  res.writeHead(401, { "content-type": "application/json" });
+  res.end(envelope("authentication_error", "invalid or missing API key"));
+  return false;
 }
 
 // Opaque index cursor standing in for the platform's keyset tokens.
@@ -2579,7 +2514,7 @@ const server = createServer(async (req, res) => {
   // once a provider revokes one. `/__reset` puts it back. No auth, on purpose —
   // the whole point is to reach it while the console's own credential is dead.
   if (req.method === "POST" && url.pathname === "/__expire-identity") {
-    identityRejected = true;
+    expireSessions();
     res.setHeader("content-type", "application/json");
     res.writeHead(200);
     res.end(JSON.stringify({ ok: true }));
@@ -2633,8 +2568,17 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (!authenticate(req, res)) return;
-
+  if (await nativeAuthRoute(req, res, url, readBody)) return;
+  const privateRequest = url.pathname.startsWith("/api/");
+  if (
+    !(privateRequest ? authenticateBrowser(req, res) : authenticate(req, res))
+  )
+    return;
+  if (url.pathname.startsWith("/api/organizations/default/proxy/")) {
+    url.pathname = url.pathname.slice(
+      "/api/organizations/default/proxy".length,
+    );
+  }
   // Authenticated, and not allowed. The role check runs AFTER authentication on
   // the platform too (requireIdentity then requireRole), and the message names
   // the role the route requires rather than the caller's — which is what lets
@@ -2692,6 +2636,61 @@ const server = createServer(async (req, res) => {
     res.setHeader("content-type", "application/json");
     res.writeHead(404);
     res.end(envelope("not_found_error", unknownPath(url.pathname)));
+    return;
+  }
+
+  if (
+    url.pathname === "/api/console/organizations/default/service_accounts" &&
+    req.method === "GET"
+  ) {
+    res.setHeader("content-type", "application/json");
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            id: "svac_mockci01",
+            type: "service_account",
+            name: "ci-deploy",
+            description: null,
+            organization_role: "developer",
+            created_at: "2026-08-02T10:30:00Z",
+            updated_at: "2026-08-02T10:30:00Z",
+            created_by_actor_id: MOCK_ACCOUNT.id,
+            updated_by_actor_id: MOCK_ACCOUNT.id,
+            archived_at: null,
+            archived_by_actor_id: null,
+          },
+        ],
+        next_page: null,
+      }),
+    );
+    return;
+  }
+  if (
+    url.pathname === "/api/console/organizations/default/members" &&
+    req.method === "GET"
+  ) {
+    res.setHeader("content-type", "application/json");
+    res.end(
+      JSON.stringify({
+        data: [
+          {
+            id: MOCK_ACCOUNT.id,
+            type: "user",
+            email: MOCK_ACCOUNT.email,
+            name: MOCK_ACCOUNT.name,
+            role: MOCK_ACCOUNT.role,
+            role_source: MOCK_ACCOUNT.role_source,
+            login_name: MOCK_ACCOUNT.login_name,
+            added_at: "2026-08-01T00:00:00Z",
+            status: "active",
+          },
+        ],
+        first_id: MOCK_ACCOUNT.id,
+        last_id: MOCK_ACCOUNT.id,
+        has_more: false,
+      }),
+    );
     return;
   }
 
@@ -2798,11 +2797,17 @@ const server = createServer(async (req, res) => {
         name,
         workspace_id: null,
         created_at: new Date().toISOString(),
-        created_by: { id: "principal_op01", type: "principal" },
+        created_by: { id: "user_mockadmin01", type: "user" },
         partial_key_hint: partialKeyHint(rawKey),
         status: "active",
         expires_at: expiresAt,
-        principal: null,
+        principal:
+          body.principal_id === "svac_mockci01"
+            ? {
+                type: "service_account_actor",
+                service_account_id: "svac_mockci01",
+              }
+            : { type: "user_actor", user_id: MOCK_ACCOUNT.id },
       };
       apiKeysStore.unshift(row);
       // `noStore(...)` wraps this route and only this one on the platform
@@ -2851,7 +2856,7 @@ const server = createServer(async (req, res) => {
         res.end(
           envelope(
             "invalid_request_error",
-            `api key ${keyId} is managed by CONTROLPLANE_API_KEY; rotate it by restarting the control plane with a new value`,
+            "unowned historical keys cannot be changed",
           ),
         );
         return;
@@ -5696,7 +5701,7 @@ const gatewayServer = createServer(async (req, res) => {
   requestCounter += 1;
   res.setHeader("request-id", `req_mock${requestCounter}`);
   const url = new URL(req.url, `http://${req.headers.host}`);
-  if (!authenticate(req, res)) return;
+  if (!authenticateBrowser(req, res)) return;
   res.setHeader("content-type", "application/json");
   const answer = (status, body) => {
     res.writeHead(status);
@@ -5763,22 +5768,10 @@ const gatewayServer = createServer(async (req, res) => {
 // conformance suite imports it instead and drives it on an ephemeral port, so
 // the listen has to be conditional or the import would bind 18080.
 if (argv[1] && fileURLToPath(import.meta.url) === argv[1]) {
-  // The stub identity provider binds first, and the platform only inside its
-  // callback. Playwright's webServer probes the platform's URL alone, so
-  // chaining them is what makes "the platform answered" mean "the provider is
-  // up too" — otherwise the console's first `/api/auth/login` could outrun a
-  // listen that had not landed yet, and lose a whole pass to one flaky shot.
-  //
-  // A second port rather than a path prefix on this one: a deployment's issuer
-  // is not its platform, and sharing an origin would let a console that
-  // confused the two keep passing (#99).
-  oidcServer.listen(OIDC_PORT, "127.0.0.1", () => {
-    console.log(`mock oidc listening on http://127.0.0.1:${OIDC_PORT}`);
-    gatewayServer.listen(GATEWAY_PORT, "127.0.0.1", () => {
-      console.log(`mock gateway listening on http://127.0.0.1:${GATEWAY_PORT}`);
-      server.listen(PORT, "127.0.0.1", () => {
-        console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
-      });
+  gatewayServer.listen(GATEWAY_PORT, "127.0.0.1", () => {
+    console.log(`mock gateway listening on http://127.0.0.1:${GATEWAY_PORT}`);
+    server.listen(PORT, "127.0.0.1", () => {
+      console.log(`mock platform listening on http://127.0.0.1:${PORT}`);
     });
   });
 }

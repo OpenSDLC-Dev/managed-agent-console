@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -16,7 +17,7 @@ afterEach(() => {
 it("renders the Dream creation form", () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(() => new Promise<Response>(() => {})),
+    withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },

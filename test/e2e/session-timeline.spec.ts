@@ -40,7 +40,7 @@ test("timeline zoom, event navigation and JSON download retain the complete load
     .fill("no matching transcript text");
   const expected = await (
     await page.request.get(
-      "/api/platform/v1/sessions/sesn_gatedbash00000000001/events",
+      "/api/organizations/default/proxy/v1/sessions/sesn_gatedbash00000000001/events",
     )
   ).json();
   const downloadPromise = page.waitForEvent("download");
@@ -95,7 +95,9 @@ test("a never-run thread renders pending usage instead of failing the Threads vi
   request,
 }) => {
   const created = await request.post("http://127.0.0.1:18080/v1/sessions", {
-    headers: { "x-api-key": "test-key" },
+    headers: {
+      "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+    },
     data: {
       agent: "agent_taskrunner0000000001",
       environment_id: "env_egress000000000000001",
@@ -119,7 +121,9 @@ test("a never-run thread renders pending usage instead of failing the Threads vi
   const sent = await request.post(
     `http://127.0.0.1:18080/v1/sessions/${id}/events`,
     {
-      headers: { "x-api-key": "test-key" },
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
       data: { events: [{ type: "user.message", content: "Go" }] },
     },
   );

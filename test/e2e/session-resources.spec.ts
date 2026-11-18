@@ -1,3 +1,4 @@
+import { browserPost } from "./browser-write";
 import { expect, test } from "@playwright/test";
 import { signIn } from "./sign-in";
 
@@ -54,7 +55,9 @@ test("attach a file to an existing session and remove its reference", async ({
   await expect(leftover).toContainText("research-notes.md");
   await expect(leftover.getByRole("link")).toHaveCount(0);
   await expect(panel).toHaveAttribute("data-resources-state", "rows");
-  const files = await (await page.request.get("/api/platform/v1/files")).json();
+  const files = await (
+    await page.request.get("/api/organizations/default/proxy/v1/files")
+  ).json();
   expect(files.data.map((file: { id: string }) => file.id)).toContain(
     "file_notes0000000000001",
   );
@@ -71,11 +74,17 @@ test("attach a file to an existing session and remove its reference", async ({
   await expect(panel).toHaveAttribute("data-session-file-count", "0");
   await expect(panel).toHaveAttribute("data-resources-state", "empty");
   expect(
-    (await page.request.get(`/api/platform/v1/files/${copy}`)).status(),
+    (
+      await page.request.get(
+        `/api/organizations/default/proxy/v1/files/${copy}`,
+      )
+    ).status(),
   ).toBe(404);
   expect(
     (
-      await page.request.get("/api/platform/v1/files/file_notes0000000000001")
+      await page.request.get(
+        "/api/organizations/default/proxy/v1/files/file_notes0000000000001",
+      )
     ).status(),
   ).toBe(200);
 });
@@ -84,24 +93,28 @@ test("repository tokens stay write-only and a memory store offers no Remove", as
   page,
 }) => {
   await signIn(page);
-  const created = await page.request.post("/api/platform/v1/sessions", {
-    data: {
-      agent: "agent_taskrunner0000000001",
-      environment_id: "env_egress000000000000001",
-      resources: [
-        {
-          type: "github_repository",
-          url: "https://github.com/example/project",
-          authorization_token: "test-only-original",
-        },
-        {
-          type: "memory_store",
-          memory_store_id: "memstore_projectnotes000001",
-          access: "read_only",
-        },
-      ],
+  const created = await browserPost(
+    page,
+    "/api/organizations/default/proxy/v1/sessions",
+    {
+      data: {
+        agent: "agent_taskrunner0000000001",
+        environment_id: "env_egress000000000000001",
+        resources: [
+          {
+            type: "github_repository",
+            url: "https://github.com/example/project",
+            authorization_token: "test-only-original",
+          },
+          {
+            type: "memory_store",
+            memory_store_id: "memstore_projectnotes000001",
+            access: "read_only",
+          },
+        ],
+      },
     },
-  });
+  );
   expect(created.status()).toBe(200);
   const session = await created.json();
   expect(JSON.stringify(session)).not.toContain("test-only-original");
@@ -122,7 +135,9 @@ test("repository tokens stay write-only and a memory store offers no Remove", as
   expect(await rotated.text()).not.toContain("test-only-rotated");
   await expect(page.getByRole("dialog")).toBeHidden();
   const refreshed = await (
-    await page.request.get(`/api/platform/v1/sessions/${session.id}`)
+    await page.request.get(
+      `/api/organizations/default/proxy/v1/sessions/${session.id}`,
+    )
   ).json();
   expect(JSON.stringify(refreshed)).not.toContain("test-only-rotated");
   // Neither row offers Remove: the platform keeps a repository for the

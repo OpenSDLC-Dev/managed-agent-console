@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { useTestSearchParams } from "../../../../test/search-params";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -150,16 +151,17 @@ function stubFetch(
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
-      if (url.pathname === "/api/platform/v1/deployments")
+      if (url.pathname === "/api/organizations/default/proxy/v1/deployments")
         return json({ data: [] });
       // The agent-filter options query rides along on every mount.
-      if (url.pathname === "/api/platform/v1/agents") return agentsHandler(url);
+      if (url.pathname === "/api/organizations/default/proxy/v1/agents")
+        return agentsHandler(url);
       const response = handler(url, init);
       if (!response) throw new Error(`unmatched fetch: ${url.pathname}`);
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -167,7 +169,9 @@ function stubFetch(
 function sessionUrls(fetchMock: ReturnType<typeof stubFetch>): URL[] {
   return fetchMock.mock.calls
     .map((call) => new URL(String(call[0]), "http://console.test"))
-    .filter((url) => url.pathname === "/api/platform/v1/sessions");
+    .filter(
+      (url) => url.pathname === "/api/organizations/default/proxy/v1/sessions",
+    );
 }
 
 function renderPage() {
@@ -191,7 +195,7 @@ describe("SessionsPage", () => {
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     const { container } = renderPage();
     expect(screen.getByText("Sessions")).toBeInTheDocument();

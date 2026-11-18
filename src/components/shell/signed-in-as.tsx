@@ -4,7 +4,7 @@ import { useLeaveConfirmation } from "./unsaved-changes";
 import { useContext, useState } from "react";
 import { beginSignOut, leaveAfterSignOut } from "@/lib/identity/signed-out";
 
-import { csrfHeaders, isNativeConsole } from "@/lib/platform/http";
+import { csrfHeaders } from "@/lib/platform/http";
 import { ConsoleSessionContext, useConsoleSession } from "./console-session";
 
 const SIGN_OUT_TIMEOUT_MS = 5_000;
@@ -36,7 +36,7 @@ function Account({
   async function signOut() {
     setSigningOut(true);
     // Before the request, not after it: the POST destroys the session, so every
-    // BFF call still in flight comes back marked signed-out, and the first one
+    // private call still in flight comes back marked signed-out, and the first one
     // to land would otherwise bounce to `/login?return_to=<this page>` — the
     // page the operator just chose to leave.
     beginSignOut();
@@ -55,9 +55,7 @@ function Account({
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
-        ...(isNativeConsole()
-          ? { headers: await csrfHeaders(bound.signal) }
-          : {}),
+        headers: await csrfHeaders(bound.signal),
         signal: bound.signal,
       });
     } catch {
@@ -87,15 +85,10 @@ function Account({
           {data.email}
         </div>
       )}
-      {isNativeConsole() && (
-        <div
-          className="text-[12px] text-muted-foreground"
-          data-role={data.role}
-        >
-          {data.role}
-        </div>
-      )}
-      {isNativeConsole() && data.role === "user" && (
+      <div className="text-[12px] text-muted-foreground" data-role={data.role}>
+        {data.role}
+      </div>
+      {data.role === "user" && (
         <a href="/setup" className="block text-xs underline">
           Redeem administrator setup code
         </a>

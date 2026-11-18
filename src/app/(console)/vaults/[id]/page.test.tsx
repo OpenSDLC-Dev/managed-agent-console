@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -110,7 +111,7 @@ function stubFetch(
       return response;
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -124,9 +125,12 @@ function routes(over?: {
       const handled = over.onMutate(url, init);
       if (handled) return handled;
     }
-    if (url.pathname === "/api/platform/v1/vaults/vlt_1/credentials")
+    if (
+      url.pathname ===
+      "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials"
+    )
       return json({ data: over?.credentials ?? credentials });
-    if (url.pathname === "/api/platform/v1/vaults/vlt_1")
+    if (url.pathname === "/api/organizations/default/proxy/v1/vaults/vlt_1")
       return json(over?.vault ?? vault());
     return undefined;
   });
@@ -165,7 +169,7 @@ describe("VaultDetailPage", () => {
   it("shows the detail skeleton while the vault loads", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() => new Promise<Response>(() => {})),
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderPage();
     await waitFor(() =>
@@ -273,7 +277,7 @@ describe("VaultDetailPage", () => {
 
     await waitFor(() => expect(deletes).toHaveLength(1));
     expect(deletes[0].pathname).toBe(
-      "/api/platform/v1/vaults/vlt_1/credentials/crd_bearer",
+      "/api/organizations/default/proxy/v1/vaults/vlt_1/credentials/crd_bearer",
     );
   });
 
@@ -302,7 +306,9 @@ describe("VaultDetailPage", () => {
     );
 
     await waitFor(() => expect(posts).toHaveLength(1));
-    expect(posts[0].pathname).toBe("/api/platform/v1/vaults/vlt_1/archive");
+    expect(posts[0].pathname).toBe(
+      "/api/organizations/default/proxy/v1/vaults/vlt_1/archive",
+    );
   });
 
   it("deletes the vault and returns to the list", async () => {
@@ -327,7 +333,9 @@ describe("VaultDetailPage", () => {
     );
 
     await waitFor(() => expect(deletes).toHaveLength(1));
-    expect(deletes[0].pathname).toBe("/api/platform/v1/vaults/vlt_1");
+    expect(deletes[0].pathname).toBe(
+      "/api/organizations/default/proxy/v1/vaults/vlt_1",
+    );
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults"));
   });
 

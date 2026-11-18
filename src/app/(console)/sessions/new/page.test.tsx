@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -145,7 +146,7 @@ function stubFetch(over?: {
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://console.test");
       if (init?.method === "POST") {
-        if (url.pathname === "/api/platform/v1/files")
+        if (url.pathname === "/api/organizations/default/proxy/v1/files")
           return over?.onUpload
             ? over.onUpload()
             : json({
@@ -158,21 +159,21 @@ function stubFetch(over?: {
                 scope: null,
                 created_at: "2026-08-02T00:00:00Z",
               });
-        if (url.pathname === "/api/platform/v1/sessions")
+        if (url.pathname === "/api/organizations/default/proxy/v1/sessions")
           return over?.onCreate ? over.onCreate() : json({ id: "sess_9" });
       }
-      if (url.pathname === "/api/platform/v1/agents")
+      if (url.pathname === "/api/organizations/default/proxy/v1/agents")
         return json({ data: [agent] });
-      if (url.pathname === "/api/platform/v1/environments")
+      if (url.pathname === "/api/organizations/default/proxy/v1/environments")
         return json({ data: [environment] });
-      if (url.pathname === "/api/platform/v1/vaults")
+      if (url.pathname === "/api/organizations/default/proxy/v1/vaults")
         return json({ data: over?.vaults ?? [vault] });
-      if (url.pathname === "/api/platform/v1/memory_stores")
+      if (url.pathname === "/api/organizations/default/proxy/v1/memory_stores")
         return json({ data: [memoryStore], next_page: null });
       throw new Error(`unmatched fetch: ${url.pathname}`);
     },
   );
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
   return fetchMock;
 }
 
@@ -321,7 +322,7 @@ describe("NewSessionPage", () => {
       const post = fetchMock.mock.calls.find(
         ([url, init]) =>
           init?.method === "POST" &&
-          String(url) === "/api/platform/v1/sessions",
+          String(url) === "/api/organizations/default/proxy/v1/sessions",
       );
       expect(post).toBeDefined();
       expect(JSON.parse(post![1]?.body as string)).toEqual({
@@ -368,7 +369,7 @@ describe("NewSessionPage", () => {
       const post = fetchMock.mock.calls.find(
         ([url, init]) =>
           init?.method === "POST" &&
-          String(url) === "/api/platform/v1/sessions",
+          String(url) === "/api/organizations/default/proxy/v1/sessions",
       );
       expect(JSON.parse(post![1]?.body as string)).toEqual({
         agent: "agt_1",

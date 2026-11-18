@@ -33,31 +33,39 @@ it("native failure guard refuses an unverified version or missing serialization 
   expect(serialized).toEqual([]);
 });
 
-it("native failure guard protects soft, aggregate and non-Error diagnostics before serialization", () => {
-  const { info, serialized } = fixture();
-  protectFailureDiagnostics(info as unknown as TestInfo, "1.64.1");
-  const marker = ["sk", "map", "api01", "synthetic"].join("-");
-  const failure = Object.assign(new Error(`ordinary detail ${marker}`), {
-    matcherResult: {
-      ariaSnapshot: `heading: ordinary detail\ntext: ${marker}`,
-    },
-  });
-  const step = info._addStep({ title: "ordinary step" }, undefined);
-  step.complete({ softError: failure });
-  info._failWithError(
-    new AggregateError([failure], `ordinary aggregate ${marker}`, {
-      cause: failure,
-    }),
-  );
-  info._failWithError({ raw_key: marker });
-  const text = serialized.map((value) => JSON.stringify(value)).join("\n");
-  expect(text.includes(marker)).toBe(false);
-  expect(failure.message).toBe("ordinary detail [REDACTED issued API key]");
-  expect(failure.matcherResult.ariaSnapshot).toContain(
-    "heading: ordinary detail",
-  );
-  expect(serialized).toHaveLength(3);
-});
+it.each([
+  ["api01", "API"],
+  ["env01", "environment"],
+])(
+  "native failure guard protects %s soft, aggregate and non-Error diagnostics before serialization",
+  (prefix, label) => {
+    const { info, serialized } = fixture();
+    protectFailureDiagnostics(info as unknown as TestInfo, "1.64.1");
+    const marker = ["sk", "map", prefix, "synthetic"].join("-");
+    const failure = Object.assign(new Error(`ordinary detail ${marker}`), {
+      matcherResult: {
+        ariaSnapshot: `heading: ordinary detail\ntext: ${marker}`,
+      },
+    });
+    const step = info._addStep({ title: "ordinary step" }, undefined);
+    step.complete({ softError: failure });
+    info._failWithError(
+      new AggregateError([failure], `ordinary aggregate ${marker}`, {
+        cause: failure,
+      }),
+    );
+    info._failWithError({ raw_key: marker });
+    const text = serialized.map((value) => JSON.stringify(value)).join("\n");
+    expect(text.includes(marker)).toBe(false);
+    expect(failure.message).toBe(
+      `ordinary detail [REDACTED issued ${label} key]`,
+    );
+    expect(failure.matcherResult.ariaSnapshot).toContain(
+      "heading: ordinary detail",
+    );
+    expect(serialized).toHaveLength(3);
+  },
+);
 
 it("native failure guard refuses an incompatible step before completion", () => {
   const { info } = fixture();

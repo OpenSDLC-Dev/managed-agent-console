@@ -1,3 +1,4 @@
+import { browserPost } from "./browser-write";
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
@@ -5,31 +6,35 @@ import { signIn } from "./sign-in";
 
 async function createSession(page: Page) {
   await signIn(page);
-  const response = await page.request.post("/api/platform/v1/sessions", {
-    data: {
-      agent: "agent_taskrunner0000000001",
-      environment_id: "env_egress000000000000001",
-      title: "Resource inspection",
-      resources: [
-        {
-          type: "memory_store",
-          memory_store_id: "memstore_projectnotes000001",
-          access: "read_only",
-          instructions: "Use the recorded project notes.",
-        },
-        {
-          type: "file",
-          file_id: "file_notes0000000000001",
-          mount_path: "/mnt/session/uploads/notes.md",
-        },
-        {
-          type: "github_repository",
-          url: "https://github.com/example/project",
-          authorization_token: "test-only-repository-token",
-        },
-      ],
+  const response = await browserPost(
+    page,
+    "/api/organizations/default/proxy/v1/sessions",
+    {
+      data: {
+        agent: "agent_taskrunner0000000001",
+        environment_id: "env_egress000000000000001",
+        title: "Resource inspection",
+        resources: [
+          {
+            type: "memory_store",
+            memory_store_id: "memstore_projectnotes000001",
+            access: "read_only",
+            instructions: "Use the recorded project notes.",
+          },
+          {
+            type: "file",
+            file_id: "file_notes0000000000001",
+            mount_path: "/mnt/session/uploads/notes.md",
+          },
+          {
+            type: "github_repository",
+            url: "https://github.com/example/project",
+            authorization_token: "test-only-repository-token",
+          },
+        ],
+      },
     },
-  });
+  );
   expect(response.ok()).toBe(true);
   return response.json() as Promise<{ id: string }>;
 }
@@ -90,8 +95,9 @@ test("resource metadata and archived previews stay usable at narrow widths", asy
   page,
 }) => {
   const session = await createSession(page);
-  const archive = await page.request.post(
-    `/api/platform/v1/sessions/${session.id}/archive`,
+  const archive = await browserPost(
+    page,
+    `/api/organizations/default/proxy/v1/sessions/${session.id}/archive`,
   );
   expect(archive.ok()).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });

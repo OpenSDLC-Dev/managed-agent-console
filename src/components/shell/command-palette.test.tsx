@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -11,9 +12,7 @@ import { CommandPalette } from "./command-palette";
 import { NAV_DESTINATIONS } from "@/lib/nav";
 import { SURFACES } from "@/lib/platform/surfaces";
 
-const LEGACY_SURFACES = Object.values(SURFACES).filter(
-  (entry) => !("api" in entry) || entry.api !== "native",
-);
+const ALL_SURFACES = Object.values(SURFACES);
 
 const routerState = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -29,42 +28,42 @@ vi.mock("next/navigation", () => ({
 
 /** First page of every list, keyed by BFF path (wire shapes from types.ts). */
 const LISTS: Record<string, unknown> = {
-  "/api/platform/v1/agents": {
+  "/api/organizations/default/proxy/v1/agents": {
     data: [{ id: "agent_01", type: "agent", name: "Support triage" }],
     next_page: null,
   },
-  "/api/platform/v1/sessions": {
+  "/api/organizations/default/proxy/v1/sessions": {
     data: [
       { id: "sess_01", type: "session", title: "Nightly run" },
       { id: "sess_02", type: "session", title: "" },
     ],
     next_page: null,
   },
-  "/api/platform/v1/deployments": {
+  "/api/organizations/default/proxy/v1/deployments": {
     data: [{ id: "depl_01", type: "deployment", name: "Daily digest" }],
     next_page: null,
   },
-  "/api/platform/v1/memory_stores": {
+  "/api/organizations/default/proxy/v1/memory_stores": {
     data: [{ id: "memstore_01", type: "memory_store", name: "Shared notes" }],
     next_page: null,
   },
-  "/api/platform/v1/dreams": {
+  "/api/organizations/default/proxy/v1/dreams": {
     data: [{ id: "drm_01", type: "dream" }],
     next_page: null,
   },
-  "/api/platform/v1/environments": {
+  "/api/organizations/default/proxy/v1/environments": {
     data: [{ id: "env_01", type: "environment", name: "Prod sandbox" }],
     next_page: null,
   },
-  "/api/platform/v1/vaults": {
+  "/api/organizations/default/proxy/v1/vaults": {
     data: [{ id: "vault_01", type: "vault", display_name: "GitHub tokens" }],
     next_page: null,
   },
-  "/api/platform/v1/skills": {
+  "/api/organizations/default/proxy/v1/skills": {
     data: [{ id: "skill_01", type: "skill", display_name: "PDF filler" }],
     next_page: null,
   },
-  "/api/platform/v1/files": {
+  "/api/organizations/default/proxy/v1/files": {
     data: [{ id: "file_01", type: "file", filename: "report.pdf" }],
     has_more: false,
     first_id: "file_01",
@@ -72,7 +71,7 @@ const LISTS: Record<string, unknown> = {
   },
 };
 
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
 beforeEach(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -85,7 +84,7 @@ beforeEach(() => {
       headers: { "content-type": "application/json" },
     });
   });
-  vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
 });
 
 afterEach(() => {
@@ -122,7 +121,7 @@ describe("CommandPalette", () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://console");
       if (
-        (url.pathname === "/api/platform/v1/skills" &&
+        (url.pathname === "/api/organizations/default/proxy/v1/skills" &&
           url.searchParams.get("limit") === "1") ||
         url.pathname.startsWith("/api/console/")
       ) {
@@ -190,21 +189,21 @@ describe("CommandPalette", () => {
     const LIST_QUERIES = 9;
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledTimes(
-        LIST_QUERIES + LEGACY_SURFACES.length,
+        LIST_QUERIES + ALL_SURFACES.length,
       ),
     );
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls).toEqual(
       expect.arrayContaining([
-        "/api/platform/v1/agents?limit=50",
-        "/api/platform/v1/sessions?limit=20",
-        "/api/platform/v1/deployments?limit=50",
-        "/api/platform/v1/memory_stores?limit=50",
-        "/api/platform/v1/dreams?limit=50",
-        "/api/platform/v1/environments?limit=50",
-        "/api/platform/v1/vaults?limit=50",
-        "/api/platform/v1/skills?limit=50",
-        "/api/platform/v1/files?limit=20",
+        "/api/organizations/default/proxy/v1/agents?limit=50",
+        "/api/organizations/default/proxy/v1/sessions?limit=20",
+        "/api/organizations/default/proxy/v1/deployments?limit=50",
+        "/api/organizations/default/proxy/v1/memory_stores?limit=50",
+        "/api/organizations/default/proxy/v1/dreams?limit=50",
+        "/api/organizations/default/proxy/v1/environments?limit=50",
+        "/api/organizations/default/proxy/v1/vaults?limit=50",
+        "/api/organizations/default/proxy/v1/skills?limit=50",
+        "/api/organizations/default/proxy/v1/files?limit=20",
       ]),
     );
   });
@@ -270,9 +269,9 @@ describe("CommandPalette", () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const path = String(input).split("?")[0];
       if (
-        path === "/api/platform/v1/vaults" ||
-        path === "/api/platform/v1/skills" ||
-        path === "/api/platform/v1/files"
+        path === "/api/organizations/default/proxy/v1/vaults" ||
+        path === "/api/organizations/default/proxy/v1/skills" ||
+        path === "/api/organizations/default/proxy/v1/files"
       ) {
         return new Promise<Response>(() => {});
       }
@@ -299,9 +298,9 @@ describe("CommandPalette", () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const path = String(input).split("?")[0];
       if (
-        path === "/api/platform/v1/agents" ||
-        path === "/api/platform/v1/sessions" ||
-        path === "/api/platform/v1/environments"
+        path === "/api/organizations/default/proxy/v1/agents" ||
+        path === "/api/organizations/default/proxy/v1/sessions" ||
+        path === "/api/organizations/default/proxy/v1/environments"
       ) {
         return new Promise<Response>(() => {});
       }

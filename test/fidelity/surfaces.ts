@@ -1,3 +1,4 @@
+import { browserPost } from "../e2e/browser-write";
 import { NATIVE_SURFACES } from "./native-surfaces";
 import type { Page } from "@playwright/test";
 import { type ConsoleMode, MOCK_URL } from "./consoles";
@@ -23,14 +24,7 @@ import { type ConsoleMode, MOCK_URL } from "./consoles";
 export type Surface = {
   /** Stable slug; becomes the screenshot filename. Never reuse across states. */
   id: string;
-  /**
-   * Which console configuration this is shot against — one `next start` per
-   * value (`./consoles.ts`). Absent means the password-gated deployment the
-   * design reference was compared to, which is all but two surfaces: identity
-   * changes nothing on a page except the sidebar's account block, so a surface
-   * names a mode only when that block, or the login page's own offer, is the
-   * point. A mode costs a process, so a new one needs a surface that earns it.
-   */
+  /** Native mock login offer, or the real-platform integration walker. */
   mode?: ConsoleMode;
   /** Where the shot starts. Some states need `setup` to finish arriving. */
   route: string;
@@ -166,7 +160,12 @@ export const SURFACES: Surface[] = [
       if (view === "archived") {
         const response = await page.request.post(
           MOCK_URL + "/v1/deployments/" + DEPLOYMENT + "/archive",
-          { headers: { "x-api-key": "test-key" } },
+          {
+            headers: {
+              "x-api-key":
+                "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+            },
+          },
         );
         if (!response.ok())
           throw new Error("Could not archive inspector fixture");
@@ -218,7 +217,7 @@ export const SURFACES: Surface[] = [
         await page.setViewportSize({ width: 390, height: 844 });
       if (view === "version-pages" || view === "version-error") {
         await page.route(
-          `**/api/platform/v1/agents/${AGENT}/versions?*`,
+          `**/api/organizations/default/proxy/v1/agents/${AGENT}/versions?*`,
           async (route) => {
             if (new URL(route.request().url()).searchParams.has("page")) {
               await route.fulfill({
@@ -249,7 +248,12 @@ export const SURFACES: Surface[] = [
       if (view === "archived") {
         const archived = await page.request.post(
           `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/archive`,
-          { headers: { "x-api-key": "test-key" } },
+          {
+            headers: {
+              "x-api-key":
+                "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+            },
+          },
         );
         if (!archived.ok())
           throw new Error("Could not archive deployment fixture");
@@ -262,7 +266,12 @@ export const SURFACES: Surface[] = [
       ) {
         const response = await page.request.post(
           `${MOCK_URL}/v1/deployments/${DEPLOYMENT}/run`,
-          { headers: { "x-api-key": "test-key" } },
+          {
+            headers: {
+              "x-api-key":
+                "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+            },
+          },
         );
         if (!response.ok())
           throw new Error("Could not create deployment run fixture");
@@ -346,37 +355,41 @@ export const SURFACES: Surface[] = [
         view === "text" || view === "download"
           ? "file_output000000000001"
           : "file_notes0000000000001";
-      const response = await page.request.post("/api/platform/v1/sessions", {
-        data: {
-          agent: AGENT,
-          environment_id: ENV,
-          title: "Project resource inspection",
-          resources: fileView
-            ? [
-                {
-                  type: "file",
-                  file_id: sourceId,
-                  mount_path: "/mnt/session/uploads/notes.md",
-                },
-              ]
-            : view === "repository"
+      const response = await browserPost(
+        page,
+        "/api/organizations/default/proxy/v1/sessions",
+        {
+          data: {
+            agent: AGENT,
+            environment_id: ENV,
+            title: "Project resource inspection",
+            resources: fileView
               ? [
                   {
-                    type: "github_repository",
-                    url: "https://github.com/example/project",
-                    authorization_token: "test-only-reference",
+                    type: "file",
+                    file_id: sourceId,
+                    mount_path: "/mnt/session/uploads/notes.md",
                   },
                 ]
-              : [
-                  {
-                    type: "memory_store",
-                    memory_store_id: MEMORY_STORE,
-                    access: "read_only",
-                    instructions: "Use the project notes as reference.",
-                  },
-                ],
+              : view === "repository"
+                ? [
+                    {
+                      type: "github_repository",
+                      url: "https://github.com/example/project",
+                      authorization_token: "test-only-reference",
+                    },
+                  ]
+                : [
+                    {
+                      type: "memory_store",
+                      memory_store_id: MEMORY_STORE,
+                      access: "read_only",
+                      instructions: "Use the project notes as reference.",
+                    },
+                  ],
+          },
         },
-      });
+      );
       if (!response.ok())
         throw new Error("Resource preview fixture creation failed");
       const session = (await response.json()) as {
@@ -391,44 +404,49 @@ export const SURFACES: Surface[] = [
         session.resources.find((resource) => resource.type === "file")
           ?.file_id ?? sourceId;
       if (view === "download")
-        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
-          route.fulfill({
-            json: {
-              id: fileId,
-              type: "file",
-              filename: "summary.xlsx",
-              mime_type:
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              size_bytes: 120400,
-              downloadable: true,
-              created_at: "2026-09-01T10:00:00Z",
-              expires_at: null,
-            },
-          }),
+        await page.route(
+          `**/api/organizations/default/proxy/v1/files/${fileId}`,
+          (route) =>
+            route.fulfill({
+              json: {
+                id: fileId,
+                type: "file",
+                filename: "summary.xlsx",
+                mime_type:
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                size_bytes: 120400,
+                downloadable: true,
+                created_at: "2026-09-01T10:00:00Z",
+                expires_at: null,
+              },
+            }),
         );
       if (view === "archived") {
-        const archived = await page.request.post(
-          `/api/platform/v1/sessions/${session.id}/archive`,
+        const archived = await browserPost(
+          page,
+          `/api/organizations/default/proxy/v1/sessions/${session.id}/archive`,
         );
         if (!archived.ok()) throw new Error("Resource preview archive failed");
       }
       if (view === "text") {
-        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
-          route.fulfill({
-            json: {
-              id: fileId,
-              type: "file",
-              filename: "summary.txt",
-              mime_type: "text/plain",
-              size_bytes: 44,
-              downloadable: true,
-              created_at: "2026-09-01T10:00:00Z",
-              expires_at: null,
-            },
-          }),
+        await page.route(
+          `**/api/organizations/default/proxy/v1/files/${fileId}`,
+          (route) =>
+            route.fulfill({
+              json: {
+                id: fileId,
+                type: "file",
+                filename: "summary.txt",
+                mime_type: "text/plain",
+                size_bytes: 44,
+                downloadable: true,
+                created_at: "2026-09-01T10:00:00Z",
+                expires_at: null,
+              },
+            }),
         );
         await page.route(
-          `**/api/platform/v1/files/${fileId}/content`,
+          `**/api/organizations/default/proxy/v1/files/${fileId}/content`,
           (route) =>
             route.fulfill({
               contentType: "text/plain",
@@ -437,17 +455,19 @@ export const SURFACES: Surface[] = [
         );
       }
       if (view === "missing-file")
-        await page.route(`**/api/platform/v1/files/${fileId}`, (route) =>
-          route.fulfill({
-            status: 404,
-            json: {
-              type: "error",
-              error: {
-                type: "not_found_error",
-                message: "The source file is no longer available.",
+        await page.route(
+          `**/api/organizations/default/proxy/v1/files/${fileId}`,
+          (route) =>
+            route.fulfill({
+              status: 404,
+              json: {
+                type: "error",
+                error: {
+                  type: "not_found_error",
+                  message: "The source file is no longer available.",
+                },
               },
-            },
-          }),
+            }),
         );
       if (view === "narrow")
         await page.setViewportSize({ width: 390, height: 844 });
@@ -516,7 +536,10 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       if (view === "empty") {
         const response = await page.request.post(MOCK_URL + "/v1/sessions", {
-          headers: { "x-api-key": "test-key" },
+          headers: {
+            "x-api-key":
+              "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+          },
           data: { agent: AGENT, environment_id: ENV, title: "Empty timeline" },
         });
         if (!response.ok())
@@ -678,7 +701,10 @@ export const SURFACES: Surface[] = [
         await page.setViewportSize({ width: 390, height: 844 });
       if (view === "empty-resources") {
         const response = await page.request.post(MOCK_URL + "/v1/sessions", {
-          headers: { "x-api-key": "test-key" },
+          headers: {
+            "x-api-key":
+              "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+          },
           data: {
             agent: AGENT,
             environment_id: ENV,
@@ -738,7 +764,10 @@ export const SURFACES: Surface[] = [
           const updated = await page.request.post(
             MOCK_URL + "/v1/agents/" + AGENT,
             {
-              headers: { "x-api-key": "test-key" },
+              headers: {
+                "x-api-key":
+                  "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+              },
               data: {
                 version: 3,
                 tools: [
@@ -1035,9 +1064,9 @@ export const SURFACES: Surface[] = [
     route: "/models?model=agent-default",
     fixture: "agent-default: a 3:1 primary tier and one fallback",
     description:
-      "Non-modal model inspector: kind, routing tiers with provider and share, legacy grants, and current owner-role authority.",
+      "Non-modal model inspector: kind, routing tiers with provider and share, organization limits and current owner-role authority.",
     setup: async (page) => {
-      await page.locator("[data-callers]").waitFor();
+      await page.getByRole("region", { name: "Model details" }).waitFor();
     },
   },
   {
@@ -1096,7 +1125,8 @@ export const SURFACES: Surface[] = [
     id: "environment-cloud-detail",
     route: "/environments/env_egress000000000000001",
     fixture: "cloud environment",
-    description: "Structured networking, packages and metadata.",
+    description:
+      "Structured networking, packages, metadata and environment keys.",
   },
   {
     id: "environment-edit-inline",
@@ -1138,8 +1168,7 @@ export const SURFACES: Surface[] = [
     fixture: ENV,
     description:
       "The environment config union rendered as sections, plus the " +
-      "environment-key table — this fixture is the self-hosted arm, the only " +
-      "one that shows keys at all.",
+      "environment-key table and self-hosted worker setup guide.",
   },
   {
     id: "vault-detail",
@@ -1236,7 +1265,7 @@ export const SURFACES: Surface[] = [
     description: `Memory ${view} end-of-walk message and enabled Previous control.`,
     setup: async (page) => {
       await page.route(
-        `**/api/platform/v1/memory_stores/${MEMORY_STORE}/memories?*`,
+        `**/api/organizations/default/proxy/v1/memory_stores/${MEMORY_STORE}/memories?*`,
         async (route) => {
           if (new URL(route.request().url()).searchParams.has("page")) {
             await route.fulfill({ json: { data: [], next_page: null } });
@@ -1335,7 +1364,10 @@ export const SURFACES: Surface[] = [
           MEMORY +
           "?view=full",
         {
-          headers: { "x-api-key": "test-key" },
+          headers: {
+            "x-api-key":
+              "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+          },
           data: {
             content:
               "# Image reference\n\n![diagram](https://memory-assets.example/diagram.png)",
@@ -1588,7 +1620,10 @@ export const SURFACES: Surface[] = [
       const add = await page.request.post(
         `${MOCK_URL}/v1/sessions/${GATED}/resources`,
         {
-          headers: { "x-api-key": "test-key" },
+          headers: {
+            "x-api-key":
+              "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+          },
           data: { type: "file", file_id: "file_notes0000000000001" },
         },
       );
@@ -2044,13 +2079,13 @@ export const SURFACES: Surface[] = [
       await page.getByTestId("error-state").waitFor();
     },
   },
-  // Stub OIDC signs in through the real console RP. The mock injects the
+  // The native mock session supplies presentation state. The mock injects the
   // refusals; these states do not establish the platform's stored-role mapping.
   ...["dashboard", "palette", "bookmark"].map((view): Surface => ({
     id: "read-denied-" + view,
     mode: "sso",
     route: view === "bookmark" ? `/skills/${SKILL}` : "/dashboard",
-    fixture: "stub OIDC session with injected resource-read permission_error",
+    fixture: "native mock session with injected resource-read permission_error",
     description:
       "No resource entry points after refused reads; direct bookmarks explain the refusal: " +
       view,
@@ -2084,8 +2119,9 @@ export const SURFACES: Surface[] = [
         }
       }
       // Resolve against this page, not the walker's password-mode baseURL.
-      const write = await page.request.post(
-        new URL("/api/platform/v1/agents", page.url()).href,
+      const write = await browserPost(
+        page,
+        new URL("/api/organizations/default/proxy/v1/agents", page.url()).href,
         { data: {} },
       );
       if (write.status() !== 403)
@@ -2273,12 +2309,13 @@ export const SURFACES: Surface[] = [
   {
     id: "api-keys",
     route: "/api-keys",
-    fixture: "2 keys, one control-plane managed",
+    fixture:
+      "one owned service-account key and one inactive historical unowned key",
     description:
       "The management-key listing: a two-line Key cell, each key's model access, and the one row whose controls are absent because the platform refuses to mutate it.",
     setup: async (page) => {
       await page.getByText("ci-deploy").waitFor();
-      await page.locator("[data-models='2']").waitFor();
+      await page.locator("[data-models='owner']").waitFor();
     },
   },
   {
@@ -2311,21 +2348,7 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   },
-  {
-    id: "api-key-model-access",
-    route: "/api-keys",
-    fixture: "ci-deploy: two models at 60 RPM",
-    description:
-      "Model access: no access, every model, or selected models, with the per-minute limits.",
-    setup: async (page) => {
-      await page
-        .getByRole("row")
-        .filter({ hasText: "ci-deploy" })
-        .getByRole("button", { name: "Model access" })
-        .click();
-      await page.locator("[role=dialog] [data-alias]").first().waitFor();
-    },
-  },
+  // Retired api-key-model-access: per-key grants and limits no longer exist.
   {
     id: "api-key-create",
     route: "/api-keys",
@@ -2492,12 +2515,15 @@ export const SURFACES: Surface[] = [
     description:
       "An archive-only action menu cannot reopen while its request is pending.",
     setup: async (page) => {
-      await page.route("**/api/platform/v1/agents/*/archive", async (route) => {
-        await new Promise<void>((resolve) =>
-          page.once("close", () => resolve()),
-        );
-        await route.abort().catch(() => {});
-      });
+      await page.route(
+        "**/api/organizations/default/proxy/v1/agents/*/archive",
+        async (route) => {
+          await new Promise<void>((resolve) =>
+            page.once("close", () => resolve()),
+          );
+          await route.abort().catch(() => {});
+        },
+      );
       await page
         .getByRole("main")
         .getByRole("button", { name: "More actions" })
@@ -2574,35 +2600,31 @@ export const SURFACES: Surface[] = [
     route: "/login",
     fixture: "n/a",
     description:
-      "The deployment gate — the only surface with no sidebar or header.",
+      "Native password login with a named account and a first-admin setup link.",
   },
   {
     id: "login-invalid",
     route: "/login",
     fixture: "n/a",
     description:
-      "The gate after a rejected password: the console's only invalid field that needs no fixture or signed-in state to reach, and so the surface that shows what `aria-invalid` draws — one opaque danger border and no halo (issue #104). Until this entry the manifest could not shoot an invalid control at all, which is why #104's alphas had no observable before or after.",
+      "Native password login after refused credentials, with the platform error announced as an alert.",
     setup: async (page) => {
+      await page.getByLabel("Login name").fill("operator");
       await page.getByLabel("Password").fill("not-the-password");
       await page.getByRole("button", { name: "Sign in" }).click();
       // The border and the sentence appear together; wait on the sentence.
-      await page.getByText("Wrong password.").waitFor();
+      await page.getByText("invalid login name or password").waitFor();
     },
   },
 
-  // ---- what only a deployment with identity renders (#99) ----------------
-  // Shot against a second console because the configuration *is* the surface:
-  // which gate the login page offers, and whether the sidebar has an account
-  // block, come from environment variables read at request time, so one process
-  // renders exactly one of them. Until this pair existed the pass walked past
-  // both and still reported complete coverage.
+  // Login IDs retain their visible state while moving authority to the platform.
   {
     id: "login-sso",
     mode: "sso",
     route: "/login",
     fixture: "n/a",
     description:
-      "The gate on a deployment that runs SSO: one primary control, no password field, and the organization-account line in place of the password one. A page with no reference counterpart, so what it is compared against is docs/design-reference.md's own account of it.",
+      "Native OIDC sign-in offer: one SSO link and a setup link, with no password field. The real RP is covered by the native tier.",
   },
   {
     id: "account-block",
@@ -2611,6 +2633,6 @@ export const SURFACES: Surface[] = [
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:
-      "The sidebar's signed-in account block: a 14px/500 name over a 12px muted email over Sign out. Renders only where identity is configured, so no other surface shows it at all — and the only surface that shows the footer group with two blocks in it, under the one rule they share (#107). It names no role and no organization, and that is the divergence.",
+      "The native sidebar account block shows the current user, role and Sign out beneath the platform connection.",
   },
 ];

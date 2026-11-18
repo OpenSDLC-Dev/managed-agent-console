@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -117,7 +118,7 @@ describe("CredentialEditor", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", withTestSession(fetchMock));
     renderEditor(environment);
 
     await userEvent.type(
@@ -161,11 +162,13 @@ describe("CredentialEditor", () => {
     const secret = "rotated-cache-secret";
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify(environment), {
-            headers: { "content-type": "application/json" },
-          }),
+      withTestSession(
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify(environment), {
+              headers: { "content-type": "application/json" },
+            }),
+        ),
       ),
     );
     const { client } = renderEditor(environment);
@@ -186,7 +189,7 @@ describe("CredentialEditor", () => {
   });
 
   it("requires one injection location", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderEditor(environment);
     await userEvent.click(screen.getByLabelText("Header"));
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
@@ -194,7 +197,7 @@ describe("CredentialEditor", () => {
   });
 
   it("requires a new client secret when the OAuth auth method changes", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    vi.stubGlobal("fetch", withTestSession(vi.fn()));
     renderEditor(oauth);
     await userEvent.click(
       screen.getByLabelText("Token endpoint authentication"),

@@ -5,12 +5,14 @@ How a console release is cut. The reasoning behind each choice is
 [release-please.yml](../.github/workflows/release-please.yml),
 [release.yml](../.github/workflows/release.yml) and [scripts/changelog.mjs](../scripts/changelog.mjs).
 
-## Plan 69 release hold
-
-Do not merge a release-please PR, dispatch `release.yml` or cut a SemVer release until platform plan 69 slice 7.
-This hold does not change the existing staging deploy workflow. Use the receiver-only channel below for slice 2.
-
 ## Non-release SHA channel
+
+Check the platform's [active release holds](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/STATE.md)
+before merging a release-please PR, cutting a SemVer release or dispatching
+`release.yml`, including for an existing tag. While a hold applies, wait.
+
+The platform owns staging deployment and rollback. This repository publishes
+the Console image. See [deployment ownership](./deploy-gcp.md).
 
 On a trusted repository push to `main`, `ci.yml` waits for both `ci-ok` and the Docker vulnerability gate.
 It builds amd64 and arm64 on native runners, labels the full checked-out source SHA, and scans each child before push.
@@ -83,7 +85,7 @@ matches what the tag says.
 
 - **The GHCR package must be public** — done 2026-08-08. A container package is private on first
   publish even when its repository is public, and there is no REST endpoint for it: package page →
-  Package settings → Change visibility → Public. Until then the README's `docker run` fails for
+  Package settings → Change visibility → Public. Until then image pulls fail for
   everyone outside the org. Verify from a shell with no GHCR credentials:
   `docker buildx imagetools inspect ghcr.io/opensdlc-dev/managed-agent-console:X.Y.Z`.
 - **The release automation runs as a GitHub App** (`RELEASE_BOT_APP_ID` variable,

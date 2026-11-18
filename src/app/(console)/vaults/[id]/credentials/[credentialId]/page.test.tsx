@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -52,21 +53,23 @@ const json = (payload: unknown, status = 200) =>
 function renderPage(overrides?: { credential?: VaultCredential }) {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: string, init?: RequestInit) => {
-      const url = new URL(String(input), "http://console.test");
-      if (init?.method === "POST")
-        return json({
-          ...(overrides?.credential ?? credential),
-          archived_at: "2026-09-02T00:00:00Z",
-        });
-      if (init?.method === "DELETE")
-        return json({ id: "vcred_1", type: "vault_credential_deleted" });
-      return json(
-        url.pathname.endsWith("/vcred_1")
-          ? (overrides?.credential ?? credential)
-          : vault,
-      );
-    }),
+    withTestSession(
+      vi.fn(async (input: string, init?: RequestInit) => {
+        const url = new URL(String(input), "http://console.test");
+        if (init?.method === "POST")
+          return json({
+            ...(overrides?.credential ?? credential),
+            archived_at: "2026-09-02T00:00:00Z",
+          });
+        if (init?.method === "DELETE")
+          return json({ id: "vcred_1", type: "vault_credential_deleted" });
+        return json(
+          url.pathname.endsWith("/vcred_1")
+            ? (overrides?.credential ?? credential)
+            : vault,
+        );
+      }),
+    ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

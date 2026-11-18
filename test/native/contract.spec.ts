@@ -15,6 +15,7 @@ import { test, expect } from "./test";
 import type { QueryClient } from "@tanstack/react-query";
 import { credentialHeaders } from "./credential-headers";
 import { nativeDocker } from "./docker";
+import { seedDeployment } from "./deployment-fixture";
 import {
   seedGateway,
   model as limitedModel,
@@ -308,8 +309,22 @@ test("real native password/setup, current authority, management, private bytes/S
   ).toEqual({ local: [], session: [] });
   for (const path of ["/api/login", "/api/platform/v1/agents"]) {
     const response = await page.request.get(path);
-    expect(response.status()).toBe(path === "/api/login" ? 405 : 404);
+    expect(response.status()).toBe(404);
     expect(response.headers()["set-cookie"]).toBeUndefined();
+  }
+  // The page server itself owns neither a browser RP nor a credential BFF.
+  // A cookie sent directly to Next must not recover any removed authority.
+  for (const path of [
+    "/api/auth/session",
+    "/api/auth/login",
+    "/api/auth/callback",
+    "/api/console/organizations/default/workspaces/default/api_keys",
+    "/api/oauth/organizations/default/environments/env_absent/tokens",
+    "/api/gateway/admin/v1/profiles",
+  ]) {
+    const response = await page.request.get(`http://127.0.0.1:38100${path}`);
+    expect(response.status(), path).toBe(404);
+    expect(response.headers()["set-cookie"], path).toBeUndefined();
   }
   expect(
     (await page.request.post("/api/login", { data: { password } })).status(),
@@ -1331,6 +1346,104 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
   ).toBe(false);
 });
 
+test("native deployment initiator changes persist without unpausing or changing manual authority", async ({
+  page,
+}) => {
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin: "http://127.0.0.1:38200" },
+    data: { code: code(), login_name: "deployment-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) {
+    const credentials = { login_name: "deployment-admin", password };
+    const headers = { origin: "http://127.0.0.1:38200" };
+    const existing = await page.request.post("/api/auth/login", {
+      headers,
+      data: credentials,
+    });
+    if (existing.status() !== 200) {
+      expect(existing.status()).toBe(401);
+      // The full suite already bootstrapped new-person. Give this scenario
+      // its own administrator; standalone retries reuse that same account.
+      const bootstrap = await page.request.post("/api/auth/login", {
+        headers,
+        data: { login_name: "new-person", password },
+      });
+      expect(bootstrap.status()).toBe(200);
+      const actor = await (await page.request.get("/api/auth/session")).json();
+      const create = await page.request.post(`${org}/members`, {
+        headers: { ...headers, "X-CSRF-Token": actor.csrf_token },
+        data: { ...credentials, role: "admin" },
+      });
+      expect(create.status()).toBe(200);
+      const dedicated = await page.request.post("/api/auth/login", {
+        headers,
+        data: credentials,
+      });
+      expect(dedicated.status()).toBe(200);
+    }
+  }
+  const { deployment, account, session } = await seedDeployment(page.request);
+  const offered: string[] = [];
+  page.on("request", (r) =>
+    offered.push(
+      ...credentialHeaders("http://127.0.0.1:38200", r.url(), r.headers()),
+    ),
+  );
+  await page.goto(`/deployments/${deployment.id}`);
+  await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
+    "data-initiator-id",
+    session.id,
+  );
+  await page.getByRole("button", { name: "Change initiator" }).click();
+  await page.getByLabel("Service account").selectOption(account.id);
+  await page.getByRole("button", { name: "Save initiator" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
+    "data-initiator-id",
+    account.id,
+  );
+  await expect(page.locator("[data-status=paused]").first()).toBeVisible();
+  expect(offered).toEqual([]);
+  const run = await write(
+    page,
+    `/api/organizations/default/proxy/v1/deployments/${deployment.id}/run`,
+    {},
+  );
+  expect(run.status).toBe(200);
+  const result = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-At",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `SELECT replace(initiator_principal_id,'principal_','user_') FROM sessions WHERE id='${run.body.session_id}'`,
+  ]);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout.trim()).toBe(session.id);
+});
+
 test("native model limits persist and principal usage keeps credential attribution", async ({
   page,
 }) => {
@@ -1390,6 +1503,127 @@ test("native model limits persist and principal usage keeps credential attributi
   await expect(
     page.locator("[data-api-key-id=apikey_browser_one]"),
   ).toBeVisible();
+});
+
+test("native environment keys cover cloud and self-hosted lifecycles with cookie and CSRF", async ({
+  page,
+}) => {
+  const origin = "http://127.0.0.1:38200";
+  const credentials = { login_name: "environment-admin", password };
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin },
+    data: { code: code(), ...credentials },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) {
+    const own = await page.request.post("/api/auth/login", {
+      headers: { origin },
+      data: credentials,
+    });
+    if (own.status() !== 200) {
+      expect(own.status()).toBe(401);
+      await login(page, "new-person");
+    }
+  }
+  await page.goto("/dashboard");
+  const offered: string[] = [];
+  page.on("request", (request) =>
+    offered.push(
+      ...credentialHeaders(origin, request.url(), request.headers()),
+    ),
+  );
+  const resource = "/api/organizations/default/proxy/v1/environments";
+  for (const kind of ["cloud", "self_hosted"] as const) {
+    for (const archived of [false, true]) {
+      const created = await write(page, resource, {
+        name: `environment-keys-${kind}-${archived}`,
+        config: { type: kind },
+      });
+      expect(created.status).toBe(200);
+      const id = created.body.id;
+      if (archived)
+        expect((await write(page, `${resource}/${id}/archive`)).status).toBe(
+          200,
+        );
+      const tokens = `/api/oauth/organizations/default/environments/${id}/tokens`;
+      // A valid cookie alone does not authorize either mutation.
+      expect(
+        (
+          await page.request.post(tokens, {
+            headers: { origin },
+            data: { name: "missing-csrf" },
+          })
+        ).status(),
+      ).toBe(403);
+      await page.goto(`/environments/${id}`);
+      await expect(page.getByTestId("environment-keys")).toBeVisible();
+      await expect(page.getByTestId("environment-key-setup")).toHaveCount(
+        kind === "self_hosted" ? 1 : 0,
+      );
+      await page
+        .getByRole("button", { name: "Generate environment key", exact: true })
+        .click();
+      await page
+        .getByLabel("Name", { exact: true })
+        .fill("native-environment-key");
+      const issuance = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(tokens) &&
+          response.request().method() === "POST",
+      );
+      await page
+        .getByRole("button", { name: "Create environment key", exact: true })
+        .click();
+      expect((await issuance).status()).toBe(200);
+      const revealed = page.getByTestId("revealed-key");
+      await expect(revealed).toBeVisible();
+      expect(
+        await revealed.evaluate((element) => {
+          const dialog = element.closest('[role="dialog"]')!;
+          const keyBounds = element.getBoundingClientRect();
+          const dialogBounds = dialog.getBoundingClientRect();
+          return (
+            keyBounds.left >= dialogBounds.left &&
+            keyBounds.right <= dialogBounds.right &&
+            keyBounds.top >= dialogBounds.top &&
+            keyBounds.bottom <= dialogBounds.bottom &&
+            element.scrollWidth <= element.clientWidth
+          );
+        }),
+      ).toBe(true);
+      const secret = (await revealed.textContent()) ?? "";
+      expect(/^sk-map-env01-.+/.test(secret)).toBe(true);
+      await page.getByTestId("close-revealed-key").click();
+      expect((await page.content()).includes(secret)).toBe(false);
+      const listed = await (await page.request.get(tokens)).json();
+      expect(listed.data).toHaveLength(1);
+      expect(JSON.stringify(listed).includes(secret)).toBe(false);
+      const revoke = `${tokens}/${listed.data[0].id}/revoke`;
+      expect(
+        (await page.request.post(revoke, { headers: { origin } })).status(),
+      ).toBe(403);
+      const row = page
+        .getByRole("row")
+        .filter({ hasText: "native-environment-key" });
+      await row
+        .getByRole("button", {
+          name: "Revoke environment key native-environment-key",
+        })
+        .click();
+      const revocation = page.waitForResponse((response) =>
+        response.url().endsWith(revoke),
+      );
+      await page
+        .getByRole("button", { name: "Revoke environment key", exact: true })
+        .click();
+      expect((await revocation).status()).toBe(204);
+      await expect(row).toHaveCount(0);
+      expect((await (await page.request.get(tokens)).json()).data).toHaveLength(
+        0,
+      );
+    }
+  }
+  expect(offered).toEqual([]);
 });
 
 test("native owned keys preserve owner creator permissions and credential isolation", async ({

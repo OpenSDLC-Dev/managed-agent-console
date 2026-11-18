@@ -1,3 +1,4 @@
+import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -20,14 +21,16 @@ vi.mock("next/navigation", () => ({
 function renderPage() {
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({ data: dreams.slice(0, 2), next_page: null }),
-          {
-            status: 200,
-          },
-        ),
+    withTestSession(
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: dreams.slice(0, 2), next_page: null }),
+            {
+              status: 200,
+            },
+          ),
+      ),
     ),
   );
   const client = new QueryClient({
