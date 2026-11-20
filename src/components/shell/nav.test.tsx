@@ -99,7 +99,7 @@ const navigation = () =>
 const groupButton = (name: string) =>
   within(navigation()).getByRole("button", { name });
 const back = () =>
-  within(navigation()).getByRole("button", { name: "Back to all sections" });
+  within(navigation()).getByRole("button", { name: /back to all sections/i });
 
 beforeEach(() => {
   navState.pathname = "/dashboard";

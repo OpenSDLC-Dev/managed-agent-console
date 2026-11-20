@@ -231,19 +231,28 @@ export function Nav({ compact = false }: { compact?: boolean }) {
     >
       {panel ? (
         <div className="flex flex-col gap-1">
-          <div className="mb-2 flex items-center gap-2">
+          <h2 aria-label={panel.label} className="mb-2">
             <button
               type="button"
-              aria-label="Back to all sections"
+              aria-label={`${panel.label}, back to all sections`}
               title="Back to all sections"
               data-nav-back
               onClick={back}
-              className={cn(COMPACT_ROW, "text-muted-foreground", HOVER)}
+              className={cn(
+                "grid h-9 w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg px-2.5",
+                HOVER,
+              )}
             >
-              <ArrowLeft className="size-4" strokeWidth={1.75} aria-hidden />
+              <ArrowLeft
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <span className="truncate text-center text-sm font-semibold">
+                {panel.label}
+              </span>
             </button>
-            <h2 className="text-sm font-semibold">{panel.label}</h2>
-          </div>
+          </h2>
           {panel.items.map(({ surface }) => (
             <NavLink
               key={surface}

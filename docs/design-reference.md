@@ -9,7 +9,7 @@ date. What ships from these facts is `src/app/globals.css`.
 
 Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
 
-The reference Back to all sections button leaves the current page open. The console follows that behavior. Opening a group displays its existing links in place of the top-level menu. Compact navigation retains a flyout. The console keeps its existing page URLs and keeps Model Gateway for self-hosted models and providers.
+The reference's full submenu header serves as the return control. In the console, clicking its arrow or title returns to all sections, keeps the current page open and restores focus to that group's button. Opening a group displays its existing links in place of the top-level menu. Compact navigation retains a flyout. The console keeps its existing page URLs and keeps Model Gateway for self-hosted models and providers.
 
 The reference uses a single-line wordmark and puts Documentation on the right of the global header. Its first sidebar row is inset 8px from the top and sides. Rows are 36px high with no gap within a section. The console retains a sidebar toggle beside its own mark and links to the self-hosted platform documentation.
 

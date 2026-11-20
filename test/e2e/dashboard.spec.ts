@@ -152,9 +152,20 @@ test("submenus return to all sections and sidebar width survives reload", async 
   await expect(
     nav.getByRole("link", { name: "Files", exact: true }),
   ).toHaveAttribute("aria-current", "page");
-  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await nav
+    .getByRole("button", { name: "Back to all sections" })
+    .getByText("Resources", { exact: true })
+    .click();
   await expect(nav).toHaveAttribute("data-nav-view", "root");
   await expect(page).toHaveURL(/\/files$/);
+  const resources = nav.getByRole("button", { name: "Resources", exact: true });
+  await expect(resources).toBeFocused();
+  await resources.press("Enter");
+  await nav
+    .getByRole("button", { name: "Back to all sections" })
+    .locator("svg")
+    .click();
+  await expect(resources).toBeFocused();
   await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByRole("button", { name: "Collapse sidebar" }).click();

@@ -8,7 +8,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
-- Group console navigation under Build and Organization, with dedicated submenu panels and a return to all sections. Move search into the global header.
+- Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Move search into the global header.
 - Put platform documentation in the global header and group appearance, platform status, build version and sign-out under the sidebar account button.
 
 ## Released
