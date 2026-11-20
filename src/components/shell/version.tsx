@@ -1,7 +1,7 @@
 import pkg from "../../../package.json";
 
 /**
- * Which console this is, on the wordmark's second line.
+ * The self-hosted console's version in the account panel.
  *
  * A deliberate divergence from the reference console, recorded in
  * docs/design-reference.md: a hosted product's operator never wonders what

@@ -11,6 +11,7 @@ test("the console renders in both themes and the choice persists", async ({
   await signIn(page, "/agents");
 
   // Dark: the reference palette's bg-100 (#262624) on <body>, class on <html>.
+  await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Dark theme" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await expect(page.locator("body")).toHaveCSS(
@@ -25,6 +26,7 @@ test("the console renders in both themes and the choice persists", async ({
   await expect(page.locator("html")).toHaveClass(/dark/);
 
   // Light: back to the extracted light background (#fcfcfb).
+  await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Light theme" }).click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
   await expect(page.locator("body")).toHaveCSS(

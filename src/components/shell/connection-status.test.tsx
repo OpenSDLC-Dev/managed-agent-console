@@ -7,7 +7,21 @@ import {
   hasBouncedToLogin,
   resetSignedOutBounceForTests,
 } from "@/lib/identity/signed-out";
-import { ConnectionStatus } from "./connection-status";
+import {
+  ConnectionIndicator,
+  ConnectionStatus,
+  useConnectionStatus,
+} from "./connection-status";
+
+function Widget() {
+  const status = useConnectionStatus();
+  return (
+    <>
+      <ConnectionIndicator {...status} />
+      <ConnectionStatus {...status} />
+    </>
+  );
+}
 
 function renderWidget() {
   const client = new QueryClient({
@@ -15,7 +29,7 @@ function renderWidget() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <ConnectionStatus />
+      <Widget />
     </QueryClientProvider>,
   );
 }

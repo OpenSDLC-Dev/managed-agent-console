@@ -1073,6 +1073,7 @@ test("real native password/setup, current authority, management, private bytes/S
           attributes: true,
         });
       });
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByTestId("sign-out").click();
       await arrived;
       expect(logoutStatus).toBe(200);
@@ -1273,6 +1274,7 @@ test("real native password/setup, current authority, management, private bytes/S
   await userPage.getByRole("button", { name: "Confirm removal" }).click();
   await page.reload();
   await expect(page).toHaveURL(/\/login/);
+  await userPage.getByRole("button", { name: "Account menu" }).click();
   await userPage.getByTestId("sign-out").click();
   await expect(userPage).toHaveURL(/\/login$/);
   expect(

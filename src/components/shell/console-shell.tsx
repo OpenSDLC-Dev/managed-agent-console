@@ -7,7 +7,12 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
-import { BookOpen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Terminal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
 import { useNavPreference } from "./nav-preference";
@@ -23,19 +28,13 @@ function subscribeViewport(callback: () => void) {
 
 /**
  * Keep navigation and its footer in the viewport while the page scrolls.
- *
- * `version` is a slot rather than an import so the version stays a server
- * component: this shell is client code, and importing package.json here would
- * ship the whole manifest to the browser.
  */
 export function ConsoleShell({
   children,
   footer,
-  version,
 }: {
   children: React.ReactNode;
   footer: React.ReactNode;
-  version?: React.ReactNode;
 }) {
   const narrow = useSyncExternalStore(
     subscribeViewport,
@@ -60,7 +59,12 @@ export function ConsoleShell({
   };
 
   const closeOnEscape = (event: KeyboardEvent<HTMLElement>) => {
-    if (open && event.key === "Escape" && !event.defaultPrevented) {
+    if (
+      open &&
+      event.key === "Escape" &&
+      !event.defaultPrevented &&
+      event.currentTarget.contains(event.target as Node)
+    ) {
       event.preventDefault();
       close();
     }
@@ -70,31 +74,29 @@ export function ConsoleShell({
     <div className="min-h-dvh">
       <header
         data-console-header
-        className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"
+        className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"
       >
         <div
-          className="flex min-w-0 items-center gap-2"
+          className="flex min-w-0 max-w-[14.5rem] items-center gap-2"
           onKeyDown={closeOnEscape}
         >
           {open && (
-            <div className="min-w-0 leading-none">
-              <Link
-                href="/dashboard"
-                onClick={() => {
-                  if (narrow) close();
-                }}
-                className="block truncate font-serif text-lg font-medium"
-              >
-                Agent Console
-              </Link>
-              {version}
-            </div>
+            <Link
+              href="/dashboard"
+              onClick={() => {
+                if (narrow) close();
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-sm font-serif text-xl leading-none"
+            >
+              <Terminal aria-hidden className="size-5 shrink-0" />
+              <span className="truncate">Agent Console</span>
+            </Link>
           )}
           <Button
             ref={toggleRef}
             variant="ghost"
             size="icon"
-            className="shrink-0"
+            className="size-7 shrink-0 text-muted-foreground"
             aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
             aria-expanded={open}
             aria-controls="console-navigation"
@@ -107,41 +109,38 @@ export function ConsoleShell({
           compact={narrow}
           onNavigate={narrow ? close : undefined}
         />
+        <a
+          href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Platform documentation"
+          title="Platform documentation"
+          className="flex h-7 items-center gap-2 rounded-md px-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground md:justify-self-end md:px-2"
+        >
+          <BookOpen aria-hidden className="size-4" />
+          <span className="hidden md:inline">Documentation</span>
+        </a>
       </header>
       <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">
         <aside
           data-sidebar-state={open ? "expanded" : "collapsed"}
           onKeyDown={closeOnEscape}
           className={cn(
-            "sticky top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+            "group/sidebar sticky top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
             open ? "w-64" : "w-12",
             open && narrow && "w-full",
           )}
         >
           <div
             id="console-navigation"
-            className="min-h-0 flex-1 overflow-y-auto pb-3"
+            className="min-h-0 flex-1 overflow-y-auto pb-2"
             onClick={(event) => {
               if (narrow && (event.target as Element).closest("a")) close();
             }}
           >
             <Nav compact={!open} />
           </div>
-          <div hidden={!open} className="shrink-0">
-            {footer}
-          </div>
-          {!open && (
-            <a
-              href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Platform documentation"
-              title="Platform documentation"
-              className="mx-auto my-3 rounded-lg p-2 hover:bg-sidebar-accent"
-            >
-              <BookOpen className="size-4" />
-            </a>
-          )}
+          <div className="shrink-0">{footer}</div>
         </aside>
         <main
           hidden={open && narrow}

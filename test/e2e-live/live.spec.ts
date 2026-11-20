@@ -218,7 +218,10 @@ test("the console connects to the real platform and lists real agents", async ({
 
   await signIn(page);
   await page.goto("/agents");
-  await expect(page.getByText("Platform Connected")).toBeVisible();
+  await expect(page.getByTestId("connection-dot")).toHaveAttribute(
+    "data-state",
+    "up",
+  );
   await expect(
     page.locator("tbody tr").filter({ hasText: name }),
   ).toBeVisible();

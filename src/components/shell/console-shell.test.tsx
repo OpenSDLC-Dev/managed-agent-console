@@ -35,7 +35,7 @@ it("collapses, reopens and returns focus on Escape", async () => {
   const user = userEvent.setup();
   renderShell(false);
   await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  expect(screen.getByText("Account")).not.toBeVisible();
+  expect(screen.getByText("Account")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
   expect(screen.getByText("Account")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
@@ -136,7 +136,7 @@ it("updates the sidebar when another tab changes its preference", () => {
   ).toBeInTheDocument();
 });
 
-it("puts the version under the wordmark, and hides both when collapsed", async () => {
+it("keeps documentation in the header when the sidebar collapses", async () => {
   const user = userEvent.setup();
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
@@ -144,12 +144,14 @@ it("puts the version under the wordmark, and hides both when collapsed", async (
     removeEventListener: vi.fn(),
   }));
   render(
-    <ConsoleShell footer={<span>Account</span>} version={<span>v9.9.9</span>}>
+    <ConsoleShell footer={<span>Account</span>}>
       <h1>Dashboard</h1>
     </ConsoleShell>,
   );
-  const wordmark = screen.getByRole("link", { name: "Agent Console" });
-  expect(wordmark.parentElement).toContainElement(screen.getByText("v9.9.9"));
+  const documentation = screen.getByRole("link", {
+    name: "Platform documentation",
+  });
+  expect(screen.getByRole("banner")).toContainElement(documentation);
   await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  expect(screen.queryByText("v9.9.9")).toBeNull();
+  expect(documentation).toBeVisible();
 });

@@ -207,7 +207,9 @@ it("probe: actual layout prevents A-private population before a held initial 503
       ),
     );
   });
-  await screen.findByText("Actor B");
+  expect(
+    await screen.findByRole("button", { name: "Account menu" }),
+  ).toHaveAccessibleDescription(/Actor B/);
   await waitFor(() =>
     expect(screen.getByTestId("error-state")).toHaveAttribute(
       "data-denied",
@@ -286,7 +288,11 @@ it("keeps same-id metadata updates but departs exactly once for a later differen
     expires_at: "2098-01-01T00:00:00Z",
   };
   await refresh();
-  await screen.findByText("Renamed A");
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "Account menu" }),
+    ).toHaveAccessibleDescription(/Renamed A/),
+  );
   expect(mounts).toBe(1);
   expect(assign).not.toHaveBeenCalled();
   actor = accountB;
@@ -346,9 +352,12 @@ it.each([false, true])(
         </ConsoleLayout>,
       );
       await screen.findByText("Sensitive A row");
-      await screen.findByText("Actor A");
+      expect(
+        await screen.findByRole("button", { name: "Account menu" }),
+      ).toHaveAccessibleDescription(/Actor A/);
       expect(mounts).toBe(1);
       const client = state.client;
+      fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
       fireEvent.click(screen.getByTestId("sign-out"));
       await waitFor(() =>
         expect(fetcher).toHaveBeenCalledWith(
@@ -424,6 +433,7 @@ it("keeps the private console offscreen until a sign-out retry is confirmed", as
     </ConsoleLayout>,
   );
   await screen.findByTestId("private-page");
+  fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
   fireEvent.click(screen.getByTestId("sign-out"));
   const retry = await screen.findByRole("button", { name: "Retry sign out" });
   expect(screen.queryByTestId("private-page")).toBeNull();
@@ -443,8 +453,11 @@ it("offers a fresh console when the active account changes during sign-out", asy
     </ConsoleLayout>,
   );
   await screen.findByTestId("private-page");
-  await screen.findByText("Actor A");
+  expect(
+    await screen.findByRole("button", { name: "Account menu" }),
+  ).toHaveAccessibleDescription(/Actor A/);
   actor = accountB;
+  fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
   fireEvent.click(screen.getByTestId("sign-out"));
   const reopen = await screen.findByRole("button", { name: "Reopen console" });
   expect(screen.getByRole("alert")).toHaveTextContent(

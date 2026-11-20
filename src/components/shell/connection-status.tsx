@@ -39,7 +39,14 @@ async function probe(): Promise<ProbeResult> {
   }
 }
 
-export function ConnectionStatus() {
+const STATUS_LABELS = {
+  checking: "Checking Platform…",
+  up: "Platform Connected",
+  denied: "Platform Access Denied",
+  down: "Platform Unreachable",
+};
+
+export function useConnectionStatus() {
   const { data } = useQuery({
     queryKey: ["connection-probe"],
     queryFn: probe,
@@ -55,33 +62,47 @@ export function ConnectionStatus() {
         : data.denied
           ? "denied"
           : "down";
+  return {
+    state,
+    label: STATUS_LABELS[state],
+    error: data && !data.ok ? data : undefined,
+  } as const;
+}
+
+export function ConnectionIndicator({
+  state,
+  label,
+}: ReturnType<typeof useConnectionStatus>) {
   return (
-    <div className="px-4 py-3 text-[13px]">
-      <div className="flex items-center gap-2">
-        <span
-          data-testid="connection-dot"
-          data-state={state}
-          className={cn(
-            "size-2 rounded-full",
-            state === "up" && "bg-emerald-500",
-            state === "down" && "bg-red-500",
-            state === "checking" && "bg-muted-foreground/40",
-            state === "denied" && "bg-muted-foreground",
-          )}
-        />
-        <span className="text-sidebar-foreground">
-          {state === "up" && "Platform Connected"}
-          {state === "down" && "Platform Unreachable"}
-          {state === "denied" && "Platform Access Denied"}
-          {state === "checking" && "Checking Platform…"}
-        </span>
-      </div>
-      {data && !data.ok && (
-        <div className="mt-1 break-words text-muted-foreground">
-          {data.message}
-          {data.requestId && (
+    <span
+      aria-hidden
+      title={label}
+      data-testid="connection-dot"
+      data-state={state}
+      className={cn(
+        "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-sidebar",
+        state === "up" && "bg-emerald-500",
+        state === "down" && "bg-red-500",
+        state === "checking" && "bg-muted-foreground/40",
+        state === "denied" && "bg-muted-foreground",
+      )}
+    />
+  );
+}
+
+export function ConnectionStatus({
+  label,
+  error,
+}: ReturnType<typeof useConnectionStatus>) {
+  return (
+    <div className="min-w-0 text-xs text-muted-foreground">
+      <div>{label}</div>
+      {error && (
+        <div className="mt-1 wrap-anywhere">
+          {error.message}
+          {error.requestId && (
             <span className="block font-mono text-[11px]">
-              request-id: {data.requestId}
+              request-id: {error.requestId}
             </span>
           )}
         </div>

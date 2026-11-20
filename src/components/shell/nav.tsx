@@ -16,7 +16,7 @@ import {
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
 
-const ROW = "flex h-9 items-center gap-4 rounded-lg px-2 text-sm";
+const ROW = "flex h-9 items-center gap-3.5 rounded-lg px-2.5 text-sm";
 const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
 const HIGHLIGHT = "bg-sidebar-accent font-medium";
 const HOVER = "hover:bg-sidebar-accent/60";
@@ -227,7 +227,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
           back();
         }
       }}
-      className={cn("flex flex-col gap-4 pt-4", compact ? "px-1.5" : "px-3")}
+      className={cn("flex flex-col gap-4 pt-2", compact ? "px-1.5" : "px-2")}
     >
       {panel ? (
         <div className="flex flex-col gap-1">
@@ -264,12 +264,15 @@ export function Nav({ compact = false }: { compact?: boolean }) {
             compact={compact}
           />
           {sections.map(({ heading, groups }) => (
-            <div key={heading} className="flex flex-col gap-1">
+            <div
+              key={heading}
+              className={cn("flex flex-col", compact && "gap-1")}
+            >
               <h2
                 className={
                   compact
                     ? "sr-only"
-                    : "px-2 pb-1 text-xs font-medium text-muted-foreground"
+                    : "mb-2 px-2 text-xs leading-[17px] text-muted-foreground"
                 }
               >
                 {heading}

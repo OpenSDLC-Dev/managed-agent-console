@@ -2636,6 +2636,7 @@ export const SURFACES: Surface[] = [
       await page.route("**/api/auth/logout", (route) =>
         route.fulfill({ status: 503 }),
       );
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByTestId("sign-out").click();
       await page
         .locator('[data-native-identity="sign-out-unconfirmed"]')
@@ -2665,6 +2666,7 @@ export const SURFACES: Surface[] = [
           return fetcher(input, init);
         };
       });
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByTestId("sign-out").click();
       await page
         .locator('[data-native-identity="sign-out-account-changed"]')
@@ -2709,6 +2711,10 @@ export const SURFACES: Surface[] = [
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:
-      "The native sidebar account block shows the current user, role and Sign out beneath the platform connection.",
+      "The sidebar account panel shows the current user and role, theme, connection, console version and Sign out.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByRole("dialog", { name: "Account settings" }).waitFor();
+    },
   },
 ];

@@ -2,7 +2,21 @@ import { withTestSession } from "@/../test/session-fixture";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConnectionStatus } from "./connection-status";
+import {
+  ConnectionIndicator,
+  ConnectionStatus,
+  useConnectionStatus,
+} from "./connection-status";
+
+function Widget() {
+  const status = useConnectionStatus();
+  return (
+    <>
+      <ConnectionIndicator {...status} />
+      <ConnectionStatus {...status} />
+    </>
+  );
+}
 
 function renderWidget() {
   const client = new QueryClient({
@@ -10,7 +24,7 @@ function renderWidget() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <ConnectionStatus />
+      <Widget />
     </QueryClientProvider>,
   );
 }
