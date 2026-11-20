@@ -61,10 +61,15 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
         kind: "group",
         label: "Agents",
         icon: Waypoints,
+        defaultOpen: false,
         items: [
           surfaceEntry("agents", Bot),
           surfaceEntry("sessions", MessagesSquare),
           surfaceEntry("deployments", Rocket),
+          surfaceEntry("environments", Boxes),
+          surfaceEntry("memory-stores", Database),
+          surfaceEntry("vaults", KeyRound),
+          surfaceEntry("dreams", Moon),
         ],
       },
       {
@@ -75,10 +80,6 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
         items: [
           surfaceEntry("files", FileText),
           surfaceEntry("skills", Sparkles),
-          surfaceEntry("environments", Boxes),
-          surfaceEntry("vaults", KeyRound),
-          surfaceEntry("memory-stores", Database),
-          surfaceEntry("dreams", Moon),
         ],
       },
     ],
@@ -86,16 +87,21 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
   {
     heading: "Organization",
     entries: [
-      surfaceEntry("api-keys", KeySquare),
+      {
+        kind: "group",
+        label: "Keys",
+        icon: KeySquare,
+        items: [
+          surfaceEntry("api-keys", KeySquare),
+          surfaceEntry("service-accounts", UserRoundCog),
+        ],
+      },
       surfaceEntry("usage", ChartColumn),
       {
         kind: "group",
         label: "Settings",
         icon: Settings,
-        items: [
-          surfaceEntry("members", Users),
-          surfaceEntry("service-accounts", UserRoundCog),
-        ],
+        items: [surfaceEntry("members", Users)],
       },
       {
         kind: "group",

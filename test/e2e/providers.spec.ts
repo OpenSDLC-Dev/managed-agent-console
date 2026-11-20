@@ -69,7 +69,7 @@ test("a gateway that serves no admin API takes the screens with it", async ({
     data: { surfaces: ["model-gateway"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
   await expect(page.locator("nav [data-surface=providers]")).toHaveCount(0);
 
   await page.goto("/providers");

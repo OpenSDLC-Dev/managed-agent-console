@@ -173,7 +173,7 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   await expect(state).toHaveAttribute("data-denied", "true");
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
   await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
   await expect(
     page.getByText("this route requires the admin role"),
   ).toBeVisible();

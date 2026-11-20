@@ -93,6 +93,7 @@ test("the shell shows all resources and a live platform connection", async ({
   await expect(page).toHaveURL(/\/dashboard$/);
 
   const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Agents", exact: true }).click();
   await nav.getByRole("button", { name: "Resources", exact: true }).click();
   for (const item of [
     "Agents",

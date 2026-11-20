@@ -75,7 +75,7 @@ test("mock vault updates reject malformed or invalid requests atomically", async
 
 test("create, edit, archive, and delete an environment", async ({ page }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await page.getByRole("button", { name: "Create environment" }).click();
 
@@ -161,6 +161,7 @@ test("create a session with file and memory mounts, then drive it", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
   await page.getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -223,7 +224,7 @@ test("the first credential returns to the populated vault after creation", async
   page,
 }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();
@@ -259,7 +260,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
   page,
 }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();

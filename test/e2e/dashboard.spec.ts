@@ -44,7 +44,9 @@ test("dashboard stays centered and its compact navigation remains usable", async
     page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
   ).toHaveAttribute("data-active", "true");
   await expect(
-    page.getByRole("navigation").getByRole("link", { name: "API Keys" }),
+    page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Keys", exact: true }),
   ).toHaveAttribute("data-active", "false");
   await page.getByRole("button", { name: "Search Console… Ctrl K" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -142,6 +144,7 @@ test("navigation preferences survive reload while viewport changes keep the page
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("main")).toBeVisible();
   await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Agents", exact: true })

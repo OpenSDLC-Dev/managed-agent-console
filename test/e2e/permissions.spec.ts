@@ -27,7 +27,7 @@ test("a denied collection read hides its entry and explains a detail bookmark", 
   ).toBeVisible();
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
   await expect(page.locator("nav [data-surface=skills]")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
 });
 
 test("refused resource reads leave only local entry points", async ({
@@ -62,7 +62,7 @@ test("a denied write keeps readable resources and the console session", async ({
   request,
 }) => {
   await signIn(page);
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await page.getByRole("button", { name: "Create environment" }).click();
   await page.getByLabel("Name").fill("role-check");

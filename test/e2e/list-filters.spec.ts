@@ -33,6 +33,7 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
       req.url().includes("include_archived=true") &&
       req.url().includes("limit=100"),
   );
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
   await optionsRequest;
   await expect(

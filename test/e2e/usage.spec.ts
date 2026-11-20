@@ -86,7 +86,7 @@ test("a console without a gateway hides its Usage link", async ({
     data: { surfaces: ["model-gateway"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
   await expect(page.locator("nav [data-surface=usage]")).toHaveCount(0);
   await page.goto("/usage");
   await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(

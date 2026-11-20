@@ -7,11 +7,11 @@ date. What ships from these facts is `src/app/globals.css`.
 
 ## Sidebar structure — checked 2026-11-20
 
-The [Claude Dashboard](https://platform.claude.com/dashboard) exposes Dashboard above Build and Organization in its published page. Chrome reached the sign-in page, so the authenticated submenus could not be verified.
+Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
 
-The console uses those sections for its existing destinations. Build groups agent workflows separately from reusable resources. API Keys and Usage open directly because each has one destination. Organization also contains Settings for member and service-account administration and Model Gateway for self-hosted models and providers.
+The console uses inline groups and keeps only locally served destinations. Usage opens directly. Organization also contains Model Gateway for self-hosted models and providers. Dreams sits beside the other agent memory resources.
 
-Resources starts collapsed on Dashboard so Organization stays visible. A resource route opens the group by default. A saved expansion preference takes precedence.
+Agents and Resources start collapsed outside their own routes so Organization stays visible. A saved expansion preference takes precedence.
 
 ## Native-only Console — checked 2026-11-17
 

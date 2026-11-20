@@ -44,33 +44,33 @@ const EXPECTED = [
     surface: "deployments",
     group: "Agents",
   },
-  { label: "Files", href: "/files", surface: "files", group: "Resources" },
-  { label: "Skills", href: "/skills", surface: "skills", group: "Resources" },
   {
     label: "Environments",
     href: "/environments",
     surface: "environments",
-    group: "Resources",
-  },
-  {
-    label: "Credential Vaults",
-    href: "/vaults",
-    surface: "vaults",
-    group: "Resources",
+    group: "Agents",
   },
   {
     label: "Memory Stores",
     href: "/memory-stores",
     surface: "memory-stores",
-    group: "Resources",
+    group: "Agents",
+  },
+  {
+    label: "Credential Vaults",
+    href: "/vaults",
+    surface: "vaults",
+    group: "Agents",
   },
   {
     label: "Dreams",
     href: "/dreams",
     surface: "dreams",
-    group: "Resources",
+    group: "Agents",
   },
-  { label: "API Keys", href: "/api-keys", surface: "api-keys" },
+  { label: "Files", href: "/files", surface: "files", group: "Resources" },
+  { label: "Skills", href: "/skills", surface: "skills", group: "Resources" },
+  { label: "API Keys", href: "/api-keys", surface: "api-keys", group: "Keys" },
   { label: "Usage", href: "/usage", surface: "usage" },
   {
     label: "Models",
@@ -87,18 +87,19 @@ const EXPECTED = [
 ];
 
 const GROUPS = [
-  { label: "Agents", surfaces: ["agents", "sessions", "deployments"] },
   {
-    label: "Resources",
+    label: "Agents",
     surfaces: [
-      "files",
-      "skills",
+      "agents",
+      "sessions",
+      "deployments",
       "environments",
-      "vaults",
       "memory-stores",
+      "vaults",
       "dreams",
     ],
   },
+  { label: "Resources", surfaces: ["files", "skills"] },
   { label: "Model Gateway", surfaces: ["models", "providers"] },
 ];
 
@@ -176,10 +177,12 @@ const rowOrder = () =>
     (el.textContent ?? "").trim(),
   );
 
+const AGENTS_PREFERENCE = "managed-agent-console:nav:nav-group-agents";
 const RESOURCES_PREFERENCE = "managed-agent-console:nav:nav-group-resources";
 
 beforeEach(() => {
   localStorage.setItem(RESOURCES_PREFERENCE, "true");
+  localStorage.setItem(AGENTS_PREFERENCE, "true");
 });
 
 afterEach(() => {
@@ -194,16 +197,15 @@ describe("Nav", () => {
   for (const compact of [false, true]) {
     it(`probe: hides only denied read destinations in ${compact ? "compact" : "expanded"} navigation`, async () => {
       renderNav(["api-keys", "files", "skills"], { compact }, 403);
-      // Capture the initial link before starting the timeout. Polling its
-      // removal avoids repeating a role/name scan while query notifications
-      // are queued, which can exhaust waitFor's 1 s budget under load (#242).
-      await waitForElementToBeRemoved(
-        screen.getByRole("link", { name: "API Keys" }),
-      );
+      await waitFor(() => expect(groupHeader("Resources")).toBeNull());
+      if (compact) {
+        await userEvent.click(groupHeader("Keys")!);
+        const dialog = await screen.findByRole("dialog", { name: "Keys" });
+        expect(dialog.textContent).toContain("Service accounts");
+      }
       expect(link("API Keys")).toBeNull();
       expect(link("Files")).toBeNull();
       expect(link("Skills")).toBeNull();
-      expect(groupHeader("Resources")).not.toBeNull();
       expect(link("Dashboard")).not.toBeNull();
       if (compact) expect(groupHeader("Agents")).not.toBeNull();
       else expect(link("Agents")).not.toBeNull();
@@ -230,14 +232,15 @@ describe("Nav", () => {
       "Agents",
       "Sessions",
       "Deployments",
+      "Environments",
+      "Memory Stores",
+      "Credential Vaults",
+      "Dreams",
       "Resources",
       "Files",
       "Skills",
-      "Environments",
-      "Credential Vaults",
-      "Memory Stores",
-      "Dreams",
       "Organization",
+      "Keys",
       "API Keys",
       "Usage",
       "Model Gateway",
@@ -297,7 +300,7 @@ describe("Nav", () => {
       expect(row.querySelector("svg") !== null, label).toBe(!group);
       expect(row.classList.contains("pl-10"), label).toBe(Boolean(group));
     }
-    for (const { label } of GROUPS) {
+    for (const { label } of [...GROUPS, { label: "Keys" }]) {
       expect(groupHeader(label)?.querySelector("svg"), label).not.toBeNull();
     }
   });
@@ -387,9 +390,12 @@ describe("Nav", () => {
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
     await screen.findByRole("button", { name: "Settings" });
     expect(link("Members")?.getAttribute("href")).toBe("/members");
-    expect(link("Service accounts")?.getAttribute("href")).toBe(
-      "/service-accounts",
-    );
+    const keysLinks = groupHeader("Keys")?.getAttribute("aria-controls");
+    expect(
+      document
+        .getElementById(keysLinks!)
+        ?.querySelector('[href="/service-accounts"]'),
+    ).not.toBeNull();
   });
 
   // One per surface: a deployment that does not serve it loses the item, and
@@ -435,7 +441,8 @@ describe("Nav", () => {
       expect(
         screen.getByRole("heading", { name: "Organization" }),
       ).toBeDefined();
-      expect(link("API Keys")).not.toBeNull();
+      if (compact) expect(groupHeader("Keys")).not.toBeNull();
+      else expect(link("API Keys")).not.toBeNull();
     },
   );
 
@@ -460,19 +467,25 @@ describe("Nav", () => {
   });
 });
 
-it("opens Resources by default only on a resource route", () => {
-  localStorage.removeItem(RESOURCES_PREFERENCE);
-  navState.pathname = "/dashboard";
-  const first = renderNav();
-  expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("false");
-  expect(link("Files")).toBeNull();
-  first.unmount();
+it.each([
+  ["Agents", AGENTS_PREFERENCE, "/environments", "Environments"],
+  ["Resources", RESOURCES_PREFERENCE, "/files", "Files"],
+])(
+  "opens %s by default only on one of its routes",
+  (group, preference, route, label) => {
+    localStorage.removeItem(preference);
+    navState.pathname = "/dashboard";
+    const first = renderNav();
+    expect(groupHeader(group)?.getAttribute("aria-expanded")).toBe("false");
+    expect(link(label)).toBeNull();
+    first.unmount();
 
-  navState.pathname = "/files";
-  renderNav();
-  expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("true");
-  expect(link("Files")?.getAttribute("aria-current")).toBe("page");
-});
+    navState.pathname = route;
+    renderNav();
+    expect(groupHeader(group)?.getAttribute("aria-expanded")).toBe("true");
+    expect(link(label)?.getAttribute("aria-current")).toBe("page");
+  },
+);
 
 it("restores a collapsed group after remount", async () => {
   navState.pathname = "/files";

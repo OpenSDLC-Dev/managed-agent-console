@@ -23,8 +23,8 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await signIn(page);
 
   const nav = page.locator("nav");
+  await nav.getByRole("button", { name: "Agents", exact: true }).click();
   await expect(nav.locator("[data-surface=agents]")).toBeVisible();
-  await nav.getByRole("button", { name: "Resources", exact: true }).click();
   await expect(nav.locator("[data-surface=vaults]")).toBeVisible();
   await expect(nav.locator("[data-surface=skills]")).toHaveCount(0);
   await expect(nav.locator("[data-surface=files]")).toHaveCount(0);
@@ -81,6 +81,7 @@ test("its nested routes stand down too, not just its list page", async ({
 test("a served deployment keeps every surface", async ({ page }) => {
   await signIn(page);
   const nav = page.locator("nav");
+  await nav.getByRole("button", { name: "Agents", exact: true }).click();
   await nav.getByRole("button", { name: "Resources", exact: true }).click();
   for (const surface of [
     "agents",

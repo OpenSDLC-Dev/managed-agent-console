@@ -63,7 +63,6 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
   const editUrl = page.url();
   const name = page.getByLabel("Name", { exact: true });
   await name.fill("Kept draft");
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Memory Stores", exact: true })
@@ -129,7 +128,6 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
   await page.evaluate(() => history.forward());
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
   await page.getByLabel("Name", { exact: true }).fill("Sidebar draft");
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("navigation", { name: "Main navigation" })
     .getByRole("link", { name: "Memory Stores", exact: true })
