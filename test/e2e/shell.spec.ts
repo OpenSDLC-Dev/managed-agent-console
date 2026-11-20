@@ -92,6 +92,8 @@ test("the shell shows all resources and a live platform connection", async ({
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Resources", exact: true }).click();
   for (const item of [
     "Agents",
     "Sessions",
@@ -102,12 +104,8 @@ test("the shell shows all resources and a live platform connection", async ({
     "Skills",
     "Files",
   ]) {
-    // Scoped to the sidebar: the Dashboard gives each of these a card as well,
-    // so an unscoped link by name matches twice on this page.
     await expect(
-      page
-        .getByRole("navigation")
-        .getByRole("link", { name: item, exact: true }),
+      nav.getByRole("link", { name: item, exact: true }),
     ).toBeVisible();
   }
 
@@ -119,9 +117,6 @@ test("the shell shows all resources and a live platform connection", async ({
   );
 
   // Client-side navigation works.
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Sessions" })
-    .click();
+  await nav.getByRole("link", { name: "Sessions", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
 });
