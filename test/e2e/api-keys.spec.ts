@@ -138,9 +138,8 @@ test("an unowned historical key is listed without mutation controls", async ({
   await expect(row.getByRole("button")).toHaveCount(0);
 });
 
-// A deployment predating the surface answers 404 through its router catch-all,
-// and the console drops the item rather than showing a page that cannot work.
-test("a platform without the surface loses the nav item", async ({
+// The mock's legacy deployment lacks the entire private console namespace.
+test("a platform without the console namespace loses the Keys group", async ({
   page,
   request,
 }) => {
@@ -148,11 +147,8 @@ test("a platform without the surface loses the nav item", async ({
     data: { surfaces: ["api-keys"] },
   });
   await signIn(page);
-  await page.getByRole("button", { name: "Keys", exact: true }).click();
-  await expect(
-    page.locator("nav [data-surface=service-accounts]"),
-  ).toBeVisible();
-  await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Keys"]')).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
 
   await page.goto("/api-keys");
   const standIn = page.getByTestId("unavailable-surface");
