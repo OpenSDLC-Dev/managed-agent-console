@@ -1229,7 +1229,7 @@ test("real native password/setup, current authority, management, private bytes/S
     )
     .toBe(true);
   await expect(page.getByTestId("error-state")).toContainText(
-    "developer role",
+    "This account can only use Playground.",
     { timeout: 20_000 },
   );
   await expect(page).not.toHaveURL(/\/login/);
@@ -1286,7 +1286,7 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     data: { code: code(), login_name: "first-admin", password },
   });
   expect([200, 409]).toContain(setup.status());
-  if (setup.status() === 409) await login(page, "first-admin");
+  if (setup.status() === 409) await login(page, "new-person");
   await page.goto("/members");
   const member = await write(page, `${org}/members`, {
     login_name: "playground-user",
