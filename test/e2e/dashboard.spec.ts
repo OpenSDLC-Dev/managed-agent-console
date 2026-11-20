@@ -124,8 +124,24 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     return window.scrollY;
   });
   expect(scrollOffset).toBeGreaterThan(0);
-  await menu.click();
-  await page.getByRole("link", { name: "Platform documentation" }).hover();
+  await expect(menu).toBeInViewport();
+  const menuBounds = (await menu.boundingBox())!;
+  await page.mouse.click(
+    menuBounds.x + menuBounds.width / 2,
+    menuBounds.y + menuBounds.height / 2,
+  );
+  const documentation = page.getByRole("link", {
+    name: "Platform documentation",
+  });
+  await expect(documentation).toBeInViewport();
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
+  const documentationBounds = (await documentation.boundingBox())!;
+  await page.mouse.move(
+    documentationBounds.x + documentationBounds.width / 2,
+    documentationBounds.y + documentationBounds.height / 2,
+  );
   await page.mouse.wheel(0, 300);
   await expect
     .poll(() => page.evaluate(() => window.scrollY))
