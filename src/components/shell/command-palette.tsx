@@ -379,7 +379,7 @@ export function CommandPalette({
             <span className="truncate">Search Console…</span>
             <kbd
               aria-hidden
-              className="ml-auto flex shrink-0 gap-1 font-mono text-[11px]"
+              className="ml-auto flex shrink-0 gap-0.5 font-mono text-[11px] [&>span]:rounded-sm [&>span]:border [&>span]:px-1 [&>span]:leading-4"
             >
               <span>{shortcutModifier}</span>
               <span>K</span>

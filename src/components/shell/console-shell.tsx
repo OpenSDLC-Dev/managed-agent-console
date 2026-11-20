@@ -67,7 +67,7 @@ export function ConsoleShell({
   };
 
   return (
-    <div className="min-h-dvh [--console-header-height:3rem]">
+    <div className="min-h-dvh">
       <header
         data-console-header
         className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"

@@ -23,6 +23,27 @@ async function expectVisibleFocus(locator: Locator) {
   expect(indicator.boxShadow).toMatch(/[23]px/);
 }
 
+test("keyboard focus scrolls out from behind the console header", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 600 });
+  await signIn(page);
+  const createKey = page.getByRole("button", { name: "Get API key" });
+  await page.getByRole("link", { name: "Build an agent" }).focus();
+  await createKey.evaluate((element) => {
+    window.scrollBy(0, element.getBoundingClientRect().top - 16);
+  });
+  const headerBottom = await page
+    .locator("[data-console-header]")
+    .evaluate((element) => element.getBoundingClientRect().bottom);
+  expect((await createKey.boundingBox())!.y).toBeLessThan(headerBottom);
+  await page.keyboard.press("Shift+Tab");
+  await expect(createKey).toBeFocused();
+  await expect
+    .poll(async () => (await createKey.boundingBox())!.y)
+    .toBeGreaterThanOrEqual(headerBottom);
+});
+
 test("keyboard focus stays visible across composite controls", async ({
   page,
 }) => {
