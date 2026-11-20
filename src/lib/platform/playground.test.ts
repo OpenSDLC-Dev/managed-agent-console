@@ -84,8 +84,9 @@ it("hides Playground presentation when the edge reports the gateway disabled", a
 
 it("stops the fresh session request before submitting Messages", async () => {
   const fetcher = vi.fn(
-    (_url: string, init?: RequestInit) =>
+    (url: string, init?: RequestInit) =>
       new Promise<Response>((_, reject) => {
+        expect(url).toBe("/api/auth/session");
         init?.signal?.addEventListener(
           "abort",
           () => reject(init.signal?.reason),
