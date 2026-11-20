@@ -11,6 +11,10 @@ Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dash
 
 The reference Back to all sections button leaves the current page open. The console follows that behavior. Opening a group displays its existing links in place of the top-level menu. Compact navigation retains a flyout. The console keeps its existing page URLs and keeps Model Gateway for self-hosted models and providers.
 
+## Global search — checked 2026-11-20
+
+Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a roughly 640px panel near the top of the viewport. The trigger showed Command on macOS. The console adopts the header and keyboard layout. Search offers existing pages and platform resources.
+
 ## Native-only Console — checked 2026-11-17
 
 Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.

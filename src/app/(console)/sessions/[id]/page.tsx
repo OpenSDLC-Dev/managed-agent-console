@@ -448,7 +448,7 @@ function SessionWorkspace({ id }: { id: string }) {
   const outcomeEvaluations = outcomesSupported ? data.outcome_evaluations : [];
 
   return (
-    <div className="flex h-[calc(100dvh-48px)] min-h-[480px] min-w-0 flex-col">
+    <div className="flex h-[calc(100dvh-var(--console-header-height)-48px)] min-h-[480px] min-w-0 flex-col">
       <Breadcrumb
         parent={
           deploymentBack

@@ -48,8 +48,20 @@ test("dashboard stays centered and its compact navigation remains usable", async
       .getByRole("navigation")
       .getByRole("button", { name: "Keys", exact: true }),
   ).toHaveAttribute("data-active", "false");
-  await page.getByRole("button", { name: "Search Console… Ctrl K" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const search = page
+    .locator("[data-console-header]")
+    .getByRole("button", { name: /^Search Console/ });
+  const searchBounds = await search.boundingBox();
+  expect(searchBounds!.width).toBe(448);
+  expect(searchBounds!.height).toBe(28);
+  expect(searchBounds!.x + searchBounds!.width / 2).toBe(720);
+  await search.click();
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(palette).toBeVisible();
+  await expect(palette).toHaveCSS("max-width", "640px");
+  await expect(
+    palette.getByRole("combobox", { name: "Search pages and resources" }),
+  ).toBeFocused();
   await page.keyboard.press("Escape");
   const agents = page
     .getByRole("navigation")
@@ -87,6 +99,11 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     "data-sidebar-state",
     "collapsed",
   );
+  await expect(
+    page
+      .locator("[data-console-header]")
+      .getByRole("button", { name: /^Search Console/ }),
+  ).toHaveCSS("width", "32px");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

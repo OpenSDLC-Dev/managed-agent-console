@@ -30,7 +30,9 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await expect(nav.locator('[data-nav-group="Resources"]')).toHaveCount(0);
 
   await page.keyboard.press("Control+k");
-  const input = page.getByPlaceholder("Search agents, sessions, environments…");
+  const input = page.getByRole("combobox", {
+    name: "Search pages and resources",
+  });
   await expect(input).toBeVisible();
   // An empty query lists exactly the section shortcuts, read by surface id
   // rather than by label (CLAUDE.md's data-* convention).

@@ -37,7 +37,9 @@ test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {
   await signIn(page);
 
   await page.keyboard.press("Control+k");
-  const input = page.getByPlaceholder("Search agents, sessions, environments…");
+  const input = page.getByRole("combobox", {
+    name: "Search pages and resources",
+  });
   await expect(input).toBeVisible();
 
   // Empty query lists the section shortcuts.

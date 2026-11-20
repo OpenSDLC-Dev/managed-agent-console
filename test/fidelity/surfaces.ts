@@ -2294,7 +2294,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page.keyboard.press("Control+k");
       await page
-        .getByPlaceholder("Search agents, sessions, environments…")
+        .getByRole("combobox", { name: "Search pages and resources" })
         .fill("deep resea");
       await page.getByRole("option", { name: /Deep researcher/ }).waitFor();
     },

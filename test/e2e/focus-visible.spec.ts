@@ -34,10 +34,10 @@ test("keyboard focus stays visible across composite controls", async ({
   await composer.click();
   await expectVisibleFocus(composer);
 
-  await page.getByRole("button", { name: "Search Console… Ctrl K" }).click();
+  await page.getByRole("button", { name: /^Search Console/ }).click();
   await expectVisibleFocus(
     page.getByRole("combobox", {
-      name: "Search agents, sessions, environments…",
+      name: "Search pages and resources",
     }),
   );
   await page.keyboard.press("Escape");
