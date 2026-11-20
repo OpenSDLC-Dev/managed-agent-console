@@ -16,7 +16,7 @@ It holds no management key, login password or OIDC client secret.
 flowchart LR
   Browser -->|cookie and CSRF| Edge[Application edge]
   Edge -->|auth, setup and private resources| Controlplane[Platform control plane]
-  Edge -->|model administration| Gateway[Model gateway]
+  Edge -->|model administration and Playground| Gateway[Model gateway]
   Edge -->|pages, assets and health| Console[Console server]
   Client[SDK or CLI] -->|issued owned API key| Edge
   Edge -->|public API| Controlplane
@@ -24,7 +24,7 @@ flowchart LR
 
 Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
 `/setup` offers code redemption; the platform decides eligibility. Administrators manage members and service accounts.
-A signed-in `user` has no resource reads but keeps account, setup and sign-out controls.
+An administrator can enable Playground for a `user` in Members. The member keeps account, setup and sign-out controls.
 Developers issue and manage their own API keys. Administrators can also issue keys for active service accounts.
 Each key uses its owner's current role; deactivating the owner revokes access.
 Browser calls keep using the session cookie, never a revealed key.

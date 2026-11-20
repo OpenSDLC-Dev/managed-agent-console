@@ -1,5 +1,10 @@
+"use client";
+
+import { useContext } from "react";
 import { ConnectionStatus } from "@/components/shell/connection-status";
 import { SignedInAs } from "@/components/shell/signed-in-as";
+import { playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 
 /**
  * The bottom of the sidebar: who is signed in, and whether the platform answers.
@@ -18,10 +23,11 @@ import { SignedInAs } from "@/components/shell/signed-in-as";
  * none, because its account block is an inset button that carries its own edges.
  */
 export function SidebarFooter() {
+  const session = useContext(ConsoleSessionContext)?.data;
   return (
     <div className="border-t border-sidebar-border">
       <SignedInAs />
-      <ConnectionStatus />
+      {playgroundOnly(session) ? null : <ConnectionStatus />}
     </div>
   );
 }

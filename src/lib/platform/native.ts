@@ -10,6 +10,7 @@ export type NativeSession = {
   id: string;
   role: Role;
   role_source: string;
+  playground_access?: boolean;
   email: string;
   name: string;
   login_name?: string;
@@ -25,6 +26,7 @@ export type Member = {
   role: Role;
   role_source: string;
   status: string;
+  playground_access?: boolean;
   login_name?: string;
 };
 export type MemberPage = {

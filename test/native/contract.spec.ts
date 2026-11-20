@@ -63,7 +63,7 @@ async function login(page: Page, name: string) {
   await page.getByLabel("Login name").fill(name);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/(dashboard|playground)$/);
 }
 
 // Inspect the actual provider rather than claiming that a window marker proves
@@ -431,12 +431,12 @@ test("real native password/setup, current authority, management, private bytes/S
   });
   const userPage = await userContext.newPage();
   await login(userPage, "new-person");
-  await expect(userPage.locator("[data-no-resource-access]")).toBeVisible();
+  await expect(userPage).toHaveURL(/\/playground$/);
+  await expect(
+    userPage.getByRole("status").filter({ hasText: "Ask an administrator" }),
+  ).toBeVisible();
   await expect(userPage.locator("[data-role=user]")).toBeVisible();
-  await expect(userPage.getByTestId("connection-dot")).toHaveAttribute(
-    "data-state",
-    "denied",
-  );
+  await expect(userPage.getByTestId("connection-dot")).toHaveCount(0);
   await expect(
     userPage.getByRole("link", { name: "Members", exact: true }),
   ).toHaveCount(0);
@@ -1277,6 +1277,127 @@ test("real native password/setup, current authority, management, private bytes/S
   await userContext.close();
 });
 
+test("real Playground approval, Messages streaming, stop and withdrawal", async ({
+  page,
+  browser,
+}) => {
+  const origin = "http://127.0.0.1:38200";
+  const setup = await page.request.post(`${org}/setup_code/redeem`, {
+    headers: { origin },
+    data: { code: code(), login_name: "first-admin", password },
+  });
+  expect([200, 409]).toContain(setup.status());
+  if (setup.status() === 409) await login(page, "first-admin");
+  await page.goto("/members");
+  const member = await write(page, `${org}/members`, {
+    login_name: "playground-user",
+    name: "Playground user",
+    role: "user",
+    password,
+  });
+  expect(member.status).toBe(200);
+  const vendor = await write(page, "/admin/v1/providers", {
+    name: "playground-fixture",
+    profile: "anthropic-generic",
+    endpoints: { anthropic: "https://playground.invalid" },
+  });
+  expect(vendor.status).toBe(200);
+  expect(
+    (
+      await write(page, `/admin/v1/providers/${vendor.body.id}/credentials`, {
+        key: "fixture-placeholder-key",
+      })
+    ).status,
+  ).toBe(200);
+  const deployment = await write(page, "/admin/v1/deployments", {
+    provider_id: vendor.body.id,
+    upstream_model: "fixture-playground",
+    kind: "chat",
+  });
+  expect(deployment.status).toBe(200);
+  const alias = "playground-e2e";
+  expect(
+    (
+      await write(page, "/admin/v1/aliases", {
+        name: alias,
+        targets: [{ deployment_id: deployment.body.id, weight: 1 }],
+      })
+    ).status,
+  ).toBe(200);
+
+  const userContext = await browser.newContext({ baseURL: origin });
+  try {
+    const user = await userContext.newPage();
+    const offered: string[] = [];
+    user.on("request", (r) =>
+      offered.push(...credentialHeaders(origin, r.url(), r.headers())),
+    );
+    await login(user, "playground-user");
+    await expect(user).toHaveURL(/\/playground$/);
+    await expect(
+      user.getByRole("status").filter({ hasText: "Ask an administrator" }),
+    ).toBeVisible();
+    await expect(user.getByRole("button", { name: "Run prompt" })).toHaveCount(
+      0,
+    );
+    const resource = "/api/organizations/default/proxy/v1";
+    expect((await user.request.get(`${resource}/models`)).status()).toBe(403);
+    await expect(
+      user
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("link"),
+    ).toHaveCount(1);
+
+    await page.goto("/members");
+    const approval = page.getByRole("checkbox", {
+      name: "Playground access for Playground user",
+    });
+    await approval.click();
+    await expect(approval).toBeChecked();
+    await expect
+      .poll(async () => (await user.request.get(`${resource}/models`)).status())
+      .toBe(200);
+    expect((await user.request.get(`${resource}/agents`)).status()).toBe(403);
+    expect((await user.request.get("/admin/v1/providers")).status()).toBe(403);
+    expect(
+      (await user.request.post(`${resource}/messages`, { data: {} })).status(),
+    ).toBe(403);
+
+    await user.reload();
+    await user.getByLabel("Model", { exact: true }).selectOption(alias);
+    const prompt = user.getByLabel("Prompt", { exact: true });
+    const run = user.getByRole("button", { name: "Run prompt" });
+    const status = user.locator("[data-run-status]");
+    await prompt.fill("Hello from the Playground");
+    await run.click();
+    await expect(status).toHaveAttribute("data-run-status", "complete");
+    await expect(
+      user.getByText("Fixture response", { exact: true }),
+    ).toBeVisible();
+    await prompt.fill("hold fixture stream");
+    await run.click();
+    await expect(
+      user.getByText("Fixture response", { exact: true }),
+    ).toBeVisible();
+    await user.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(status).toHaveAttribute("data-run-status", "stopped");
+
+    await run.click();
+    await expect(
+      user.getByText("Fixture response", { exact: true }),
+    ).toBeVisible();
+    await approval.click();
+    await expect(approval).not.toBeChecked();
+    await expect(
+      user.getByRole("status").filter({ hasText: "Ask an administrator" }),
+    ).toBeVisible({ timeout: 20_000 });
+    expect((await user.request.get(`${resource}/models`)).status()).toBe(403);
+    expect(offered).toEqual([]);
+  } finally {
+    await userContext.close();
+  }
+});
+
 test("real native OIDC follows platform-owned PKCE/callback and setup refreshes current authority", async ({
   browser,
 }) => {
@@ -1294,8 +1415,12 @@ test("real native OIDC follows platform-owned PKCE/callback and setup refreshes 
   });
   await page.goto("/login");
   await page.getByRole("link", { name: "Sign in with SSO" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/playground$/);
   await expect(page.locator("[data-role=user]")).toBeVisible();
+  expect(
+    (await (await page.request.get("/api/auth/session")).json())
+      .playground_access,
+  ).toBe(false);
   expect(calls).toContain("/api/auth/callback");
   expect(calls).not.toContain("/token");
   expect((await context.cookies()).map((c) => c.name)).toContain("map_session");

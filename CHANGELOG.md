@@ -6,7 +6,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Playground runs a prompt against configured chat models and streams the answer. Administrators can approve access for the `user` role in Members. [Platform #995](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/995)
 
 ## Released
 

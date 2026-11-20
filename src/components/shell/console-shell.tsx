@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useContext, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { BookOpen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Nav } from "./nav";
 import { useNavPreference } from "./nav-preference";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
+import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 
 const NARROW = "(max-width: 767px)";
 function subscribeViewport(callback: () => void) {
@@ -32,6 +34,7 @@ export function ConsoleShell({
   footer: React.ReactNode;
   version?: React.ReactNode;
 }) {
+  const playground = playgroundOnly(useContext(ConsoleSessionContext)?.data);
   const narrow = useSyncExternalStore(
     subscribeViewport,
     () => window.matchMedia(NARROW).matches,
@@ -84,7 +87,7 @@ export function ConsoleShell({
           {open && (
             <div className="min-w-0 flex-1 leading-tight">
               <Link
-                href="/dashboard"
+                href={playground ? PLAYGROUND_ROUTE : LANDING_ROUTE}
                 onClick={() => {
                   if (narrow) close();
                 }}
@@ -107,10 +110,12 @@ export function ConsoleShell({
             {open ? <PanelLeftClose /> : <PanelLeftOpen />}
           </Button>
         </div>
-        <CommandPalette
-          compact={!open}
-          onNavigate={narrow ? close : undefined}
-        />
+        {!playground && (
+          <CommandPalette
+            compact={!open}
+            onNavigate={narrow ? close : undefined}
+          />
+        )}
         <div
           id="console-navigation"
           className="min-h-0 flex-1 overflow-y-auto pb-3"

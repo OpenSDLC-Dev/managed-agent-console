@@ -171,7 +171,8 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
     selected.some(
       (s) =>
         s.id.startsWith("native-model-limits") ||
-        s.id.startsWith("native-principal-"),
+        s.id.startsWith("native-principal-") ||
+        s.id === "native-playground",
     )
   )
     await seedGateway(request, receipt.container);
@@ -649,6 +650,17 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(
               page.locator("[data-limit=requests_per_minute]"),
             ).toHaveAttribute("data-value", "120");
+            break;
+          case "native-playground":
+            await expect(
+              page.getByRole("heading", { name: "Playground", exact: true }),
+            ).toBeVisible();
+            await expect(
+              page.getByLabel("Model", { exact: true }),
+            ).toBeEnabled();
+            await expect(
+              page.getByLabel("Prompt", { exact: true }),
+            ).toBeVisible();
             break;
           case "native-model-limits-form":
             await expect(page.getByRole("dialog")).toBeVisible();

@@ -240,6 +240,33 @@ export function Members() {
                 <span data-member-status={m.status}>{m.status}</span>
               ),
             },
+            ...(list.data?.data.some(
+              (m) => typeof m.playground_access === "boolean",
+            )
+              ? [
+                  {
+                    key: "playground",
+                    header: "Playground access",
+                    cell: (m: Member) =>
+                      m.role === "user" &&
+                      m.status === "active" &&
+                      typeof m.playground_access === "boolean" ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`Playground access for ${m.name || m.login_name || m.id}`}
+                          checked={m.playground_access}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void change(
+                              `${ORGANIZATION}/members/${encodeURIComponent(m.id)}`,
+                              { playground_access: event.target.checked },
+                            )
+                          }
+                        />
+                      ) : null,
+                  },
+                ]
+              : []),
             {
               key: "actions",
               header: <span className="sr-only">Actions</span>,
