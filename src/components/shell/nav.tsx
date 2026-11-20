@@ -86,25 +86,25 @@ function GroupControl({
     "aria-current": current ? ("page" as const) : undefined,
     className: cn(
       ROW,
-      current ? cn("h-11", HIGHLIGHT) : cn("text-muted-foreground", HOVER),
+      current ? HIGHLIGHT : cn("text-muted-foreground", HOVER),
     ),
   };
   const contents = (
     <>
       <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-      <span className="min-w-0 truncate">
-        {group.label}
+      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <span className="truncate">{group.label}</span>
         {current && (
           <>
             {" "}
-            <span className="block truncate text-xs font-normal text-muted-foreground">
+            <span className="max-w-[55%] shrink-0 truncate text-xs font-normal text-muted-foreground">
               {current}
             </span>
           </>
         )}
       </span>
       <ChevronRight
-        className="ml-auto size-3.5 shrink-0"
+        className="size-3.5 shrink-0"
         strokeWidth={1.75}
         aria-hidden
       />

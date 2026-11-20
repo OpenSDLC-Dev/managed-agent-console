@@ -9,7 +9,7 @@ date. What ships from these facts is `src/app/globals.css`.
 
 Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
 
-On desktop the reference opens a group's default page and submenu together. After returning to all sections it shows the current page under its group. Reopening that group keeps the current page. The console uses the first available destination in each group as its landing page. Browser Back and Forward restore the page and its submenu.
+On desktop the reference opens a group's default page and submenu together. After returning to all sections it shows the current page beside its group. Reopening that group keeps the current page. The console uses the first available destination in each group as its landing page. Browser Back and Forward restore the page and its submenu.
 
 The full submenu header returns to all sections, keeps the current page open and restores focus to its group. On narrow screens the header menu opens full width and contains Documentation. A group selection opens its submenu. A destination selection or Escape closes the menu. Reopening starts from the current page. Opening and dismissing the menu preserves the page's scroll position. The desktop compact rail retains its flyouts for self-hosted deployments.
 
