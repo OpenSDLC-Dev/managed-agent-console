@@ -41,9 +41,11 @@ it("probes the connection with the account panel closed and shows account action
     </QueryClientProvider>,
   );
 
-  const trigger = await screen.findByRole("button", { name: "Account menu" });
+  const trigger = await screen.findByRole("button", {
+    name: "Stub Operator admin, account menu",
+  });
   await screen.findByTitle("Platform Connected");
-  expect(trigger).toHaveAccessibleDescription(/Stub Operator, admin/);
+  expect(trigger).toHaveAccessibleDescription("Platform Connected");
   expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
 
   await user.click(trigger);

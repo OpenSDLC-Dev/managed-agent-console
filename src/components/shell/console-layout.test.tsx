@@ -208,8 +208,8 @@ it("probe: actual layout prevents A-private population before a held initial 503
     );
   });
   expect(
-    await screen.findByRole("button", { name: "Account menu" }),
-  ).toHaveAccessibleDescription(/Actor B/);
+    await screen.findByRole("button", { name: /account menu/i }),
+  ).toHaveAccessibleName(/Actor B/);
   await waitFor(() =>
     expect(screen.getByTestId("error-state")).toHaveAttribute(
       "data-denied",
@@ -290,8 +290,8 @@ it("keeps same-id metadata updates but departs exactly once for a later differen
   await refresh();
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Account menu" }),
-    ).toHaveAccessibleDescription(/Renamed A/),
+      screen.getByRole("button", { name: /account menu/i }),
+    ).toHaveAccessibleName(/Renamed A/),
   );
   expect(mounts).toBe(1);
   expect(assign).not.toHaveBeenCalled();
@@ -353,11 +353,11 @@ it.each([false, true])(
       );
       await screen.findByText("Sensitive A row");
       expect(
-        await screen.findByRole("button", { name: "Account menu" }),
-      ).toHaveAccessibleDescription(/Actor A/);
+        await screen.findByRole("button", { name: /account menu/i }),
+      ).toHaveAccessibleName(/Actor A/);
       expect(mounts).toBe(1);
       const client = state.client;
-      fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+      fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
       fireEvent.click(screen.getByTestId("sign-out"));
       await waitFor(() =>
         expect(fetcher).toHaveBeenCalledWith(
@@ -433,7 +433,7 @@ it("keeps the private console offscreen until a sign-out retry is confirmed", as
     </ConsoleLayout>,
   );
   await screen.findByTestId("private-page");
-  fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+  fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
   fireEvent.click(screen.getByTestId("sign-out"));
   const retry = await screen.findByRole("button", { name: "Retry sign out" });
   expect(screen.queryByTestId("private-page")).toBeNull();
@@ -454,10 +454,10 @@ it("offers a fresh console when the active account changes during sign-out", asy
   );
   await screen.findByTestId("private-page");
   expect(
-    await screen.findByRole("button", { name: "Account menu" }),
-  ).toHaveAccessibleDescription(/Actor A/);
+    await screen.findByRole("button", { name: /account menu/i }),
+  ).toHaveAccessibleName(/Actor A/);
   actor = accountB;
-  fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
+  fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
   fireEvent.click(screen.getByTestId("sign-out"));
   const reopen = await screen.findByRole("button", { name: "Reopen console" });
   expect(screen.getByRole("alert")).toHaveTextContent(

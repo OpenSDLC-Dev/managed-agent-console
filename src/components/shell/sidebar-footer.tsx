@@ -23,8 +23,8 @@ export function SidebarFooter({ version }: { version: React.ReactNode }) {
     <div className="p-2 group-data-[sidebar-state=collapsed]/sidebar:px-1.5">
       <Popover.Root>
         <Popover.Trigger
-          aria-label="Account menu"
-          aria-description={`${label}, ${data.role}. ${connection.label}`}
+          aria-label={`${label} ${data.role}, account menu`}
+          aria-description={connection.label}
           title="Account menu"
           className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent group-data-[sidebar-state=collapsed]/sidebar:h-9 group-data-[sidebar-state=collapsed]/sidebar:justify-center group-data-[sidebar-state=collapsed]/sidebar:px-0"
         >
