@@ -122,10 +122,9 @@ test("navigation preferences survive reload while viewport changes keep the page
   });
   await expect(resources).toHaveAttribute("aria-expanded", "false");
   await resources.click();
+  await page.reload();
   await expect(resources).toHaveAttribute("aria-expanded", "true");
   await resources.click();
-  await page.reload();
-  await expect(resources).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.reload();
   await expect(page.locator("aside")).toHaveAttribute(

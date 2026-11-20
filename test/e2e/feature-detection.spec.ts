@@ -81,6 +81,7 @@ test("its nested routes stand down too, not just its list page", async ({
 test("a served deployment keeps every surface", async ({ page }) => {
   await signIn(page);
   const nav = page.locator("nav");
+  await nav.getByRole("button", { name: "Resources", exact: true }).click();
   for (const surface of [
     "agents",
     "sessions",

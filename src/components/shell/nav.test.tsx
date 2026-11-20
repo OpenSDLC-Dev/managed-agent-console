@@ -475,6 +475,7 @@ it("opens Resources by default only on a resource route", () => {
 });
 
 it("restores a collapsed group after remount", async () => {
+  navState.pathname = "/files";
   const user = userEvent.setup();
   const first = renderNav();
   await user.click(groupHeader("Resources")!);
@@ -482,6 +483,7 @@ it("restores a collapsed group after remount", async () => {
   first.unmount();
   renderNav();
   expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("false");
+  expect(groupHeader("Resources")?.getAttribute("data-active")).toBe("true");
   expect(link("Files")).toBeNull();
   await user.click(groupHeader("Resources")!);
   expect(link("Files")).not.toBeNull();
