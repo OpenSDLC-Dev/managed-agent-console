@@ -218,7 +218,10 @@ test("the console connects to the real platform and lists real agents", async ({
 
   await signIn(page);
   await page.goto("/agents");
-  await expect(page.getByText("Platform Connected")).toBeVisible();
+  await expect(page.getByTestId("connection-dot")).toHaveAttribute(
+    "data-state",
+    "up",
+  );
   await expect(
     page.locator("tbody tr").filter({ hasText: name }),
   ).toBeVisible();
@@ -329,6 +332,7 @@ test("sessions filter by agent server-side; created presets bound real lists", a
   }
 
   await signIn(page);
+  await page.locator('[data-nav-group="Agents"]').click();
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
 
   // Server-side agent filter: A's session stays, B's goes.

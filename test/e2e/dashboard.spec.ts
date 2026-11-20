@@ -44,29 +44,46 @@ test("dashboard stays centered and its compact navigation remains usable", async
     page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
   ).toHaveAttribute("data-active", "true");
   await expect(
-    page.getByRole("navigation").getByRole("link", { name: "API Keys" }),
+    page.getByRole("navigation").locator('[data-nav-group="Keys"]'),
   ).toHaveAttribute("data-active", "false");
-  await page.getByRole("button", { name: "Search Console… Ctrl K" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  const header = page.locator("[data-console-header]");
+  const search = header.getByRole("button", { name: /^Search Console/ });
+  const headerBounds = await header.boundingBox();
+  const searchBounds = await search.boundingBox();
+  expect(searchBounds!.width).toBe(448);
+  expect(searchBounds!.height).toBe(28);
+  expect(searchBounds!.x + searchBounds!.width / 2).toBeCloseTo(
+    headerBounds!.x + headerBounds!.width / 2,
+    0,
+  );
+  await search.click();
+  const palette = page.getByRole("dialog", { name: "Command palette" });
+  await expect(palette).toBeVisible();
+  await expect(palette).toHaveCSS("max-width", "672px");
+  await expect(palette).toHaveCSS("top", "135px");
+  await expect(
+    palette.getByRole("combobox", { name: "Search pages and resources" }),
+  ).toBeFocused();
   await page.keyboard.press("Escape");
-  const managed = page
+  const agents = page
     .getByRole("navigation")
-    .getByRole("button", { name: "Managed Agents" });
-  await managed.click();
+    .locator('[data-nav-group="Agents"]');
+  await agents.click();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
     "collapsed",
   );
-  const group = page.getByRole("dialog", { name: "Managed Agents" });
+  const group = page.getByRole("dialog", { name: "Agents", exact: true });
   await expect(
     group.getByRole("link", { name: "Agents", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(managed).toBeFocused();
-  await managed.click();
+  await expect(agents).toBeFocused();
+  await agents.click();
   await group.getByRole("link", { name: "Agents", exact: true }).click();
   await expect(group).not.toBeVisible();
   await expect(page).toHaveURL(/\/agents$/);
+  await expect(agents).toHaveAttribute("data-active", "true");
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Dashboard" })
@@ -84,6 +101,11 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     "data-sidebar-state",
     "collapsed",
   );
+  await expect(
+    page
+      .locator("[data-console-header]")
+      .getByRole("button", { name: /^Search Console/ }),
+  ).toHaveCSS("width", "32px");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -95,8 +117,51 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   }
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  await expect(page.locator("aside")).toBeHidden();
+  const scrollOffset = await page.evaluate(() => {
+    window.scrollTo(0, 300);
+    return window.scrollY;
+  });
+  expect(scrollOffset).toBeGreaterThan(0);
+  await expect(menu).toBeInViewport();
+  const menuBounds = (await menu.boundingBox())!;
+  await page.mouse.click(
+    menuBounds.x + menuBounds.width / 2,
+    menuBounds.y + menuBounds.height / 2,
+  );
+  const documentation = page.getByRole("link", {
+    name: "Platform documentation",
+  });
+  await expect(documentation).toBeInViewport();
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
+  const documentationBounds = (await documentation.boundingBox())!;
+  await page.mouse.move(
+    documentationBounds.x + documentationBounds.width / 2,
+    documentationBounds.y + documentationBounds.height / 2,
+  );
+  await page.mouse.wheel(0, 300);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
+  await menu.click();
   await expect(page.getByRole("main")).not.toBeVisible();
+  await page.locator('[data-nav-group="Resources"]').click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("aside")).toBeHidden();
+  await menu.click();
+  await expect(page.getByRole("navigation")).toHaveAttribute(
+    "data-nav-view",
+    "root",
+  );
+  await page.locator('[data-nav-group="Resources"]').click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Files" })
@@ -107,17 +172,62 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     "collapsed",
   );
   await expect(page.getByRole("main")).toBeVisible();
+  await menu.click();
+  const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(
+    drawer.getByRole("link", { name: "Platform documentation" }),
+  ).toBeVisible();
+  await drawer.getByRole("link", { name: "Files", exact: true }).focus();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(menu).toBeFocused();
 });
 
-test("navigation preferences survive reload while viewport changes keep the page reachable", async ({
+test("submenus return to all sections and sidebar width survives reload", async ({
   page,
 }) => {
   await signIn(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const build = page.getByRole("button", { name: "Build", exact: true });
-  await build.click();
-  await page.reload();
-  await expect(build).toHaveAttribute("aria-expanded", "false");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await nav.locator('[data-nav-group="Resources"]').click();
+  await expect(nav).toHaveAttribute("data-nav-view", "Resources");
+  await expect(page).toHaveURL(/\/files$/);
+  await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+  await expect(
+    nav.getByRole("link", { name: "Files", exact: true }),
+  ).toBeVisible();
+  await nav.getByRole("link", { name: "Skills", exact: true }).click();
+  await expect(page).toHaveURL(/\/skills$/);
+  await expect(
+    nav.getByRole("link", { name: "Skills", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.goBack();
+  await expect(
+    nav.getByRole("link", { name: "Files", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.goForward();
+  await expect(
+    nav.getByRole("link", { name: "Skills", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await nav
+    .getByRole("button", { name: "Back to all sections" })
+    .getByText("Resources", { exact: true })
+    .click();
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await expect(page).toHaveURL(/\/skills$/);
+  const resources = nav.locator('[data-nav-group="Resources"]');
+  await expect(resources).toHaveAccessibleName("Resources Skills");
+  await expect(resources).toBeFocused();
+  await resources.press("Enter");
+  await expect(page).toHaveURL(/\/skills$/);
+  await nav
+    .getByRole("button", { name: "Back to all sections" })
+    .locator("svg")
+    .click();
+  await expect(resources).toBeFocused();
+  await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.reload();
   await expect(page.locator("aside")).toHaveAttribute(
@@ -125,7 +235,7 @@ test("navigation preferences survive reload while viewport changes keep the page
     "collapsed",
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await expect(page.getByRole("main")).not.toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.locator("aside")).toHaveAttribute(
@@ -134,13 +244,14 @@ test("navigation preferences survive reload while viewport changes keep the page
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("main")).toBeVisible();
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.locator('[data-nav-group="Agents"]').click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Agents", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("main")).toBeVisible();
@@ -181,7 +292,7 @@ test("exact Agent lookup opens archived records, exposes missing IDs and support
   );
   await page.getByRole("link", { name: "Agents", exact: true }).last().click();
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
 });
 

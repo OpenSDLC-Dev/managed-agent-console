@@ -1,6 +1,13 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useLeaveConfirmation } from "./unsaved-changes";
 import { useRouter } from "next/navigation";
 import {
@@ -257,7 +264,11 @@ function PaletteResults({
   }, [clamped]);
 
   return (
-    <div id={listId} role="listbox" className="max-h-72 overflow-y-auto pb-1">
+    <div
+      id={listId}
+      role="listbox"
+      className="max-h-[min(28rem,60dvh)] overflow-y-auto pb-1"
+    >
       {items.length === 0 && (
         <p className="px-3 py-6 text-center text-sm text-muted-foreground">
           No matches in the loaded lists.
@@ -305,7 +316,7 @@ function PaletteResults({
   );
 }
 
-/** Ctrl+K resource search: sidebar trigger + global-shortcut dialog. */
+/** Header trigger and keyboard access to pages and resource lists. */
 export function CommandPalette({
   compact = false,
   onNavigate,
@@ -315,6 +326,12 @@ export function CommandPalette({
 }) {
   const router = useRouter();
   const leave = useLeaveConfirmation();
+  const isMac = useSyncExternalStore(
+    () => () => {},
+    () => navigator.platform.startsWith("Mac"),
+    () => false,
+  );
+  const shortcutModifier = isMac ? "⌘" : "Ctrl";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -352,34 +369,52 @@ export function CommandPalette({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Search Console… Ctrl K"
-        title={compact ? "Search Console… Ctrl K" : undefined}
+        aria-label={
+          compact ? "Search Console" : `Search Console… ${shortcutModifier} K`
+        }
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Meta+K Control+K"
+        title={compact ? "Search Console" : undefined}
         className={cn(
-          "mx-2 flex h-8 shrink-0 items-center gap-2 rounded-lg border bg-background px-2 text-sm text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-          compact && "justify-center border-transparent px-0",
+          "flex items-center gap-2 rounded-md border bg-background text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+          compact
+            ? "size-8 justify-center border-transparent"
+            : "h-7 w-full px-2.5",
         )}
       >
-        <Search className="size-4" strokeWidth={1.75} />
+        <Search className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
         {!compact && (
           <>
-            Search Console…
-            <kbd className="ml-auto rounded border px-1 font-mono text-[10px]">
-              Ctrl K
+            <span className="truncate">Search Console…</span>{" "}
+            <kbd
+              aria-hidden
+              className="ml-auto flex shrink-0 gap-0.5 font-mono text-[11px] [&>span]:rounded-sm [&>span]:border [&>span]:px-1 [&>span]:leading-4"
+            >
+              <span>{shortcutModifier}</span> <span>K</span>
             </kbd>
           </>
         )}
       </button>
       <Dialog open={open} onOpenChange={reset}>
-        <DialogContent className="gap-0 p-0" aria-describedby={undefined}>
-          <DialogTitle className="sr-only">Search resources</DialogTitle>
-          <div className="border-b p-2">
+        <DialogContent
+          className="top-[max(1rem,15dvh)] translate-y-0 gap-0 p-0 sm:max-w-[42rem]"
+          aria-describedby={undefined}
+        >
+          <DialogTitle className="sr-only">Command palette</DialogTitle>
+          <div className="flex items-center gap-2 border-b py-2 pr-11 pl-3">
+            <Search
+              className="size-4 shrink-0 text-muted-foreground"
+              strokeWidth={1.75}
+              aria-hidden
+            />
             <Input
               autoFocus
               role="combobox"
+              aria-label="Search pages and resources"
               aria-expanded="true"
               aria-controls={listId}
               aria-activedescendant={`${listId}-${active}`}
-              placeholder="Search agents, sessions, environments…"
+              placeholder="Search pages and resources…"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);

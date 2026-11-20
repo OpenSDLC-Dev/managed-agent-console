@@ -85,8 +85,10 @@ test("inspector navigation and resizing work with mouse and keyboard", async ({
   await expect(resize).toHaveAttribute("aria-valuenow", "560");
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileBounds = await panel.boundingBox();
+  const header = await page.locator("[data-console-header]").boundingBox();
   expect(mobileBounds!.x).toBeGreaterThanOrEqual(48);
   expect(mobileBounds!.x + mobileBounds!.width).toBeLessThanOrEqual(390);
+  expect(mobileBounds!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
   await expect(
     panel.getByRole("button", { name: "Close details" }),
   ).toBeInViewport();

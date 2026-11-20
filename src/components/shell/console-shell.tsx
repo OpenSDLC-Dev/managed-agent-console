@@ -1,8 +1,21 @@
 "use client";
 
-import { useContext, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useContext,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
-import { BookOpen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  BookOpen,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Terminal,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
 import { useNavPreference } from "./nav-preference";
@@ -20,21 +33,15 @@ function subscribeViewport(callback: () => void) {
 
 /**
  * Keep navigation and its footer in the viewport while the page scrolls.
- *
- * `version` is a slot rather than an import so the version stays a server
- * component: this shell is client code, and importing package.json here would
- * ship the whole manifest to the browser.
  */
 export function ConsoleShell({
   children,
   footer,
-  version,
 }: {
   children: React.ReactNode;
   footer: React.ReactNode;
-  version?: React.ReactNode;
 }) {
-  const playground = playgroundOnly(useContext(ConsoleSessionContext)?.data);
+  const limited = playgroundOnly(useContext(ConsoleSessionContext)?.data);
   const narrow = useSyncExternalStore(
     subscribeViewport,
     () => window.matchMedia(NARROW).matches,
@@ -54,99 +61,129 @@ export function ConsoleShell({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const close = () => {
     setExpanded(false);
-    toggleRef.current?.focus();
+    toggleRef.current?.focus({ preventScroll: true });
+  };
+  const mobileMenuOpen = narrow && open;
+
+  const closeOnEscape = (event: KeyboardEvent<HTMLElement>) => {
+    if (
+      open &&
+      event.key === "Escape" &&
+      !event.defaultPrevented &&
+      event.currentTarget.contains(event.target as Node)
+    ) {
+      event.preventDefault();
+      close();
+    }
   };
 
+  const desktopToggle = open ? PanelLeftClose : PanelLeftOpen;
+  const ToggleIcon = narrow ? (open ? X : Menu) : desktopToggle;
+  const desktopLabel = open ? "Collapse sidebar" : "Expand sidebar";
+  const toggle = (
+    <Button
+      ref={toggleRef}
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "size-7 shrink-0 text-muted-foreground",
+        narrow && "col-start-3",
+      )}
+      aria-label={narrow ? (open ? "Close menu" : "Menu") : desktopLabel}
+      aria-expanded={open}
+      aria-controls="console-navigation"
+      onClick={() => setExpanded(!open)}
+    >
+      <ToggleIcon />
+    </Button>
+  );
+  const documentation = (
+    <a
+      href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Platform documentation"
+      className={cn(
+        "flex items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+        narrow ? "mx-2 h-9" : "col-start-3 h-7 justify-self-end",
+      )}
+    >
+      <BookOpen aria-hidden className="size-4" />
+      Documentation
+    </a>
+  );
+
   return (
-    <div className="flex min-h-screen">
-      <aside
-        data-sidebar-state={open ? "expanded" : "collapsed"}
-        onKeyDown={(event) => {
-          if (
-            event.key === "Escape" &&
-            open &&
-            !event.defaultPrevented &&
-            event.currentTarget.contains(event.target as Node)
-          ) {
-            event.preventDefault();
-            close();
-          }
-        }}
-        className={cn(
-          "sticky top-0 flex h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
-          open ? "w-64" : "w-12",
-          open && narrow && "w-full",
-        )}
+    <div className="min-h-dvh">
+      <header
+        data-console-header
+        onKeyDown={closeOnEscape}
+        className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"
       >
-        <div
-          className={cn(
-            "flex h-14 shrink-0 items-center",
-            open ? "px-4" : "justify-center",
+        <div className="flex min-w-0 max-w-[14.5rem] items-center gap-2">
+          {(open || narrow) && (
+            <Link
+              href={limited ? PLAYGROUND_ROUTE : LANDING_ROUTE}
+              onClick={() => {
+                if (narrow) close();
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-sm font-serif text-xl leading-none"
+            >
+              <Terminal aria-hidden className="size-5 shrink-0" />
+              <span className="truncate">Agent Console</span>
+            </Link>
           )}
-        >
-          {open && (
-            <div className="min-w-0 flex-1 leading-tight">
-              <Link
-                href={playground ? PLAYGROUND_ROUTE : LANDING_ROUTE}
-                onClick={() => {
-                  if (narrow) close();
-                }}
-                className="font-serif text-lg font-medium"
-              >
-                Agent Console
-              </Link>
-              {version}
-            </div>
-          )}
-          <Button
-            ref={toggleRef}
-            variant="ghost"
-            size="icon"
-            aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-            aria-expanded={open}
-            aria-controls="console-navigation"
-            onClick={() => setExpanded(!open)}
-          >
-            {open ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
+          {!narrow && toggle}
         </div>
-        {!playground && (
+        {!limited && (
           <CommandPalette
-            compact={!open}
+            compact={narrow}
             onNavigate={narrow ? close : undefined}
           />
         )}
-        <div
-          id="console-navigation"
-          className="min-h-0 flex-1 overflow-y-auto pb-3"
-          onClick={(event) => {
-            if (narrow && (event.target as Element).closest("a")) close();
-          }}
+        {narrow ? toggle : documentation}
+      </header>
+      <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">
+        <aside
+          data-sidebar-state={open ? "expanded" : "collapsed"}
+          data-console-menu-open={mobileMenuOpen || undefined}
+          role={mobileMenuOpen ? "dialog" : undefined}
+          aria-label={mobileMenuOpen ? "Menu" : undefined}
+          onKeyDown={closeOnEscape}
+          className={cn(
+            "group/sidebar top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+            mobileMenuOpen
+              ? "fixed inset-x-0 z-20 w-full"
+              : open
+                ? "sticky w-64"
+                : "sticky w-12",
+            narrow && !open && "hidden",
+          )}
         >
-          <Nav compact={!open} />
-        </div>
-        <div hidden={!open} className="shrink-0">
-          {footer}
-        </div>
-        {!open && (
-          <a
-            href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Platform documentation"
-            title="Platform documentation"
-            className="mx-auto my-3 rounded-lg p-2 hover:bg-sidebar-accent"
+          <div
+            id="console-navigation"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2"
+            onClick={(event) => {
+              if (narrow && (event.target as Element).closest("a")) close();
+            }}
           >
-            <BookOpen className="size-4" />
-          </a>
-        )}
-      </aside>
-      <main
-        hidden={open && narrow}
-        className="min-w-0 flex-1 px-4 py-6 sm:px-8"
-      >
-        {children}
-      </main>
+            {(!narrow || open) && <Nav compact={!open} mobile={narrow} />}
+          </div>
+          <div className="shrink-0">
+            {narrow && documentation}
+            {footer}
+          </div>
+        </aside>
+        <main
+          inert={mobileMenuOpen}
+          className={cn(
+            "min-w-0 flex-1 px-4 py-6 sm:px-8",
+            mobileMenuOpen && "invisible",
+          )}
+        >
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

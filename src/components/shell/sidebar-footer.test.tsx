@@ -1,79 +1,58 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { resetSignedOutBounceForTests } from "@/lib/identity/signed-out";
+import { ConsoleSessionBoundary } from "./console-session";
 import { SidebarFooter } from "./sidebar-footer";
 
-/**
- * Both blocks poll on mount, so both routes are answered: the console session
- * behind `SignedInAs`, and the platform probe behind `ConnectionStatus`. The
- * session status is what decides which deployment this is.
- */
-const serve = (session: { body: unknown; status: number }) =>
-  vi.fn(async (input: RequestInfo | URL) =>
-    String(input).includes("/api/auth/session")
-      ? new Response(JSON.stringify(session.body), { status: session.status })
-      : new Response(JSON.stringify({ data: [] })),
-  );
-
-function renderFooter() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={client}>
-      <SidebarFooter />
-    </QueryClientProvider>,
-  );
-}
-
-/**
- * jsdom computes no Tailwind, so the rule is counted as the class token that
- * draws it — `[class~=]` matches the whole token, not a prefix of one.
- */
-const rules = (container: HTMLElement) =>
-  container.querySelectorAll('[class~="border-t"]');
-
-beforeEach(() => {
-  resetSignedOutBounceForTests();
-});
-
+beforeEach(resetSignedOutBounceForTests);
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   resetSignedOutBounceForTests();
 });
 
-describe("SidebarFooter", () => {
-  // The defect this group exists to make impossible (#107): the rule was on
-  // each block, so a deployment with identity drew two of them and a
-  // password-gated one drew one. Only the configuration nobody could shoot
-  // until #99 showed it.
-  it("draws one rule for the group where identity is configured, not one per block", async () => {
-    vi.stubGlobal(
-      "fetch",
-      serve({
-        body: { signed_in: true, name: "Stub Operator", email: "op@x.test" },
-        status: 200,
-      }),
-    );
-    const { container } = renderFooter();
-    await screen.findByText("Stub Operator");
-    await screen.findByText("Platform Connected");
-
-    expect(rules(container)).toHaveLength(1);
-    // And it is the group's, not the first block's: it wraps both of them.
-    const rule = rules(container)[0];
-    expect(rule.contains(screen.getByTestId("signed-in-as"))).toBe(true);
-    expect(rule.contains(screen.getByTestId("connection-dot"))).toBe(true);
+it("probes the connection with the account panel closed and shows account actions on demand", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes("/api/auth/session")
+        ? Response.json({
+            signed_in: true,
+            id: "user_operator",
+            name: "Stub Operator",
+            email: "op@x.test",
+            role: "admin",
+          })
+        : Response.json({ data: [] }),
+    ),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
+  const user = userEvent.setup();
+  render(
+    <QueryClientProvider client={client}>
+      <ConsoleSessionBoundary>
+        <SidebarFooter version="v9.9.9" />
+      </ConsoleSessionBoundary>
+    </QueryClientProvider>,
+  );
 
-  it("draws that same one rule on a deployment without identity", async () => {
-    vi.stubGlobal("fetch", serve({ body: { signed_in: false }, status: 404 }));
-    const { container } = renderFooter();
-    await screen.findByText("Platform Connected");
-
-    expect(screen.queryByTestId("signed-in-as")).toBeNull();
-    expect(rules(container)).toHaveLength(1);
+  const trigger = await screen.findByRole("button", {
+    name: "Stub Operator admin, account menu",
   });
+  await screen.findByTitle("Platform Connected");
+  expect(trigger).toHaveTextContent("Stub Operator admin");
+  expect(trigger).toHaveAccessibleDescription("Platform Connected");
+  expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+
+  await user.click(trigger);
+  const panel = screen.getByRole("dialog", { name: "Account settings" });
+  expect(within(panel).getByText("op@x.test")).toBeVisible();
+  expect(within(panel).getByText("Platform Connected")).toBeVisible();
+  expect(within(panel).getByText("v9.9.9")).toBeVisible();
+  expect(within(panel).getByRole("button", { name: "Sign out" })).toBeVisible();
 });

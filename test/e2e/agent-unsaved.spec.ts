@@ -8,6 +8,24 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+test("reopening the active group preserves a draft and the raw page query", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new?filter=two%20words");
+  const url = page.url();
+  const name = page.getByLabel("Name", { exact: true });
+  await name.fill("In progress");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await nav.locator('[data-nav-group="Agents"]').click();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
+  await expect(page).toHaveURL(url);
+  await expect(name).toHaveValue("In progress");
+  await expect(
+    page.getByRole("dialog", { name: "Unsaved changes" }),
+  ).toBeHidden();
+});
+
 test("agent modal retains drafts on Stay and discards only on Leave", async ({
   page,
 }) => {
@@ -116,6 +134,15 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .getByRole("button", { name: "configuration", exact: true })
     .click();
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const sidebarBack = nav.getByRole("button", { name: "Back to all sections" });
+  await sidebarBack.click();
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await page.goBack();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
+  await sidebarBack.click();
+  await page.goForward();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByLabel("Raw agent config").fill("{");
   await page.evaluate(() => history.back());
@@ -134,4 +161,27 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .click();
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/memory-stores$/);
+});
+
+test("confirming a dirty draft's group navigation focuses its submenu", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new");
+  const name = page.getByLabel("Name", { exact: true });
+  await name.fill("Keep or leave");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  const resources = nav.locator('[data-nav-group="Resources"]');
+  await expect(resources).toHaveAttribute("href", "/files");
+  const prompt = page.getByRole("dialog", { name: "Unsaved changes" });
+  await resources.click();
+  await prompt.getByRole("button", { name: "Stay" }).click();
+  await expect(name).toHaveValue("Keep or leave");
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await resources.click();
+  await prompt.getByRole("button", { name: "Leave" }).click();
+  await expect(page).toHaveURL(/\/files$/);
+  await expect(
+    nav.getByRole("button", { name: "Back to all sections" }),
+  ).toBeFocused();
 });

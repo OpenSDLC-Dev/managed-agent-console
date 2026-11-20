@@ -2,21 +2,18 @@ import {
   Bot,
   Boxes,
   ChartColumn,
-  ChartLine,
   Cpu,
   Database,
   FileText,
-  Hammer,
   House,
   KeyRound,
-  // Not `Lock`: that name collides with the DOM's own global `Lock`, and the
-  // import loses — a type error whose message names neither the icon nor lucide.
   KeySquare,
   MessagesSquare,
   Moon,
   Network,
   Plug,
   Rocket,
+  Settings,
   Sparkles,
   Waypoints,
   Users,
@@ -26,172 +23,117 @@ import {
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE } from "./routes";
 
-/**
- * The console's navigation, in one place.
- *
- * It lives here rather than in `nav.tsx` because two surfaces render it — the
- * sidebar and the command palette's "Go to" section — and each used to carry
- * its own copy of the order and the icons. Two copies of an order is an order
- * that will disagree with itself.
- *
- * Shape and order are the reference console's, measured in Chrome on
- * 2026-08-17: `Dashboard`, `API keys`, then the `Build` group, then
- * `Managed Agents`, with the reference's own order inside each group.
- * `Model Gateway` has no counterpart there (plan 10): it sits before
- * `Managed Agents` because an agent cannot run until the gateway routes its
- * model.
- *
- * An icon here is **data, not a decision to draw one**. The reference puts an
- * icon on top-level rows and on group headers and none on the rows inside a
- * group, so the sidebar skips a nested entry's icon — but the palette lists
- * that entry as a search result and the dashboard gives it a card, and both
- * want it. One icon per destination, wherever it is drawn.
- */
-
-/** A console-local page. No platform route behind it, so never probed. */
-export interface LocalEntry {
-  kind: "local";
-  label: string;
-  href: string;
-  icon: LucideIcon;
-}
-
-/** A platform surface. Hidden on confirmed absence or a refused collection read. */
 export interface SurfaceEntry {
-  kind: "surface";
   surface: Surface;
   icon: LucideIcon;
 }
 
-/** A titled group. Its header carries the icon; its children do not. */
 export interface GroupEntry {
-  kind: "group";
   label: string;
   icon: LucideIcon;
   items: SurfaceEntry[];
 }
 
-export type NavEntry = LocalEntry | SurfaceEntry | GroupEntry;
-
 const surfaceEntry = (surface: Surface, icon: LucideIcon): SurfaceEntry => ({
-  kind: "surface",
   surface,
   icon,
 });
 
-export const NAV: NavEntry[] = [
-  { kind: "local", label: "Dashboard", href: LANDING_ROUTE, icon: House },
+export const DASHBOARD_LINK = {
+  key: `nav-${LANDING_ROUTE}`,
+  label: "Dashboard",
+  href: LANDING_ROUTE,
+  icon: House,
+};
+
+export const PLAYGROUND_LINK = {
+  key: `nav-${PLAYGROUND_ROUTE}`,
+  label: "Playground",
+  href: PLAYGROUND_ROUTE,
+  icon: MessagesSquare,
+};
+
+// The sidebar, Dashboard and command palette share the same destination order.
+export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
   {
-    kind: "local",
-    label: "Playground",
-    href: PLAYGROUND_ROUTE,
-    icon: MessagesSquare,
-  },
-  // Top-level, as it is today and as the reference has it — but second now
-  // rather than last, which is the position the reference gives it. Still not
-  // filed under a Settings area: a self-hosted console's whole settings story
-  // is its environment file, so that section would hold exactly one item
-  // (plan 07 D2).
-  //
-  // `KeySquare` and not the round-bowed key the reference draws, because
-  // `KeyRound` is already Credential vaults' and one icon may mean one thing.
-  surfaceEntry("api-keys", KeySquare),
-  {
-    kind: "group",
-    label: "Organization",
-    icon: Users,
-    items: [
-      surfaceEntry("members", Users),
-      surfaceEntry("service-accounts", UserRoundCog),
+    heading: "Build",
+    groups: [
+      {
+        label: "Agents",
+        icon: Waypoints,
+        items: [
+          surfaceEntry("agents", Bot),
+          surfaceEntry("sessions", MessagesSquare),
+          surfaceEntry("deployments", Rocket),
+          surfaceEntry("environments", Boxes),
+          surfaceEntry("memory-stores", Database),
+          surfaceEntry("vaults", KeyRound),
+          surfaceEntry("dreams", Moon),
+        ],
+      },
+      {
+        label: "Resources",
+        icon: Boxes,
+        items: [
+          surfaceEntry("files", FileText),
+          surfaceEntry("skills", Sparkles),
+        ],
+      },
     ],
   },
   {
-    kind: "group",
-    label: "Build",
-    icon: Hammer,
-    items: [surfaceEntry("files", FileText), surfaceEntry("skills", Sparkles)],
-  },
-  {
-    kind: "group",
-    label: "Model Gateway",
-    icon: Network,
-    items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
-  },
-  {
-    kind: "group",
-    label: "Managed Agents",
-    icon: Waypoints,
-    items: [
-      surfaceEntry("agents", Bot),
-      surfaceEntry("sessions", MessagesSquare),
-      surfaceEntry("deployments", Rocket),
-      surfaceEntry("environments", Boxes),
-      surfaceEntry("vaults", KeyRound),
-      surfaceEntry("memory-stores", Database),
-      surfaceEntry("dreams", Moon),
+    heading: "Organization",
+    groups: [
+      {
+        label: "Keys",
+        icon: KeySquare,
+        items: [
+          surfaceEntry("api-keys", KeySquare),
+          surfaceEntry("service-accounts", UserRoundCog),
+        ],
+      },
+      {
+        label: "Spending & usage",
+        icon: ChartColumn,
+        items: [surfaceEntry("usage", ChartColumn)],
+      },
+      {
+        label: "Settings",
+        icon: Settings,
+        items: [surfaceEntry("members", Users)],
+      },
+      {
+        label: "Model Gateway",
+        icon: Network,
+        items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
+      },
     ],
-  },
-  // The reference files its usage pages under `Analytics`, right after
-  // `Managed Agents`, with `Usage` first (measured in Chrome 2026-10-16,
-  // #219). Its one item here is the gateway's, so a console without a gateway
-  // loses the whole group.
-  {
-    kind: "group",
-    label: "Analytics",
-    icon: ChartLine,
-    items: [surfaceEntry("usage", ChartColumn)],
   },
 ];
 
-/** Where a nav entry points. Groups are containers and have no destination. */
 export interface Destination {
   key: string;
   label: string;
   href: string;
   icon: LucideIcon;
-  /** Absent for a console-local page, which no probe can take away. */
   surface?: Surface;
 }
 
-/**
- * Every destination the nav reaches, flattened in nav order — what the command
- * palette lists and what the dashboard builds its cards from. A group
- * contributes its children and not itself.
- */
-export const NAV_DESTINATIONS: Destination[] = NAV.flatMap((entry) => {
-  if (entry.kind === "local")
-    return [
-      {
-        key: `nav-${entry.href}`,
-        label: entry.label,
-        href: entry.href,
-        icon: entry.icon,
-      },
-    ];
-  const items = entry.kind === "group" ? entry.items : [entry];
-  return items.map((item) => ({
-    key: `nav-${item.surface}`,
-    label: SURFACES[item.surface].label,
-    href: surfaceRoute(item.surface),
-    icon: item.icon,
-    surface: item.surface,
-  }));
-});
+export const DASHBOARD_SECTIONS = NAV_SECTIONS.map(({ heading, groups }) => ({
+  heading,
+  items: groups.flatMap(({ items }) => items),
+}));
 
-/**
- * The groups as the dashboard lists them: the nav's own order, with the
- * top-level entries gathered under a heading of their own so the landing page
- * and the sidebar cannot drift apart. `Dashboard` is dropped — a landing page
- * does not link to itself.
- */
-export const DASHBOARD_SECTIONS: { heading: string; items: SurfaceEntry[] }[] =
-  NAV.flatMap((entry) => {
-    if (entry.kind === "group")
-      return [{ heading: entry.label, items: entry.items }];
-    if (entry.kind === "surface")
-      // A heading the sidebar does not draw, because the sidebar has the
-      // sidebar's own affordance for "top level" — position. A grid of cards
-      // has none, so these would otherwise be a headless row above the rest.
-      return [{ heading: "Manage", items: [entry] }];
-    return [];
-  });
+export const NAV_DESTINATIONS: Destination[] = [
+  DASHBOARD_LINK,
+  PLAYGROUND_LINK,
+  ...DASHBOARD_SECTIONS.flatMap(({ items }) =>
+    items.map(({ icon, surface }) => ({
+      key: `nav-${surface}`,
+      label: SURFACES[surface].label,
+      href: surfaceRoute(surface),
+      icon,
+      surface,
+    })),
+  ),
+];

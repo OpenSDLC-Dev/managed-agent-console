@@ -3,151 +3,165 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
-import { useNavPreference } from "./nav-preference";
-import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { NAV, type GroupEntry, type NavEntry } from "@/lib/nav";
-import { PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
-import { ConsoleSessionContext } from "./console-session";
+import { usePathname, useRouter } from "next/navigation";
+import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import {
+  DASHBOARD_LINK,
+  NAV_SECTIONS,
+  PLAYGROUND_LINK,
+  type GroupEntry,
+} from "@/lib/nav";
+import {
+  isSurfaceVisible,
   SURFACES,
+  surfaceOfPath,
   surfaceRoute,
   useSurfaces,
-  isSurfaceVisible,
+  type Surface,
 } from "@/lib/platform/surfaces";
-import type { Surface } from "@/lib/platform/surfaces";
+import { cn } from "@/lib/utils";
+import { playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
+import { useLeaveConfirmation } from "./unsaved-changes";
 
-/** Shared by every row so the group header sits flush with its neighbours. */
-const ROW = "flex h-9 items-center gap-4 rounded-lg px-2 text-sm";
-
-/**
- * Whether a surface should be drawn. Unknown means shown: an item disappears
- * only once the platform has said it does not serve that surface (CLAUDE.md
- * principle 3).
- */
-type Available = (surface: Surface) => boolean;
+const ROW = "flex h-9 items-center gap-3.5 rounded-lg px-2.5 text-sm";
+const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
+const HIGHLIGHT = "bg-sidebar-accent font-medium";
+const HOVER = "hover:bg-sidebar-accent/60";
 
 function NavLink({
   href,
   label,
   icon: Icon,
   surface,
-  nested,
+  active,
   popup,
+  compact,
   onNavigate,
 }: {
   href: string;
   label: string;
-  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon?: LucideIcon;
   surface?: Surface;
-  nested?: boolean;
+  active: boolean;
   popup?: boolean;
+  compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
       onClick={onNavigate}
       data-surface={surface}
+      data-active={active}
       aria-current={active ? "page" : undefined}
+      aria-label={compact ? label : undefined}
+      title={compact ? label : undefined}
       className={cn(
-        ROW,
-        // Align nested labels with 8px padding + 16px icon + 16px gap.
-        nested && "pl-10",
+        compact ? COMPACT_ROW : ROW,
         popup && "h-8 px-2.5 py-1.5",
         "text-sidebar-foreground",
-        active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
+        active ? HIGHLIGHT : HOVER,
       )}
     >
-      {Icon ? (
-        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
-      ) : null}
-      {label}
+      {Icon && (
+        <Icon
+          className={cn("size-4", !compact && "text-muted-foreground")}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      )}
+      {!compact && label}
     </Link>
   );
 }
 
-function Group({
+function GroupControl({
   group,
-  available,
+  href,
+  current,
+  onOpen,
 }: {
   group: GroupEntry;
-  available: Available;
+  href?: string;
+  current?: string;
+  onOpen: () => void;
 }) {
-  const id = `nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`;
-  const [preference, setOpen] = useNavPreference(id);
-  const open = preference ?? true;
-  const items = group.items.filter((item) => available(item.surface));
-  // A group is its items. With none of them served there is nothing to title,
-  // and a header alone would advertise a section this deployment does not have.
-  if (items.length === 0) return null;
   const { icon: Icon } = group;
-  return (
-    <div className="flex flex-col gap-0.5">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-controls={id}
-        data-nav-group={group.label}
-        // Whether the group is open is derived state, so it is readable as an
-        // attribute and not only as a rotated chevron — the same contract
-        // `ConnectionStatus` carries and e2e already reads there. `aria-expanded`
-        // says it too, but for the assistive tree rather than for a test.
-        data-state={open ? "open" : "closed"}
-        className={cn(ROW, "text-muted-foreground hover:bg-sidebar-accent/60")}
-      >
-        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        {group.label}
-        <ChevronDown
-          className={cn(
-            "ml-auto size-3.5 transition-transform",
-            !open && "-rotate-90",
-          )}
-          strokeWidth={1.75}
-          aria-hidden
-        />
-      </button>
-      {/* Unmounted rather than hidden when closed: a collapsed group's links
-          should not be tabbable, and `hidden` on the container is one more
-          state to keep in step with aria-expanded. */}
-      {open ? (
-        <div id={id} className="flex flex-col gap-0.5">
-          {items.map((item) => (
-            <NavLink
-              key={item.surface}
-              nested
-              href={surfaceRoute(item.surface)}
-              label={SURFACES[item.surface].label}
-              surface={item.surface}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+  const props = {
+    "data-nav-group": group.label,
+    "data-active": !!current,
+    "aria-current": current ? ("page" as const) : undefined,
+    className: cn(
+      ROW,
+      current ? HIGHLIGHT : cn("text-muted-foreground", HOVER),
+    ),
+  };
+  const contents = (
+    <>
+      <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+      <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <span className="truncate">{group.label}</span>
+        {current && (
+          <>
+            {" "}
+            <span className="max-w-[55%] shrink-0 truncate text-xs font-normal text-muted-foreground">
+              {current}
+            </span>
+          </>
+        )}
+      </span>
+      <ChevronRight
+        className="size-3.5 shrink-0"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+    </>
+  );
+  return href ? (
+    <Link
+      {...props}
+      href={href}
+      prefetch={href === "#" ? false : undefined}
+      data-managed-leave
+      onNavigate={(event) => {
+        event.preventDefault();
+        onOpen();
+      }}
+    >
+      {contents}
+    </Link>
+  ) : (
+    <button {...props} type="button" onClick={onOpen}>
+      {contents}
+    </button>
   );
 }
 
 function CompactGroup({
   group,
-  available,
+  activeSurface,
 }: {
   group: GroupEntry;
-  available: Available;
+  activeSurface?: Surface;
 }) {
   const [open, setOpen] = useState(false);
+  const active = group.items.some(({ surface }) => surface === activeSurface);
   const { icon: Icon } = group;
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={group.label}
         title={group.label}
-        className="flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60"
+        data-nav-group={group.label}
+        data-active={active}
+        className={cn(
+          COMPACT_ROW,
+          "text-sidebar-foreground",
+          active ? HIGHLIGHT : HOVER,
+        )}
       >
-        <Icon className="size-4" strokeWidth={1.75} />
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
@@ -160,18 +174,17 @@ function CompactGroup({
             <Popover.Title className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </Popover.Title>
-            {group.items
-              .filter((item) => available(item.surface))
-              .map((item) => (
-                <NavLink
-                  key={item.surface}
-                  popup
-                  href={surfaceRoute(item.surface)}
-                  label={SURFACES[item.surface].label}
-                  surface={item.surface}
-                  onNavigate={() => setOpen(false)}
-                />
-              ))}
+            {group.items.map(({ surface }) => (
+              <NavLink
+                key={surface}
+                popup
+                href={surfaceRoute(surface)}
+                label={SURFACES[surface].label}
+                surface={surface}
+                active={surface === activeSurface}
+                onNavigate={() => setOpen(false)}
+              />
+            ))}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -179,113 +192,228 @@ function CompactGroup({
   );
 }
 
-function Entry({
-  entry,
-  available,
+export function Nav({
+  compact = false,
+  mobile = false,
 }: {
-  entry: NavEntry;
-  available: Available;
+  compact?: boolean;
+  mobile?: boolean;
 }) {
-  if (entry.kind === "local")
-    return <NavLink href={entry.href} label={entry.label} icon={entry.icon} />;
-  if (entry.kind === "surface")
-    return available(entry.surface) ? (
-      <NavLink
-        href={surfaceRoute(entry.surface)}
-        label={SURFACES[entry.surface].label}
-        icon={entry.icon}
-        surface={entry.surface}
-      />
-    ) : null;
-  return <Group group={entry} available={available} />;
-}
-
-export function Nav({ compact = false }: { compact?: boolean }) {
   const surfaces = useSurfaces();
   const session = useContext(ConsoleSessionContext)?.data;
-  const entries = NAV.filter((entry) => {
-    const playground =
-      entry.kind === "local" && entry.href === PLAYGROUND_ROUTE;
-    if (playgroundOnly(session)) return playground;
-    return !playground || session?.playground_access === true;
-  });
+  const limited = playgroundOnly(session);
   const pathname = usePathname();
-  // The list outgrows a laptop's height once every group is open, and the
-  // sidebar scrolls; the page you are on must not be the row below the fold.
-  // The compact rail has no such list, so expanding the sidebar brings the
-  // row in too.
+  const router = useRouter();
+  const { requestLeave } = useLeaveConfirmation();
+  const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
+  const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
+  const [selection, setSelection] = useState<{
+    pathname: string;
+    label: string | null;
+  } | null>(null);
+
+  // A URL change selects the destination's own navigation. Manual panel changes
+  // apply only to the current page and are independent of the sidebar width.
+  if (selection && selection.pathname !== pathname) setSelection(null);
+  const sections = NAV_SECTIONS.map(({ heading, groups }) => ({
+    heading,
+    groups: groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(({ surface }) =>
+          isSurfaceVisible(surfaces?.[surface], surface),
+        ),
+      }))
+      .filter(({ items }) => items.length > 0),
+  })).filter(({ groups }) => !limited && groups.length > 0);
+  const groups = sections.flatMap((section) => section.groups);
+  const routeGroup = groups.find(({ items }) =>
+    items.some(({ surface }) => surface === activeSurface),
+  );
+  const selectedLabel =
+    selection?.pathname === pathname ? selection.label : routeGroup?.label;
+  const panel = compact
+    ? undefined
+    : groups.find(({ label }) => label === selectedLabel);
+  const panelLabel = panel?.label;
+
   useEffect(() => {
+    const restoreRoutePanel = () => {
+      pendingFocus.current = null;
+      setSelection(null);
+    };
+    window.addEventListener("popstate", restoreRoutePanel);
+    return () => window.removeEventListener("popstate", restoreRoutePanel);
+  }, []);
+
+  useEffect(() => {
+    if (pendingFocus.current?.pathname !== pathname)
+      pendingFocus.current = null;
+  }, [pathname]);
+
+  useEffect(() => {
+    const focus = pendingFocus.current;
+    if (focus?.pathname === pathname) {
+      pendingFocus.current = null;
+      if (!compact) {
+        const target = panelLabel
+          ? nav.current?.querySelector<HTMLButtonElement>("[data-nav-back]")
+          : Array.from(
+              nav.current?.querySelectorAll<HTMLElement>("[data-nav-group]") ??
+                [],
+            ).find((row) => row.dataset.navGroup === focus.label);
+        if (target) {
+          target.focus();
+          return;
+        }
+      }
+    }
     nav.current
-      ?.querySelector("[aria-current=page]")
+      ?.querySelector('[aria-current="page"], button[data-active="true"]')
       ?.scrollIntoView?.({ block: "nearest" });
-  }, [pathname, surfaces, compact]);
-  const available: Available = (surface) =>
-    isSurfaceVisible(surfaces?.[surface], surface);
-  if (compact) {
-    return (
-      <nav
-        aria-label="Main navigation"
-        className="flex flex-col gap-1 px-1.5 pt-4"
-      >
-        {entries.map((entry) => {
-          if (entry.kind === "surface" && !available(entry.surface))
-            return null;
-          if (
-            entry.kind === "group" &&
-            !entry.items.some((item) => available(item.surface))
-          )
-            return null;
-          const { icon: Icon } = entry;
-          const label =
-            entry.kind === "surface"
-              ? SURFACES[entry.surface].label
-              : entry.label;
-          const className =
-            "flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60";
-          if (entry.kind === "group")
-            return (
-              <CompactGroup key={label} group={entry} available={available} />
-            );
-          const href =
-            entry.kind === "local" ? entry.href : surfaceRoute(entry.surface);
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={label}
-              href={href}
-              aria-label={label}
-              title={label}
-              data-active={active}
-              aria-current={active ? "page" : undefined}
-              className={cn(className, active && "bg-sidebar-accent")}
-            >
-              <Icon className="size-4" strokeWidth={1.75} />
-            </Link>
-          );
-        })}
-      </nav>
-    );
-  }
+  }, [pathname, surfaces, compact, panelLabel]);
+
+  const back = () => {
+    if (panelLabel) pendingFocus.current = { pathname, label: panelLabel };
+    setSelection({ pathname, label: null });
+  };
+
   return (
     <nav
       ref={nav}
       aria-label="Main navigation"
-      className="flex flex-col gap-1 px-3 pt-4"
+      data-nav-view={panelLabel ?? "root"}
+      onKeyDown={(event) => {
+        if (
+          !mobile &&
+          panel &&
+          event.key === "Escape" &&
+          !event.defaultPrevented
+        ) {
+          event.preventDefault();
+          back();
+        }
+      }}
+      className={cn("flex flex-col gap-4 pt-2", compact ? "px-1.5" : "px-2")}
     >
-      {entries.map((entry) => (
-        <Entry
-          key={
-            entry.kind === "group"
-              ? entry.label
-              : entry.kind === "local"
-                ? entry.href
-                : entry.surface
-          }
-          entry={entry}
-          available={available}
-        />
-      ))}
+      {panel ? (
+        <div className="flex flex-col gap-1">
+          <h2 aria-label={panel.label} className="mb-2">
+            <button
+              type="button"
+              aria-label={`${panel.label}, back to all sections`}
+              title="Back to all sections"
+              data-nav-back
+              onClick={back}
+              className={cn(
+                "grid h-9 w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg px-2.5",
+                HOVER,
+              )}
+            >
+              <ArrowLeft
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <span className="truncate text-center text-sm font-semibold">
+                {panel.label}
+              </span>
+            </button>
+          </h2>
+          {panel.items.map(({ surface }) => (
+            <NavLink
+              key={surface}
+              href={surfaceRoute(surface)}
+              label={SURFACES[surface].label}
+              surface={surface}
+              active={surface === activeSurface}
+            />
+          ))}
+        </div>
+      ) : (
+        <>
+          {!limited && (
+            <NavLink
+              href={DASHBOARD_LINK.href}
+              label={DASHBOARD_LINK.label}
+              icon={DASHBOARD_LINK.icon}
+              active={pathname === DASHBOARD_LINK.href}
+              compact={compact}
+            />
+          )}
+          {(limited || session?.playground_access === true) && (
+            <NavLink
+              href={PLAYGROUND_LINK.href}
+              label={PLAYGROUND_LINK.label}
+              icon={PLAYGROUND_LINK.icon}
+              active={pathname === PLAYGROUND_LINK.href}
+              compact={compact}
+            />
+          )}
+          {sections.map(({ heading, groups }) => (
+            <div
+              key={heading}
+              className={cn("flex flex-col", compact && "gap-1")}
+            >
+              <h2
+                className={
+                  compact
+                    ? "sr-only"
+                    : "mb-2 px-2 text-xs leading-[17px] text-muted-foreground"
+                }
+              >
+                {heading}
+              </h2>
+              {groups.map((group) => {
+                if (compact)
+                  return (
+                    <CompactGroup
+                      key={group.label}
+                      group={group}
+                      activeSurface={activeSurface}
+                    />
+                  );
+
+                const current =
+                  group === routeGroup && activeSurface
+                    ? SURFACES[activeSurface].label
+                    : undefined;
+                const destination =
+                  !mobile && !current && surfaces
+                    ? surfaceRoute(group.items[0].surface)
+                    : undefined;
+                return (
+                  <GroupControl
+                    key={group.label}
+                    group={group}
+                    // A same-document link preserves the current query's encoding.
+                    href={mobile ? undefined : (destination ?? "#")}
+                    current={current}
+                    onOpen={() => {
+                      if (destination) {
+                        requestLeave(() => {
+                          pendingFocus.current = {
+                            pathname: destination,
+                            label: group.label,
+                          };
+                          router.push(destination);
+                        });
+                        return;
+                      }
+                      pendingFocus.current = {
+                        pathname,
+                        label: group.label,
+                      };
+                      setSelection({ pathname, label: group.label });
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </>
+      )}
     </nav>
   );
 }

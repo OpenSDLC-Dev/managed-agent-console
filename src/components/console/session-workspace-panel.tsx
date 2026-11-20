@@ -89,7 +89,7 @@ export function SessionWorkspacePanel({
           onClose();
         }
       }}
-      className="fixed inset-y-2 right-2 z-30 flex max-w-[calc(100vw-64px)] shrink-0 flex-col rounded-lg border bg-background shadow-lg outline-none lg:static lg:z-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none"
+      className="fixed top-[calc(var(--console-header-height,0px)+0.5rem)] right-2 bottom-2 z-30 flex max-w-[calc(100vw-64px)] shrink-0 flex-col rounded-lg border bg-background shadow-lg outline-none lg:static lg:z-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:shadow-none"
       style={{ width: visibleWidth }}
     >
       <div

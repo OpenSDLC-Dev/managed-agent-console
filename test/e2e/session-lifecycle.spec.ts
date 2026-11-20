@@ -188,6 +188,8 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
       ).json()
     ).data,
   ).toEqual([]);
+  await page.getByRole("button", { name: "Back to all sections" }).click();
+  await page.locator('[data-nav-group="Resources"]').click();
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),

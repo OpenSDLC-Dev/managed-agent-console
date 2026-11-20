@@ -894,16 +894,26 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "dashboard-group-collapsed",
+    id: "dashboard-mobile-nav",
     route: "/dashboard",
-    fixture: "Build group persisted closed",
-    description: "Collapsed group survives a full reload.",
+    fixture: "390px viewport, navigation expanded",
+    description: "The full-width sidebar shows both navigation sections.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Build", exact: true }).click();
-      await page.reload();
-      await page
-        .locator('[data-nav-group="Build"][aria-expanded="false"]')
-        .waitFor();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Menu", exact: true }).click();
+      await page.locator('[data-sidebar-state="expanded"]').waitFor();
+    },
+  },
+  {
+    id: "dashboard-resources-panel",
+    route: "/dashboard",
+    fixture: "Resources submenu open on Files",
+    description:
+      "The Resources link opens its submenu and the first available destination.",
+    setup: async (page) => {
+      await page.locator('[data-nav-group="Resources"]').click();
+      await page.locator('[data-nav-view="Resources"]').waitFor();
+      await page.waitForURL(/\/files$/);
     },
   },
   {
@@ -921,18 +931,20 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "dashboard-nav-flyout",
+    id: "dashboard-resources-flyout",
     route: "/dashboard",
-    fixture: "compact Build navigation",
+    fixture: "compact Resources navigation",
     description:
       "A group flyout opens beside the rail without changing sidebar preference.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Collapse sidebar" }).click();
       await page
         .getByRole("navigation")
-        .getByRole("button", { name: "Build", exact: true })
+        .locator('[data-nav-group="Resources"]')
         .click();
-      await page.getByRole("dialog", { name: "Build", exact: true }).waitFor();
+      await page
+        .getByRole("dialog", { name: "Resources", exact: true })
+        .waitFor();
     },
   },
   // ---- the landing page ------------------------------------------------
@@ -1017,7 +1029,7 @@ export const SURFACES: Surface[] = [
     route: "/usage",
     fixture: "14 days of the mock gateway's rollups",
     description:
-      "Analytics → Usage: tiles, cost per day, and the table grouped by model.",
+      "Organization → Usage: tiles, cost per day, and the table grouped by model.",
     setup: async (page) => {
       await page.locator("table[data-by]").waitFor();
     },
@@ -2111,7 +2123,8 @@ export const SURFACES: Surface[] = [
       if (!refused.ok()) throw new Error("Cannot stage denied reads");
       await page.reload();
       await page.waitForFunction(
-        () => !document.querySelector("nav [data-surface]"),
+        () =>
+          !document.querySelector("nav [data-nav-group], nav a[data-surface]"),
       );
       await page
         .locator('[data-testid="connection-dot"][data-state="denied"]')
@@ -2167,7 +2180,9 @@ export const SURFACES: Surface[] = [
       await page
         .locator('nav [data-surface="api-keys"]')
         .waitFor({ state: "detached" });
-      await page.locator('nav [data-surface="agents"]').waitFor();
+      await page
+        .locator('nav [data-nav-group="Agents"]')
+        .waitFor({ state: "attached" });
       const session = await page.request.get(
         new URL("/api/auth/session", page.url()).href,
       );
@@ -2279,7 +2294,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page.keyboard.press("Control+k");
       await page
-        .getByPlaceholder("Search agents, sessions, environments…")
+        .getByRole("combobox", { name: "Search pages and resources" })
         .fill("deep resea");
       await page.getByRole("option", { name: /Deep researcher/ }).waitFor();
     },
@@ -2620,6 +2635,7 @@ export const SURFACES: Surface[] = [
       await page.route("**/api/auth/logout", (route) =>
         route.fulfill({ status: 503 }),
       );
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByTestId("sign-out").click();
       await page
         .locator('[data-native-identity="sign-out-unconfirmed"]')
@@ -2649,6 +2665,7 @@ export const SURFACES: Surface[] = [
           return fetcher(input, init);
         };
       });
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByTestId("sign-out").click();
       await page
         .locator('[data-native-identity="sign-out-account-changed"]')
@@ -2693,6 +2710,10 @@ export const SURFACES: Surface[] = [
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:
-      "The native sidebar account block shows the current user, role and Sign out beneath the platform connection.",
+      "The sidebar account panel shows the current user and role, theme, connection, console version and Sign out.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByRole("dialog", { name: "Account settings" }).waitFor();
+    },
   },
 ];

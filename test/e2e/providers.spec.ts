@@ -15,6 +15,7 @@ test("add a provider from a vendor's published hosts, then disable it", async ({
   page,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Model Gateway"]').click();
   await page.locator("nav [data-surface=providers]").click();
   await expect(page).toHaveURL(/\/providers$/);
   await expect(page.getByRole("cell", { name: "MiniMax CN" })).toBeVisible();
@@ -69,8 +70,10 @@ test("a gateway that serves no admin API takes the screens with it", async ({
     data: { surfaces: ["model-gateway"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
-  await expect(page.locator("nav [data-surface=providers]")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await expect(
+    page.locator('nav [data-nav-group="Model Gateway"]'),
+  ).toHaveCount(0);
 
   await page.goto("/providers");
   await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(

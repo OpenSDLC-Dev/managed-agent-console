@@ -106,7 +106,7 @@ export default function DeploymentDetailPage({
   if (!query.data) return <DetailSkeleton />;
   const item = query.data;
   return (
-    <div className="flex h-[calc(100dvh-48px)] min-h-[480px] min-w-0 flex-col">
+    <div className="flex h-[calc(100dvh-var(--console-header-height)-48px)] min-h-[480px] min-w-0 flex-col">
       <Breadcrumb
         parent={{ href: "/deployments", label: "Deployments" }}
         current={item.name}

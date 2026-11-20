@@ -5,6 +5,22 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Sidebar structure — checked 2026-11-20
+
+Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
+
+On desktop the reference opens a group's default page and submenu together. After returning to all sections it shows the current page beside its group. Reopening that group keeps the current page. The console uses the first available destination in each group as its landing page. While availability is being checked, the group opens its submenu in place. Browser Back and Forward restore the page and its submenu, including on query-only history traversal.
+
+The full submenu header returns to all sections, keeps the current page open and restores focus to its group. On narrow screens the header menu opens full width and contains Documentation. A group selection opens its submenu. A destination selection or Escape closes the menu. Reopening starts from the current page. Opening and dismissing the menu preserves the page's scroll position. The desktop compact rail retains its flyouts for self-hosted deployments.
+
+The reference uses a single-line wordmark and puts Documentation on the right of the global header. Its first sidebar row is inset 8px from the top and sides. Rows are 36px high with no gap within a section. The console retains a sidebar toggle beside its own mark and links to the self-hosted platform documentation.
+
+The reference ends the sidebar with an inset account button and opens its menu upward. The console shows the signed-in user, current platform role and a connection indicator on that button. The panel contains appearance, connection details, build version and Sign out. Arrow keys move focus through available actions and Escape returns focus to the button. The account button also works in the collapsed rail.
+
+## Global search — checked 2026-11-20
+
+Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
+
 ## Playground — checked 2026-11-20
 
 Isolated Chrome reached the reference's public sign-in offer. The [recording](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/tree/main/2026-10-22-playground-protocol) supplies the prompt and streaming behavior.
@@ -232,9 +248,7 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
 ## Deliberate divergences
 
 - **Font** — `anthropicSans` is proprietary and cannot be shipped; we use its own fallback stack.
-  **Branding** — our own wordmark, never Anthropic marks. Since 2026-08-17 it reads `Agent Console`.
-  Since 2026-10-14 its second line is the console's version (below); the reference's block names an
-  organization there.
+  **Branding** — the header uses the console's own terminal icon and `Agent Console` wordmark.
 - **Nav icons are the nearest lucide equivalents**, because the reference's are a pictogram font we
   cannot ship — the same constraint as the typeface, one layer down. `House`, `Hammer` and `Waypoints`
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
@@ -280,25 +294,14 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   an exported `ANTHROPIC_BASE_URL` telling the worker where this platform is, and that value written
   as `$PLATFORM_BASE_URL` for the operator to set to an address the worker can reach.
 - **Native login follows the platform's configured sign-in method.** Named password accounts and setup-code redemption are self-hosting extensions. The Console does not add a second shared gate.
-- **The signed-in account block includes the backend's current role.** It keeps the reference's placement and type scale, with the user's email and explicit Sign out. It does not infer roles from identity-provider claims or invent a workspace selector.
-- **The account block is a plain block, not the reference's inset button.** Theirs is a borderless
-  8px-radius button inset 12px in the sidebar, with a leading org avatar and a trailing chevron;
-  ours is full-bleed with neither ornament, under the single rule that closes the sidebar off where
-  the reference's footer draws none. This reflects its behavior: a block that opens nothing should not wear the frame of a control that does, and an
-  avatar would stand for an organization we do not have. The rule belongs to the footer group and
-  not to the blocks in it ([#107](https://github.com/OpenSDLC-Dev/managed-agent-console/issues/107)):
-  owned per block, the sidebar ended in however many blocks happened to render — one without
-  identity, two with it — which is a difference no reading of the reference asks for.
+- **The account trigger represents the current user.** Its second line displays the platform's current role. The panel carries the email when the sign-in provider supplies it.
 - **A day-scale date always carries its year**, where two of the reference's four forms drop it. Ours
   matches the reference exactly on the two key tables and parts from it on the environments list and
   the detail subheader: a yearless date is unambiguous only if the formatter is year-conditional —
   output that depends on what today is, a row that changes shape on 1 January, and a test that has to
   be told the date. A self-hosted console shows its deployment's whole history, where a hosted
   product mostly shows this week's.
-- **The sidebar states the console's version.** The reference shows none, correctly — nobody wonders
-  which build of a hosted product they are looking at. A self-hosted operator has no other way to
-  tell. Since 2026-10-14 it sits under the wordmark, in the muted register, rather than above the
-  connection state.
+- **The account panel displays the console's version.** Self-hosted operators use it to identify the running build.
 - **Navigation labels and the connection state are title case** (`API Keys`, `Credential Vaults`,
   `Memory Stores`, `Platform Connected`), where the reference writes `API keys`. The owner's call on
   2026-10-14, so that two-word labels match the group headers (`Managed Agents`). Form field labels

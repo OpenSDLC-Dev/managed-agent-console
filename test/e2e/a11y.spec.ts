@@ -29,8 +29,14 @@ test("agents list passes axe in light and dark themes", async ({ page }) => {
   await signIn(page);
   await expectNoViolations(page);
 
+  await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Dark theme" }).click();
   await expect(page.locator("html")).toHaveClass(/dark/);
+  await expectNoViolations(page);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Account settings" }),
+  ).toBeHidden();
   await expectNoViolations(page);
 });
 
@@ -176,6 +182,7 @@ for (const theme of ["light", "dark"] as const) {
   }) => {
     await signIn(page);
     if (theme === "dark") {
+      await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByRole("button", { name: "Dark theme" }).click();
       await expect(page.locator("html")).toHaveClass(/dark/);
     }

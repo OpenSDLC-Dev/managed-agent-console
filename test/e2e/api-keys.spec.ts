@@ -24,7 +24,9 @@ test("issue a key, see it once, then disable and delete it", async ({
   page,
 }) => {
   await signIn(page, "/agents");
-  await page.getByRole("link", { name: "API Keys" }).click();
+  await page.getByRole("button", { name: "Back to all sections" }).click();
+  await page.locator('[data-nav-group="Keys"]').click();
+  await page.getByRole("link", { name: "API Keys", exact: true }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
   // The seeded rows: one issued by a person, one the control plane manages.
@@ -136,9 +138,8 @@ test("an unowned historical key is listed without mutation controls", async ({
   await expect(row.getByRole("button")).toHaveCount(0);
 });
 
-// A deployment predating the surface answers 404 through its router catch-all,
-// and the console drops the item rather than showing a page that cannot work.
-test("a platform without the surface loses the nav item", async ({
+// The mock's legacy deployment lacks the entire private console namespace.
+test("a platform without the console namespace loses the Keys group", async ({
   page,
   request,
 }) => {
@@ -146,7 +147,8 @@ test("a platform without the surface loses the nav item", async ({
     data: { surfaces: ["api-keys"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Keys"]')).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
 
   await page.goto("/api-keys");
   const standIn = page.getByTestId("unavailable-surface");
@@ -172,10 +174,15 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   await expect(state).toHaveAttribute("data-error-status", "403");
   await expect(state).toHaveAttribute("data-denied", "true");
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
   await expect(
     page.getByText("this route requires the admin role"),
+  ).toBeVisible();
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await page.locator('[data-nav-group="Keys"]').click();
+  await expect(page).toHaveURL(/\/service-accounts$/);
+  await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
+  await expect(
+    page.locator("nav [data-surface=service-accounts]"),
   ).toBeVisible();
 });
 

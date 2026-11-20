@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 /** Navigate to /login and wait until the form is hydrated and interactive. */
 async function openLogin(page: Page) {
@@ -92,23 +93,30 @@ test("the shell shows all resources and a live platform connection", async ({
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  for (const item of [
-    "Agents",
-    "Sessions",
-    "Deployments",
-    "Memory Stores",
-    "Environments",
-    "Credential Vaults",
-    "Skills",
-    "Files",
-  ]) {
-    // Scoped to the sidebar: the Dashboard gives each of these a card as well,
-    // so an unscoped link by name matches twice on this page.
-    await expect(
-      page
-        .getByRole("navigation")
-        .getByRole("link", { name: item, exact: true }),
-    ).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  for (const [group, items] of [
+    ["Resources", ["Skills", "Files"]],
+    [
+      "Agents",
+      [
+        "Agents",
+        "Sessions",
+        "Deployments",
+        "Memory Stores",
+        "Environments",
+        "Credential Vaults",
+      ],
+    ],
+  ] as const) {
+    await nav.locator(`[data-nav-group="${group}"]`).click();
+    for (const item of items) {
+      await expect(
+        nav.getByRole("link", { name: item, exact: true }),
+      ).toBeVisible();
+    }
+    if (group === "Resources") {
+      await nav.getByRole("button", { name: "Back to all sections" }).click();
+    }
   }
 
   // The probe goes through the application edge to the mock platform and comes back green.
@@ -119,9 +127,41 @@ test("the shell shows all resources and a live platform connection", async ({
   );
 
   // Client-side navigation works.
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: "Sessions" })
-    .click();
+  await nav.getByRole("link", { name: "Sessions", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+});
+
+test("the header and account panel stay available when navigation collapses", async ({
+  page,
+}) => {
+  await signIn(page, "/dashboard");
+  const header = page.getByRole("banner");
+  await expect(
+    header.getByRole("link", { name: "Platform documentation" }),
+  ).toBeVisible();
+  const account = page.getByRole("button", { name: "Account menu" });
+  const panel = page.getByRole("dialog", { name: "Account settings" });
+
+  await account.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Light theme" }),
+  ).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    panel.getByRole("button", { name: "System theme" }),
+  ).toBeFocused();
+  await expect(panel.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(account).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Collapse sidebar" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await account.click();
+  await expect(panel).toBeVisible();
+  await expect(panel.locator("[data-console-version]")).toBeVisible();
 });

@@ -173,4 +173,12 @@
   html {
     @apply font-sans;
   }
+  html:has([data-console-header]) {
+    --console-header-height: 3rem;
+    scroll-padding-top: var(--console-header-height);
+  }
+
+  html:has([data-console-menu-open]) {
+    overflow: hidden;
+  }
 }

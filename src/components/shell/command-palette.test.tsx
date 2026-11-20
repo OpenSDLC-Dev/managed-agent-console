@@ -168,19 +168,19 @@ describe("CommandPalette", () => {
     // dropped. Dashboard leads and is not a platform surface.
     expect(options.map((o) => o.textContent)).toEqual([
       "Dashboard",
-      "API Keys",
-      "Files",
-      "Skills",
-      "Models",
-      "Providers",
       "Agents",
       "Sessions",
       "Deployments",
       "Environments",
-      "Credential Vaults",
       "Memory Stores",
+      "Credential Vaults",
       "Dreams",
+      "Files",
+      "Skills",
+      "API Keys",
       "Usage",
+      "Models",
+      "Providers",
     ]);
 
     // The searchable list queries, plus one surface probe per registered

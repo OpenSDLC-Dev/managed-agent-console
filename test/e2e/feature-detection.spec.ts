@@ -23,13 +23,16 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await signIn(page);
 
   const nav = page.locator("nav");
+  await nav.locator('[data-nav-group="Agents"]').click();
   await expect(nav.locator("[data-surface=agents]")).toBeVisible();
   await expect(nav.locator("[data-surface=vaults]")).toBeVisible();
-  await expect(nav.locator("[data-surface=skills]")).toHaveCount(0);
-  await expect(nav.locator("[data-surface=files]")).toHaveCount(0);
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await expect(nav.locator('[data-nav-group="Resources"]')).toHaveCount(0);
 
   await page.keyboard.press("Control+k");
-  const input = page.getByPlaceholder("Search agents, sessions, environments…");
+  const input = page.getByRole("combobox", {
+    name: "Search pages and resources",
+  });
   await expect(input).toBeVisible();
   // An empty query lists exactly the section shortcuts, read by surface id
   // rather than by label (CLAUDE.md's data-* convention).
@@ -80,17 +83,25 @@ test("its nested routes stand down too, not just its list page", async ({
 test("a served deployment keeps every surface", async ({ page }) => {
   await signIn(page);
   const nav = page.locator("nav");
-  for (const surface of [
-    "agents",
-    "sessions",
-    "deployments",
-    "memory-stores",
-    "environments",
-    "vaults",
-    "skills",
-    "files",
-  ]) {
-    await expect(nav.locator(`[data-surface=${surface}]`)).toBeVisible();
+  for (const [group, surfaces] of [
+    [
+      "Agents",
+      [
+        "agents",
+        "sessions",
+        "deployments",
+        "memory-stores",
+        "environments",
+        "vaults",
+      ],
+    ],
+    ["Resources", ["skills", "files"]],
+  ] as const) {
+    await nav.locator(`[data-nav-group="${group}"]`).click();
+    for (const surface of surfaces) {
+      await expect(nav.locator(`[data-surface=${surface}]`)).toBeVisible();
+    }
+    await nav.getByRole("button", { name: "Back to all sections" }).click();
   }
 });
 

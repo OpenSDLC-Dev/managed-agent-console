@@ -95,7 +95,7 @@ export function ResourceInspector({
       aria-label={label + " details"}
       tabIndex={-1}
       {...{ ["data-" + kind + "-id"]: id }}
-      className="fixed inset-y-2 right-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
+      className="fixed top-[calc(var(--console-header-height,0px)+0.5rem)] right-2 bottom-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
       style={{ width: visibleWidth }}
       onKeyDown={(event) => {
         if (

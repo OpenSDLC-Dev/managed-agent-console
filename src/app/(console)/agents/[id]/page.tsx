@@ -73,7 +73,7 @@ function AgentWorkspace({ id }: { id: string }) {
       filters.update({ tab: value === "configuration" ? null : value }),
     );
   return (
-    <div className="flex h-[calc(100dvh-64px)] min-h-[480px] flex-col">
+    <div className="flex h-[calc(100dvh-var(--console-header-height)-64px)] min-h-[480px] flex-col">
       <div className="shrink-0 pb-4">
         <Breadcrumb
           parent={{ href: "/agents", label: "Agents" }}

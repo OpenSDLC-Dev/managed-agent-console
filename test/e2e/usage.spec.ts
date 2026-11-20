@@ -8,11 +8,12 @@ test.beforeEach(async ({ request }) => {
 });
 
 /**
- * Plan 10 slice 5: Analytics → Usage, the gateway's daily rollups and its
+ * Plan 10 slice 5: Organization → Usage, the gateway's daily rollups and its
  * per-request ledger, through the `/admin/v1` native edge.
  */
 test("read the month's usage, grouped and filtered", async ({ page }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Spending & usage"]').click();
   await page.locator("nav [data-surface=usage]").click();
   await expect(page).toHaveURL(/\/usage$/);
 
@@ -78,7 +79,7 @@ test("probe: the overview fits a phone's width", async ({ page }) => {
     expect(boxes[i].left).toBeGreaterThanOrEqual(boxes[i - 1].right);
 });
 
-test("a console without a gateway has no Analytics", async ({
+test("a console without a gateway hides its Usage link", async ({
   page,
   request,
 }) => {
@@ -86,8 +87,10 @@ test("a console without a gateway has no Analytics", async ({
     data: { surfaces: ["model-gateway"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
-  await expect(page.locator("[data-nav-group=Analytics]")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await expect(
+    page.locator('nav [data-nav-group="Spending & usage"]'),
+  ).toHaveCount(0);
   await page.goto("/usage");
   await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(
     "data-surface",

@@ -48,6 +48,7 @@ test("environments list and detail render the config union", async ({
   page,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Agents"]').click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "cloud-limited", exact: true }),
@@ -97,6 +98,7 @@ test("a self-hosted environment lists its keys, live and expired", async ({
 
 test("sessions list filters by status", async ({ page }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Agents"]').click();
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "Install deps and run tests" }),
@@ -159,6 +161,7 @@ test("vaults list and detail render secret-free credentials", async ({
   page,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Agents"]').click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();
@@ -182,6 +185,7 @@ test("skills list filters by source; detail shows versions", async ({
   page,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Resources"]').click();
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "Excel spreadsheets" }),
@@ -205,6 +209,7 @@ test("files list renders uploads, and no session's own files", async ({
   page,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Resources"]').click();
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),
@@ -226,7 +231,9 @@ test("files list renders uploads, and no session's own files", async ({
 
   // Nor does the palette, which searches the same list.
   await page.keyboard.press("Control+k");
-  const input = page.getByPlaceholder("Search agents, sessions, environments…");
+  const input = page.getByRole("combobox", {
+    name: "Search pages and resources",
+  });
   await input.fill("research-notes");
   await expect(
     page.getByRole("option", { name: /research-notes\.md/ }),

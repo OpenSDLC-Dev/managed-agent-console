@@ -26,8 +26,10 @@ test("a denied collection read hides its entry and explains a detail bookmark", 
     page.getByText("this route requires the developer role"),
   ).toBeVisible();
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await page.locator('[data-nav-group="Resources"]').click();
   await expect(page.locator("nav [data-surface=skills]")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=agents]")).toBeVisible();
+  await expect(page.locator("nav [data-surface=files]")).toBeVisible();
 });
 
 test("refused resource reads leave only local entry points", async ({
@@ -41,7 +43,7 @@ test("refused resource reads leave only local entry points", async ({
   });
   await signIn(page);
   await page.goto("/dashboard");
-  await expect(page.locator("nav [data-surface]")).toHaveCount(0);
+  await expect(page.locator("nav [data-nav-group]")).toHaveCount(0);
   await expect(page.locator("[data-dashboard-card]")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Get API key" })).toHaveCount(
     0,
@@ -62,6 +64,7 @@ test("a denied write keeps readable resources and the console session", async ({
   request,
 }) => {
   await signIn(page);
+  await page.locator('[data-nav-group="Agents"]').click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await page.getByRole("button", { name: "Create environment" }).click();
   await page.getByLabel("Name").fill("role-check");
@@ -118,6 +121,7 @@ test("gateway read and write refusals use the platform's current messages", asyn
     "data-denied",
     "true",
   );
+  await page.locator('[data-nav-group="Model Gateway"]').click();
   await expect(page.locator("nav [data-surface=providers]")).toHaveCount(0);
   await expect(page.locator("nav [data-surface=models]")).toBeVisible();
 });
