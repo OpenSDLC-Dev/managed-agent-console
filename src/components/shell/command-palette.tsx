@@ -376,13 +376,12 @@ export function CommandPalette({
         <Search className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
         {!compact && (
           <>
-            <span className="truncate">Search Console…</span>
+            <span className="truncate">Search Console…</span>{" "}
             <kbd
               aria-hidden
               className="ml-auto flex shrink-0 gap-0.5 font-mono text-[11px] [&>span]:rounded-sm [&>span]:border [&>span]:px-1 [&>span]:leading-4"
             >
-              <span>{shortcutModifier}</span>
-              <span>K</span>
+              <span>{shortcutModifier}</span> <span>K</span>
             </kbd>
           </>
         )}

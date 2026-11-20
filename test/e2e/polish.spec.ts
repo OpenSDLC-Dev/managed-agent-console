@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { signIn } from "./sign-in";
 
 test.beforeEach(async ({ request }) => {
@@ -36,7 +37,20 @@ test("the console renders in both themes and the choice persists", async ({
 });
 
 test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "Win32",
+    });
+  });
   await signIn(page);
+  const trigger = page.getByRole("button", { name: "Search Console… Ctrl K" });
+  await expect(trigger).toBeVisible();
+  const axe = await new AxeBuilder({ page })
+    .include("[data-console-header]")
+    .withRules(["label-content-name-mismatch"])
+    .analyze();
+  expect(axe.violations).toEqual([]);
 
   await page.keyboard.press("Control+k");
   const input = page.getByRole("combobox", {
@@ -54,8 +68,7 @@ test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {
   await expect(page).toHaveURL(/\/agents\/agent_researcher00000000001$/);
   await expect(input).toBeHidden();
 
-  // The trigger button in the sidebar opens it too.
-  await page.getByRole("button", { name: /Search/ }).click();
+  await trigger.click();
   await expect(input).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(input).toBeHidden();

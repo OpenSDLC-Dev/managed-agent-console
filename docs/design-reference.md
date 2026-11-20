@@ -19,7 +19,7 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 ## Global search — checked 2026-11-20
 
-Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The trigger showed Command on macOS. The console adopts the header and keyboard layout. Search offers existing pages and platform resources.
+Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
 
 ## Native-only Console — checked 2026-11-17
 
