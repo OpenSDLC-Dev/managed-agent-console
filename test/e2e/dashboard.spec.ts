@@ -48,17 +48,21 @@ test("dashboard stays centered and its compact navigation remains usable", async
       .getByRole("navigation")
       .getByRole("button", { name: "Keys", exact: true }),
   ).toHaveAttribute("data-active", "false");
-  const search = page
-    .locator("[data-console-header]")
-    .getByRole("button", { name: /^Search Console/ });
+  const header = page.locator("[data-console-header]");
+  const search = header.getByRole("button", { name: /^Search Console/ });
+  const headerBounds = await header.boundingBox();
   const searchBounds = await search.boundingBox();
   expect(searchBounds!.width).toBe(448);
   expect(searchBounds!.height).toBe(28);
-  expect(searchBounds!.x + searchBounds!.width / 2).toBe(720);
+  expect(searchBounds!.x + searchBounds!.width / 2).toBeCloseTo(
+    headerBounds!.x + headerBounds!.width / 2,
+    0,
+  );
   await search.click();
   const palette = page.getByRole("dialog", { name: "Command palette" });
   await expect(palette).toBeVisible();
-  await expect(palette).toHaveCSS("max-width", "640px");
+  await expect(palette).toHaveCSS("max-width", "672px");
+  await expect(palette).toHaveCSS("top", "135px");
   await expect(
     palette.getByRole("combobox", { name: "Search pages and resources" }),
   ).toBeFocused();

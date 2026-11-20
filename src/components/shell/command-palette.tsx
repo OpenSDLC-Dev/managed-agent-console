@@ -258,7 +258,7 @@ function PaletteResults({
     <div
       id={listId}
       role="listbox"
-      className="max-h-[min(24rem,60dvh)] overflow-y-auto pb-1"
+      className="max-h-[min(28rem,60dvh)] overflow-y-auto pb-1"
     >
       {items.length === 0 && (
         <p className="px-3 py-6 text-center text-sm text-muted-foreground">
@@ -389,7 +389,7 @@ export function CommandPalette({
       </button>
       <Dialog open={open} onOpenChange={reset}>
         <DialogContent
-          className="top-[max(1rem,16dvh)] translate-y-0 gap-0 p-0 sm:max-w-[40rem]"
+          className="top-[max(1rem,15dvh)] translate-y-0 gap-0 p-0 sm:max-w-[42rem]"
           aria-describedby={undefined}
         >
           <DialogTitle className="sr-only">Command palette</DialogTitle>

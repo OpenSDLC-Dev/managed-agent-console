@@ -102,6 +102,14 @@ test("narrow transcript and inspector remain accessible, resizable and keyboard 
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const open = page.getByRole("button", { name: "Open session inspector" });
   await open.click();
+  await page
+    .locator("[data-console-header]")
+    .getByRole("button", { name: /^Search Console/ })
+    .click();
+  await expect(
+    page.getByRole("combobox", { name: "Search pages and resources" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Session", exact: true }).focus();
   await page.keyboard.press("End");
   await expect(
