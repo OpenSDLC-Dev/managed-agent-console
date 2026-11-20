@@ -111,5 +111,13 @@ export async function readAccount(): Promise<
 > {
   const response = await fetch("/api/auth/session", { cache: "no-store" });
   await assertOk(response);
-  return response.json();
+  const session = (await response.json()) as
+    (Partial<NativeSession> & { signed_in: boolean }) | null;
+  if (
+    session &&
+    response.headers.get("x-platform-playground-disabled") === "1"
+  ) {
+    delete session.playground_access;
+  }
+  return session;
 }

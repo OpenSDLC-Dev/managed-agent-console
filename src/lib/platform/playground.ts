@@ -9,14 +9,28 @@ const TENANCY = {
 export type PlaygroundModel = { id: string; display_name: string };
 
 export async function playgroundModels(signal: AbortSignal) {
-  const response = await fetch(resourceURL("v1/models?limit=1000"), {
-    headers: TENANCY,
-    cache: "no-store",
-    signal,
-  });
-  await assertOk(response);
-  const models = (await response.json()) as { data: PlaygroundModel[] };
-  return models.data;
+  const models: PlaygroundModel[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const query = new URLSearchParams({ limit: "1000" });
+    if (after) query.set("after_id", after);
+    const response = await fetch(resourceURL(`v1/models?${query}`), {
+      headers: TENANCY,
+      cache: "no-store",
+      signal,
+    });
+    await assertOk(response);
+    const page = (await response.json()) as {
+      data: PlaygroundModel[];
+      has_more: boolean;
+      last_id: string | null;
+    };
+    models.push(...page.data);
+    if (!page.has_more) return models;
+    if (!page.last_id || page.last_id === after)
+      throw new Error("Invalid model pagination cursor.");
+    after = page.last_id;
+  }
 }
 
 type Prompt = {
@@ -38,7 +52,7 @@ export async function runPlayground(
     headers: {
       ...TENANCY,
       "content-type": "application/json",
-      ...(await csrfHeaders({ expectedPrincipalId: principalId })),
+      ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
     body: JSON.stringify({
       model: prompt.model,

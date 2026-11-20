@@ -240,7 +240,8 @@ export function Members() {
                 <span data-member-status={m.status}>{m.status}</span>
               ),
             },
-            ...(list.data?.data.some(
+            ...(typeof account.data?.playground_access === "boolean" &&
+            list.data?.data.some(
               (m) => typeof m.playground_access === "boolean",
             )
               ? [

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { playgroundModels, runPlayground } from "./playground";
+import { readAccount } from "./native";
 
 const resource = "/api/organizations/default/proxy/v1";
 const prompt = {
@@ -28,7 +29,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("lists the gateway models through the private cookie route", async () => {
   const fetcher = fixture(
-    '{"data":[{"id":"demo","display_name":"Demo"}]}',
+    '{"data":[{"id":"demo","display_name":"Demo"}],"has_more":false,"last_id":"demo"}',
     "application/json",
   );
   const signal = new AbortController().signal;
@@ -39,6 +40,65 @@ it("lists the gateway models through the private cookie route", async () => {
     `${resource}/models?limit=1000`,
     expect.objectContaining({ signal }),
   );
+});
+
+it("loads models past the first gateway page", async () => {
+  const first = { id: "alpha/model", display_name: "Alpha" };
+  const last = { id: "omega/model", display_name: "Omega" };
+  const fetcher = vi.fn(async (url: string) =>
+    Response.json(
+      url.includes("after_id=")
+        ? { data: [last], has_more: false, last_id: last.id }
+        : { data: [first], has_more: true, last_id: first.id },
+    ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  await expect(playgroundModels(new AbortController().signal)).resolves.toEqual(
+    [first, last],
+  );
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    `${resource}/models?limit=1000`,
+    `${resource}/models?limit=1000&after_id=alpha%2Fmodel`,
+  ]);
+});
+
+it("hides Playground presentation when the edge reports the gateway disabled", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        {
+          signed_in: true,
+          id: "user_demo",
+          role: "user",
+          playground_access: true,
+        },
+        { headers: { "x-platform-playground-disabled": "1" } },
+      ),
+    ),
+  );
+  const session = await readAccount();
+  expect(session).toMatchObject({ signed_in: true, role: "user" });
+  expect(session).not.toHaveProperty("playground_access");
+});
+
+it("stops the fresh session request before submitting Messages", async () => {
+  const fetcher = vi.fn(
+    (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener(
+          "abort",
+          () => reject(init.signal?.reason),
+          { once: true },
+        );
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const controller = new AbortController();
+  const run = runPlayground(prompt, "user_demo", controller.signal, vi.fn());
+  controller.abort();
+  await expect(run).rejects.toMatchObject({ name: "AbortError" });
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(["/api/auth/session"]);
 });
 
 it("posts Messages with fresh CSRF and renders only text blocks from the stream", async () => {

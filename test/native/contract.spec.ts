@@ -295,11 +295,13 @@ test("real native password/setup, current authority, management, private bytes/S
       "id",
       "login_name",
       "name",
+      "playground_access",
       "role",
       "role_source",
       "signed_in",
     ].sort(),
   );
+  expect(session.playground_access).toBe(true);
   expect(JSON.stringify(session).includes(cookie.value)).toBe(false);
   expect(
     await page.evaluate(() => ({
@@ -920,10 +922,7 @@ test("real native password/setup, current authority, management, private bytes/S
             !response.marked,
         ),
       ).toBe(true);
-      expect(privateResponses.length).toBeGreaterThan(0);
-      expect(
-        privateResponses.every((response) => response.status === 403),
-      ).toBe(true);
+      expect(privateResponses).toEqual([]);
       const original = await firstPage.request.get("/api/auth/session", {
         headers: { cookie: `map_session=${cookie.value}` },
       });

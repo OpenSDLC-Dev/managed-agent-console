@@ -411,7 +411,9 @@ describe("CommandPalette", () => {
     // hardcoded count here has been wrong once already.
     expect(screen.getAllByRole("option")).toHaveLength(
       NAV_DESTINATIONS.filter(
-        (item) => !["members", "service-accounts"].includes(item.surface ?? ""),
+        (item) =>
+          item.href !== "/playground" &&
+          !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,
     );
     expect(screen.getByText("Go to")).toBeDefined();

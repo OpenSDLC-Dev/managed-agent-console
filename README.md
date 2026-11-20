@@ -107,7 +107,7 @@ NATIVE_EVIDENCE_DIR=/absolute/path/to/scratch \
 pnpm test:e2e:native
 ```
 
-The platform source must implement plan 69 slice 5's private deployment initiator API and the earlier owned-key issuance API. The tier needs Docker and that checkout's Go toolchain.
+The platform source must implement the private Playground API from plan 73 and the native browser APIs from plan 69. The tier needs Docker and that checkout's Go toolchain.
 A test-only client builds against the platform's pinned Go SDK. Human and service-account keys come from the browser's one-time reveal, then reach the client through stdin.
 Independent cookie reads check persisted Memory actors, redacted nulls and current authority. No `ant` checkout is needed by this automated tier.
 The separate real-`ant` check must run against a fresh packaged Compose install after immutable source/image pairing.
