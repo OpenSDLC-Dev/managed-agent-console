@@ -332,7 +332,7 @@ test("sessions filter by agent server-side; created presets bound real lists", a
   }
 
   await signIn(page);
-  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await page.locator('[data-nav-group="Agents"]').click();
   await page.getByRole("link", { name: "Sessions", exact: true }).click();
 
   // Server-side agent filter: A's session stays, B's goes.
