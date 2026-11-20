@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
-import { LANDING_ROUTE } from "./routes";
+import { LANDING_ROUTE, PLAYGROUND_ROUTE } from "./routes";
 
 export interface SurfaceEntry {
   surface: Surface;
@@ -44,6 +44,13 @@ export const DASHBOARD_LINK = {
   label: "Dashboard",
   href: LANDING_ROUTE,
   icon: House,
+};
+
+export const PLAYGROUND_LINK = {
+  key: `nav-${PLAYGROUND_ROUTE}`,
+  label: "Playground",
+  href: PLAYGROUND_ROUTE,
+  icon: MessagesSquare,
 };
 
 // The sidebar, Dashboard and command palette share the same destination order.
@@ -119,6 +126,7 @@ export const DASHBOARD_SECTIONS = NAV_SECTIONS.map(({ heading, groups }) => ({
 
 export const NAV_DESTINATIONS: Destination[] = [
   DASHBOARD_LINK,
+  PLAYGROUND_LINK,
   ...DASHBOARD_SECTIONS.flatMap(({ items }) =>
     items.map(({ icon, surface }) => ({
       key: `nav-${surface}`,

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -26,6 +27,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
+import { PLAYGROUND_ROUTE } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 import {
   useAgents,
   useDeployments,
@@ -80,6 +83,8 @@ const matches = (query: string, ...fields: (string | null | undefined)[]) =>
  * search endpoint, so this filters what the lists already serve).
  */
 function useSearchItems(query: string): Item[] {
+  const playgroundAccess = useContext(ConsoleSessionContext)?.data
+    ?.playground_access;
   const limit = 50;
   const agents = useAgents({ limit });
   const deployments = useDeployments({ limit });
@@ -102,7 +107,10 @@ function useSearchItems(query: string): Item[] {
       item.surface === undefined ||
       isSurfaceVisible(surfaces?.[item.surface], item.surface);
     const items: Item[] = SECTIONS.filter(
-      (s) => visible(s) && (!q || s.label.toLowerCase().includes(q)),
+      (s) =>
+        visible(s) &&
+        (s.href !== PLAYGROUND_ROUTE || playgroundAccess === true) &&
+        (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;
     for (const a of agents.data?.data ?? []) {
@@ -215,6 +223,7 @@ function useSearchItems(query: string): Item[] {
     return items.filter(visible);
   }, [
     query,
+    playgroundAccess,
     surfaces,
     agents.data,
     sessions.data,

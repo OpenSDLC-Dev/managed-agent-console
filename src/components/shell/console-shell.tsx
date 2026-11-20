@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useContext,
   useRef,
   useState,
   useSyncExternalStore,
@@ -20,6 +21,8 @@ import { Nav } from "./nav";
 import { useNavPreference } from "./nav-preference";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
+import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 
 const NARROW = "(max-width: 767px)";
 function subscribeViewport(callback: () => void) {
@@ -38,6 +41,7 @@ export function ConsoleShell({
   children: React.ReactNode;
   footer: React.ReactNode;
 }) {
+  const limited = playgroundOnly(useContext(ConsoleSessionContext)?.data);
   const narrow = useSyncExternalStore(
     subscribeViewport,
     () => window.matchMedia(NARROW).matches,
@@ -81,7 +85,10 @@ export function ConsoleShell({
       ref={toggleRef}
       variant="ghost"
       size="icon"
-      className="size-7 shrink-0 text-muted-foreground"
+      className={cn(
+        "size-7 shrink-0 text-muted-foreground",
+        narrow && "col-start-3",
+      )}
       aria-label={narrow ? (open ? "Close menu" : "Menu") : desktopLabel}
       aria-expanded={open}
       aria-controls="console-navigation"
@@ -98,7 +105,7 @@ export function ConsoleShell({
       aria-label="Platform documentation"
       className={cn(
         "flex items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
-        narrow ? "mx-2 h-9" : "h-7 justify-self-end",
+        narrow ? "mx-2 h-9" : "col-start-3 h-7 justify-self-end",
       )}
     >
       <BookOpen aria-hidden className="size-4" />
@@ -116,7 +123,7 @@ export function ConsoleShell({
         <div className="flex min-w-0 max-w-[14.5rem] items-center gap-2">
           {(open || narrow) && (
             <Link
-              href="/dashboard"
+              href={limited ? PLAYGROUND_ROUTE : LANDING_ROUTE}
               onClick={() => {
                 if (narrow) close();
               }}
@@ -128,10 +135,12 @@ export function ConsoleShell({
           )}
           {!narrow && toggle}
         </div>
-        <CommandPalette
-          compact={narrow}
-          onNavigate={narrow ? close : undefined}
-        />
+        {!limited && (
+          <CommandPalette
+            compact={narrow}
+            onNavigate={narrow ? close : undefined}
+          />
+        )}
         {narrow ? toggle : documentation}
       </header>
       <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">

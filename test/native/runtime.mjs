@@ -309,7 +309,11 @@ async function edge(port, upstream) {
         record();
       });
     }
-    const backend = path.startsWith("/admin/v1/")
+    const gateway =
+      path.startsWith("/admin/v1/") ||
+      path === "/api/organizations/default/proxy/v1/messages" ||
+      path === "/api/organizations/default/proxy/v1/models";
+    const backend = gateway
       ? upstream === 38110
         ? 38120
         : 38121

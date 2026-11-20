@@ -321,9 +321,14 @@ export function resourceURL(path: string): string {
 
 /** Read metadata only. The browser owns the opaque HttpOnly cookie. */
 export async function csrfHeaders(
-  options: { expectedPrincipalId?: string; logoutSignal?: AbortSignal } = {},
+  options: {
+    expectedPrincipalId?: string;
+    logoutSignal?: AbortSignal;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<Record<string, string>> {
   const { expectedPrincipalId, logoutSignal } = options;
+  const signal = logoutSignal ?? options.signal;
   const ensureActive = () => {
     if (
       !logoutSignal &&
@@ -335,7 +340,7 @@ export async function csrfHeaders(
   ensureActive();
   const response = await fetch("/api/auth/session", {
     cache: "no-store",
-    ...(logoutSignal ? { signal: logoutSignal } : {}),
+    ...(signal ? { signal } : {}),
   });
   await assertOk(response);
   const session = (await response.json()) as {

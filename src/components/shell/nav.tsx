@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
-import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
+import {
+  DASHBOARD_LINK,
+  NAV_SECTIONS,
+  PLAYGROUND_LINK,
+  type GroupEntry,
+} from "@/lib/nav";
 import {
   isSurfaceVisible,
   SURFACES,
@@ -15,6 +20,8 @@ import {
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
+import { playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 
 const ROW = "flex h-9 items-center gap-3.5 rounded-lg px-2.5 text-sm";
 const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
@@ -188,6 +195,8 @@ export function Nav({
   mobile?: boolean;
 }) {
   const surfaces = useSurfaces();
+  const session = useContext(ConsoleSessionContext)?.data;
+  const limited = playgroundOnly(session);
   const pathname = usePathname();
   const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
@@ -210,7 +219,7 @@ export function Nav({
         ),
       }))
       .filter(({ items }) => items.length > 0),
-  })).filter(({ groups }) => groups.length > 0);
+  })).filter(({ groups }) => !limited && groups.length > 0);
   const groups = sections.flatMap((section) => section.groups);
   const routeGroup = groups.find(({ items }) =>
     items.some(({ surface }) => surface === activeSurface),
@@ -303,13 +312,24 @@ export function Nav({
         </div>
       ) : (
         <>
-          <NavLink
-            href={DASHBOARD_LINK.href}
-            label={DASHBOARD_LINK.label}
-            icon={DASHBOARD_LINK.icon}
-            active={pathname === DASHBOARD_LINK.href}
-            compact={compact}
-          />
+          {!limited && (
+            <NavLink
+              href={DASHBOARD_LINK.href}
+              label={DASHBOARD_LINK.label}
+              icon={DASHBOARD_LINK.icon}
+              active={pathname === DASHBOARD_LINK.href}
+              compact={compact}
+            />
+          )}
+          {(limited || session?.playground_access === true) && (
+            <NavLink
+              href={PLAYGROUND_LINK.href}
+              label={PLAYGROUND_LINK.label}
+              icon={PLAYGROUND_LINK.icon}
+              active={pathname === PLAYGROUND_LINK.href}
+              compact={compact}
+            />
+          )}
           {sections.map(({ heading, groups }) => (
             <div
               key={heading}

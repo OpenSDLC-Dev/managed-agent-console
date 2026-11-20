@@ -3,6 +3,7 @@
 import { useContext, type KeyboardEvent } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { ChevronDown, UserRound } from "lucide-react";
+import { playgroundOnly } from "@/lib/routes";
 import {
   ConnectionIndicator,
   ConnectionStatus,
@@ -35,8 +36,9 @@ function moveAccountFocus(event: KeyboardEvent<HTMLElement>) {
 
 export function SidebarFooter({ version }: { version: React.ReactNode }) {
   const data = useContext(ConsoleSessionContext)?.data;
-  // Keep the probe active while the account panel is closed.
-  const connection = useConnectionStatus();
+  const limited = playgroundOnly(data);
+  // Probe only when the session can use the resource console.
+  const connection = useConnectionStatus(!limited);
   if (!data?.signed_in) return null;
   const label = accountLabel(data);
 
@@ -45,13 +47,13 @@ export function SidebarFooter({ version }: { version: React.ReactNode }) {
       <Popover.Root>
         <Popover.Trigger
           aria-label={`${label} ${data.role}, account menu`}
-          aria-description={connection.label}
+          aria-description={limited ? undefined : connection.label}
           title="Account menu"
           className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-sidebar-foreground hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent group-data-[sidebar-state=collapsed]/sidebar:h-9 group-data-[sidebar-state=collapsed]/sidebar:justify-center group-data-[sidebar-state=collapsed]/sidebar:px-0"
         >
           <span className="relative grid size-8 shrink-0 place-items-center rounded-md border border-sidebar-border bg-sidebar-accent text-muted-foreground">
             <UserRound aria-hidden className="size-4" />
-            <ConnectionIndicator {...connection} />
+            {!limited && <ConnectionIndicator {...connection} />}
           </span>
           <span className="min-w-0 flex-1 group-data-[sidebar-state=collapsed]/sidebar:hidden">
             <span className="block truncate text-sm font-medium">{label}</span>{" "}
@@ -87,7 +89,7 @@ export function SidebarFooter({ version }: { version: React.ReactNode }) {
                     <span className="text-sm">Theme</span>
                     <ThemeToggle />
                   </div>
-                  <ConnectionStatus {...connection} />
+                  {!limited && <ConnectionStatus {...connection} />}
                   {version}
                 </div>
               </SignedInAs>

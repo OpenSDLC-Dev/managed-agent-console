@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useContext } from "react";
+import { redirect, usePathname } from "next/navigation";
 import {
   ErrorState,
   ListSkeleton,
@@ -8,6 +9,9 @@ import {
 } from "@/components/console/bits";
 import { PageHeader } from "./page-header";
 import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
+import { PlatformError } from "@/lib/platform/http";
+import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 
 /**
  * Stops an absent or denied surface across its whole route tree, not just its
@@ -21,7 +25,29 @@ import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
  */
 export function SurfaceGuard({ children }: { children: React.ReactNode }) {
   const surfaces = useSurfaces();
-  const surface = surfaceOfPath(usePathname());
+  const pathname = usePathname();
+  const session = useContext(ConsoleSessionContext)?.data;
+  const surface = surfaceOfPath(pathname);
+  if (playgroundOnly(session)) {
+    if (pathname === LANDING_ROUTE) redirect(PLAYGROUND_ROUTE);
+    if (surface)
+      return (
+        <div>
+          <PageHeader title={SURFACES[surface].label} />
+          <ErrorState
+            error={
+              new PlatformError(403, {
+                type: "error",
+                error: {
+                  type: "permission_error",
+                  message: "This account can only use Playground.",
+                },
+              })
+            }
+          />
+        </div>
+      );
+  }
   if (!surface) return <>{children}</>;
   const state = surfaces?.[surface];
   if (state && state.status === "unimplemented")

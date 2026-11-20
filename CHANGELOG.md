@@ -6,6 +6,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
+### Added
+
+- Playground runs a prompt against configured chat models and streams the answer. Administrators can approve access for the `user` role in Members. [Platform #995](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/995)
+
 ### Changed
 
 - Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Move search into the global header.

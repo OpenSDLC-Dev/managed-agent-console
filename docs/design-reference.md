@@ -21,6 +21,12 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
 
+## Playground — checked 2026-11-20
+
+Isolated Chrome reached the reference's public sign-in offer. The [recording](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/tree/main/2026-10-22-playground-protocol) supplies the prompt and streaming behavior.
+The Console uses its own request form and response panel. The member approval control is specific to the self-hosted platform.
+The local Chrome manifest covers the request form in both themes.
+
 ## Native-only Console — checked 2026-11-17
 
 Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.

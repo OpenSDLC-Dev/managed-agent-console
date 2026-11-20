@@ -4,6 +4,15 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Platform plan 73 Playground acceptance
+
+On 2026-11-20, Chrome signed in through the real native HTTP stack. The
+unmatched OIDC user started without Playground access. A local user ran a
+Messages prompt after an admin granted access in Members. The fixture sent
+text over SSE and the browser stopped an open response. Withdrawing access
+refused new requests. The same browser session could not read Agents or
+gateway administration. The gateway fixture made no vendor call.
+
 ## Platform plan 69 native-only Console acceptance
 
 [PR #261](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/261) published

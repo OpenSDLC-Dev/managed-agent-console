@@ -46,10 +46,11 @@ const STATUS_LABELS = {
   down: "Platform Unreachable",
 };
 
-export function useConnectionStatus() {
+export function useConnectionStatus(enabled = true) {
   const { data } = useQuery({
     queryKey: ["connection-probe"],
     queryFn: probe,
+    enabled,
     refetchInterval: 30_000,
     refetchOnWindowFocus: false,
   });
