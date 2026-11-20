@@ -154,6 +154,14 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   await expect(page.getByRole("main")).not.toBeVisible();
   await page.locator('[data-nav-group="Resources"]').click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("aside")).toBeHidden();
+  await menu.click();
+  await expect(page.getByRole("navigation")).toHaveAttribute(
+    "data-nav-view",
+    "root",
+  );
+  await page.locator('[data-nav-group="Resources"]').click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Files" })

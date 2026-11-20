@@ -158,7 +158,7 @@ export function ConsoleShell({
               if (narrow && (event.target as Element).closest("a")) close();
             }}
           >
-            <Nav compact={!open && !narrow} mobile={narrow} />
+            {(!narrow || open) && <Nav compact={!open} mobile={narrow} />}
           </div>
           <div className="shrink-0">
             {narrow && documentation}

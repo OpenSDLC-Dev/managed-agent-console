@@ -11,7 +11,7 @@ Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dash
 
 On desktop the reference opens a group's default page and submenu together. After returning to all sections it shows the current page under its group. Reopening that group keeps the current page. The console uses the first available destination in each group as its landing page. Browser Back and Forward restore the page and its submenu.
 
-The full submenu header returns to all sections, keeps the current page open and restores focus to its group. On narrow screens the header menu opens full width and contains Documentation. A group selection opens its submenu. A destination selection or Escape closes the menu. Opening and dismissing the menu preserves the page's scroll position. The desktop compact rail retains its flyouts for self-hosted deployments.
+The full submenu header returns to all sections, keeps the current page open and restores focus to its group. On narrow screens the header menu opens full width and contains Documentation. A group selection opens its submenu. A destination selection or Escape closes the menu. Reopening starts from the current page. Opening and dismissing the menu preserves the page's scroll position. The desktop compact rail retains its flyouts for self-hosted deployments.
 
 The reference uses a single-line wordmark and puts Documentation on the right of the global header. Its first sidebar row is inset 8px from the top and sides. Rows are 36px high with no gap within a section. The console retains a sidebar toggle beside its own mark and links to the self-hosted platform documentation.
 
