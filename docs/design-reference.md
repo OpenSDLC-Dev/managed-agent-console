@@ -5,6 +5,12 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Playground — checked 2026-11-20
+
+Isolated Chrome reached the reference's public sign-in offer. The [recording](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/tree/main/2026-10-22-playground-protocol) supplies the prompt and streaming behavior.
+The Console uses its own request form and response panel. The member approval control is specific to the self-hosted platform.
+The local Chrome manifest covers the request form in both themes.
+
 ## Native-only Console — checked 2026-11-17
 
 Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.

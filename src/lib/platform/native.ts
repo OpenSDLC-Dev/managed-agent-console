@@ -10,6 +10,7 @@ export type NativeSession = {
   id: string;
   role: Role;
   role_source: string;
+  playground_access?: boolean;
   email: string;
   name: string;
   login_name?: string;
@@ -25,6 +26,7 @@ export type Member = {
   role: Role;
   role_source: string;
   status: string;
+  playground_access?: boolean;
   login_name?: string;
 };
 export type MemberPage = {
@@ -109,5 +111,13 @@ export async function readAccount(): Promise<
 > {
   const response = await fetch("/api/auth/session", { cache: "no-store" });
   await assertOk(response);
-  return response.json();
+  const session = (await response.json()) as
+    (Partial<NativeSession> & { signed_in: boolean }) | null;
+  if (
+    session &&
+    response.headers.get("x-platform-playground-disabled") === "1"
+  ) {
+    delete session.playground_access;
+  }
+  return session;
 }

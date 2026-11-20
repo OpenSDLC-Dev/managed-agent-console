@@ -16,7 +16,7 @@ It holds no management key, login password or OIDC client secret.
 flowchart LR
   Browser -->|cookie and CSRF| Edge[Application edge]
   Edge -->|auth, setup and private resources| Controlplane[Platform control plane]
-  Edge -->|model administration| Gateway[Model gateway]
+  Edge -->|model administration and Playground| Gateway[Model gateway]
   Edge -->|pages, assets and health| Console[Console server]
   Client[SDK or CLI] -->|issued owned API key| Edge
   Edge -->|public API| Controlplane
@@ -24,7 +24,7 @@ flowchart LR
 
 Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
 `/setup` offers code redemption; the platform decides eligibility. Administrators manage members and service accounts.
-A signed-in `user` has no resource reads but keeps account, setup and sign-out controls.
+An administrator can enable Playground for a `user` in Members. The member keeps account, setup and sign-out controls.
 Developers issue and manage their own API keys. Administrators can also issue keys for active service accounts.
 Each key uses its owner's current role; deactivating the owner revokes access.
 Browser calls keep using the session cookie, never a revealed key.
@@ -107,7 +107,7 @@ NATIVE_EVIDENCE_DIR=/absolute/path/to/scratch \
 pnpm test:e2e:native
 ```
 
-The platform source must implement plan 69 slice 5's private deployment initiator API and the earlier owned-key issuance API. The tier needs Docker and that checkout's Go toolchain.
+The platform source must implement the private Playground API from plan 73 and the native browser APIs from plan 69. The tier needs Docker and that checkout's Go toolchain.
 A test-only client builds against the platform's pinned Go SDK. Human and service-account keys come from the browser's one-time reveal, then reach the client through stdin.
 Independent cookie reads check persisted Memory actors, redacted nulls and current authority. No `ant` checkout is needed by this automated tier.
 The separate real-`ant` check must run against a fresh packaged Compose install after immutable source/image pairing.

@@ -2,6 +2,12 @@
 // counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
+    id: "native-playground",
+    route: "/playground",
+    fixture: "chat alias from the real gateway catalogue",
+    description: "Prompt form with model selection and response panel.",
+  },
+  {
     id: "native-environment-cloud-keys",
     route: "/environments/{fixture}",
     fixture: "real cloud environment with an issued key",

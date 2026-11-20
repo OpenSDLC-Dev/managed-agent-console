@@ -7,6 +7,7 @@ import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { nativeGet, ORGANIZATION } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
+import { playgroundOnly } from "@/lib/routes";
 
 /**
  * Feature detection for surfaces a deployment does not serve (CLAUDE.md
@@ -205,6 +206,7 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
   const session = useContext(ConsoleSessionContext)?.data;
   return useQuery({
     queryKey: ["surfaces", session?.id, session?.role],
+    enabled: !playgroundOnly(session),
     queryFn: async () => {
       const probes = SURFACE_NAMES.map(
         async (surface): Promise<[Surface, SurfaceState]> => {

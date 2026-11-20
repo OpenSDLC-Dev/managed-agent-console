@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
 import { useNavPreference } from "./nav-preference";
@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV, type GroupEntry, type NavEntry } from "@/lib/nav";
+import { PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 import {
   SURFACES,
   surfaceRoute,
@@ -200,6 +202,13 @@ function Entry({
 
 export function Nav({ compact = false }: { compact?: boolean }) {
   const surfaces = useSurfaces();
+  const session = useContext(ConsoleSessionContext)?.data;
+  const entries = NAV.filter((entry) => {
+    const playground =
+      entry.kind === "local" && entry.href === PLAYGROUND_ROUTE;
+    if (playgroundOnly(session)) return playground;
+    return !playground || session?.playground_access === true;
+  });
   const pathname = usePathname();
   // The list outgrows a laptop's height once every group is open, and the
   // sidebar scrolls; the page you are on must not be the row below the fold.
@@ -219,7 +228,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
         aria-label="Main navigation"
         className="flex flex-col gap-1 px-1.5 pt-4"
       >
-        {NAV.map((entry) => {
+        {entries.map((entry) => {
           if (entry.kind === "surface" && !available(entry.surface))
             return null;
           if (
@@ -264,7 +273,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
       aria-label="Main navigation"
       className="flex flex-col gap-1 px-3 pt-4"
     >
-      {NAV.map((entry) => (
+      {entries.map((entry) => (
         <Entry
           key={
             entry.kind === "group"
