@@ -932,7 +932,7 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "dashboard-nav-flyout",
+    id: "dashboard-resources-flyout",
     route: "/dashboard",
     fixture: "compact Resources navigation",
     description:
