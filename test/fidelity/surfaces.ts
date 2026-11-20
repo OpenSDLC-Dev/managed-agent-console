@@ -1035,7 +1035,7 @@ export const SURFACES: Surface[] = [
     route: "/usage",
     fixture: "14 days of the mock gateway's rollups",
     description:
-      "Analytics → Usage: tiles, cost per day, and the table grouped by model.",
+      "Organization → Usage: tiles, cost per day, and the table grouped by model.",
     setup: async (page) => {
       await page.locator("table[data-by]").waitFor();
     },
@@ -2185,7 +2185,9 @@ export const SURFACES: Surface[] = [
       await page
         .locator('nav [data-surface="api-keys"]')
         .waitFor({ state: "detached" });
-      await page.locator('nav [data-surface="agents"]').waitFor();
+      await page
+        .locator('nav [data-surface="agents"]')
+        .waitFor({ state: "attached" });
       const session = await page.request.get(
         new URL("/api/auth/session", page.url()).href,
       );
