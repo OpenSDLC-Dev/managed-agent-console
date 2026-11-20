@@ -32,7 +32,7 @@ function renderDashboard(unimplemented?: string[], status = 404) {
         if (unimplemented === undefined) return new Promise<Response>(() => {});
         const absent = unimplemented.some((s) =>
           s === "api-keys"
-            ? String(input).includes("/api/console/")
+            ? String(input).includes("/api_keys")
             : s === "model-gateway"
               ? String(input).includes("/admin/v1/")
               : String(input).includes(`/v1/${s}?`),
@@ -93,8 +93,8 @@ describe("DashboardPage", () => {
     renderDashboard(["api-keys", "agents", "files", "skills"], 403);
     await waitFor(() => expect(card("api-keys")).toBeNull());
     expect(card("agents")).toBeNull();
-    expect(headings()).not.toContain("Build");
-    expect(headings()).not.toContain("Manage");
+    expect(headings()).toContain("Build");
+    expect(headings()).toContain("Organization");
     expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
     expect(card("vaults")).not.toBeNull();
@@ -123,13 +123,7 @@ describe("DashboardPage", () => {
 
   it("groups the cards under the nav's own headings, in the nav's order", () => {
     renderDashboard();
-    expect(headings()).toEqual([
-      "Manage",
-      "Build",
-      "Model Gateway",
-      "Managed Agents",
-      "Analytics",
-    ]);
+    expect(headings()).toEqual(["Build", "Organization"]);
   });
 
   it("gives every surface a card pointing at it", () => {
@@ -164,27 +158,32 @@ describe("DashboardPage", () => {
     await waitFor(() => expect(card("skills")).toBeNull());
     expect(card("files")).not.toBeNull();
     expect(card("agents")).not.toBeNull();
-    // Build still has Files, so its heading stays.
     expect(headings()).toContain("Build");
   });
 
   it("drops a whole section when the deployment serves none of it", async () => {
-    renderDashboard(["files", "skills"]);
-    await waitFor(() => expect(headings()).not.toContain("Build"));
-    expect(headings()).toEqual([
-      "Manage",
-      "Organization",
-      "Model Gateway",
-      "Managed Agents",
-      "Analytics",
+    renderDashboard([
+      "agents",
+      "sessions",
+      "deployments",
+      "files",
+      "skills",
+      "environments",
+      "vaults",
+      "memory_stores",
+      "dreams",
     ]);
+    await waitFor(() => expect(headings()).not.toContain("Build"));
+    expect(headings()).toEqual(["Organization"]);
   });
 
-  it("drops the Model Gateway and Analytics sections on a console that runs without a gateway", async () => {
+  it("keeps organization links when the gateway is unavailable", async () => {
     renderDashboard(["model-gateway"]);
-    await waitFor(() => expect(headings()).not.toContain("Model Gateway"));
-    expect(headings()).not.toContain("Analytics");
-    expect(card("agents")).not.toBeNull();
+    await waitFor(() => expect(card("models")).toBeNull());
+    expect(card("providers")).toBeNull();
+    expect(card("usage")).toBeNull();
+    expect(card("api-keys")).not.toBeNull();
+    expect(headings()).toEqual(["Build", "Organization"]);
   });
 
   it("shows every card while the probe has not answered", () => {

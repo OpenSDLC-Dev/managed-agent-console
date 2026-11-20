@@ -62,6 +62,7 @@ test("a denied write keeps readable resources and the console session", async ({
   request,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await page.getByRole("button", { name: "Create environment" }).click();
   await page.getByLabel("Name").fill("role-check");

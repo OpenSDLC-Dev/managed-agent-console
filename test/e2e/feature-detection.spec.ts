@@ -24,6 +24,7 @@ test("a surface the deployment does not implement leaves the nav and the palette
 
   const nav = page.locator("nav");
   await expect(nav.locator("[data-surface=agents]")).toBeVisible();
+  await nav.getByRole("button", { name: "Resources", exact: true }).click();
   await expect(nav.locator("[data-surface=vaults]")).toBeVisible();
   await expect(nav.locator("[data-surface=skills]")).toHaveCount(0);
   await expect(nav.locator("[data-surface=files]")).toHaveCount(0);

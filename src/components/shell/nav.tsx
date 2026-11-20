@@ -3,85 +3,87 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
-import { useNavPreference } from "./nav-preference";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { NAV, type GroupEntry, type NavEntry } from "@/lib/nav";
+import { ChevronDown, type LucideIcon } from "lucide-react";
+import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
+  isSurfaceVisible,
   SURFACES,
+  surfaceOfPath,
   surfaceRoute,
   useSurfaces,
-  isSurfaceVisible,
+  type Surface,
 } from "@/lib/platform/surfaces";
-import type { Surface } from "@/lib/platform/surfaces";
+import { cn } from "@/lib/utils";
+import { useNavPreference } from "./nav-preference";
 
-/** Shared by every row so the group header sits flush with its neighbours. */
 const ROW = "flex h-9 items-center gap-4 rounded-lg px-2 text-sm";
-
-/**
- * Whether a surface should be drawn. Unknown means shown: an item disappears
- * only once the platform has said it does not serve that surface (CLAUDE.md
- * principle 3).
- */
-type Available = (surface: Surface) => boolean;
+const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
+const HIGHLIGHT = "bg-sidebar-accent font-medium";
+const HOVER = "hover:bg-sidebar-accent/60";
 
 function NavLink({
   href,
   label,
   icon: Icon,
   surface,
+  active,
   nested,
   popup,
+  compact,
   onNavigate,
 }: {
   href: string;
   label: string;
-  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon?: LucideIcon;
   surface?: Surface;
+  active: boolean;
   nested?: boolean;
   popup?: boolean;
+  compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
       onClick={onNavigate}
       data-surface={surface}
+      data-active={active}
       aria-current={active ? "page" : undefined}
+      aria-label={compact ? label : undefined}
+      title={compact ? label : undefined}
       className={cn(
-        ROW,
+        compact ? COMPACT_ROW : ROW,
         // Align nested labels with 8px padding + 16px icon + 16px gap.
         nested && "pl-10",
         popup && "h-8 px-2.5 py-1.5",
         "text-sidebar-foreground",
-        active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60",
+        active ? HIGHLIGHT : HOVER,
       )}
     >
-      {Icon ? (
-        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
-      ) : null}
-      {label}
+      {Icon && (
+        <Icon
+          className={cn("size-4", !compact && "text-muted-foreground")}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      )}
+      {!compact && label}
     </Link>
   );
 }
 
 function Group({
   group,
-  available,
+  activeSurface,
 }: {
   group: GroupEntry;
-  available: Available;
+  activeSurface?: Surface;
 }) {
   const id = `nav-group-${group.label.toLowerCase().replace(/\s+/g, "-")}`;
   const [preference, setOpen] = useNavPreference(id);
-  const open = preference ?? true;
-  const items = group.items.filter((item) => available(item.surface));
-  // A group is its items. With none of them served there is nothing to title,
-  // and a header alone would advertise a section this deployment does not have.
-  if (items.length === 0) return null;
+  const active = group.items.some(({ surface }) => surface === activeSurface);
+  const open = preference ?? (active || group.defaultOpen !== false);
   const { icon: Icon } = group;
   return (
     <div className="flex flex-col gap-0.5">
@@ -91,14 +93,14 @@ function Group({
         aria-expanded={open}
         aria-controls={id}
         data-nav-group={group.label}
-        // Whether the group is open is derived state, so it is readable as an
-        // attribute and not only as a rotated chevron — the same contract
-        // `ConnectionStatus` carries and e2e already reads there. `aria-expanded`
-        // says it too, but for the assistive tree rather than for a test.
         data-state={open ? "open" : "closed"}
-        className={cn(ROW, "text-muted-foreground hover:bg-sidebar-accent/60")}
+        data-active={active}
+        className={cn(
+          ROW,
+          active && !open ? HIGHLIGHT : cn("text-muted-foreground", HOVER),
+        )}
       >
-        <Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
         {group.label}
         <ChevronDown
           className={cn(
@@ -109,43 +111,48 @@ function Group({
           aria-hidden
         />
       </button>
-      {/* Unmounted rather than hidden when closed: a collapsed group's links
-          should not be tabbable, and `hidden` on the container is one more
-          state to keep in step with aria-expanded. */}
-      {open ? (
-        <div id={id} className="flex flex-col gap-0.5">
-          {items.map((item) => (
+      <div id={id} hidden={!open}>
+        <div className="flex flex-col gap-0.5">
+          {group.items.map(({ surface }) => (
             <NavLink
-              key={item.surface}
+              key={surface}
               nested
-              href={surfaceRoute(item.surface)}
-              label={SURFACES[item.surface].label}
-              surface={item.surface}
+              href={surfaceRoute(surface)}
+              label={SURFACES[surface].label}
+              surface={surface}
+              active={surface === activeSurface}
             />
           ))}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
 
 function CompactGroup({
   group,
-  available,
+  activeSurface,
 }: {
   group: GroupEntry;
-  available: Available;
+  activeSurface?: Surface;
 }) {
   const [open, setOpen] = useState(false);
+  const active = group.items.some(({ surface }) => surface === activeSurface);
   const { icon: Icon } = group;
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={group.label}
         title={group.label}
-        className="flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60"
+        data-nav-group={group.label}
+        data-active={active}
+        className={cn(
+          COMPACT_ROW,
+          "text-sidebar-foreground",
+          active ? HIGHLIGHT : HOVER,
+        )}
       >
-        <Icon className="size-4" strokeWidth={1.75} />
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
@@ -158,18 +165,17 @@ function CompactGroup({
             <Popover.Title className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </Popover.Title>
-            {group.items
-              .filter((item) => available(item.surface))
-              .map((item) => (
-                <NavLink
-                  key={item.surface}
-                  popup
-                  href={surfaceRoute(item.surface)}
-                  label={SURFACES[item.surface].label}
-                  surface={item.surface}
-                  onNavigate={() => setOpen(false)}
-                />
-              ))}
+            {group.items.map(({ surface }) => (
+              <NavLink
+                key={surface}
+                popup
+                href={surfaceRoute(surface)}
+                label={SURFACES[surface].label}
+                surface={surface}
+                active={surface === activeSurface}
+                onNavigate={() => setOpen(false)}
+              />
+            ))}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>
@@ -177,106 +183,76 @@ function CompactGroup({
   );
 }
 
-function Entry({
-  entry,
-  available,
-}: {
-  entry: NavEntry;
-  available: Available;
-}) {
-  if (entry.kind === "local")
-    return <NavLink href={entry.href} label={entry.label} icon={entry.icon} />;
-  if (entry.kind === "surface")
-    return available(entry.surface) ? (
-      <NavLink
-        href={surfaceRoute(entry.surface)}
-        label={SURFACES[entry.surface].label}
-        icon={entry.icon}
-        surface={entry.surface}
-      />
-    ) : null;
-  return <Group group={entry} available={available} />;
-}
-
 export function Nav({ compact = false }: { compact?: boolean }) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
-  // The list outgrows a laptop's height once every group is open, and the
-  // sidebar scrolls; the page you are on must not be the row below the fold.
-  // The compact rail has no such list, so expanding the sidebar brings the
-  // row in too.
+  const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
   useEffect(() => {
-    nav.current
-      ?.querySelector("[aria-current=page]")
-      ?.scrollIntoView?.({ block: "nearest" });
-  }, [pathname, surfaces, compact]);
-  const available: Available = (surface) =>
-    isSurfaceVisible(surfaces?.[surface], surface);
-  if (compact) {
-    return (
-      <nav
-        aria-label="Main navigation"
-        className="flex flex-col gap-1 px-1.5 pt-4"
-      >
-        {NAV.map((entry) => {
-          if (entry.kind === "surface" && !available(entry.surface))
-            return null;
-          if (
-            entry.kind === "group" &&
-            !entry.items.some((item) => available(item.surface))
-          )
-            return null;
-          const { icon: Icon } = entry;
-          const label =
-            entry.kind === "surface"
-              ? SURFACES[entry.surface].label
-              : entry.label;
-          const className =
-            "flex size-9 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/60";
-          if (entry.kind === "group")
-            return (
-              <CompactGroup key={label} group={entry} available={available} />
-            );
-          const href =
-            entry.kind === "local" ? entry.href : surfaceRoute(entry.surface);
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={label}
-              href={href}
-              aria-label={label}
-              title={label}
-              data-active={active}
-              aria-current={active ? "page" : undefined}
-              className={cn(className, active && "bg-sidebar-accent")}
-            >
-              <Icon className="size-4" strokeWidth={1.75} />
-            </Link>
-          );
-        })}
-      </nav>
+    // Prefer the current link. When it is hidden, reveal its group instead.
+    const current = nav.current?.querySelector(
+      '[aria-current="page"]:not([hidden] *), button[data-active="true"]:not([aria-expanded="true"])',
     );
-  }
+    current?.scrollIntoView?.({ block: "nearest" });
+  }, [pathname, surfaces, compact]);
+
+  const available = (surface: Surface) =>
+    isSurfaceVisible(surfaces?.[surface], surface);
+  const GroupControl = compact ? CompactGroup : Group;
   return (
     <nav
       ref={nav}
       aria-label="Main navigation"
-      className="flex flex-col gap-1 px-3 pt-4"
+      className={cn("flex flex-col gap-4 pt-4", compact ? "px-1.5" : "px-3")}
     >
-      {NAV.map((entry) => (
-        <Entry
-          key={
-            entry.kind === "group"
-              ? entry.label
-              : entry.kind === "local"
-                ? entry.href
-                : entry.surface
+      <NavLink
+        href={DASHBOARD_LINK.href}
+        label={DASHBOARD_LINK.label}
+        icon={DASHBOARD_LINK.icon}
+        active={pathname === DASHBOARD_LINK.href}
+        compact={compact}
+      />
+      {NAV_SECTIONS.map(({ heading, entries }) => {
+        const rows = entries.map((entry) => {
+          if (entry.kind === "surface") {
+            const { surface } = entry;
+            return available(surface) ? (
+              <NavLink
+                key={surface}
+                href={surfaceRoute(surface)}
+                label={SURFACES[surface].label}
+                icon={entry.icon}
+                surface={surface}
+                active={surface === activeSurface}
+                compact={compact}
+              />
+            ) : null;
           }
-          entry={entry}
-          available={available}
-        />
-      ))}
+          const items = entry.items.filter(({ surface }) => available(surface));
+          return items.length > 0 ? (
+            <GroupControl
+              key={entry.label}
+              group={{ ...entry, items }}
+              activeSurface={activeSurface}
+            />
+          ) : null;
+        });
+        if (!rows.some(Boolean)) return null;
+        return (
+          <div key={heading} className="flex flex-col gap-1">
+            <h2
+              className={
+                compact
+                  ? "sr-only"
+                  : "px-2 pb-1 text-xs font-medium text-muted-foreground"
+              }
+            >
+              {heading}
+            </h2>
+            {rows}
+          </div>
+        );
+      })}
     </nav>
   );
 }

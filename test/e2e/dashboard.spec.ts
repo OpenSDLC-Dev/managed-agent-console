@@ -49,24 +49,25 @@ test("dashboard stays centered and its compact navigation remains usable", async
   await page.getByRole("button", { name: "Search Console… Ctrl K" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
-  const managed = page
+  const agents = page
     .getByRole("navigation")
-    .getByRole("button", { name: "Managed Agents" });
-  await managed.click();
+    .getByRole("button", { name: "Agents", exact: true });
+  await agents.click();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
     "collapsed",
   );
-  const group = page.getByRole("dialog", { name: "Managed Agents" });
+  const group = page.getByRole("dialog", { name: "Agents", exact: true });
   await expect(
     group.getByRole("link", { name: "Agents", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(managed).toBeFocused();
-  await managed.click();
+  await expect(agents).toBeFocused();
+  await agents.click();
   await group.getByRole("link", { name: "Agents", exact: true }).click();
   await expect(group).not.toBeVisible();
   await expect(page).toHaveURL(/\/agents$/);
+  await expect(agents).toHaveAttribute("data-active", "true");
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Dashboard" })
@@ -97,6 +98,7 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect(page.getByRole("main")).not.toBeVisible();
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Files" })
@@ -114,10 +116,16 @@ test("navigation preferences survive reload while viewport changes keep the page
 }) => {
   await signIn(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const build = page.getByRole("button", { name: "Build", exact: true });
-  await build.click();
+  const resources = page.getByRole("button", {
+    name: "Resources",
+    exact: true,
+  });
+  await expect(resources).toHaveAttribute("aria-expanded", "false");
+  await resources.click();
+  await expect(resources).toHaveAttribute("aria-expanded", "true");
+  await resources.click();
   await page.reload();
-  await expect(build).toHaveAttribute("aria-expanded", "false");
+  await expect(resources).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.reload();
   await expect(page.locator("aside")).toHaveAttribute(

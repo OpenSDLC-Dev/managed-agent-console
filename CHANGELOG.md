@@ -6,7 +6,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Group console navigation under Build and Organization, with matching Dashboard cards and search shortcuts.
 
 ## Released
 

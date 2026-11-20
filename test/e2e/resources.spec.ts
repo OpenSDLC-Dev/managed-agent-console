@@ -48,6 +48,7 @@ test("environments list and detail render the config union", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "cloud-limited", exact: true }),
@@ -159,6 +160,7 @@ test("vaults list and detail render secret-free credentials", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();
@@ -182,6 +184,7 @@ test("skills list filters by source; detail shows versions", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "Excel spreadsheets" }),
@@ -205,6 +208,7 @@ test("files list renders uploads, and no session's own files", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "research-notes.md", exact: true }),

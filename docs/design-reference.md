@@ -5,6 +5,14 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Sidebar structure — checked 2026-11-20
+
+The [Claude Dashboard](https://platform.claude.com/dashboard) exposes Dashboard above Build and Organization in its published page. Chrome reached the sign-in page, so the authenticated submenus could not be verified.
+
+The console uses those sections for its existing destinations. Build groups agent workflows separately from reusable resources. API Keys and Usage open directly because each has one destination. Organization also contains Settings for member and service-account administration and Model Gateway for self-hosted models and providers.
+
+Resources starts collapsed on Dashboard so Organization stays visible. A resource route opens the group by default. A saved expansion preference takes precedence.
+
 ## Native-only Console — checked 2026-11-17
 
 Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.

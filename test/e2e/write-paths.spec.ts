@@ -75,6 +75,7 @@ test("mock vault updates reject malformed or invalid requests atomically", async
 
 test("create, edit, archive, and delete an environment", async ({ page }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Environments", exact: true }).click();
   await page.getByRole("button", { name: "Create environment" }).click();
 
@@ -222,6 +223,7 @@ test("the first credential returns to the populated vault after creation", async
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();
@@ -257,6 +259,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
   page,
 }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page
     .getByRole("link", { name: "Credential Vaults", exact: true })
     .click();
@@ -348,6 +351,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
 
 test("skill upload, new version, and deletes", async ({ page }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await page.getByRole("button", { name: "Upload skill" }).click();
   await page.getByLabel("Display name (optional)").fill("Release notes");
@@ -397,6 +401,7 @@ test("skill upload, new version, and deletes", async ({ page }) => {
 
 test("file upload and delete from the files page", async ({ page }) => {
   await signIn(page);
+  await page.getByRole("button", { name: "Resources", exact: true }).click();
   await page.getByRole("link", { name: "Files", exact: true }).click();
   await page.getByLabel("Upload file").setInputFiles({
     name: "report.pdf",

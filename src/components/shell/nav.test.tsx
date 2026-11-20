@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   render,
@@ -30,12 +30,48 @@ vi.mock("next/link", () => ({
 
 /** Every destination, in nav order. `surface` absent = console-local. */
 const EXPECTED = [
-  // Top level, and first: the landing page, which is not a platform surface.
   { label: "Dashboard", href: "/dashboard" },
-  // Top level and second, which is where the reference puts it.
+  { label: "Agents", href: "/agents", surface: "agents", group: "Agents" },
+  {
+    label: "Sessions",
+    href: "/sessions",
+    surface: "sessions",
+    group: "Agents",
+  },
+  {
+    label: "Deployments",
+    href: "/deployments",
+    surface: "deployments",
+    group: "Agents",
+  },
+  { label: "Files", href: "/files", surface: "files", group: "Resources" },
+  { label: "Skills", href: "/skills", surface: "skills", group: "Resources" },
+  {
+    label: "Environments",
+    href: "/environments",
+    surface: "environments",
+    group: "Resources",
+  },
+  {
+    label: "Credential Vaults",
+    href: "/vaults",
+    surface: "vaults",
+    group: "Resources",
+  },
+  {
+    label: "Memory Stores",
+    href: "/memory-stores",
+    surface: "memory-stores",
+    group: "Resources",
+  },
+  {
+    label: "Dreams",
+    href: "/dreams",
+    surface: "dreams",
+    group: "Resources",
+  },
   { label: "API Keys", href: "/api-keys", surface: "api-keys" },
-  { label: "Files", href: "/files", surface: "files", group: "Build" },
-  { label: "Skills", href: "/skills", surface: "skills", group: "Build" },
+  { label: "Usage", href: "/usage", surface: "usage" },
   {
     label: "Models",
     href: "/models",
@@ -48,68 +84,22 @@ const EXPECTED = [
     surface: "providers",
     group: "Model Gateway",
   },
-  {
-    label: "Agents",
-    href: "/agents",
-    surface: "agents",
-    group: "Managed Agents",
-  },
-  {
-    label: "Sessions",
-    href: "/sessions",
-    surface: "sessions",
-    group: "Managed Agents",
-  },
-  {
-    label: "Deployments",
-    href: "/deployments",
-    surface: "deployments",
-    group: "Managed Agents",
-  },
-  {
-    label: "Environments",
-    href: "/environments",
-    surface: "environments",
-    group: "Managed Agents",
-  },
-  {
-    label: "Credential Vaults",
-    href: "/vaults",
-    surface: "vaults",
-    group: "Managed Agents",
-  },
-  {
-    label: "Memory Stores",
-    href: "/memory-stores",
-    surface: "memory-stores",
-    group: "Managed Agents",
-  },
-  {
-    label: "Dreams",
-    href: "/dreams",
-    surface: "dreams",
-    group: "Managed Agents",
-  },
-  { label: "Usage", href: "/usage", surface: "usage", group: "Analytics" },
 ];
 
-/** The groups, in nav order, and what each holds. */
 const GROUPS = [
-  { label: "Build", surfaces: ["files", "skills"] },
-  { label: "Model Gateway", surfaces: ["models", "providers"] },
+  { label: "Agents", surfaces: ["agents", "sessions", "deployments"] },
   {
-    label: "Managed Agents",
+    label: "Resources",
     surfaces: [
-      "agents",
-      "sessions",
-      "deployments",
+      "files",
+      "skills",
       "environments",
       "vaults",
       "memory-stores",
       "dreams",
     ],
   },
-  { label: "Analytics", surfaces: ["usage"] },
+  { label: "Model Gateway", surfaces: ["models", "providers"] },
 ];
 
 const SURFACE_ITEMS = EXPECTED.filter((i) => i.surface);
@@ -135,7 +125,7 @@ function renderNav(
         // at their own BFF paths — which carry no query string and no name that
         // matches the pattern above.
         s === "api-keys"
-          ? String(input).includes("/api/console/")
+          ? String(input).includes("/api_keys")
           : s === "providers" || s === "models" || s === "usage"
             ? String(input).includes(`/admin/v1/${SURFACES[s].path}`)
             : String(input).includes(
@@ -182,9 +172,15 @@ const groupHeader = (label: string) =>
 
 /** Every row the nav draws, top to bottom: group headers and links alike. */
 const rowOrder = () =>
-  [...document.querySelectorAll("nav a, nav button")].map((el) =>
+  [...document.querySelectorAll("nav h2, nav a, nav button")].map((el) =>
     (el.textContent ?? "").trim(),
   );
+
+const RESOURCES_PREFERENCE = "managed-agent-console:nav:nav-group-resources";
+
+beforeEach(() => {
+  localStorage.setItem(RESOURCES_PREFERENCE, "true");
+});
 
 afterEach(() => {
   cleanup();
@@ -207,9 +203,9 @@ describe("Nav", () => {
       expect(link("API Keys")).toBeNull();
       expect(link("Files")).toBeNull();
       expect(link("Skills")).toBeNull();
-      expect(groupHeader("Build")).toBeNull();
+      expect(groupHeader("Resources")).not.toBeNull();
       expect(link("Dashboard")).not.toBeNull();
-      if (compact) expect(groupHeader("Managed Agents")).not.toBeNull();
+      if (compact) expect(groupHeader("Agents")).not.toBeNull();
       else expect(link("Agents")).not.toBeNull();
     });
   }
@@ -224,39 +220,32 @@ describe("Nav", () => {
     }
   });
 
-  // The order is the point of the grouping, and the assertion the flat nav did
-  // not have: every routing test below passed against the ungrouped list too,
-  // so without this one a regrouping could be undone and the suite stay green.
-  it("draws the reference's order: two top-level rows, then Build, Model Gateway, Managed Agents and Analytics", () => {
+  it("orders the destinations under Build and Organization", () => {
     navState.pathname = "/";
     renderNav();
     expect(rowOrder()).toEqual([
       "Dashboard",
-      "API Keys",
       "Build",
-      "Files",
-      "Skills",
-      "Model Gateway",
-      "Models",
-      "Providers",
-      "Managed Agents",
+      "Agents",
       "Agents",
       "Sessions",
       "Deployments",
+      "Resources",
+      "Files",
+      "Skills",
       "Environments",
       "Credential Vaults",
       "Memory Stores",
       "Dreams",
-      "Analytics",
+      "Organization",
+      "API Keys",
       "Usage",
+      "Model Gateway",
+      "Models",
+      "Providers",
     ]);
   });
 
-  // The reference draws an icon on top-level rows and on group headers, and
-  // none on the rows inside a group; a nested row pads left instead, so every
-  // label lands in one column (docs/design-reference.md).
-  // Analytics is the last group, and with every group open it sits below a
-  // laptop's fold; the sidebar scrolls, so the current page is brought in.
   it("scrolls the current page's row into view", () => {
     const scrolled: Element[] = [];
     const original = Element.prototype.scrollIntoView;
@@ -352,26 +341,24 @@ describe("Nav", () => {
   it("collapses a group and leaves its neighbours alone", async () => {
     navState.pathname = "/";
     renderNav();
-    const build = groupHeader("Build")!;
-    expect(build.getAttribute("aria-expanded")).toBe("true");
+    const resources = groupHeader("Resources")!;
+    expect(resources.getAttribute("aria-expanded")).toBe("true");
     // The machine-readable half of the contract: a test reads the attribute,
     // not the chevron it rotates.
-    expect(build.getAttribute("data-state")).toBe("open");
+    expect(resources.getAttribute("data-state")).toBe("open");
 
-    await userEvent.click(build);
+    await userEvent.click(resources);
 
-    expect(build.getAttribute("aria-expanded")).toBe("false");
-    expect(build.getAttribute("data-state")).toBe("closed");
-    // Unmounted rather than hidden, so a collapsed group's links are not
-    // tabbable and there is one less state to keep in step with aria-expanded.
+    expect(resources.getAttribute("aria-expanded")).toBe("false");
+    expect(resources.getAttribute("data-state")).toBe("closed");
     expect(link("Files")).toBeNull();
     expect(link("Skills")).toBeNull();
     expect(link("Agents")).not.toBeNull();
     expect(link("Dashboard")).not.toBeNull();
 
-    await userEvent.click(build);
-    expect(build.getAttribute("aria-expanded")).toBe("true");
-    expect(build.getAttribute("data-state")).toBe("open");
+    await userEvent.click(resources);
+    expect(resources.getAttribute("aria-expanded")).toBe("true");
+    expect(resources.getAttribute("data-state")).toBe("open");
     expect(link("Files")).not.toBeNull();
   });
 
@@ -398,6 +385,11 @@ describe("Nav", () => {
       expect(vi.mocked(fetch)).toHaveBeenCalledTimes(ALL_SURFACES.length),
     );
     for (const { label } of EXPECTED) expect(link(label)).not.toBeNull();
+    await screen.findByRole("button", { name: "Settings" });
+    expect(link("Members")?.getAttribute("href")).toBe("/members");
+    expect(link("Service accounts")?.getAttribute("href")).toBe(
+      "/service-accounts",
+    );
   });
 
   // One per surface: a deployment that does not serve it loses the item, and
@@ -420,7 +412,6 @@ describe("Nav", () => {
       navState.pathname = "/";
       renderNav(surfaces);
       await waitFor(() => expect(groupHeader(label)).toBeNull());
-      // The other group, and both top-level rows, are untouched.
       for (const other of GROUPS.filter((g) => g.label !== label)) {
         expect(groupHeader(other.label), other.label).not.toBeNull();
       }
@@ -428,6 +419,25 @@ describe("Nav", () => {
       expect(link("API Keys")).not.toBeNull();
     });
   }
+
+  it.each([false, true])(
+    "omits an empty Build section (compact=%s)",
+    async (compact) => {
+      renderNav(
+        GROUPS.filter(({ label }) => label !== "Model Gateway").flatMap(
+          ({ surfaces }) => surfaces,
+        ),
+        { compact },
+      );
+      await waitForElementToBeRemoved(
+        screen.getByRole("heading", { name: "Build" }),
+      );
+      expect(
+        screen.getByRole("heading", { name: "Organization" }),
+      ).toBeDefined();
+      expect(link("API Keys")).not.toBeNull();
+    },
+  );
 
   it("probe: keeps every item when the probe fails rather than 404s", async () => {
     navState.pathname = "/";
@@ -450,31 +460,46 @@ describe("Nav", () => {
   });
 });
 
+it("opens Resources by default only on a resource route", () => {
+  localStorage.removeItem(RESOURCES_PREFERENCE);
+  navState.pathname = "/dashboard";
+  const first = renderNav();
+  expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("false");
+  expect(link("Files")).toBeNull();
+  first.unmount();
+
+  navState.pathname = "/files";
+  renderNav();
+  expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("true");
+  expect(link("Files")?.getAttribute("aria-current")).toBe("page");
+});
+
 it("restores a collapsed group after remount", async () => {
   const user = userEvent.setup();
   const first = renderNav();
-  await user.click(groupHeader("Build")!);
+  await user.click(groupHeader("Resources")!);
   expect(link("Files")).toBeNull();
   first.unmount();
   renderNav();
-  expect(groupHeader("Build")?.getAttribute("aria-expanded")).toBe("false");
+  expect(groupHeader("Resources")?.getAttribute("aria-expanded")).toBe("false");
   expect(link("Files")).toBeNull();
-  await user.click(groupHeader("Build")!);
+  await user.click(groupHeader("Resources")!);
   expect(link("Files")).not.toBeNull();
 });
 
 it("compact groups open an accessible flyout without changing saved expansion", async () => {
-  localStorage.setItem("managed-agent-console:nav:nav-group-build", "false");
+  localStorage.setItem(
+    "managed-agent-console:nav:nav-group-resources",
+    "false",
+  );
   renderNav(["skills"], { compact: true });
   const user = userEvent.setup();
-  const trigger = screen.getByRole("button", { name: "Build" });
+  const trigger = screen.getByRole("button", { name: "Resources" });
   await user.click(trigger);
-  await screen.findByRole("dialog", { name: "Build" });
+  await screen.findByRole("dialog", { name: "Resources" });
   await waitFor(() => expect(link("Skills")).toBeNull());
   expect(link("Files")?.getAttribute("href")).toBe("/files");
-  expect(
-    localStorage.getItem("managed-agent-console:nav:nav-group-build"),
-  ).toBe("false");
+  expect(localStorage.getItem(RESOURCES_PREFERENCE)).toBe("false");
   await user.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   expect(document.activeElement).toBe(trigger);

@@ -894,15 +894,31 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "dashboard-mobile-nav",
+    route: "/dashboard",
+    fixture: "390px viewport, navigation expanded",
+    description: "The full-width sidebar shows both navigation sections.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Expand sidebar" }).click();
+      await page.locator('[data-sidebar-state="expanded"]').waitFor();
+    },
+  },
+  {
     id: "dashboard-group-collapsed",
     route: "/dashboard",
-    fixture: "Build group persisted closed",
+    fixture: "Resources group persisted closed",
     description: "Collapsed group survives a full reload.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Build", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Resources", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Resources", exact: true })
+        .click();
       await page.reload();
       await page
-        .locator('[data-nav-group="Build"][aria-expanded="false"]')
+        .locator('[data-nav-group="Resources"][aria-expanded="false"]')
         .waitFor();
     },
   },
@@ -923,16 +939,18 @@ export const SURFACES: Surface[] = [
   {
     id: "dashboard-nav-flyout",
     route: "/dashboard",
-    fixture: "compact Build navigation",
+    fixture: "compact Resources navigation",
     description:
       "A group flyout opens beside the rail without changing sidebar preference.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Collapse sidebar" }).click();
       await page
         .getByRole("navigation")
-        .getByRole("button", { name: "Build", exact: true })
+        .getByRole("button", { name: "Resources", exact: true })
         .click();
-      await page.getByRole("dialog", { name: "Build", exact: true }).waitFor();
+      await page
+        .getByRole("dialog", { name: "Resources", exact: true })
+        .waitFor();
     },
   },
   // ---- the landing page ------------------------------------------------
