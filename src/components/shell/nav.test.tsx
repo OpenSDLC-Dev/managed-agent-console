@@ -29,7 +29,6 @@ vi.mock("next/navigation", async () => {
         },
         () => navState.pathname,
       ),
-    useSearchParams: () => new URLSearchParams(navState.search),
   };
 });
 
@@ -49,7 +48,7 @@ vi.mock("next/link", () => ({
       onClick={(event) => {
         event.preventDefault();
         onClick?.(event);
-        if (!href) return;
+        if (href == null) return;
         let cancelled = false;
         onNavigate?.({
           preventDefault: () => {
@@ -57,7 +56,10 @@ vi.mock("next/link", () => ({
           },
         });
         if (cancelled) return;
-        const target = new URL(href, "http://console.test");
+        const target = new URL(
+          href,
+          `http://console.test${navState.pathname}${navState.search}`,
+        );
         navState.pathname = target.pathname;
         navState.search = target.search;
         navState.listeners.forEach((listener) => listener());
@@ -225,7 +227,7 @@ describe("Nav", () => {
 
   it("opens the current route's panel and returns to the root without changing the route", async () => {
     navState.pathname = "/sessions/sess_01/trace";
-    navState.search = "?order=asc";
+    navState.search = "?name=two%20words";
     const view = renderNav();
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
     expect(
@@ -241,13 +243,11 @@ describe("Nav", () => {
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
     const activeGroup = screen.getByRole("link", { name: "Agents Sessions" });
     expect(activeGroup.getAttribute("aria-current")).toBe("page");
-    expect(activeGroup.getAttribute("href")).toBe(
-      "/sessions/sess_01/trace?order=asc",
-    );
+    expect(activeGroup.getAttribute("href")).toBe("#");
     expect(document.activeElement).toBe(activeGroup);
     await userEvent.click(activeGroup);
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
-    expect(navState.search).toBe("?order=asc");
+    expect(navState.search).toBe("?name=two%20words");
 
     navState.pathname = "/files";
     view.rerender(<Nav />);

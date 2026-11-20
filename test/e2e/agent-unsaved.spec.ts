@@ -8,6 +8,24 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+test("reopening the active group preserves a draft and the raw page query", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new?filter=two%20words");
+  const url = page.url();
+  const name = page.getByLabel("Name", { exact: true });
+  await name.fill("In progress");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await nav.locator('[data-nav-group="Agents"]').click();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
+  await expect(page).toHaveURL(url);
+  await expect(name).toHaveValue("In progress");
+  await expect(
+    page.getByRole("dialog", { name: "Unsaved changes" }),
+  ).toBeHidden();
+});
+
 test("agent modal retains drafts on Stay and discards only on Leave", async ({
   page,
 }) => {

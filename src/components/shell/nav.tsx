@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
@@ -111,7 +111,12 @@ function GroupControl({
     </>
   );
   return href ? (
-    <Link {...props} href={href} onNavigate={onOpen}>
+    <Link
+      {...props}
+      href={href}
+      prefetch={href === "#" ? false : undefined}
+      onNavigate={onOpen}
+    >
       {contents}
     </Link>
   ) : (
@@ -184,7 +189,6 @@ export function Nav({
 }) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
-  const search = useSearchParams().toString();
   const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
   const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
@@ -341,13 +345,8 @@ export function Nav({
                   <GroupControl
                     key={group.label}
                     group={group}
-                    href={
-                      mobile
-                        ? undefined
-                        : current && search
-                          ? `${pathname}?${search}`
-                          : destination
-                    }
+                    // A same-document link preserves the current query's encoding.
+                    href={mobile ? undefined : current ? "#" : destination}
                     current={current}
                     onOpen={(event) => {
                       pendingFocus.current = {

@@ -125,6 +125,11 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   });
   expect(scrollOffset).toBeGreaterThan(0);
   await menu.click();
+  await page.getByRole("link", { name: "Platform documentation" }).hover();
+  await page.mouse.wheel(0, 300);
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
   await page.keyboard.press("Escape");
   await expect
     .poll(() => page.evaluate(() => window.scrollY))

@@ -137,6 +137,7 @@ export function ConsoleShell({
       <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">
         <aside
           data-sidebar-state={open ? "expanded" : "collapsed"}
+          data-console-menu-open={mobileMenuOpen || undefined}
           role={mobileMenuOpen ? "dialog" : undefined}
           aria-label={mobileMenuOpen ? "Menu" : undefined}
           onKeyDown={closeOnEscape}
