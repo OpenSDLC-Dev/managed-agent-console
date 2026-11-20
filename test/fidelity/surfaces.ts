@@ -2124,7 +2124,8 @@ export const SURFACES: Surface[] = [
       if (!refused.ok()) throw new Error("Cannot stage denied reads");
       await page.reload();
       await page.waitForFunction(
-        () => !document.querySelector("nav [data-nav-group]"),
+        () =>
+          !document.querySelector("nav [data-nav-group], nav a[data-surface]"),
       );
       await page
         .locator('[data-testid="connection-dot"][data-state="denied"]')
