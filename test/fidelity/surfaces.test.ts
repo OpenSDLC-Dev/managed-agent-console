@@ -67,7 +67,12 @@ describe("the fidelity surface manifest", () => {
           s.route.replace(/\/[a-z]+_[A-Za-z0-9]+/g, "/[id]").replace(/\/$/, ""),
       ),
     );
-    const nativeOnly = new Set(["/setup", "/members", "/service-accounts"]);
+    const nativeOnly = new Set([
+      "/setup",
+      "/members",
+      "/service-accounts",
+      "/playground",
+    ]);
     const nativeCovered = new Set(
       SURFACES.filter((s) => s.mode === "platform").map((s) => s.route),
     );
