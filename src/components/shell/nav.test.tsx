@@ -15,8 +15,20 @@ import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 const navState = vi.hoisted(() => ({
   pathname: "/dashboard",
   search: "",
+  deferNavigation: false,
   listeners: new Set<() => void>(),
 }));
+
+function navigate(href: string) {
+  if (navState.deferNavigation) return;
+  const target = new URL(
+    href,
+    `http://console.test${navState.pathname}${navState.search}`,
+  );
+  navState.pathname = target.pathname;
+  navState.search = target.search;
+  navState.listeners.forEach((listener) => listener());
+}
 
 vi.mock("next/navigation", async () => {
   const { useSyncExternalStore } = await import("react");
@@ -29,6 +41,7 @@ vi.mock("next/navigation", async () => {
         },
         () => navState.pathname,
       ),
+    useRouter: () => ({ push: navigate }),
   };
 });
 
@@ -55,14 +68,7 @@ vi.mock("next/link", () => ({
             cancelled = true;
           },
         });
-        if (cancelled) return;
-        const target = new URL(
-          href,
-          `http://console.test${navState.pathname}${navState.search}`,
-        );
-        navState.pathname = target.pathname;
-        navState.search = target.search;
-        navState.listeners.forEach((listener) => listener());
+        if (!cancelled) navigate(href);
       }}
     >
       {children}
@@ -141,6 +147,7 @@ const back = () =>
 beforeEach(() => {
   navState.pathname = "/dashboard";
   navState.search = "";
+  navState.deferNavigation = false;
 });
 
 afterEach(() => {
@@ -264,11 +271,26 @@ describe("Nav", () => {
   it("keeps a manual panel while switching sidebar width, with the rail showing the current route", async () => {
     const view = renderNav();
     await userEvent.click(groupRow("Resources"));
+    expect(navState.pathname).toBe("/dashboard");
     view.rerender(<Nav compact />);
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
-    expect(groupRow("Resources").getAttribute("data-active")).toBe("true");
+    expect(groupRow("Resources").getAttribute("data-active")).toBe("false");
     view.rerender(<Nav />);
     expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
+  });
+
+  it("drops the focus request for a superseded group navigation", async () => {
+    const view = renderNav([]);
+    await screen.findByRole("link", { name: "Settings" });
+    navState.deferNavigation = true;
+    await userEvent.click(groupRow("Resources"));
+    navState.pathname = "/sessions";
+    view.rerender(<Nav />);
+    expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
+    navState.pathname = "/files";
+    view.rerender(<Nav />);
+    expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
+    expect(document.activeElement).not.toBe(back());
   });
 
   it("probe: scrolls the current page's row into view when the sidebar expands", () => {

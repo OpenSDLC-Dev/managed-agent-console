@@ -79,6 +79,8 @@ export function UnsavedChangesProvider({
           : null;
       if (
         !link ||
+        // The group Link calls requestLeave with its route and focus action.
+        link.hasAttribute("data-managed-leave") ||
         link.hasAttribute("download") ||
         (link.target && link.target !== "_self")
       )

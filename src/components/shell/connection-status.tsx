@@ -96,7 +96,7 @@ export function ConnectionStatus({
   error,
 }: ReturnType<typeof useConnectionStatus>) {
   return (
-    <div className="min-w-0 text-xs text-muted-foreground">
+    <div role="status" className="min-w-0 text-xs text-muted-foreground">
       <div>{label}</div>
       {error && (
         <div className="mt-1 wrap-anywhere">

@@ -134,6 +134,15 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .getByRole("button", { name: "configuration", exact: true })
     .click();
   await expect(page).toHaveURL(/agents\/agent_researcher00000000001$/);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const sidebarBack = nav.getByRole("button", { name: "Back to all sections" });
+  await sidebarBack.click();
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await page.goBack();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
+  await sidebarBack.click();
+  await page.goForward();
+  await expect(nav).toHaveAttribute("data-nav-view", "Agents");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   await page.getByLabel("Raw agent config").fill("{");
   await page.evaluate(() => history.back());
@@ -152,4 +161,27 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
     .click();
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/memory-stores$/);
+});
+
+test("confirming a dirty draft's group navigation focuses its submenu", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new");
+  const name = page.getByLabel("Name", { exact: true });
+  await name.fill("Keep or leave");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  const resources = nav.locator('[data-nav-group="Resources"]');
+  await expect(resources).toHaveAttribute("href", "/files");
+  const prompt = page.getByRole("dialog", { name: "Unsaved changes" });
+  await resources.click();
+  await prompt.getByRole("button", { name: "Stay" }).click();
+  await expect(name).toHaveValue("Keep or leave");
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await resources.click();
+  await prompt.getByRole("button", { name: "Leave" }).click();
+  await expect(page).toHaveURL(/\/files$/);
+  await expect(
+    nav.getByRole("button", { name: "Back to all sections" }),
+  ).toBeFocused();
 });

@@ -3,7 +3,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import {
   DASHBOARD_LINK,
@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
+import { useLeaveConfirmation } from "./unsaved-changes";
 
 const ROW = "flex h-9 items-center gap-3.5 rounded-lg px-2.5 text-sm";
 const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
@@ -84,7 +85,7 @@ function GroupControl({
   group: GroupEntry;
   href?: string;
   current?: string;
-  onOpen: (event?: { preventDefault: () => void }) => void;
+  onOpen: () => void;
 }) {
   const { icon: Icon } = group;
   const props = {
@@ -122,12 +123,16 @@ function GroupControl({
       {...props}
       href={href}
       prefetch={href === "#" ? false : undefined}
-      onNavigate={onOpen}
+      data-managed-leave
+      onNavigate={(event) => {
+        event.preventDefault();
+        onOpen();
+      }}
     >
       {contents}
     </Link>
   ) : (
-    <button {...props} type="button" onClick={() => onOpen()}>
+    <button {...props} type="button" onClick={onOpen}>
       {contents}
     </button>
   );
@@ -198,6 +203,8 @@ export function Nav({
   const session = useContext(ConsoleSessionContext)?.data;
   const limited = playgroundOnly(session);
   const pathname = usePathname();
+  const router = useRouter();
+  const { requestLeave } = useLeaveConfirmation();
   const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
   const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
@@ -230,6 +237,20 @@ export function Nav({
     ? undefined
     : groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
+
+  useEffect(() => {
+    const restoreRoutePanel = () => {
+      pendingFocus.current = null;
+      setSelection(null);
+    };
+    window.addEventListener("popstate", restoreRoutePanel);
+    return () => window.removeEventListener("popstate", restoreRoutePanel);
+  }, []);
+
+  useEffect(() => {
+    if (pendingFocus.current?.pathname !== pathname)
+      pendingFocus.current = null;
+  }, [pathname]);
 
   useEffect(() => {
     const focus = pendingFocus.current;
@@ -358,25 +379,33 @@ export function Nav({
                   group === routeGroup && activeSurface
                     ? SURFACES[activeSurface].label
                     : undefined;
-                const destination = current
-                  ? pathname
-                  : surfaceRoute(group.items[0].surface);
+                const destination =
+                  !mobile && !current && surfaces
+                    ? surfaceRoute(group.items[0].surface)
+                    : undefined;
                 return (
                   <GroupControl
                     key={group.label}
                     group={group}
                     // A same-document link preserves the current query's encoding.
-                    href={mobile ? undefined : current ? "#" : destination}
+                    href={mobile ? undefined : (destination ?? "#")}
                     current={current}
-                    onOpen={(event) => {
+                    onOpen={() => {
+                      if (destination) {
+                        requestLeave(() => {
+                          pendingFocus.current = {
+                            pathname: destination,
+                            label: group.label,
+                          };
+                          router.push(destination);
+                        });
+                        return;
+                      }
                       pendingFocus.current = {
-                        pathname: mobile ? pathname : destination,
+                        pathname,
                         label: group.label,
                       };
-                      if (mobile || current) {
-                        event?.preventDefault();
-                        setSelection({ pathname, label: group.label });
-                      }
+                      setSelection({ pathname, label: group.label });
                     }}
                   />
                 );

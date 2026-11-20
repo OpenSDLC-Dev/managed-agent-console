@@ -69,10 +69,11 @@ describe("ConnectionStatus", () => {
         screen.getByTestId("connection-dot").getAttribute("data-state"),
       ).toBe("denied"),
     );
-    expect(screen.getByText("Platform Access Denied")).toBeDefined();
-    expect(
-      screen.getByText("this route requires the developer role"),
-    ).toBeDefined();
+    const status = screen.getByRole("status");
+    expect(status.textContent).toContain("Platform Access Denied");
+    expect(status.textContent).toContain(
+      "this route requires the developer role",
+    );
     expect(screen.getByText(/req_read_denied/)).toBeDefined();
     expect(screen.queryByText("Platform Unreachable")).toBeNull();
     expect(hasBouncedToLogin()).toBe(false);
