@@ -15,6 +15,9 @@ test("add a model with a fallback tier, edit its routing, then delete it", async
   page,
 }) => {
   await signIn(page);
+  await page
+    .getByRole("button", { name: "Model Gateway", exact: true })
+    .click();
   await page.locator("nav [data-surface=models]").click();
   await expect(page).toHaveURL(/\/models$/);
 

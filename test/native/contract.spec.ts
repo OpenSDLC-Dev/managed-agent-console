@@ -438,13 +438,16 @@ test("real native password/setup, current authority, management, private bytes/S
     "denied",
   );
   await expect(
-    userPage.getByRole("link", { name: "Members", exact: true }),
+    userPage.getByRole("button", { name: "Settings", exact: true }),
   ).toHaveCount(0);
   await page.getByLabel("Role for new-person").selectOption("admin");
   await userPage.reload();
   await expect(userPage.locator("[data-role=admin]")).toBeVisible();
+  await userPage.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(
-    userPage.getByRole("link", { name: "Members", exact: true }).first(),
+    userPage
+      .getByRole("navigation", { name: "Main navigation" })
+      .getByRole("link", { name: "Members", exact: true }),
   ).toBeVisible();
   const memberPage = await (
     await page.request.get(`${org}/members?limit=1&roles[]=admin`)
@@ -709,6 +712,7 @@ test("real native password/setup, current authority, management, private bytes/S
       await page
         .getByLabel("Name", { exact: true })
         .fill("Old actor unsaved draft");
+      await page.getByRole("button", { name: "Back to all sections" }).click();
       await page
         .getByRole("link", { name: "Dashboard", exact: true })
         .first()
@@ -1262,7 +1266,7 @@ test("real native password/setup, current authority, management, private bytes/S
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.locator("[data-role=developer]")).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Members", exact: true }),
+    page.getByRole("button", { name: "Settings", exact: true }),
   ).toHaveCount(0);
   await userPage.goto("/members");
   await userPage.getByRole("button", { name: "Remove first-admin" }).click();

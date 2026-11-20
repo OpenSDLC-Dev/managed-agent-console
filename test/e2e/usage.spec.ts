@@ -13,6 +13,9 @@ test.beforeEach(async ({ request }) => {
  */
 test("read the month's usage, grouped and filtered", async ({ page }) => {
   await signIn(page);
+  await page
+    .getByRole("button", { name: "Spending & usage", exact: true })
+    .click();
   await page.locator("nav [data-surface=usage]").click();
   await expect(page).toHaveURL(/\/usage$/);
 
@@ -86,8 +89,10 @@ test("a console without a gateway hides its Usage link", async ({
     data: { surfaces: ["model-gateway"] },
   });
   await signIn(page);
-  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
-  await expect(page.locator("nav [data-surface=usage]")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await expect(
+    page.locator('nav [data-nav-group="Spending & usage"]'),
+  ).toHaveCount(0);
   await page.goto("/usage");
   await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(
     "data-surface",

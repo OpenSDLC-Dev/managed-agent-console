@@ -905,21 +905,16 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "dashboard-group-collapsed",
+    id: "dashboard-resources-panel",
     route: "/dashboard",
-    fixture: "Resources group persisted closed",
-    description: "Collapsed group survives a full reload.",
+    fixture: "Resources submenu open",
+    description:
+      "A dedicated submenu replaces the top-level sidebar without leaving Dashboard.",
     setup: async (page) => {
       await page
         .getByRole("button", { name: "Resources", exact: true })
         .click();
-      await page
-        .getByRole("button", { name: "Resources", exact: true })
-        .click();
-      await page.reload();
-      await page
-        .locator('[data-nav-group="Resources"][aria-expanded="false"]')
-        .waitFor();
+      await page.locator('[data-nav-view="Resources"]').waitFor();
     },
   },
   {
@@ -2129,7 +2124,7 @@ export const SURFACES: Surface[] = [
       if (!refused.ok()) throw new Error("Cannot stage denied reads");
       await page.reload();
       await page.waitForFunction(
-        () => !document.querySelector("nav [data-surface]"),
+        () => !document.querySelector("nav [data-nav-group]"),
       );
       await page
         .locator('[data-testid="connection-dot"][data-state="denied"]')
@@ -2186,7 +2181,7 @@ export const SURFACES: Surface[] = [
         .locator('nav [data-surface="api-keys"]')
         .waitFor({ state: "detached" });
       await page
-        .locator('nav [data-surface="agents"]')
+        .locator('nav [data-nav-group="Agents"]')
         .waitFor({ state: "attached" });
       const session = await page.request.get(
         new URL("/api/auth/session", page.url()).href,

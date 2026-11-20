@@ -24,23 +24,17 @@ import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
 import { LANDING_ROUTE } from "./routes";
 
 export interface SurfaceEntry {
-  kind: "surface";
   surface: Surface;
   icon: LucideIcon;
 }
 
 export interface GroupEntry {
-  kind: "group";
   label: string;
   icon: LucideIcon;
   items: SurfaceEntry[];
-  defaultOpen?: boolean;
 }
 
-type NavEntry = SurfaceEntry | GroupEntry;
-
 const surfaceEntry = (surface: Surface, icon: LucideIcon): SurfaceEntry => ({
-  kind: "surface",
   surface,
   icon,
 });
@@ -53,15 +47,13 @@ export const DASHBOARD_LINK = {
 };
 
 // The sidebar, Dashboard and command palette share the same destination order.
-export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
+export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
   {
     heading: "Build",
-    entries: [
+    groups: [
       {
-        kind: "group",
         label: "Agents",
         icon: Waypoints,
-        defaultOpen: false,
         items: [
           surfaceEntry("agents", Bot),
           surfaceEntry("sessions", MessagesSquare),
@@ -73,10 +65,8 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
         ],
       },
       {
-        kind: "group",
         label: "Resources",
         icon: Boxes,
-        defaultOpen: false,
         items: [
           surfaceEntry("files", FileText),
           surfaceEntry("skills", Sparkles),
@@ -86,9 +76,8 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
   },
   {
     heading: "Organization",
-    entries: [
+    groups: [
       {
-        kind: "group",
         label: "Keys",
         icon: KeySquare,
         items: [
@@ -96,15 +85,17 @@ export const NAV_SECTIONS: { heading: string; entries: NavEntry[] }[] = [
           surfaceEntry("service-accounts", UserRoundCog),
         ],
       },
-      surfaceEntry("usage", ChartColumn),
       {
-        kind: "group",
+        label: "Spending & usage",
+        icon: ChartColumn,
+        items: [surfaceEntry("usage", ChartColumn)],
+      },
+      {
         label: "Settings",
         icon: Settings,
         items: [surfaceEntry("members", Users)],
       },
       {
-        kind: "group",
         label: "Model Gateway",
         icon: Network,
         items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
@@ -121,11 +112,9 @@ export interface Destination {
   surface?: Surface;
 }
 
-export const DASHBOARD_SECTIONS = NAV_SECTIONS.map(({ heading, entries }) => ({
+export const DASHBOARD_SECTIONS = NAV_SECTIONS.map(({ heading, groups }) => ({
   heading,
-  items: entries.flatMap((entry) =>
-    entry.kind === "group" ? entry.items : [entry],
-  ),
+  items: groups.flatMap(({ items }) => items),
 }));
 
 export const NAV_DESTINATIONS: Destination[] = [

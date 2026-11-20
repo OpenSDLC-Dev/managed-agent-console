@@ -272,7 +272,8 @@ describe("useSurfaces", () => {
           .map((link) => link.getAttribute("href"))
           .filter((href) =>
             ["/members", "/service-accounts"].includes(href ?? ""),
-          );
+          )
+          .sort();
       try {
         await waitFor(() =>
           expect(screen.getByTestId("current-role").textContent).toBe(before),

@@ -113,20 +113,29 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   await expect(page.getByRole("main")).toBeVisible();
 });
 
-test("navigation preferences survive reload while viewport changes keep the page reachable", async ({
+test("submenus return to all sections and sidebar width survives reload", async ({
   page,
 }) => {
   await signIn(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const resources = page.getByRole("button", {
-    name: "Resources",
-    exact: true,
-  });
-  await expect(resources).toHaveAttribute("aria-expanded", "false");
-  await resources.click();
-  await page.reload();
-  await expect(resources).toHaveAttribute("aria-expanded", "true");
-  await resources.click();
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await nav.getByRole("button", { name: "Resources", exact: true }).click();
+  await expect(nav).toHaveAttribute("data-nav-view", "Resources");
+  await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+  await expect(
+    nav.getByRole("link", { name: "Files", exact: true }),
+  ).toBeVisible();
+  await nav.getByRole("link", { name: "Files", exact: true }).click();
+  await expect(page).toHaveURL(/\/files$/);
+  await expect(
+    nav.getByRole("link", { name: "Files", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await expect(nav).toHaveAttribute("data-nav-view", "root");
+  await expect(page).toHaveURL(/\/files$/);
+  await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await page.reload();
   await expect(page.locator("aside")).toHaveAttribute(
@@ -150,7 +159,7 @@ test("navigation preferences survive reload while viewport changes keep the page
     .getByRole("link", { name: "Agents", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("main")).toBeVisible();
@@ -191,7 +200,7 @@ test("exact Agent lookup opens archived records, exposes missing IDs and support
   );
   await page.getByRole("link", { name: "Agents", exact: true }).last().click();
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
 });
 

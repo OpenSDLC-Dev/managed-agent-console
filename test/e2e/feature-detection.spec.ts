@@ -26,8 +26,8 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await nav.getByRole("button", { name: "Agents", exact: true }).click();
   await expect(nav.locator("[data-surface=agents]")).toBeVisible();
   await expect(nav.locator("[data-surface=vaults]")).toBeVisible();
-  await expect(nav.locator("[data-surface=skills]")).toHaveCount(0);
-  await expect(nav.locator("[data-surface=files]")).toHaveCount(0);
+  await nav.getByRole("button", { name: "Back to all sections" }).click();
+  await expect(nav.locator('[data-nav-group="Resources"]')).toHaveCount(0);
 
   await page.keyboard.press("Control+k");
   const input = page.getByPlaceholder("Search agents, sessions, environments…");
@@ -81,19 +81,25 @@ test("its nested routes stand down too, not just its list page", async ({
 test("a served deployment keeps every surface", async ({ page }) => {
   await signIn(page);
   const nav = page.locator("nav");
-  await nav.getByRole("button", { name: "Agents", exact: true }).click();
-  await nav.getByRole("button", { name: "Resources", exact: true }).click();
-  for (const surface of [
-    "agents",
-    "sessions",
-    "deployments",
-    "memory-stores",
-    "environments",
-    "vaults",
-    "skills",
-    "files",
-  ]) {
-    await expect(nav.locator(`[data-surface=${surface}]`)).toBeVisible();
+  for (const [group, surfaces] of [
+    [
+      "Agents",
+      [
+        "agents",
+        "sessions",
+        "deployments",
+        "memory-stores",
+        "environments",
+        "vaults",
+      ],
+    ],
+    ["Resources", ["skills", "files"]],
+  ] as const) {
+    await nav.getByRole("button", { name: group, exact: true }).click();
+    for (const surface of surfaces) {
+      await expect(nav.locator(`[data-surface=${surface}]`)).toBeVisible();
+    }
+    await nav.getByRole("button", { name: "Back to all sections" }).click();
   }
 });
 

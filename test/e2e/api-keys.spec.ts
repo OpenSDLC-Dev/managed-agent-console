@@ -24,7 +24,9 @@ test("issue a key, see it once, then disable and delete it", async ({
   page,
 }) => {
   await signIn(page, "/agents");
-  await page.getByRole("link", { name: "API Keys" }).click();
+  await page.getByRole("button", { name: "Back to all sections" }).click();
+  await page.getByRole("button", { name: "Keys", exact: true }).click();
+  await page.getByRole("link", { name: "API Keys", exact: true }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
   // The seeded rows: one issued by a person, one the control plane manages.
@@ -146,6 +148,10 @@ test("a platform without the surface loses the nav item", async ({
     data: { surfaces: ["api-keys"] },
   });
   await signIn(page);
+  await page.getByRole("button", { name: "Keys", exact: true }).click();
+  await expect(
+    page.locator("nav [data-surface=service-accounts]"),
+  ).toBeVisible();
   await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
 
   await page.goto("/api-keys");
@@ -172,8 +178,12 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   await expect(state).toHaveAttribute("data-error-status", "403");
   await expect(state).toHaveAttribute("data-denied", "true");
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
+  await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
+  await page.getByRole("button", { name: "Keys", exact: true }).click();
   await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
-  await expect(page.locator("nav [data-surface=agents]")).toBeAttached();
+  await expect(
+    page.locator("nav [data-surface=service-accounts]"),
+  ).toBeVisible();
   await expect(
     page.getByText("this route requires the admin role"),
   ).toBeVisible();

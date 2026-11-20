@@ -93,21 +93,29 @@ test("the shell shows all resources and a live platform connection", async ({
   await expect(page).toHaveURL(/\/dashboard$/);
 
   const nav = page.getByRole("navigation", { name: "Main navigation" });
-  await nav.getByRole("button", { name: "Agents", exact: true }).click();
-  await nav.getByRole("button", { name: "Resources", exact: true }).click();
-  for (const item of [
-    "Agents",
-    "Sessions",
-    "Deployments",
-    "Memory Stores",
-    "Environments",
-    "Credential Vaults",
-    "Skills",
-    "Files",
-  ]) {
-    await expect(
-      nav.getByRole("link", { name: item, exact: true }),
-    ).toBeVisible();
+  for (const [group, items] of [
+    ["Resources", ["Skills", "Files"]],
+    [
+      "Agents",
+      [
+        "Agents",
+        "Sessions",
+        "Deployments",
+        "Memory Stores",
+        "Environments",
+        "Credential Vaults",
+      ],
+    ],
+  ] as const) {
+    await nav.getByRole("button", { name: group, exact: true }).click();
+    for (const item of items) {
+      await expect(
+        nav.getByRole("link", { name: item, exact: true }),
+      ).toBeVisible();
+    }
+    if (group === "Resources") {
+      await nav.getByRole("button", { name: "Back to all sections" }).click();
+    }
   }
 
   // The probe goes through the application edge to the mock platform and comes back green.

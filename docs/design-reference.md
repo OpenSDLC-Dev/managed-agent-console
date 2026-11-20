@@ -9,9 +9,7 @@ date. What ships from these facts is `src/app/globals.css`.
 
 Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
 
-The console uses inline groups and keeps only locally served destinations. Usage opens directly. Organization also contains Model Gateway for self-hosted models and providers. Dreams sits beside the other agent memory resources.
-
-Agents and Resources start collapsed outside their own routes so Organization stays visible. A saved expansion preference takes precedence.
+The reference Back to all sections button leaves the current page open. The console follows that behavior. Opening a group displays its existing links in place of the top-level menu. Compact navigation retains a flyout. The console keeps its existing page URLs and keeps Model Gateway for self-hosted models and providers.
 
 ## Native-only Console — checked 2026-11-17
 

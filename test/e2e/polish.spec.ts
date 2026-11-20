@@ -18,7 +18,7 @@ test("the console renders in both themes and the choice persists", async ({
     "rgb(38, 38, 36)",
   );
   await expect(
-    page.getByRole("heading", { name: "Agents", exact: true }),
+    page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
 
   await page.reload();
