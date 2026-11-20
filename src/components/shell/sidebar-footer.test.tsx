@@ -45,6 +45,7 @@ it("probes the connection with the account panel closed and shows account action
     name: "Stub Operator admin, account menu",
   });
   await screen.findByTitle("Platform Connected");
+  expect(trigger).toHaveTextContent("Stub Operator admin");
   expect(trigger).toHaveAccessibleDescription("Platform Connected");
   expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
 
