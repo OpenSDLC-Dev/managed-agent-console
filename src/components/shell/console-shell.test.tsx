@@ -44,14 +44,16 @@ it("collapses, reopens and returns focus on Escape", async () => {
   expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveFocus();
 });
 
-it("starts compact on narrow screens and closes after navigation", async () => {
+it("opens the header menu on narrow screens and closes after navigation", async () => {
   const user = userEvent.setup();
   renderShell(true);
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  expect(screen.getByText("Dashboard")).not.toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Menu" }));
+  expect(screen.getByText("Dashboard").closest("main")).toHaveAttribute(
+    "inert",
+  );
   await user.click(screen.getByRole("link", { name: "Files" }));
   expect(screen.getByText("Dashboard")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveFocus();
+  expect(screen.getByRole("button", { name: "Menu" })).toHaveFocus();
 });
 
 it("restores desktop preference after remount without opening mobile navigation", async () => {
@@ -66,9 +68,7 @@ it("restores desktop preference after remount without opening mobile navigation"
   await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
   view.unmount();
   renderShell(true);
-  expect(
-    screen.getByRole("button", { name: "Expand sidebar" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Menu" })).toBeInTheDocument();
   expect(localStorage.getItem("managed-agent-console:nav:sidebar")).toBe(
     "true",
   );
@@ -95,8 +95,10 @@ it("resets temporary mobile expansion across viewport transitions", async () => 
     narrow = true;
     listeners.forEach((listener) => listener());
   });
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  expect(screen.getByText("Dashboard")).not.toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Menu" }));
+  expect(screen.getByText("Dashboard").closest("main")).toHaveAttribute(
+    "inert",
+  );
   act(() => {
     narrow = false;
     listeners.forEach((listener) => listener());

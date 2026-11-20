@@ -44,9 +44,7 @@ test("dashboard stays centered and its compact navigation remains usable", async
     page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
   ).toHaveAttribute("data-active", "true");
   await expect(
-    page
-      .getByRole("navigation")
-      .getByRole("button", { name: "Keys", exact: true }),
+    page.getByRole("navigation").locator('[data-nav-group="Keys"]'),
   ).toHaveAttribute("data-active", "false");
   const header = page.locator("[data-console-header]");
   const search = header.getByRole("button", { name: /^Search Console/ });
@@ -69,7 +67,7 @@ test("dashboard stays centered and its compact navigation remains usable", async
   await page.keyboard.press("Escape");
   const agents = page
     .getByRole("navigation")
-    .getByRole("button", { name: "Agents", exact: true });
+    .locator('[data-nav-group="Agents"]');
   await agents.click();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
@@ -119,9 +117,22 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   }
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  await expect(page.locator("aside")).toBeHidden();
+  const scrollOffset = await page.evaluate(() => {
+    window.scrollTo(0, 300);
+    return window.scrollY;
+  });
+  expect(scrollOffset).toBeGreaterThan(0);
+  await menu.click();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(scrollOffset);
+  await menu.click();
   await expect(page.getByRole("main")).not.toBeVisible();
-  await page.getByRole("button", { name: "Resources", exact: true }).click();
+  await page.locator('[data-nav-group="Resources"]').click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Files" })
@@ -132,6 +143,15 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
     "collapsed",
   );
   await expect(page.getByRole("main")).toBeVisible();
+  await menu.click();
+  const drawer = page.getByRole("dialog", { name: "Menu", exact: true });
+  await expect(
+    drawer.getByRole("link", { name: "Platform documentation" }),
+  ).toBeVisible();
+  await drawer.getByRole("link", { name: "Files", exact: true }).focus();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(menu).toBeFocused();
 });
 
 test("submenus return to all sections and sidebar width survives reload", async ({
@@ -141,26 +161,37 @@ test("submenus return to all sections and sidebar width survives reload", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await expect(nav).toHaveAttribute("data-nav-view", "root");
-  await nav.getByRole("button", { name: "Resources", exact: true }).click();
+  await nav.locator('[data-nav-group="Resources"]').click();
   await expect(nav).toHaveAttribute("data-nav-view", "Resources");
+  await expect(page).toHaveURL(/\/files$/);
   await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
   await expect(
     nav.getByRole("link", { name: "Files", exact: true }),
   ).toBeVisible();
-  await nav.getByRole("link", { name: "Files", exact: true }).click();
-  await expect(page).toHaveURL(/\/files$/);
+  await nav.getByRole("link", { name: "Skills", exact: true }).click();
+  await expect(page).toHaveURL(/\/skills$/);
+  await expect(
+    nav.getByRole("link", { name: "Skills", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.goBack();
   await expect(
     nav.getByRole("link", { name: "Files", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await page.goForward();
+  await expect(
+    nav.getByRole("link", { name: "Skills", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await nav
     .getByRole("button", { name: "Back to all sections" })
     .getByText("Resources", { exact: true })
     .click();
   await expect(nav).toHaveAttribute("data-nav-view", "root");
-  await expect(page).toHaveURL(/\/files$/);
-  const resources = nav.getByRole("button", { name: "Resources", exact: true });
+  await expect(page).toHaveURL(/\/skills$/);
+  const resources = nav.locator('[data-nav-group="Resources"]');
+  await expect(resources).toHaveAccessibleName("Resources Skills");
   await expect(resources).toBeFocused();
   await resources.press("Enter");
+  await expect(page).toHaveURL(/\/skills$/);
   await nav
     .getByRole("button", { name: "Back to all sections" })
     .locator("svg")
@@ -175,7 +206,7 @@ test("submenus return to all sections and sidebar width survives reload", async 
     "collapsed",
   );
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await expect(page.getByRole("main")).not.toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.locator("aside")).toHaveAttribute(
@@ -184,8 +215,8 @@ test("submenus return to all sections and sidebar width survives reload", async 
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("main")).toBeVisible();
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
-  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.locator('[data-nav-group="Agents"]').click();
   await page
     .getByRole("navigation")
     .getByRole("link", { name: "Agents", exact: true })

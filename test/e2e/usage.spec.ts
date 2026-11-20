@@ -13,9 +13,7 @@ test.beforeEach(async ({ request }) => {
  */
 test("read the month's usage, grouped and filtered", async ({ page }) => {
   await signIn(page);
-  await page
-    .getByRole("button", { name: "Spending & usage", exact: true })
-    .click();
+  await page.locator('[data-nav-group="Spending & usage"]').click();
   await page.locator("nav [data-surface=usage]").click();
   await expect(page).toHaveURL(/\/usage$/);
 

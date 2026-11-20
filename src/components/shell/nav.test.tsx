@@ -12,20 +12,55 @@ import type { ComponentProps } from "react";
 import { Nav } from "./nav";
 import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
-const navState = vi.hoisted(() => ({ pathname: "/dashboard" }));
-
-vi.mock("next/navigation", () => ({
-  usePathname: () => navState.pathname,
+const navState = vi.hoisted(() => ({
+  pathname: "/dashboard",
+  search: "",
+  listeners: new Set<() => void>(),
 }));
 
+vi.mock("next/navigation", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    usePathname: () =>
+      useSyncExternalStore(
+        (listener) => {
+          navState.listeners.add(listener);
+          return () => navState.listeners.delete(listener);
+        },
+        () => navState.pathname,
+      ),
+    useSearchParams: () => new URLSearchParams(navState.search),
+  };
+});
+
 vi.mock("next/link", () => ({
-  default: ({ href, children, onClick, ...props }: ComponentProps<"a">) => (
+  default: ({
+    href,
+    children,
+    onClick,
+    onNavigate,
+    ...props
+  }: ComponentProps<"a"> & {
+    onNavigate?: (event: { preventDefault: () => void }) => void;
+  }) => (
     <a
       href={href}
       {...props}
       onClick={(event) => {
         event.preventDefault();
         onClick?.(event);
+        if (!href) return;
+        let cancelled = false;
+        onNavigate?.({
+          preventDefault: () => {
+            cancelled = true;
+          },
+        });
+        if (cancelled) return;
+        const target = new URL(href, "http://console.test");
+        navState.pathname = target.pathname;
+        navState.search = target.search;
+        navState.listeners.forEach((listener) => listener());
       }}
     >
       {children}
@@ -96,13 +131,14 @@ function renderNav(
 
 const navigation = () =>
   screen.getByRole("navigation", { name: "Main navigation" });
-const groupButton = (name: string) =>
-  within(navigation()).getByRole("button", { name });
+const groupRow = (name: string) =>
+  navigation().querySelector<HTMLElement>(`[data-nav-group="${name}"]`)!;
 const back = () =>
   within(navigation()).getByRole("button", { name: /back to all sections/i });
 
 beforeEach(() => {
   navState.pathname = "/dashboard";
+  navState.search = "";
 });
 
 afterEach(() => {
@@ -114,7 +150,7 @@ afterEach(() => {
 describe("Nav", () => {
   it("starts with the ordered top-level categories and no submenu links", async () => {
     renderNav([]);
-    await screen.findByRole("button", { name: "Settings" });
+    await screen.findByRole("link", { name: "Settings" });
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
     expect(
       Array.from(navigation().querySelectorAll("h2, a, button")).map((el) =>
@@ -131,7 +167,19 @@ describe("Nav", () => {
       "Settings",
       "Model Gateway",
     ]);
-    expect(within(navigation()).getAllByRole("link")).toHaveLength(1);
+    expect(
+      within(navigation())
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).toEqual([
+      "/dashboard",
+      "/agents",
+      "/files",
+      "/api-keys",
+      "/usage",
+      "/members",
+      "/models",
+    ]);
     expect(
       within(navigation())
         .getByRole("link", { name: "Dashboard" })
@@ -146,10 +194,11 @@ describe("Nav", () => {
     "shows only the %s destinations in its panel",
     async (name, surfaces) => {
       renderNav([]);
-      await screen.findByRole("button", { name: "Settings" });
-      await userEvent.click(groupButton(name));
+      await screen.findByRole("link", { name: "Settings" });
+      await userEvent.click(groupRow(name));
 
       expect(navigation().getAttribute("data-nav-view")).toBe(name);
+      expect(navState.pathname).toBe(`/${surfaces[0]}`);
       expect(within(navigation()).getByRole("heading", { name })).toBeDefined();
       expect(
         within(navigation())
@@ -170,12 +219,13 @@ describe("Nav", () => {
 
       await userEvent.click(back());
       expect(navigation().getAttribute("data-nav-view")).toBe("root");
-      expect(document.activeElement).toBe(groupButton(name));
+      expect(document.activeElement).toBe(groupRow(name));
     },
   );
 
   it("opens the current route's panel and returns to the root without changing the route", async () => {
     navState.pathname = "/sessions/sess_01/trace";
+    navState.search = "?order=asc";
     const view = renderNav();
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
     expect(
@@ -189,8 +239,15 @@ describe("Nav", () => {
     back().focus();
     await userEvent.keyboard("{Escape}");
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
-    expect(groupButton("Agents").getAttribute("data-active")).toBe("true");
-    expect(document.activeElement).toBe(groupButton("Agents"));
+    const activeGroup = screen.getByRole("link", { name: "Agents Sessions" });
+    expect(activeGroup.getAttribute("aria-current")).toBe("page");
+    expect(activeGroup.getAttribute("href")).toBe(
+      "/sessions/sess_01/trace?order=asc",
+    );
+    expect(document.activeElement).toBe(activeGroup);
+    await userEvent.click(activeGroup);
+    expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
+    expect(navState.search).toBe("?order=asc");
 
     navState.pathname = "/files";
     view.rerender(<Nav />);
@@ -206,10 +263,10 @@ describe("Nav", () => {
 
   it("keeps a manual panel while switching sidebar width, with the rail showing the current route", async () => {
     const view = renderNav();
-    await userEvent.click(groupButton("Resources"));
+    await userEvent.click(groupRow("Resources"));
     view.rerender(<Nav compact />);
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
-    expect(groupButton("Resources").getAttribute("data-active")).toBe("false");
+    expect(groupRow("Resources").getAttribute("data-active")).toBe("true");
     view.rerender(<Nav />);
     expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
   });
@@ -231,7 +288,7 @@ describe("Nav", () => {
     }
   });
 
-  it("keeps focus on the group just left when another group owns the current page", async () => {
+  it("returns focus to the active group without scrolling another row", async () => {
     const original = Element.prototype.scrollIntoView;
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
@@ -239,10 +296,10 @@ describe("Nav", () => {
       navState.pathname = "/sessions";
       renderNav();
       await userEvent.click(back());
-      await userEvent.click(groupButton("Model Gateway"));
+      await userEvent.click(groupRow("Model Gateway"));
       scroll.mockClear();
       await userEvent.click(back());
-      expect(document.activeElement).toBe(groupButton("Model Gateway"));
+      expect(document.activeElement).toBe(groupRow("Model Gateway"));
       expect(scroll).not.toHaveBeenCalled();
     } finally {
       Element.prototype.scrollIntoView = original;
@@ -253,13 +310,11 @@ describe("Nav", () => {
     "probe: hides only denied read destinations (compact=%s)",
     async (compact) => {
       renderNav(["api-keys", "files", "skills"], { compact }, 403);
-      await waitFor(() =>
-        expect(
-          within(navigation()).queryByRole("button", { name: "Resources" }),
-        ).toBeNull(),
-      );
-      expect(groupButton("Agents")).toBeDefined();
-      await userEvent.click(groupButton("Keys"));
+      await waitFor(() => expect(groupRow("Resources")).toBeNull());
+      expect(groupRow("Agents")).not.toBeNull();
+      if (!compact)
+        expect(groupRow("Keys").getAttribute("href")).toBe("/service-accounts");
+      await userEvent.click(groupRow("Keys"));
       const scope = compact
         ? screen.getByRole("dialog", { name: "Keys" })
         : navigation();
@@ -286,12 +341,8 @@ describe("Nav", () => {
           within(navigation()).queryByRole("heading", { name: "Build" }),
         ).toBeNull(),
       );
-      expect(
-        within(navigation()).queryByRole("button", {
-          name: "Spending & usage",
-        }),
-      ).toBeNull();
-      expect(groupButton("Keys")).toBeDefined();
+      expect(groupRow("Spending & usage")).toBeNull();
+      expect(groupRow("Keys")).not.toBeNull();
       expect(
         within(navigation()).getByRole("heading", { name: "Organization" }),
       ).toBeDefined();
@@ -325,8 +376,8 @@ describe("Nav", () => {
         Object.keys(SURFACES).length,
       ),
     );
-    expect(groupButton("Resources")).toBeDefined();
-    await userEvent.click(groupButton("Resources"));
+    expect(groupRow("Resources")).not.toBeNull();
+    await userEvent.click(groupRow("Resources"));
     expect(screen.getByRole("link", { name: "Files" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Skills" })).toBeDefined();
   });
@@ -334,7 +385,7 @@ describe("Nav", () => {
   it("compact groups use a keyboard-accessible flyout", async () => {
     renderNav(["skills"], { compact: true });
     const user = userEvent.setup();
-    await user.click(groupButton("Resources"));
+    await user.click(groupRow("Resources"));
     const popup = await screen.findByRole("dialog", { name: "Resources" });
     await waitFor(() =>
       expect(within(popup).queryByRole("link", { name: "Skills" })).toBeNull(),
@@ -344,8 +395,8 @@ describe("Nav", () => {
     ).toBe("/files");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(document.activeElement).toBe(groupButton("Resources"));
-    await user.click(groupButton("Resources"));
+    expect(document.activeElement).toBe(groupRow("Resources"));
+    await user.click(groupRow("Resources"));
     await user.click(screen.getByRole("link", { name: "Files" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });

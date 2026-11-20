@@ -108,7 +108,7 @@ test("the shell shows all resources and a live platform connection", async ({
       ],
     ],
   ] as const) {
-    await nav.getByRole("button", { name: group, exact: true }).click();
+    await nav.locator(`[data-nav-group="${group}"]`).click();
     for (const item of items) {
       await expect(
         nav.getByRole("link", { name: item, exact: true }),
@@ -145,6 +145,13 @@ test("the header and account panel stay available when navigation collapses", as
   await account.focus();
   await page.keyboard.press("Enter");
   await expect(panel).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Light theme" }),
+  ).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    panel.getByRole("button", { name: "System theme" }),
+  ).toBeFocused();
   await expect(panel.getByRole("button", { name: "Sign out" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();

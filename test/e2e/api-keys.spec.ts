@@ -25,7 +25,7 @@ test("issue a key, see it once, then disable and delete it", async ({
 }) => {
   await signIn(page, "/agents");
   await page.getByRole("button", { name: "Back to all sections" }).click();
-  await page.getByRole("button", { name: "Keys", exact: true }).click();
+  await page.locator('[data-nav-group="Keys"]').click();
   await page.getByRole("link", { name: "API Keys", exact: true }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
@@ -175,7 +175,7 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   await expect(state).toHaveAttribute("data-denied", "true");
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
   await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
-  await page.getByRole("button", { name: "Keys", exact: true }).click();
+  await page.locator('[data-nav-group="Keys"]').click();
   await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
   await expect(
     page.locator("nav [data-surface=service-accounts]"),

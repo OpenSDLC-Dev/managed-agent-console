@@ -900,21 +900,20 @@ export const SURFACES: Surface[] = [
     description: "The full-width sidebar shows both navigation sections.",
     setup: async (page) => {
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.getByRole("button", { name: "Expand sidebar" }).click();
+      await page.getByRole("button", { name: "Menu", exact: true }).click();
       await page.locator('[data-sidebar-state="expanded"]').waitFor();
     },
   },
   {
     id: "dashboard-resources-panel",
     route: "/dashboard",
-    fixture: "Resources submenu open",
+    fixture: "Resources submenu open on Files",
     description:
-      "A dedicated submenu replaces the top-level sidebar without leaving Dashboard.",
+      "The Resources link opens its submenu and the first available destination.",
     setup: async (page) => {
-      await page
-        .getByRole("button", { name: "Resources", exact: true })
-        .click();
+      await page.locator('[data-nav-group="Resources"]').click();
       await page.locator('[data-nav-view="Resources"]').waitFor();
+      await page.waitForURL(/\/files$/);
     },
   },
   {
@@ -941,7 +940,7 @@ export const SURFACES: Surface[] = [
       await page.getByRole("button", { name: "Collapse sidebar" }).click();
       await page
         .getByRole("navigation")
-        .getByRole("button", { name: "Resources", exact: true })
+        .locator('[data-nav-group="Resources"]')
         .click();
       await page
         .getByRole("dialog", { name: "Resources", exact: true })

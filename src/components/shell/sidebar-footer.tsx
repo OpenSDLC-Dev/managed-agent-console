@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, type KeyboardEvent } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { ChevronDown, UserRound } from "lucide-react";
 import {
@@ -11,6 +11,27 @@ import {
 import { ConsoleSessionContext } from "./console-session";
 import { accountLabel, SignedInAs } from "./signed-in-as";
 import { ThemeToggle } from "./theme-toggle";
+
+function moveAccountFocus(event: KeyboardEvent<HTMLElement>) {
+  const down = event.key === "ArrowDown";
+  if (!down && event.key !== "ArrowUp") return;
+  const controls = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(
+      "button:not(:disabled), a[href]",
+    ),
+  );
+  const index = controls.findIndex(
+    (control) => control === document.activeElement,
+  );
+  const next =
+    index === -1
+      ? down
+        ? 0
+        : controls.length - 1
+      : (index + (down ? 1 : -1) + controls.length) % controls.length;
+  event.preventDefault();
+  controls[next]?.focus();
+}
 
 export function SidebarFooter({ version }: { version: React.ReactNode }) {
   const data = useContext(ConsoleSessionContext)?.data;
@@ -53,7 +74,10 @@ export function SidebarFooter({ version }: { version: React.ReactNode }) {
             sideOffset={6}
             className="z-50"
           >
-            <Popover.Popup className="max-h-(--available-height) w-72 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
+            <Popover.Popup
+              onKeyDown={moveAccountFocus}
+              className="max-h-(--available-height) w-72 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none"
+            >
               <Popover.Title className="sr-only">
                 Account settings
               </Popover.Title>

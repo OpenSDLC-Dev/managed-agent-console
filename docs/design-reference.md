@@ -9,11 +9,13 @@ date. What ships from these facts is `src/app/globals.css`.
 
 Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
 
-The reference's full submenu header serves as the return control. In the console, clicking its arrow or title returns to all sections, keeps the current page open and restores focus to that group's button. Opening a group displays its existing links in place of the top-level menu. Compact navigation retains a flyout. The console keeps its existing page URLs and keeps Model Gateway for self-hosted models and providers.
+On desktop the reference opens a group's default page and submenu together. After returning to all sections it shows the current page under its group. Reopening that group keeps the current page. The console uses the first available destination in each group as its landing page. Browser Back and Forward restore the page and its submenu.
+
+The full submenu header returns to all sections, keeps the current page open and restores focus to its group. On narrow screens the header menu opens full width and contains Documentation. A group selection opens its submenu. A destination selection or Escape closes the menu. Opening and dismissing the menu preserves the page's scroll position. The desktop compact rail retains its flyouts for self-hosted deployments.
 
 The reference uses a single-line wordmark and puts Documentation on the right of the global header. Its first sidebar row is inset 8px from the top and sides. Rows are 36px high with no gap within a section. The console retains a sidebar toggle beside its own mark and links to the self-hosted platform documentation.
 
-The reference ends the sidebar with an inset account button and opens its menu upward. The console shows the signed-in user, current platform role and a connection indicator on that button. The panel contains appearance, connection details, build version and Sign out. The account button also works in the collapsed rail.
+The reference ends the sidebar with an inset account button and opens its menu upward. The console shows the signed-in user, current platform role and a connection indicator on that button. The panel contains appearance, connection details, build version and Sign out. Arrow keys move focus through available actions and Escape returns focus to the button. The account button also works in the collapsed rail.
 
 ## Global search — checked 2026-11-20
 

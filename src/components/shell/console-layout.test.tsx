@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/members",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("./theme-toggle", () => ({ ThemeToggle: () => null }));

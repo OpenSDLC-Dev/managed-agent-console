@@ -9,9 +9,11 @@ import {
 import Link from "next/link";
 import {
   BookOpen,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Terminal,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
@@ -55,8 +57,9 @@ export function ConsoleShell({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const close = () => {
     setExpanded(false);
-    toggleRef.current?.focus();
+    toggleRef.current?.focus({ preventScroll: true });
   };
+  const mobileMenuOpen = narrow && open;
 
   const closeOnEscape = (event: KeyboardEvent<HTMLElement>) => {
     if (
@@ -70,17 +73,48 @@ export function ConsoleShell({
     }
   };
 
+  const desktopToggle = open ? PanelLeftClose : PanelLeftOpen;
+  const ToggleIcon = narrow ? (open ? X : Menu) : desktopToggle;
+  const desktopLabel = open ? "Collapse sidebar" : "Expand sidebar";
+  const toggle = (
+    <Button
+      ref={toggleRef}
+      variant="ghost"
+      size="icon"
+      className="size-7 shrink-0 text-muted-foreground"
+      aria-label={narrow ? (open ? "Close menu" : "Menu") : desktopLabel}
+      aria-expanded={open}
+      aria-controls="console-navigation"
+      onClick={() => setExpanded(!open)}
+    >
+      <ToggleIcon />
+    </Button>
+  );
+  const documentation = (
+    <a
+      href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Platform documentation"
+      className={cn(
+        "flex items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+        narrow ? "mx-2 h-9" : "h-7 justify-self-end",
+      )}
+    >
+      <BookOpen aria-hidden className="size-4" />
+      Documentation
+    </a>
+  );
+
   return (
     <div className="min-h-dvh">
       <header
         data-console-header
+        onKeyDown={closeOnEscape}
         className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"
       >
-        <div
-          className="flex min-w-0 max-w-[14.5rem] items-center gap-2"
-          onKeyDown={closeOnEscape}
-        >
-          {open && (
+        <div className="flex min-w-0 max-w-[14.5rem] items-center gap-2">
+          {(open || narrow) && (
             <Link
               href="/dashboard"
               onClick={() => {
@@ -92,59 +126,50 @@ export function ConsoleShell({
               <span className="truncate">Agent Console</span>
             </Link>
           )}
-          <Button
-            ref={toggleRef}
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0 text-muted-foreground"
-            aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-            aria-expanded={open}
-            aria-controls="console-navigation"
-            onClick={() => setExpanded(!open)}
-          >
-            {open ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
+          {!narrow && toggle}
         </div>
         <CommandPalette
           compact={narrow}
           onNavigate={narrow ? close : undefined}
         />
-        <a
-          href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Platform documentation"
-          title="Platform documentation"
-          className="flex h-7 items-center gap-2 rounded-md px-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground md:justify-self-end md:px-2"
-        >
-          <BookOpen aria-hidden className="size-4" />
-          <span className="hidden md:inline">Documentation</span>
-        </a>
+        {narrow ? toggle : documentation}
       </header>
       <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">
         <aside
           data-sidebar-state={open ? "expanded" : "collapsed"}
+          role={mobileMenuOpen ? "dialog" : undefined}
+          aria-label={mobileMenuOpen ? "Menu" : undefined}
           onKeyDown={closeOnEscape}
           className={cn(
-            "group/sidebar sticky top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
-            open ? "w-64" : "w-12",
-            open && narrow && "w-full",
+            "group/sidebar top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+            mobileMenuOpen
+              ? "fixed inset-x-0 z-20 w-full"
+              : open
+                ? "sticky w-64"
+                : "sticky w-12",
+            narrow && !open && "hidden",
           )}
         >
           <div
             id="console-navigation"
-            className="min-h-0 flex-1 overflow-y-auto pb-2"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2"
             onClick={(event) => {
               if (narrow && (event.target as Element).closest("a")) close();
             }}
           >
-            <Nav compact={!open} />
+            <Nav compact={!open && !narrow} mobile={narrow} />
           </div>
-          <div className="shrink-0">{footer}</div>
+          <div className="shrink-0">
+            {narrow && documentation}
+            {footer}
+          </div>
         </aside>
         <main
-          hidden={open && narrow}
-          className="min-w-0 flex-1 px-4 py-6 sm:px-8"
+          inert={mobileMenuOpen}
+          className={cn(
+            "min-w-0 flex-1 px-4 py-6 sm:px-8",
+            mobileMenuOpen && "invisible",
+          )}
         >
           {children}
         </main>

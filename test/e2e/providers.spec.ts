@@ -15,9 +15,7 @@ test("add a provider from a vendor's published hosts, then disable it", async ({
   page,
 }) => {
   await signIn(page);
-  await page
-    .getByRole("button", { name: "Model Gateway", exact: true })
-    .click();
+  await page.locator('[data-nav-group="Model Gateway"]').click();
   await page.locator("nav [data-surface=providers]").click();
   await expect(page).toHaveURL(/\/providers$/);
   await expect(page.getByRole("cell", { name: "MiniMax CN" })).toBeVisible();

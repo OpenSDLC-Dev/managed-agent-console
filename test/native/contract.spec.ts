@@ -437,13 +437,11 @@ test("real native password/setup, current authority, management, private bytes/S
     "data-state",
     "denied",
   );
-  await expect(
-    userPage.getByRole("button", { name: "Settings", exact: true }),
-  ).toHaveCount(0);
+  await expect(userPage.locator('[data-nav-group="Settings"]')).toHaveCount(0);
   await page.getByLabel("Role for new-person").selectOption("admin");
   await userPage.reload();
   await expect(userPage.locator("[data-role=admin]")).toBeVisible();
-  await userPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await userPage.locator('[data-nav-group="Settings"]').click();
   await expect(
     userPage
       .getByRole("navigation", { name: "Main navigation" })
@@ -1266,9 +1264,7 @@ test("real native password/setup, current authority, management, private bytes/S
   await page.getByLabel("Role for first-admin").selectOption("developer");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.locator("[data-role=developer]")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Settings", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.locator('[data-nav-group="Settings"]')).toHaveCount(0);
   await userPage.goto("/members");
   await userPage.getByRole("button", { name: "Remove first-admin" }).click();
   await userPage.getByRole("button", { name: "Confirm removal" }).click();

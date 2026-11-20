@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
@@ -68,34 +68,55 @@ function NavLink({
   );
 }
 
-function GroupButton({
+function GroupControl({
   group,
-  active,
+  href,
+  current,
   onOpen,
 }: {
   group: GroupEntry;
-  active: boolean;
-  onOpen: () => void;
+  href?: string;
+  current?: string;
+  onOpen: (event?: { preventDefault: () => void }) => void;
 }) {
   const { icon: Icon } = group;
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-nav-group={group.label}
-      data-active={active}
-      className={cn(
-        ROW,
-        active ? HIGHLIGHT : cn("text-muted-foreground", HOVER),
-      )}
-    >
-      <Icon className="size-4" strokeWidth={1.75} aria-hidden />
-      {group.label}
+  const props = {
+    "data-nav-group": group.label,
+    "data-active": !!current,
+    "aria-current": current ? ("page" as const) : undefined,
+    className: cn(
+      ROW,
+      current ? cn("h-11", HIGHLIGHT) : cn("text-muted-foreground", HOVER),
+    ),
+  };
+  const contents = (
+    <>
+      <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+      <span className="min-w-0 truncate">
+        {group.label}
+        {current && (
+          <>
+            {" "}
+            <span className="block truncate text-xs font-normal text-muted-foreground">
+              {current}
+            </span>
+          </>
+        )}
+      </span>
       <ChevronRight
-        className="ml-auto size-3.5"
+        className="ml-auto size-3.5 shrink-0"
         strokeWidth={1.75}
         aria-hidden
       />
+    </>
+  );
+  return href ? (
+    <Link {...props} href={href} onNavigate={onOpen}>
+      {contents}
+    </Link>
+  ) : (
+    <button {...props} type="button" onClick={() => onOpen()}>
+      {contents}
     </button>
   );
 }
@@ -154,12 +175,19 @@ function CompactGroup({
   );
 }
 
-export function Nav({ compact = false }: { compact?: boolean }) {
+export function Nav({
+  compact = false,
+  mobile = false,
+}: {
+  compact?: boolean;
+  mobile?: boolean;
+}) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
+  const search = useSearchParams().toString();
   const activeSurface = surfaceOfPath(pathname);
   const nav = useRef<HTMLElement>(null);
-  const pendingFocus = useRef<string | null>(null);
+  const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
   const [selection, setSelection] = useState<{
     pathname: string;
     label: string | null;
@@ -192,18 +220,19 @@ export function Nav({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     const focus = pendingFocus.current;
-    pendingFocus.current = null;
-    if (focus && !compact) {
-      const target = panelLabel
-        ? nav.current?.querySelector<HTMLButtonElement>("[data-nav-back]")
-        : Array.from(
-            nav.current?.querySelectorAll<HTMLButtonElement>(
-              "[data-nav-group]",
-            ) ?? [],
-          ).find((button) => button.dataset.navGroup === focus);
-      if (target) {
-        target.focus();
-        return;
+    if (focus?.pathname === pathname) {
+      pendingFocus.current = null;
+      if (!compact) {
+        const target = panelLabel
+          ? nav.current?.querySelector<HTMLButtonElement>("[data-nav-back]")
+          : Array.from(
+              nav.current?.querySelectorAll<HTMLElement>("[data-nav-group]") ??
+                [],
+            ).find((row) => row.dataset.navGroup === focus.label);
+        if (target) {
+          target.focus();
+          return;
+        }
       }
     }
     nav.current
@@ -212,7 +241,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
   }, [pathname, surfaces, compact, panelLabel]);
 
   const back = () => {
-    pendingFocus.current = panelLabel ?? null;
+    if (panelLabel) pendingFocus.current = { pathname, label: panelLabel };
     setSelection({ pathname, label: null });
   };
 
@@ -222,7 +251,12 @@ export function Nav({ compact = false }: { compact?: boolean }) {
       aria-label="Main navigation"
       data-nav-view={panelLabel ?? "root"}
       onKeyDown={(event) => {
-        if (panel && event.key === "Escape" && !event.defaultPrevented) {
+        if (
+          !mobile &&
+          panel &&
+          event.key === "Escape" &&
+          !event.defaultPrevented
+        ) {
           event.preventDefault();
           back();
         }
@@ -286,25 +320,48 @@ export function Nav({ compact = false }: { compact?: boolean }) {
               >
                 {heading}
               </h2>
-              {groups.map((group) =>
-                compact ? (
-                  <CompactGroup
+              {groups.map((group) => {
+                if (compact)
+                  return (
+                    <CompactGroup
+                      key={group.label}
+                      group={group}
+                      activeSurface={activeSurface}
+                    />
+                  );
+
+                const current =
+                  group === routeGroup && activeSurface
+                    ? SURFACES[activeSurface].label
+                    : undefined;
+                const destination = current
+                  ? pathname
+                  : surfaceRoute(group.items[0].surface);
+                return (
+                  <GroupControl
                     key={group.label}
                     group={group}
-                    activeSurface={activeSurface}
-                  />
-                ) : (
-                  <GroupButton
-                    key={group.label}
-                    group={group}
-                    active={group === routeGroup}
-                    onOpen={() => {
-                      pendingFocus.current = group.label;
-                      setSelection({ pathname, label: group.label });
+                    href={
+                      mobile
+                        ? undefined
+                        : current && search
+                          ? `${pathname}?${search}`
+                          : destination
+                    }
+                    current={current}
+                    onOpen={(event) => {
+                      pendingFocus.current = {
+                        pathname: mobile ? pathname : destination,
+                        label: group.label,
+                      };
+                      if (mobile || current) {
+                        event?.preventDefault();
+                        setSelection({ pathname, label: group.label });
+                      }
                     }}
                   />
-                ),
-              )}
+                );
+              })}
             </div>
           ))}
         </>

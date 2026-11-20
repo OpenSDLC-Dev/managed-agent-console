@@ -23,7 +23,7 @@ test("a surface the deployment does not implement leaves the nav and the palette
   await signIn(page);
 
   const nav = page.locator("nav");
-  await nav.getByRole("button", { name: "Agents", exact: true }).click();
+  await nav.locator('[data-nav-group="Agents"]').click();
   await expect(nav.locator("[data-surface=agents]")).toBeVisible();
   await expect(nav.locator("[data-surface=vaults]")).toBeVisible();
   await nav.getByRole("button", { name: "Back to all sections" }).click();
@@ -97,7 +97,7 @@ test("a served deployment keeps every surface", async ({ page }) => {
     ],
     ["Resources", ["skills", "files"]],
   ] as const) {
-    await nav.getByRole("button", { name: group, exact: true }).click();
+    await nav.locator(`[data-nav-group="${group}"]`).click();
     for (const surface of surfaces) {
       await expect(nav.locator(`[data-surface=${surface}]`)).toBeVisible();
     }
