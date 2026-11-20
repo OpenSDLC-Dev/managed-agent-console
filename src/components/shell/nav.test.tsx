@@ -231,6 +231,24 @@ describe("Nav", () => {
     }
   });
 
+  it("keeps focus on the group just left when another group owns the current page", async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      navState.pathname = "/sessions";
+      renderNav();
+      await userEvent.click(back());
+      await userEvent.click(groupButton("Model Gateway"));
+      scroll.mockClear();
+      await userEvent.click(back());
+      expect(document.activeElement).toBe(groupButton("Model Gateway"));
+      expect(scroll).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it.each([false, true])(
     "probe: hides only denied read destinations (compact=%s)",
     async (compact) => {

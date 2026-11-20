@@ -201,7 +201,10 @@ export function Nav({ compact = false }: { compact?: boolean }) {
               "[data-nav-group]",
             ) ?? [],
           ).find((button) => button.dataset.navGroup === focus);
-      target?.focus();
+      if (target) {
+        target.focus();
+        return;
+      }
     }
     nav.current
       ?.querySelector('[aria-current="page"], button[data-active="true"]')
