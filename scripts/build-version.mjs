@@ -18,12 +18,12 @@ export function developmentBuild(root = process.cwd()) {
   const sha = git("rev-parse", "--verify", "HEAD");
   if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) return undefined;
   const base = git(
-    "tag",
+    "for-each-ref",
     "--merged",
     sha,
     "--sort=-version:refname",
-    "--list",
-    "v[0-9]*",
+    "--format=%(refname:strip=2)",
+    "refs/tags/v[0-9]*",
   )
     .split(/\r?\n/)
     .find((tag) => stableTag.test(tag));

@@ -25,6 +25,7 @@ it("stamps a development checkout with its own reachable stable release and comm
     );
   try {
     git("init", "-q", "-b", "main");
+    git("config", "column.ui", "always");
     commit("initial release");
     git("tag", "v0.9.0");
     git("switch", "-qc", "other");
@@ -35,6 +36,7 @@ it("stamps a development checkout with its own reachable stable release and comm
     git("tag", "v0.10.0");
     commit("next change");
     git("tag", "v1.0.0-rc.1");
+    git("tag", "v8.0.0+metadata");
     const revision = git("rev-parse", "HEAD").slice(0, 8);
     expect(consoleBuildVersion(root)).toBe(`v0.10.0-dev-${revision}`);
   } finally {
