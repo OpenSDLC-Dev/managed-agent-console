@@ -132,3 +132,41 @@ it("pages through templates and fills a draft without calling the model", async 
   expect(screen.getByLabelText("System", { exact: true })).toBeVisible();
   expect(run).not.toHaveBeenCalled();
 });
+
+it("stops immediately and ignores a cancelled stream while the next run is open", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  const requests: {
+    signal: AbortSignal;
+    append: (part: string) => void;
+    finish: () => void;
+  }[] = [];
+  vi.spyOn(gateway, "runPlayground").mockImplementation(
+    (_body, _id, signal, append) =>
+      new Promise<void>((finish) => requests.push({ signal, append, finish })),
+  );
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: false })),
+  );
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "Hello");
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  await user.click(screen.getByRole("button", { name: "Stop" }));
+  expect(requests[0].signal.aborted).toBe(true);
+  expect(document.querySelector("[data-run-status]")).toHaveAttribute(
+    "data-run-status",
+    "stopped",
+  );
+  expect(requests).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  requests[0].append("stale response");
+  requests[0].finish();
+  await user.click(screen.getByRole("button", { name: "Stop" }));
+  expect(requests[1].signal.aborted).toBe(true);
+  expect(screen.queryByText("stale response")).toBeNull();
+  requests[1].finish();
+});

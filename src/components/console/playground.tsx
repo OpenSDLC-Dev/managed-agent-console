@@ -155,9 +155,11 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     try {
       let answer = "";
       await runPlayground(request, principalId, controller.signal, (part) => {
+        if (controller.signal.aborted) return;
         answer += part;
         setText(answer);
       });
+      if (controller.signal.aborted) return;
       setStatus("complete");
       setHistory((previous) =>
         [
@@ -166,15 +168,14 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
         ].slice(0, 20),
       );
     } catch (cause) {
-      if (controller.signal.aborted) setStatus("stopped");
-      else {
+      if (!controller.signal.aborted) {
         setStatus("failed");
         setError(
           cause instanceof Error ? cause.message : "The model request failed.",
         );
       }
     } finally {
-      active.current = null;
+      if (active.current === controller) active.current = null;
     }
   }
   return (
@@ -277,15 +278,22 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
           <div className="flex shrink-0 justify-end border-t px-5 py-2">
             {running ? (
               <Button
+                key="stop"
                 type="button"
                 size="sm"
-                onClick={() => active.current?.abort()}
+                onClick={(event) => {
+                  event.preventDefault();
+                  active.current?.abort();
+                  active.current = null;
+                  setStatus("stopped");
+                }}
               >
                 <Square />
                 Stop
               </Button>
             ) : (
               <Button
+                key="run"
                 type="submit"
                 size="sm"
                 aria-label="Run prompt"
