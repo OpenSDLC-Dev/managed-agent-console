@@ -267,18 +267,10 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   `501`) and refused reads (`403 permission_error`) hide entry points, for different reasons.
   Unknown, network and server failures keep them visible. Direct routes distinguish refusal from
   absence; see [Authorization presentation](#authorization-presentation--checked-2026-10-27).
-- **`Model Gateway` is a group the reference does not have** (plan 10, added 2026-10-14). The
-  reference calls only Anthropic's models. A self-hosted platform routes every agent through its own
-  gateway, so the gateway's screens sit in a group between `Build` and `Managed Agents`. They have no
-  reference counterpart: they reuse this console's list, detail and dialog patterns and follow the
-  prototype the owner approved. Vendor names are the gateway profiles' own `display_name`.
-- **API keys is a top-level item**, not filed under a Settings area (added 2026-08-14). A self-hosted
-  console's whole settings story is its environment file, so a Settings section holding exactly one
-  page would be a menu built to hold a menu. Since 2026-08-17 it also sits **second, directly under
-  Dashboard**, which is the reference's own position for it — it had been last while the nav was flat.
-  On the dashboard it is filed under a `Manage` heading the sidebar does not draw: the sidebar shows
-  "top level" by position, and a grid of cards has no such affordance, so those cards would otherwise
-  be a headless row above the rest.
+- **Model Gateway** groups the self-hosted platform's models and providers. In signed-in Chrome
+  on 2026-11-21, the shared Organization groups appeared in the order Keys, Spending & usage,
+  then Settings. The self-hosted console places Model Gateway immediately after Keys. Vendor names come
+  from the gateway profiles' `display_name`.
 - **The API-keys table drops `Last used` and `Cost` and adds `Status`.** Nothing serves the first two
   here, and a column of em dashes is a promise the deployment cannot keep; `Created by` renders the
   actor id the wire carries rather than a display name, because there is no member lookup to enrich
