@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,33 +59,54 @@ function KeyFilter({
   options: Option[];
   onChange: (value: string) => void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
   return (
-    <Select value={value || null} onValueChange={(v) => onChange(v ?? "")}>
-      <SelectTrigger
-        aria-label={label}
-        data-value={value}
-        size="sm"
-        className="max-w-full border-0 bg-muted px-2 hover:bg-accent dark:bg-muted"
-      >
-        <span className="text-muted-foreground">{label}</span>
-        <SelectValue className="truncate">
-          {value
-            ? (options.find((item) => item.value === value)?.label ?? value)
-            : all}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent
-        align="start"
-        alignItemWithTrigger={false}
-        className="w-auto max-w-[90vw]"
-      >
-        {options.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div
+      role="group"
+      aria-label={`${label} filter`}
+      className="inline-flex max-w-full items-center"
+    >
+      <Select value={value || null} onValueChange={(v) => onChange(v ?? "")}>
+        <SelectTrigger
+          ref={trigger}
+          aria-label={label}
+          data-value={value}
+          size="sm"
+          className="max-w-full border-0 bg-muted px-2 hover:bg-accent dark:bg-muted"
+        >
+          <span className="text-muted-foreground">{label}</span>
+          <SelectValue className="truncate">
+            {value
+              ? (options.find((item) => item.value === value)?.label ?? value)
+              : all}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent
+          align="start"
+          alignItemWithTrigger={false}
+          className="w-auto max-w-[90vw]"
+        >
+          {options.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear selection"
+          className="relative ms-[9px] me-[3px] flex size-[22px] shrink-0 items-center justify-center rounded-md text-muted-foreground after:absolute after:-inset-px hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          onClick={() => {
+            onChange("");
+            trigger.current?.focus();
+          }}
+        >
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 

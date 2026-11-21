@@ -81,7 +81,7 @@ Platform defines the following limits in `internal/api/consoleapikeys.go` and `i
 ### Repeat the Keys comparison
 
 1. Run the focused regression and Chrome screenshot commands below. The mock suite owns its sample keys. The native tier in the [development guide](../README.md#development) also verifies real issuance and revocation.
-2. At the same viewport and theme, open the signed-in reference and the local `/api-keys`. Compare the heading, search and filter row, table, panel, menu and create dialogs. Search for a missing name, combine two filters, then Reset. Sort a column and open a key with Enter. Check both ends of Previous/Next, click another row, then dismiss by outside click, Escape and Close. Check focus after dismissal.
+2. At the same viewport and theme, open the signed-in reference and the local `/api-keys`. Compare the heading, search and filter row, table, panel, menu and create dialogs. Search for a missing name. Combine two filters, clear one selection and check that the other filter and search survive. Try Reset search, Reset filters and the toolbar Reset. Sort a column and open a key with Enter. Check both ends of Previous/Next, click another row, then dismiss by outside click, Escape and Close. Check focus after dismissal.
 3. Open View cost from the list and the panel. Check the selected key, UTC dates, reload and browser Back. Open the CLI and API-key paths from both entry points. Check name focus, expiry preview, Custom, Never and cancellation. Use owned fixtures for issuance, one-time reveal, disable, enable and confirmed deletion. Keep live keys and account identities out of shared captures.
 
 ```bash

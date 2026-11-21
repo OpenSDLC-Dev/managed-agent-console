@@ -250,6 +250,21 @@ test("linked account filters by actor type and the empty search can be reset in 
     ).toBeVisible();
     await page.getByRole("button", { name: "Reset", exact: true }).click();
   }
+  await search.fill("ci-deploy");
+  await account.click();
+  await page
+    .getByRole("option", { name: "Service account", exact: true })
+    .click();
+  await page.getByRole("combobox", { name: "Status", exact: true }).click();
+  await page.getByRole("option", { name: "Disabled", exact: true }).click();
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  await page
+    .getByRole("group", { name: "Status filter", exact: true })
+    .getByRole("button", { name: "Clear selection", exact: true })
+    .click();
+  await expect(search).toHaveValue("ci-deploy");
+  await expect(account).toHaveAttribute("data-value", "service_account_actor");
+  await expect(count).toHaveAttribute("data-visible-count", "1");
 });
 
 test("View cost opens the actual key's UTC month-to-date query and survives reload", async ({

@@ -202,6 +202,26 @@ it("filters linked account kind across distinct service accounts", async () => {
   expect(screen.getByText("svac_other")).toBeInTheDocument();
 });
 
+it("clears one filter without changing search or another selected filter", async () => {
+  mount();
+  const search = screen.getByRole("searchbox", { name: "Search keys" });
+  await userEvent.type(search, "alp");
+  await choose("Linked account", "Service account");
+  await choose("Status", "Active");
+  count(0);
+  const status = within(screen.getByRole("group", { name: "Status filter" }));
+  await userEvent.click(
+    status.getByRole("button", { name: "Clear selection" }),
+  );
+  expect(status.getByRole("combobox")).toHaveFocus();
+  expect(status.queryByRole("button", { name: "Clear selection" })).toBeNull();
+  expect(
+    screen.getByRole("combobox", { name: "Linked account" }),
+  ).toHaveAttribute("data-value", "service_account_actor");
+  expect(search).toHaveValue("alp");
+  expect(names()).toEqual(["Alpine"]);
+});
+
 it("sorts full names and timestamps without losing focus or treating Never as a date", async () => {
   mount();
   const keyHeading = screen.getByRole("columnheader", {
