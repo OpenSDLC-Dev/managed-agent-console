@@ -68,7 +68,12 @@ export function Playground() {
   );
 }
 
-type PastRun = { draft: PlaygroundDraft; text: string; reply: PlaygroundReply };
+type PastRun = {
+  draft: PlaygroundDraft;
+  text: string;
+  reply: PlaygroundReply;
+  completedAt: Date;
+};
 
 function PlaygroundForm({ principalId }: { principalId: string }) {
   const models = useQuery({
@@ -228,6 +233,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
             draft: { ...draft, selection: model },
             text: answer,
             reply: result,
+            completedAt: new Date(),
           },
           ...previous,
         ].slice(0, 20),
@@ -432,19 +438,30 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
                   type="button"
                   key={i}
                   data-history-entry
-                  className="truncate rounded-lg bg-muted/60 px-3 py-2 text-left text-sm hover:bg-muted"
+                  aria-current={reply === entry.reply ? true : undefined}
+                  className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted"
                   onClick={() => {
                     setDraft(entry.draft);
                     setText(entry.text);
                     setReply(entry.reply);
                     setStatus("complete");
                     setError(undefined);
-                    setHistoryOpen(false);
-                    historyToggle.current?.focus();
                     setMode("Form");
                   }}
                 >
-                  {entry.draft.messages.find((m) => m.content)?.content}
+                  <span className="truncate">
+                    {entry.draft.messages.find((m) => m.content)?.content}
+                  </span>
+                  <time
+                    dateTime={entry.completedAt.toISOString()}
+                    data-completed-at={entry.completedAt.getTime()}
+                    className="shrink-0 text-xs text-muted-foreground"
+                  >
+                    {entry.completedAt.toLocaleTimeString(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </time>
                 </button>
               ))
             ) : (

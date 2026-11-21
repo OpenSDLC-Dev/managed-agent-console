@@ -117,12 +117,19 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
     within(screen.getByRole("region", { name: "History" })).getByRole(
       "button",
       {
-        name: "First turn",
+        name: /First turn/,
       },
     ),
   );
   expect(screen.getByLabelText("user message 3")).toHaveValue("Next turn");
   expect(screen.getByText("OK", { exact: true })).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "History" })).getByRole(
+      "button",
+      { name: /First turn/ },
+    ),
+  ).toHaveAttribute("aria-current", "true");
+  await user.click(screen.getByRole("button", { name: "Close history" }));
   await act(async () => {
     client.setQueryData(
       ["playground-models", TEST_SESSION.id],

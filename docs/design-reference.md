@@ -29,7 +29,7 @@ At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle.
 
 After a signed-in Haiku run, the right column switched to Rendered and Raw views. Add to messages worked from either view and placed the answer above a fresh user message. The footer showed token counts, cost and duration. The native Messages stream supplies token counts. The Console measures elapsed time and omits the hosted price estimate.
 
-History opened in a 432px panel over the right column. Clicking the prompt closed the panel and focused the editor. Arrow keys on the pane divider changed the split by one percentage point.
+History opened in a 432px panel over the right column. Selecting the recorded run restored its reply while the panel stayed open. Clicking the prompt closed the panel and focused the editor. Arrow keys on the pane divider changed the split by one percentage point.
 
 ## Native-only Console — checked 2026-11-17
 
