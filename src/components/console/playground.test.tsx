@@ -138,6 +138,38 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   expect(screen.getByRole("button", { name: "Run prompt" })).toBeEnabled();
 });
 
+it("continues a final assistant prefill in the same message", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  vi.spyOn(gateway, "runPlayground").mockImplementation(
+    async (_req, _id, _signal, append) => {
+      append("ground");
+      return reply;
+    },
+  );
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: false })),
+  );
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "Complete the word");
+  await user.click(
+    screen.getByRole("button", { name: "Add assistant message" }),
+  );
+  await user.type(screen.getByLabelText("assistant message 2"), "Play");
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Add to messages" }),
+  );
+  expect(screen.getByLabelText("assistant message 2")).toHaveValue(
+    "Playground",
+  );
+  expect(screen.getByLabelText("user message 3")).toHaveValue("");
+});
+
 it("pages through templates and fills a draft without calling the model", async () => {
   vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
     { id: "demo", display_name: "Demo" },

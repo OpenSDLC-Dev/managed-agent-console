@@ -126,13 +126,17 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   function addToMessages() {
     if (status !== "complete" || !text) return;
     const id = draft.messages[draft.messages.length - 1].id + 1;
+    const messages = draft.messages.filter(
+      (message) => message.content.length > 0,
+    );
+    const last = messages.at(-1);
+    // Messages continues a final assistant prefill in the same turn.
+    if (last?.role === "assistant")
+      messages[messages.length - 1] = { ...last, content: last.content + text };
+    else messages.push({ id, role: "assistant", content: text });
     setDraft({
       ...draft,
-      messages: [
-        ...draft.messages.filter((message) => message.content.length > 0),
-        { id, role: "assistant", content: text },
-        { id: id + 1, role: "user", content: "" },
-      ],
+      messages: [...messages, { id: id + 1, role: "user", content: "" }],
     });
     setMode("Form");
     setStatus("idle");
