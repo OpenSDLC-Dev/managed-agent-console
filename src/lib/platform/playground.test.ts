@@ -1,13 +1,22 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { playgroundModels, runPlayground } from "./playground";
+import {
+  playgroundModels,
+  runPlayground,
+  type PlaygroundRequest,
+} from "./playground";
 import { readAccount } from "./native";
 
 const resource = "/api/organizations/default/proxy/v1";
-const prompt = {
+const prompt: PlaygroundRequest = {
   model: "demo",
-  prompt: "Hello",
+  messages: [
+    { role: "user", content: "Hello" },
+    { role: "assistant", content: "Hi" },
+    { role: "user", content: "Continue" },
+  ],
   system: "Be brief",
-  maxTokens: 32,
+  max_tokens: 32,
+  stream: true,
 };
 
 function fixture(frames: string, contentType = "text/event-stream") {
@@ -124,7 +133,11 @@ it("posts Messages with fresh CSRF and renders only text blocks from the stream"
     model: "demo",
     max_tokens: 32,
     system: "Be brief",
-    messages: [{ role: "user", content: "Hello" }],
+    messages: [
+      { role: "user", content: "Hello" },
+      { role: "assistant", content: "Hi" },
+      { role: "user", content: "Continue" },
+    ],
     stream: true,
   });
 });

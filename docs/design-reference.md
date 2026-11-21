@@ -21,11 +21,11 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
 
-## Playground — checked 2026-11-20
+## Playground — checked 2026-11-21
 
-Isolated Chrome reached the reference's public sign-in offer. The [recording](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/tree/main/2026-10-22-playground-protocol) supplies the prompt and streaming behavior.
-The Console uses its own request form and response panel. The member approval control is specific to the self-hosted platform.
-The local Chrome manifest covers the request form in both themes.
+Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. The reference opens Messages on Overview. Playground is the first supported destination in the self-hosted Messages group. Both the group header and its arrow return to all sections while the editor stays open.
+
+At 1800 × 945 the reference divides the area beside the sidebar into equal columns. Form and Code share the left column, with model settings at the top and Run at the bottom. The right column offers templates before a run. More and Previous page through them. The self-hosted editor uses the gateway's model aliases, text-message templates and a copyable request. History covers runs in the open page. The platform does not store prompt history or host shared requests.
 
 ## Native-only Console — checked 2026-11-17
 

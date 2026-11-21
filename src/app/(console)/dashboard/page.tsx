@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BookOpen, Waypoints } from "lucide-react";
+import { useContext } from "react";
+import { ArrowRight, BookOpen, Waypoints, type LucideIcon } from "lucide-react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { CreateKeyButton } from "@/components/console/api-keys";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { DASHBOARD_SECTIONS, type SurfaceEntry } from "@/lib/nav";
+import { NAV_SECTIONS, PLAYGROUND_LINK } from "@/lib/nav";
 import {
   SURFACES,
   surfaceRoute,
   useSurfaces,
   isSurfaceVisible,
+  type Surface,
 } from "@/lib/platform/surfaces";
 
 /**
@@ -25,8 +28,13 @@ import {
  * Sections and their order come from the nav itself (`lib/nav.ts`), so the
  * landing page cannot drift from the sidebar.
  */
-function SurfaceCard({ entry }: { entry: SurfaceEntry }) {
-  const { icon: Icon, surface } = entry;
+function SurfaceCard({
+  icon: Icon,
+  surface,
+}: {
+  icon: LucideIcon;
+  surface: Surface;
+}) {
   const { label, blurb } = SURFACES[surface];
   return (
     <Link
@@ -50,11 +58,16 @@ function SurfaceCard({ entry }: { entry: SurfaceEntry }) {
 
 export default function DashboardPage() {
   const surfaces = useSurfaces();
-  const sections = DASHBOARD_SECTIONS.map(({ heading, items }) => ({
+  const playground =
+    useContext(ConsoleSessionContext)?.data?.playground_access === true;
+  const sections = NAV_SECTIONS.map(({ heading, groups }) => ({
     heading,
-    // Unknown stays shown. Confirmed absence and refused reads lose their links.
-    items: items.filter(({ surface }) =>
-      isSurfaceVisible(surfaces?.[surface], surface),
+    items: groups.flatMap(({ items }) =>
+      items.flatMap(({ surface, icon }) =>
+        surface && isSurfaceVisible(surfaces?.[surface], surface)
+          ? [{ surface, icon }]
+          : [],
+      ),
     ),
   })).filter(({ items }) => items.length > 0);
 
@@ -114,11 +127,32 @@ export default function DashboardPage() {
             </h2>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,220px),1fr))] gap-3">
               {items.map((entry) => (
-                <SurfaceCard key={entry.surface} entry={entry} />
+                <SurfaceCard key={entry.surface} {...entry} />
               ))}
             </div>
           </section>
         ))}
+        {playground && (
+          <section className="mb-6">
+            <h2 className="mb-3 text-[15px] font-semibold leading-5">
+              Resources
+            </h2>
+            <div className="max-w-sm rounded-xl border p-4">
+              <h3 className="text-sm font-semibold">
+                <Link href={PLAYGROUND_LINK.href}>Playground</Link>
+              </h3>
+              <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+                Try models and prompts in the browser.
+              </p>
+              <Link
+                href={PLAYGROUND_LINK.href}
+                className="mt-3 inline-flex items-center gap-1 text-sm font-medium hover:underline"
+              >
+                Open playground <ArrowRight aria-hidden className="size-3.5" />
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
       <footer className="flex justify-center gap-4 py-4 text-xs text-muted-foreground">
         <a

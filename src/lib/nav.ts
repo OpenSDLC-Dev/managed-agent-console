@@ -8,6 +8,7 @@ import {
   House,
   KeyRound,
   KeySquare,
+  MessageSquare,
   MessagesSquare,
   Moon,
   Network,
@@ -23,18 +24,24 @@ import {
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE } from "./routes";
 
-export interface SurfaceEntry {
-  surface: Surface;
+export interface Destination {
+  key: string;
+  label: string;
+  href: string;
   icon: LucideIcon;
+  surface?: Surface;
 }
 
 export interface GroupEntry {
   label: string;
   icon: LucideIcon;
-  items: SurfaceEntry[];
+  items: Destination[];
 }
 
-const surfaceEntry = (surface: Surface, icon: LucideIcon): SurfaceEntry => ({
+const surfaceEntry = (surface: Surface, icon: LucideIcon): Destination => ({
+  key: `nav-${surface}`,
+  label: SURFACES[surface].label,
+  href: surfaceRoute(surface),
   surface,
   icon,
 });
@@ -50,7 +57,7 @@ export const PLAYGROUND_LINK = {
   key: `nav-${PLAYGROUND_ROUTE}`,
   label: "Playground",
   href: PLAYGROUND_ROUTE,
-  icon: MessagesSquare,
+  icon: MessageSquare,
 };
 
 // The sidebar, Dashboard and command palette share the same destination order.
@@ -58,6 +65,11 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
   {
     heading: "Build",
     groups: [
+      {
+        label: "Messages",
+        icon: MessageSquare,
+        items: [PLAYGROUND_LINK],
+      },
       {
         label: "Agents",
         icon: Waypoints,
@@ -111,29 +123,7 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
   },
 ];
 
-export interface Destination {
-  key: string;
-  label: string;
-  href: string;
-  icon: LucideIcon;
-  surface?: Surface;
-}
-
-export const DASHBOARD_SECTIONS = NAV_SECTIONS.map(({ heading, groups }) => ({
-  heading,
-  items: groups.flatMap(({ items }) => items),
-}));
-
 export const NAV_DESTINATIONS: Destination[] = [
   DASHBOARD_LINK,
-  PLAYGROUND_LINK,
-  ...DASHBOARD_SECTIONS.flatMap(({ items }) =>
-    items.map(({ icon, surface }) => ({
-      key: `nav-${surface}`,
-      label: SURFACES[surface].label,
-      href: surfaceRoute(surface),
-      icon,
-      surface,
-    })),
-  ),
+  ...NAV_SECTIONS.flatMap(({ groups }) => groups.flatMap(({ items }) => items)),
 ];

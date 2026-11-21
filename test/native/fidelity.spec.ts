@@ -172,7 +172,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
       (s) =>
         s.id.startsWith("native-model-limits") ||
         s.id.startsWith("native-principal-") ||
-        s.id === "native-playground",
+        s.id.startsWith("native-playground"),
     )
   )
     await seedGateway(request, receipt.container);
@@ -343,6 +343,14 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               .click();
           if (surface.id === "native-model-limits-form")
             await page.getByRole("button", { name: "Edit limits" }).click();
+          if (surface.id === "native-playground-code") {
+            await page
+              .getByLabel("Prompt", { exact: true })
+              .fill("Write a short greeting.");
+            await page.getByText("Code", { exact: true }).click();
+          }
+          if (surface.id === "native-playground-settings")
+            await page.getByRole("button", { name: "Model settings" }).click();
           if (surface.id === "native-deployment-initiator-form") {
             await page
               .getByRole("button", { name: "Change initiator" })
@@ -650,6 +658,14 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(
               page.locator("[data-limit=requests_per_minute]"),
             ).toHaveAttribute("data-value", "120");
+            break;
+          case "native-playground-code":
+            await expect(page.getByLabel("Request code")).toContainText(
+              "Write a short greeting.",
+            );
+            break;
+          case "native-playground-settings":
+            await expect(page.getByLabel("Max tokens")).toBeVisible();
             break;
           case "native-playground":
             await expect(

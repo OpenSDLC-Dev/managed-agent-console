@@ -1365,7 +1365,8 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     ).toBe(403);
 
     await user.reload();
-    await user.getByLabel("Model", { exact: true }).selectOption(alias);
+    await user.getByRole("combobox", { name: "Model", exact: true }).click();
+    await user.getByRole("option", { name: alias, exact: true }).click();
     const prompt = user.getByLabel("Prompt", { exact: true });
     const run = user.getByRole("button", { name: "Run prompt" });
     const status = user.locator("[data-run-status]");

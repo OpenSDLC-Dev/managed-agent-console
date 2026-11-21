@@ -10,6 +10,11 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import { Nav } from "./nav";
+import {
+  ConsoleSessionContext,
+  type useConsoleSession,
+} from "./console-session";
+import { TEST_SESSION } from "@/../test/session-fixture";
 import { SURFACES, type Surface } from "@/lib/platform/surfaces";
 
 const navState = vi.hoisted(() => ({
@@ -97,6 +102,7 @@ function renderNav(
   unavailable?: readonly Surface[],
   props: ComponentProps<typeof Nav> = {},
   status = 404,
+  playgroundAccess?: boolean,
 ) {
   vi.stubGlobal(
     "fetch",
@@ -132,7 +138,22 @@ function renderNav(
   });
   return render(<Nav {...props} />, {
     wrapper: ({ children }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        <ConsoleSessionContext.Provider
+          value={
+            playgroundAccess === undefined
+              ? null
+              : ({
+                  data: {
+                    ...TEST_SESSION,
+                    playground_access: playgroundAccess,
+                  },
+                } as ReturnType<typeof useConsoleSession>)
+          }
+        >
+          {children}
+        </ConsoleSessionContext.Provider>
+      </QueryClientProvider>
     ),
   });
 }
@@ -157,6 +178,24 @@ afterEach(() => {
 });
 
 describe("Nav", () => {
+  it("places approved Playground in Build > Messages and restores focus on return", async () => {
+    renderNav([], {}, 404, true);
+    const group = groupRow("Messages");
+    expect(group.getAttribute("href")).toBe("/playground");
+    expect(group.previousElementSibling?.textContent).toBe("Build");
+    expect(group.nextElementSibling?.textContent).toBe("Agents");
+    expect(
+      within(navigation()).queryByRole("link", { name: "Playground" }),
+    ).toBeNull();
+    await userEvent.click(group);
+    const link = within(navigation()).getByRole("link", { name: "Playground" });
+    expect(link.getAttribute("aria-current")).toBe("page");
+    await userEvent.click(within(back()).getByText("Messages"));
+    expect(document.activeElement).toBe(groupRow("Messages"));
+    expect(groupRow("Messages").textContent).toBe("Messages Playground");
+    expect(navState.pathname).toBe("/playground");
+  });
+
   it("starts with the ordered top-level categories and no submenu links", async () => {
     renderNav([]);
     await screen.findByRole("link", { name: "Settings" });

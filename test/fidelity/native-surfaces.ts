@@ -1,11 +1,24 @@
-// Private self-hosting surfaces. These have no freshly observed reference
-// counterpart. The real-platform Chrome walker is test/native/fidelity.spec.ts.
+// Self-hosting surfaces exercised by test/native/fidelity.spec.ts.
 export const NATIVE_SURFACES = [
   {
     id: "native-playground",
     route: "/playground",
     fixture: "chat alias from the real gateway catalogue",
-    description: "Prompt form with model selection and response panel.",
+    description:
+      "Messages submenu, Form/Code request builder and starter templates.",
+  },
+  {
+    id: "native-playground-code",
+    route: "/playground",
+    fixture: "text-message draft",
+    description:
+      "Code view of the same request, with its language and copy controls.",
+  },
+  {
+    id: "native-playground-settings",
+    route: "/playground",
+    fixture: "chat model settings",
+    description: "Max tokens opens beside the selected chat model.",
   },
   {
     id: "native-environment-cloud-keys",

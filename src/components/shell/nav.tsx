@@ -5,15 +5,9 @@ import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
-import {
-  DASHBOARD_LINK,
-  NAV_SECTIONS,
-  PLAYGROUND_LINK,
-  type GroupEntry,
-} from "@/lib/nav";
+import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
   isSurfaceVisible,
-  SURFACES,
   surfaceOfPath,
   surfaceRoute,
   useSurfaces,
@@ -140,13 +134,13 @@ function GroupControl({
 
 function CompactGroup({
   group,
-  activeSurface,
+  activeHref,
 }: {
   group: GroupEntry;
-  activeSurface?: Surface;
+  activeHref: string;
 }) {
   const [open, setOpen] = useState(false);
-  const active = group.items.some(({ surface }) => surface === activeSurface);
+  const active = group.items.some(({ href }) => href === activeHref);
   const { icon: Icon } = group;
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -174,14 +168,14 @@ function CompactGroup({
             <Popover.Title className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
               {group.label}
             </Popover.Title>
-            {group.items.map(({ surface }) => (
+            {group.items.map(({ href, label, surface }) => (
               <NavLink
-                key={surface}
+                key={href}
                 popup
-                href={surfaceRoute(surface)}
-                label={SURFACES[surface].label}
+                href={href}
+                label={label}
                 surface={surface}
-                active={surface === activeSurface}
+                active={href === activeHref}
                 onNavigate={() => setOpen(false)}
               />
             ))}
@@ -206,6 +200,7 @@ export function Nav({
   const router = useRouter();
   const { requestLeave } = useLeaveConfirmation();
   const activeSurface = surfaceOfPath(pathname);
+  const activeHref = activeSurface ? surfaceRoute(activeSurface) : pathname;
   const nav = useRef<HTMLElement>(null);
   const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
   const [selection, setSelection] = useState<{
@@ -222,14 +217,16 @@ export function Nav({
       .map((group) => ({
         ...group,
         items: group.items.filter(({ surface }) =>
-          isSurfaceVisible(surfaces?.[surface], surface),
+          surface
+            ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
+            : limited || session?.playground_access === true,
         ),
       }))
       .filter(({ items }) => items.length > 0),
-  })).filter(({ groups }) => !limited && groups.length > 0);
+  })).filter(({ groups }) => groups.length > 0);
   const groups = sections.flatMap((section) => section.groups);
   const routeGroup = groups.find(({ items }) =>
-    items.some(({ surface }) => surface === activeSurface),
+    items.some(({ href }) => href === activeHref),
   );
   const selectedLabel =
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
@@ -321,13 +318,13 @@ export function Nav({
               </span>
             </button>
           </h2>
-          {panel.items.map(({ surface }) => (
+          {panel.items.map(({ href, label, surface }) => (
             <NavLink
-              key={surface}
-              href={surfaceRoute(surface)}
-              label={SURFACES[surface].label}
+              key={href}
+              href={href}
+              label={label}
               surface={surface}
-              active={surface === activeSurface}
+              active={href === activeHref}
             />
           ))}
         </div>
@@ -339,15 +336,6 @@ export function Nav({
               label={DASHBOARD_LINK.label}
               icon={DASHBOARD_LINK.icon}
               active={pathname === DASHBOARD_LINK.href}
-              compact={compact}
-            />
-          )}
-          {(limited || session?.playground_access === true) && (
-            <NavLink
-              href={PLAYGROUND_LINK.href}
-              label={PLAYGROUND_LINK.label}
-              icon={PLAYGROUND_LINK.icon}
-              active={pathname === PLAYGROUND_LINK.href}
               compact={compact}
             />
           )}
@@ -371,17 +359,17 @@ export function Nav({
                     <CompactGroup
                       key={group.label}
                       group={group}
-                      activeSurface={activeSurface}
+                      activeHref={activeHref}
                     />
                   );
 
-                const current =
-                  group === routeGroup && activeSurface
-                    ? SURFACES[activeSurface].label
-                    : undefined;
+                const current = group.items.find(
+                  ({ href }) => href === activeHref,
+                )?.label;
+                const first = group.items[0];
                 const destination =
-                  !mobile && !current && surfaces
-                    ? surfaceRoute(group.items[0].surface)
+                  !mobile && !current && (!first.surface || surfaces)
+                    ? first.href
                     : undefined;
                 return (
                   <GroupControl

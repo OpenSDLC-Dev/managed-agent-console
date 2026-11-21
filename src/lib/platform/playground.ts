@@ -33,16 +33,22 @@ export async function playgroundModels(signal: AbortSignal) {
   }
 }
 
-type Prompt = {
+export type PlaygroundMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type PlaygroundRequest = {
   model: string;
-  system: string;
-  prompt: string;
-  maxTokens: number;
+  max_tokens: number;
+  system?: string;
+  messages: PlaygroundMessage[];
+  stream: true;
 };
 
 // The private Messages route uses the gateway's Anthropic SSE contract.
 export async function runPlayground(
-  prompt: Prompt,
+  request: PlaygroundRequest,
   principalId: string,
   signal: AbortSignal,
   append: (text: string) => void,
@@ -54,13 +60,7 @@ export async function runPlayground(
       "content-type": "application/json",
       ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
-    body: JSON.stringify({
-      model: prompt.model,
-      max_tokens: prompt.maxTokens,
-      ...(prompt.system ? { system: prompt.system } : {}),
-      messages: [{ role: "user", content: prompt.prompt }],
-      stream: true,
-    }),
+    body: JSON.stringify(request),
     cache: "no-store",
     signal,
   });
