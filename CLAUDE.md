@@ -50,6 +50,18 @@ Testing mirrors the platform's tiered philosophy. Default suites use recorded fi
 | [docs/HISTORY.md](./docs/HISTORY.md) | archived plans: what each delivered, and what running it proved or broke               |
 | GitHub issues                        | the backlog — the only backlog                                                         |
 
+## Issue triage
+
+Assign each open issue and every new issue a GitHub issue type and exactly two labels.
+
+| Field            | Choices                                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue type       | `Bug` for unexpected behavior, `Feature` for a new capability or improvement, `Task` for a specific piece of work such as maintenance or verification.      |
+| Priority label   | `p0` for critical work that needs immediate attention, `p1` for important near-term work, `p2` for work that can wait.                                      |
+| Difficulty label | `easy` when AI can resolve the issue directly, `medium` when AI can resolve it after writing a plan, `hard` when a person must make a judgment or decision. |
+
+Choose the type, priority and difficulty when filing an issue. For missing information, use `Feature`, `p1` or `hard` for the corresponding field. Maintainers can revise each choice as evidence arrives.
+
 ## Iteration workflow
 
 Every change lands through a PR; **never commit directly to `main`**.

@@ -21,6 +21,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Check issue triage rules
+        if: runner.os == 'Linux'
+        run: python3 .github/scripts/issue_labels_test.py
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           version: 11
