@@ -21,7 +21,7 @@ function focusHeading(heading: HTMLHeadingElement | null) {
 async function cliLoginAvailable({ signal }: { signal: AbortSignal }) {
   const response = await fetch("/oauth/authorize", {
     signal,
-    credentials: "omit",
+    credentials: "same-origin",
     redirect: "error",
     cache: "no-store",
   });

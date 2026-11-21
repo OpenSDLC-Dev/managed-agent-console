@@ -74,7 +74,7 @@ Create key first asks where code runs. The local-machine path offers CLI sign-in
 Platform defines the following limits in `internal/api/consoleapikeys.go` and `internal/modelgateway/store/usage.go`.
 
 - Only the default workspace exists. The key resource supplies neither scope nor last use. Admins can assign an active service account. Historical unowned keys retain their attribution.
-- Owned key issuance predates CLI login. The chooser checks the edge's `GET /oauth/authorize` response before offering the CLI path. The check uses no cookies or OAuth parameters. See the Platform's `internal/api/clioauth.go`.
+- Owned key issuance predates CLI login. The chooser checks the edge's `GET /oauth/authorize` response before offering the CLI path. The request uses same-origin cookies for installations behind an identity proxy. Without OAuth parameters, the handler returns before sign-in or consent. See the Platform's `internal/api/clioauth.go`.
 - Gateway daily reads with `api_key_id` preserve credential-level costs. Unfiltered owner totals combine credentials. The Console links to the selected key's UTC month to date. A sortable per-key amount in the listing needs a permission-scoped batch read.
 - Expired keys allow archival as their sole mutation. Archived and control-plane credentials stay read-only. A user with gateway usage access can still inspect costs. The key hint remains in the listing after the one-time secret closes.
 

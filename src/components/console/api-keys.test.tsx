@@ -410,7 +410,7 @@ describe("creating a key", () => {
     await waitFor(() =>
       expect(mock.fetcher).toHaveBeenCalledWith(
         "/oauth/authorize",
-        expect.objectContaining({ credentials: "omit" }),
+        expect.objectContaining({ credentials: "same-origin" }),
       ),
     );
     expect(
@@ -420,6 +420,15 @@ describe("creating a key", () => {
       screen.getByRole("button", { name: "Somewhere else" }),
     );
     expect(keyForm().getByLabelText("Name")).toHaveFocus();
+  });
+
+  it("recognizes CLI login behind the same identity proxy that protects the Console", async () => {
+    nativeFetch({ protectedCli: true });
+    nativeView(session, false, <CreateKeyButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    expect(
+      await screen.findByRole("button", { name: "Your own machine" }),
+    ).toBeVisible();
   });
 
   it("puts the name and lifetime first and shows the supported linked account and scope", async () => {
@@ -716,6 +725,7 @@ function nativeFetch(
     firstPageFail?: boolean;
     singlePage?: boolean;
     cliUnavailable?: boolean;
+    protectedCli?: boolean;
   } = {},
 ) {
   let current = session;
@@ -728,6 +738,8 @@ function nativeFetch(
     const url = new URL(String(input), "http://console.test");
     if (url.pathname === "/oauth/authorize") {
       if (options.cliUnavailable) return new Response(null, { status: 404 });
+      if (options.protectedCli && init?.credentials === "omit")
+        return new Response(null, { status: 401 });
       return json(
         {
           type: "error",
