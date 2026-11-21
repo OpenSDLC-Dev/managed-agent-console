@@ -13,6 +13,7 @@ const result = spawnSync(
     "--build-arg",
     `CONSOLE_BUILD_VERSION=${stamp}`,
     ...process.argv.slice(2),
+    ".",
   ],
   { stdio: "inherit" },
 );

@@ -69,7 +69,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - run: node scripts/build-image.mjs -t managed-agent-console:ci .
+      - run: node scripts/build-image.mjs -t managed-agent-console:ci
       - name: Scan image (trivy, HIGH/CRITICAL gate)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
