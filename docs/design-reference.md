@@ -21,11 +21,15 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
 
-## Playground — checked 2026-11-20
+## Playground — checked 2026-11-21
 
-Isolated Chrome reached the reference's public sign-in offer. The [recording](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/tree/main/2026-10-22-playground-protocol) supplies the prompt and streaming behavior.
-The Console uses its own request form and response panel. The member approval control is specific to the self-hosted platform.
-The local Chrome manifest covers the request form in both themes.
+Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. The reference opens Messages on Overview. Playground is the first supported destination in the self-hosted Messages group. Both the group header and its arrow return to all sections while the editor stays open.
+
+At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle. Form and Code share the left column, with model settings at the top and Run at the bottom. The empty right column contains a 672px template grid with 16px gaps. More and Previous page through it. The self-hosted editor uses the gateway's model aliases, text-message templates and a copyable request. History covers runs in the open page. The platform does not store prompt history or host shared requests.
+
+After a signed-in Haiku run, the right column switched to Rendered and Raw views. Add to messages worked from either view and placed the answer above a fresh user message. The footer showed token counts, cost and duration. The native Messages stream supplies token counts. The Console measures elapsed time and omits the hosted price estimate.
+
+History opened in a 432px panel over the right column. Selecting the recorded run restored its reply while the panel stayed open. Clicking the prompt closed the panel and focused the editor. Arrow keys on the pane divider changed the split by one percentage point.
 
 ## Native-only Console — checked 2026-11-17
 

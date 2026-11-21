@@ -1,38 +1,79 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Play, Plus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/shell/page-header";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
+import { PlaygroundViewSwitch } from "./playground-view-switch";
+import {
+  playgroundModels,
+  runPlayground,
+  type PlaygroundRequest,
+  type PlaygroundReply,
+} from "@/lib/platform/playground";
 import { ErrorState } from "./bits";
-import { playgroundModels, runPlayground } from "@/lib/platform/playground";
+import { PlaygroundCode } from "./playground-code";
+import {
+  newDraft,
+  PlaygroundEditor,
+  type PlaygroundDraft,
+} from "./playground-editor";
+import { PlaygroundTemplates } from "./playground-templates";
+import { PlaygroundPanes } from "./playground-panes";
+import { PlaygroundResponse, type RunStatus } from "./playground-response";
 
-const input =
-  "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-60";
+function Heading({ children }: { children?: ReactNode }) {
+  return (
+    <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+      <div>
+        <h1 className="text-[22px] leading-7 font-medium">Playground</h1>
+        <p className="mt-1 text-sm leading-5 text-muted-foreground">
+          Build a Messages API request, see the model’s response, and copy the
+          code.
+        </p>
+      </div>
+      {children}
+    </header>
+  );
+}
 
 export function Playground() {
   const session = useContext(ConsoleSessionContext)?.data;
   return (
-    <div className="mx-auto w-full max-w-5xl">
-      <PageHeader title="Playground" />
+    <div
+      data-playground
+      className="-mx-4 -my-6 flex min-h-[calc(100dvh-var(--console-header-height))] flex-col bg-card sm:-mx-8 lg:h-[calc(100dvh-var(--console-header-height))]"
+    >
       {session?.playground_access === true && session.id ? (
-        <PlaygroundForm principalId={session.id} />
+        <PlaygroundForm key={session.id} principalId={session.id} />
       ) : (
-        <p
-          role="status"
-          className="rounded-xl border p-5 text-sm text-muted-foreground"
-        >
-          {session?.playground_access === false
-            ? "Ask an administrator to enable Playground access for your account."
-            : "Playground is unavailable on this platform."}
-        </p>
+        <>
+          <Heading />
+          <p role="status" className="m-5 text-sm text-muted-foreground">
+            {session?.playground_access === false
+              ? "Ask an administrator to enable Playground access for your account."
+              : "Playground is unavailable on this platform."}
+          </p>
+        </>
       )}
     </div>
   );
 }
+
+type PastRun = {
+  draft: PlaygroundDraft;
+  text: string;
+  reply: PlaygroundReply;
+  completedAt: Date;
+};
 
 function PlaygroundForm({ principalId }: { principalId: string }) {
   const models = useQuery({
@@ -40,193 +81,395 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     queryFn: ({ signal }) => playgroundModels(signal),
     retry: false,
   });
-  const [selection, setSelection] = useState("");
+  const [draft, setDraft] = useState(newDraft);
+  const [mode, setMode] = useState<"Form" | "Code">("Form");
   const [text, setText] = useState("");
-  const [status, setStatus] = useState<
-    "idle" | "running" | "complete" | "stopped" | "failed"
-  >("idle");
+  const [reply, setReply] = useState<PlaygroundReply>();
+  const [status, setStatus] = useState<RunStatus>("idle");
   const [error, setError] = useState<string>();
+  const [history, setHistory] = useState<PastRun[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyToggle = useRef<HTMLButtonElement>(null);
+  const historyPanel = useRef<HTMLElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const response = useRef<HTMLElement>(null);
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    if (!historyOpen) return;
+    const panel = historyPanel.current;
+    (
+      panel?.querySelector<HTMLButtonElement>("[data-history-entry]") ??
+      panel?.querySelector("button")
+    )?.focus();
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        setHistoryOpen(false);
+        historyToggle.current?.focus();
+      }
+    }
+    function dismissOutside(event: PointerEvent) {
+      if (
+        event.target instanceof Node &&
+        !panel?.contains(event.target) &&
+        !historyToggle.current?.contains(event.target)
+      )
+        setHistoryOpen(false);
+    }
+    document.addEventListener("keydown", escape);
+    document.addEventListener("pointerdown", dismissOutside);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.removeEventListener("pointerdown", dismissOutside);
+    };
+  }, [historyOpen]);
 
-  const model =
-    models.data?.find((m) => m.id === selection)?.id ??
-    models.data?.[0]?.id ??
-    "";
+  const model = draft.selection || models.data?.[0]?.id || "";
+  const available = models.data?.some((entry) => entry.id === model) === true;
   const running = status === "running";
+  const modifier =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "⌘"
+      : "Ctrl";
+  const request: PlaygroundRequest = {
+    model,
+    max_tokens: Number(draft.tokens),
+    ...(draft.system ? { system: draft.system } : {}),
+    messages: draft.messages
+      .filter((m) => m.content.length > 0)
+      .map(({ role, content }) => ({ role, content })),
+    stream: true,
+  };
+  function reset(prompt = "") {
+    const next = newDraft();
+    next.selection = available ? model : "";
+    next.messages[0].content = prompt;
+    setDraft(next);
+    setText("");
+    setReply(undefined);
+    setError(undefined);
+    setStatus("idle");
+    setMode("Form");
+    setHistoryOpen(false);
+    if (prompt)
+      requestAnimationFrame(() =>
+        form.current
+          ?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')
+          ?.focus(),
+      );
+  }
+  function addToMessages() {
+    if (status !== "complete" || !text) return;
+    const id = draft.messages[draft.messages.length - 1].id + 1;
+    const messages = draft.messages.filter(
+      (message) => message.content.length > 0,
+    );
+    const last = messages.at(-1);
+    // Messages continues a final assistant prefill in the same turn.
+    if (last?.role === "assistant")
+      messages[messages.length - 1] = { ...last, content: last.content + text };
+    else messages.push({ id, role: "assistant", content: text });
+    setDraft({
+      ...draft,
+      messages: [...messages, { id: id + 1, role: "user", content: "" }],
+    });
+    setMode("Form");
+    setStatus("idle");
+    setText("");
+    setReply(undefined);
+    setError(undefined);
+    requestAnimationFrame(() =>
+      document.getElementById(`playground-message-${id + 1}`)?.focus(),
+    );
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (active.current || !model) return;
-    const fields = new FormData(event.currentTarget);
-    const prompt = String(fields.get("prompt") ?? "");
-    if (!prompt.trim()) {
-      setError("Enter a prompt.");
+    if (active.current || !available) return;
+    const hasPrompt = request.messages.some((message) =>
+      message.content.trim(),
+    );
+    if (
+      !hasPrompt ||
+      !Number.isInteger(request.max_tokens) ||
+      request.max_tokens < 1
+    ) {
+      setError(
+        hasPrompt
+          ? "Enter a positive whole number for Max tokens in Model settings."
+          : "Enter a prompt.",
+      );
       return;
     }
     const controller = new AbortController();
     active.current = controller;
+    setHistoryOpen(false);
     setText("");
+    setReply(undefined);
     setError(undefined);
     setStatus("running");
+    if (window.matchMedia("(max-width: 1023px)").matches)
+      response.current?.scrollIntoView({ block: "start" });
     try {
-      await runPlayground(
-        {
-          model,
-          prompt,
-          system: String(fields.get("system") ?? ""),
-          maxTokens: Number(fields.get("tokens")),
-        },
+      let answer = "";
+      const result = await runPlayground(
+        request,
         principalId,
         controller.signal,
-        (part) => setText((previous) => previous + part),
+        (part) => {
+          if (controller.signal.aborted) return;
+          answer += part;
+          setText(answer);
+        },
       );
+      if (controller.signal.aborted) return;
+      setReply(result);
       setStatus("complete");
-    } catch (error) {
-      if (controller.signal.aborted) {
-        setStatus("stopped");
-      } else {
+      setHistory((previous) =>
+        [
+          {
+            draft: { ...draft, selection: model },
+            text: answer,
+            reply: result,
+            completedAt: new Date(),
+          },
+          ...previous,
+        ].slice(0, 20),
+      );
+    } catch (cause) {
+      if (!controller.signal.aborted) {
         setStatus("failed");
         setError(
-          error instanceof Error ? error.message : "The model request failed.",
+          cause instanceof Error ? cause.message : "The model request failed.",
         );
       }
     } finally {
-      active.current = null;
+      if (active.current === controller) active.current = null;
     }
   }
-
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <form
-        aria-labelledby="playground-request"
-        method="post"
-        onSubmit={submit}
-        className="space-y-4 rounded-xl border bg-card p-5"
+    <>
+      <Heading>
+        <div className="flex items-center gap-1">
+          <Button
+            ref={historyToggle}
+            variant="ghost"
+            size="sm"
+            disabled={running}
+            aria-controls="playground-history"
+            aria-expanded={historyOpen}
+            onClick={() => setHistoryOpen(!historyOpen)}
+          >
+            History
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={running}
+            onClick={() => reset()}
+          >
+            <Plus />
+            New
+          </Button>
+        </div>
+      </Heading>
+      <PlaygroundPanes
+        onKeyDown={(e) => {
+          if (
+            (e.metaKey || e.ctrlKey) &&
+            e.key === "Enter" &&
+            !e.defaultPrevented
+          ) {
+            e.preventDefault();
+            if (e.shiftKey) addToMessages();
+            else form.current?.requestSubmit();
+          }
+        }}
       >
-        <h2 id="playground-request" className="text-sm font-semibold">
-          Request
-        </h2>
-        {models.error ? <ErrorState error={models.error} /> : null}
-        {models.data?.length === 0 ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            No chat models are configured.
-          </p>
-        ) : null}
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
-          <div className="space-y-1.5">
-            <Label htmlFor="playground-model">Model</Label>
-            <select
-              id="playground-model"
-              value={model}
-              onChange={(e) => setSelection(e.target.value)}
-              disabled={running || !model}
-              className={input}
-            >
-              {model ? (
-                models.data?.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.display_name}
-                  </option>
-                ))
-              ) : (
-                <option value="">
-                  {models.isPending ? "Loading models…" : "No models"}
-                </option>
-              )}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="playground-tokens">Max tokens</Label>
-            <Input
-              id="playground-tokens"
-              name="tokens"
-              type="number"
-              min={1}
-              step={1}
-              defaultValue={1024}
-              disabled={running}
-              required
+        <form
+          ref={form}
+          aria-labelledby="playground-request"
+          onSubmit={submit}
+          method="post"
+          className="flex min-h-0 min-w-0 flex-col border-b lg:border-r lg:border-b-0"
+        >
+          <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 border-b px-5">
+            <h2 id="playground-request" className="text-sm font-semibold">
+              Build your request
+            </h2>
+            <PlaygroundViewSwitch
+              label="Request view"
+              options={["Form", "Code"] as const}
+              value={mode}
+              onChange={setMode}
             />
           </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="playground-system">
-            System instruction{" "}
-            <span className="font-normal text-muted-foreground">
-              (optional)
-            </span>
-          </Label>
-          <textarea
-            id="playground-system"
-            name="system"
-            rows={2}
-            disabled={running}
-            className={input}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="playground-prompt">Prompt</Label>
-          <textarea
-            id="playground-prompt"
-            name="prompt"
-            rows={5}
-            disabled={running}
-            required
-            className={input}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button type="submit" disabled={running || !model}>
-            Run prompt
-          </Button>
-          {running ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => active.current?.abort()}
-            >
-              Stop
-            </Button>
-          ) : null}
-        </div>
-      </form>
-      <section
-        aria-labelledby="playground-response"
-        className="min-w-0 rounded-xl border bg-card p-5"
-      >
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 id="playground-response" className="text-sm font-semibold">
-            Response
-          </h2>
-          <span
-            role="status"
-            data-run-status={status}
-            className="text-xs text-muted-foreground"
-          >
-            {
-              {
-                idle: "",
-                running: "Generating…",
-                complete: "Complete",
-                stopped: "Stopped",
-                failed: "Failed",
-              }[status]
-            }
-          </span>
-        </div>
-        {error ? (
-          <p role="alert" className="mb-3 text-sm text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <div
-          aria-busy={running}
-          className="wrap-break-word whitespace-pre-wrap text-sm leading-6"
+          <div className="min-h-0 flex-1 space-y-3 px-5 py-4 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
+            {models.error && <ErrorState error={models.error} />}
+            {models.data?.length === 0 && (
+              <p role="status" className="text-sm text-muted-foreground">
+                No chat models are configured.
+              </p>
+            )}
+            {mode === "Form" ? (
+              <PlaygroundEditor
+                draft={draft}
+                model={model}
+                models={models.data ?? []}
+                running={running}
+                loading={models.isPending}
+                onChange={setDraft}
+              />
+            ) : (
+              <PlaygroundCode request={request} />
+            )}
+            {error && status !== "failed" && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 justify-end border-t px-5 py-2">
+            {running ? (
+              <Button
+                key="stop"
+                type="button"
+                size="sm"
+                onClick={(event) => {
+                  event.preventDefault();
+                  active.current?.abort();
+                  active.current = null;
+                  setStatus("stopped");
+                }}
+              >
+                <Square />
+                Stop
+              </Button>
+            ) : (
+              <Button
+                key="run"
+                type="submit"
+                size="sm"
+                aria-label="Run prompt"
+                aria-keyshortcuts="Meta+Enter Control+Enter"
+                disabled={!available}
+              >
+                <Play />
+                Run{" "}
+                <kbd
+                  aria-hidden
+                  className="ml-1 rounded bg-background/20 px-1 font-mono text-xs"
+                >
+                  {modifier} ↵
+                </kbd>
+              </Button>
+            )}
+          </div>
+        </form>
+        <section
+          ref={response}
+          aria-label="Response"
+          className="@container flex min-w-0 scroll-mt-(--console-header-height) flex-col lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
         >
-          {text}
-        </div>
-      </section>
-    </div>
+          {status === "idle" ? (
+            <>
+              <span role="status" data-run-status="idle" className="sr-only" />
+              {request.messages.length || draft.system ? (
+                <div className="m-auto px-5 py-16 text-center">
+                  <Play
+                    aria-hidden
+                    className="mx-auto mb-3 size-7 text-muted-foreground"
+                  />
+                  <h3 className="text-sm font-semibold">Press Run</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    The full API response will appear here.
+                  </p>
+                </div>
+              ) : (
+                <PlaygroundTemplates onSelect={reset} />
+              )}
+            </>
+          ) : (
+            <PlaygroundResponse
+              status={status}
+              text={text}
+              error={error}
+              reply={reply}
+              onAdd={addToMessages}
+              modifier={modifier}
+            />
+          )}
+        </section>
+        {historyOpen && (
+          <section
+            ref={historyPanel}
+            id="playground-history"
+            aria-labelledby="playground-history-title"
+            className="absolute top-1 right-3 bottom-3 z-20 flex w-[27rem] max-w-[calc(100%-1.5rem)] flex-col gap-4 overflow-auto rounded-xl border bg-popover p-5 text-sm text-popover-foreground shadow-lg lg:right-5"
+          >
+            <div className="flex items-center justify-between">
+              <h2
+                id="playground-history-title"
+                className="text-base font-semibold"
+              >
+                History
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Close history"
+                onClick={() => {
+                  setHistoryOpen(false);
+                  historyToggle.current?.focus();
+                }}
+              >
+                <X />
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Completed requests from this visit.
+            </p>
+            {history.length ? (
+              history.map((entry, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  data-history-entry
+                  aria-current={reply === entry.reply ? true : undefined}
+                  className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted"
+                  onClick={() => {
+                    setDraft(entry.draft);
+                    setText(entry.text);
+                    setReply(entry.reply);
+                    setStatus("complete");
+                    setError(undefined);
+                    setMode("Form");
+                  }}
+                >
+                  <span className="truncate">
+                    {entry.draft.messages.find((m) => m.content)?.content}
+                  </span>
+                  <time
+                    dateTime={entry.completedAt.toISOString()}
+                    data-completed-at={entry.completedAt.getTime()}
+                    className="shrink-0 text-xs text-muted-foreground"
+                  >
+                    {entry.completedAt.toLocaleTimeString(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </button>
+              ))
+            ) : (
+              <p className="text-sm">No requests yet.</p>
+            )}
+          </section>
+        )}
+      </PlaygroundPanes>
+    </>
   );
 }

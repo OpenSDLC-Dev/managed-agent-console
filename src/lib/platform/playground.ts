@@ -33,20 +33,55 @@ export async function playgroundModels(signal: AbortSignal) {
   }
 }
 
-type Prompt = {
+export type PlaygroundMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type PlaygroundRequest = {
   model: string;
-  system: string;
-  prompt: string;
-  maxTokens: number;
+  max_tokens: number;
+  system?: string;
+  messages: PlaygroundMessage[];
+  stream: true;
+};
+
+export type PlaygroundReply = {
+  raw: string;
+  rawLabel: "Response body" | "Stream events";
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs: number;
+};
+
+type Usage = { input_tokens?: number; output_tokens?: number };
+type Block = {
+  type: string;
+  text?: string;
+  thinking?: string;
+  signature?: string;
+};
+type MessageBody = { content: Block[]; usage?: Usage } & Record<
+  string,
+  unknown
+>;
+type Frame = {
+  message?: MessageBody;
+  index?: number;
+  content_block?: Block;
+  delta?: Block & Record<string, unknown>;
+  usage?: Usage;
+  error?: { message?: string };
 };
 
 // The private Messages route uses the gateway's Anthropic SSE contract.
 export async function runPlayground(
-  prompt: Prompt,
+  request: PlaygroundRequest,
   principalId: string,
   signal: AbortSignal,
   append: (text: string) => void,
-) {
+): Promise<PlaygroundReply> {
+  const started = performance.now();
   const response = await fetch(resourceURL("v1/messages?beta=true"), {
     method: "POST",
     headers: {
@@ -54,13 +89,7 @@ export async function runPlayground(
       "content-type": "application/json",
       ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
-    body: JSON.stringify({
-      model: prompt.model,
-      max_tokens: prompt.maxTokens,
-      ...(prompt.system ? { system: prompt.system } : {}),
-      messages: [{ role: "user", content: prompt.prompt }],
-      stream: true,
-    }),
+    body: JSON.stringify(request),
     cache: "no-store",
     signal,
   });
@@ -72,26 +101,84 @@ export async function runPlayground(
     throw new Error("The gateway did not return a streaming response.");
   }
 
+  // Keep the original events when a provider sends a delta we cannot fold.
+  const events: string[] = [];
+  let body: MessageBody | undefined;
+  let canAssembleBody = true;
+  let usage: Usage | undefined;
   for await (const { event, data } of parseSseStream(response.body)) {
-    if (event === "message_stop") return;
-    if (event === "error") {
-      const frame = JSON.parse(data) as { error?: { message?: string } };
+    if (event === "ping") continue;
+    events.push(`event: ${event}\ndata: ${data}`);
+    if (event === "message_stop") {
+      const complete = canAssembleBody && body;
+      return {
+        raw: complete ? JSON.stringify(complete, null, 2) : events.join("\n\n"),
+        rawLabel: complete ? "Response body" : "Stream events",
+        inputTokens: usage?.input_tokens,
+        outputTokens: usage?.output_tokens,
+        durationMs: performance.now() - started,
+      } satisfies PlaygroundReply;
+    }
+    if (event === "content_block_stop") continue;
+    if (
+      ![
+        "error",
+        "message_start",
+        "message_delta",
+        "content_block_start",
+        "content_block_delta",
+      ].includes(event)
+    ) {
+      canAssembleBody = false;
+      continue;
+    }
+    const frame: Frame = JSON.parse(data);
+    if (event === "error")
       throw new Error(frame.error?.message ?? "The model request failed.");
-    }
-    if (event === "content_block_start" || event === "content_block_delta") {
-      type Block = { type: string; text?: string };
-      const frame = JSON.parse(data) as {
-        content_block?: Block;
-        delta?: Block;
-      };
-      const block = frame.content_block ?? frame.delta;
-      if (
-        (block?.type === "text" || block?.type === "text_delta") &&
-        block.text
-      ) {
-        append(block.text);
+    if (
+      event === "message_start" &&
+      frame.message &&
+      Array.isArray(frame.message.content)
+    ) {
+      body = frame.message;
+      usage = body.usage;
+    } else if (event === "message_delta") {
+      if (body && frame.delta) body = { ...body, ...frame.delta };
+      if (frame.usage) {
+        usage = { ...usage, ...frame.usage };
+        if (body) body.usage = usage;
       }
-    }
+    } else if (event === "content_block_start" && frame.content_block) {
+      if (body && frame.index === body.content.length)
+        body.content.push(frame.content_block);
+      else canAssembleBody = false;
+      if (frame.content_block.type === "text" && frame.content_block.text)
+        append(frame.content_block.text);
+    } else if (event === "content_block_delta") {
+      const block =
+        frame.index === undefined ? undefined : body?.content[frame.index];
+      if (
+        frame.delta?.type === "text_delta" &&
+        typeof frame.delta.text === "string"
+      ) {
+        if (block?.type === "text")
+          block.text = (block.text ?? "") + frame.delta.text;
+        else canAssembleBody = false;
+        if (frame.delta.text) append(frame.delta.text);
+      } else if (
+        block?.type === "thinking" &&
+        frame.delta?.type === "thinking_delta" &&
+        typeof frame.delta.thinking === "string"
+      ) {
+        block.thinking = (block.thinking ?? "") + frame.delta.thinking;
+      } else if (
+        block?.type === "thinking" &&
+        frame.delta?.type === "signature_delta" &&
+        typeof frame.delta.signature === "string"
+      ) {
+        block.signature = (block.signature ?? "") + frame.delta.signature;
+      } else canAssembleBody = false;
+    } else canAssembleBody = false;
   }
   throw new Error("The model stream ended before the response finished.");
 }

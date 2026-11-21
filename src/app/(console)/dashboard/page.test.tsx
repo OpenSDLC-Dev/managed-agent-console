@@ -24,7 +24,11 @@ vi.mock("next/link", () => ({
  * argument it never settles, which is the state a page renders in before the
  * platform has said anything — and the one where everything shows.
  */
-function renderDashboard(unimplemented?: string[], status = 404) {
+function renderDashboard(
+  unimplemented?: string[],
+  status = 404,
+  playgroundAccess?: boolean,
+) {
   vi.stubGlobal(
     "fetch",
     withTestSession(
@@ -68,7 +72,11 @@ function renderDashboard(unimplemented?: string[], status = 404) {
   return render(
     <QueryClientProvider client={client}>
       <ConsoleSessionContext.Provider
-        value={{ data: TEST_SESSION } as ReturnType<typeof useConsoleSession>}
+        value={
+          {
+            data: { ...TEST_SESSION, playground_access: playgroundAccess },
+          } as ReturnType<typeof useConsoleSession>
+        }
       >
         <DashboardPage />
       </ConsoleSessionContext.Provider>
@@ -89,6 +97,18 @@ afterEach(() => {
 });
 
 describe("DashboardPage", () => {
+  it.each([true, false, undefined])(
+    "gates both Playground resource links on the session grant (%s)",
+    (access) => {
+      renderDashboard(undefined, 404, access);
+      const links = screen.queryAllByRole("link", {
+        name: /^(open )?playground$/i,
+      });
+      expect(links.map((link) => link.getAttribute("href"))).toEqual(
+        access ? ["/playground", "/playground"] : [],
+      );
+    },
+  );
   it("probe: drops denied-read cards and shortcuts without hiding readable resources", async () => {
     renderDashboard(["api-keys", "agents", "files", "skills"], 403);
     await waitFor(() => expect(card("api-keys")).toBeNull());

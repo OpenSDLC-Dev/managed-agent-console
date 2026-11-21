@@ -18,6 +18,7 @@ import { nativeDocker } from "./docker";
 import { seedDeployment } from "./deployment-fixture";
 import {
   seedGateway,
+  seedPlaygroundModel,
   model as limitedModel,
   principals as usagePrincipals,
 } from "./gateway-fixture";
@@ -1297,34 +1298,8 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     password,
   });
   expect(member.status).toBe(200);
-  const vendor = await write(page, "/admin/v1/providers", {
-    name: "playground-fixture",
-    profile: "anthropic-generic",
-    endpoints: { anthropic: "https://playground.invalid" },
-  });
-  expect(vendor.status).toBe(200);
-  expect(
-    (
-      await write(page, `/admin/v1/providers/${vendor.body.id}/credentials`, {
-        key: "fixture-placeholder-key",
-      })
-    ).status,
-  ).toBe(200);
-  const deployment = await write(page, "/admin/v1/deployments", {
-    provider_id: vendor.body.id,
-    upstream_model: "fixture-playground",
-    kind: "chat",
-  });
-  expect(deployment.status).toBe(200);
   const alias = "playground-e2e";
-  expect(
-    (
-      await write(page, "/admin/v1/aliases", {
-        name: alias,
-        targets: [{ deployment_id: deployment.body.id, weight: 1 }],
-      })
-    ).status,
-  ).toBe(200);
+  await seedPlaygroundModel(page.request, alias);
 
   const userContext = await browser.newContext({ baseURL: origin });
   try {
@@ -1365,7 +1340,30 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     ).toBe(403);
 
     await user.reload();
-    await user.getByLabel("Model", { exact: true }).selectOption(alias);
+    const divider = user.getByRole("separator", {
+      name: "Resize the request and response panes",
+    });
+    await expect(divider).toHaveAttribute("aria-valuenow", "50");
+    const requestPane = user.getByRole("form", { name: "Build your request" });
+    const before = (await requestPane.boundingBox())!;
+    await divider.press("ArrowRight");
+    expect((await requestPane.boundingBox())!.width).toBeGreaterThan(
+      before.width,
+    );
+    const handle = (await divider.boundingBox())!;
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await user.mouse.move(x, y);
+    await user.mouse.down();
+    await user.mouse.move(x + 60, y, { steps: 4 });
+    await user.mouse.up();
+    expect((await requestPane.boundingBox())!.width).toBeGreaterThan(
+      before.width + 50,
+    );
+    await divider.dblclick();
+    await expect(divider).toHaveAttribute("aria-valuenow", "50");
+    await user.getByRole("combobox", { name: "Model", exact: true }).click();
+    await user.getByRole("option", { name: alias, exact: true }).click();
     const prompt = user.getByLabel("Prompt", { exact: true });
     const run = user.getByRole("button", { name: "Run prompt" });
     const status = user.locator("[data-run-status]");
