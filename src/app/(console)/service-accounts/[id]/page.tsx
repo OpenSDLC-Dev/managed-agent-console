@@ -9,8 +9,12 @@ export default async function ServiceAccountPage({
 }) {
   const [{ id }, filters] = await Promise.all([params, searchParams]);
   const query = new URLSearchParams();
-  if (filters.status === "archived") query.set("status", "archived");
-  if (typeof filters.q === "string" && filters.q) query.set("q", filters.q);
+  const status = Array.isArray(filters.status)
+    ? filters.status[0]
+    : filters.status;
+  const search = Array.isArray(filters.q) ? filters.q[0] : filters.q;
+  if (status === "archived") query.set("status", status);
+  if (search) query.set("q", search);
   const listHref = "/service-accounts" + (query.size ? "?" + query : "");
   return <ServiceAccountDetail key={id} id={id} listHref={listHref} />;
 }

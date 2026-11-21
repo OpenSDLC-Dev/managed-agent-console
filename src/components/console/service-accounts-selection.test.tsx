@@ -61,6 +61,8 @@ function directory(query = "") {
     rows: [account],
     detail: account,
     listError: null as Error | null,
+    detailError: null as Error | null,
+    detailRequest: null as Promise<native.ServiceAccount> | null,
   };
   vi.spyOn(http, "consoleKeysGet").mockResolvedValue([]);
   vi.spyOn(native, "nativeGet").mockImplementation(async (path) => {
@@ -68,7 +70,8 @@ function directory(query = "") {
       if (server.listError) throw server.listError;
       return { data: server.rows, next_page: null };
     }
-    return server.detail;
+    if (server.detailError) throw server.detailError;
+    return server.detailRequest ?? server.detail;
   });
   const write = vi
     .spyOn(native, "nativeWrite")
@@ -95,7 +98,7 @@ function directory(query = "") {
         queryKey: ["service-accounts", "directory"],
       });
     });
-  return { server, write, refresh, user: userEvent.setup() };
+  return { server, client, write, refresh, user: userEvent.setup() };
 }
 
 async function openPanel(user: ReturnType<typeof userEvent.setup>) {
@@ -108,6 +111,96 @@ async function openEditor(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await panel.findByRole("button", { name: "Edit" }));
   return within(await screen.findByRole("dialog", { name: account.name }));
 }
+
+async function editFromRow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", {
+      name: "More actions for " + account.name,
+    }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+  return within(await screen.findByRole("dialog", { name: account.name }));
+}
+
+it("waits for a fresh detail from the row menu before editing, even with a recently cached active account", async () => {
+  const { server, client, write, user } = directory();
+  const key = ["service-accounts", "detail", account.id];
+  client.setQueryDefaults(key, { staleTime: 60_000 });
+  client.setQueryData(key, account);
+  let release!: (record: native.ServiceAccount) => void;
+  server.detailRequest = new Promise((resolve) => {
+    release = resolve;
+  });
+  const loading = await editFromRow(user);
+  expect(loading.queryByRole("textbox", { name: /Description/ })).toBeNull();
+  server.detail = {
+    ...account,
+    description: "Updated remotely",
+    organization_role: "admin",
+  };
+  await act(async () => release(server.detail));
+  const field = await screen.findByRole("textbox", { name: /Description/ });
+  expect(field).toHaveValue("Updated remotely");
+  expect(
+    screen.getByRole("combobox", { name: "Organization role" }),
+  ).toHaveTextContent("Admin");
+  fireEvent.change(field, { target: { value: "Current draft" } });
+  server.detailRequest = null;
+  server.detail = { ...server.detail, description: "Another remote change" };
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: key });
+  });
+  expect(field).toHaveValue("Current draft");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(write.mock.calls[0][1]).toEqual({ description: "Current draft" });
+});
+
+it("retries a failed row edit detail request without presenting stale inputs", async () => {
+  const { server, client, write, user } = directory();
+  client.setQueryData(["service-accounts", "detail", account.id], account);
+  server.detailError = new TypeError("Offline while reading this account");
+  const loading = await editFromRow(user);
+  expect(await loading.findByRole("alert")).toHaveTextContent(
+    "Offline while reading this account",
+  );
+  expect(loading.queryByRole("button", { name: "Save" })).toBeNull();
+  server.detailError = null;
+  server.detail = { ...account, description: "Ready after retry" };
+  await user.click(loading.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("textbox", { name: /Description/ }),
+  ).toHaveValue("Ready after retry");
+  expect(write).not.toHaveBeenCalled();
+});
+
+it.each(["archived", "denied"] as const)(
+  "keeps a row edit read-only when the current detail is %s",
+  async (state) => {
+    const { server, client, write, user } = directory();
+    client.setQueryData(["service-accounts", "detail", account.id], account);
+    if (state === "archived")
+      server.detail = {
+        ...account,
+        archived_at: "2026-10-02T12:00:00Z",
+        archived_by_actor_id: "user_admin",
+      };
+    else server.detailError = new http.PlatformError(403, null);
+    await editFromRow(user);
+    if (state === "archived") {
+      await screen.findByRole("link", { name: "Open" });
+      expect(
+        within(screen.getByRole("dialog", { name: account.name })).getByText(
+          /Archived/,
+        ),
+      ).toBeVisible();
+    } else {
+      expect(await screen.findByRole("alert")).toHaveTextContent("403");
+    }
+    expect(screen.queryByRole("textbox", { name: /Description/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(write).not.toHaveBeenCalled();
+  },
+);
 
 it("starts editing from the fetched detail and writes only the field changed by the user", async () => {
   const { server, write, user } = directory();

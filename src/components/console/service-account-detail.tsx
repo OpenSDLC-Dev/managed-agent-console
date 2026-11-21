@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, type FormEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Archive, ArrowUpRight, Ellipsis, Plus, Pencil } from "lucide-react";
@@ -54,10 +60,11 @@ const accountPath = (id: string) =>
   ORGANIZATION + "/service_accounts/" + encodeURIComponent(id);
 const detailKey = (id: string) => ["service-accounts", "detail", id];
 
-function useServiceAccount(id: string) {
+function useServiceAccount(id: string, refetchOnMount?: "always") {
   const client = useQueryClient();
   return useQuery<ServiceAccount | null>({
     queryKey: detailKey(id),
+    refetchOnMount,
     queryFn: async ({ signal }) => {
       try {
         return await nativeGet<ServiceAccount>(
@@ -206,6 +213,55 @@ function AccountKeys({
         )}
       </div>
     </section>
+  );
+}
+
+export function LoadServiceAccountForEdit({
+  account,
+  onLoaded,
+  onClose,
+  returnFocus,
+}: {
+  account: ServiceAccount;
+  onLoaded: (current: ServiceAccount) => void;
+  onClose: () => void;
+  returnFocus?: FocusRef;
+}) {
+  const detail = useServiceAccount(account.id, "always");
+  const current =
+    detail.isFetchedAfterMount && detail.isSuccess && !detail.isFetching
+      ? detail.data
+      : null;
+  useEffect(() => {
+    if (current) onLoaded(current);
+  }, [current, onLoaded]);
+
+  return (
+    <ResourceInspector
+      kind="service-account"
+      id={account.id}
+      dialogLabel={account.name}
+      onClose={onClose}
+      returnFocus={returnFocus}
+    >
+      {detail.error ? (
+        <>
+          <div role="alert">
+            <ErrorState error={detail.error} />
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={detail.isFetching}
+            onClick={() => void detail.refetch()}
+          >
+            Retry
+          </Button>
+        </>
+      ) : (
+        <DetailSkeleton />
+      )}
+    </ResourceInspector>
   );
 }
 

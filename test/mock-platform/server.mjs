@@ -45,6 +45,7 @@ import { emptyGateway, gatewayRoute, resetGateway } from "./gateway.mjs";
 const API_KEY =
   process.env.MOCK_TEST_API_KEY ??
   "sk-map-api01-mock-owned-test-key-00000000000000000000001";
+const FIXTURE_KEY_ID = "apikey_ci01";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
 /** The model gateway double (gateway.mjs) — its own port, see gatewayServer. */
 const GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 18070);
@@ -196,7 +197,7 @@ const API_KEYS_SEED = [
     principal: null,
   },
   {
-    id: "apikey_ci01",
+    id: FIXTURE_KEY_ID,
     type: "api_key",
     name: "ci-deploy",
     workspace_id: null,
@@ -1938,7 +1939,21 @@ function authenticate(req, res) {
   const key =
     req.headers["x-api-key"] ??
     /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ""))?.[1];
-  if (key === API_KEY) return true;
+  if (key === API_KEY) {
+    const credential = apiKeysStore.find((row) => row.id === FIXTURE_KEY_ID);
+    // ownedkeyauth.go checks the live key and owner on every public request.
+    if (
+      credential?.status === "active" &&
+      (credential.expires_at == null ||
+        Date.parse(credential.expires_at) > Date.now()) &&
+      serviceAccounts.some(
+        (account) =>
+          account.id === credential.principal?.service_account_id &&
+          notArchived(account),
+      )
+    )
+      return true;
+  }
   res.writeHead(401, { "content-type": "application/json" });
   res.end(envelope("authentication_error", "invalid or missing API key"));
   return false;

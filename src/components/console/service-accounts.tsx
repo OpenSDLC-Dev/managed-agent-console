@@ -46,6 +46,7 @@ import {
   CreateServiceAccountDialog,
 } from "./service-account-dialogs";
 import {
+  LoadServiceAccountForEdit,
   ServiceAccountEditPanel,
   ServiceAccountPanel,
 } from "./service-account-detail";
@@ -144,7 +145,7 @@ function AccountActions({
 
 type Selection = {
   account: ServiceAccount;
-  mode: "view" | "edit";
+  mode: "view" | "load-edit" | "edit";
   directoryUpdatedAt: number;
 };
 type Modal =
@@ -206,7 +207,7 @@ function Directory() {
   ) {
     setModal(null);
   }
-  const editing = selection?.mode === "edit";
+  const editing = selection?.mode === "edit" || selection?.mode === "load-edit";
   const busy = pending || editing || !!modal || denied;
   const listHref = `/service-accounts${filters.key ? `?${filters.key}` : ""}`;
   const select = (account: ServiceAccount, mode: Selection["mode"] = "view") =>
@@ -428,7 +429,7 @@ function Directory() {
                           onAction={(action, trigger) => {
                             opener.current = trigger;
                             if (action === "edit") {
-                              select(account, "edit");
+                              select(account, "load-edit");
                             } else {
                               setSelection(null);
                               setModal({ kind: action, account });
@@ -490,33 +491,44 @@ function Directory() {
           </div>
         )}
       </div>
-      {selected &&
-        (editing ? (
-          <ServiceAccountEditPanel
-            key={selected.id}
-            account={selected}
-            returnFocus={opener}
-            onClose={() => select(selected)}
-            onSaved={(account) => select(account)}
-          />
-        ) : (
-          <ServiceAccountPanel
-            account={selected}
-            previous={rows[index - 1]}
-            next={index < 0 ? undefined : rows[index + 1]}
-            listHref={listHref}
-            onEdit={(account) => select(account, "edit")}
-            onClose={() => setSelection(null)}
-            onSelect={(account) => {
-              opener.current = document.querySelector<HTMLButtonElement>(
-                `tr[data-account-id="${CSS.escape(account.id)}"] button[data-account-opener]`,
-              );
-              select(account);
-            }}
-            returnFocus={opener}
-            fallbackFocus={search}
-          />
-        ))}
+      {selection?.mode === "load-edit" && (
+        <LoadServiceAccountForEdit
+          key={selection.account.id}
+          account={selection.account}
+          returnFocus={opener}
+          onClose={() => setSelection(null)}
+          onLoaded={(current) =>
+            select(current, current.archived_at ? "view" : "edit")
+          }
+        />
+      )}
+      {selected && selection?.mode === "edit" && (
+        <ServiceAccountEditPanel
+          key={selected.id}
+          account={selected}
+          returnFocus={opener}
+          onClose={() => select(selected)}
+          onSaved={(account) => select(account)}
+        />
+      )}
+      {selected && selection?.mode === "view" && (
+        <ServiceAccountPanel
+          account={selected}
+          previous={rows[index - 1]}
+          next={index < 0 ? undefined : rows[index + 1]}
+          listHref={listHref}
+          onEdit={(account) => select(account, "edit")}
+          onClose={() => setSelection(null)}
+          onSelect={(account) => {
+            opener.current = document.querySelector<HTMLButtonElement>(
+              `tr[data-account-id="${CSS.escape(account.id)}"] button[data-account-opener]`,
+            );
+            select(account);
+          }}
+          returnFocus={opener}
+          fallbackFocus={search}
+        />
+      )}
       {modal?.kind === "create" && (
         <CreateServiceAccountDialog
           returnFocus={create}

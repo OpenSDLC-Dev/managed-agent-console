@@ -178,6 +178,10 @@ test("search follows opaque pages and preserves the selected status through Open
   await expect(
     page.getByRole("heading", { level: 1, name: retired.name }),
   ).toBeVisible();
+  const sharedUrl = new URL(page.url());
+  sharedUrl.searchParams.append("status", "active");
+  sharedUrl.searchParams.append("q", "other");
+  await page.goto(sharedUrl.href);
   await page
     .getByRole("navigation", { name: "Breadcrumb" })
     .getByRole("link", { name: "Service accounts", exact: true })
