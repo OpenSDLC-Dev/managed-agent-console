@@ -1,4 +1,10 @@
 import { openApiKeyForm } from "../api-key-flow";
+import {
+  openServiceAccountForm,
+  openServiceAccountMenu,
+  serviceAccountsPath,
+  showArchivedServiceAccounts,
+} from "../service-account-flow";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { nativeDocker } from "./docker";
@@ -315,7 +321,9 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               ? `/deployments/${deploymentFixture!.deployment.id}`
               : surface.id.startsWith("native-environment-")
                 ? `/environments/${environmentFixtures[surface.id.includes("archived-cloud") ? "archived-cloud" : surface.id.includes("self-hosted") ? "self-hosted" : "cloud"]}`
-                : surface.route,
+                : surface.route === "/service-accounts/[id]"
+                  ? `/service-accounts/${service.id}`
+                  : surface.route,
           );
           if (surface.route === "/login" || surface.route === "/setup")
             await expect(
@@ -477,7 +485,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               0,
             );
           }
-          if (surface.id.includes("pending")) {
+          if (surface.route === "/members" && surface.id.includes("pending")) {
             const target = `pending-${surface.id.split("-").at(-1)}-${info.project.name}`;
             if (surface.id === "native-members-pending-removal") {
               await page
@@ -490,43 +498,22 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               await page
                 .getByLabel(`Role for ${target}`, { exact: true })
                 .selectOption("developer");
-            } else if (surface.id.endsWith("pending-create")) {
-              const isMember = surface.route === "/members";
-              await page
-                .getByRole("button", {
-                  name: isMember
-                    ? "Create local member"
-                    : "Create service account",
-                  exact: true,
-                })
-                .click();
-              await page
-                .getByLabel(isMember ? "Login name" : "Name", { exact: true })
-                .fill(`new-${target}`);
-              if (isMember)
-                await page
-                  .getByLabel("Password", { exact: true })
-                  .fill(password);
-              await page
-                .getByRole("button", {
-                  name: isMember ? "Create member" : "Create account",
-                  exact: true,
-                })
-                .click();
-            } else if (surface.id.endsWith("pending-update")) {
-              await page
-                .getByRole("button", { name: `Edit ${target}`, exact: true })
-                .click();
-              await page.getByLabel("Description").fill("Pending description");
-              await page
-                .getByRole("button", { name: "Save account", exact: true })
-                .click();
             } else {
               await page
-                .getByRole("button", { name: `Archive ${target}`, exact: true })
+                .getByRole("button", {
+                  name: "Create local member",
+                  exact: true,
+                })
                 .click();
               await page
-                .getByRole("button", { name: "Confirm archive", exact: true })
+                .getByLabel("Login name", { exact: true })
+                .fill(`new-${target}`);
+              await page.getByLabel("Password", { exact: true }).fill(password);
+              await page
+                .getByRole("button", {
+                  name: "Create member",
+                  exact: true,
+                })
                 .click();
             }
             await writeArrived;
@@ -535,17 +522,11 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
                 .getByRole("button", { name: "Cancel", exact: true })
                 .click();
             const trigger = page.getByRole("button", {
-              name:
-                surface.route === "/members"
-                  ? "Create local member"
-                  : "Create service account",
+              name: "Create local member",
               exact: true,
             });
             await expect(trigger).toBeDisabled();
-            if (
-              surface.id.endsWith("pending-create") ||
-              surface.id.endsWith("pending-update")
-            ) {
+            if (surface.id.endsWith("pending-create")) {
               await expect(trigger).toBeFocused();
               await trigger.press("Enter");
               await trigger.press("Space");
@@ -553,6 +534,52 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               await expect(page.getByRole("dialog")).toHaveCount(0);
             }
             await expect(page.getByRole("dialog")).toHaveCount(0);
+          }
+          if (surface.id.startsWith("native-service-account-pending-")) {
+            const target = `pending-${surface.id.split("-").at(-1)}-${info.project.name}`;
+            let dialog;
+            let submit;
+            if (surface.id.endsWith("pending-create")) {
+              dialog = await openServiceAccountForm(page);
+              await dialog
+                .getByLabel("Name", { exact: true })
+                .fill(`new-${target}`);
+              submit = dialog.getByRole("button", {
+                name: "Create service account",
+                exact: true,
+              });
+            } else if (surface.id.endsWith("pending-update")) {
+              const menu = await openServiceAccountMenu(page, target);
+              await menu
+                .getByRole("menuitem", { name: "Edit", exact: true })
+                .click();
+              dialog = page.getByRole("dialog", { name: target });
+              await dialog
+                .getByLabel(/Description/)
+                .fill("Pending description");
+              submit = dialog.getByRole("button", {
+                name: "Save",
+                exact: true,
+              });
+            } else {
+              const menu = await openServiceAccountMenu(page, target);
+              await menu
+                .getByRole("menuitem", { name: "Archive", exact: true })
+                .click();
+              dialog = page.getByRole("alertdialog", {
+                name: "Archive service account",
+                exact: true,
+              });
+              submit = dialog.getByRole("button", {
+                name: "Archive",
+                exact: true,
+              });
+            }
+            await submit.click();
+            await writeArrived;
+            await expect(submit).toBeDisabled();
+            await page.keyboard.press("Escape");
+            await expect(dialog).toBeVisible();
           }
           if (surface.id === "native-member-create-refused") {
             await page
@@ -604,21 +631,119 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(page.locator("p[role=alert]")).toContainText("last");
           }
           if (surface.id === "native-service-accounts") {
-            await page.getByLabel("Include archived").check();
             await expect(
-              page.getByText("release-bot", { exact: true }),
+              page.getByRole("radio", { name: "Active", exact: true }),
+            ).toBeChecked();
+            await expect(
+              page.getByRole("button", { name: "release-bot", exact: true }),
             ).toBeVisible();
             await expect(
-              page
-                .getByRole("row", { name: /retired-bot/ })
-                .locator('[data-status="archived"]'),
+              page.getByRole("button", { name: "retired-bot", exact: true }),
+            ).toHaveCount(0);
+          }
+          if (surface.id === "native-service-accounts-archived") {
+            await showArchivedServiceAccounts(page);
+            await expect(
+              page.getByRole("button", { name: "retired-bot", exact: true }),
+            ).toBeVisible();
+            await expect(
+              page.getByRole("button", { name: "release-bot", exact: true }),
+            ).toHaveCount(0);
+          }
+          if (surface.id === "native-service-account-search") {
+            await page
+              .getByLabel("Search service accounts", { exact: true })
+              .fill("no-matching-bot");
+            await expect(
+              page.getByRole("button", { name: "Reset search", exact: true }),
             ).toBeVisible();
           }
-          if (surface.id === "native-service-account-edit") {
+          if (surface.id === "native-service-account-drawer") {
             await page
-              .getByRole("button", { name: "Edit release-bot" })
+              .getByRole("button", { name: "release-bot", exact: true })
               .click();
-            await expect(page.getByRole("dialog")).toBeVisible();
+            const inspector = page.getByRole("dialog", {
+              name: "release-bot",
+              exact: true,
+            });
+            await expect(
+              inspector.getByRole("link", { name: "Open", exact: true }),
+            ).toBeVisible();
+            await expect(
+              inspector.getByRole("link", {
+                name: new RegExp(`^shot-owned-service-${info.project.name}\\b`),
+              }),
+            ).toBeVisible();
+          }
+          if (surface.id === "native-service-account-detail") {
+            await expect(
+              page.getByRole("heading", { name: "release-bot", level: 1 }),
+            ).toBeVisible();
+            await expect(
+              page.getByRole("link", {
+                name: new RegExp(`^shot-owned-service-${info.project.name}\\b`),
+              }),
+            ).toBeVisible();
+          }
+          if (surface.id === "native-service-account-draft") {
+            const dialog = await openServiceAccountForm(page);
+            await dialog
+              .getByLabel("Name", { exact: true })
+              .fill("deploy-worker");
+            await page.keyboard.press("Escape");
+            const discard = page.getByRole("alertdialog", {
+              name: "Discard unsaved changes?",
+            });
+            await expect(
+              discard.getByRole("button", { name: "Keep editing" }),
+            ).toBeFocused();
+          }
+          if (surface.id === "native-service-account-create") {
+            const dialog = await openServiceAccountForm(page);
+            await expect(
+              dialog.getByLabel("Name", { exact: true }),
+            ).toBeFocused();
+            await expect(
+              dialog.getByRole("button", {
+                name: "Create service account",
+                exact: true,
+              }),
+            ).toBeDisabled();
+          }
+          if (
+            surface.id === "native-service-account-actions" ||
+            surface.id === "native-service-account-key-form"
+          ) {
+            const menu = await openServiceAccountMenu(page, "release-bot");
+            await expect(menu.getByRole("menuitem")).toHaveText([
+              "Edit",
+              "Create API key",
+              "Archive",
+            ]);
+            if (surface.id === "native-service-account-key-form") {
+              await menu
+                .getByRole("menuitem", { name: "Create API key" })
+                .click();
+              const form = page.getByRole("dialog", { name: "Create API key" });
+              await expect(
+                form.getByText("release-bot", { exact: true }),
+              ).toBeVisible();
+              await expect(
+                form.getByLabel("Expires", { exact: true }),
+              ).toHaveValue("");
+              await expect(
+                form.getByRole("button", { name: "Add", exact: true }),
+              ).toBeDisabled();
+            }
+          }
+          if (surface.id === "native-service-account-edit") {
+            const menu = await openServiceAccountMenu(page, "release-bot");
+            await menu.getByRole("menuitem", { name: "Edit" }).click();
+            await expect(
+              page
+                .getByRole("dialog", { name: "release-bot" })
+                .getByLabel(/Description/),
+            ).toHaveValue("Build automation");
           }
         }
         // These assertions are independent of the interaction branches above.
@@ -866,7 +991,17 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
         if (surface.id === "native-environment-cloud-key-reveal")
           await page.getByTestId("close-revealed-key").click();
         if (releaseWrite) {
+          const response = page.waitForResponse(
+            (r) =>
+              r.request().method() !== "GET" &&
+              new URL(r.url()).pathname.startsWith(
+                surface.route === "/members"
+                  ? `${org}/members`
+                  : serviceAccountsPath,
+              ),
+          );
           releaseWrite();
+          expect((await response).ok()).toBe(true);
           await expect(
             page.getByRole("button", {
               name:

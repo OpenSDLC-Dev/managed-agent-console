@@ -86,6 +86,7 @@ pnpm lint       # eslint; pnpm typecheck and pnpm format:check also exist
 ```
 
 The [API key regression walkthrough](./docs/design-reference.md#repeat-the-keys-comparison) covers keyboard and pointer interactions, native fixtures, and light/dark Chrome captures.
+The [service account walkthrough](./docs/design-reference.md#repeat-the-service-account-comparison) covers account creation, editing, archiving, associated keys and searches beyond the first page.
 
 To verify the current GA Skills contract against a local platform without model
 calls, configure `.env.local` and run

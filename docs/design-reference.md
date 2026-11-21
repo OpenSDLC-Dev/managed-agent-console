@@ -94,6 +94,29 @@ pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (
 
 Light and dark captures go to `fidelity-shots/<theme>/`. The manifest includes the empty search, filtered list, mobile detail, cost drilldown, CLI guide and key form. The mock, native and screenshot suites share the steps in `test/api-key-flow.ts`.
 
+## Service accounts — checked 2026-11-21
+
+The signed-in [Claude Service accounts page](https://platform.claude.com/settings/service-accounts) opens a resizable detail panel from the account name. Copying the ID keeps the list open. Active rows offer Edit, Create API key and Archive. The editable panel returns to the same account on Cancel or Save. Open leads to a centered detail page with an inline description, an organization role and a menu for archiving. Creating a key from an account fixes its owner and asks for an expiration.
+
+Platform's `internal/api/serviceaccounts.go` supplies cursor pages. The Archived read includes active accounts, so the Console follows each cursor and filters by the returned archive timestamp. Associated keys use the service account's public ID in the key principal. Platform supports one workspace and does not return federation rules for this page.
+
+### Repeat the service account comparison
+
+1. Open the signed-in reference and the local Service accounts page at the same viewport. Compare the table, row menu, copy button, search, status switch, resizable panel, full detail page and create dialog. Use an existing reference account. Check the archive confirmation and cancel it.
+2. On the local fixture, create an account. Try an invalid name, a duplicate and a valid name. Use Escape, the close button and a click outside a modified form. Keep editing, then discard. Open an account with the keyboard. Edit from the row, cancel back to its panel, then save. Follow Open, edit the description, refresh, and return through the breadcrumb.
+3. Issue a key from the account, dismiss its one-time reveal, and open its metadata from the account. Archive the fixture account. Verify that it leaves Active, appears in Archived after reload, and offers read-only details. Search for a record beyond the first cursor page, search for a missing record, then reset the search while Archived is selected.
+
+```bash
+pnpm build
+pnpm exec playwright test test/e2e/service-accounts.spec.ts
+# Set NATIVE_PLATFORM_SOURCE and NATIVE_EVIDENCE_DIR as in the development guide.
+pnpm exec playwright test --config playwright.native.config.ts --grep 'native service account page|native owned keys preserve'
+export NATIVE_FIDELITY_IDS=$(node --input-type=module -e 'import { NATIVE_SURFACES } from "./test/fidelity/native-surfaces.ts"; console.log(NATIVE_SURFACES.map(s => s.id).filter(id => id.startsWith("native-service-account")).join(","))')
+NATIVE_FIDELITY=1 pnpm exec playwright test --config playwright.native.config.ts --grep 'walk native manifest'
+```
+
+The [shared interactions](../test/service-account-flow.ts) run against both the mock and real Platform. Native fidelity captures cover the light and dark states in [the manifest](../test/fidelity/native-surfaces.ts).
+
 ## Memory pagination — checked 2026-10-24 (#236)
 
 Chrome's active memory-store list was empty, so no populated end-page UI was available to compare.

@@ -10,8 +10,14 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ORGANIZATION, type ServiceAccount } from "@/lib/platform/native";
+import { useTestSearchParams } from "../../../test/search-params";
 import { Members } from "./members";
 import { ServiceAccounts } from "./service-accounts";
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => useTestSearchParams(),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 const member = {
   id: "user_admin",
   type: "user",
@@ -23,7 +29,7 @@ const member = {
   status: "active",
   added_at: "2026-10-01T00:00:00Z",
 };
-const service = {
+const service: ServiceAccount = {
   id: "svac_a",
   type: "service_account",
   name: "build-bot",
@@ -31,7 +37,7 @@ const service = {
   organization_role: "developer",
   created_at: "2026-10-01T00:00:00Z",
   created_by_actor_id: null,
-  updated_at: null,
+  updated_at: "2026-10-01T00:00:00Z",
   updated_by_actor_id: null,
   archived_at: null,
   archived_by_actor_id: null,
@@ -62,6 +68,17 @@ function mock({
   pending?: Promise<Response>;
   self?: boolean;
 } = {}) {
+  const servicePath = `${ORGANIZATION}/service_accounts`;
+  let accounts: ServiceAccount[] = [
+    service,
+    {
+      ...service,
+      id: "svac_old",
+      name: "old-bot",
+      archived_at: "2026-10-02T00:00:00Z",
+      archived_by_actor_id: member.id,
+    },
+  ];
   const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/auth/config")
       return Response.json({ mode, native_login: true });
@@ -72,6 +89,45 @@ function mock({
         signed_in: true,
         csrf_token: "test-csrf",
       });
+    const { pathname, searchParams } = new URL(url, location.origin);
+    if (pathname === servicePath || pathname.startsWith(servicePath + "/")) {
+      const id = pathname.slice(servicePath.length + 1).split("/")[0];
+      const account = accounts.find((row) => row.id === id);
+      if (init?.method === "POST") {
+        const fields = init.body ? JSON.parse(String(init.body)) : {};
+        const record =
+          pathname === servicePath
+            ? { ...service, ...fields, id: "svac_new" }
+            : pathname.endsWith("/archive")
+              ? {
+                  ...account,
+                  archived_at: "2026-10-03T00:00:00Z",
+                  archived_by_actor_id: member.id,
+                }
+              : { ...account, ...fields };
+        const response = pending ? await pending : Response.json(record);
+        if (response.ok) {
+          const saved = (await response.clone().json()) as ServiceAccount;
+          accounts = [saved, ...accounts.filter((row) => row.id !== saved.id)];
+        }
+        return response;
+      }
+      if (pathname !== servicePath) {
+        return account
+          ? Response.json(account)
+          : Response.json({}, { status: 404 });
+      }
+      const rows = accounts.filter(
+        (row) =>
+          searchParams.get("include_archived") === "true" || !row.archived_at,
+      );
+      const afterFirst = searchParams.get("page") === "opaque-cursor";
+      return Response.json({
+        data: afterFirst ? rows.slice(1) : rows.slice(0, 1),
+        next_page: !afterFirst && rows.length > 1 ? "opaque-cursor" : null,
+      });
+    }
+    if (pathname.endsWith("/api_keys")) return Response.json([]);
     if (init?.method && init.method !== "GET")
       return (
         pending ??
@@ -92,8 +148,6 @@ function mock({
                 : service,
             ))
       );
-    if (url.includes("service_accounts"))
-      return Response.json({ data: [service], next_page: "opaque-cursor" });
     return Response.json({
       data: [{ ...member, role_source: mapped ? "idp" : "manual" }],
       has_more: true,
@@ -176,15 +230,33 @@ it("probe: mapped roles are not hand-editable, but removal still goes to the ser
   );
   expect(screen.getByText("Alice")).toBeInTheDocument();
 });
-it("service account create defaults developer and promises no automatic key", async () => {
+async function chooseAccountAction(
+  user: ReturnType<typeof userEvent.setup>,
+  action: "Edit" | "Archive",
+) {
+  await user.click(
+    await screen.findByRole("button", { name: "More actions for build-bot" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: action }));
+  return within(
+    await screen.findByRole(action === "Archive" ? "alertdialog" : "dialog"),
+  );
+}
+
+it("service account create defaults developer and issues no automatic key", async () => {
   const fetcher = mock();
   mount(<ServiceAccounts />);
   const user = userEvent.setup();
   await user.click(
     await screen.findByRole("button", { name: "Create service account" }),
   );
-  await user.type(screen.getByLabelText("Name"), "new-bot");
-  await user.click(screen.getByRole("button", { name: "Create account" }));
+  const form = within(
+    await screen.findByRole("dialog", { name: "Create service account" }),
+  );
+  await user.type(form.getByLabelText("Name"), "new-bot");
+  await user.click(
+    form.getByRole("button", { name: "Create service account" }),
+  );
   expect(fetcher).toHaveBeenCalledWith(
     "/api/console/organizations/default/service_accounts",
     expect.objectContaining({
@@ -195,47 +267,59 @@ it("service account create defaults developer and promises no automatic key", as
       }),
     }),
   );
+  const panel = within(await screen.findByRole("dialog", { name: "new-bot" }));
+  expect(await panel.findByRole("heading", { name: "new-bot" })).toBeVisible();
   expect(
-    screen.getByText("Creating a service account does not create an API key."),
-  ).toBeInTheDocument();
+    await panel.findByText("No API keys for this service account yet."),
+  ).toBeVisible();
+  expect(
+    fetcher.mock.calls.filter(
+      ([url, init]) => init?.method === "POST" && url.endsWith("/api_keys"),
+    ),
+  ).toHaveLength(0);
 });
 it("service account edits keep names immutable, clear description and use opaque pagination/archive", async () => {
   const fetcher = mock();
   mount(<ServiceAccounts />);
   const user = userEvent.setup();
-  await user.click(
-    await screen.findByRole("button", { name: "Edit build-bot" }),
-  );
-  expect(screen.getByLabelText("Name")).toBeDisabled();
-  await user.clear(screen.getByLabelText("Description"));
-  await user.click(screen.getByRole("button", { name: "Save account" }));
+  const edit = await chooseAccountAction(user, "Edit");
+  expect(edit.queryByRole("textbox", { name: "Name" })).toBeNull();
+  await user.clear(edit.getByRole("textbox", { name: /Description/ }));
+  await user.click(edit.getByRole("button", { name: "Save" }));
   expect(fetcher).toHaveBeenCalledWith(
     expect.stringContaining("service_accounts/svac_a"),
     expect.objectContaining({
-      body: JSON.stringify({
-        description: null,
-        organization_role: "developer",
-      }),
+      body: JSON.stringify({ description: null }),
     }),
   );
-  await user.click(screen.getByRole("button", { name: "Next page" }));
+  const details = within(
+    await screen.findByRole("dialog", { name: service.name }),
+  );
+  expect(await details.findByText("No description.")).toBeVisible();
+  await user.click(details.getByRole("button", { name: "Close details" }));
+  await user.click(screen.getByRole("radio", { name: "Archived" }));
+  expect(await screen.findByRole("button", { name: "old-bot" })).toBeVisible();
   expect(
     fetcher.mock.calls.some(([u]) => u.includes("page=opaque-cursor")),
   ).toBe(true);
-  await user.click(screen.getByLabelText("Include archived"));
+  expect(screen.queryByRole("button", { name: "build-bot" })).toBeNull();
   expect(
     fetcher.mock.calls.some(([u]) => u.includes("include_archived=true")),
   ).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Archive build-bot" }));
-  await user.click(
-    within(screen.getByRole("dialog")).getByRole("button", {
-      name: "Confirm archive",
-    }),
-  );
+  await user.click(screen.getByRole("radio", { name: "Active" }));
+  const confirm = await chooseAccountAction(user, "Archive");
+  await user.click(confirm.getByRole("button", { name: "Archive" }));
   expect(fetcher).toHaveBeenCalledWith(
     expect.stringContaining("/svac_a/archive"),
     expect.objectContaining({ method: "POST" }),
   );
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "build-bot" })).toBeNull(),
+  );
+  await user.click(screen.getByRole("radio", { name: "Archived" }));
+  expect(
+    await screen.findByRole("button", { name: "build-bot" }),
+  ).toBeVisible();
 });
 
 function deferredWrite() {
@@ -385,40 +469,60 @@ it("member password policy refusal sends no write and preserves editable draft",
   ).toHaveLength(0);
   client.clear();
 });
-it.each(["create", "update", "archive"])(
-  "pending service-account %s cannot open a new draft after dismissal",
+it.each(["create", "update", "archive"] as const)(
+  "a pending service-account %s keeps its form and cannot open a new draft",
   async (operation) => {
     const pending = deferredWrite();
-    mock({ pending: pending.promise });
+    const fetcher = mock({ pending: pending.promise });
     const client = mount(<ServiceAccounts />);
     const user = userEvent.setup();
-    await screen.findByText("build-bot");
+    await screen.findByRole("button", { name: "build-bot" });
     const trigger = screen.getByRole("button", {
       name: "Create service account",
     });
-    if (operation === "archive") {
-      await user.click(
-        screen.getByRole("button", { name: "Archive build-bot" }),
+    if (operation === "create") await user.click(trigger);
+    else
+      await chooseAccountAction(
+        user,
+        operation === "archive" ? "Archive" : "Edit",
       );
-      await user.click(screen.getByRole("button", { name: "Confirm archive" }));
-    } else {
-      await user.click(
+    const dialog = screen.getByRole(
+      operation === "archive" ? "alertdialog" : "dialog",
+    );
+    const form = within(dialog);
+    if (operation === "create")
+      await user.type(form.getByLabelText("Name"), "pending-bot");
+    if (operation === "update")
+      await user.type(
+        form.getByRole("textbox", { name: /Description/ }),
+        " updated",
+      );
+    const action = form.getByRole("button", {
+      name:
         operation === "create"
-          ? trigger
-          : screen.getByRole("button", { name: "Edit build-bot" }),
-      );
-      if (operation === "create")
-        await user.type(screen.getByLabelText("Name"), "pending-bot");
-      await user.click(
-        screen.getByRole("button", {
-          name: operation === "create" ? "Create account" : "Save account",
-        }),
-      );
+          ? "Create service account"
+          : operation === "archive"
+            ? "Archive"
+            : "Save",
+    });
+    await user.click(action);
+    await waitFor(() => expect(action).toBeDisabled());
+    if (operation === "create")
+      await user.click(form.getByRole("button", { name: "Close" }));
+    else await user.keyboard("{Escape}");
+    expect(dialog).toBeVisible();
+    if (operation === "update") {
+      await user.click(trigger);
+      expect(
+        screen.queryByRole("dialog", { name: "Create service account" }),
+      ).toBeNull();
     }
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(trigger).toHaveAttribute("aria-disabled", "true");
-    await user.click(trigger);
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    expect(
+      fetcher.mock.calls.filter(
+        ([url, init]) =>
+          url.includes("service_accounts") && init?.method === "POST",
+      ),
+    ).toHaveLength(1);
     await act(async () =>
       pending.resolve(
         operation === "update"
@@ -426,13 +530,32 @@ it.each(["create", "update", "archive"])(
               { error: { type: "invalid_request_error", message: "refused" } },
               { status: 400 },
             )
-          : Response.json(service),
+          : Response.json(
+              operation === "create"
+                ? { ...service, id: "svac_pending", name: "pending-bot" }
+                : {
+                    ...service,
+                    archived_at: "2026-10-03T00:00:00Z",
+                    archived_by_actor_id: member.id,
+                  },
+            ),
       ),
     );
+    if (operation === "update") {
+      expect(await form.findByRole("alert")).toHaveTextContent("refused");
+      expect(form.getByRole("textbox", { name: /Description/ })).toHaveValue(
+        "CI tasks updated",
+      );
+      await user.click(form.getByRole("button", { name: "Cancel" }));
+    }
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toBeEnabled());
     await user.click(trigger);
-    await user.type(screen.getByLabelText("Name"), "later-bot");
-    expect(screen.getByLabelText("Name")).toHaveValue("later-bot");
+    const later = within(
+      await screen.findByRole("dialog", { name: "Create service account" }),
+    );
+    await user.type(later.getByLabelText("Name"), "later-bot");
+    expect(later.getByLabelText("Name")).toHaveValue("later-bot");
     client.clear();
   },
 );

@@ -1,7 +1,9 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -18,8 +20,14 @@ import {
 import { useApiKeys } from "@/lib/platform/queries";
 import type { NativeSession, ServiceAccount } from "@/lib/platform/native";
 import ApiKeysPage from "@/app/(console)/api-keys/page";
+import { ServiceAccountKeyIssuer } from "./service-account-key-issuer";
 import DashboardPage from "@/app/(console)/dashboard/page";
 import type { ReactNode } from "react";
+
+vi.mock("next/navigation", async (original) => ({
+  ...(await original<typeof import("next/navigation")>()),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 const KEYS = "/api/console/organizations/default/workspaces/default/api_keys";
 
@@ -944,6 +952,32 @@ function nativeFetch(
     settle: () => settle(),
   };
 }
+
+it("issues exactly one key for the fixed account when the form submits twice", async () => {
+  const { fetcher } = nativeFetch();
+  const account = serviceAccount("svac_build", "build");
+  nativeView(
+    session,
+    false,
+    <ServiceAccountKeyIssuer account={account} onClose={() => {}} />,
+  );
+  await userEvent.type(
+    screen.getByLabelText("Name", { exact: true }),
+    "build-key",
+  );
+  await userEvent.selectOptions(screen.getByLabelText("Expires"), "30d");
+  const form = screen.getByRole("form", { name: "Create API key" });
+  act(() => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  await screen.findByTestId("revealed-api-key");
+  const writes = fetcher.mock.calls.filter(
+    ([url, init]) => String(url).endsWith(KEYS) && init?.method === "POST",
+  );
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(String(writes[0][1]?.body)).principal_id).toBe(account.id);
+});
 
 it.each([false, true])(
   "native key form sends self or an admin-selected active service account (shortcut=%s)",

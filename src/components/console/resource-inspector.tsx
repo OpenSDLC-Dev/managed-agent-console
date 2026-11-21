@@ -25,6 +25,8 @@ export function ResourceInspector({
   next,
   onSelect,
   onClose,
+  dialogLabel,
+  returnFocus,
   fallbackFocus,
   restoreToFallback,
 }: {
@@ -36,13 +38,16 @@ export function ResourceInspector({
     | "session"
     | "deployment"
     | "deployment-run"
+    | "service-account"
     | "model";
   children: React.ReactNode;
   id: string;
   previous?: string;
   next?: string;
-  onSelect: (id: string) => void;
+  onSelect?: (id: string) => void;
   onClose: () => void;
+  dialogLabel?: string;
+  returnFocus?: RefObject<HTMLElement | null>;
   fallbackFocus?: RefObject<HTMLElement | null>;
   restoreToFallback?: RefObject<boolean>;
 }) {
@@ -54,6 +59,7 @@ export function ResourceInspector({
     session: "Session",
     deployment: "Deployment",
     "deployment-run": "Deployment run",
+    "service-account": "Service account",
     model: "Model",
   }[kind];
   const panel = useRef<HTMLElement>(null);
@@ -72,27 +78,30 @@ export function ResourceInspector({
   useEffect(() => {
     const trigger = document.activeElement;
     const fallback = fallbackFocus?.current;
+    const finalFocus = returnFocus;
     panel.current?.focus();
     return () => {
+      // These are the requested focus target and close reason at dismissal.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const target = restoreToFallback?.current
+        ? fallback
+        : (finalFocus?.current ?? trigger);
       if (
-        // This is a close-reason ref, not a DOM ref; cleanup needs its latest value.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        !restoreToFallback?.current &&
-        trigger instanceof HTMLElement &&
-        trigger !== document.body &&
-        trigger !== document.documentElement &&
-        trigger.isConnected
+        target instanceof HTMLElement &&
+        target !== document.body &&
+        target !== document.documentElement &&
+        target.isConnected
       )
-        trigger.focus();
+        target.focus();
       else if (fallback?.isConnected) fallback.focus();
     };
-  }, [fallbackFocus, restoreToFallback]);
+  }, [fallbackFocus, restoreToFallback, returnFocus]);
 
   return (
     <aside
       ref={panel}
-      role="region"
-      aria-label={label + " details"}
+      role={dialogLabel ? "dialog" : "region"}
+      aria-label={dialogLabel ?? label + " details"}
       tabIndex={-1}
       {...{ ["data-" + kind + "-id"]: id }}
       className="fixed top-[calc(var(--console-header-height,0px)+0.5rem)] right-2 bottom-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
@@ -159,26 +168,30 @@ export function ResourceInspector({
         >
           {label}
         </span>
-        <IdCell id={id} />
+        <IdCell key={id} id={id} />
         <div className="ml-auto flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={"Previous " + label.toLowerCase()}
-            disabled={!previous}
-            onClick={() => previous && onSelect(previous)}
-          >
-            <ChevronLeft />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={"Next " + label.toLowerCase()}
-            disabled={!next}
-            onClick={() => next && onSelect(next)}
-          >
-            <ChevronRight />
-          </Button>
+          {onSelect && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={"Previous " + label.toLowerCase()}
+                disabled={!previous}
+                onClick={() => previous && onSelect(previous)}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={"Next " + label.toLowerCase()}
+                disabled={!next}
+                onClick={() => next && onSelect(next)}
+              >
+                <ChevronRight />
+              </Button>
+            </>
+          )}
           <Button
             variant="ghost"
             size="icon"

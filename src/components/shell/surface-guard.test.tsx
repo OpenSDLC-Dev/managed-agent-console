@@ -13,6 +13,7 @@ const navState = vi.hoisted(() => ({ pathname: "/skills" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navState.pathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 /** Probe answering 404 for `unimplemented`, 200 for the rest. */

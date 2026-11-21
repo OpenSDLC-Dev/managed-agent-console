@@ -143,12 +143,16 @@ export function ApiKeysTable({
   error,
   action,
   canViewCost = false,
+  initialKeyId = null,
+  onCloseLinkedKey,
 }: {
   keys: ApiKeyListItem[];
   loading: boolean;
   error: unknown;
   action?: ReactNode;
   canViewCost?: boolean;
+  initialKeyId?: string | null;
+  onCloseLinkedKey?: () => void;
 }) {
   const session = useContext(ConsoleSessionContext)?.data;
   const update = useUpdateApiKey();
@@ -157,7 +161,7 @@ export function ApiKeysTable({
   const [selection, setSelection] = useState<{
     id: string | null;
     removed?: boolean;
-  }>({ id: null });
+  }>({ id: initialKeyId });
   const opener = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
   // React detaches the ref before removing the row. At that point the action
@@ -188,7 +192,7 @@ export function ApiKeysTable({
   );
   const filtered = Boolean(filters.query || filterSelected);
   const selected = rows.find((key) => key.id === selection.id);
-  if (selection.id !== null && !selected)
+  if (selection.id !== null && !selected && !loading && !error)
     setSelection({ id: null, removed: true });
   // A nonmodal inspector leaves outside focus alone. When its selected row
   // disappears too, return the keyboard to search if the document lost focus.
@@ -501,7 +505,10 @@ export function ApiKeysTable({
             apiKey={selected}
             rows={rows}
             onSelect={selectKey}
-            onClose={() => setSelection({ id: null })}
+            onClose={() => {
+              setSelection({ id: null });
+              onCloseLinkedKey?.();
+            }}
             finalFocus={opener}
             fallbackFocus={search}
             update={update}

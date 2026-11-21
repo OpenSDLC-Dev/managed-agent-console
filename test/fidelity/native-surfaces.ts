@@ -236,8 +236,61 @@ export const NATIVE_SURFACES = [
   {
     id: "native-service-accounts",
     route: "/service-accounts",
-    fixture: "active and archived service accounts",
-    description: "Archive state and no automatic API key promise.",
+    fixture: "active release-bot and archived retired-bot",
+    description:
+      "Default active directory with search, copyable IDs and per-row actions.",
+  },
+  {
+    id: "native-service-accounts-archived",
+    route: "/service-accounts",
+    fixture: "archived retired-bot",
+    description: "Archived directory excludes active accounts.",
+  },
+  {
+    id: "native-service-account-search",
+    route: "/service-accounts",
+    fixture: "an unmatched service account query",
+    description: "Empty search result with a reset action.",
+  },
+  {
+    id: "native-service-account-drawer",
+    route: "/service-accounts",
+    fixture: "release-bot with a linked API key",
+    description:
+      "Read-only inspector with account metadata, linked keys and Open.",
+  },
+  {
+    id: "native-service-account-detail",
+    route: "/service-accounts/[id]",
+    fixture: "release-bot opened by ID",
+    description: "Standalone detail with its breadcrumb and linked key.",
+  },
+  {
+    id: "native-service-account-create",
+    route: "/service-accounts",
+    fixture: "empty service account draft",
+    description:
+      "Initial form, required name, optional description and default organization role.",
+  },
+  {
+    id: "native-service-account-actions",
+    route: "/service-accounts",
+    fixture: "release-bot row menu",
+    description:
+      "Edit, key issuance and archive actions for an active service account.",
+  },
+  {
+    id: "native-service-account-key-form",
+    route: "/service-accounts",
+    fixture: "key issuance for release-bot",
+    description:
+      "API key form with a fixed service account and required expiration.",
+  },
+  {
+    id: "native-service-account-draft",
+    route: "/service-accounts",
+    fixture: "new service account with unsaved input",
+    description: "Discard confirmation over a partially completed create form.",
   },
   {
     id: "native-service-account-edit",
@@ -278,20 +331,20 @@ export const NATIVE_SURFACES = [
   {
     id: "native-service-account-pending-create",
     route: "/service-accounts",
-    fixture: "pending create after dismissal",
-    description: "Create stays disabled while the earlier create settles.",
+    fixture: "pending create",
+    description: "The create form guards its admitted write.",
   },
   {
     id: "native-service-account-pending-update",
     route: "/service-accounts",
-    fixture: "pending update after dismissal",
-    description: "Create stays disabled while the earlier edit settles.",
+    fixture: "pending edit",
+    description: "The editor guards its admitted write.",
   },
   {
     id: "native-service-account-pending-archive",
     route: "/service-accounts",
-    fixture: "pending archive after dismissal",
-    description: "Create stays disabled while the admitted archive settles.",
+    fixture: "pending archive",
+    description: "The archive confirmation guards its admitted write.",
   },
 ].map((surface) => ({ ...surface, mode: "platform" as const }));
 
