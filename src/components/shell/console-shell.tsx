@@ -16,7 +16,8 @@ import { cn } from "@/lib/utils";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 
-const NARROW = "(max-width: 767px)";
+// The menu button and the sidebar must switch at the same Tailwind md breakpoint.
+const NARROW = "(width < 48rem)";
 function subscribeViewport(callback: () => void) {
   const media = window.matchMedia(NARROW);
   media.addEventListener("change", callback);

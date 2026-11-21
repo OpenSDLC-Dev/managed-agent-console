@@ -174,6 +174,26 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   await expect(menu).toBeFocused();
 });
 
+test("the header menu remains available with a larger browser font", async ({
+  page,
+  context,
+}) => {
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Page.setFontSizes", { fontSizes: { standard: 20 } });
+  await page.setViewportSize({ width: 850, height: 800 });
+  await signIn(page);
+  const menu = page.getByRole("button", { name: "Menu", exact: true });
+  await expect(page.locator("aside")).toBeHidden();
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await expect(
+    page.getByRole("dialog", { name: "Menu", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Account menu" }),
+  ).toBeVisible();
+});
+
 test("submenus return to all sections and mobile navigation resets on resize", async ({
   page,
 }) => {
