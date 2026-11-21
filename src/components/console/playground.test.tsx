@@ -64,7 +64,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   await user.click(
     screen.getByRole("button", { name: "Add assistant message" }),
   );
-  await user.type(screen.getByLabelText("assistant message 2"), "A reply");
+  await user.type(screen.getByLabelText("assistant message 2"), " ");
   await user.click(screen.getByRole("button", { name: "Add user message" }));
   await user.type(screen.getByLabelText("user message 3"), "Next turn");
   await user.click(screen.getByLabelText("Code", { exact: true }));
@@ -78,7 +78,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
     system: "Be brief",
     messages: [
       { role: "user", content: "First turn" },
-      { role: "assistant", content: "A reply" },
+      { role: "assistant", content: " " },
       { role: "user", content: "Next turn" },
     ],
     stream: true,

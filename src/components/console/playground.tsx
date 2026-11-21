@@ -107,7 +107,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     max_tokens: Number(draft.tokens),
     ...(draft.system ? { system: draft.system } : {}),
     messages: draft.messages
-      .filter((m) => m.content.trim())
+      .filter((m) => m.content.length > 0)
       .map(({ role, content }) => ({ role, content })),
     stream: true,
   };
@@ -130,13 +130,16 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (active.current || !model) return;
+    const hasPrompt = request.messages.some((message) =>
+      message.content.trim(),
+    );
     if (
-      !request.messages.length ||
+      !hasPrompt ||
       !Number.isInteger(request.max_tokens) ||
       request.max_tokens < 1
     ) {
       setError(
-        request.messages.length
+        hasPrompt
           ? "Enter a positive whole number for Max tokens in Model settings."
           : "Enter a prompt.",
       );
