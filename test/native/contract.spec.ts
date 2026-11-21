@@ -1,3 +1,4 @@
+import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import {
   mkdirSync,
   mkdtempSync,
@@ -1767,7 +1768,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
   const keysPath = `${org}/workspaces/default/api_keys`;
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
-    data: { code: code(), login_name: "owned-admin", password },
+    data: { code: code(), login_name: "new-person", password },
   });
   expect([200, 409]).toContain(setup.status());
   if (setup.status() === 409) await login(page, "new-person");
@@ -1810,24 +1811,36 @@ test("native owned keys preserve owner creator permissions and credential isolat
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
   await page.goto("/api-keys");
-  await page.getByRole("button", { name: "Create key", exact: true }).click();
+  await openApiKeyForm(page);
   await page.getByLabel("Name", { exact: true }).fill("native-owned-service");
   await expect(
-    page.getByLabel("Owner").locator(`option[value="${retired.body.id}"]`),
+    page
+      .getByRole("dialog", { name: "Create API key" })
+      .getByLabel("Linked account", { exact: true })
+      .locator(`option[value="${retired.body.id}"]`),
   ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Load more service accounts" })
     .click();
   await expect(
-    page.getByLabel("Owner").locator(`option[value="${service.id}"]`),
+    page
+      .getByRole("dialog", { name: "Create API key" })
+      .getByLabel("Linked account", { exact: true })
+      .locator(`option[value="${service.id}"]`),
   ).toHaveCount(1);
-  await page.getByLabel("Owner").selectOption(service.id);
+  await page
+    .getByRole("dialog", { name: "Create API key" })
+    .getByLabel("Linked account", { exact: true })
+    .selectOption(service.id);
   const issuance = page.waitForResponse(
     (response) =>
       response.url().endsWith(keysPath) &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Create API key" })
+    .getByRole("button", { name: "Create key", exact: true })
+    .click();
   const response = await issuance;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON()).toMatchObject({
@@ -1879,20 +1892,26 @@ test("native owned keys preserve owner creator permissions and credential isolat
   await expect(
     row.getByRole("button", { name: "Model access", exact: true }),
   ).toHaveCount(0);
-  await row.getByRole("button", { name: "Disable", exact: true }).click();
+  const actions = await openApiKeyMenu(page, "native-owned-service");
+  await actions
+    .getByRole("menuitem", { name: "Disable API key", exact: true })
+    .click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
     "inactive",
   );
   // The Dashboard shortcut uses the exact session ID, without manufacturing aliases.
   await page.goto("/dashboard");
-  await page.getByRole("button", { name: "Get API key", exact: true }).click();
+  await openApiKeyForm(page, "Get API key");
   await page.getByLabel("Name", { exact: true }).fill("native-owned-self");
   const selfIssuance = page.waitForResponse(
     (answer) =>
       answer.url().endsWith(keysPath) && answer.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Create API key" })
+    .getByRole("button", { name: "Create key", exact: true })
+    .click();
   const selfResponse = await selfIssuance;
   expect(selfResponse.status()).toBe(200);
   expect(selfResponse.request().postDataJSON()).toMatchObject({
@@ -1920,9 +1939,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
         directory.push(request.method());
     });
     await login(developer, "owned-developer");
-    await developer
-      .getByRole("button", { name: "Get API key", exact: true })
-      .click();
+    await openApiKeyForm(developer, "Get API key");
     await developer
       .getByLabel("Name", { exact: true })
       .fill("native-owned-developer");
@@ -1930,7 +1947,10 @@ test("native owned keys preserve owner creator permissions and credential isolat
       (answer) =>
         answer.url().endsWith(keysPath) && answer.request().method() === "POST",
     );
-    await developer.getByRole("button", { name: "Add", exact: true }).click();
+    await developer
+      .getByRole("dialog", { name: "Create API key" })
+      .getByRole("button", { name: "Create key", exact: true })
+      .click();
     expect((await developerIssuance).status()).toBe(200);
     await expect(
       developer.getByRole("heading", { name: "Save your API key" }),
@@ -1972,7 +1992,7 @@ test("native-issued human and service keys preserve SDK actors and current autho
   const resource = "/api/organizations/default/proxy/v1";
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
-    data: { code: code(), login_name: "sdk-root", password },
+    data: { code: code(), login_name: "new-person", password },
   });
   expect([200, 409]).toContain(setup.status());
   if (setup.status() === 409) await login(page, "new-person");
@@ -2070,18 +2090,22 @@ test("native-issued human and service keys preserve SDK actors and current autho
       ["service", service.body.id, page],
     ] as const) {
       await actorPage.goto("/dashboard");
-      await actorPage
-        .getByRole("button", { name: "Get API key", exact: true })
-        .click();
+      await openApiKeyForm(actorPage, "Get API key");
       await actorPage.getByLabel("Name", { exact: true }).fill(`sdk-${kind}`);
       if (kind === "service")
-        await actorPage.getByLabel("Owner").selectOption(owner);
+        await actorPage
+          .getByRole("dialog", { name: "Create API key" })
+          .getByLabel("Linked account", { exact: true })
+          .selectOption(owner);
       const pending = actorPage.waitForResponse(
         (response) =>
           response.url().endsWith(keys) &&
           response.request().method() === "POST",
       );
-      await actorPage.getByRole("button", { name: "Add", exact: true }).click();
+      await actorPage
+        .getByRole("dialog", { name: "Create API key" })
+        .getByRole("button", { name: "Create key", exact: true })
+        .click();
       const response = await pending;
       expect(response.status()).toBe(200);
       const issued = await response.json();

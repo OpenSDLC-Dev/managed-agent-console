@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiKeysTable } from "./api-keys";
 import type { ApiKeyListItem } from "@/lib/platform/types";
@@ -40,7 +41,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("probe: key inventory never reads or offers obsolete model grants", () => {
+it("probe: key inventory never reads or offers obsolete model grants", async () => {
   const fetcher = show([
     key({}),
     key({
@@ -50,6 +51,7 @@ it("probe: key inventory never reads or offers obsolete model grants", () => {
       can_manage: false,
     }),
   ]);
+  await userEvent.click(screen.getByRole("button", { name: "Owned key" }));
   expect(fetcher).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "Model access" })).toBeNull();
   expect(
@@ -62,16 +64,20 @@ it.each([
   { type: "service_account_actor", service_account_id: "svac_ci" } as const,
 ])(
   "describes owned model authority without inferring the current role ($type)",
-  (principal) => {
+  async (principal) => {
     show([key({ principal })]);
+    await userEvent.click(screen.getByRole("button", { name: "Owned key" }));
     expect(
-      screen.getByText("Owner's role · organization limits"),
+      within(screen.getByRole("dialog")).getByText(
+        "Owner's role · organization limits",
+      ),
     ).toHaveAttribute("data-models", "owner");
   },
 );
 
-it("keeps a historical unowned row without claiming a built-in grant", () => {
+it("keeps a historical unowned row without claiming a built-in grant", async () => {
   show([key({ principal: null, created_by: null, can_manage: false })]);
+  await userEvent.click(screen.getByRole("button", { name: "Owned key" }));
   expect(screen.getByText("No owner")).toHaveAttribute(
     "data-models",
     "unowned",

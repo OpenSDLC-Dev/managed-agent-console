@@ -10,15 +10,9 @@ import {
   type ServiceAccountPage,
 } from "@/lib/platform/native";
 import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
-import { DataTable, type Column } from "@/components/console/data-table";
-import {
-  Day,
-  IdCode,
-  EmptyState,
-  ErrorState,
-  RequestId,
-} from "@/components/console/bits";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { RequestId } from "@/components/console/bits";
+import { KeyCliLogin, KeyConnectionMethods } from "./api-key-connection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,14 +24,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ResourceActions } from "@/components/console/resource-actions";
-import { ModelAccessCell } from "@/components/console/model-access";
 import { copyText } from "@/lib/copy-text";
-import { cn } from "@/lib/utils";
 import { PlatformError } from "@/lib/platform/http";
-import { useCreateApiKey, useUpdateApiKey } from "@/lib/platform/queries";
+import { useCreateApiKey } from "@/lib/platform/queries";
 import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
-import type { ApiKeyListItem } from "@/lib/platform/types";
 
 /**
  * How long a new key lives, offered as the reference offers it.
@@ -90,14 +80,57 @@ function customIsIncomplete(choice: ExpiryChoice, custom: string): boolean {
   return choice === "custom" && Number.isNaN(Date.parse(custom));
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  active:
-    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
-  inactive: "bg-secondary text-secondary-foreground border-transparent",
-  expired:
-    "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50",
-  archived: "text-muted-foreground",
-};
+const SELECT_CLASS =
+  "h-7 w-full rounded-lg border border-transparent bg-muted px-2 text-sm disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400";
+
+function ExpirySelect({
+  choice,
+  onChange,
+  disabled,
+}: {
+  choice: ExpiryChoice;
+  onChange: (choice: ExpiryChoice) => void;
+  disabled: boolean;
+}) {
+  const [now, setNow] = useState(Date.now);
+  // Keep the projected local date current even when a draft stays open.
+  // The POST still resolves its duration at submission time.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <select
+      id="api-key-expires"
+      data-testid="api-key-expires"
+      className={SELECT_CLASS}
+      value={choice}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value as ExpiryChoice)}
+    >
+      {EXPIRY_OPTIONS.map((option) => {
+        const instant = option.hours
+          ? expiryInstant(option.value, "", now)
+          : undefined;
+        const format: Intl.DateTimeFormatOptions =
+          option.value === "3h"
+            ? { hour: "numeric", minute: "2-digit" }
+            : { month: "short", day: "numeric", year: "numeric" };
+        return (
+          <option
+            key={option.value}
+            value={option.value}
+            data-expires-at={instant}
+          >
+            {instant
+              ? `${option.label} (${new Date(instant).toLocaleString(undefined, format)})`
+              : option.label}
+          </option>
+        );
+      })}
+    </select>
+  );
+}
 
 /**
  * The reveal-once dialog, the only place a management key's plaintext is ever
@@ -166,9 +199,7 @@ function RevealKeyDialog({
 }
 
 /**
- * Create, then reveal — one control, two dialogs, the reference's sequence.
- *
- * The Dashboard shortcut uses the same sequence as the API keys list.
+ * The Dashboard and Keys page enter the same connection flow.
  */
 export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
   const session = useContext(ConsoleSessionContext)?.data;
@@ -196,8 +227,10 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
     };
   }, []);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const cliButtonRef = useRef<HTMLButtonElement>(null);
   const create = useCreateApiKey();
-  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"connect" | "cli" | "key" | null>(null);
   const [name, setName] = useState("");
   const [choice, setChoice] = useState<ExpiryChoice>("30d");
   const [custom, setCustom] = useState("");
@@ -214,7 +247,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_page ?? undefined,
-    enabled: session?.role === "admin" && open,
+    enabled: session?.role === "admin" && step === "key",
     gcTime: 0,
     // This observer stays mounted while closed. Re-enable must read the directory
     // again: an account can be created or archived without leaving this page.
@@ -232,15 +265,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
     create.reset();
   };
 
-  /**
-   * Puts the form back to its defaults, and the only way the dialog closes.
-   *
-   * Cancel used to set `open` directly, which does not run Radix's
-   * `onOpenChange` — so the draft survived, and the next open of the dialog
-   * came back pre-filled with whatever was abandoned. On a form whose fields
-   * are a name and a lifetime that includes **Never**, a stale draft is a key
-   * minted with an expiry nobody chose this time.
-   */
+  // Closing also discards the lifetime and account chosen for this draft.
   const resetDraft = () => {
     setName("");
     setChoice("30d");
@@ -251,8 +276,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   };
 
   const submit = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || customIsIncomplete(choice, custom)) return;
+    if (!name || pending || customIsIncomplete(choice, custom)) return;
     let principalId: string | undefined;
     setChecking(true);
     setSessionError(null);
@@ -264,7 +288,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
         current.id !== session?.id ||
         current.role !== session?.role
       ) {
-        setOpen(false);
+        setStep(null);
         resetDraft();
         queryClient.setQueryData(["console-session"], current);
         return;
@@ -288,14 +312,14 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
       // Absent rather than null for "never": both mean the same to the
       // platform, and absent is what the reference sends.
       {
-        name: trimmed,
+        name,
         ...(expiresAt ? { expires_at: expiresAt } : {}),
         ...(principalId ? { principal_id: principalId } : {}),
       },
       {
         onSuccess: (issued) => {
           setSecret(issued.raw_key);
-          setOpen(false);
+          setStep(null);
           setName("");
           setChoice("30d");
           setCustom("");
@@ -307,17 +331,17 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   };
 
   const error = sessionError ?? create.error;
-  const incomplete = !name.trim() || customIsIncomplete(choice, custom);
+  const incomplete = !name || customIsIncomplete(choice, custom);
   return (
     <>
       <Button
         ref={triggerRef}
         size={shortcut ? "default" : "sm"}
         variant={shortcut ? "outline" : "default"}
-        className="h-8"
+        className={shortcut ? "h-8" : "h-7"}
         onClick={() => {
           resetDraft();
-          setOpen(true);
+          setStep("connect");
         }}
       >
         {shortcut ? (
@@ -328,199 +352,228 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
         {shortcut ? "Get API key" : "Create key"}
       </Button>
 
-      {/* Dismissal is refused while the POST is in flight, for the reason plan
-          07 slice 3 recorded: the platform mints the key when the request
-          lands, and a dismissal detaches the handler that captures the
-          plaintext — leaving a live credential nobody has ever seen.
-
-          What this does NOT cover, deliberately, is a route navigation in the
-          same window — Back, or a nav click, in the sub-second a POST is in
-          flight. The capture is observer-scoped, so unmounting loses it there
-          too. It is left uncovered because the outcome differs from the
-          environment-key case that motivated the guard: that issuance response
-          identified no row at all, so a lost plaintext meant a credential the
-          operator could not pick out of a list and could only revoke blind.
-          Here the minted key appears in the listing under the name they typed,
-          with its hint and creation time, and Delete is in that row's menu.
-          Closing the gap properly would mean holding the plaintext in
-          module state across a navigation so it could be shown on return —
-          a second storage path for the one value this file exists to render
-          exactly once, which the probe below treats as a defect. */}
       <Dialog
-        open={open}
+        open={step !== null}
         onOpenChange={(next) => {
-          if (!next && pending) return;
-          setOpen(next);
-          if (!next) resetDraft();
+          // Closing a pending POST would lose its one-time plaintext response.
+          if (next || pending) return;
+          setStep(null);
+          resetDraft();
         }}
       >
-        <DialogContent finalFocus={secret ? false : triggerRef}>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submit();
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Create API key</DialogTitle>
-              <DialogDescription>
-                An owned key uses its owner’s current role. Deactivating the
-                owner revokes access.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              {/* Read-only, as the reference has it: the segment is in every
-                  URL this page calls and this platform answers for one value. */}
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="api-key-workspace">Workspace</Label>
-                <Input
-                  id="api-key-workspace"
-                  value={CONSOLE_WORKSPACE}
-                  readOnly
-                  disabled
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="api-key-owner">Owner</Label>
-                <select
-                  id="api-key-owner"
-                  className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
-                  value={owner}
-                  onChange={(event) => setOwner(event.target.value)}
-                  disabled={pending || session?.role !== "admin"}
-                >
-                  <option value={session?.id}>
-                    You · {session?.name || session?.login_name || session?.id}
-                  </option>
-                  {owner !== session?.id &&
-                    !services.some((account) => account.id === owner) && (
-                      <option value={owner} disabled>
-                        Selected account not in current list · {owner}
-                      </option>
-                    )}
-                  {services.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      Service account · {account.name || account.id}
-                    </option>
-                  ))}
-                </select>
-                {accounts.isFetching && (
-                  <p
-                    role="status"
-                    className="text-[13px] text-muted-foreground"
-                  >
-                    Loading service accounts…
-                  </p>
-                )}
-                {accounts.error && (
-                  <p role="alert" className="text-[13px] text-destructive">
-                    {accounts.error.message}
-                  </p>
-                )}
-                {/* A cold retry clears error; a cached refetch retains it.
-                      Keep recovery mounted and disabled during either request. */}
-                {((accounts.isFetched && !accounts.data) ||
-                  accounts.isRefetchError) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={accounts.isFetching || pending}
-                    onClick={() => void accounts.refetch()}
-                  >
-                    Retry
-                  </Button>
-                )}
-                {accounts.hasNextPage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={accounts.isFetching || pending}
-                    onClick={() => void accounts.fetchNextPage()}
-                  >
-                    Load more service accounts
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="api-key-name">Name</Label>
-                <Input
-                  id="api-key-name"
-                  value={name}
-                  autoFocus
-                  placeholder="my-secret-key"
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="api-key-expires">Expires</Label>
-                <select
-                  id="api-key-expires"
-                  data-testid="api-key-expires"
-                  value={choice}
-                  onChange={(event) =>
-                    setChoice(event.target.value as ExpiryChoice)
-                  }
-                  className="h-9 rounded-md border bg-transparent px-3 text-sm"
-                >
-                  {EXPIRY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {/* "Never" is the one choice that cannot be undone by waiting,
+        <DialogContent
+          ref={popupRef}
+          initialFocus={() =>
+            popupRef.current?.querySelector<HTMLButtonElement>(
+              '[data-slot="dialog-close"]',
+            )
+          }
+          finalFocus={secret ? false : triggerRef}
+          showCloseButton={!pending}
+          className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[520px]"
+        >
+          {step === "connect" && (
+            <KeyConnectionMethods
+              cliButtonRef={cliButtonRef}
+              onCli={() => setStep("cli")}
+              onKey={() => setStep("key")}
+            />
+          )}
+          {step === "cli" && (
+            <KeyCliLogin
+              onBack={() => {
+                setStep("connect");
+                requestAnimationFrame(() => cliButtonRef.current?.focus());
+              }}
+            />
+          )}
+          {step === "key" && (
+            <form
+              aria-label="Create API key"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit();
+              }}
+            >
+              <DialogHeader>
+                <DialogTitle className="text-[15px]">
+                  Create API key
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Choose a name, lifetime, and linked account for this key.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="api-key-name">Name</Label>
+                  <Input
+                    id="api-key-name"
+                    className="h-7 border-transparent bg-muted focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:bg-muted dark:focus-visible:border-blue-400"
+                    value={name}
+                    disabled={pending}
+                    autoFocus
+                    placeholder="my-dev-key"
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="api-key-expires">Expires</Label>
+                  <ExpirySelect
+                    choice={choice}
+                    onChange={setChoice}
+                    disabled={pending}
+                  />
+                  {/* "Never" is the one choice that cannot be undone by waiting,
                     so it says so rather than merely being styled as danger —
                     the reference's red is doing the same job with less. */}
-                {choice === "never" && (
-                  <p
-                    data-testid="never-expires-warning"
-                    className="text-[13px] text-destructive"
+                  {choice === "never" && (
+                    <p
+                      data-testid="never-expires-warning"
+                      className="text-[13px] text-destructive"
+                    >
+                      No time limit. Disabling or deleting this key, or
+                      deactivating its owner, revokes access.
+                    </p>
+                  )}
+                  {choice === "custom" && (
+                    <Input
+                      type="datetime-local"
+                      disabled={pending}
+                      aria-label="Custom expiry"
+                      data-testid="api-key-custom-expiry"
+                      value={custom}
+                      onChange={(event) => setCustom(event.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Label htmlFor="api-key-owner">Linked account</Label>
+                    {session?.role === "admin" &&
+                      accounts.isSuccess &&
+                      !pending && (
+                        <Link
+                          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                          href="/service-accounts"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          prefetch={false}
+                        >
+                          Manage service accounts
+                          <span className="sr-only"> (opens in a new tab)</span>
+                        </Link>
+                      )}
+                  </div>
+                  <select
+                    id="api-key-owner"
+                    aria-describedby="key-owner-description"
+                    className={SELECT_CLASS}
+                    value={owner}
+                    onChange={(event) => setOwner(event.target.value)}
+                    disabled={pending || session?.role !== "admin"}
                   >
-                    No time limit. Disabling or deleting this key, or
-                    deactivating its owner, revokes access.
+                    <option value={session?.id}>
+                      You ·{" "}
+                      {session?.name || session?.login_name || session?.id}
+                    </option>
+                    {owner !== session?.id &&
+                      !services.some((account) => account.id === owner) && (
+                        <option value={owner} disabled>
+                          Selected account not in current list · {owner}
+                        </option>
+                      )}
+                    {services.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        Service account · {account.name || account.id}
+                      </option>
+                    ))}
+                  </select>
+                  <p
+                    id="key-owner-description"
+                    className="text-[13px] text-muted-foreground"
+                  >
+                    {owner === session?.id
+                      ? "Requests with this key act as you. Deactivating your account revokes access."
+                      : "Requests with this key act as the service account. Archiving that account revokes access."}
+                  </p>
+                  {accounts.isFetching && (
+                    <p
+                      role="status"
+                      className="text-[13px] text-muted-foreground"
+                    >
+                      Loading service accounts…
+                    </p>
+                  )}
+                  {accounts.error && (
+                    <p role="alert" className="text-[13px] text-destructive">
+                      {accounts.error.message}
+                    </p>
+                  )}
+                  {/* A cold retry clears error; a cached refetch retains it.
+                      Keep recovery mounted and disabled during either request. */}
+                  {((accounts.isFetched && !accounts.data) ||
+                    accounts.isRefetchError) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={accounts.isFetching || pending}
+                      onClick={() => void accounts.refetch()}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                  {accounts.hasNextPage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={accounts.isFetching || pending}
+                      onClick={() => void accounts.fetchNextPage()}
+                    >
+                      Load more service accounts
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="api-key-scope">Scope</Label>
+                  <select
+                    id="api-key-scope"
+                    className={SELECT_CLASS}
+                    value={CONSOLE_WORKSPACE}
+                    disabled
+                    aria-describedby="key-scope-description"
+                  >
+                    <option value={CONSOLE_WORKSPACE}>Default workspace</option>
+                  </select>
+                  <p
+                    id="key-scope-description"
+                    className="text-[13px] text-muted-foreground"
+                  >
+                    This installation uses the default workspace.
+                  </p>
+                </div>
+                {error && (
+                  <p className="text-[13px] text-destructive" role="alert">
+                    {error instanceof Error ? error.message : "Request failed"}
+                    {error instanceof PlatformError && error.requestId && (
+                      <>
+                        {" "}
+                        <RequestId id={error.requestId} />
+                      </>
+                    )}
                   </p>
                 )}
-                {choice === "custom" && (
-                  <Input
-                    type="datetime-local"
-                    aria-label="Custom expiry"
-                    data-testid="api-key-custom-expiry"
-                    value={custom}
-                    onChange={(event) => setCustom(event.target.value)}
-                  />
-                )}
               </div>
-              {error && (
-                <p className="text-[13px] text-destructive" role="alert">
-                  {error instanceof Error ? error.message : "Request failed"}
-                  {error instanceof PlatformError && error.requestId && (
-                    <>
-                      {" "}
-                      <RequestId id={error.requestId} />
-                    </>
-                  )}
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => {
-                  // Through the same door as every other close: setting `open`
-                  // alone would skip `onOpenChange` and leave the draft behind.
-                  setOpen(false);
-                  resetDraft();
-                }}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending || incomplete}>
-                Add
-              </Button>
-            </DialogFooter>
-          </form>
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={pending || incomplete}
+                >
+                  Create key
+                </Button>
+              </div>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -535,183 +588,4 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   );
 }
 
-/**
- * The management-key surface.
- *
- * Three of the reference's columns do not ship, and their absence is a decision
- * rather than an omission (plan 07's own "three gaps"): `Last used` and `Cost`
- * have no source on this platform, and `Created by` renders the actor id the
- * wire carries instead of a display name over an email. It does not fetch an
- * admin-only directory to enrich developer rows.
- */
-export function ApiKeysTable({
-  keys,
-  loading,
-  error,
-}: {
-  keys: ApiKeyListItem[];
-  loading: boolean;
-  error: unknown;
-}) {
-  const update = useUpdateApiKey();
-
-  const columns: Column<ApiKeyListItem>[] = [
-    {
-      key: "key",
-      header: "Key",
-      className: "w-full",
-      // Two lines, as the reference renders it: the operator's label, then the
-      // hint that identifies which credential a log line belongs to.
-      cell: (k) => (
-        <span className="flex flex-col" data-key-id={k.id}>
-          <span>{k.name}</span>
-          <span className="font-mono text-[12px] text-muted-foreground">
-            {k.partial_key_hint}
-          </span>
-        </span>
-      ),
-    },
-    {
-      key: "owner",
-      header: "Owner",
-      cell: (key) => {
-        const owner = key.principal;
-        const id =
-          owner?.type === "user_actor"
-            ? owner.user_id
-            : owner?.service_account_id;
-        return (
-          <span
-            className="flex flex-col text-[13px]"
-            data-owner-id={id ?? ""}
-            data-owner-type={owner?.type ?? ""}
-          >
-            <span>
-              {owner
-                ? owner.type === "user_actor"
-                  ? "User"
-                  : "Service account"
-                : "Unowned"}
-            </span>
-            {id && <IdCode id={id} />}
-          </span>
-        );
-      },
-    },
-    {
-      key: "created_by",
-      header: "Created by",
-      cell: (k) => (
-        <span
-          className="flex flex-col whitespace-nowrap text-[13px]"
-          data-created-by={k.created_by?.id ?? ""}
-          data-created-by-type={k.created_by?.type ?? ""}
-        >
-          {k.created_by ? (
-            <>
-              <span>
-                {k.created_by.type === "user"
-                  ? "User"
-                  : k.created_by.type === "api_key"
-                    ? "API key"
-                    : "Principal"}
-              </span>
-              <IdCode id={k.created_by.id} />
-            </>
-          ) : (
-            "Control plane"
-          )}
-        </span>
-      ),
-    },
-    {
-      key: "model_access",
-      header: "Model access",
-      cell: (key) => <ModelAccessCell apiKey={key} />,
-    },
-    {
-      key: "created",
-      header: "Created",
-      cell: (k) => <Day iso={k.created_at} />,
-    },
-    {
-      key: "expires",
-      header: "Expires",
-      cell: (k) => (
-        <span data-expires-at={k.expires_at ?? ""}>
-          {k.expires_at ? <Day iso={k.expires_at} /> : "Never"}
-        </span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (k) => (
-        <Badge
-          variant="outline"
-          className={cn("font-normal", STATUS_STYLE[k.status])}
-          data-key-status={k.status}
-        >
-          {k.status}
-        </Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "Actions",
-      cell: (k) => {
-        // Permission comes from the list response, including historical rows.
-        // Absence of the hint is not permission to change the credential.
-        if (!k.can_manage || !k.created_by) return null;
-        // Archived is terminal on this surface, and an expired key admits
-        // exactly one operation — archiving it. Both are the platform's rules,
-        // stated in its refusals.
-        if (k.status === "archived") return null;
-        const expired = k.status === "expired";
-        return (
-          <span className="flex items-center justify-end gap-1">
-            {!expired && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7"
-                data-testid={`toggle-${k.id}`}
-                disabled={update.isPending}
-                onClick={() =>
-                  update.mutate({
-                    id: k.id,
-                    status: k.status === "active" ? "inactive" : "active",
-                  })
-                }
-              >
-                {k.status === "active" ? "Disable" : "Enable"}
-              </Button>
-            )}
-            <ResourceActions
-              resource="API key"
-              menuLabel={`More actions for ${k.name}`}
-              deleteDescription={`Delete API key “${k.name}”? Anything using it stops working immediately. This action cannot be undone.`}
-              deletePending={update.isPending}
-              // The platform's delete is a terminal status update, not DELETE
-              // (internal/api/consoleapikeys.go, updateAPIKeyIn).
-              onDelete={() => update.mutate({ id: k.id, status: "archived" })}
-            />
-          </span>
-        );
-      },
-    },
-  ];
-
-  if (error) return <ErrorState error={error} />;
-  return (
-    <>
-      <DataTable
-        columns={columns}
-        rows={keys}
-        rowKey={(k) => k.id}
-        loading={loading}
-        empty={<EmptyState title="No API keys yet." />}
-      />
-    </>
-  );
-}
+export { ApiKeysTable } from "./api-key-list";

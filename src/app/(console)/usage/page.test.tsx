@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -17,11 +18,12 @@ import {
   resetGateway,
 } from "../../../../test/mock-platform/gateway.mjs";
 import type { GatewayDailyUsage, GatewayUsageRow } from "@/lib/platform/types";
+import { useTestSearchParams } from "../../../../test/search-params";
 
-const navigation = { pathname: "/usage", search: "" };
+const navigation = { pathname: "/usage" };
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,
-  useSearchParams: () => new URLSearchParams(navigation.search),
+  useSearchParams: () => useTestSearchParams(),
   useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -65,10 +67,121 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   navigation.pathname = "/usage";
-  navigation.search = "";
+  vi.useRealTimers();
 });
 
 describe("Usage overview", () => {
+  it("identifies a whitespace-only key by its ID in the cost filter", async () => {
+    const id = "apikey_spaces";
+    window.history.replaceState(null, "", `/usage?api_key=${id}&range=mtd`);
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json([...KEYS, { ...KEYS[0], id, name: "  " }])
+        : undefined,
+    );
+    renderPage(<UsagePage />);
+    const select = screen.getByRole("combobox", { name: "Key" });
+    await within(select).findByRole("option", { name: "ci-deploy" });
+    expect(select).toHaveDisplayValue(id);
+  });
+
+  it("clears the active chart bar when history restores a shorter cached period", async () => {
+    window.history.replaceState(null, "", "/usage?range=7");
+    stub();
+    renderPage(<UsagePage />);
+    const bars = () =>
+      within(screen.getByRole("list", { name: "Cost per day" })).getAllByRole(
+        "listitem",
+      );
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Period" }),
+      "90",
+    );
+    await waitFor(() => expect(bars()).toHaveLength(90));
+    act(() => bars()[75].focus());
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    act(() => {
+      window.history.replaceState(null, "", "/usage?range=7");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(bars()).toHaveLength(7);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it.each([
+    ["2026-03-01T00:15:00Z", "2026-03-01", "2026-03-01"],
+    ["2028-02-28T23:30:00-02:00", "2028-02-01", "2028-02-29"],
+  ])(
+    "opens View cost for %s with this UTC month and exactly one key",
+    async (now, from, to) => {
+      vi.setSystemTime(new Date(now));
+      window.history.replaceState(
+        null,
+        "",
+        "/usage?api_key=apikey_ci01&range=mtd",
+      );
+      const fetchMock = stub();
+      renderPage(<UsagePage />);
+      await waitFor(() =>
+        expect(reads(fetchMock, "usage/daily")).toHaveLength(1),
+      );
+      const params = reads(fetchMock, "usage/daily")[0].searchParams;
+      expect(Object.fromEntries(params)).toEqual({
+        from,
+        to,
+        api_key_id: "apikey_ci01",
+      });
+      expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue(
+        "mtd",
+      );
+      expect(screen.getByRole("combobox", { name: "Key" })).toHaveValue(
+        "apikey_ci01",
+      );
+    },
+  );
+
+  it("updates the URL on manual changes and follows a new key on the mounted page", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/usage?api_key=apikey_old&range=mtd",
+    );
+    const fetchMock = stub();
+    renderPage(<UsagePage />);
+    const key = await screen.findByRole("combobox", { name: "Key" });
+    expect(key).toHaveValue("apikey_old");
+    await userEvent.selectOptions(key, "");
+    expect(new URLSearchParams(window.location.search).has("api_key")).toBe(
+      false,
+    );
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Period" }),
+      "7",
+    );
+    expect(window.location.search).toBe("?range=7");
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/daily").at(-1)?.searchParams.has("api_key_id"),
+      ).toBe(false),
+    );
+
+    act(() =>
+      window.history.pushState(
+        null,
+        "",
+        "/usage?api_key=retired%2F2026&range=mtd",
+      ),
+    );
+    expect(key).toHaveValue("retired/2026");
+    await waitFor(() =>
+      expect(
+        reads(fetchMock, "usage/daily").at(-1)?.searchParams.get("api_key_id"),
+      ).toBe("retired/2026"),
+    );
+    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("mtd");
+  });
+
   it("keeps principal rollups separate when their key field is empty", async () => {
     const rows = [
       { ...daily[0], principal_id: "principal_one", api_key_id: "", cost: 2 },
@@ -379,7 +492,11 @@ describe("Usage requests", () => {
 
   it("filters by a session from the URL", async () => {
     navigation.pathname = "/usage/requests";
-    navigation.search = `session_id=${ledger[0].session_id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `/usage/requests?session_id=${ledger[0].session_id}`,
+    );
     const fetchMock = stub();
     renderPage(<UsageRequestsPage />);
     await waitFor(() =>
@@ -396,17 +513,20 @@ describe("Usage requests", () => {
   // mounted (PR #223 review).
   it("probe: follows the URL when its session changes on a mounted page", async () => {
     navigation.pathname = "/usage/requests";
-    navigation.search = `session_id=${ledger[0].session_id}`;
+    window.history.replaceState(
+      null,
+      "",
+      `/usage/requests?session_id=${ledger[0].session_id}`,
+    );
     const fetchMock = stub();
     const page = (
       <QueryClientProvider client={new QueryClient()}>
         <UsageRequestsPage />
       </QueryClientProvider>
     );
-    const { rerender } = render(page);
+    render(page);
     await screen.findByDisplayValue(ledger[0].session_id!);
-    navigation.search = "";
-    rerender(page);
+    act(() => window.history.pushState(null, "", "/usage/requests"));
     await waitFor(() =>
       expect(screen.getByLabelText("Session ID")).toHaveValue(""),
     );

@@ -1,4 +1,5 @@
 import { browserPost } from "../e2e/browser-write";
+import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
 import type { Page } from "@playwright/test";
 import { type ConsoleMode, MOCK_URL } from "./consoles";
@@ -869,8 +870,8 @@ export const SURFACES: Surface[] = [
     description:
       "The Dashboard shortcut opens key creation without a route change.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Get API key" }).click();
-      await page.getByRole("dialog", { name: "Create API key" }).waitFor();
+      const form = await openApiKeyForm(page, "Get API key");
+      await form.waitFor();
     },
   },
   {
@@ -2313,24 +2314,59 @@ export const SURFACES: Surface[] = [
     fixture:
       "one owned service-account key and one inactive historical unowned key",
     description:
-      "The management-key listing: a two-line Key cell, each key's model access, and the one row whose controls are absent because the platform refuses to mutate it.",
+      "Search, filters, a live count and sortable columns above owned and historical keys.",
     setup: async (page) => {
-      await page.getByText("ci-deploy").waitFor();
-      await page.locator("[data-models='owner']").waitFor();
+      await page
+        .getByRole("button", { name: "ci-deploy", exact: true })
+        .waitFor();
+      await page.locator('[data-visible-count="2"]').waitFor();
     },
   },
+  {
+    id: "api-key-filtered",
+    route: "/api-keys",
+    fixture: "one disabled historical key",
+    description: "A selected status, the matching count and Reset.",
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Status", exact: true }).click();
+      await page.getByRole("option", { name: "Disabled", exact: true }).click();
+      await page.locator('[data-visible-count="1"]').waitFor();
+    },
+  },
+  {
+    id: "api-key-empty-search",
+    route: "/api-keys",
+    fixture: "search that matches neither seeded key",
+    description: "No matching results while a search is applied.",
+    setup: async (page) => {
+      await page
+        .getByRole("searchbox", { name: "Search keys" })
+        .fill("no-such-key");
+      await page.getByText("No matching API keys", { exact: true }).waitFor();
+    },
+  },
+  ...[false, true].map((mobile) => ({
+    id: mobile ? "api-key-details-mobile" : "api-key-details",
+    route: "/api-keys",
+    fixture: "ci-deploy service-account key",
+    description:
+      "Key metadata, resource ID, model access and adjacent-key controls.",
+    setup: async (page: Page) => {
+      if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("button", { name: "ci-deploy", exact: true })
+        .click();
+      await page.getByRole("dialog", { name: "ci-deploy" }).waitFor();
+    },
+  })),
   {
     id: "api-key-delete-menu",
     route: "/api-keys",
     fixture: "ci-deploy action menu",
-    description: "The explicit Delete action for an issued API key.",
+    description: "Cost, disable and delete actions for an active key.",
     setup: async (page) => {
-      await page
-        .getByRole("button", { name: "More actions for ci-deploy" })
-        .click();
-      await page
-        .getByRole("menuitem", { name: "Delete", exact: true })
-        .waitFor();
+      const menu = await openApiKeyMenu(page, "ci-deploy");
+      await menu.getByRole("menuitem", { name: "Delete API key" }).waitFor();
     },
   },
   {
@@ -2340,25 +2376,58 @@ export const SURFACES: Surface[] = [
     description:
       "Deletion names the key and explains immediate, irreversible revocation.",
     setup: async (page) => {
+      const menu = await openApiKeyMenu(page, "ci-deploy");
+      await menu.getByRole("menuitem", { name: "Delete API key" }).click();
       await page
-        .getByRole("button", { name: "More actions for ci-deploy" })
-        .click();
-      await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
-      await page
-        .getByRole("dialog", { name: "Delete this API key?" })
+        .getByRole("button", { name: "Delete API key", exact: true })
         .waitFor();
     },
   },
-  // Retired api-key-model-access: per-key grants and limits no longer exist.
+  {
+    id: "api-key-cost",
+    route: "/api-keys",
+    fixture: "ci-deploy current-month gateway usage",
+    description:
+      "View cost opens the usage page filtered to this credential and period.",
+    setup: async (page) => {
+      const menu = await openApiKeyMenu(page, "ci-deploy");
+      await menu.getByRole("menuitem", { name: "View cost" }).click();
+      await page.getByRole("combobox", { name: "Key", exact: true }).waitFor();
+    },
+  },
+  {
+    id: "api-key-connect",
+    route: "/api-keys",
+    fixture: "supported self-hosted authentication methods",
+    description: "The first step offers CLI sign-in or an API key.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create key" }).click();
+      await page.getByRole("button", { name: "Your own machine" }).waitFor();
+    },
+  },
+  {
+    id: "api-key-cli",
+    route: "/api-keys",
+    fixture: "interactive CLI sign-in",
+    description: "A copyable login command for the current Console origin.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Create key" }).click();
+      await page
+        .getByRole("button", { name: "Your own machine", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Copy sign-in command" })
+        .waitFor();
+    },
+  },
   {
     id: "api-key-create",
     route: "/api-keys",
     fixture: "empty dialog form",
-    description:
-      "The create dialog with its expiry select — a read-only workspace row and the only Never option in the console.",
+    description: "Name, expiry, linked account and the platform's fixed scope.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Create key" }).click();
-      await page.getByRole("dialog").waitFor();
+      const form = await openApiKeyForm(page);
+      await form.waitFor();
     },
   },
   {

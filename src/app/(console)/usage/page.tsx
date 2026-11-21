@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { PageHeader } from "@/components/shell/page-header";
 import {
   EmptyState,
@@ -20,10 +20,8 @@ import {
   useUsageNames,
 } from "@/components/console/usage-bits";
 import { cn } from "@/lib/utils";
-import {
-  useGatewayDailyUsage,
-  type GatewayUsageFilter,
-} from "@/lib/platform/gateway-queries";
+import { useListFilters } from "@/lib/use-list-filters";
+import { useGatewayDailyUsage } from "@/lib/platform/gateway-queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import type { GatewayDailyUsage } from "@/lib/platform/types";
 
@@ -125,10 +123,31 @@ function groupBy<T>(rows: T[], key: (row: T) => string) {
 }
 
 export default function UsagePage() {
-  const [days, setDays] = useState<(typeof PERIODS)[number]>(30);
-  const [filter, setFilter] = useState<GatewayUsageFilter>({});
+  return (
+    <Suspense fallback={<ListSkeleton />}>
+      <UsageOverview />
+    </Suspense>
+  );
+}
+
+function UsageOverview() {
+  const { params, update } = useListFilters();
+  const filter = {
+    api_key_id: params.get("api_key") || undefined,
+    principal_id: params.get("principal_id") || undefined,
+    alias: params.get("alias") || undefined,
+    deployment_id: params.get("deployment_id") || undefined,
+  };
+  const selectedRange = params.get("range");
+  const period =
+    selectedRange === "mtd"
+      ? "mtd"
+      : (PERIODS.find((n) => String(n) === selectedRange) ?? 30);
   const [by, setBy] = useState<By>("alias");
-  const range = lastDays(days);
+  // The gateway bills UTC days. The same instant fixes both ends at month rollover.
+  const now = new Date();
+  const days = period === "mtd" ? now.getUTCDate() : period;
+  const range = lastDays(days, now);
   const { data, error, isPending } = useGatewayDailyUsage(range, filter);
   const names = useUsageNames();
 
@@ -165,16 +184,28 @@ export default function UsagePage() {
         subtitle={`${SURFACES.usage.blurb} Days are UTC.`}
       />
       <UsageViews />
-      <UsageFilters filter={filter} onChange={setFilter} seen={rows}>
+      <UsageFilters
+        filter={filter}
+        seen={rows}
+        onChange={(next) =>
+          update({
+            api_key: next.api_key_id ?? null,
+            principal_id: next.principal_id ?? null,
+            alias: next.alias ?? null,
+            deployment_id: next.deployment_id ?? null,
+          })
+        }
+      >
         <label className="flex items-center gap-1.5 text-sm">
           <span className="sr-only">Period</span>
           <select
             className={USAGE_SELECT}
-            value={days}
+            value={period}
             onChange={(e) =>
-              setDays(Number(e.target.value) as (typeof PERIODS)[number])
+              update({ range: e.target.value === "30" ? null : e.target.value })
             }
           >
+            <option value="mtd">Month to date</option>
             {PERIODS.map((n) => (
               <option key={n} value={n}>
                 Last {n} days
@@ -193,7 +224,7 @@ export default function UsagePage() {
             <Tile
               label="Requests"
               value={tokenCount(totals.requests)}
-              note={`last ${days} days`}
+              note={period === "mtd" ? "month to date" : `last ${days} days`}
               data={{ requests: totals.requests }}
             />
             <Tile
@@ -233,7 +264,7 @@ export default function UsagePage() {
               data={{ cost: totals.cost }}
             />
           </div>
-          <CostChart days={perDay} />
+          <CostChart key={`${range.from}/${range.to}`} days={perDay} />
           <div className="flex items-center justify-between pb-1.5">
             <span className="text-sm font-medium">By</span>
             <span className="inline-flex gap-0.5 rounded-lg border p-0.5">

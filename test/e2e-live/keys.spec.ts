@@ -1,3 +1,4 @@
+import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { nativeRequest } from "./native-request";
 import { LIVE_BROWSER_ORIGIN } from "./env";
 import type { APIRequestContext } from "@playwright/test";
@@ -253,10 +254,13 @@ test("a console-issued management key drives the real wire API, and Disable stop
   await signIn(page);
   await page.goto("/api-keys");
 
-  await page.getByRole("button", { name: "Create key" }).click();
+  await openApiKeyForm(page);
   await page.getByLabel("Name").fill(`live-e2e-mgmt-${RUN}`);
   await page.getByLabel("Expires").selectOption("7d");
-  await page.getByRole("button", { name: "Add" }).click();
+  await page
+    .getByRole("dialog", { name: "Create API key" })
+    .getByRole("button", { name: "Create key", exact: true })
+    .click();
 
   const revealed = page.getByTestId("revealed-api-key");
   await expect(revealed).toBeVisible();
@@ -294,7 +298,8 @@ test("a console-issued management key drives the real wire API, and Disable stop
   const accepted = await call();
   expect(accepted.status()).toBe(200);
 
-  await row.getByRole("button", { name: "Disable" }).click();
+  const actions = await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
+  await actions.getByRole("menuitem", { name: "Disable API key" }).click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
     "inactive",
@@ -309,7 +314,9 @@ test("a console-issued management key drives the real wire API, and Disable stop
   await row
     .getByRole("button", { name: `More actions for live-e2e-mgmt-${RUN}` })
     .click();
-  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "Delete API key", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Delete API key", exact: true })
     .click();
@@ -317,5 +324,14 @@ test("a console-issued management key drives the real wire API, and Disable stop
     "data-key-status",
     "archived",
   );
-  await expect(row.getByRole("button")).toHaveCount(0);
+  // The gateway can disappear or recover between issuance and archival.
+  const archivedActions = row.getByRole("button", { name: /More actions/ });
+  await expect(async () => {
+    if (!(await archivedActions.isVisible())) return;
+    if (!(await actions.isVisible()))
+      await archivedActions.click({ timeout: 1000 });
+    await expect(actions.getByRole("menuitem")).toHaveText(["View cost"], {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 5000 });
 });

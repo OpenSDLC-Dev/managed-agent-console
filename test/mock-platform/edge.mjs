@@ -24,7 +24,8 @@ createServer((req, res) => {
   const path = new URL(req.url, "http://edge").pathname;
   const backend = path.startsWith("/admin/v1/")
     ? gateway
-    : [
+    : path === "/oauth/authorize" ||
+        [
           "/api/auth/",
           "/api/console/",
           "/api/oauth/",

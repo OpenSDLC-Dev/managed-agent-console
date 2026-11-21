@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
+import { openApiKeyForm } from "../api-key-flow";
 
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
@@ -127,6 +128,26 @@ async function dialogSettled(page: Page) {
     .poll(() => dialog.evaluate((el) => getComputedStyle(el).opacity))
     .toBe("1");
 }
+
+test("API key filters, details and creation form pass axe in light and dark", async ({
+  page,
+}) => {
+  await signIn(page, "/api-keys");
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    const row = page.getByRole("button", { name: "ci-deploy", exact: true });
+    await expect(row).toBeVisible();
+    await expectNoViolations(page);
+    await row.click();
+    await dialogSettled(page);
+    await expectNoViolations(page);
+    await page.getByRole("button", { name: "Close details" }).click();
+    const form = await openApiKeyForm(page);
+    await dialogSettled(page);
+    await expectNoViolations(page);
+    await form.getByRole("button", { name: "Close", exact: true }).click();
+  }
+});
 
 test("the environment-key surface and its dialogs pass axe", async ({
   page,

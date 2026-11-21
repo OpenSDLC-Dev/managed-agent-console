@@ -184,7 +184,8 @@ const API_KEYS_SEED = [
     created_by: { id: "user_mockadmin01", type: "user" },
     partial_key_hint: partialKeyHint(API_KEY),
     status: "active",
-    expires_at: "2026-12-01T00:00:00Z",
+    // The mutable fixture must still be active whenever the suite is run.
+    expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
     principal: {
       type: "service_account_actor",
       service_account_id: "svac_mockci01",
