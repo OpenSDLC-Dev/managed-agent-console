@@ -50,17 +50,17 @@ Testing mirrors the platform's tiered philosophy. Default suites use recorded fi
 | [docs/HISTORY.md](./docs/HISTORY.md) | archived plans: what each delivered, and what running it proved or broke               |
 | GitHub issues                        | the backlog — the only backlog                                                         |
 
-## Issue labels
+## Issue triage
 
-Every open issue in Platform and Console takes one label from each row.
+Assign each open issue and every new issue a GitHub issue type and exactly two labels.
 
-| Dimension  | Labels                                                                                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Type       | `bug` for a failure in existing behavior. `feature` for a new capability or improvement.                                                                    |
-| Priority   | `p0` for critical work that needs immediate attention. `p1` for important near-term work. `p2` for work that can wait.                                      |
-| Difficulty | `easy` when AI can resolve the issue directly. `medium` when AI can resolve it after writing a plan. `hard` when a person must make a judgment or decision. |
+| Field            | Choices                                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Issue type       | `Bug` for unexpected behavior, `Feature` for a new capability or improvement, `Task` for a specific piece of work such as maintenance or verification.      |
+| Priority label   | `p0` for critical work that needs immediate attention, `p1` for important near-term work, `p2` for work that can wait.                                      |
+| Difficulty label | `easy` when AI can resolve the issue directly, `medium` when AI can resolve it after writing a plan, `hard` when a person must make a judgment or decision. |
 
-Choose all three when filing an issue. When evidence is incomplete, use `feature`, `p1` or `hard` for the missing dimension. Maintainers can replace any provisional label as evidence arrives.
+Choose the type, priority and difficulty when filing an issue. For missing information, use `Feature`, `p1` or `hard` for the corresponding field. Maintainers can revise each choice as evidence arrives.
 
 ## Iteration workflow
 
