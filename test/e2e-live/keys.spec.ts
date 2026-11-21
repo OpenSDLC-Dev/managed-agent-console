@@ -299,6 +299,8 @@ test("a console-issued management key drives the real wire API, and Disable stop
   expect(accepted.status()).toBe(200);
 
   const actions = await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
+  const viewCost = actions.getByRole("menuitem", { name: "View cost" });
+  const canViewCost = await viewCost.isVisible();
   await actions.getByRole("menuitem", { name: "Disable API key" }).click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
@@ -324,8 +326,13 @@ test("a console-issued management key drives the real wire API, and Disable stop
     "data-key-status",
     "archived",
   );
-  await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
-  await expect(
-    page.getByRole("menuitem", { name: /Enable|Disable|Delete/ }),
-  ).toHaveCount(0);
+  if (canViewCost) {
+    await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
+    await expect(viewCost).toBeVisible();
+    await expect(actions.getByRole("menuitem")).toHaveCount(1);
+  } else {
+    await expect(row.getByRole("button", { name: /More actions/ })).toHaveCount(
+      0,
+    );
+  }
 });

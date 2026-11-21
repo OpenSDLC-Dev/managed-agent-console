@@ -403,6 +403,25 @@ describe("creating a key", () => {
     expect(postOf(mock.fetcher)).toBeUndefined();
   });
 
+  it("keeps linked key issuance available when this edge has no CLI authorization route", async () => {
+    const mock = nativeFetch({ cliUnavailable: true });
+    nativeView(session, false, <CreateKeyButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await waitFor(() =>
+      expect(mock.fetcher).toHaveBeenCalledWith(
+        "/oauth/authorize",
+        expect.objectContaining({ credentials: "omit" }),
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Your own machine" }),
+    ).toBeNull();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Somewhere else" }),
+    );
+    expect(keyForm().getByLabelText("Name")).toHaveFocus();
+  });
+
   it("puts the name and lifetime first and shows the supported linked account and scope", async () => {
     renderTable([], stubCreate());
     await openKeyForm();
@@ -418,7 +437,7 @@ describe("creating a key", () => {
     const selected = within(expires).getByRole("option", { selected: true });
     const date = new Date(selected.getAttribute("data-expires-at")!);
     expect(selected).toHaveTextContent(
-      `30 days (${date.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric" })})`,
+      `30 days (${date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" })})`,
     );
     expect(form.getByRole("combobox", { name: "Scope" })).toBeDisabled();
     expect(
@@ -696,6 +715,7 @@ function nativeFetch(
     pageFail?: boolean;
     firstPageFail?: boolean;
     singlePage?: boolean;
+    cliUnavailable?: boolean;
   } = {},
 ) {
   let current = session;
@@ -706,6 +726,19 @@ function nativeFetch(
   let settle = () => {};
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/oauth/authorize") {
+      if (options.cliUnavailable) return new Response(null, { status: 404 });
+      return json(
+        {
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message: "invalid CLI authorization parameters",
+          },
+        },
+        400,
+      );
+    }
     if (url.pathname === "/api/auth/session") return json(current);
     if (url.pathname.endsWith("/service_accounts")) {
       if (

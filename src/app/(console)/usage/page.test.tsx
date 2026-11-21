@@ -71,6 +71,44 @@ afterEach(() => {
 });
 
 describe("Usage overview", () => {
+  it("identifies a whitespace-only key by its ID in the cost filter", async () => {
+    const id = "apikey_spaces";
+    window.history.replaceState(null, "", `/usage?api_key=${id}&range=mtd`);
+    stubGatewayFetch((_method, rest) =>
+      rest.endsWith("/api_keys")
+        ? Response.json([...KEYS, { ...KEYS[0], id, name: "  " }])
+        : undefined,
+    );
+    renderPage(<UsagePage />);
+    const select = screen.getByRole("combobox", { name: "Key" });
+    await within(select).findByRole("option", { name: "ci-deploy" });
+    expect(select).toHaveDisplayValue(id);
+  });
+
+  it("clears the active chart bar when history restores a shorter cached period", async () => {
+    window.history.replaceState(null, "", "/usage?range=7");
+    stub();
+    renderPage(<UsagePage />);
+    const bars = () =>
+      within(screen.getByRole("list", { name: "Cost per day" })).getAllByRole(
+        "listitem",
+      );
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Period" }),
+      "90",
+    );
+    await waitFor(() => expect(bars()).toHaveLength(90));
+    act(() => bars()[75].focus());
+    expect(screen.getByRole("tooltip")).toBeVisible();
+    act(() => {
+      window.history.replaceState(null, "", "/usage?range=7");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(bars()).toHaveLength(7);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it.each([
     ["2026-03-01T00:15:00Z", "2026-03-01", "2026-03-01"],
     ["2028-02-28T23:30:00-02:00", "2028-02-01", "2028-02-29"],

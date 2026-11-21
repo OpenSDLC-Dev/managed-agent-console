@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode, type RefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, Copy, KeyRound, Laptop } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,24 @@ function focusHeading(heading: HTMLHeadingElement | null) {
   heading?.focus();
 }
 
+// The key issuer also exists on older edges without CLI OAuth. A parameterless
+// GET reaches clioauth.go's input check before login, consent, or code issuance.
+async function cliLoginAvailable({ signal }: { signal: AbortSignal }) {
+  const response = await fetch("/oauth/authorize", {
+    signal,
+    credentials: "omit",
+    redirect: "error",
+    cache: "no-store",
+  });
+  if (response.status !== 400) return false;
+  const body = await response.json();
+  return (
+    body?.type === "error" &&
+    body.error?.type === "invalid_request_error" &&
+    body.error.message === "invalid CLI authorization parameters"
+  );
+}
+
 export function KeyConnectionMethods({
   onCli,
   onKey,
@@ -24,6 +43,12 @@ export function KeyConnectionMethods({
   onKey: () => void;
   cliButtonRef: RefObject<HTMLButtonElement | null>;
 }) {
+  const cli = useQuery({
+    queryKey: ["cli-login-available"],
+    queryFn: cliLoginAvailable,
+    staleTime: 60_000,
+    retry: false,
+  });
   const card =
     "flex flex-col items-start gap-2 rounded-xl bg-muted/65 p-4 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring";
   return (
@@ -32,26 +57,28 @@ export function KeyConnectionMethods({
         <DialogTitle>Connect to the API</DialogTitle>
         <DialogDescription>Where does your code run?</DialogDescription>
       </DialogHeader>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          ref={cliButtonRef}
-          className={card}
-          aria-labelledby="cli-method"
-          aria-describedby="cli-method-description"
-          onClick={onCli}
-        >
-          <Laptop aria-hidden className="mb-2 size-5" />
-          <span id="cli-method" className="font-medium">
-            Your own machine
-          </span>
-          <span id="cli-method-description" className="text-muted-foreground">
-            Sign in with the ant CLI.
-          </span>
-          <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-xs">
-            No key needed
-          </span>
-        </button>
+      <div className={cli.data ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
+        {cli.data && (
+          <button
+            type="button"
+            ref={cliButtonRef}
+            className={card}
+            aria-labelledby="cli-method"
+            aria-describedby="cli-method-description"
+            onClick={onCli}
+          >
+            <Laptop aria-hidden className="mb-2 size-5" />
+            <span id="cli-method" className="font-medium">
+              Your own machine
+            </span>
+            <span id="cli-method-description" className="text-muted-foreground">
+              Sign in with the ant CLI.
+            </span>
+            <span className="rounded-full bg-foreground/5 px-2 py-0.5 text-xs">
+              No key needed
+            </span>
+          </button>
+        )}
         <button
           type="button"
           className={card}

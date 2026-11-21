@@ -264,7 +264,7 @@ function UsageOverview() {
               data={{ cost: totals.cost }}
             />
           </div>
-          <CostChart days={perDay} />
+          <CostChart key={`${range.from}/${range.to}`} days={perDay} />
           <div className="flex items-center justify-between pb-1.5">
             <span className="text-sm font-medium">By</span>
             <span className="inline-flex gap-0.5 rounded-lg border p-0.5">

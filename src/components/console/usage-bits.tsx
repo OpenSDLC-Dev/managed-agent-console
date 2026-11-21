@@ -10,6 +10,7 @@ import {
   type GatewayUsageFilter,
 } from "@/lib/platform/gateway-queries";
 import { useApiKeys } from "@/lib/platform/queries";
+import { apiKeyDisplayName } from "./api-key-labels";
 
 /**
  * Shared by Usage's two pages (plan 10 slice 5). Cost carries no currency:
@@ -107,7 +108,7 @@ export function useUsageNames() {
   const aliases = useGatewayAliases();
   const deployments = useGatewayDeployments();
   const keyNames = useMemo(
-    () => new Map(keys.data?.map((k) => [k.id, k.name])),
+    () => new Map(keys.data?.map((k) => [k.id, apiKeyDisplayName(k)])),
     [keys.data],
   );
   const upstreams = useMemo(
@@ -187,7 +188,7 @@ export function UsageFilters({
         "Key",
         "api_key_id",
         "All keys",
-        names.keys.map((k) => [k.id, k.name]),
+        names.keys.map((k) => [k.id, names.keyName(k.id)]),
       )}
       {field(
         "Model",

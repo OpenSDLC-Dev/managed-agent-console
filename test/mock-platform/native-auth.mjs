@@ -102,6 +102,21 @@ export function authenticateBrowser(req, res) {
   return session;
 }
 export async function nativeAuthRoute(req, res, url, readBody) {
+  // The chooser recognizes a parameterless GET from the real CLI handler.
+  if (
+    url.pathname === "/oauth/authorize" &&
+    req.method === "GET" &&
+    !url.search
+  ) {
+    reply(res, 400, {
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "invalid CLI authorization parameters",
+      },
+    });
+    return true;
+  }
   if (!url.pathname.startsWith("/api/auth/")) return false;
   if (url.pathname === "/api/auth/config" && req.method === "GET") {
     reply(res, 200, { mode: mode(req), native_login: true });

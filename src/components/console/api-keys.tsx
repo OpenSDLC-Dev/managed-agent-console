@@ -81,7 +81,7 @@ function customIsIncomplete(choice: ExpiryChoice, custom: string): boolean {
 }
 
 const SELECT_CLASS =
-  "h-9 w-full rounded-md border border-input bg-background px-2 text-sm disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-ring";
+  "h-7 w-full rounded-lg border border-transparent bg-muted px-2 text-sm disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400";
 
 function ExpirySelect({
   choice,
@@ -115,7 +115,7 @@ function ExpirySelect({
         const format: Intl.DateTimeFormatOptions =
           option.value === "3h"
             ? { hour: "numeric", minute: "2-digit" }
-            : { weekday: "short", month: "short", day: "numeric" };
+            : { month: "short", day: "numeric", year: "numeric" };
         return (
           <option
             key={option.value}
@@ -396,16 +396,19 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
               }}
             >
               <DialogHeader>
-                <DialogTitle>Create API key</DialogTitle>
+                <DialogTitle className="text-[15px]">
+                  Create API key
+                </DialogTitle>
                 <DialogDescription className="sr-only">
                   Choose a name, lifetime, and linked account for this key.
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex flex-col gap-4 py-5">
+              <div className="flex flex-col gap-4 py-4">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="api-key-name">Name</Label>
                   <Input
                     id="api-key-name"
+                    className="h-7 border-transparent bg-muted focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:bg-muted dark:focus-visible:border-blue-400"
                     value={name}
                     disabled={pending}
                     autoFocus

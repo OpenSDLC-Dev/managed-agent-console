@@ -317,7 +317,8 @@ async function edge(port, upstream) {
       ? upstream === 38110
         ? 38120
         : 38121
-      : path.startsWith("/api/auth/") ||
+      : path === "/oauth/authorize" ||
+          path.startsWith("/api/auth/") ||
           path.startsWith("/api/console/") ||
           path.startsWith("/api/oauth/") ||
           path.startsWith("/api/organizations/") ||
