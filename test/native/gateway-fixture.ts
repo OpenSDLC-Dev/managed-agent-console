@@ -4,22 +4,51 @@ import { nativeDocker } from "./docker";
 export const model = "slice4/model";
 export const principals = ["principal_browser_one", "principal_browser_two"];
 
-/** Real handlers and database; synthetic ledger rows, never a vendor call. */
-export async function seedGateway(
-  request: APIRequestContext,
-  container: string,
-) {
+async function gatewayFixtureWriter(request: APIRequestContext) {
   const session = await (await request.get("/api/auth/session")).json();
   const headers = {
     origin: "http://127.0.0.1:38200",
     "X-CSRF-Token": session.csrf_token,
   };
-  async function post(path: string, data: unknown) {
+  return async (path: string, data: unknown) => {
     const response = await request.post(`/admin/v1/${path}`, { headers, data });
     if (!response.ok())
       throw new Error(`gateway fixture ${path}: ${response.status()}`);
     return response.json();
-  }
+  };
+}
+
+/** This provider is intercepted by playgroundVendor in the native platform fixture. */
+export async function seedPlaygroundModel(
+  request: APIRequestContext,
+  alias: string,
+) {
+  const post = await gatewayFixtureWriter(request);
+  const vendor = await post("providers", {
+    name: alias,
+    profile: "anthropic-generic",
+    endpoints: { anthropic: "https://playground.invalid" },
+  });
+  await post(`providers/${vendor.id}/credentials`, {
+    key: "fixture-placeholder-key",
+  });
+  const deployment = await post("deployments", {
+    provider_id: vendor.id,
+    upstream_model: "fixture-playground",
+    kind: "chat",
+  });
+  await post("aliases", {
+    name: alias,
+    targets: [{ deployment_id: deployment.id, weight: 1 }],
+  });
+}
+
+/** Real handlers and database; synthetic ledger rows, never a vendor call. */
+export async function seedGateway(
+  request: APIRequestContext,
+  container: string,
+) {
+  const post = await gatewayFixtureWriter(request);
   const aliases = await (await request.get("/admin/v1/aliases")).json();
   if (!aliases.data.some((a: { name: string }) => a.name === model)) {
     const provider = await post("providers", {

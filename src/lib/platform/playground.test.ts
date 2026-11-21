@@ -120,7 +120,9 @@ it("posts Messages with fresh CSRF and renders only text blocks from the stream"
   );
   const append = vi.fn();
   const signal = new AbortController().signal;
-  await runPlayground(prompt, "user_demo", signal, append);
+  const result = await runPlayground(prompt, "user_demo", signal, append);
+  expect(result.rawLabel).toBe("Stream events");
+  expect(result.raw).toContain('{"type":"message_stop"}');
   expect(append.mock.calls).toEqual([["Hi"], [" there"]]);
   const [url, init] = fetcher.mock.calls[1];
   expect(url).toBe(`${resource}/messages?beta=true`);
@@ -157,3 +159,79 @@ it.each([
     ).rejects.toThrow(message);
   },
 );
+
+it("displays the completed gateway body and its reported usage, preserving unknown response fields", async () => {
+  const message = {
+    id: "msg_demo",
+    type: "message",
+    role: "assistant",
+    model: "demo",
+    content: [],
+    stop_reason: null,
+    usage: { input_tokens: 6, output_tokens: 0 },
+    extension: "provided",
+  };
+  const frames = [
+    { type: "message_start", message },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "thinking", thinking: "" },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "thinking_delta", thinking: "Reasoning" },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "signature_delta", signature: "fixture" },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "content_block_start",
+      index: 1,
+      content_block: { type: "text", text: "O" },
+    },
+    {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "text_delta", text: "K" },
+    },
+    { type: "content_block_stop", index: 1 },
+    {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn" },
+      usage: { output_tokens: 2 },
+    },
+    { type: "message_stop" },
+  ];
+  fixture(
+    frames
+      .map((f) => `event: ${f.type}\ndata: ${JSON.stringify(f)}\n\n`)
+      .join(""),
+  );
+  const append = vi.fn();
+  const out = await runPlayground(
+    prompt,
+    "user_demo",
+    new AbortController().signal,
+    append,
+  );
+  expect(append.mock.calls).toEqual([["O"], ["K"]]);
+  expect(out).toMatchObject({
+    rawLabel: "Response body",
+    inputTokens: 6,
+    outputTokens: 2,
+  });
+  expect(JSON.parse(out.raw)).toEqual({
+    ...message,
+    content: [
+      { type: "thinking", thinking: "Reasoning", signature: "fixture" },
+      { type: "text", text: "OK" },
+    ],
+    stop_reason: "end_turn",
+    usage: { input_tokens: 6, output_tokens: 2 },
+  });
+});

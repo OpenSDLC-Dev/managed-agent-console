@@ -18,6 +18,7 @@ import { nativeDocker } from "./docker";
 import { seedDeployment } from "./deployment-fixture";
 import {
   seedGateway,
+  seedPlaygroundModel,
   model as limitedModel,
   principals as usagePrincipals,
 } from "./gateway-fixture";
@@ -1297,34 +1298,8 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     password,
   });
   expect(member.status).toBe(200);
-  const vendor = await write(page, "/admin/v1/providers", {
-    name: "playground-fixture",
-    profile: "anthropic-generic",
-    endpoints: { anthropic: "https://playground.invalid" },
-  });
-  expect(vendor.status).toBe(200);
-  expect(
-    (
-      await write(page, `/admin/v1/providers/${vendor.body.id}/credentials`, {
-        key: "fixture-placeholder-key",
-      })
-    ).status,
-  ).toBe(200);
-  const deployment = await write(page, "/admin/v1/deployments", {
-    provider_id: vendor.body.id,
-    upstream_model: "fixture-playground",
-    kind: "chat",
-  });
-  expect(deployment.status).toBe(200);
   const alias = "playground-e2e";
-  expect(
-    (
-      await write(page, "/admin/v1/aliases", {
-        name: alias,
-        targets: [{ deployment_id: deployment.body.id, weight: 1 }],
-      })
-    ).status,
-  ).toBe(200);
+  await seedPlaygroundModel(page.request, alias);
 
   const userContext = await browser.newContext({ baseURL: origin });
   try {

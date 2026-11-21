@@ -83,7 +83,7 @@ export function PlaygroundEditor({
           onValueChange={(value) => {
             if (value) patch({ selection: value });
           }}
-          disabled={!model || running}
+          disabled={!models.length || running}
         >
           <SelectTrigger
             size="sm"
@@ -93,7 +93,11 @@ export function PlaygroundEditor({
           >
             <SelectValue>
               {models.find((m) => m.id === model)?.display_name ??
-                (loading ? "Loading models…" : "No models")}
+                (loading
+                  ? "Loading models…"
+                  : model
+                    ? `${model} (unavailable)`
+                    : "No models")}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start" alignItemWithTrigger={false}>

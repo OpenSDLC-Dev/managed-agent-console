@@ -3,11 +3,20 @@ import { join } from "node:path";
 import { nativeDocker } from "./docker";
 import { test, expect } from "./test";
 import { selectNativeSurfaces } from "../fidelity/native-surfaces";
-import { seedGateway, principals } from "./gateway-fixture";
+import {
+  seedGateway,
+  seedPlaygroundModel,
+  principals,
+} from "./gateway-fixture";
 import { seedDeployment } from "./deployment-fixture";
 const selected = selectNativeSurfaces(process.env.NATIVE_FIDELITY_IDS);
 const org = "/api/console/organizations/default";
 const password = "native-shot-password-123";
+const playgroundReplies = new Set([
+  "native-playground-response",
+  "native-playground-raw",
+  "native-playground-continuation",
+]);
 
 test("walk native manifest in owned Chrome (not a current-reference comparison)", async ({
   page,
@@ -172,10 +181,13 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
       (s) =>
         s.id.startsWith("native-model-limits") ||
         s.id.startsWith("native-principal-") ||
-        s.id.startsWith("native-playground"),
+        (s.id.startsWith("native-playground") && !playgroundReplies.has(s.id)),
     )
   )
     await seedGateway(request, receipt.container);
+  const playgroundAlias = `playground-${info.project.name}`;
+  if (selected.some((surface) => playgroundReplies.has(surface.id)))
+    await seedPlaygroundModel(request, playgroundAlias);
   for (const surface of selected) {
     await test.step(surface.id, async () => {
       let releaseWrite: (() => void) | undefined;
@@ -351,6 +363,27 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           }
           if (surface.id === "native-playground-settings")
             await page.getByRole("button", { name: "Model settings" }).click();
+          if (playgroundReplies.has(surface.id)) {
+            await page
+              .getByRole("combobox", { name: "Model", exact: true })
+              .click();
+            await page
+              .getByRole("option", { name: playgroundAlias, exact: true })
+              .click();
+            await page
+              .getByLabel("Prompt", { exact: true })
+              .fill("Write a short greeting.");
+            await page.getByRole("button", { name: "Run prompt" }).click();
+            await expect(
+              page.locator('[data-run-status="complete"]'),
+            ).toBeAttached();
+            if (surface.id === "native-playground-raw")
+              await page.getByText("Raw", { exact: true }).click();
+            if (surface.id === "native-playground-continuation")
+              await page
+                .getByRole("button", { name: "Add to messages" })
+                .click();
+          }
           if (surface.id === "native-deployment-initiator-form") {
             await page
               .getByRole("button", { name: "Change initiator" })
@@ -666,6 +699,30 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             break;
           case "native-playground-settings":
             await expect(page.getByLabel("Max tokens")).toBeVisible();
+            break;
+          case "native-playground-response":
+            await expect(
+              page.getByText("Fixture response", { exact: true }),
+            ).toBeVisible();
+            await expect(page.locator("[data-input-tokens]")).toHaveAttribute(
+              "data-input-tokens",
+              "3",
+            );
+            await expect(page.locator("[data-output-tokens]")).toHaveAttribute(
+              "data-output-tokens",
+              "2",
+            );
+            break;
+          case "native-playground-raw":
+            await expect(page.getByLabel("Response body")).toContainText(
+              "Fixture response",
+            );
+            break;
+          case "native-playground-continuation":
+            await expect(page.getByLabel("assistant message 2")).toHaveValue(
+              "Fixture response",
+            );
+            await expect(page.getByLabel("user message 3")).toBeEmpty();
             break;
           case "native-playground":
             await expect(

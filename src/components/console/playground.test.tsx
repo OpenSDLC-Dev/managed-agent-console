@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { TEST_SESSION } from "@/../test/session-fixture";
@@ -11,10 +11,20 @@ import {
 import * as gateway from "@/lib/platform/playground";
 import { Playground } from "./playground";
 
-function renderPlayground(access: boolean | undefined = true) {
-  const client = new QueryClient({
+const reply: gateway.PlaygroundReply = {
+  raw: '{"content":[{"type":"text","text":"OK"}]}',
+  rawLabel: "Response body",
+  inputTokens: 10,
+  outputTokens: 1,
+  durationMs: 425,
+};
+
+function renderPlayground(
+  access = true,
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
-  });
+  }),
+) {
   return render(
     <QueryClientProvider client={client}>
       <ConsoleSessionContext.Provider
@@ -45,13 +55,15 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
     .spyOn(gateway, "runPlayground")
     .mockImplementation(async (_req, _id, _signal, append) => {
       append("OK");
+      return reply;
     });
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({ matches: false })),
   );
   const user = userEvent.setup();
-  renderPlayground();
+  const client = new QueryClient();
+  renderPlayground(true, client);
   await screen.findByText("Demo", { exact: true });
   await user.click(screen.getByRole("combobox", { name: "Model" }));
   await user.click(await screen.findByRole("option", { name: "Fast" }));
@@ -85,6 +97,13 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   });
   await user.keyboard("{Control>}{Enter}{/Control}");
   expect(await screen.findByText("OK", { exact: true })).toBeVisible();
+  await user.click(screen.getByLabelText("Raw", { exact: true }));
+  expect(screen.getByLabelText("Response body")).toHaveTextContent(reply.raw);
+  await user.click(screen.getByLabelText("Rendered", { exact: true }));
+  await user.click(screen.getByRole("button", { name: "Add to messages" }));
+  expect(screen.getByLabelText("assistant message 4")).toHaveValue("OK");
+  expect(screen.getByLabelText("user message 5")).toHaveValue("");
+  expect(screen.getByText("Press Run")).toBeVisible();
   expect(run).toHaveBeenCalledWith(
     request,
     TEST_SESSION.id,
@@ -101,6 +120,22 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   );
   expect(screen.getByLabelText("user message 3")).toHaveValue("Next turn");
   expect(screen.getByText("OK", { exact: true })).toBeVisible();
+  await act(async () => {
+    client.setQueryData(
+      ["playground-models", TEST_SESSION.id],
+      [{ id: "demo", display_name: "Demo" }],
+    );
+  });
+  expect(await screen.findByText("fast (unavailable)")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(screen.getByLabelText("Request code")).toHaveTextContent(
+    '"model": "fast"',
+  );
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("combobox", { name: "Model" }));
+  await user.click(await screen.findByRole("option", { name: "Demo" }));
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeEnabled();
 });
 
 it("pages through templates and fills a draft without calling the model", async () => {
@@ -144,7 +179,9 @@ it("stops immediately and ignores a cancelled stream while the next run is open"
   }[] = [];
   vi.spyOn(gateway, "runPlayground").mockImplementation(
     (_body, _id, signal, append) =>
-      new Promise<void>((finish) => requests.push({ signal, append, finish })),
+      new Promise<gateway.PlaygroundReply>((resolve) =>
+        requests.push({ signal, append, finish: () => resolve(reply) }),
+      ),
   );
   vi.stubGlobal(
     "matchMedia",

@@ -9,17 +9,16 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, Play, Plus, Square, X } from "lucide-react";
-import { toast } from "sonner";
+import { Play, Plus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
-import { copyText } from "@/lib/copy-text";
-import { cn } from "@/lib/utils";
+import { PlaygroundViewSwitch } from "./playground-view-switch";
 import {
   playgroundModels,
   runPlayground,
   type PlaygroundRequest,
+  type PlaygroundReply,
 } from "@/lib/platform/playground";
 import { ErrorState } from "./bits";
 import { PlaygroundCode } from "./playground-code";
@@ -29,6 +28,7 @@ import {
   type PlaygroundDraft,
 } from "./playground-editor";
 import { PlaygroundTemplates } from "./playground-templates";
+import { PlaygroundResponse, type RunStatus } from "./playground-response";
 
 function Heading({ children }: { children?: ReactNode }) {
   return (
@@ -68,16 +68,7 @@ export function Playground() {
   );
 }
 
-type RunStatus = "idle" | "running" | "complete" | "stopped" | "failed";
-const statuses: Record<RunStatus, string> = {
-  idle: "",
-  running: "Generating…",
-  complete: "Complete",
-  stopped: "Stopped",
-  failed: "Failed",
-};
-
-type PastRun = { draft: PlaygroundDraft; text: string };
+type PastRun = { draft: PlaygroundDraft; text: string; reply: PlaygroundReply };
 
 function PlaygroundForm({ principalId }: { principalId: string }) {
   const models = useQuery({
@@ -88,6 +79,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   const [draft, setDraft] = useState(newDraft);
   const [mode, setMode] = useState<"Form" | "Code">("Form");
   const [text, setText] = useState("");
+  const [reply, setReply] = useState<PlaygroundReply>();
   const [status, setStatus] = useState<RunStatus>("idle");
   const [error, setError] = useState<string>();
   const [history, setHistory] = useState<PastRun[]>([]);
@@ -97,11 +89,14 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
 
-  const model =
-    models.data?.find((m) => m.id === draft.selection)?.id ??
-    models.data?.[0]?.id ??
-    "";
+  const model = draft.selection || models.data?.[0]?.id || "";
+  const available = models.data?.some((entry) => entry.id === model) === true;
   const running = status === "running";
+  const modifier =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform)
+      ? "⌘"
+      : "Ctrl";
   const request: PlaygroundRequest = {
     model,
     max_tokens: Number(draft.tokens),
@@ -113,10 +108,11 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   };
   function reset(prompt = "") {
     const next = newDraft();
-    next.selection = model;
+    next.selection = available ? model : "";
     next.messages[0].content = prompt;
     setDraft(next);
     setText("");
+    setReply(undefined);
     setError(undefined);
     setStatus("idle");
     setMode("Form");
@@ -127,9 +123,30 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
           ?.focus(),
       );
   }
+  function addToMessages() {
+    if (status !== "complete" || !text) return;
+    const id = draft.messages[draft.messages.length - 1].id + 1;
+    setDraft({
+      ...draft,
+      messages: [
+        ...draft.messages.filter((message) => message.content.length > 0),
+        { id, role: "assistant", content: text },
+        { id: id + 1, role: "user", content: "" },
+      ],
+    });
+    setMode("Form");
+    setStatus("idle");
+    setText("");
+    setReply(undefined);
+    setError(undefined);
+    requestAnimationFrame(() =>
+      document.getElementById(`playground-message-${id + 1}`)?.focus(),
+    );
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (active.current || !model) return;
+    if (active.current || !available) return;
     const hasPrompt = request.messages.some((message) =>
       message.content.trim(),
     );
@@ -148,22 +165,33 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     const controller = new AbortController();
     active.current = controller;
     setText("");
+    setReply(undefined);
     setError(undefined);
     setStatus("running");
     if (window.matchMedia("(max-width: 1023px)").matches)
       response.current?.scrollIntoView({ block: "start" });
     try {
       let answer = "";
-      await runPlayground(request, principalId, controller.signal, (part) => {
-        if (controller.signal.aborted) return;
-        answer += part;
-        setText(answer);
-      });
+      const result = await runPlayground(
+        request,
+        principalId,
+        controller.signal,
+        (part) => {
+          if (controller.signal.aborted) return;
+          answer += part;
+          setText(answer);
+        },
+      );
       if (controller.signal.aborted) return;
+      setReply(result);
       setStatus("complete");
       setHistory((previous) =>
         [
-          { draft: { ...draft, selection: model }, text: answer },
+          {
+            draft: { ...draft, selection: model },
+            text: answer,
+            reply: result,
+          },
           ...previous,
         ].slice(0, 20),
       );
@@ -212,7 +240,8 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
             !e.defaultPrevented
           ) {
             e.preventDefault();
-            form.current?.requestSubmit();
+            if (e.shiftKey) addToMessages();
+            else form.current?.requestSubmit();
           }
         }}
       >
@@ -227,28 +256,12 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
             <h2 id="playground-request" className="text-sm font-semibold">
               Build your request
             </h2>
-            <fieldset className="inline-flex rounded-lg bg-muted/70 p-0.5">
-              <legend className="sr-only">Request view</legend>
-              {(["Form", "Code"] as const).map((tab) => (
-                <label key={tab} className="cursor-pointer">
-                  <input
-                    type="radio"
-                    name="playground-view"
-                    className="peer sr-only"
-                    checked={mode === tab}
-                    onChange={() => setMode(tab)}
-                  />
-                  <span
-                    className={cn(
-                      "block rounded-md px-3 py-0.5 text-sm peer-focus-visible:outline-2 peer-focus-visible:outline-ring",
-                      mode === tab && "bg-background shadow-xs",
-                    )}
-                  >
-                    {tab}
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            <PlaygroundViewSwitch
+              label="Request view"
+              options={["Form", "Code"] as const}
+              value={mode}
+              onChange={setMode}
+            />
           </div>
           <div className="min-h-0 flex-1 space-y-3 px-5 py-4 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
             {models.error && <ErrorState error={models.error} />}
@@ -298,7 +311,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
                 size="sm"
                 aria-label="Run prompt"
                 aria-keyshortcuts="Meta+Enter Control+Enter"
-                disabled={!model}
+                disabled={!available}
               >
                 <Play />
                 Run{" "}
@@ -306,11 +319,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
                   aria-hidden
                   className="ml-1 rounded bg-background/20 px-1 font-mono text-xs"
                 >
-                  {typeof navigator !== "undefined" &&
-                  /Mac|iPhone|iPad/.test(navigator.platform)
-                    ? "⌘"
-                    : "Ctrl"}{" "}
-                  ↵
+                  {modifier} ↵
                 </kbd>
               </Button>
             )}
@@ -324,50 +333,30 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
           {status === "idle" ? (
             <>
               <span role="status" data-run-status="idle" className="sr-only" />
-              <PlaygroundTemplates onSelect={reset} />
+              {request.messages.length || draft.system ? (
+                <div className="m-auto px-5 py-16 text-center">
+                  <Play
+                    aria-hidden
+                    className="mx-auto mb-3 size-7 text-muted-foreground"
+                  />
+                  <h3 className="text-sm font-semibold">Press Run</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    The full API response will appear here.
+                  </p>
+                </div>
+              ) : (
+                <PlaygroundTemplates onSelect={reset} />
+              )}
             </>
           ) : (
-            <>
-              <div className="flex h-[50px] shrink-0 items-center justify-between gap-2 border-b px-5">
-                <h2 className="text-sm font-semibold">Response</h2>
-                <div className="flex items-center gap-2">
-                  <span
-                    role="status"
-                    data-run-status={status}
-                    className="text-xs text-muted-foreground"
-                  >
-                    {statuses[status]}
-                  </span>
-                  {text && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Copy response"
-                      title="Copy response"
-                      onClick={async () => {
-                        if (await copyText(text))
-                          toast.success("Response copied.");
-                        else toast.error("Could not copy response.");
-                      }}
-                    >
-                      <Copy />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {error && (
-                <p role="alert" className="px-5 pt-4 text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              <div
-                aria-busy={running}
-                className="p-5 text-sm leading-6 wrap-break-word whitespace-pre-wrap"
-              >
-                {text}
-              </div>
-            </>
+            <PlaygroundResponse
+              status={status}
+              text={text}
+              error={error}
+              reply={reply}
+              onAdd={addToMessages}
+              modifier={modifier}
+            />
           )}
         </section>
       </div>
@@ -401,6 +390,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
                 onClick={() => {
                   setDraft(entry.draft);
                   setText(entry.text);
+                  setReply(entry.reply);
                   setStatus("complete");
                   setError(undefined);
                   setHistoryOpen(false);

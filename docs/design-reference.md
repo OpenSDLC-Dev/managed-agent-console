@@ -27,6 +27,8 @@ Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/defa
 
 At 1800 × 945 the reference divides the area beside the sidebar into equal columns. Form and Code share the left column, with model settings at the top and Run at the bottom. The right column offers templates before a run. More and Previous page through them. The self-hosted editor uses the gateway's model aliases, text-message templates and a copyable request. History covers runs in the open page. The platform does not store prompt history or host shared requests.
 
+After a signed-in Haiku run, the right column switched to Rendered and Raw views. Add to messages worked from either view and placed the answer above a fresh user message. The footer showed token counts, cost and duration. The native Messages stream supplies token counts. The Console measures elapsed time and omits the hosted price estimate.
+
 ## Native-only Console — checked 2026-11-17
 
 Chrome reached the reference's public sign-in offer, with a centered rounded card, Google button, email field and dark primary action.

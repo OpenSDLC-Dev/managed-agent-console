@@ -12,7 +12,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
-- Open Playground from Build → Messages or the Dashboard resource card. Edit a request in the form, inspect and copy its code, and run it beside the response.
+- Open Playground from Build → Messages or the Dashboard resource card. Edit and run a request beside its rendered or raw response, inspect token usage, and add the answer to the next turn.
 - Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Move search into the global header.
 - Open the first available destination from desktop group links, show the active page beside its group and open narrow navigation from the header.
 - Put platform documentation in the global header and group appearance, platform status, build version and sign-out under the sidebar account button.

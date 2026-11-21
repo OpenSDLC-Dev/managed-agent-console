@@ -21,6 +21,26 @@ export const NATIVE_SURFACES = [
     description: "Max tokens opens beside the selected chat model.",
   },
   {
+    id: "native-playground-response",
+    route: "/playground",
+    fixture: "completed text response from the native fixture model",
+    description:
+      "Rendered reply, reported token counts and continuation action.",
+  },
+  {
+    id: "native-playground-raw",
+    route: "/playground",
+    fixture: "completed text response from the native fixture model",
+    description: "Raw Messages body for the same reply.",
+  },
+  {
+    id: "native-playground-continuation",
+    route: "/playground",
+    fixture: "completed reply added to the request",
+    description:
+      "Previous prompt and answer followed by an empty user message.",
+  },
+  {
     id: "native-environment-cloud-keys",
     route: "/environments/{fixture}",
     fixture: "real cloud environment with an issued key",
