@@ -35,7 +35,7 @@ const second: ApiKeyListItem = {
   ...first,
   id: "apikey_second/old",
   name: "Second key",
-  status: "archived",
+  status: "expired",
   can_manage: false,
   principal: null,
   created_by: null,

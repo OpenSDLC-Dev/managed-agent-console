@@ -175,9 +175,14 @@ describe("ApiKeysTable", () => {
     expect(screen.queryByText(/Rotate them/)).toBeNull();
   });
 
-  it("offers nothing on an archived key, which is terminal", () => {
+  it("shows the empty inventory when every returned key is archived", () => {
     renderTable([apiKey({ id: "apikey_1", status: "archived" })]);
-    expect(screen.queryByTestId("toggle-apikey_1")).toBeNull();
+    expect(document.querySelector("[data-visible-count]")).toHaveAttribute(
+      "data-visible-count",
+      "0",
+    );
+    expect(screen.getByText("No API keys yet.")).toBeInTheDocument();
+    expect(screen.queryByText("ci-deploy")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
@@ -1308,7 +1313,8 @@ it("probe: key controls obey row permission and lifecycle", async () => {
     ],
     vi.fn(async () => json({ data: [] })),
   );
-  for (const id of ["denied", "missing", "archived", "preset", "old"]) {
+  expect(document.querySelector('[data-key-id="archived"]')).toBeNull();
+  for (const id of ["denied", "missing", "preset", "old"]) {
     const row = document.querySelector(`[data-key-id="${id}"]`)!.closest("tr")!;
     expect(
       within(row).queryByRole("button", { name: /More actions for/ }),

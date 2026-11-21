@@ -1,4 +1,5 @@
 import { browserPost } from "../e2e/browser-write";
+import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
 import type { Page } from "@playwright/test";
@@ -2320,6 +2321,27 @@ export const SURFACES: Surface[] = [
         .getByRole("button", { name: "ci-deploy", exact: true })
         .waitFor();
       await page.locator('[data-visible-count="2"]').waitFor();
+    },
+  },
+  {
+    id: "api-key-archived-only",
+    route: "/api-keys",
+    fixture: "workspace containing only archived keys",
+    description: "The Keys page shows its empty state and a count of zero.",
+    setup: async (page) => {
+      await page.route(
+        "**/api/console/organizations/default/workspaces/default/api_keys",
+        async (route) => {
+          const response = await route.fetch();
+          const keys: ApiKeyListItem[] = await response.json();
+          await route.fulfill({
+            json: keys.map((key) => ({ ...key, status: "archived" })),
+          });
+        },
+      );
+      await page.reload();
+      await page.getByText("No API keys yet.", { exact: true }).waitFor();
+      await page.locator('[data-visible-count="0"]').waitFor();
     },
   },
   {

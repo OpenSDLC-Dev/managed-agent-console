@@ -1,4 +1,8 @@
-import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
+import {
+  expectListedKeyStatus,
+  openApiKeyForm,
+  openApiKeyMenu,
+} from "../api-key-flow";
 import {
   mkdirSync,
   mkdtempSync,
@@ -1761,11 +1765,7 @@ test("native environment keys cover cloud and self-hosted lifecycles with cookie
   expect(offered).toEqual([]);
 });
 
-test("native owned keys preserve owner creator permissions and credential isolation", async ({
-  page,
-  browser,
-}) => {
-  const keysPath = `${org}/workspaces/default/api_keys`;
+async function signInKeyAdmin(page: Page) {
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "new-person", password },
@@ -1773,7 +1773,75 @@ test("native owned keys preserve owner creator permissions and credential isolat
   expect([200, 409]).toContain(setup.status());
   if (setup.status() === 409) await login(page, "new-person");
   else await page.goto("/dashboard");
-  const admin = await (await page.request.get("/api/auth/session")).json();
+  const session = await (await page.request.get("/api/auth/session")).json();
+  expect(session.role).toBe("admin");
+  return session;
+}
+
+test("native key page creates and deletes an active key while its archived record remains queryable", async ({
+  page,
+  request,
+}) => {
+  await signInKeyAdmin(page);
+  await page.goto("/api-keys");
+  const name = "native-key-page-lifecycle";
+  const search = page.getByRole("searchbox", { name: "Search keys" });
+  const count = page.locator("[data-visible-count]");
+  await search.fill(name);
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  const form = await openApiKeyForm(page);
+  await form.getByLabel("Name", { exact: true }).fill(name);
+  await form.getByRole("button", { name: "Create key", exact: true }).click();
+  const revealed = page.getByTestId("revealed-api-key");
+  await expect(revealed).toBeVisible();
+  const key = (await revealed.textContent())!.trim();
+  const authenticate = () =>
+    request.get("/v1/agents?limit=1", {
+      headers: { "x-api-key": key },
+    });
+  await page.getByTestId("close-revealed-api-key").click();
+  await expect(revealed).toHaveCount(0);
+  expect((await page.content()).includes(key)).toBe(false);
+  await expect(count).toHaveAttribute("data-visible-count", "1");
+  const keyButton = page.getByRole("button", { name, exact: true });
+  const id = (await keyButton.getAttribute("data-key-id"))!;
+
+  const actions = await openApiKeyMenu(page, name);
+  await actions.getByRole("menuitem", { name: "Delete API key" }).click();
+  const confirmation = page.getByRole("dialog", {
+    name: "Delete API key",
+    exact: true,
+  });
+  await confirmation.getByRole("button", { name: "Cancel" }).click();
+  await expectListedKeyStatus(page, id, "active");
+  expect((await authenticate()).status()).toBe(200);
+
+  await keyButton.click();
+  const drawer = page.getByRole("dialog", { name, exact: true });
+  await drawer
+    .getByRole("button", { name: `More actions for ${name}` })
+    .click();
+  await actions.getByRole("menuitem", { name: "Delete API key" }).click();
+  await confirmation.getByRole("button", { name: "Delete API key" }).click();
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  await expect(keyButton).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
+  expect((await authenticate()).status()).toBe(401);
+
+  await page.reload();
+  await expect(count).toBeVisible();
+  await expect(keyButton).toHaveCount(0);
+  await search.fill(id);
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  await expectListedKeyStatus(page, id, "archived");
+});
+
+test("native owned keys preserve owner creator permissions and credential isolation", async ({
+  page,
+  browser,
+}) => {
+  const keysPath = `${org}/workspaces/default/api_keys`;
+  const admin = await signInKeyAdmin(page);
   const offered: string[] = [];
   page.on("request", (request) =>
     offered.push(
@@ -1990,14 +2058,7 @@ test("native-issued human and service keys preserve SDK actors and current autho
   const sdkClient = receipt().sdkClient;
   const keys = `${org}/workspaces/default/api_keys`;
   const resource = "/api/organizations/default/proxy/v1";
-  const setup = await page.request.post(`${org}/setup_code/redeem`, {
-    headers: { origin: "http://127.0.0.1:38200" },
-    data: { code: code(), login_name: "new-person", password },
-  });
-  expect([200, 409]).toContain(setup.status());
-  if (setup.status() === 409) await login(page, "new-person");
-  else await page.goto("/dashboard");
-  const creator = await (await page.request.get("/api/auth/session")).json();
+  const creator = await signInKeyAdmin(page);
   const human = await write(page, `${org}/members`, {
     login_name: "sdk-human",
     password,

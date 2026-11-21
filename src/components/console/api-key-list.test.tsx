@@ -64,6 +64,7 @@ const keys = [
   key("apikey_c", {
     name: "Coast",
     status: "archived",
+    partial_key_hint: "test…tide",
     created_by: { id: "user_b", type: "user" },
     principal: null,
     can_manage: false,
@@ -106,7 +107,7 @@ afterEach(cleanup);
 
 it("combines search, linked account, creator and status, then resets the full list", async () => {
   mount();
-  count(4);
+  count(3);
   const search = screen.getByRole("searchbox", { name: "Search keys" });
   await userEvent.type(search, "ZULU");
   expect(names()).toEqual(["Zebra"]);
@@ -123,7 +124,7 @@ it("combines search, linked account, creator and status, then resets the full li
   expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   expect(search).toHaveValue("");
-  count(4);
+  count(3);
   expect(
     screen.queryByRole("button", { name: "Reset" }),
   ).not.toBeInTheDocument();
@@ -133,18 +134,36 @@ it("combines search, linked account, creator and status, then resets the full li
   await userEvent.click(screen.getByRole("button", { name: "Reset search" }));
   expect(search).toHaveValue("");
   expect(search).toHaveFocus();
-  count(4);
+  count(3);
 });
 
-it("separates missing owners from issuers and retains the server's unknown and archived statuses", async () => {
+it("excludes archived keys from search and filter choices", async () => {
+  mount();
+  const search = screen.getByRole("searchbox");
+  for (const query of ["Coast", "apikey_c", "tide"]) {
+    await userEvent.clear(search);
+    await userEvent.type(search, query);
+    expect(names()).toEqual([]);
+    count(0);
+  }
+  await userEvent.clear(search);
+  await userEvent.click(screen.getByRole("combobox", { name: "Created by" }));
+  expect(await screen.findByRole("option", { name: "Avery" })).toBeVisible();
+  expect(screen.queryByRole("option", { name: "user_b" })).toBeNull();
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(screen.getByRole("combobox", { name: "Status" }));
+  expect(
+    (await screen.findAllByRole("option")).map((o) => o.textContent),
+  ).toEqual(["Active", "Disabled", "Expired"]);
+});
+
+it("separates missing owners from issuers and retains unknown server statuses", async () => {
   mount([
     ...keys,
     key("apikey_x", { status: "waiting", principal: null, can_manage: false }),
   ]);
   await choose("Linked account", "Not linked");
-  count(3);
-  await choose("Status", "Archived");
-  expect(names()).toEqual(["Coast"]);
+  count(2);
   await choose("Status", "waiting");
   expect(names()).toEqual(["apikey_x"]);
   await choose("Created by", "Control plane");
@@ -155,7 +174,7 @@ it("separates missing owners from issuers and retains the server's unknown and a
   await choose("Status", "Expired");
   expect(names()).toEqual(["Beach"]);
   await userEvent.click(screen.getByRole("button", { name: "Reset" }));
-  count(5);
+  count(4);
 });
 
 it("shows All and Anyone on the closed controls and replaces a selected status", async () => {
@@ -232,18 +251,18 @@ it("sorts full names and timestamps without losing focus or treating Never as a 
   await userEvent.keyboard("{Enter}");
   expect(keyButton).toHaveFocus();
   expect(keyHeading).toHaveAttribute("aria-sort", "ascending");
-  expect(names()).toEqual(["Alpine", "Beach", "Coast", "Zebra"]);
+  expect(names()).toEqual(["Alpine", "Beach", "Zebra"]);
   await userEvent.keyboard("{Enter}");
-  expect(names()).toEqual(["Zebra", "Coast", "Beach", "Alpine"]);
+  expect(names()).toEqual(["Zebra", "Beach", "Alpine"]);
   const sortExpires = within(
     screen.getByRole("columnheader", { name: "Expires" }),
   ).getByRole("button");
   await userEvent.click(sortExpires);
   expect(keyHeading).not.toHaveAttribute("aria-sort");
-  expect(names()).toEqual(["Alpine", "Beach", "Zebra", "Coast"]);
+  expect(names()).toEqual(["Alpine", "Beach", "Zebra"]);
   expect(sortExpires.closest("th")).toHaveAttribute("aria-sort", "descending");
   await userEvent.click(sortExpires);
-  expect(names()).toEqual(["Beach", "Alpine", "Zebra", "Coast"]);
+  expect(names()).toEqual(["Beach", "Alpine", "Zebra"]);
   await userEvent.click(
     within(screen.getByRole("columnheader", { name: "Created" })).getByRole(
       "button",
@@ -274,7 +293,8 @@ it("separates row actions from inspection and keeps only a still-visible selecti
   expect(
     panel().getByRole("heading", { name: "Renamed by another user" }),
   ).toBeInTheDocument();
-  refresh(keys.slice(1));
+  refresh([{ ...keys[0], status: "archived" }, ...keys.slice(1)]);
+  expect(names()).toEqual(["Alpine", "Beach"]);
   expect(screen.queryByRole("dialog")).toBeNull();
   await waitFor(() => expect(screen.getByRole("searchbox")).toHaveFocus());
   refresh(keys);

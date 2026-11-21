@@ -76,13 +76,14 @@ Platform defines the following limits in `internal/api/consoleapikeys.go` and `i
 - Only the default workspace exists. The key resource supplies neither scope nor last use. Admins can assign an active service account. Historical unowned keys retain their attribution.
 - Owned key issuance predates CLI login. The chooser checks the edge's `GET /oauth/authorize` response before offering the CLI path. The request uses same-origin cookies for installations behind an identity proxy. Without OAuth parameters, the handler returns before sign-in or consent. See the Platform's `internal/api/clioauth.go`.
 - Gateway daily reads with `api_key_id` preserve credential-level costs. Unfiltered owner totals combine credentials. The Console links to the selected key's UTC month to date. A sortable per-key amount in the listing needs a permission-scoped batch read.
-- Expired keys allow archival as their sole mutation. Archived and control-plane credentials stay read-only. A user with gateway usage access can still inspect costs. The key hint remains in the listing after the one-time secret closes.
+- Delete archives the key. The Keys page omits archived rows from the list, count and filter choices. Platform retains the key ID for administrative queries and historical costs. Expired keys remain visible until deleted.
 
 ### Repeat the Keys comparison
 
 1. Run the focused regression and Chrome screenshot commands below. The mock suite owns its sample keys. The native tier in the [development guide](../README.md#development) also verifies real issuance and revocation.
 2. At the same viewport and theme, open the signed-in reference and the local `/api-keys`. Compare the heading, search and filter row, table, panel, menu and create dialogs. Search for a missing name. Combine two filters, clear one selection and check that the other filter and search survive. Try Reset search, Reset filters and the toolbar Reset. Sort a column and open a key with Enter. Check both ends of Previous/Next, click another row, then dismiss by outside click, Escape and Close. Check focus after dismissal.
-3. Open View cost from the list and the panel. Check the selected key, UTC dates, reload and browser Back. Open the CLI and API-key paths from both entry points. Check name focus, expiry preview, Custom, Never and cancellation. Use owned fixtures for issuance, one-time reveal, disable, enable and confirmed deletion. Keep live keys and account identities out of shared captures.
+3. Open View cost from the list and the panel. Check the selected key, UTC dates, reload and browser Back. Open the CLI and API-key paths from both entry points. Check name focus, expiry preview, Custom, Never and cancellation.
+4. Create a fixture key, close its one-time reveal, then disable and enable it. Cancel deletion and check the row is still present. Confirm deletion and verify the count drops. Search for the key before and after reload. Check that the administrative listing still returns its ID with status `archived`. Keep live keys and account identities out of shared captures.
 
 ```bash
 pnpm build
