@@ -243,7 +243,12 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
             else await consoleKeysGet<unknown>(entry.path);
             return [surface, { status: "available" }];
           } catch (error) {
-            if (error instanceof PlatformError && isPermissionDenied(error))
+            if (
+              error instanceof PlatformError &&
+              (isPermissionDenied(error) ||
+                (surface === "service-accounts" &&
+                  (error.status === 401 || error.status === 403)))
+            )
               return [surface, { status: "denied", error }];
             return [
               surface,

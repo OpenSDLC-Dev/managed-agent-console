@@ -1,9 +1,17 @@
 ﻿import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Members } from "@/components/console/members";
 import { ServiceAccounts } from "@/components/console/service-accounts";
+import { ServiceAccountDetail } from "@/components/console/service-account-detail";
 import { SurfaceGuard } from "./surface-guard";
 import { SURFACES } from "@/lib/platform/surfaces";
 
@@ -68,6 +76,95 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
+
+it.each(["create", "detail"] as const)(
+  "protects the %s draft across a background service-account probe, and clears it on denial",
+  async (kind) => {
+    const account = {
+      id: "svac_test",
+      name: "ci",
+      description: "Initial description",
+      organization_role: "developer",
+      created_at: "2026-01-01T00:00:00Z",
+      archived_at: null,
+    };
+    let status = 200;
+    navState.pathname =
+      kind === "detail" ? "/service-accounts/svac_test" : "/service-accounts";
+    vi.stubGlobal("fetch", async (input: string) => {
+      const url = new URL(String(input), "http://console");
+      if (
+        url.pathname.endsWith("/service_accounts") &&
+        url.searchParams.get("limit") === "1" &&
+        status !== 200
+      )
+        return Response.json(
+          {
+            error: {
+              type: status === 403 ? "permission_error" : "api_error",
+              message: "probe unavailable",
+            },
+          },
+          { status },
+        );
+      if (url.pathname.endsWith("/svac_test")) return Response.json(account);
+      if (url.pathname.endsWith("/api_keys")) return Response.json([]);
+      return Response.json({ data: [], next_page: null });
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <SurfaceGuard>
+          {kind === "detail" ? (
+            <ServiceAccountDetail
+              id={account.id}
+              listHref="/service-accounts"
+            />
+          ) : (
+            <ServiceAccounts />
+          )}
+        </SurfaceGuard>
+      </QueryClientProvider>,
+    );
+    if (kind === "create")
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Create service account" }),
+      );
+    const getField = () => screen.getByRole("textbox", { name: /Description/ });
+    const field = await screen.findByRole("textbox", { name: /Description/ });
+    fireEvent.change(field, { target: { value: "local draft" } });
+    async function probe(next: number) {
+      status = next;
+      await act(async () => {
+        await client.invalidateQueries({ queryKey: ["surfaces"] });
+      });
+    }
+    await probe(503);
+    await screen.findByText("Unable to confirm access to this surface.");
+    expect(screen.queryByRole("textbox", { name: /Description/ })).toBeNull();
+    await probe(200);
+    await waitFor(() => expect(getField()).toHaveValue("local draft"));
+    await probe(403);
+    await waitFor(() =>
+      expect(screen.getByTestId("error-state")).toHaveAttribute(
+        "data-error-status",
+        "403",
+      ),
+    );
+    await probe(200);
+    if (kind === "detail")
+      await waitFor(() =>
+        expect(getField()).toHaveValue("Initial description"),
+      );
+    else {
+      await screen.findByRole("button", { name: "Create service account" });
+      expect(screen.queryByRole("dialog")).toBeNull();
+    }
+    client.clear();
+  },
+);
 
 describe("SurfaceGuard", () => {
   for (const pathname of [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext } from "react";
+import { Activity, useContext, useState, type ReactNode } from "react";
 import { redirect, usePathname } from "next/navigation";
 import {
   ErrorState,
@@ -12,6 +12,53 @@ import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
 import { PlatformError } from "@/lib/platform/http";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
+
+function UnconfirmedNativeSurface({
+  label,
+  pending,
+}: {
+  label: string;
+  pending: boolean;
+}) {
+  return (
+    <div>
+      <PageHeader title={label} />
+      {pending ? (
+        <ListSkeleton />
+      ) : (
+        <ErrorState
+          error={new Error("Unable to confirm access to this surface.")}
+        />
+      )}
+    </div>
+  );
+}
+
+function ServiceAccountAdmission({
+  available,
+  children,
+}: {
+  available: boolean;
+  children: ReactNode;
+}) {
+  const [admitted, setAdmitted] = useState(available);
+  if (available && !admitted) setAdmitted(true);
+  // An inconclusive background probe hides the UI until access is confirmed.
+  // Retain the mounted draft for that interval. A definitive refusal unmounts this boundary.
+  return (
+    <>
+      {!available && (
+        <UnconfirmedNativeSurface
+          label={SURFACES["service-accounts"].label}
+          pending={false}
+        />
+      )}
+      {(admitted || available) && (
+        <Activity mode={available ? "visible" : "hidden"}>{children}</Activity>
+      )}
+    </>
+  );
+}
 
 /**
  * Stops an absent or denied surface across its whole route tree, not just its
@@ -60,18 +107,16 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       </div>
     );
   const entry = SURFACES[surface];
-  if ("api" in entry && entry.api === "native" && state?.status !== "available")
+  if (surface === "service-accounts" && state)
     return (
-      <div>
-        <PageHeader title={entry.label} />
-        {state ? (
-          <ErrorState
-            error={new Error("Unable to confirm access to this surface.")}
-          />
-        ) : (
-          <ListSkeleton />
-        )}
-      </div>
+      <ServiceAccountAdmission
+        key={JSON.stringify([pathname, session?.id, session?.role])}
+        available={state.status === "available"}
+      >
+        {children}
+      </ServiceAccountAdmission>
     );
+  if ("api" in entry && entry.api === "native" && state?.status !== "available")
+    return <UnconfirmedNativeSurface label={entry.label} pending={!state} />;
   return <>{children}</>;
 }
