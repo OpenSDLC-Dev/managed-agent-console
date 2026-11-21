@@ -16,6 +16,7 @@ const playgroundReplies = new Set([
   "native-playground-response",
   "native-playground-raw",
   "native-playground-continuation",
+  "native-playground-history",
 ]);
 
 test("walk native manifest in owned Chrome (not a current-reference comparison)", async ({
@@ -383,6 +384,10 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               await page
                 .getByRole("button", { name: "Add to messages" })
                 .click();
+            if (surface.id === "native-playground-history")
+              await page
+                .getByRole("button", { name: "History", exact: true })
+                .click();
           }
           if (surface.id === "native-deployment-initiator-form") {
             await page
@@ -723,6 +728,13 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               "Fixture response",
             );
             await expect(page.getByLabel("user message 3")).toBeEmpty();
+            break;
+          case "native-playground-history":
+            await expect(
+              page
+                .getByRole("region", { name: "History" })
+                .getByRole("button", { name: "Write a short greeting." }),
+            ).toBeVisible();
             break;
           case "native-playground":
             await expect(

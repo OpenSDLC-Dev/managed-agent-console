@@ -114,9 +114,12 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   expect(screen.getByLabelText("Prompt")).toHaveValue("");
   await user.click(screen.getByRole("button", { name: "History" }));
   await user.click(
-    within(screen.getByRole("dialog")).getByRole("button", {
-      name: "First turn",
-    }),
+    within(screen.getByRole("region", { name: "History" })).getByRole(
+      "button",
+      {
+        name: "First turn",
+      },
+    ),
   );
   expect(screen.getByLabelText("user message 3")).toHaveValue("Next turn");
   expect(screen.getByText("OK", { exact: true })).toBeVisible();
@@ -177,6 +180,15 @@ it("pages through templates and fills a draft without calling the model", async 
   const run = vi.spyOn(gateway, "runPlayground");
   const user = userEvent.setup();
   renderPlayground();
+  const history = screen.getByRole("button", { name: "History" });
+  await user.click(history);
+  expect(screen.getByRole("region", { name: "History" })).toBeVisible();
+  await user.click(screen.getByLabelText("Prompt"));
+  expect(screen.queryByRole("region", { name: "History" })).toBeNull();
+  expect(screen.getByLabelText("Prompt")).toHaveFocus();
+  await user.click(history);
+  await user.keyboard("{Escape}");
+  expect(history).toHaveFocus();
   await user.click(screen.getByRole("button", { name: "More" }));
   expect(
     screen.queryByRole("button", { name: /Extract structured data/ }),

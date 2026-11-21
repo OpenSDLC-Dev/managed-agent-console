@@ -1340,6 +1340,28 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
     ).toBe(403);
 
     await user.reload();
+    const divider = user.getByRole("separator", {
+      name: "Resize the request and response panes",
+    });
+    await expect(divider).toHaveAttribute("aria-valuenow", "50");
+    const requestPane = user.getByRole("form", { name: "Build your request" });
+    const before = (await requestPane.boundingBox())!;
+    await divider.press("ArrowRight");
+    expect((await requestPane.boundingBox())!.width).toBeGreaterThan(
+      before.width,
+    );
+    const handle = (await divider.boundingBox())!;
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await user.mouse.move(x, y);
+    await user.mouse.down();
+    await user.mouse.move(x + 60, y, { steps: 4 });
+    await user.mouse.up();
+    expect((await requestPane.boundingBox())!.width).toBeGreaterThan(
+      before.width + 50,
+    );
+    await divider.dblclick();
+    await expect(divider).toHaveAttribute("aria-valuenow", "50");
     await user.getByRole("combobox", { name: "Model", exact: true }).click();
     await user.getByRole("option", { name: alias, exact: true }).click();
     const prompt = user.getByLabel("Prompt", { exact: true });

@@ -11,7 +11,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Play, Plus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
 import {
@@ -28,6 +27,7 @@ import {
   type PlaygroundDraft,
 } from "./playground-editor";
 import { PlaygroundTemplates } from "./playground-templates";
+import { PlaygroundPanes } from "./playground-panes";
 import { PlaygroundResponse, type RunStatus } from "./playground-response";
 
 function Heading({ children }: { children?: ReactNode }) {
@@ -84,10 +84,41 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
   const [error, setError] = useState<string>();
   const [history, setHistory] = useState<PastRun[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const historyToggle = useRef<HTMLButtonElement>(null);
+  const historyPanel = useRef<HTMLElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const response = useRef<HTMLElement>(null);
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    if (!historyOpen) return;
+    const panel = historyPanel.current;
+    (
+      panel?.querySelector<HTMLButtonElement>("[data-history-entry]") ??
+      panel?.querySelector("button")
+    )?.focus();
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        setHistoryOpen(false);
+        historyToggle.current?.focus();
+      }
+    }
+    function dismissOutside(event: PointerEvent) {
+      if (
+        event.target instanceof Node &&
+        !panel?.contains(event.target) &&
+        !historyToggle.current?.contains(event.target)
+      )
+        setHistoryOpen(false);
+    }
+    document.addEventListener("keydown", escape);
+    document.addEventListener("pointerdown", dismissOutside);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.removeEventListener("pointerdown", dismissOutside);
+    };
+  }, [historyOpen]);
 
   const model = draft.selection || models.data?.[0]?.id || "";
   const available = models.data?.some((entry) => entry.id === model) === true;
@@ -116,6 +147,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     setError(undefined);
     setStatus("idle");
     setMode("Form");
+    setHistoryOpen(false);
     if (prompt)
       requestAnimationFrame(() =>
         form.current
@@ -168,6 +200,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     }
     const controller = new AbortController();
     active.current = controller;
+    setHistoryOpen(false);
     setText("");
     setReply(undefined);
     setError(undefined);
@@ -215,12 +248,13 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
       <Heading>
         <div className="flex items-center gap-1">
           <Button
+            ref={historyToggle}
             variant="ghost"
             size="sm"
             disabled={running}
-            aria-haspopup="dialog"
+            aria-controls="playground-history"
             aria-expanded={historyOpen}
-            onClick={() => setHistoryOpen(true)}
+            onClick={() => setHistoryOpen(!historyOpen)}
           >
             History
           </Button>
@@ -235,8 +269,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
           </Button>
         </div>
       </Heading>
-      <div
-        className="grid min-h-0 flex-1 lg:grid-cols-2"
+      <PlaygroundPanes
         onKeyDown={(e) => {
           if (
             (e.metaKey || e.ctrlKey) &&
@@ -332,7 +365,7 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
         <section
           ref={response}
           aria-label="Response"
-          className="flex min-w-0 scroll-mt-(--console-header-height) flex-col lg:overflow-y-auto"
+          className="@container flex min-w-0 scroll-mt-(--console-header-height) flex-col lg:overflow-y-auto lg:[scrollbar-gutter:stable]"
         >
           {status === "idle" ? (
             <>
@@ -363,52 +396,63 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
             />
           )}
         </section>
-      </div>
-      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent
-          aria-describedby={undefined}
-          showCloseButton={false}
-          className="top-[calc(var(--console-header-height)+5.5rem)] right-4 left-auto max-h-[calc(100dvh-var(--console-header-height)-7rem)] w-[27rem] translate-x-0 translate-y-0 overflow-auto p-5 sm:max-w-[calc(100vw-2rem)]"
-        >
-          <div className="flex items-center justify-between">
-            <DialogTitle>History</DialogTitle>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close history"
-              onClick={() => setHistoryOpen(false)}
-            >
-              <X />
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Completed requests from this visit.
-          </p>
-          {history.length ? (
-            history.map((entry, i) => (
-              <button
+        {historyOpen && (
+          <section
+            ref={historyPanel}
+            id="playground-history"
+            aria-labelledby="playground-history-title"
+            className="absolute top-1 right-3 bottom-3 z-20 flex w-[27rem] max-w-[calc(100%-1.5rem)] flex-col gap-4 overflow-auto rounded-xl border bg-popover p-5 text-sm text-popover-foreground shadow-lg lg:right-5"
+          >
+            <div className="flex items-center justify-between">
+              <h2
+                id="playground-history-title"
+                className="text-base font-semibold"
+              >
+                History
+              </h2>
+              <Button
                 type="button"
-                key={i}
-                className="truncate rounded-lg bg-muted/60 px-3 py-2 text-left text-sm hover:bg-muted"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Close history"
                 onClick={() => {
-                  setDraft(entry.draft);
-                  setText(entry.text);
-                  setReply(entry.reply);
-                  setStatus("complete");
-                  setError(undefined);
                   setHistoryOpen(false);
-                  setMode("Form");
+                  historyToggle.current?.focus();
                 }}
               >
-                {entry.draft.messages.find((m) => m.content)?.content}
-              </button>
-            ))
-          ) : (
-            <p className="text-sm">No requests yet.</p>
-          )}
-        </DialogContent>
-      </Dialog>
+                <X />
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Completed requests from this visit.
+            </p>
+            {history.length ? (
+              history.map((entry, i) => (
+                <button
+                  type="button"
+                  key={i}
+                  data-history-entry
+                  className="truncate rounded-lg bg-muted/60 px-3 py-2 text-left text-sm hover:bg-muted"
+                  onClick={() => {
+                    setDraft(entry.draft);
+                    setText(entry.text);
+                    setReply(entry.reply);
+                    setStatus("complete");
+                    setError(undefined);
+                    setHistoryOpen(false);
+                    historyToggle.current?.focus();
+                    setMode("Form");
+                  }}
+                >
+                  {entry.draft.messages.find((m) => m.content)?.content}
+                </button>
+              ))
+            ) : (
+              <p className="text-sm">No requests yet.</p>
+            )}
+          </section>
+        )}
+      </PlaygroundPanes>
     </>
   );
 }

@@ -53,7 +53,7 @@ export function PlaygroundTemplates({
 }) {
   const [more, setMore] = useState(false);
   return (
-    <div className="mx-auto my-auto w-full max-w-3xl px-4 py-8 sm:px-10">
+    <div className="mx-auto my-auto w-full max-w-[calc(42rem+2.5rem)] px-5 py-8">
       <div className="mb-8 text-center">
         <Bot
           aria-hidden
@@ -65,7 +65,7 @@ export function PlaygroundTemplates({
           Build your request and press Run.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 @min-[28rem]:grid-cols-2">
         {templates
           .slice(more ? 6 : 0, more ? templates.length : 6)
           .map(([title, description, prompt]) => (
@@ -73,20 +73,20 @@ export function PlaygroundTemplates({
               key={title}
               type="button"
               onClick={() => onSelect(prompt)}
-              className="flex flex-col items-start gap-1.5 rounded-xl bg-muted/50 p-4 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+              className="flex min-h-[124px] flex-col items-start gap-2 rounded-xl bg-muted/50 p-3.5 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
             >
               <span className="font-medium">{title}</span>
               <span className="grow text-[13px] leading-5 text-muted-foreground">
                 {description}
               </span>
-              <span className="mt-2 inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
                 <MessageSquareText className="size-3" aria-hidden />
                 Text
               </span>
             </button>
           ))}
       </div>
-      <div className="mt-2 flex justify-end">
+      <div className="mt-3 flex justify-end">
         <Button
           type="button"
           size="sm"

@@ -41,6 +41,12 @@ export const NATIVE_SURFACES = [
       "Previous prompt and answer followed by an empty user message.",
   },
   {
+    id: "native-playground-history",
+    route: "/playground",
+    fixture: "one completed request from this visit",
+    description: "History beside the open request and response.",
+  },
+  {
     id: "native-environment-cloud-keys",
     route: "/environments/{fixture}",
     fixture: "real cloud environment with an issued key",
