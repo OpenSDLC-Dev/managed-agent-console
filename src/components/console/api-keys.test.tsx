@@ -328,7 +328,10 @@ describe("ApiKeysTable", () => {
       }
       const outside = screen.getByRole("button", { name: "Created" });
       if (target === "slow-write") {
-        await waitFor(() => expect(more).toBeDisabled());
+        await waitFor(() =>
+          expect(more).toHaveAttribute("aria-disabled", "true"),
+        );
+        await waitFor(() => expect(more).toHaveFocus());
         finishWrite!();
       }
       if (target === "row" || target === "outside") {
@@ -366,11 +369,20 @@ describe("ApiKeysTable", () => {
       screen.getByRole("button", { name: "Delete API key" }),
     );
     const trigger = screen.getByRole("button", { name: /More actions for/ });
-    await waitFor(() => expect(trigger).toBeDisabled());
+    await waitFor(() =>
+      expect(trigger).toHaveAttribute("aria-disabled", "true"),
+    );
     await userEvent.click(trigger);
     expect(screen.queryByRole("menu")).toBeNull();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(1);
     settle(json(apiKey({ id: "apikey_1", status: "archived" })));
-    await waitFor(() => expect(trigger).toBeEnabled());
+    await waitFor(() =>
+      expect(trigger).not.toHaveAttribute("aria-disabled", "true"),
+    );
   });
 
   it("disables an active key through the status field, since there is no verb", async () => {
