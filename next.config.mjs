@@ -1,10 +1,10 @@
-import type { NextConfig } from "next";
 import { consoleBuildVersion } from "./scripts/build-version.mjs";
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   env: {
     CONSOLE_BUILD_VERSION: consoleBuildVersion(
-      process.cwd(),
+      import.meta.dirname,
       process.env.CONSOLE_BUILD_VERSION,
     ),
   },
