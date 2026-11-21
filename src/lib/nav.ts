@@ -105,6 +105,11 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
         ],
       },
       {
+        label: "Model Gateway",
+        icon: Network,
+        items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
+      },
+      {
         label: "Spending & usage",
         icon: ChartColumn,
         items: [surfaceEntry("usage", ChartColumn)],
@@ -113,11 +118,6 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
         label: "Settings",
         icon: Settings,
         items: [surfaceEntry("members", Users)],
-      },
-      {
-        label: "Model Gateway",
-        icon: Network,
-        items: [surfaceEntry("models", Cpu), surfaceEntry("providers", Plug)],
       },
     ],
   },

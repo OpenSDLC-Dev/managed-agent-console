@@ -93,9 +93,9 @@ const GROUPS = {
   ],
   Resources: ["files", "skills"],
   Keys: ["api-keys", "service-accounts"],
+  "Model Gateway": ["models", "providers"],
   "Spending & usage": ["usage"],
   Settings: ["members"],
-  "Model Gateway": ["models", "providers"],
 } as const satisfies Record<string, readonly Surface[]>;
 
 function renderNav(
@@ -211,9 +211,9 @@ describe("Nav", () => {
       "Resources",
       "Organization",
       "Keys",
+      "Model Gateway",
       "Spending & usage",
       "Settings",
-      "Model Gateway",
     ]);
     expect(
       within(navigation())
@@ -224,9 +224,9 @@ describe("Nav", () => {
       "/agents",
       "/files",
       "/api-keys",
+      "/models",
       "/usage",
       "/members",
-      "/models",
     ]);
     expect(
       within(navigation())

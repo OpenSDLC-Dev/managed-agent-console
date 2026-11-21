@@ -178,9 +178,9 @@ describe("CommandPalette", () => {
       "Files",
       "Skills",
       "API Keys",
-      "Usage",
       "Models",
       "Providers",
+      "Usage",
     ]);
 
     // The searchable list queries, plus one surface probe per registered
