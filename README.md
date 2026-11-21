@@ -85,6 +85,8 @@ pnpm test:e2e   # Playwright against the in-repo mock platform server
 pnpm lint       # eslint; pnpm typecheck and pnpm format:check also exist
 ```
 
+The [API key regression walkthrough](./docs/design-reference.md#repeat-the-keys-comparison) covers keyboard and pointer interactions, native fixtures, and light/dark Chrome captures.
+
 To verify the current GA Skills contract against a local platform without model
 calls, configure `.env.local` and run
 `RUN_LIVE_CONTRACT_TESTS=1 pnpm test:contract:live` (PowerShell:

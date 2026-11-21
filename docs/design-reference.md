@@ -65,31 +65,31 @@ The model inspector's organization budget editor is a self-hosting extension of 
 Usage follows `admin/usage.go`: daily rows group by stored principal, with legacy key attribution retained. The ledger shows both principal and credential. The directory exposes different public IDs, so the console displays stored principal IDs without inventing name mappings.
 The new states are enumerated in `test/fidelity/native-surfaces.ts`.
 
-## Owned API keys — checked 2026-11-08
+## API keys — checked 2026-11-21
 
-The [published ownership summary](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/a7fa9c0715c92f85ffbdf6f9d595e7d014d6a4d8/2026-11-07-owned-key-memory-actors/README.md) distinguishes the user/service-account owner from the human creator.
-It records admin list permission hints, not lower-human-role visibility.
-A fresh isolated Chrome reached only the public sign-in offer. No authenticated-reference screenshot parity is claimed.
+The signed-in [Claude Keys page](https://platform.claude.com/settings/keys) counts visible matches. Search and filters combine. Reset restores the unfiltered collection. The Key cell shows its hint and status. Created groups the date and creator. A row opens a right-hand panel with resource ID, adjacent keys and actions. View cost opens the selected credential and month to date. Expired keys retain cost and deletion.
 
-The native companion reuses the existing key dialogs, table and Dashboard shortcut.
-Self-hosting departures follow platform `internal/api/consoleapikeys.go`:
+Create key first asks where code runs. The local-machine path offers CLI sign-in. Somewhere else opens Name, Expires, Linked account and Scope. Both the Keys page and the Dashboard use the same issuer here.
 
-- Workspace stays a null seam; there is no `scope` or workspace selector API.
-- Developers manage only their own owned keys. Admins may assign an active service account, never another human.
-- Slice 4 follows current owner-role authority for inference. Slice 7 removes unowned-key policy controls and keeps historical attribution.
+Platform defines the following limits in `internal/api/consoleapikeys.go` and `internal/modelgateway/store/usage.go`.
 
-The lower-human-role policy is conservative and local. Reference evidence remains open in [recordings #40](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/issues/40).
-`test/fidelity/native-surfaces.ts` and its real-platform Chrome walker cover the list, form, owner selection, masked reveal and Dashboard form in both themes.
-These are local-state checks against the recorded design system, not a new authenticated-reference comparison.
+- Only the default workspace exists. The key resource supplies neither scope nor last use. The Console offers the supported account and CLI paths. Admins can assign an active service account. Historical unowned keys retain their attribution.
+- Gateway daily reads with `api_key_id` preserve credential-level costs. Unfiltered owner totals combine credentials. The Console links to the selected key's UTC month to date. A sortable per-key amount in the listing needs a permission-scoped batch read.
+- Expired keys allow archival as their sole mutation. Archived and control-plane credentials stay read-only. A user with gateway usage access can still inspect costs. The key hint remains in the listing after the one-time secret closes.
 
-## API key deletion — checked 2026-10-28
+### Repeat the Keys comparison
 
-Chrome shows `Actions` → `More actions for …` → `Delete API key`, followed by a
-`Delete API key` dialog naming the key and warning that deletion cannot be undone.
-The console reuses its shared Delete menu and confirmation. It also warns that clients
-lose access immediately. Platform `internal/api/consoleapikeys.go:updateAPIKeyIn`
-implements this as `status: archived`; the retained row keeps its wire status.
-Historical unowned keys have no Delete action because the platform refuses updates.
+1. Run the focused regression and Chrome screenshot commands below. The mock suite owns its sample keys. The native tier in the [development guide](../README.md#development) also verifies real issuance and revocation.
+2. At the same viewport and theme, open the signed-in reference and the local `/api-keys`. Compare the heading, search and filter row, table, panel, menu and create dialogs. Search for a missing name, combine two filters, then Reset. Sort a column and open a key with Enter. Check the first and last Previous/Next states and focus after closing.
+3. Open View cost from the list and the panel. Check the selected key, UTC dates, reload and browser Back. Open the CLI and API-key paths from both entry points. Check name focus, expiry preview, Custom, Never and cancellation. Use owned fixtures for issuance, one-time reveal, disable, enable and confirmed deletion. Keep live keys and account identities out of shared captures.
+
+```bash
+pnpm build
+pnpm exec playwright test test/e2e/api-keys.spec.ts
+pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (api-key|dashboard-api-key)'
+```
+
+Light and dark captures go to `fidelity-shots/<theme>/`. The manifest includes the empty search, filtered list, mobile detail, cost drilldown, CLI guide and key form. The mock, native and screenshot suites share the steps in `test/api-key-flow.ts`.
 
 ## Memory pagination — checked 2026-10-24 (#236)
 
@@ -271,11 +271,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   on 2026-11-21, the shared Organization groups appeared in the order Keys, Spending & usage,
   then Settings. The self-hosted console places Model Gateway immediately after Keys. Vendor names come
   from the gateway profiles' `display_name`.
-- **The API-keys table drops `Last used` and `Cost` and adds `Status`.** Nothing serves the first two
-  here, and a column of em dashes is a promise the deployment cannot keep; `Created by` renders the
-  actor id the wire carries rather than a display name, because there is no member lookup to enrich
-  it with. `Status` is added because our rows are `active`/`inactive`/`archived` plus a derived
-  `expired` and the console acts on them.
 - **No work-queue Overview on the environment detail page**, and this one is forced rather than
   chosen: the reference does render it, but the platform registers `…/work/stats` on the
   environment-key lane at `RoleNone`, which no human credential can reach. Revisit if it ever moves

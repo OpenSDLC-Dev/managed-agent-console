@@ -78,6 +78,9 @@ it.each([false, true])(
       const locator = {
         fill: async () => {},
         click: async () => {},
+        getByRole() {
+          return this;
+        },
         textContent: async () => "synthetic-owned-key",
       };
       ui.add(locator);

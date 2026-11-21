@@ -12,6 +12,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Search, filter and inspect API keys, manage them from the row or details panel, and open their month-to-date gateway costs. Key creation now starts with CLI sign-in or an account-linked API key.
 - Issue reports now use GitHub's Bug, Feature and Task types. Two labels show priority and difficulty.
 - Open Playground from Build → Messages or the Dashboard resource card. Edit and run a request beside its rendered or raw response, inspect token usage, and add the answer to the next turn.
 - Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Place Model Gateway directly after Keys in Organization. Move search into the global header.

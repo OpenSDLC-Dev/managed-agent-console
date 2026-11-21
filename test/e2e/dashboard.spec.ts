@@ -30,7 +30,7 @@ test("dashboard and search stay centered beside the expanded navigation", async 
   ).toBeLessThan(1);
   await keyShortcut.click();
   await expect(
-    page.getByRole("dialog", { name: "Create API key" }),
+    page.getByRole("dialog", { name: "Connect to the API" }),
   ).toBeVisible();
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.keyboard.press("Escape");
@@ -251,6 +251,8 @@ test("submenus return to all sections and mobile navigation resets on resize", a
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await expect(page.getByRole("main")).not.toBeVisible();
   await page.setViewportSize({ width: 1440, height: 900 });
+  // Wait for React to process the breakpoint before crossing it again.
+  await expect(page.getByRole("main")).toBeVisible();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
     "expanded",

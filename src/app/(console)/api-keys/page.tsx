@@ -1,10 +1,12 @@
 "use client";
 
-import { PageHeader } from "@/components/shell/page-header";
+import { useContext } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { UnavailableSurface } from "@/components/console/bits";
-import { ApiKeysTable, CreateKeyButton } from "@/components/console/api-keys";
+import { CreateKeyButton } from "@/components/console/api-keys";
+import { ApiKeysTable } from "@/components/console/api-key-list";
 import { useApiKeys } from "@/lib/platform/queries";
-import { isUnimplemented } from "@/lib/platform/surfaces";
+import { isUnimplemented, useSurfaces } from "@/lib/platform/surfaces";
 
 /**
  * Owned API keys for a CLI, SDK or CI job. Browser calls use the session cookie.
@@ -14,21 +16,23 @@ import { isUnimplemented } from "@/lib/platform/surfaces";
  */
 export default function ApiKeysPage() {
   const keys = useApiKeys();
+  const session = useContext(ConsoleSessionContext)?.data;
+  const usage = useSurfaces()?.usage;
   if (keys.error && isUnimplemented(keys.error))
     return <UnavailableSurface surface="api-keys" />;
 
   return (
-    <div>
-      <PageHeader
-        title="API Keys"
-        subtitle="Owned keys use their owner’s current role and stop working when the owner is deactivated."
-        actions={<CreateKeyButton />}
-      />
-      <ApiKeysTable
-        keys={keys.data ?? []}
-        loading={keys.isPending}
-        error={keys.error}
-      />
-    </div>
+    <ApiKeysTable
+      key={`${session?.id}:${session?.role}`}
+      keys={keys.data ?? []}
+      loading={keys.isPending}
+      error={keys.error}
+      action={<CreateKeyButton />}
+      canViewCost={
+        session?.signed_in === true &&
+        (session.role === "admin" || session.role === "developer") &&
+        usage?.status === "available"
+      }
+    />
   );
 }

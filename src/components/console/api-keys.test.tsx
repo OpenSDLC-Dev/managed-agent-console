@@ -129,16 +129,20 @@ describe("expiryInstant", () => {
   });
 });
 
+async function openRowMenu(name: string | RegExp = /More actions for/) {
+  await userEvent.click(screen.getByRole("button", { name }));
+  return screen.findByRole("menu");
+}
+
 describe("ApiKeysTable", () => {
   it("renders the label over the hint, and says which keys never expire", () => {
     renderTable([apiKey({ id: "apikey_1" })]);
     expect(screen.getByText("ci-deploy")).toBeInTheDocument();
     expect(screen.getByText("sk-map-api01-Cid...ploy")).toBeInTheDocument();
     expect(screen.getByText("Never")).toBeInTheDocument();
-    expect(screen.getByText("active")).toHaveAttribute(
-      "data-key-status",
-      "active",
-    );
+    expect(
+      document.querySelector('[data-key-status="active"]'),
+    ).toBeInTheDocument();
   });
 
   // The reference renders a display name over an email; our wire carries only
@@ -184,12 +188,10 @@ describe("ApiKeysTable", () => {
   it("offers only deletion on an expired key", async () => {
     renderTable([apiKey({ id: "apikey_1", status: "expired" })]);
     expect(screen.queryByTestId("toggle-apikey_1")).toBeNull();
-    await userEvent.click(
-      screen.getByRole("button", { name: /More actions for/ }),
-    );
+    await openRowMenu();
     expect(screen.getAllByRole("menuitem")).toHaveLength(1);
     expect(
-      screen.getByRole("menuitem", { name: "Delete" }),
+      screen.getByRole("menuitem", { name: "Delete API key" }),
     ).toBeInTheDocument();
   });
 
@@ -204,10 +206,10 @@ describe("ApiKeysTable", () => {
         fetchMock,
       );
       const invalidate = vi.spyOn(client, "invalidateQueries");
+      await openRowMenu();
       await userEvent.click(
-        screen.getByRole("button", { name: /More actions for/ }),
+        screen.getByRole("menuitem", { name: "Delete API key" }),
       );
-      await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
       expect(screen.getByRole("dialog")).toHaveTextContent("ci-deploy");
       expect(postOf(fetchMock)).toBeUndefined();
       await userEvent.click(
@@ -227,10 +229,10 @@ describe("ApiKeysTable", () => {
   it("cancels deletion without changing the key", async () => {
     const fetchMock = vi.fn(async () => json([]));
     renderTable([apiKey({ id: "apikey_1" })], fetchMock);
+    await openRowMenu();
     await userEvent.click(
-      screen.getByRole("button", { name: /More actions for/ }),
+      screen.getByRole("menuitem", { name: "Delete API key" }),
     );
-    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(postOf(fetchMock)).toBeUndefined();
@@ -248,10 +250,10 @@ describe("ApiKeysTable", () => {
       },
     );
     renderTable([apiKey({ id: "apikey_1" })], fetchMock);
+    await openRowMenu();
     await userEvent.click(
-      screen.getByRole("button", { name: /More actions for/ }),
+      screen.getByRole("menuitem", { name: "Delete API key" }),
     );
-    await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     await userEvent.click(
       screen.getByRole("button", { name: "Delete API key" }),
     );
@@ -271,6 +273,7 @@ describe("ApiKeysTable", () => {
     >(async () => json(apiKey({ id: "apikey_1" })));
     renderTable([apiKey({ id: "apikey_1" })], fetchMock);
 
+    await openRowMenu();
     await userEvent.click(screen.getByTestId("toggle-apikey_1"));
     await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
     const [url, init] = postOf(fetchMock)!;
@@ -287,12 +290,33 @@ describe("ApiKeysTable", () => {
     >(async () => json(apiKey({ id: "apikey_1" })));
     renderTable([apiKey({ id: "apikey_1", status: "inactive" })], fetchMock);
 
+    await openRowMenu();
     await userEvent.click(screen.getByTestId("toggle-apikey_1"));
     await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
     const [, init] = postOf(fetchMock)!;
     expect(JSON.parse(String(init.body))).toEqual({ status: "active" });
   });
 });
+
+function keyForm() {
+  return within(screen.getByRole("dialog", { name: "Create API key" }));
+}
+
+const submitKeyButton = () =>
+  keyForm().getByRole("button", { name: "Create key" });
+
+async function openKeyForm(shortcut = false) {
+  await userEvent.click(
+    screen.getByRole("button", {
+      name: shortcut ? "Get API key" : "Create key",
+    }),
+  );
+  await userEvent.click(
+    within(
+      screen.getByRole("dialog", { name: "Connect to the API" }),
+    ).getByRole("button", { name: "Somewhere else" }),
+  );
+}
 
 describe("creating a key", () => {
   const stubCreate = () =>
@@ -306,16 +330,122 @@ describe("creating a key", () => {
     });
 
   const openDialog = async () => {
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     await userEvent.type(screen.getByLabelText("Name"), "ci-deploy");
   };
+
+  it("shows the supported connections and copies the CLI command for this installation", async () => {
+    const mock = nativeFetch();
+    nativeView(session, false, <CreateKeyButton />);
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    const trigger = screen.getByRole("button", { name: "Create key" });
+    await userEvent.click(trigger);
+    const chooser = within(
+      screen.getByRole("dialog", { name: "Connect to the API" }),
+    );
+    expect(
+      chooser.getByRole("button", { name: "Somewhere else" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(chooser.getByRole("button", { name: "Close" })).toHaveFocus(),
+    );
+    await userEvent.click(
+      chooser.getByRole("button", { name: "Your own machine" }),
+    );
+    const cli = within(
+      screen.getByRole("dialog", { name: "Your own machine" }),
+    );
+    expect(
+      cli.getByRole("heading", { name: "Your own machine", level: 2 }),
+    ).toHaveFocus();
+    expect(cli.getAllByRole("listitem")).toHaveLength(3);
+    const installation = cli.getByRole("combobox", {
+      name: "Installation method",
+    });
+    expect(installation).toHaveValue("homebrew");
+    const copyInstall = cli.getByRole("button", {
+      name: "Copy install command",
+    });
+    await userEvent.click(copyInstall);
+    await userEvent.selectOptions(installation, "go");
+    await userEvent.click(copyInstall);
+    await userEvent.click(
+      cli.getByRole("button", { name: "Copy sign-in command" }),
+    );
+    const origin = window.location.origin;
+    await waitFor(() =>
+      expect(writeText.mock.calls).toEqual([
+        ["brew install anthropics/tap/ant"],
+        ["go install github.com/anthropics/anthropic-cli/cmd/ant@v1.30.0"],
+        [
+          `ant auth login --profile platform --console-url '${origin}' --base-url '${origin}'`,
+        ],
+      ]),
+    );
+    expect(
+      cli.getByRole("link", { name: "Follow the quickstart" }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/deploy/compose/README.md#quick-start",
+    );
+    await userEvent.click(cli.getByRole("button", { name: "Back" }));
+    const machine = screen.getByRole("button", { name: "Your own machine" });
+    await waitFor(() => expect(machine).toHaveFocus());
+    await userEvent.click(machine);
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(
+      mock.fetcher.mock.calls.some(([url]) =>
+        String(url).includes("/service_accounts"),
+      ),
+    ).toBe(false);
+    expect(postOf(mock.fetcher)).toBeUndefined();
+  });
+
+  it("puts the name and lifetime first and shows the supported linked account and scope", async () => {
+    renderTable([], stubCreate());
+    await openKeyForm();
+    const form = keyForm();
+    expect(form.getByRole("textbox", { name: "Name" })).toHaveFocus();
+    expect(form.getAllByRole("combobox").map((control) => control.id)).toEqual([
+      "api-key-expires",
+      "api-key-owner",
+      "api-key-scope",
+    ]);
+    const expires = form.getByRole("combobox", { name: "Expires" });
+    expect(expires).toHaveValue("30d");
+    const selected = within(expires).getByRole("option", { selected: true });
+    const date = new Date(selected.getAttribute("data-expires-at")!);
+    expect(selected).toHaveTextContent(
+      `30 days (${date.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric" })})`,
+    );
+    expect(form.getByRole("combobox", { name: "Scope" })).toBeDisabled();
+    expect(
+      await form.findByRole("link", { name: /Manage service accounts/ }),
+    ).toHaveAttribute("href", "/service-accounts");
+    expect(submitKeyButton()).toBeDisabled();
+  });
+
+  it("passes a nonempty key name to the platform as entered", async () => {
+    const fetcher = stubCreate();
+    renderTable([], fetcher);
+    await openKeyForm();
+    await userEvent.type(
+      keyForm().getByRole("textbox", { name: "Name" }),
+      "   ",
+    );
+    await userEvent.click(submitKeyButton());
+    await waitFor(() => expect(postOf(fetcher)).toBeDefined());
+    expect(JSON.parse(String(postOf(fetcher)![1].body)).name).toBe("   ");
+  });
 
   it("sends the chosen lifetime as an absolute instant", async () => {
     const fetchMock = stubCreate();
     renderTable([], fetchMock);
     await openDialog();
     await userEvent.selectOptions(screen.getByTestId("api-key-expires"), "7d");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
 
     await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
     const [, init] = postOf(fetchMock)!;
@@ -342,7 +472,7 @@ describe("creating a key", () => {
       "never",
     );
     expect(screen.getByTestId("never-expires-warning")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
 
     await waitFor(() => expect(postOf(fetchMock)).toBeDefined());
     const [, init] = postOf(fetchMock)!;
@@ -352,9 +482,6 @@ describe("creating a key", () => {
     });
   });
 
-  // Cancel used to set `open` directly, which does not run Radix's
-  // `onOpenChange`, so the abandoned draft came back on the next open — and on
-  // this form the abandoned value can be an expiry of Never.
   it("probe: an abandoned draft does not come back on the next open", async () => {
     const fetchMock = stubCreate();
     renderTable([], fetchMock);
@@ -363,9 +490,9 @@ describe("creating a key", () => {
       screen.getByTestId("api-key-expires"),
       "never",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(keyForm().getByRole("button", { name: "Close" }));
 
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     expect(screen.getByLabelText("Name")).toHaveValue("");
     expect(screen.getByTestId("api-key-expires")).toHaveValue("30d");
     expect(screen.queryByTestId("never-expires-warning")).toBeNull();
@@ -384,7 +511,7 @@ describe("creating a key", () => {
       screen.getByTestId("api-key-expires"),
       "custom",
     );
-    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled();
+    expect(submitKeyButton()).toBeDisabled();
     expect(postOf(fetchMock)).toBeUndefined();
   });
 
@@ -401,7 +528,7 @@ describe("creating a key", () => {
     const fetchMock = stubCreate();
     const { client, container } = renderTable([], fetchMock);
     await openDialog();
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
 
     const revealed = await screen.findByTestId("revealed-api-key");
     expect(revealed).toHaveTextContent(SECRET);
@@ -446,7 +573,7 @@ describe("creating a key", () => {
     );
     renderTable([], fetchMock);
     await openDialog();
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
     await userEvent.keyboard("{Escape}");
@@ -484,7 +611,7 @@ describe("creating a key", () => {
     );
     renderTable([], fetchMock);
     await openDialog();
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
 
     const alert = await screen.findByRole("alert");
     expect(
@@ -664,13 +791,9 @@ it.each([false, true])(
         .getAll()
         .filter((mutation) => mutation.state.status === "success")
         .map((mutation) => (mutation.state.data as ApiKey).principal);
-    await userEvent.click(
-      screen.getByRole("button", {
-        name: shortcut ? "Get API key" : "Create key",
-      }),
-    );
+    await openKeyForm(shortcut);
     await userEvent.type(screen.getByLabelText("Name"), "self-key");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await screen.findByTestId("revealed-api-key");
     expect(JSON.parse(String(postOf(fetcher)![1].body))).toMatchObject({
       principal_id: "user_verbatim-self",
@@ -679,12 +802,8 @@ it.each([false, true])(
       { type: "user_actor", user_id: "user_verbatim-self" },
     ]);
     await userEvent.click(screen.getByTestId("close-revealed-api-key"));
-    await userEvent.click(
-      screen.getByRole("button", {
-        name: shortcut ? "Get API key" : "Create key",
-      }),
-    );
-    const picker = await screen.findByLabelText("Owner");
+    await openKeyForm(shortcut);
+    const picker = await keyForm().findByLabelText("Linked account");
     expect(
       within(picker).queryByRole("option", { name: /Archived service/ }),
     ).toBeNull();
@@ -694,7 +813,7 @@ it.each([false, true])(
     await screen.findByRole("option", { name: /Second-page service/ });
     await userEvent.selectOptions(picker, "svac_second");
     await userEvent.type(screen.getByLabelText("Name"), "service-key");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await screen.findByTestId("revealed-api-key");
     const posts = fetcher.mock.calls.filter(
       ([, init]) => init?.method === "POST",
@@ -705,9 +824,15 @@ it.each([false, true])(
     expect(issuedPrincipals()).toEqual([
       { type: "service_account_actor", service_account_id: "svac_second" },
     ]);
-    const directory = fetcher.mock.calls.filter(([url]) =>
-      String(url).includes("/service_accounts"),
-    );
+    // Page admission probes native collections with limit=1. The form reads
+    // only its own paginated service-account collection.
+    const directory = fetcher.mock.calls.filter(([input]) => {
+      const url = new URL(String(input), "http://console.test");
+      return (
+        url.pathname.endsWith("/service_accounts") &&
+        url.searchParams.get("limit") !== "1"
+      );
+    });
     expect(
       directory.map(([url]) =>
         new URL(String(url), "http://console.test").searchParams.get("limit"),
@@ -715,7 +840,13 @@ it.each([false, true])(
     ).toEqual(["100", "100", "100"]);
     expect(directory.at(-1)?.[0]).toContain("page=page-two");
     expect(
-      fetcher.mock.calls.some(([url]) => String(url).includes("/members")),
+      fetcher.mock.calls.some(([input]) => {
+        const url = new URL(String(input), "http://console.test");
+        return (
+          url.pathname.endsWith("/members") &&
+          url.searchParams.get("limit") !== "1"
+        );
+      }),
     ).toBe(false);
   },
 );
@@ -731,14 +862,14 @@ it.each([
   async (owner, principal) => {
     const mock = nativeFetch({ pending: true });
     const { client } = nativeView();
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     await screen.findByRole("option", { name: /First service/ });
     await userEvent.selectOptions(
-      screen.getByLabelText("Owner"),
+      keyForm().getByLabelText("Linked account"),
       String(owner),
     );
     await userEvent.type(screen.getByLabelText("Name"), "pending-owner");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
     mock.replace({ ...session, id: "user_later-session" });
     mock.settle();
@@ -759,30 +890,30 @@ it.each([false, true])(
     const mock = nativeFetch();
     const view = nativeView(session, shortcut);
     view.client.setQueryData(["unrelated-public-cache"], "retained");
-    const open = () =>
-      userEvent.click(
-        screen.getByRole("button", {
-          name: shortcut ? "Get API key" : "Create key",
-        }),
-      );
-    await open();
+    await openKeyForm(shortcut);
     await screen.findByRole("option", { name: /First service/ });
-    await userEvent.selectOptions(screen.getByLabelText("Owner"), "svac_first");
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.selectOptions(
+      keyForm().getByLabelText("Linked account"),
+      "svac_first",
+    );
+    await userEvent.click(keyForm().getByRole("button", { name: "Close" }));
     mock.replaceDirectory([
       serviceAccount("svac_first", "First service", "2026-11-08T00:00:00Z"),
       serviceAccount("svac_new", "New active service"),
     ]);
-    await open();
+    await openKeyForm(shortcut);
     await waitFor(() =>
       expect(
         screen.queryByRole("option", { name: /New active service/ }),
       ).not.toBeNull(),
     );
     expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
-    expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
-    await userEvent.selectOptions(screen.getByLabelText("Owner"), "svac_new");
-    expect(screen.getByLabelText("Owner")).toHaveValue("svac_new");
+    expect(keyForm().getByLabelText("Linked account")).toHaveValue(session.id);
+    await userEvent.selectOptions(
+      keyForm().getByLabelText("Linked account"),
+      "svac_new",
+    );
+    expect(keyForm().getByLabelText("Linked account")).toHaveValue("svac_new");
     await userEvent.click(
       screen.getByRole("button", { name: "Load more service accounts" }),
     );
@@ -803,11 +934,7 @@ it.each([false, true])(
       expect(
         screen.getByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
-    await userEvent.click(
-      screen.getByRole("button", {
-        name: shortcut ? "Get API key" : "Create key",
-      }),
-    );
+    await openKeyForm(shortcut);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Directory page unavailable",
     );
@@ -846,7 +973,7 @@ it.each([false, true])(
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByLabelText("Name")).toHaveValue("retained-draft");
     expect(screen.getByLabelText("Expires")).toHaveValue("7d");
-    expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
+    expect(keyForm().getByLabelText("Linked account")).toHaveValue(session.id);
     expect(postOf(fetcher)).toBeUndefined();
   },
 );
@@ -866,21 +993,15 @@ it.each([false, true])(
         screen.getByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
     client.setQueryData(["unrelated-public-cache"], "retained");
-    const open = () =>
-      userEvent.click(
-        screen.getByRole("button", {
-          name: shortcut ? "Get API key" : "Create key",
-        }),
-      );
-    await open();
+    await openKeyForm(shortcut);
     await screen.findByRole("option", { name: /First service/ });
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(keyForm().getByRole("button", { name: "Close" }));
     options.firstPageFail = true;
-    await open();
+    await openKeyForm(shortcut);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Directory page unavailable",
     );
-    const owner = screen.getByLabelText("Owner");
+    const owner = keyForm().getByLabelText("Linked account");
     const name = screen.getByLabelText("Name");
     const form = name.closest("form");
     await userEvent.selectOptions(owner, "svac_first");
@@ -929,7 +1050,7 @@ it.each([false, true])(
     expect(screen.getByLabelText("Custom expiry")).toHaveValue(
       "2099-05-06T10:30",
     );
-    expect(screen.getByLabelText("Owner")).toBe(owner);
+    expect(keyForm().getByLabelText("Linked account")).toBe(owner);
     expect(owner).toHaveValue("svac_first");
     expect(postOf(fetcher)).toBeUndefined();
     expect(
@@ -962,22 +1083,16 @@ it.each([
       expect(
         screen.getByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
-    const open = () =>
-      userEvent.click(
-        screen.getByRole("button", {
-          name: shortcut ? "Get API key" : "Create key",
-        }),
-      );
-    await open();
+    await openKeyForm(shortcut);
     if (cached) {
       await screen.findByRole("option", { name: /First service/ });
-      await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      await userEvent.click(keyForm().getByRole("button", { name: "Close" }));
       options.firstPageFail = true;
-      await open();
+      await openKeyForm(shortcut);
     }
     await screen.findByRole("alert");
     await userEvent.type(screen.getByLabelText("Name"), "self-during-outage");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
     const retry = screen.getByRole("button", { name: "Retry" });
     expect(retry).toBeDisabled();
@@ -1023,19 +1138,15 @@ it.each(
       expect(
         screen.getByRole("heading", { name: "Dashboard" }),
       ).toBeInTheDocument();
-    const open = () =>
-      userEvent.click(
-        screen.getByRole("button", {
-          name: shortcut ? "Get API key" : "Create key",
-        }),
-      );
-    await open();
+    await openKeyForm(shortcut);
     await screen.findByRole("option", { name: /First service/ });
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await userEvent.click(keyForm().getByRole("button", { name: "Close" }));
     options.firstPageFail = true;
-    await open();
+    await openKeyForm(shortcut);
     await screen.findByRole("alert");
-    const owner = screen.getByLabelText("Owner") as HTMLSelectElement;
+    const owner = keyForm().getByLabelText(
+      "Linked account",
+    ) as HTMLSelectElement;
     const name = screen.getByLabelText("Name");
     const form = name.closest("form");
     await userEvent.selectOptions(owner, "svac_first");
@@ -1056,7 +1167,7 @@ it.each(
     options.firstPageFail = false;
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-    expect(screen.getByLabelText("Owner")).toBe(owner);
+    expect(keyForm().getByLabelText("Linked account")).toBe(owner);
     expect(screen.getByLabelText("Name")).toBe(name);
     expect(name.closest("form")).toBe(form);
     expect(name).toHaveValue("retained-owner");
@@ -1068,7 +1179,7 @@ it.each(
     const recoveredOption = owner.selectedOptions[0];
     if (reselect !== "keep") await userEvent.selectOptions(owner, reselect);
     const submittedValue = owner.value;
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await screen.findByTestId("revealed-api-key");
     const requestedOwner = JSON.parse(
       String(postOf(mock.fetcher)![1].body),
@@ -1099,7 +1210,7 @@ it("native owner pagination failure remains visible and page two can retry", asy
   const options = { pageFail: true };
   nativeFetch(options);
   nativeView();
-  await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+  await openKeyForm();
   await userEvent.click(
     await screen.findByRole("button", { name: "Load more service accounts" }),
   );
@@ -1121,9 +1232,9 @@ it.each(["developer", "user"] as const)(
     mock.replace({ ...session, role });
     nativeView({ ...session, role });
     if (role === "developer") {
-      await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+      await openKeyForm();
       await userEvent.type(screen.getByLabelText("Name"), "developer-key");
-      await userEvent.click(screen.getByRole("button", { name: "Add" }));
+      await userEvent.click(submitKeyButton());
       await screen.findByTestId("revealed-api-key");
       expect(JSON.parse(String(postOf(mock.fetcher)![1].body))).toHaveProperty(
         "principal_id",
@@ -1154,16 +1265,25 @@ it("probe: key controls obey row permission and lifecycle", async () => {
   );
   for (const id of ["denied", "missing", "archived", "preset", "old"]) {
     const row = document.querySelector(`[data-key-id="${id}"]`)!.closest("tr")!;
-    expect(within(row).queryByRole("button")).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: /More actions for/ }),
+    ).toBeNull();
   }
-  expect(screen.getByTestId("toggle-allowed")).toBeInTheDocument();
-  expect(screen.queryByTestId("toggle-expired")).toBeNull();
-  await userEvent.click(
-    screen.getByRole("button", { name: "More actions for expired" }),
-  );
+  const allowed = screen.getByRole("button", {
+    name: "More actions for allowed",
+  });
+  await userEvent.click(allowed);
+  await screen.findByRole("menu");
   expect(
-    screen.getAllByRole("menuitem").map((item) => item.textContent),
-  ).toEqual(["Delete"]);
+    screen.getByRole("menuitem", { name: "Disable API key" }),
+  ).toBeInTheDocument();
+  await userEvent.keyboard("{Escape}");
+  expect(screen.queryByTestId("toggle-expired")).toBeNull();
+  await openRowMenu("More actions for expired");
+  expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+  expect(
+    screen.getByRole("menuitem", { name: "Delete API key" }),
+  ).toBeInTheDocument();
 });
 
 it.each(["draft", "reveal", "pending"])(
@@ -1171,11 +1291,11 @@ it.each(["draft", "reveal", "pending"])(
   async (phase) => {
     const mock = nativeFetch({ pending: phase === "pending" });
     const view = nativeView();
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     await screen.findByRole("option", { name: /First service/ });
     await userEvent.type(screen.getByLabelText("Name"), "old-identity-draft");
     if (phase !== "draft") {
-      await userEvent.click(screen.getByRole("button", { name: "Add" }));
+      await userEvent.click(submitKeyButton());
       await waitFor(() => expect(postOf(mock.fetcher)).toBeDefined());
       if (phase === "reveal") await screen.findByTestId("revealed-api-key");
     }
@@ -1210,7 +1330,7 @@ it.each(["draft", "reveal", "pending"])(
           JSON.stringify(query.queryKey).includes("user_verbatim-self"),
         ),
     ).toHaveLength(0);
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     expect(screen.getByLabelText("Name")).toHaveValue("");
   },
 );
@@ -1250,13 +1370,16 @@ it.each([
       </QueryClientProvider>,
     );
     await screen.findByRole("button", { name: "Create key" });
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+    await openKeyForm();
     await screen.findByRole("option", { name: /First service/ });
-    await userEvent.selectOptions(screen.getByLabelText("Owner"), owner);
+    await userEvent.selectOptions(
+      keyForm().getByLabelText("Linked account"),
+      owner,
+    );
     await userEvent.type(screen.getByLabelText("Name"), "stale-admin-draft");
     // Only the next HTTP session answer changes. No poll or provider update.
     mock.replace({ ...session, role });
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await userEvent.click(submitKeyButton());
     await waitFor(() =>
       expect(
         client.getQueryData<NativeSession>(["console-session"])?.role,
@@ -1271,9 +1394,11 @@ it.each([
     expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
     expect(postOf(mock.fetcher)).toBeUndefined();
     if (role === "developer") {
-      await userEvent.click(screen.getByRole("button", { name: "Create key" }));
-      expect(screen.getByLabelText("Owner")).toHaveValue(session.id);
-      expect(screen.getByLabelText("Owner")).toBeDisabled();
+      await openKeyForm();
+      expect(keyForm().getByLabelText("Linked account")).toHaveValue(
+        session.id,
+      );
+      expect(keyForm().getByLabelText("Linked account")).toBeDisabled();
       expect(screen.getByLabelText("Name")).toHaveValue("");
     } else
       expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
@@ -1283,17 +1408,19 @@ it.each([
 it("native same-principal demotion discards service selection and rejects without fallback", async () => {
   const mock = nativeFetch({ reject: true });
   const view = nativeView();
-  await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+  await openKeyForm();
   await screen.findByRole("option", { name: /First service/ });
-  await userEvent.selectOptions(screen.getByLabelText("Owner"), "svac_first");
+  await userEvent.selectOptions(
+    keyForm().getByLabelText("Linked account"),
+    "svac_first",
+  );
   const developer = { ...session, role: "developer" as const };
   mock.replace(developer);
   view.replace(developer);
   expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
-  if (!screen.queryByLabelText("Name"))
-    await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+  if (!screen.queryByLabelText("Name")) await openKeyForm();
   await userEvent.type(screen.getByLabelText("Name"), "demoted");
-  await userEvent.click(screen.getByRole("button", { name: "Add" }));
+  await userEvent.click(submitKeyButton());
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "Owner is unavailable",
   );
@@ -1313,9 +1440,9 @@ it("native reveal copies only to the clipboard and never stores or forwards the 
   vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: copy } });
   const storage = vi.spyOn(Storage.prototype, "setItem");
   const view = nativeView();
-  await userEvent.click(screen.getByRole("button", { name: "Create key" }));
+  await openKeyForm();
   await userEvent.type(screen.getByLabelText("Name"), "clipboard-key");
-  await userEvent.click(screen.getByRole("button", { name: "Add" }));
+  await userEvent.click(submitKeyButton());
   await screen.findByTestId("revealed-api-key");
   await userEvent.click(screen.getByRole("button", { name: "Copy API key" }));
   await waitFor(() => expect(copy).toHaveBeenCalledWith(SECRET));
@@ -1339,7 +1466,8 @@ it("owned metadata labels the owner and creator types independently", () => {
   expect(owner).toHaveAttribute("data-owner-id", session.id);
   expect(owner).toHaveTextContent("User");
   expect(creator).toHaveAttribute("data-created-by", session.id);
-  expect(creator).toHaveTextContent("User");
+  expect(creator).toHaveAttribute("data-created-by-type", "user");
+  expect(creator).toHaveTextContent(session.name!);
   expect(
     within(owner as HTMLElement).getByTitle(session.id),
   ).toBeInTheDocument();

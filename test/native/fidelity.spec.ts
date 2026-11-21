@@ -1,3 +1,4 @@
+import { openApiKeyForm } from "../api-key-flow";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { nativeDocker } from "./docker";
@@ -409,26 +410,27 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               page.locator(`[data-owner-id="${service.id}"]`).first(),
             ).toBeVisible();
           } else if (surface.id === "native-owned-key-form") {
-            await page
-              .getByRole("button", { name: "Create key", exact: true })
-              .click();
+            await openApiKeyForm(page);
           } else if (surface.id === "native-owned-key-dashboard-form") {
-            await page
-              .getByRole("button", { name: "Get API key", exact: true })
-              .click();
+            await openApiKeyForm(page, "Get API key");
           } else if (surface.id === "native-owned-key-owner-picker") {
-            await page
-              .getByRole("button", { name: "Create key", exact: true })
-              .click();
+            await openApiKeyForm(page);
             await expect(
-              page.getByLabel("Owner").locator(`option[value="${service.id}"]`),
+              page
+                .getByRole("dialog", { name: "Create API key" })
+                .getByLabel("Linked account", { exact: true })
+                .locator(`option[value="${service.id}"]`),
             ).toHaveCount(1);
-            await page.getByLabel("Owner").selectOption(service.id);
-            await page.getByLabel("Owner").focus();
-          } else if (surface.id === "native-owned-key-reveal") {
             await page
-              .getByRole("button", { name: "Create key", exact: true })
-              .click();
+              .getByRole("dialog", { name: "Create API key" })
+              .getByLabel("Linked account", { exact: true })
+              .selectOption(service.id);
+            await page
+              .getByRole("dialog", { name: "Create API key" })
+              .getByLabel("Linked account", { exact: true })
+              .focus();
+          } else if (surface.id === "native-owned-key-reveal") {
+            await openApiKeyForm(page);
             await page
               .getByLabel("Name", { exact: true })
               .fill(`shot-reveal-${info.project.name}`);
@@ -438,7 +440,8 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
                 response.request().method() === "POST",
             );
             await page
-              .getByRole("button", { name: "Add", exact: true })
+              .getByRole("dialog", { name: "Create API key" })
+              .getByRole("button", { name: "Create key", exact: true })
               .click();
             expect((await issuance).status()).toBe(200);
           }
@@ -765,11 +768,14 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             break;
           case "native-owned-key-list":
             await expect(
-              page.getByRole("columnheader", { name: "Owner", exact: true }),
+              page.getByRole("columnheader", {
+                name: "Linked account",
+                exact: true,
+              }),
             ).toBeVisible();
             await expect(
               page.getByRole("columnheader", {
-                name: "Created by",
+                name: "Created",
                 exact: true,
               }),
             ).toBeVisible();
@@ -779,12 +785,23 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(
               page.getByRole("dialog", { name: "Create API key" }),
             ).toBeVisible();
-            await expect(page.getByLabel("Owner")).toHaveValue(session.id);
+            await expect(
+              page
+                .getByRole("dialog", { name: "Create API key" })
+                .getByLabel("Linked account", { exact: true }),
+            ).toHaveValue(session.id);
             break;
           case "native-owned-key-owner-picker":
-            await expect(page.getByLabel("Owner")).toHaveValue(service.id);
             await expect(
-              page.getByLabel("Owner").locator(`option[value="${retired.id}"]`),
+              page
+                .getByRole("dialog", { name: "Create API key" })
+                .getByLabel("Linked account", { exact: true }),
+            ).toHaveValue(service.id);
+            await expect(
+              page
+                .getByRole("dialog", { name: "Create API key" })
+                .getByLabel("Linked account", { exact: true })
+                .locator(`option[value="${retired.id}"]`),
             ).toHaveCount(0);
             break;
           case "native-owned-key-reveal":
