@@ -175,9 +175,14 @@ describe("ApiKeysTable", () => {
     expect(screen.queryByText(/Rotate them/)).toBeNull();
   });
 
-  it("offers nothing on an archived key, which is terminal", () => {
+  it("shows the empty inventory when every returned key is archived", () => {
     renderTable([apiKey({ id: "apikey_1", status: "archived" })]);
-    expect(screen.queryByTestId("toggle-apikey_1")).toBeNull();
+    expect(document.querySelector("[data-visible-count]")).toHaveAttribute(
+      "data-visible-count",
+      "0",
+    );
+    expect(screen.getByText("No API keys yet.")).toBeInTheDocument();
+    expect(screen.queryByText("ci-deploy")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /More actions for/ }),
     ).toBeNull();
@@ -238,6 +243,112 @@ describe("ApiKeysTable", () => {
     expect(postOf(fetchMock)).toBeUndefined();
   });
 
+  it.each(["immediate", "slow-write", "row", "outside", "rejected"])(
+    "keeps keyboard focus when deleting from a row menu (%s)",
+    async (target) => {
+      const listed = apiKey({ id: "apikey_1" });
+      const archived = { ...listed, status: "archived" };
+      let deleted = false;
+      let finishRefetch: (() => void) | undefined;
+      let finishWrite: (() => void) | undefined;
+      vi.stubGlobal(
+        "fetch",
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          const path = new URL(String(input), "http://console.test").pathname;
+          if (path === "/api/auth/session") return json(session);
+          if (path === KEYS && !deleted) return json([listed]);
+          if (path === `${KEYS}/${listed.id}` && init?.method === "POST") {
+            expect(JSON.parse(String(init.body))).toEqual({
+              status: "archived",
+            });
+            if (target === "rejected")
+              return json(
+                {
+                  error: {
+                    type: "permission_error",
+                    message: "Cannot delete key",
+                  },
+                },
+                403,
+              );
+            deleted = true;
+            if (target === "slow-write")
+              return new Promise<Response>((resolve) => {
+                finishWrite = () => resolve(json(archived));
+              });
+            return json(archived);
+          }
+          if (
+            path === KEYS &&
+            (target === "immediate" || target === "slow-write")
+          )
+            return json([archived]);
+          if (path === KEYS)
+            return new Promise<Response>((resolve) => {
+              finishRefetch = () => resolve(json([archived]));
+            });
+          throw new Error(`Unexpected request: ${path}`);
+        },
+      );
+      nativeView();
+      const user = userEvent.setup();
+      const more = await screen.findByRole("button", {
+        name: "More actions for ci-deploy",
+      });
+      more.focus();
+      await user.keyboard("{Enter}");
+      const menu = await screen.findByRole("menu");
+      await waitFor(() =>
+        expect(menu).toContainElement(document.activeElement as HTMLElement),
+      );
+      await user.keyboard("{End}");
+      await waitFor(() =>
+        expect(
+          within(menu).getByRole("menuitem", { name: "Delete API key" }),
+        ).toHaveFocus(),
+      );
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", {
+        name: "Delete API key",
+      });
+      await waitFor(() =>
+        expect(
+          within(dialog).getByRole("button", { name: "Cancel" }),
+        ).toHaveFocus(),
+      );
+      await user.tab();
+      expect(
+        within(dialog).getByRole("button", { name: "Delete API key" }),
+      ).toHaveFocus();
+      await user.keyboard("{Enter}");
+      if (target === "rejected") {
+        await waitFor(() => expect(more).toHaveFocus());
+        expect(screen.getByRole("button", { name: listed.name })).toBeVisible();
+        return;
+      }
+      const outside = screen.getByRole("button", { name: "Created" });
+      if (target === "slow-write") {
+        await waitFor(() =>
+          expect(more).toHaveAttribute("aria-disabled", "true"),
+        );
+        await waitFor(() => expect(more).toHaveFocus());
+        finishWrite!();
+      }
+      if (target === "row" || target === "outside") {
+        await waitFor(() => expect(finishRefetch).toBeTypeOf("function"));
+        await waitFor(() => expect(more).toHaveFocus());
+        if (target === "outside") await user.click(outside);
+        finishRefetch!();
+      }
+      await waitFor(() => expect(more).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(
+          target === "outside" ? outside : screen.getByRole("searchbox"),
+        ).toHaveFocus(),
+      );
+    },
+  );
+
   it("prevents a second deletion while the first request is pending", async () => {
     let settle: (response: Response) => void = () => {};
     const fetchMock = vi.fn(
@@ -258,11 +369,20 @@ describe("ApiKeysTable", () => {
       screen.getByRole("button", { name: "Delete API key" }),
     );
     const trigger = screen.getByRole("button", { name: /More actions for/ });
-    await waitFor(() => expect(trigger).toBeDisabled());
+    await waitFor(() =>
+      expect(trigger).toHaveAttribute("aria-disabled", "true"),
+    );
     await userEvent.click(trigger);
     expect(screen.queryByRole("menu")).toBeNull();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(1);
     settle(json(apiKey({ id: "apikey_1", status: "archived" })));
-    await waitFor(() => expect(trigger).toBeEnabled());
+    await waitFor(() =>
+      expect(trigger).not.toHaveAttribute("aria-disabled", "true"),
+    );
   });
 
   it("disables an active key through the status field, since there is no verb", async () => {
@@ -1308,7 +1428,8 @@ it("probe: key controls obey row permission and lifecycle", async () => {
     ],
     vi.fn(async () => json({ data: [] })),
   );
-  for (const id of ["denied", "missing", "archived", "preset", "old"]) {
+  expect(document.querySelector('[data-key-id="archived"]')).toBeNull();
+  for (const id of ["denied", "missing", "preset", "old"]) {
     const row = document.querySelector(`[data-key-id="${id}"]`)!.closest("tr")!;
     expect(
       within(row).queryByRole("button", { name: /More actions for/ }),

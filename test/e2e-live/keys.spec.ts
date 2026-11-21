@@ -1,4 +1,8 @@
-import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
+import {
+  expectListedKeyStatus,
+  openApiKeyForm,
+  openApiKeyMenu,
+} from "../api-key-flow";
 import { nativeRequest } from "./native-request";
 import { LIVE_BROWSER_ORIGIN } from "./env";
 import type { APIRequestContext } from "@playwright/test";
@@ -248,7 +252,7 @@ test("a console-issued environment key drives the real worker lane, and revoking
   expect(refused.status()).toBe(401);
 });
 
-test("a console-issued management key drives the real wire API, and Disable stops it", async ({
+test("a console-issued key loses wire access when disabled or deleted, and the archive remains queryable", async ({
   page,
 }) => {
   await signIn(page);
@@ -280,6 +284,9 @@ test("a console-issued management key drives the real wire API, and Disable stop
     "data-key-status",
     "active",
   );
+  const keyId = (await row
+    .locator("[data-key-id]")
+    .getAttribute("data-key-id"))!;
 
   // The listing identifies the key that was just minted — the property that
   // makes a lost plaintext recoverable rather than an orphan (PR #97).
@@ -310,28 +317,20 @@ test("a console-issued management key drives the real wire API, and Disable stop
   const refused = await call();
   expect(refused.status()).toBe(401);
 
-  // Delete is terminal and doubles as this test's cleanup.
-  await row
-    .getByRole("button", { name: `More actions for live-e2e-mgmt-${RUN}` })
-    .click();
-  await page
-    .getByRole("menuitem", { name: "Delete API key", exact: true })
-    .click();
+  // Restore access first so the last refusal proves that Delete revoked it.
+  await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
+  await actions.getByRole("menuitem", { name: "Enable API key" }).click();
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "active",
+  );
+  expect((await call()).status()).toBe(200);
+  await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
+  await actions.getByRole("menuitem", { name: "Delete API key" }).click();
   await page
     .getByRole("button", { name: "Delete API key", exact: true })
     .click();
-  await expect(row.locator("[data-key-status]")).toHaveAttribute(
-    "data-key-status",
-    "archived",
-  );
-  // The gateway can disappear or recover between issuance and archival.
-  const archivedActions = row.getByRole("button", { name: /More actions/ });
-  await expect(async () => {
-    if (!(await archivedActions.isVisible())) return;
-    if (!(await actions.isVisible()))
-      await archivedActions.click({ timeout: 1000 });
-    await expect(actions.getByRole("menuitem")).toHaveText(["View cost"], {
-      timeout: 1000,
-    });
-  }).toPass({ timeout: 5000 });
+  await expect(row).toHaveCount(0);
+  expect((await call()).status()).toBe(401);
+  await expectListedKeyStatus(page, keyId, "archived");
 });

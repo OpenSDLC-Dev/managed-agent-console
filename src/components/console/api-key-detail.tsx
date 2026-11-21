@@ -61,6 +61,9 @@ export function ApiKeyActions({
     !!apiKey.can_manage && !!apiKey.created_by && apiKey.status !== "archived";
   const canToggle =
     canDelete && (apiKey.status === "active" || apiKey.status === "inactive");
+  // Keep the trigger focusable while a write is pending. The confirmation
+  // returns focus here before the refreshed list may remove its row.
+  const menuUnavailable = update.isPending && !canViewCost;
   const active = apiKey.status === "active";
   const name = apiKeyDisplayName(apiKey);
   if (confirmDelete && !canDelete) setConfirmDelete(false);
@@ -74,17 +77,21 @@ export function ApiKeyActions({
         if (event.key === "Enter" || event.key === " ") event.stopPropagation();
       }}
     >
-      <DropdownMenu>
+      <DropdownMenu
+        onOpenChange={(open, details) => {
+          if (open && menuUnavailable) details.cancel();
+        }}
+      >
         <DropdownMenuTrigger
           ref={trigger}
-          disabled={update.isPending && !canViewCost}
+          aria-disabled={menuUnavailable || undefined}
           aria-label={`More actions for ${name}`}
           render={
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="size-7 text-muted-foreground"
+              className="size-7 text-muted-foreground aria-disabled:opacity-50"
             />
           }
         >

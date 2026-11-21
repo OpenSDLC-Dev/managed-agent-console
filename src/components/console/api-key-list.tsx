@@ -1,6 +1,13 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { Button } from "@/components/ui/button";
@@ -153,8 +160,17 @@ export function ApiKeysTable({
   }>({ id: null });
   const opener = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
+  // React detaches the ref before removing the row. At that point the action
+  // that opened its menu can still own focus, even after the dialog closes.
+  const restoreRowFocus = useCallback((row: HTMLTableRowElement | null) => {
+    if (!row) return;
+    return () => {
+      if (row.contains(document.activeElement)) search.current?.focus();
+    };
+  }, []);
+  const listedKeys = keys.filter((key) => key.status !== "archived");
   const query = filters.query.trim().toLowerCase();
-  const rows = keys.filter(
+  const rows = listedKeys.filter(
     (key) =>
       (!query ||
         [key.name, key.id, key.partial_key_hint].some((value) =>
@@ -196,8 +212,7 @@ export function ApiKeysTable({
     "active",
     "inactive",
     "expired",
-    "archived",
-    ...keys.map((key) => key.status),
+    ...listedKeys.map((key) => key.status),
   ]);
 
   return (
@@ -257,7 +272,7 @@ export function ApiKeysTable({
               value={filters.creator}
               onChange={(value) => setFilter("creator", value)}
               options={identityOptions(
-                keys.map((key) => [
+                listedKeys.map((key) => [
                   key.created_by?.id ?? "control-plane",
                   apiKeyCreatorLabel(key, session),
                 ]),
@@ -356,7 +371,7 @@ export function ApiKeysTable({
               </TableHeader>
               <TableBody aria-busy={loading || undefined}>
                 {loading &&
-                  !keys.length &&
+                  !listedKeys.length &&
                   [0, 1, 2].map((i) => (
                     <TableRow key={i}>
                       {headings.map(({ label }) => (
@@ -369,6 +384,7 @@ export function ApiKeysTable({
                 {rows.map((key) => (
                   <TableRow
                     key={key.id}
+                    ref={restoreRowFocus}
                     data-state={
                       key.id === selection.id ? "selected" : undefined
                     }

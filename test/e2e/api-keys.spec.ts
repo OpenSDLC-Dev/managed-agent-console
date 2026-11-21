@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
+import {
+  expectListedKeyStatus,
+  openApiKeyForm,
+  openApiKeyMenu,
+} from "../api-key-flow";
 import { signIn } from "./sign-in";
 
 // Even fixture keys do not belong in traces or failure screenshots.
@@ -30,9 +34,11 @@ test("issue a key, see it once, then disable and delete it", async ({
   await page.getByRole("link", { name: "API Keys", exact: true }).click();
   await expect(page).toHaveURL(/\/api-keys$/);
 
-  // The seeded rows: one issued by a person, one the control plane manages.
+  // The fixture includes an owned key and an unowned historical key.
   await expect(page.getByText("ci-deploy")).toBeVisible();
   await expect(page.getByText("historical-unowned")).toBeVisible();
+  const count = page.locator("[data-visible-count]");
+  await expect(count).toHaveAttribute("data-visible-count", "2");
 
   const form = await openApiKeyForm(page);
   await form.getByLabel("Name").fill("e2e-key");
@@ -55,6 +61,10 @@ test("issue a key, see it once, then disable and delete it", async ({
     "data-key-status",
     "active",
   );
+  await expect(count).toHaveAttribute("data-visible-count", "3");
+  const keyId = (await row
+    .locator("[data-key-id]")
+    .getAttribute("data-key-id"))!;
 
   let actions = await openApiKeyMenu(page, "e2e-key");
   await actions.getByRole("menuitem", { name: "Disable API key" }).click();
@@ -78,20 +88,24 @@ test("issue a key, see it once, then disable and delete it", async ({
     "data-key-status",
     "active",
   );
+  await expectListedKeyStatus(page, keyId, "active");
   actions = await openApiKeyMenu(page, "e2e-key");
   await actions.getByRole("menuitem", { name: "Delete API key" }).click();
   await page
     .getByRole("button", { name: "Delete API key", exact: true })
-    .click();
-  await expect(row.locator("[data-key-status]")).toHaveAttribute(
-    "data-key-status",
-    "archived",
-  );
-  actions = await openApiKeyMenu(page, "e2e-key");
-  await expect(actions.getByRole("menuitem")).toHaveCount(1);
+    .press("Enter");
+  await expect(row).toHaveCount(0);
   await expect(
-    actions.getByRole("menuitem", { name: "View cost" }),
-  ).toBeVisible();
+    page.getByRole("searchbox", { name: "Search keys" }),
+  ).toBeFocused();
+  await expect(count).toHaveAttribute("data-visible-count", "2");
+  await expectListedKeyStatus(page, keyId, "archived");
+  await page.getByRole("combobox", { name: "Status", exact: true }).click();
+  await expect(page.getByRole("option")).toHaveText([
+    "Active",
+    "Disabled",
+    "Expired",
+  ]);
   await page.keyboard.press("Escape");
   await page.route("**/admin/v1/usage/requests?*", (route) =>
     route.fulfill({
@@ -109,13 +123,17 @@ test("issue a key, see it once, then disable and delete it", async ({
   );
   await page.reload();
   await unavailable;
-  await expect(row.locator("[data-key-status]")).toHaveAttribute(
-    "data-key-status",
-    "archived",
-  );
-  await expect(row.getByRole("button", { name: /More actions/ })).toHaveCount(
-    0,
-  );
+  await expect(count).toHaveAttribute("data-visible-count", "2");
+  await expect(row).toHaveCount(0);
+  // An unowned row loses its only action when cost lookup is unavailable.
+  await expect(
+    page.getByRole("button", { name: "More actions for historical-unowned" }),
+  ).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Search keys" }).fill("e2e-key");
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  await expect(
+    page.getByText("No matching API keys", { exact: true }),
+  ).toBeVisible();
 });
 
 test("a refused deletion keeps the key and reports the platform error", async ({
