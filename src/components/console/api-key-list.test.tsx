@@ -113,14 +113,15 @@ it("combines search, linked account, creator and status, then resets the full li
   await userEvent.clear(search);
   await choose("Created by", "Avery");
   count(2);
-  await choose("Linked account", "svac_build");
+  await choose("Linked account", "Service account");
   expect(names()).toEqual(["Alpine"]);
   await choose("Status", "Disabled");
   count(1);
   await userEvent.type(search, "beach");
   count(0);
   expect(screen.getByText("No matching API keys")).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+  expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Reset filters" }));
   expect(search).toHaveValue("");
   count(4);
   expect(
@@ -128,6 +129,11 @@ it("combines search, linked account, creator and status, then resets the full li
   ).not.toBeInTheDocument();
   await userEvent.type(search, "APIKEY_A");
   expect(names()).toEqual(["Alpine"]);
+  await userEvent.type(search, "-no-match");
+  await userEvent.click(screen.getByRole("button", { name: "Reset search" }));
+  expect(search).toHaveValue("");
+  expect(search).toHaveFocus();
+  count(4);
 });
 
 it("separates missing owners from issuers and retains the server's unknown and archived statuses", async () => {
@@ -135,7 +141,7 @@ it("separates missing owners from issuers and retains the server's unknown and a
     ...keys,
     key("apikey_x", { status: "waiting", principal: null, can_manage: false }),
   ]);
-  await choose("Linked account", "Unowned");
+  await choose("Linked account", "Not linked");
   count(3);
   await choose("Status", "Archived");
   expect(names()).toEqual(["Coast"]);
@@ -146,10 +152,48 @@ it("separates missing owners from issuers and retains the server's unknown and a
   expect(
     screen.getByText("No keys match the current filters."),
   ).toBeInTheDocument();
-  await choose("Status", "All");
+  await choose("Status", "Expired");
   expect(names()).toEqual(["Beach"]);
-  await choose("Created by", "Anyone");
-  count(3);
+  await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+  count(5);
+});
+
+it("shows All and Anyone on the closed controls and replaces a selected status", async () => {
+  mount();
+  const creator = screen.getByRole("combobox", { name: "Created by" });
+  expect(creator).toHaveTextContent("Anyone");
+  await userEvent.click(creator);
+  expect(await screen.findByRole("listbox")).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: "Anyone" })).toBeNull();
+  await userEvent.keyboard("{Escape}");
+  await choose("Status", "Expired");
+  expect(screen.queryByRole("listbox")).toBeNull();
+  await userEvent.click(screen.getByRole("combobox", { name: "Status" }));
+  expect(
+    await screen.findByRole("option", { name: "Expired" }),
+  ).toHaveAttribute("aria-selected", "true");
+  expect(screen.queryByRole("option", { name: "All" })).toBeNull();
+  await userEvent.click(screen.getByRole("option", { name: "Active" }));
+  expect(names()).toEqual(["Zebra"]);
+  expect(screen.queryByRole("listbox")).toBeNull();
+});
+
+it("filters linked account kind across distinct service accounts", async () => {
+  mount([
+    ...keys,
+    key("apikey_second", {
+      name: "Service worker",
+      created_by: { id: "user_b", type: "user" },
+      principal: {
+        type: "service_account_actor",
+        service_account_id: "svac_other",
+      },
+    }),
+  ]);
+  await choose("Linked account", "Service account");
+  expect(names()).toEqual(["Alpine", "Service worker"]);
+  expect(screen.getByText("svac_build")).toBeInTheDocument();
+  expect(screen.getByText("svac_other")).toBeInTheDocument();
 });
 
 it("sorts full names and timestamps without losing focus or treating Never as a date", async () => {
@@ -170,15 +214,20 @@ it("sorts full names and timestamps without losing focus or treating Never as a 
   ).getByRole("button");
   await userEvent.click(sortExpires);
   expect(keyHeading).not.toHaveAttribute("aria-sort");
-  expect(names()).toEqual(["Beach", "Alpine", "Zebra", "Coast"]);
-  await userEvent.click(sortExpires);
   expect(names()).toEqual(["Alpine", "Beach", "Zebra", "Coast"]);
+  expect(sortExpires.closest("th")).toHaveAttribute("aria-sort", "descending");
+  await userEvent.click(sortExpires);
+  expect(names()).toEqual(["Beach", "Alpine", "Zebra", "Coast"]);
   await userEvent.click(
     within(screen.getByRole("columnheader", { name: "Created" })).getByRole(
       "button",
     ),
   );
-  expect(names()[0]).toBe("Alpine");
+  expect(screen.getByRole("columnheader", { name: "Created" })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+  expect(names().at(-1)).toBe("Alpine");
 });
 
 it("separates row actions from inspection and keeps only a still-visible selection on refetch", async () => {
@@ -204,10 +253,21 @@ it("separates row actions from inspection and keeps only a still-visible selecti
   await waitFor(() => expect(screen.getByRole("searchbox")).toHaveFocus());
   refresh(keys);
   expect(screen.queryByRole("dialog")).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Zebra" }));
+  const outside = screen.getByRole("button", { name: "Created" });
+  outside.focus();
+  refresh(keys.slice(1));
+  expect(outside).toHaveFocus();
 });
 
 it("opens an allowed whitespace-only key name by its visible resource ID", async () => {
-  mount([key("apikey_spaces", { name: "  " })]);
+  mount([
+    key("apikey_spaces", { name: "  " }),
+    key("apikey_a", { name: "Alpha" }),
+  ]);
+  const order = screen.getByRole("columnheader", { name: "Key" });
+  await userEvent.click(within(order).getByRole("button"));
+  expect(names()).toEqual(["Alpha", "apikey_spaces"]);
   await userEvent.click(screen.getByRole("button", { name: "apikey_spaces" }));
   expect(
     within(screen.getByRole("dialog")).getByRole("heading", {

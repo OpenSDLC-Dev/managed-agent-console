@@ -172,7 +172,9 @@ test("find keys, reset the list and inspect the sorted results by keyboard", asy
   await expect(
     page.getByText("No matching API keys", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Reset", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reset filters", exact: true })
+    .click();
   await expect(search).toHaveValue("");
   await expect(count).toHaveAttribute("data-visible-count", "2");
 
@@ -219,6 +221,35 @@ test("find keys, reset the list and inspect the sorted results by keyboard", asy
   await expect(page.locator("tbody tr").first()).toContainText(
     "historical-unowned",
   );
+});
+
+test("linked account filters by actor type and the empty search can be reset in place", async ({
+  page,
+}) => {
+  await signIn(page, "/api-keys");
+  const count = page.locator("[data-visible-count]");
+  const search = page.getByRole("searchbox", { name: "Search keys" });
+  await search.fill("missing-fixture-key");
+  await expect(count).toHaveAttribute("data-visible-count", "0");
+  await page.getByRole("button", { name: "Reset search", exact: true }).click();
+  await expect(search).toHaveValue("");
+  await expect(search).toBeFocused();
+  const account = page.getByRole("combobox", {
+    name: "Linked account",
+    exact: true,
+  });
+  for (const [kind, row] of [
+    ["Service account", "ci-deploy"],
+    ["Not linked", "historical-unowned"],
+  ]) {
+    await account.click();
+    await page.getByRole("option", { name: kind, exact: true }).click();
+    await expect(count).toHaveAttribute("data-visible-count", "1");
+    await expect(
+      page.getByRole("button", { name: row, exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+  }
 });
 
 test("View cost opens the actual key's UTC month-to-date query and survives reload", async ({
@@ -283,9 +314,29 @@ test("expired keys remain inspectable and billable while only deletion is offere
   ).toBeVisible();
   await menu.getByRole("menuitem", { name: "View cost" }).click();
   await expect(page).toHaveURL(/\/usage\?/);
-  await expect(page.getByLabel("Key", { exact: true })).toHaveValue(
-    /apikey_new/,
+  await expect(
+    page.getByRole("combobox", { name: "Key", exact: true }),
+  ).toHaveValue(/apikey_new/);
+});
+
+test("key issuance still works on an edge without CLI authorization", async ({
+  page,
+}) => {
+  await page.route("**/oauth/authorize", (route) =>
+    route.fulfill({ status: 404, body: "Not found" }),
   );
+  await signIn(page, "/api-keys");
+  await Promise.all([
+    page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/oauth/authorize",
+    ),
+    page.getByRole("button", { name: "Create key", exact: true }).click(),
+  ]);
+  await expect(
+    page.getByRole("button", { name: "Your own machine" }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Somewhere else" }).click();
+  await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
 });
 
 test("the local-machine path opens CLI instructions and the API-key path resets a cancelled draft", async ({

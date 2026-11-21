@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useRef, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ function KeyFilter({
   onChange: (value: string) => void;
 }) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v ?? "")}>
+    <Select value={value || null} onValueChange={(v) => onChange(v ?? "")}>
       <SelectTrigger
         aria-label={label}
         data-value={value}
@@ -79,7 +79,6 @@ function KeyFilter({
         alignItemWithTrigger={false}
         className="w-auto max-w-[90vw]"
       >
-        <SelectItem value="">{all}</SelectItem>
         {options.map((item) => (
           <SelectItem key={item.value} value={item.value}>
             {item.label}
@@ -91,8 +90,8 @@ function KeyFilter({
 }
 
 function compareKeys(a: ApiKeyListItem, b: ApiKeyListItem, sort: Sort) {
-  const left = a[sort.field];
-  const right = b[sort.field];
+  const left = sort.field === "name" ? apiKeyDisplayName(a) : a[sort.field];
+  const right = sort.field === "name" ? apiKeyDisplayName(b) : b[sort.field];
   // Never has no date; keep it after all dated expiries in either direction.
   if (left === null) return right === null ? 0 : 1;
   if (right === null) return -1;
@@ -127,7 +126,10 @@ export function ApiKeysTable({
   const update = useUpdateApiKey();
   const [filters, setFilters] = useState(clearFilters);
   const [sort, setSort] = useState<Sort>();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{
+    id: string | null;
+    removed?: boolean;
+  }>({ id: null });
   const opener = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const query = filters.query.trim().toLowerCase();
@@ -139,13 +141,34 @@ export function ApiKeysTable({
         )) &&
       (!filters.creator ||
         (key.created_by?.id ?? "control-plane") === filters.creator) &&
-      (!filters.owner || (apiKeyOwnerId(key) ?? "unowned") === filters.owner) &&
+      (!filters.owner ||
+        (key.principal?.type ?? "unowned") === filters.owner) &&
       (!filters.status || key.status === filters.status),
   );
   if (sort) rows.sort((left, right) => compareKeys(left, right, sort));
-  const filtered = Object.values(filters).some(Boolean);
-  const selected = rows.find((key) => key.id === selectedId);
-  if (selectedId !== null && !selected) setSelectedId(null);
+  const filterSelected = Boolean(
+    filters.owner || filters.creator || filters.status,
+  );
+  const filtered = Boolean(filters.query || filterSelected);
+  const selected = rows.find((key) => key.id === selection.id);
+  if (selection.id !== null && !selected)
+    setSelection({ id: null, removed: true });
+  // A nonmodal inspector leaves outside focus alone. When its selected row
+  // disappears too, return the keyboard to search if the document lost focus.
+  useEffect(() => {
+    if (
+      selection.removed &&
+      (!document.activeElement?.isConnected ||
+        document.activeElement === document.body)
+    ) {
+      search.current?.focus();
+    }
+  }, [selection.removed]);
+  const selectKey = (id: string) => setSelection({ id });
+  const resetFilters = () => {
+    setFilters(clearFilters);
+    search.current?.focus();
+  };
   const setFilter = (field: keyof typeof filters, value: string) =>
     setFilters((current) => ({ ...current, [field]: value }));
   const statuses = new Set([
@@ -224,12 +247,11 @@ export function ApiKeysTable({
               all="All"
               value={filters.owner}
               onChange={(value) => setFilter("owner", value)}
-              options={identityOptions(
-                keys.map((key) => [
-                  apiKeyOwnerId(key) ?? "unowned",
-                  apiKeyAccountLabel(key, session),
-                ]),
-              )}
+              options={[
+                { value: "user_actor", label: "Person" },
+                { value: "service_account_actor", label: "Service account" },
+                { value: "unowned", label: "Not linked" },
+              ]}
             />
             <KeyFilter
               label="Status"
@@ -247,7 +269,7 @@ export function ApiKeysTable({
                 variant="ghost"
                 size="sm"
                 className="h-7"
-                onClick={() => setFilters(clearFilters)}
+                onClick={resetFilters}
               >
                 Reset
               </Button>
@@ -269,11 +291,17 @@ export function ApiKeysTable({
                       "field" in heading ? heading.field : undefined;
                     const direction =
                       sort && field === sort.field ? sort.direction : undefined;
+                    const ascendingNext = direction
+                      ? direction === "descending"
+                      : field === "name";
                     return (
                       <TableHead
                         key={heading.label}
                         scope="col"
                         aria-sort={direction}
+                        data-default-ascending={
+                          !direction && field === "name" ? true : undefined
+                        }
                         className="group h-9 px-2 text-[13px] font-normal text-muted-foreground first:pl-0"
                       >
                         {field ? (
@@ -283,17 +311,16 @@ export function ApiKeysTable({
                             onClick={() =>
                               setSort({
                                 field,
-                                direction:
-                                  direction === "ascending"
-                                    ? "descending"
-                                    : "ascending",
+                                direction: ascendingNext
+                                  ? "ascending"
+                                  : "descending",
                               })
                             }
                           >
                             {heading.label}
                             <ChevronDown
                               aria-hidden="true"
-                              className="size-3 opacity-0 group-hover:opacity-65 group-focus-within:opacity-65 group-aria-[sort]:opacity-100 group-aria-[sort=ascending]:rotate-180"
+                              className="size-3 opacity-0 group-hover:opacity-65 group-focus-within:opacity-65 group-aria-[sort]:opacity-100 group-aria-[sort=ascending]:rotate-180 group-data-default-ascending:rotate-180"
                             />
                           </button>
                         ) : heading.label === "Actions" ? (
@@ -321,14 +348,16 @@ export function ApiKeysTable({
                 {rows.map((key) => (
                   <TableRow
                     key={key.id}
-                    data-state={key.id === selectedId ? "selected" : undefined}
+                    data-state={
+                      key.id === selection.id ? "selected" : undefined
+                    }
                     className="cursor-pointer"
                     onClick={(event) => {
                       opener.current =
                         event.currentTarget.querySelector<HTMLButtonElement>(
                           "button[data-key-id]",
                         );
-                      setSelectedId(key.id);
+                      selectKey(key.id);
                     }}
                   >
                     <TableCell className="pl-0">
@@ -412,9 +441,19 @@ export function ApiKeysTable({
                 <EmptyState
                   title="No matching API keys"
                   hint={
-                    query
-                      ? "No keys match the current search."
-                      : "No keys match the current filters."
+                    filterSelected
+                      ? "No keys match the current filters."
+                      : "No keys match the current search."
+                  }
+                  action={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={resetFilters}
+                    >
+                      {filterSelected ? "Reset filters" : "Reset search"}
+                    </Button>
                   }
                 />
               ) : (
@@ -424,8 +463,8 @@ export function ApiKeysTable({
           <ApiKeyDetails
             apiKey={selected}
             rows={rows}
-            onSelect={setSelectedId}
-            onClose={() => setSelectedId(null)}
+            onSelect={selectKey}
+            onClose={() => setSelection({ id: null })}
             finalFocus={opener}
             fallbackFocus={search}
             update={update}
