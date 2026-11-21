@@ -8,17 +8,9 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
-import {
-  BookOpen,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Terminal,
-  X,
-} from "lucide-react";
+import { BookOpen, Menu, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
-import { useNavPreference } from "./nav-preference";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
@@ -47,27 +39,18 @@ export function ConsoleShell({
     () => window.matchMedia(NARROW).matches,
     () => false,
   );
-  const [desktopExpanded, setDesktopExpanded] = useNavPreference("sidebar");
   const [mobile, setMobile] = useState({ narrow, expanded: false });
-  // Opening navigation on a phone is temporary, independent of desktop preference.
   if (mobile.narrow !== narrow) setMobile({ narrow, expanded: false });
-  const open = narrow
-    ? mobile.narrow === narrow && mobile.expanded
-    : (desktopExpanded ?? true);
-  const setExpanded = (expanded: boolean) => {
-    if (narrow) setMobile({ narrow, expanded });
-    else setDesktopExpanded(expanded);
-  };
+  const mobileMenuOpen = narrow && mobile.expanded;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const close = () => {
-    setExpanded(false);
+    setMobile({ narrow, expanded: false });
     toggleRef.current?.focus({ preventScroll: true });
   };
-  const mobileMenuOpen = narrow && open;
 
   const closeOnEscape = (event: KeyboardEvent<HTMLElement>) => {
     if (
-      open &&
+      mobileMenuOpen &&
       event.key === "Escape" &&
       !event.defaultPrevented &&
       event.currentTarget.contains(event.target as Node)
@@ -77,26 +60,7 @@ export function ConsoleShell({
     }
   };
 
-  const desktopToggle = open ? PanelLeftClose : PanelLeftOpen;
-  const ToggleIcon = narrow ? (open ? X : Menu) : desktopToggle;
-  const desktopLabel = open ? "Collapse sidebar" : "Expand sidebar";
-  const toggle = (
-    <Button
-      ref={toggleRef}
-      variant="ghost"
-      size="icon"
-      className={cn(
-        "size-7 shrink-0 text-muted-foreground",
-        narrow && "col-start-3",
-      )}
-      aria-label={narrow ? (open ? "Close menu" : "Menu") : desktopLabel}
-      aria-expanded={open}
-      aria-controls="console-navigation"
-      onClick={() => setExpanded(!open)}
-    >
-      <ToggleIcon />
-    </Button>
-  );
+  const ToggleIcon = mobileMenuOpen ? X : Menu;
   const documentation = (
     <a
       href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
@@ -120,44 +84,53 @@ export function ConsoleShell({
         onKeyDown={closeOnEscape}
         className="sticky top-0 z-30 grid h-(--console-header-height) grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b bg-background px-3 md:grid-cols-[minmax(0,1fr)_min(28rem,45vw)_minmax(0,1fr)]"
       >
-        <div className="flex min-w-0 max-w-[14.5rem] items-center gap-2">
-          {(open || narrow) && (
-            <Link
-              href={limited ? PLAYGROUND_ROUTE : LANDING_ROUTE}
-              onClick={() => {
-                if (narrow) close();
-              }}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-sm font-serif text-xl leading-none"
-            >
-              <Terminal aria-hidden className="size-5 shrink-0" />
-              <span className="truncate">Agent Console</span>
-            </Link>
-          )}
-          {!narrow && toggle}
-        </div>
+        <Link
+          href={limited ? PLAYGROUND_ROUTE : LANDING_ROUTE}
+          onClick={() => {
+            if (mobileMenuOpen) close();
+          }}
+          className="flex min-w-0 items-center gap-2 justify-self-start rounded-sm font-serif text-xl leading-none"
+        >
+          <Terminal aria-hidden className="size-5 shrink-0" />
+          <span className="truncate">Agent Console</span>
+        </Link>
         {!limited && (
           <CommandPalette
             compact={narrow}
             onNavigate={narrow ? close : undefined}
           />
         )}
-        {narrow ? toggle : documentation}
+        {narrow ? (
+          <Button
+            ref={toggleRef}
+            variant="ghost"
+            size="icon"
+            className="col-start-3 size-7 shrink-0 text-muted-foreground"
+            aria-label={mobileMenuOpen ? "Close menu" : "Menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="console-navigation"
+            onClick={() => setMobile({ narrow, expanded: !mobileMenuOpen })}
+          >
+            <ToggleIcon />
+          </Button>
+        ) : (
+          documentation
+        )}
       </header>
       <div className="flex min-h-[calc(100dvh-var(--console-header-height))]">
         <aside
-          data-sidebar-state={open ? "expanded" : "collapsed"}
+          data-sidebar-state={
+            !narrow || mobileMenuOpen ? "expanded" : "collapsed"
+          }
           data-console-menu-open={mobileMenuOpen || undefined}
           role={mobileMenuOpen ? "dialog" : undefined}
           aria-label={mobileMenuOpen ? "Menu" : undefined}
           onKeyDown={closeOnEscape}
           className={cn(
-            "group/sidebar top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+            "top-(--console-header-height) flex h-[calc(100dvh-var(--console-header-height))] shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
             mobileMenuOpen
               ? "fixed inset-x-0 z-20 w-full"
-              : open
-                ? "sticky w-64"
-                : "sticky w-12",
-            narrow && !open && "hidden",
+              : "sticky hidden w-64 md:flex",
           )}
         >
           <div
@@ -167,7 +140,7 @@ export function ConsoleShell({
               if (narrow && (event.target as Element).closest("a")) close();
             }}
           >
-            {(!narrow || open) && <Nav compact={!open} mobile={narrow} />}
+            {(!narrow || mobileMenuOpen) && <Nav mobile={narrow} />}
           </div>
           <div className="shrink-0">
             {narrow && documentation}

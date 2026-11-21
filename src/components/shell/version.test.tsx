@@ -1,32 +1,28 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import pkg from "../../../package.json";
-import { ConsoleVersion } from "./version";
+import { BuildVersions } from "./version";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
 });
 
-describe("ConsoleVersion", () => {
-  // Both sides read package.json on purpose. The failure this guards is not a
-  // wrong string but a disconnected one: the version release-please bumps has
-  // to be the version an operator reads off the sidebar, so a hardcoded literal
-  // or a second source of truth reddens here.
-  it("renders the version package.json declares", () => {
-    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
-
-    render(<ConsoleVersion />);
-
-    expect(screen.getByText(`v${pkg.version}`)).toBeInTheDocument();
-  });
-
-  it("carries the raw version as a data attribute", () => {
-    const { container } = render(<ConsoleVersion />);
-
-    expect(container.querySelector("[data-console-version]")).toHaveAttribute(
-      "data-console-version",
-      pkg.version,
-    );
-  });
-});
+it.each([
+  ["1.2.3", "v1.2.3"],
+  ["v1.2.4-rc.1", "v1.2.4-rc.1"],
+  ["dev-123abcd", "dev-123abcd"],
+  [undefined, "version unavailable"],
+])(
+  "shows the deployed Platform build %s above the Console release",
+  (stamp, label) => {
+    vi.stubEnv("PLATFORM_VERSION", stamp);
+    render(<BuildVersions />);
+    const platform = screen.getByText(`Platform ${label}`);
+    const consoleBuild = screen.getByText(`Console v${pkg.version}`);
+    expect(platform.nextElementSibling).toBe(consoleBuild);
+    expect(consoleBuild).toHaveAttribute("data-console-version", pkg.version);
+    expect(platform).toHaveAttribute("data-platform-version", stamp ?? "");
+  },
+);

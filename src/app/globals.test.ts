@@ -176,7 +176,11 @@ const THEMES = {
    * multiplies it by `--input`'s own `/ 0.2`, so the fill lands at **0.06** —
    * the value Chrome paints, and the one the `login-invalid` shot samples.
    */
-  dark: { vars: tokens(".dark"), washes: [0.2, 0.3], fieldFill: 0.3 },
+  dark: {
+    vars: tokens("@media (prefers-color-scheme: dark)"),
+    washes: [0.2, 0.3],
+    fieldFill: 0.3,
+  },
 };
 
 /**

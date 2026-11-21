@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
-test("dashboard stays centered and its compact navigation remains usable", async ({
+test("dashboard and search stay centered beside the expanded navigation", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -35,11 +35,9 @@ test("dashboard stays centered and its compact navigation remains usable", async
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.keyboard.press("Escape");
   await expect(keyShortcut).toBeFocused();
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
-  await expect(page.locator("aside")).toHaveAttribute(
-    "data-sidebar-state",
-    "collapsed",
-  );
+  await expect(
+    page.getByRole("button", { name: /collapse sidebar|expand sidebar/i }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("navigation").getByRole("link", { name: "Dashboard" }),
   ).toHaveAttribute("data-active", "true");
@@ -69,20 +67,13 @@ test("dashboard stays centered and its compact navigation remains usable", async
     .getByRole("navigation")
     .locator('[data-nav-group="Agents"]');
   await agents.click();
-  await expect(page.locator("aside")).toHaveAttribute(
-    "data-sidebar-state",
-    "collapsed",
-  );
-  const group = page.getByRole("dialog", { name: "Agents", exact: true });
-  await expect(
-    group.getByRole("link", { name: "Agents", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(agents).toBeFocused();
-  await agents.click();
-  await group.getByRole("link", { name: "Agents", exact: true }).click();
-  await expect(group).not.toBeVisible();
   await expect(page).toHaveURL(/\/agents$/);
+  const back = page.getByRole("button", {
+    name: /Agents, back to all sections/i,
+  });
+  await expect(back).toBeFocused();
+  await back.press("Escape");
+  await expect(agents).toBeFocused();
   await expect(agents).toHaveAttribute("data-active", "true");
   await page
     .getByRole("navigation")
@@ -183,7 +174,7 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
   await expect(menu).toBeFocused();
 });
 
-test("submenus return to all sections and sidebar width survives reload", async ({
+test("submenus return to all sections and mobile navigation resets on resize", async ({
   page,
 }) => {
   await signIn(page);
@@ -228,11 +219,13 @@ test("submenus return to all sections and sidebar width survives reload", async 
   await expect(resources).toBeFocused();
   await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await page.evaluate(() =>
+    localStorage.setItem("managed-agent-console:nav:sidebar", "false"),
+  );
   await page.reload();
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
-    "collapsed",
+    "expanded",
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Menu", exact: true }).click();
@@ -240,7 +233,7 @@ test("submenus return to all sections and sidebar width survives reload", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.locator("aside")).toHaveAttribute(
     "data-sidebar-state",
-    "collapsed",
+    "expanded",
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("main")).toBeVisible();

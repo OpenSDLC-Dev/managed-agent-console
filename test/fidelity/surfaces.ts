@@ -874,17 +874,6 @@ export const SURFACES: Surface[] = [
     },
   },
   {
-    id: "dashboard-compact",
-    route: "/dashboard",
-    fixture: "all surfaces, compact navigation",
-    description: "Centered dashboard with the collapsed icon rail.",
-    setup: async (page) => {
-      await page.getByRole("button", { name: "Collapse sidebar" }).click();
-      await page.reload();
-      await page.locator('[data-sidebar-state="collapsed"]').waitFor();
-    },
-  },
-  {
     id: "dashboard-mobile",
     route: "/dashboard",
     fixture: "all surfaces, 390px viewport",
@@ -930,24 +919,6 @@ export const SURFACES: Surface[] = [
       await page.getByTestId("error-state").waitFor();
     },
   },
-  {
-    id: "dashboard-resources-flyout",
-    route: "/dashboard",
-    fixture: "compact Resources navigation",
-    description:
-      "A group flyout opens beside the rail without changing sidebar preference.",
-    setup: async (page) => {
-      await page.getByRole("button", { name: "Collapse sidebar" }).click();
-      await page
-        .getByRole("navigation")
-        .locator('[data-nav-group="Resources"]')
-        .click();
-      await page
-        .getByRole("dialog", { name: "Resources", exact: true })
-        .waitFor();
-    },
-  },
-  // ---- the landing page ------------------------------------------------
   {
     id: "dashboard",
     route: "/dashboard",
@@ -2704,13 +2675,28 @@ export const SURFACES: Surface[] = [
       "Native OIDC sign-in offer: one SSO link and a setup link, with no password field. The real RP is covered by the native tier.",
   },
   {
+    id: "account-offline",
+    route: "/dashboard",
+    fixture: "signed-in browser offline after loading the dashboard",
+    description:
+      "The account indicator turns red and the menu explains the outage.",
+    setup: async (page) => {
+      await page.context().setOffline(true);
+      await page
+        .locator('[data-testid="connection-dot"][data-state="down"]')
+        .waitFor();
+      await page.getByRole("button", { name: "Account menu" }).click();
+      await page.getByText("Network offline").waitFor();
+    },
+  },
+  {
     id: "account-block",
     mode: "sso",
     route: "/agents",
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:
-      "The sidebar account panel shows the current user and role, theme, connection, console version and Sign out.",
+      "The account panel lists the Platform and Console builds above Sign out. The avatar indicates connectivity.",
     setup: async (page) => {
       await page.getByRole("button", { name: "Account menu" }).click();
       await page.getByRole("dialog", { name: "Account settings" }).waitFor();

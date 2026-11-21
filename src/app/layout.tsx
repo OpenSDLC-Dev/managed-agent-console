@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
-import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { UnsavedChangesProvider } from "@/components/shell/unsaved-changes";
 
@@ -17,18 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // suppressHydrationWarning: next-themes stamps the theme class on <html>
-    // before hydration.
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <UnsavedChangesProvider>{children}</UnsavedChangesProvider>
-        </ThemeProvider>
+        <UnsavedChangesProvider>{children}</UnsavedChangesProvider>
       </body>
     </html>
   );

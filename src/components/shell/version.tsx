@@ -1,21 +1,15 @@
 import pkg from "../../../package.json";
 
-/**
- * The self-hosted console's version in the account panel.
- *
- * A deliberate divergence from the reference console, recorded in
- * docs/design-reference.md: a hosted product's operator never wonders what
- * version they are looking at, and a self-hosted one has no other way to tell.
- * Server-rendered from package.json — the version release-please bumps — so
- * nothing has to be kept in sync by hand and no client bundle carries it.
- */
-export function ConsoleVersion() {
+/** The deployment supplies the Platform build stamp; the Console release comes from its package. */
+export function BuildVersions() {
+  const stamp = process.env.PLATFORM_VERSION?.trim();
+  const platform = stamp && /^\d/.test(stamp) ? `v${stamp}` : stamp;
   return (
-    <div
-      className="text-xs text-muted-foreground"
-      data-console-version={pkg.version}
-    >
-      v{pkg.version}
+    <div className="space-y-1 text-xs wrap-anywhere text-muted-foreground">
+      <div data-platform-version={stamp ?? ""}>
+        Platform {platform || "version unavailable"}
+      </div>
+      <div data-console-version={pkg.version}>Console v{pkg.version}</div>
     </div>
   );
 }

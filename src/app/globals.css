@@ -2,8 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -51,6 +49,7 @@
 
 /* Palette extracted from the design reference (docs/design-reference.md, 2026-08-02). */
 :root {
+  color-scheme: light;
   /* The reference's own fallback stack — anthropicSans is proprietary. */
   --font-sans: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -121,43 +120,46 @@
  * value derived rather than borrowed: `--destructive`, which AA forced off
  * danger-100 (issue #90, and the light block for the arithmetic).
  */
-.dark {
-  --background: hsl(60 2.7% 14.5%); /* bg-100 #262624 */
-  --foreground: hsl(48 33.3% 97.1%); /* text-100 #faf9f5 */
-  --card: hsl(60 2.1% 18.4%); /* bg-000 #30302e */
-  --card-foreground: hsl(48 33.3% 97.1%);
-  --popover: hsl(60 2.1% 18.4%);
-  --popover-foreground: hsl(48 33.3% 97.1%);
-  --primary: hsl(48 33.3% 97.1%);
-  --primary-foreground: hsl(60 2.7% 14.5%);
-  --secondary: hsl(60 2.5% 23.3%); /* pictogram-200 #3c3c39 */
-  --secondary-foreground: hsl(48 33.3% 97.1%);
-  --muted: hsl(60 2.5% 23.3%);
-  --muted-foreground: hsl(50 9% 73.7%); /* text-300 #c2c0b6 */
-  --accent: hsl(60 2.5% 23.3%);
-  --accent-foreground: hsl(48 33.3% 97.1%);
-  /* danger-100 lightened to clear AA as text; see the light block for why. */
-  --destructive: hsl(4 100% 82%);
-  --destructive-surface: hsl(0 67% 59.6%); /* danger-100 */
-  --border: hsl(51 16.5% 84.5% / 0.15); /* border-200 at low alpha */
-  --input: hsl(51 16.5% 84.5% / 0.2);
-  /* border-200 at full strength; see the light block. Was `/ 0.4`, which
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: hsl(60 2.7% 14.5%); /* bg-100 #262624 */
+    --foreground: hsl(48 33.3% 97.1%); /* text-100 #faf9f5 */
+    --card: hsl(60 2.1% 18.4%); /* bg-000 #30302e */
+    --card-foreground: hsl(48 33.3% 97.1%);
+    --popover: hsl(60 2.1% 18.4%);
+    --popover-foreground: hsl(48 33.3% 97.1%);
+    --primary: hsl(48 33.3% 97.1%);
+    --primary-foreground: hsl(60 2.7% 14.5%);
+    --secondary: hsl(60 2.5% 23.3%); /* pictogram-200 #3c3c39 */
+    --secondary-foreground: hsl(48 33.3% 97.1%);
+    --muted: hsl(60 2.5% 23.3%);
+    --muted-foreground: hsl(50 9% 73.7%); /* text-300 #c2c0b6 */
+    --accent: hsl(60 2.5% 23.3%);
+    --accent-foreground: hsl(48 33.3% 97.1%);
+    /* danger-100 lightened to clear AA as text; see the light block for why. */
+    --destructive: hsl(4 100% 82%);
+    --destructive-surface: hsl(0 67% 59.6%); /* danger-100 */
+    --border: hsl(51 16.5% 84.5% / 0.15); /* border-200 at low alpha */
+    --input: hsl(51 16.5% 84.5% / 0.2);
+    /* border-200 at full strength; see the light block. Was `/ 0.4`, which
      `ring-ring/50` multiplied to 0.20 — 1.70:1. Opaque the border reads
      11.02:1 in Chrome and the halo 3.88:1. */
-  --ring: hsl(51 16.5% 84.5%);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: hsl(30 3.3% 11.8%); /* bg-200 #1f1e1d */
-  --sidebar-foreground: hsl(48 33.3% 97.1%);
-  --sidebar-primary: hsl(48 33.3% 97.1%);
-  --sidebar-primary-foreground: hsl(60 2.7% 14.5%);
-  --sidebar-accent: hsl(48 33.3% 97.1% / 0.08);
-  --sidebar-accent-foreground: hsl(48 33.3% 97.1%);
-  --sidebar-border: hsl(51 16.5% 84.5% / 0.12);
-  --sidebar-ring: hsl(51 16.5% 84.5%);
+    --ring: hsl(51 16.5% 84.5%);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: hsl(30 3.3% 11.8%); /* bg-200 #1f1e1d */
+    --sidebar-foreground: hsl(48 33.3% 97.1%);
+    --sidebar-primary: hsl(48 33.3% 97.1%);
+    --sidebar-primary-foreground: hsl(60 2.7% 14.5%);
+    --sidebar-accent: hsl(48 33.3% 97.1% / 0.08);
+    --sidebar-accent-foreground: hsl(48 33.3% 97.1%);
+    --sidebar-border: hsl(51 16.5% 84.5% / 0.12);
+    --sidebar-ring: hsl(51 16.5% 84.5%);
+  }
 }
 
 @layer base {
