@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, useContext, useState, type ReactNode } from "react";
+import { useContext, useRef, useState, type ReactNode } from "react";
 import { redirect, usePathname } from "next/navigation";
 import {
   ErrorState,
@@ -12,6 +12,7 @@ import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
 import { PlatformError } from "@/lib/platform/http";
 import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
+import { PortalContainer } from "@/components/ui/portal-container";
 
 function UnconfirmedNativeSurface({
   label,
@@ -42,19 +43,26 @@ function ServiceAccountAdmission({
   children: ReactNode;
 }) {
   const [admitted, setAdmitted] = useState(available);
+  const container = useRef<HTMLDivElement>(null);
   if (available && !admitted) setAdmitted(true);
   // An inconclusive background probe hides the UI until access is confirmed.
   // Retain the mounted draft for that interval. A definitive refusal unmounts this boundary.
   return (
     <>
       {!available && (
-        <UnconfirmedNativeSurface
-          label={SURFACES["service-accounts"].label}
-          pending={false}
-        />
+        <div aria-live="polite">
+          <UnconfirmedNativeSurface
+            label={SURFACES["service-accounts"].label}
+            pending={false}
+          />
+        </div>
       )}
       {(admitted || available) && (
-        <Activity mode={available ? "visible" : "hidden"}>{children}</Activity>
+        <div ref={container} hidden={!available} inert={!available}>
+          <PortalContainer.Provider value={container}>
+            {children}
+          </PortalContainer.Provider>
+        </div>
       )}
     </>
   );

@@ -386,18 +386,22 @@ export function ServiceAccountPanel({
       onClose={onClose}
       {...focus}
     >
-      {detail.error ? (
-        <ErrorState error={detail.error} />
-      ) : !detail.data ? (
-        <DetailSkeleton />
-      ) : (
-        <AccountOverview
-          key={detail.data.id}
-          account={detail.data}
-          listHref={listHref}
-          onEdit={onEdit}
-        />
-      )}
+      <div className="h-full overflow-y-auto overscroll-contain">
+        {detail.data && (
+          <AccountOverview
+            key={detail.data.id}
+            account={detail.data}
+            listHref={listHref}
+            onEdit={onEdit}
+          />
+        )}
+        {detail.error && (
+          <div role="alert">
+            <ErrorState error={detail.error} />
+          </div>
+        )}
+        {!detail.data && !detail.error && <DetailSkeleton />}
+      </div>
     </ResourceInspector>
   );
 }
@@ -411,7 +415,7 @@ function AccountOverview({
   const issueButton = useRef<HTMLButtonElement>(null);
   const suffix = listHref.indexOf("?");
   return (
-    <div className="h-full overflow-y-auto overscroll-contain">
+    <>
       <div className="flex items-start justify-between gap-3">
         <h2 className="min-w-0 break-all text-base font-medium">
           {account.name}
@@ -467,7 +471,7 @@ function AccountOverview({
           returnFocus={issueButton}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -605,7 +609,7 @@ function AccountPage({ account }: { account: ServiceAccount }) {
             placeholder={
               archived ? "No description." : "e.g. CI/CD pipeline workloads"
             }
-            className="block h-[76px] w-full resize-none rounded-lg border border-transparent bg-muted px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 placeholder:text-muted-foreground aria-invalid:border-destructive-surface"
+            className="block h-[76px] w-full resize-none rounded-lg border border-transparent bg-muted px-3 py-2 text-sm outline-none focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 placeholder:text-muted-foreground aria-invalid:border-destructive-surface dark:focus-visible:border-blue-400"
           />
           {descriptionInvalid && (
             <p

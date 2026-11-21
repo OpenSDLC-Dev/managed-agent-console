@@ -13,6 +13,7 @@ import { Members } from "@/components/console/members";
 import { ServiceAccounts } from "@/components/console/service-accounts";
 import { ServiceAccountDetail } from "@/components/console/service-account-detail";
 import { SurfaceGuard } from "./surface-guard";
+import { UnsavedChangesProvider } from "./unsaved-changes";
 import { SURFACES } from "@/lib/platform/surfaces";
 
 const ALL_SURFACES = Object.values(SURFACES);
@@ -22,6 +23,7 @@ const navState = vi.hoisted(() => ({ pathname: "/skills" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => navState.pathname,
   useSearchParams: () => new URLSearchParams(window.location.search),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 /** Probe answering 404 for `unimplemented`, 200 for the rest. */
@@ -116,16 +118,18 @@ it.each(["create", "detail"] as const)(
     });
     render(
       <QueryClientProvider client={client}>
-        <SurfaceGuard>
-          {kind === "detail" ? (
-            <ServiceAccountDetail
-              id={account.id}
-              listHref="/service-accounts"
-            />
-          ) : (
-            <ServiceAccounts />
-          )}
-        </SurfaceGuard>
+        <UnsavedChangesProvider>
+          <SurfaceGuard>
+            {kind === "detail" ? (
+              <ServiceAccountDetail
+                id={account.id}
+                listHref="/service-accounts"
+              />
+            ) : (
+              <ServiceAccounts />
+            )}
+          </SurfaceGuard>
+        </UnsavedChangesProvider>
       </QueryClientProvider>,
     );
     if (kind === "create")
@@ -144,6 +148,9 @@ it.each(["create", "detail"] as const)(
     await probe(503);
     await screen.findByText("Unable to confirm access to this surface.");
     expect(screen.queryByRole("textbox", { name: /Description/ })).toBeNull();
+    const canReload = () =>
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    expect(canReload()).toBe(false);
     await probe(200);
     await waitFor(() => expect(getField()).toHaveValue("local draft"));
     await probe(403);
@@ -153,6 +160,7 @@ it.each(["create", "detail"] as const)(
         "403",
       ),
     );
+    expect(canReload()).toBe(true);
     await probe(200);
     if (kind === "detail")
       await waitFor(() =>

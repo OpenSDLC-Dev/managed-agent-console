@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -11,6 +12,10 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import {
+  ConsoleSessionContext,
+  type useConsoleSession,
+} from "@/components/shell/console-session";
 import * as native from "@/lib/platform/native";
 import * as http from "@/lib/platform/http";
 import type { ApiKeyListItem } from "@/lib/platform/types";
@@ -191,6 +196,79 @@ it("retains a description draft through a failed background refresh and the next
   expect(screen.getByRole("textbox", { name: "Description" })).toBe(field);
   expect(field).toHaveValue("My unsaved description");
   expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it("keeps the fixed-account key form, pending submission and one-time reveal through detail refresh failures", async () => {
+  const user = userEvent.setup();
+  const session = { signed_in: true, id: "user_issuer", role: "admin" };
+  let detailError: http.PlatformError | null = null;
+  vi.spyOn(native, "nativeGet").mockImplementation(async (path) => {
+    if (path === "/api/auth/session") return session;
+    if (detailError) throw detailError;
+    return account;
+  });
+  vi.spyOn(http, "consoleKeysGet").mockResolvedValue([]);
+  const oneTimeValue = crypto.randomUUID();
+  let finish!: () => void;
+  const pending = new Promise((resolve) => {
+    finish = () => resolve({ ...owned, raw_key: oneTimeValue });
+  });
+  const issue = vi.spyOn(http, "consoleKeysPost").mockReturnValue(pending);
+  const { client } = renderView(
+    <ConsoleSessionContext.Provider
+      value={{ data: session } as ReturnType<typeof useConsoleSession>}
+    >
+      <ServiceAccountPanel
+        account={account}
+        listHref="/service-accounts"
+        onClose={vi.fn()}
+        onEdit={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    </ConsoleSessionContext.Provider>,
+  );
+  const refresh = async (status?: number) => {
+    detailError = status ? new http.PlatformError(status, null) : null;
+    await act(async () => {
+      await client.invalidateQueries({
+        queryKey: ["service-accounts", "detail", account.id],
+      });
+    });
+    await vi.waitFor(() => {
+      const alert = document.querySelector('[data-testid="error-state"]');
+      expect(alert?.getAttribute("data-error-status")).toBe(status?.toString());
+    });
+  };
+  await user.click(await screen.findByRole("button", { name: "Create key" }));
+  const form = await screen.findByRole("form", { name: "Create API key" });
+  const name = within(form).getByRole("textbox", { name: "Name" });
+  await user.type(name, "release automation");
+  await user.selectOptions(within(form).getByLabelText("Expires"), "30d");
+  await refresh(503);
+  expect(form.isConnected).toBe(true);
+  expect(name).toHaveValue("release automation");
+  await refresh();
+  await user.click(within(form).getByRole("button", { name: "Add" }));
+  await vi.waitFor(() => expect(issue).toHaveBeenCalledOnce());
+  await refresh(503);
+  expect(form.isConnected).toBe(true);
+  await act(async () => finish());
+  // Check only boolean predicates so a failed assertion cannot print the key.
+  const reveal = () =>
+    document.querySelector('[data-testid="revealed-api-key"]');
+  await vi.waitFor(() =>
+    expect(reveal()?.textContent === oneTimeValue).toBe(true),
+  );
+  const originalReveal = reveal();
+  await refresh();
+  await refresh(503);
+  expect(reveal() === originalReveal).toBe(true);
+  expect(reveal()?.textContent === oneTimeValue).toBe(true);
+  expect(issue).toHaveBeenCalledOnce();
+  await refresh(403);
+  expect(reveal() === null).toBe(true);
+  await refresh();
+  expect(reveal() === null).toBe(true);
 });
 
 it.each([401, 403, 404])(
