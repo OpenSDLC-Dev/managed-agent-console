@@ -307,17 +307,6 @@ describe("Nav", () => {
     expect(navigation().getAttribute("data-nav-view")).toBe("root");
   });
 
-  it("keeps a manual panel while switching sidebar width, with the rail showing the current route", async () => {
-    const view = renderNav();
-    await userEvent.click(groupRow("Resources"));
-    expect(navState.pathname).toBe("/dashboard");
-    view.rerender(<Nav compact />);
-    expect(navigation().getAttribute("data-nav-view")).toBe("root");
-    expect(groupRow("Resources").getAttribute("data-active")).toBe("false");
-    view.rerender(<Nav />);
-    expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
-  });
-
   it("drops the focus request for a superseded group navigation", async () => {
     const view = renderNav([]);
     await screen.findByRole("link", { name: "Settings" });
@@ -332,7 +321,7 @@ describe("Nav", () => {
     expect(document.activeElement).not.toBe(back());
   });
 
-  it("probe: scrolls the current page's row into view when the sidebar expands", () => {
+  it("probe: scrolls the current page's row into view when opening a submenu", () => {
     const scrolled: Element[] = [];
     const original = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = function (this: Element) {
@@ -340,9 +329,7 @@ describe("Nav", () => {
     };
     try {
       navState.pathname = "/usage";
-      const view = renderNav(undefined, { compact: true });
-      scrolled.length = 0;
-      view.rerender(<Nav />);
+      renderNav();
       expect(scrolled.map((el) => el.getAttribute("href"))).toContain("/usage");
     } finally {
       Element.prototype.scrollIntoView = original;
@@ -368,17 +355,15 @@ describe("Nav", () => {
   });
 
   it.each([false, true])(
-    "probe: hides only denied read destinations (compact=%s)",
-    async (compact) => {
-      renderNav(["api-keys", "files", "skills"], { compact }, 403);
+    "probe: hides only denied read destinations (mobile=%s)",
+    async (mobile) => {
+      renderNav(["api-keys", "files", "skills"], { mobile }, 403);
       await waitFor(() => expect(groupRow("Resources")).toBeNull());
       expect(groupRow("Agents")).not.toBeNull();
-      if (!compact)
+      if (!mobile)
         expect(groupRow("Keys").getAttribute("href")).toBe("/service-accounts");
       await userEvent.click(groupRow("Keys"));
-      const scope = compact
-        ? screen.getByRole("dialog", { name: "Keys" })
-        : navigation();
+      const scope = navigation();
       expect(
         within(scope).queryByRole("link", { name: "API Keys" }),
       ).toBeNull();
@@ -391,11 +376,11 @@ describe("Nav", () => {
   );
 
   it.each([false, true])(
-    "omits empty groups and headings (compact=%s)",
-    async (compact) => {
+    "omits empty groups and headings (mobile=%s)",
+    async (mobile) => {
       renderNav(
         [...GROUPS.Agents, ...GROUPS.Resources, ...GROUPS["Spending & usage"]],
-        { compact },
+        { mobile },
       );
       await waitFor(() =>
         expect(
@@ -441,24 +426,5 @@ describe("Nav", () => {
     await userEvent.click(groupRow("Resources"));
     expect(screen.getByRole("link", { name: "Files" })).toBeDefined();
     expect(screen.getByRole("link", { name: "Skills" })).toBeDefined();
-  });
-
-  it("compact groups use a keyboard-accessible flyout", async () => {
-    renderNav(["skills"], { compact: true });
-    const user = userEvent.setup();
-    await user.click(groupRow("Resources"));
-    const popup = await screen.findByRole("dialog", { name: "Resources" });
-    await waitFor(() =>
-      expect(within(popup).queryByRole("link", { name: "Skills" })).toBeNull(),
-    );
-    expect(
-      within(popup).getByRole("link", { name: "Files" }).getAttribute("href"),
-    ).toBe("/files");
-    await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(document.activeElement).toBe(groupRow("Resources"));
-    await user.click(groupRow("Resources"));
-    await user.click(screen.getByRole("link", { name: "Files" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

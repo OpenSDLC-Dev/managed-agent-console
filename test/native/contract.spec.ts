@@ -439,7 +439,10 @@ test("real native password/setup, current authority, management, private bytes/S
     userPage.getByRole("status").filter({ hasText: "Ask an administrator" }),
   ).toBeVisible();
   await expect(userPage.locator("[data-role=user]")).toBeVisible();
-  await expect(userPage.getByTestId("connection-dot")).toHaveCount(0);
+  await expect(userPage.getByTestId("connection-dot")).toHaveAttribute(
+    "data-state",
+    "up",
+  );
   await expect(userPage.locator('[data-nav-group="Settings"]')).toHaveCount(0);
   await page.getByLabel("Role for new-person").selectOption("admin");
   await userPage.reload();

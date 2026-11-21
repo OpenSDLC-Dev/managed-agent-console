@@ -28,7 +28,6 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/members",
   useRouter: () => ({ push: vi.fn() }),
 }));
-vi.mock("./theme-toggle", () => ({ ThemeToggle: () => null }));
 vi.mock("./providers", async (original) => {
   const { Providers } = await original<typeof import("./providers")>();
   function Capture() {

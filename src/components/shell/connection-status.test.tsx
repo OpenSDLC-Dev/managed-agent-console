@@ -69,6 +69,9 @@ describe("ConnectionStatus", () => {
         screen.getByTestId("connection-dot").getAttribute("data-state"),
       ).toBe("denied"),
     );
+    expect(
+      screen.getByTestId("connection-dot").classList.contains("bg-emerald-500"),
+    ).toBe(true);
     const status = screen.getByRole("status");
     expect(status.textContent).toContain("Platform Access Denied");
     expect(status.textContent).toContain(
@@ -112,7 +115,11 @@ describe("ConnectionStatus", () => {
     );
     renderWidget();
     await waitFor(() =>
-      expect(screen.getByText("Platform Connected")).toBeDefined(),
+      expect(
+        screen
+          .getByTitle("Platform Connected")
+          .classList.contains("bg-emerald-500"),
+      ).toBe(true),
     );
   });
 

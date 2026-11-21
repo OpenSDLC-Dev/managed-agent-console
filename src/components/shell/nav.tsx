@@ -1,7 +1,6 @@
 "use client";
 
 import { useContext, useEffect, useRef, useState } from "react";
-import { Popover } from "@base-ui/react/popover";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
@@ -19,7 +18,6 @@ import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
 const ROW = "flex h-9 items-center gap-3.5 rounded-lg px-2.5 text-sm";
-const COMPACT_ROW = "flex size-9 items-center justify-center rounded-lg";
 const HIGHLIGHT = "bg-sidebar-accent font-medium";
 const HOVER = "hover:bg-sidebar-accent/60";
 
@@ -29,43 +27,29 @@ function NavLink({
   icon: Icon,
   surface,
   active,
-  popup,
-  compact,
-  onNavigate,
 }: {
   href: string;
   label: string;
   icon?: LucideIcon;
   surface?: Surface;
   active: boolean;
-  popup?: boolean;
-  compact?: boolean;
-  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
-      onClick={onNavigate}
       data-surface={surface}
       data-active={active}
       aria-current={active ? "page" : undefined}
-      aria-label={compact ? label : undefined}
-      title={compact ? label : undefined}
-      className={cn(
-        compact ? COMPACT_ROW : ROW,
-        popup && "h-8 px-2.5 py-1.5",
-        "text-sidebar-foreground",
-        active ? HIGHLIGHT : HOVER,
-      )}
+      className={cn(ROW, "text-sidebar-foreground", active ? HIGHLIGHT : HOVER)}
     >
       {Icon && (
         <Icon
-          className={cn("size-4", !compact && "text-muted-foreground")}
+          className="size-4 text-muted-foreground"
           strokeWidth={1.75}
           aria-hidden
         />
       )}
-      {!compact && label}
+      {label}
     </Link>
   );
 }
@@ -132,67 +116,7 @@ function GroupControl({
   );
 }
 
-function CompactGroup({
-  group,
-  activeHref,
-}: {
-  group: GroupEntry;
-  activeHref: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const active = group.items.some(({ href }) => href === activeHref);
-  const { icon: Icon } = group;
-  return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        aria-label={group.label}
-        title={group.label}
-        data-nav-group={group.label}
-        data-active={active}
-        className={cn(
-          COMPACT_ROW,
-          "text-sidebar-foreground",
-          active ? HIGHLIGHT : HOVER,
-        )}
-      >
-        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          side="right"
-          align="start"
-          sideOffset={12}
-          className="z-50"
-        >
-          <Popover.Popup className="w-48 max-w-[calc(100vw-64px)] rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg outline-none">
-            <Popover.Title className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-              {group.label}
-            </Popover.Title>
-            {group.items.map(({ href, label, surface }) => (
-              <NavLink
-                key={href}
-                popup
-                href={href}
-                label={label}
-                surface={surface}
-                active={href === activeHref}
-                onNavigate={() => setOpen(false)}
-              />
-            ))}
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-export function Nav({
-  compact = false,
-  mobile = false,
-}: {
-  compact?: boolean;
-  mobile?: boolean;
-}) {
+export function Nav({ mobile = false }: { mobile?: boolean }) {
   const surfaces = useSurfaces();
   const session = useContext(ConsoleSessionContext)?.data;
   const limited = playgroundOnly(session);
@@ -209,7 +133,7 @@ export function Nav({
   } | null>(null);
 
   // A URL change selects the destination's own navigation. Manual panel changes
-  // apply only to the current page and are independent of the sidebar width.
+  // apply only to the current page.
   if (selection && selection.pathname !== pathname) setSelection(null);
   const sections = NAV_SECTIONS.map(({ heading, groups }) => ({
     heading,
@@ -230,9 +154,7 @@ export function Nav({
   );
   const selectedLabel =
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
-  const panel = compact
-    ? undefined
-    : groups.find(({ label }) => label === selectedLabel);
+  const panel = groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
 
   useEffect(() => {
@@ -253,23 +175,21 @@ export function Nav({
     const focus = pendingFocus.current;
     if (focus?.pathname === pathname) {
       pendingFocus.current = null;
-      if (!compact) {
-        const target = panelLabel
-          ? nav.current?.querySelector<HTMLButtonElement>("[data-nav-back]")
-          : Array.from(
-              nav.current?.querySelectorAll<HTMLElement>("[data-nav-group]") ??
-                [],
-            ).find((row) => row.dataset.navGroup === focus.label);
-        if (target) {
-          target.focus();
-          return;
-        }
+      const target = panelLabel
+        ? nav.current?.querySelector<HTMLButtonElement>("[data-nav-back]")
+        : Array.from(
+            nav.current?.querySelectorAll<HTMLElement>("[data-nav-group]") ??
+              [],
+          ).find((row) => row.dataset.navGroup === focus.label);
+      if (target) {
+        target.focus();
+        return;
       }
     }
     nav.current
       ?.querySelector('[aria-current="page"], button[data-active="true"]')
       ?.scrollIntoView?.({ block: "nearest" });
-  }, [pathname, surfaces, compact, panelLabel]);
+  }, [pathname, surfaces, panelLabel]);
 
   const back = () => {
     if (panelLabel) pendingFocus.current = { pathname, label: panelLabel };
@@ -292,7 +212,7 @@ export function Nav({
           back();
         }
       }}
-      className={cn("flex flex-col gap-4 pt-2", compact ? "px-1.5" : "px-2")}
+      className="flex flex-col gap-4 px-2 pt-2"
     >
       {panel ? (
         <div className="flex flex-col gap-1">
@@ -336,33 +256,14 @@ export function Nav({
               label={DASHBOARD_LINK.label}
               icon={DASHBOARD_LINK.icon}
               active={pathname === DASHBOARD_LINK.href}
-              compact={compact}
             />
           )}
           {sections.map(({ heading, groups }) => (
-            <div
-              key={heading}
-              className={cn("flex flex-col", compact && "gap-1")}
-            >
-              <h2
-                className={
-                  compact
-                    ? "sr-only"
-                    : "mb-2 px-2 text-xs leading-[17px] text-muted-foreground"
-                }
-              >
+            <div key={heading} className="flex flex-col">
+              <h2 className="mb-2 px-2 text-xs leading-[17px] text-muted-foreground">
                 {heading}
               </h2>
               {groups.map((group) => {
-                if (compact)
-                  return (
-                    <CompactGroup
-                      key={group.label}
-                      group={group}
-                      activeHref={activeHref}
-                    />
-                  );
-
                 const current = group.items.find(
                   ({ href }) => href === activeHref,
                 )?.label;

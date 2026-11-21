@@ -1,6 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useContext, useSyncExternalStore } from "react";
+import { onlineManager, useQuery } from "@tanstack/react-query";
+import { playgroundOnly } from "@/lib/routes";
+import { ConsoleSessionContext } from "./console-session";
 import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 import { cn } from "@/lib/utils";
 import { resourceURL } from "@/lib/platform/http";
@@ -12,7 +15,9 @@ type ProbeResult =
 async function probe(): Promise<ProbeResult> {
   let response: Response;
   try {
-    response = await fetch(`${resourceURL("v1/agents")}?limit=1`);
+    response = await fetch(`${resourceURL("v1/agents")}?limit=1`, {
+      cache: "no-store",
+    });
   } catch {
     return { ok: false, message: "console server unreachable" };
   }
@@ -46,14 +51,35 @@ const STATUS_LABELS = {
   down: "Platform Unreachable",
 };
 
-export function useConnectionStatus(enabled = true) {
-  const { data } = useQuery({
+const subscribeOnline = (notify: () => void) => onlineManager.subscribe(notify);
+
+export function useConnectionStatus() {
+  const session = useContext(ConsoleSessionContext);
+  const sessionOnly = playgroundOnly(session?.data);
+  const online = useSyncExternalStore(
+    subscribeOnline,
+    () => onlineManager.isOnline(),
+    () => true,
+  );
+  const { data: probeResult } = useQuery({
     queryKey: ["connection-probe"],
     queryFn: probe,
-    enabled,
+    enabled: !sessionOnly,
+    networkMode: "always",
     refetchInterval: 30_000,
+    refetchOnReconnect: "always",
     refetchOnWindowFocus: false,
   });
+
+  let data: ProbeResult | undefined = probeResult;
+  if (!online) {
+    data = { ok: false, message: "Network offline" };
+  } else if (sessionOnly && session) {
+    // Playground accounts already poll the native session and cannot read agents.
+    data = session.isRefetchError
+      ? { ok: false, message: session.error.message }
+      : { ok: true };
+  }
 
   const state =
     data === undefined
@@ -82,10 +108,9 @@ export function ConnectionIndicator({
       data-state={state}
       className={cn(
         "absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-sidebar",
-        state === "up" && "bg-emerald-500",
+        (state === "up" || state === "denied") && "bg-emerald-500",
         state === "down" && "bg-red-500",
         state === "checking" && "bg-muted-foreground/40",
-        state === "denied" && "bg-muted-foreground",
       )}
     />
   );
@@ -95,19 +120,18 @@ export function ConnectionStatus({
   label,
   error,
 }: ReturnType<typeof useConnectionStatus>) {
+  if (!error) return null;
   return (
     <div role="status" className="min-w-0 text-xs text-muted-foreground">
       <div>{label}</div>
-      {error && (
-        <div className="mt-1 wrap-anywhere">
-          {error.message}
-          {error.requestId && (
-            <span className="block font-mono text-[11px]">
-              request-id: {error.requestId}
-            </span>
-          )}
-        </div>
-      )}
+      <div className="mt-1 wrap-anywhere">
+        {error.message}
+        {error.requestId && (
+          <span className="block font-mono text-[11px]">
+            request-id: {error.requestId}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

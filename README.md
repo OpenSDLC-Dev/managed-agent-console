@@ -57,6 +57,7 @@ docker build -t managed-agent-console:local .
 
 Select that image for the platform's Console service. Keep the application edge in front of it;
 exposing the Next.js container alone does not provide platform APIs or login.
+Set the Console service’s `PLATFORM_VERSION` environment variable to the deployed platform build stamp (the output of `/worker --version` in the platform image). The platform has no version API. An unset stamp displays “Platform version unavailable”.
 Published images support `linux/amd64` and `linux/arm64`. Pin the verified image digest for deployments.
 
 ## Deploying to a cluster

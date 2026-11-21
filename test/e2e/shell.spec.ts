@@ -131,7 +131,7 @@ test("the shell shows all resources and a live platform connection", async ({
   await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
 });
 
-test("the header and account panel stay available when navigation collapses", async ({
+test("the expanded sidebar offers both versions and a keyboard-accessible account menu", async ({
   page,
 }) => {
   await signIn(page, "/dashboard");
@@ -145,23 +145,47 @@ test("the header and account panel stay available when navigation collapses", as
   await account.focus();
   await page.keyboard.press("Enter");
   await expect(panel).toBeVisible();
-  await expect(
-    panel.getByRole("button", { name: "Light theme" }),
-  ).toBeFocused();
+  const signOut = panel.getByRole("button", { name: "Sign out" });
+  await expect(signOut).toBeFocused();
   await page.keyboard.press("ArrowDown");
+  await expect(signOut).toBeFocused();
+  await expect(panel.getByText("Theme", { exact: true })).toHaveCount(0);
   await expect(
-    panel.getByRole("button", { name: "System theme" }),
-  ).toBeFocused();
-  await expect(panel.getByRole("button", { name: "Sign out" })).toBeVisible();
+    panel.getByText("Platform Connected", { exact: true }),
+  ).toHaveCount(0);
+  const platform = panel.locator("[data-platform-version]");
+  const consoleBuild = panel.locator("[data-console-version]");
+  await expect(platform).toBeVisible();
+  await expect(consoleBuild).toBeVisible();
+  const platformBox = (await platform.boundingBox())!;
+  expect((await consoleBuild.boundingBox())!.y).toBeGreaterThanOrEqual(
+    platformBox.y + platformBox.height,
+  );
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
   await expect(account).toBeFocused();
-  await expect(
-    page.getByRole("button", { name: "Collapse sidebar" }),
-  ).toBeVisible();
+});
 
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
-  await account.click();
-  await expect(panel).toBeVisible();
-  await expect(panel.locator("[data-console-version]")).toBeVisible();
+test("the account dot follows a Platform outage and recovers on reconnection", async ({
+  page,
+  context,
+}) => {
+  const probe = "**/proxy/v1/agents?limit=1";
+  await page.route(probe, (route) =>
+    route.fulfill({ status: 503, body: "unavailable" }),
+  );
+  await signIn(page, "/dashboard");
+  const dot = page.getByTestId("connection-dot");
+  await expect(dot).toHaveAttribute("data-state", "down");
+  await expect(dot).toHaveClass(/bg-red-500/);
+  await page.getByRole("button", { name: "Account menu" }).click();
+  const panel = page.getByRole("dialog", { name: "Account settings" });
+  await expect(panel.getByText("HTTP 503")).toBeVisible();
+  await page.unroute(probe);
+  await context.setOffline(true);
+  await expect(panel.getByText("Network offline")).toBeVisible();
+  await context.setOffline(false);
+  await expect(dot).toHaveAttribute("data-state", "up");
+  await expect(dot).toHaveClass(/bg-emerald-500/);
+  await expect(panel.getByRole("status")).toHaveCount(0);
 });

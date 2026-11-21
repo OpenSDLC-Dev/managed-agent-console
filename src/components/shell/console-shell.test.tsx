@@ -5,8 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { ConsoleShell } from "./console-shell";
 
 vi.mock("./nav", () => ({
-  Nav: ({ compact }: { compact: boolean }) =>
-    compact ? null : <a href="#files">Files</a>,
+  Nav: () => <a href="#files">Files</a>,
 }));
 vi.mock("./command-palette", () => ({
   CommandPalette: () => <button>Search</button>,
@@ -31,17 +30,22 @@ function renderShell(narrow: boolean) {
   );
 }
 
-it("collapses, reopens and returns focus on Escape", async () => {
-  const user = userEvent.setup();
+it("keeps desktop navigation open even with a saved collapsed preference", async () => {
+  localStorage.setItem("managed-agent-console:nav:sidebar", "false");
   renderShell(false);
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+  const files = screen.getByRole("link", { name: "Files" });
+  files.focus();
+  await userEvent.keyboard("{Escape}");
+  expect(files).toHaveFocus();
   expect(screen.getByText("Account")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  expect(screen.getByText("Account")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  await user.keyboard("{Escape}");
-  expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveFocus();
+  expect(screen.getByRole("banner")).toContainElement(
+    screen.getByRole("link", { name: "Platform documentation" }),
+  );
+  expect(
+    screen.queryByRole("button", {
+      name: /collapse sidebar|expand sidebar|^menu$/i,
+    }),
+  ).toBeNull();
 });
 
 it("opens the header menu on narrow screens and closes after navigation", async () => {
@@ -54,24 +58,6 @@ it("opens the header menu on narrow screens and closes after navigation", async 
   await user.click(screen.getByRole("link", { name: "Files" }));
   expect(screen.getByText("Dashboard")).toBeVisible();
   expect(screen.getByRole("button", { name: "Menu" })).toHaveFocus();
-});
-
-it("restores desktop preference after remount without opening mobile navigation", async () => {
-  const user = userEvent.setup();
-  let view = renderShell(false);
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  view.unmount();
-  view = renderShell(false);
-  expect(
-    screen.getByRole("button", { name: "Expand sidebar" }),
-  ).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  view.unmount();
-  renderShell(true);
-  expect(screen.getByRole("button", { name: "Menu" })).toBeInTheDocument();
-  expect(localStorage.getItem("managed-agent-console:nav:sidebar")).toBe(
-    "true",
-  );
 });
 
 it("resets temporary mobile expansion across viewport transitions", async () => {
@@ -90,7 +76,6 @@ it("resets temporary mobile expansion across viewport transitions", async () => 
       <h1>Dashboard</h1>
     </ConsoleShell>,
   );
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
   act(() => {
     narrow = true;
     listeners.forEach((listener) => listener());
@@ -103,57 +88,11 @@ it("resets temporary mobile expansion across viewport transitions", async () => 
     narrow = false;
     listeners.forEach((listener) => listener());
   });
-  expect(
-    screen.getByRole("button", { name: "Expand sidebar" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Files" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Close menu" })).toBeNull();
   act(() => {
     narrow = true;
     listeners.forEach((listener) => listener());
   });
   expect(screen.getByText("Dashboard")).toBeVisible();
-});
-
-it("keeps navigation usable when browser storage is blocked", async () => {
-  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-    throw new Error("blocked");
-  });
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("blocked");
-  });
-  const user = userEvent.setup();
-  renderShell(false);
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  await user.click(screen.getByRole("button", { name: "Expand sidebar" }));
-  expect(screen.getByText("Account")).toBeVisible();
-});
-
-it("updates the sidebar when another tab changes its preference", () => {
-  renderShell(false);
-  act(() => {
-    localStorage.setItem("managed-agent-console:nav:sidebar", "false");
-    window.dispatchEvent(new StorageEvent("storage"));
-  });
-  expect(
-    screen.getByRole("button", { name: "Expand sidebar" }),
-  ).toBeInTheDocument();
-});
-
-it("keeps documentation in the header when the sidebar collapses", async () => {
-  const user = userEvent.setup();
-  vi.stubGlobal("matchMedia", () => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  }));
-  render(
-    <ConsoleShell footer={<span>Account</span>}>
-      <h1>Dashboard</h1>
-    </ConsoleShell>,
-  );
-  const documentation = screen.getByRole("link", {
-    name: "Platform documentation",
-  });
-  expect(screen.getByRole("banner")).toContainElement(documentation);
-  await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
-  expect(documentation).toBeVisible();
 });

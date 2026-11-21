@@ -30,8 +30,8 @@ test("agents list passes axe in light and dark themes", async ({ page }) => {
   await expectNoViolations(page);
 
   await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("button", { name: "Dark theme" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
   await expectNoViolations(page);
   await page.keyboard.press("Escape");
   await expect(
@@ -181,11 +181,7 @@ for (const theme of ["light", "dark"] as const) {
     page,
   }) => {
     await signIn(page);
-    if (theme === "dark") {
-      await page.getByRole("button", { name: "Account menu" }).click();
-      await page.getByRole("button", { name: "Dark theme" }).click();
-      await expect(page.locator("html")).toHaveClass(/dark/);
-    }
+    await page.emulateMedia({ colorScheme: theme });
 
     // The confirm dialog every ConfirmButton and ConfirmIconButton ends in.
     // Its footer is `bg-muted/50`, a lighter backdrop than the popover and so

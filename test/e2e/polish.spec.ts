@@ -6,34 +6,21 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
-test("the console renders in both themes and the choice persists", async ({
+test("the console follows the system at first paint, on change and after reload", async ({
   page,
 }) => {
+  await page.addInitScript(() => localStorage.setItem("theme", "light"));
+  await page.emulateMedia({ colorScheme: "dark" });
   await signIn(page, "/agents");
-
-  // Dark: the reference palette's bg-100 (#262624) on <body>, class on <html>.
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("button", { name: "Dark theme" }).click();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect(page.locator("body")).toHaveCSS(
-    "background-color",
-    "rgb(38, 38, 36)",
-  );
+  const body = page.locator("body");
+  await expect(body).toHaveCSS("background-color", "rgb(38, 38, 36)");
   await expect(
     page.getByRole("heading", { name: "Agents", exact: true, level: 1 }),
   ).toBeVisible();
-
   await page.reload();
-  await expect(page.locator("html")).toHaveClass(/dark/);
-
-  // Light: back to the extracted light background (#fcfcfb).
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("button", { name: "Light theme" }).click();
-  await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(page.locator("body")).toHaveCSS(
-    "background-color",
-    "rgb(252, 252, 251)",
-  );
+  await expect(body).toHaveCSS("background-color", "rgb(38, 38, 36)");
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(body).toHaveCSS("background-color", "rgb(252, 252, 251)");
 });
 
 test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {

@@ -41,7 +41,7 @@ describe("ConnectionStatus (remaining branches)", () => {
       withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
     );
     renderWidget();
-    expect(screen.getByText("Checking Platform…")).toBeDefined();
+    expect(screen.getByTitle("Checking Platform…")).toBeDefined();
     expect(
       screen.getByTestId("connection-dot").getAttribute("data-state"),
     ).toBe("checking");
@@ -60,6 +60,7 @@ describe("ConnectionStatus (remaining branches)", () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/organizations/default/proxy/v1/agents?limit=1",
+      { cache: "no-store" },
     );
   });
 
