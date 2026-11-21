@@ -299,8 +299,6 @@ test("a console-issued management key drives the real wire API, and Disable stop
   expect(accepted.status()).toBe(200);
 
   const actions = await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
-  const viewCost = actions.getByRole("menuitem", { name: "View cost" });
-  const canViewCost = await viewCost.isVisible();
   await actions.getByRole("menuitem", { name: "Disable API key" }).click();
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
@@ -326,13 +324,14 @@ test("a console-issued management key drives the real wire API, and Disable stop
     "data-key-status",
     "archived",
   );
-  if (canViewCost) {
-    await openApiKeyMenu(page, `live-e2e-mgmt-${RUN}`);
-    await expect(viewCost).toBeVisible();
-    await expect(actions.getByRole("menuitem")).toHaveCount(1);
-  } else {
-    await expect(row.getByRole("button", { name: /More actions/ })).toHaveCount(
-      0,
-    );
-  }
+  // The gateway can disappear or recover between issuance and archival.
+  const archivedActions = row.getByRole("button", { name: /More actions/ });
+  await expect(async () => {
+    if (!(await archivedActions.isVisible())) return;
+    if (!(await actions.isVisible()))
+      await archivedActions.click({ timeout: 1000 });
+    await expect(actions.getByRole("menuitem")).toHaveText(["View cost"], {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 5000 });
 });

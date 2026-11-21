@@ -93,10 +93,28 @@ test("issue a key, see it once, then disable and delete it", async ({
     actions.getByRole("menuitem", { name: "View cost" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
+  await page.route("**/admin/v1/usage/requests?*", (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        type: "error",
+        error: { type: "api_error", message: "Gateway unavailable" },
+      },
+    }),
+  );
+  const unavailable = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/admin/v1/usage/requests" &&
+      response.status() === 503,
+  );
   await page.reload();
+  await unavailable;
   await expect(row.locator("[data-key-status]")).toHaveAttribute(
     "data-key-status",
     "archived",
+  );
+  await expect(row.getByRole("button", { name: /More actions/ })).toHaveCount(
+    0,
   );
 });
 
