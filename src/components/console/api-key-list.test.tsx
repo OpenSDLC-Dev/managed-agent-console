@@ -176,6 +176,12 @@ it("shows All and Anyone on the closed controls and replaces a selected status",
   await userEvent.click(screen.getByRole("option", { name: "Active" }));
   expect(names()).toEqual(["Zebra"]);
   expect(screen.queryByRole("listbox")).toBeNull();
+  await choose("Status", "Active");
+  expect(screen.getByRole("combobox", { name: "Status" })).toHaveAttribute(
+    "data-value",
+    "active",
+  );
+  expect(names()).toEqual(["Zebra"]);
 });
 
 it("filters linked account kind across distinct service accounts", async () => {
