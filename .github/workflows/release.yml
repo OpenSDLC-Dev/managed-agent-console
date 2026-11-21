@@ -144,6 +144,7 @@ jobs:
           docker build \
             --build-arg VERSION="$VERSION" \
             --build-arg REVISION="$REVISION" \
+            --build-arg CONSOLE_BUILD_VERSION="v$VERSION" \
             -t "$IMAGE:$VERSION-$ARCH" .
 
       - name: Scan image (trivy, HIGH/CRITICAL gate)

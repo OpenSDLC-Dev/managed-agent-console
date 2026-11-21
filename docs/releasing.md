@@ -29,6 +29,12 @@ Before a platform deployment consumes that image, verify:
 Local publisher tests exercise parsed workflow gates and stubbed shell commands. They do not prove an image was published.
 The native integration tier exercises real handlers from the supplied platform checkout; it is not release compatibility certification.
 
+## Build versions
+
+Each product uses its own release history. Release builds display `vX.Y.Z`. Development builds display `vX.Y.Z-dev-<commit>`, using the highest stable release tag reachable from the checkout and the first eight hexadecimal characters of its Git commit.
+
+`pnpm dev`, `pnpm build` and `pnpm image:build` read the checkout automatically. The image build passes the stamp into Docker before the checkout is stripped. A source archive without build metadata shows “Console version unavailable”.
+
 ## What a release is
 
 - A `vX.Y.Z` tag on `main`, and a GitHub Release whose body is that version's

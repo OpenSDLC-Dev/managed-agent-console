@@ -13,7 +13,9 @@ export function BuildVersions({
       <div data-platform-version={stamp ?? ""}>
         Platform {platform || "version unavailable"}
       </div>
-      <div data-console-version={consoleVersion}>Console v{consoleVersion}</div>
+      <div data-console-version={consoleVersion}>
+        Console {consoleVersion || "version unavailable"}
+      </div>
     </div>
   );
 }

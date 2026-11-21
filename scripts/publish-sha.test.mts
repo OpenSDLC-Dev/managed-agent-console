@@ -183,6 +183,7 @@ function run(
       runner,
       `
 git() { printf '%s\\n' "$CHECKOUT_SHA"; }
+node() { [[ "$*" == "scripts/build-version.mjs" ]] && printf 'v0.9.1-dev-%.8s\\n' "$CHECKOUT_SHA"; }
 docker() {
   printf '%s\\n' "$*" >> "$CALLS"
   if [ "\${1:-}" = login ]; then read -r token || true; printf '%s\\n' "$token" >> "$TOKENS"; fi
@@ -273,6 +274,9 @@ function checkBuild(result: ReturnType<typeof run>) {
     `--platform linux/amd64 --build-arg VERSION=sha-${sha} --build-arg REVISION=${sha}`,
   );
   expect(result.calls).toContain(`staging-${sha}-42-2-amd64`);
+  expect(result.calls).toContain(
+    "--build-arg CONSOLE_BUILD_VERSION=v0.9.1-dev-aaaaaaaa",
+  );
 }
 function checkManifest(result: ReturnType<typeof run>) {
   expect(result.status, result.stderr).toBe(0);

@@ -16,6 +16,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Place Model Gateway directly after Keys in Organization. Move search into the global header.
 - Open the first available destination from desktop group links, show the active page beside its group and open narrow navigation from the header.
 - Keep the desktop sidebar expanded and follow system appearance. The account menu shows the running Platform version and updates after an upgrade. The Console version appears on its own line. The status dot turns red when the platform is unreachable.
+- Identify a development build by its base release and eight-character commit in the account menu, for example `v0.9.1-dev-41a8318b`.
 
 ## Released
 
