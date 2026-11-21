@@ -10,6 +10,7 @@ import {
 } from "./connection-status";
 import { ConsoleSessionContext } from "./console-session";
 import { accountLabel, SignedInAs } from "./signed-in-as";
+import { BuildVersions } from "./version";
 
 function moveAccountFocus(event: KeyboardEvent<HTMLElement>) {
   const down = event.key === "ArrowDown";
@@ -32,7 +33,7 @@ function moveAccountFocus(event: KeyboardEvent<HTMLElement>) {
   controls[next]?.focus();
 }
 
-export function SidebarFooter({ versions }: { versions: React.ReactNode }) {
+export function SidebarFooter({ consoleVersion }: { consoleVersion: string }) {
   const data = useContext(ConsoleSessionContext)?.data;
   const connection = useConnectionStatus();
   if (!data?.signed_in) return null;
@@ -78,7 +79,10 @@ export function SidebarFooter({ versions }: { versions: React.ReactNode }) {
               </Popover.Title>
               <SignedInAs>
                 <div className="mx-2 space-y-1 border-y px-1 py-2">
-                  {versions}
+                  <BuildVersions
+                    platformVersion={data.platform_version}
+                    consoleVersion={consoleVersion}
+                  />
                   <ConnectionStatus {...connection} />
                 </div>
               </SignedInAs>
