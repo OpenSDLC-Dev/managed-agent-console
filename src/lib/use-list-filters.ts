@@ -7,14 +7,19 @@ import { useSearchParams } from "next/navigation";
 export function useListFilters() {
   const key = useSearchParams().toString();
   const params = useMemo(() => new URLSearchParams(key), [key]);
-  function update(changes: Record<string, string | null>) {
+  function update(
+    changes: Record<string, string | null>,
+    mode: "push" | "replace" = "push",
+  ) {
     const url = new URL(window.location.href);
     for (const [name, value] of Object.entries(changes)) {
       if (value === null) url.searchParams.delete(name);
       else url.searchParams.set(name, value);
     }
     if (url.href !== window.location.href) {
-      window.history.pushState(null, "", url.pathname + url.search + url.hash);
+      const href = url.pathname + url.search + url.hash;
+      if (mode === "replace") window.history.replaceState(null, "", href);
+      else window.history.pushState(null, "", href);
     }
   }
   return { key, params, update };

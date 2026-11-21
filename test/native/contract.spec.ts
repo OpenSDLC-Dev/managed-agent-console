@@ -4,6 +4,11 @@ import {
   openApiKeyMenu,
 } from "../api-key-flow";
 import {
+  serviceAccountLifecycle,
+  serviceAccountsPath,
+  showArchivedServiceAccounts,
+} from "../service-account-flow";
+import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -369,55 +374,6 @@ test("real native password/setup, current authority, management, private bytes/S
       expect(status, path).toBe(403);
     }
   }
-  await page.goto("/service-accounts");
-  await page
-    .getByRole("button", { name: "Create service account", exact: true })
-    .click();
-  await page.getByLabel("Name", { exact: true }).fill("admin-bot");
-  await page.getByLabel("Organization role").selectOption("admin");
-  await page
-    .getByRole("button", { name: "Create account", exact: true })
-    .click();
-  await expect(
-    page.getByRole("cell", { name: "admin-bot", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Edit admin-bot" }).click();
-  await expect(page.getByLabel("Name", { exact: true })).toBeDisabled();
-  await page.getByLabel("Description").fill("test account");
-  await page.getByRole("button", { name: "Save account" }).click();
-  await expect(page.getByText("test account", { exact: true })).toBeVisible();
-  const accounts = await (
-    await page.request.get(`${org}/service_accounts`)
-  ).json();
-  const sa = accounts.data[0];
-  expect(sa.created_by_actor_id).toBe(session.id);
-  expect(
-    (
-      await write(page, `${org}/service_accounts/${sa.id}`, {
-        description: null,
-        organization_role: null,
-      })
-    ).status,
-  ).toBe(200);
-  await page.getByRole("button", { name: "Archive admin-bot" }).click();
-  await page.getByRole("button", { name: "Confirm archive" }).click();
-  await page.getByLabel("Include archived").check();
-  await expect(page.locator('[data-status="archived"]')).toBeVisible();
-  const archived = await (
-    await page.request.get(`${org}/service_accounts/${sa.id}`)
-  ).json();
-  const repeated = await write(
-    page,
-    `${org}/service_accounts/${sa.id}/archive`,
-  );
-  expect(repeated.body.archived_at).toBe(archived.archived_at);
-  expect(
-    (
-      await write(page, `${org}/service_accounts/${sa.id}`, {
-        description: "no",
-      })
-    ).status,
-  ).toBe(400);
   // An admin service account never satisfies the human last-admin guard.
   await write(page, `${org}/service_accounts`, {
     name: "another-admin-bot",
@@ -480,6 +436,19 @@ test("real native password/setup, current authority, management, private bytes/S
     name: "default-role-bot",
   });
   expect(defaultAccount.body.organization_role).toBe("developer");
+  const nullPatch = await write(
+    page,
+    `${serviceAccountsPath}/${defaultAccount.body.id}`,
+    {
+      description: null,
+      organization_role: null,
+    },
+  );
+  expect(nullPatch.status).toBe(200);
+  expect(nullPatch.body).toMatchObject({
+    description: "",
+    organization_role: "developer",
+  });
   const accountPage = await (
     await page.request.get(
       `${org}/service_accounts?limit=1&include_archived=true`,
@@ -1778,6 +1747,27 @@ async function signInKeyAdmin(page: Page) {
   return session;
 }
 
+test("native service account page creates, edits and archives a reloadable account", async ({
+  page,
+}) => {
+  const admin = await signInKeyAdmin(page);
+  const account = await serviceAccountLifecycle(
+    page,
+    "native-lifecycle-runner",
+  );
+  expect(account.created_by_actor_id).toBe(admin.id);
+  expect(account.updated_by_actor_id).toBe(admin.id);
+  expect(account.archived_by_actor_id).toBe(admin.id);
+  const path = `${serviceAccountsPath}/${account.id}`;
+  const repeated = await write(page, path + "/archive");
+  expect(repeated.status).toBe(200);
+  expect(repeated.body.archived_at).toBe(account.archived_at);
+  expect((await write(page, path, { description: "no" })).status).toBe(400);
+  expect(
+    (await write(page, serviceAccountsPath, { name: account.name })).status,
+  ).toBe(409);
+});
+
 test("native key page creates and deletes an active key while its archived record remains queryable", async ({
   page,
   request,
@@ -1878,6 +1868,17 @@ test("native owned keys preserve owner creator permissions and credential isolat
   ).json();
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
+  await page.goto("/service-accounts");
+  const search = page.getByLabel("Search service accounts", { exact: true });
+  await search.fill(service.id);
+  await expect(
+    page.getByRole("button", { name: service.name, exact: true }),
+  ).toBeVisible();
+  await search.fill(retired.body.name);
+  await showArchivedServiceAccounts(page);
+  await expect(
+    page.getByRole("button", { name: retired.body.name, exact: true }),
+  ).toBeVisible();
   await page.goto("/api-keys");
   await openApiKeyForm(page);
   await page.getByLabel("Name", { exact: true }).fill("native-owned-service");
@@ -2045,6 +2046,33 @@ test("native owned keys preserve owner creator permissions and credential isolat
   } finally {
     await developerContext.close();
   }
+  // The service account's key list uses owner identity and preserves disabled keys.
+  await page.goto(`/service-accounts/${service.id}`);
+  const associated = page.getByRole("region", {
+    name: "API keys",
+    exact: true,
+  });
+  const serviceKey = associated.getByRole("link", {
+    name: /^native-owned-service\b/,
+  });
+  await expect(serviceKey).toHaveAttribute(
+    "href",
+    "/api-keys?key=" + issued.id,
+  );
+  await expect(
+    associated.getByText("native-owned-self", { exact: true }),
+  ).toHaveCount(0);
+  const archive = await write(
+    page,
+    `${serviceAccountsPath}/${service.id}/archive`,
+  );
+  expect(archive.status).toBe(200);
+  await expectListedKeyStatus(page, issued.id, "archived");
+  await page.reload();
+  await expect(
+    associated.getByText("No API keys for this service account yet."),
+  ).toBeVisible();
+  await expect(serviceKey).toHaveCount(0);
 });
 
 // A key-owner shortcut in memoryActor, cached mint-time authority, or an unowned

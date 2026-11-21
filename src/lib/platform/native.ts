@@ -58,9 +58,11 @@ export const ORGANIZATION = "/api/console/organizations/default";
 export async function nativeGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(`${path}${queryString(params)}`, {
     cache: "no-store",
+    ...(signal && { signal }),
   });
   await assertOk(response);
   return response.json() as Promise<T>;

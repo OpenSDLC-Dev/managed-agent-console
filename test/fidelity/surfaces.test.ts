@@ -71,6 +71,7 @@ describe("the fidelity surface manifest", () => {
       "/setup",
       "/members",
       "/service-accounts",
+      "/service-accounts/[id]",
       "/playground",
     ]);
     const nativeCovered = new Set(

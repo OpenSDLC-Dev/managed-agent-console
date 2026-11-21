@@ -7,6 +7,7 @@ import {
   nativeGet,
   ORGANIZATION,
   type NativeSession,
+  type ServiceAccount,
   type ServiceAccountPage,
 } from "@/lib/platform/native";
 import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
@@ -88,7 +89,7 @@ function ExpirySelect({
   onChange,
   disabled,
 }: {
-  choice: ExpiryChoice;
+  choice: ExpiryChoice | "";
   onChange: (choice: ExpiryChoice) => void;
   disabled: boolean;
 }) {
@@ -108,6 +109,11 @@ function ExpirySelect({
       disabled={disabled}
       onChange={(event) => onChange(event.target.value as ExpiryChoice)}
     >
+      {choice === "" && (
+        <option value="" disabled>
+          Select an expiration
+        </option>
+      )}
       {EXPIRY_OPTIONS.map((option) => {
         const instant = option.hours
           ? expiryInstant(option.value, "", now)
@@ -146,7 +152,7 @@ function RevealKeyDialog({
 }: {
   secret: string;
   onClose: () => void;
-  finalFocus: RefObject<HTMLButtonElement | null>;
+  finalFocus: RefObject<HTMLElement | null>;
 }) {
   const [copied, setCopied] = useState<"ok" | "fail" | null>(null);
   return (
@@ -216,7 +222,17 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
   );
 }
 
-function KeyCreation({ shortcut }: { shortcut: boolean }) {
+export function KeyCreation({
+  shortcut = false,
+  target,
+}: {
+  shortcut?: boolean;
+  target?: {
+    account: ServiceAccount;
+    onClose: () => void;
+    returnFocus?: RefObject<HTMLElement | null>;
+  };
+}) {
   const session = useContext(ConsoleSessionContext)?.data;
   const queryClient = useQueryClient();
   const active = useRef(true);
@@ -227,16 +243,20 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
     };
   }, []);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const finalFocus = target?.returnFocus ?? triggerRef;
   const popupRef = useRef<HTMLDivElement>(null);
   const cliButtonRef = useRef<HTMLButtonElement>(null);
   const create = useCreateApiKey();
-  const [step, setStep] = useState<"connect" | "cli" | "key" | null>(null);
+  const [step, setStep] = useState<"connect" | "cli" | "key" | null>(
+    target ? "key" : null,
+  );
   const [name, setName] = useState("");
-  const [choice, setChoice] = useState<ExpiryChoice>("30d");
+  const [choice, setChoice] = useState<ExpiryChoice | "">(target ? "" : "30d");
   const [custom, setCustom] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
-  const [owner, setOwner] = useState(session?.id ?? "");
+  const [owner, setOwner] = useState(target?.account.id ?? session?.id ?? "");
   const [checking, setChecking] = useState(false);
+  const submitting = useRef(false);
   const [sessionError, setSessionError] = useState<unknown>(null);
   const accounts = useInfiniteQuery({
     queryKey: ["key-owner-service-accounts", session?.id, session?.role],
@@ -247,7 +267,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_page ?? undefined,
-    enabled: session?.role === "admin" && step === "key",
+    enabled: !target && session?.role === "admin" && step === "key",
     gcTime: 0,
     // This observer stays mounted while closed. Re-enable must read the directory
     // again: an account can be created or archived without leaving this page.
@@ -263,6 +283,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   const discardSecret = () => {
     setSecret(null);
     create.reset();
+    target?.onClose();
   };
 
   // Closing also discards the lifetime and account chosen for this draft.
@@ -276,8 +297,15 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   };
 
   const submit = async () => {
-    if (!name || pending || customIsIncomplete(choice, custom)) return;
+    if (
+      !name ||
+      !choice ||
+      submitting.current ||
+      customIsIncomplete(choice, custom)
+    )
+      return;
     let principalId: string | undefined;
+    submitting.current = true;
     setChecking(true);
     setSessionError(null);
     try {
@@ -291,6 +319,8 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
         setStep(null);
         resetDraft();
         queryClient.setQueryData(["console-session"], current);
+        target?.onClose();
+        submitting.current = false;
         return;
       }
       if (
@@ -300,8 +330,9 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
         throw new Error(
           "Your role changed. Reopen the form to select an owner.",
         );
-      principalId = owner || current.id;
+      principalId = target?.account.id ?? (owner || current.id);
     } catch (error) {
+      submitting.current = false;
       if (active.current) setSessionError(error);
       return;
     } finally {
@@ -324,6 +355,9 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
           setChoice("30d");
           setCustom("");
         },
+        onSettled: () => {
+          submitting.current = false;
+        },
         // `create.reset()` is deliberately NOT called here: it would clear the
         // mutation before the reveal dialog has rendered from it.
       },
@@ -331,26 +365,28 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
   };
 
   const error = sessionError ?? create.error;
-  const incomplete = !name || customIsIncomplete(choice, custom);
+  const incomplete = !name || !choice || customIsIncomplete(choice, custom);
   return (
     <>
-      <Button
-        ref={triggerRef}
-        size={shortcut ? "default" : "sm"}
-        variant={shortcut ? "outline" : "default"}
-        className={shortcut ? "h-8" : "h-7"}
-        onClick={() => {
-          resetDraft();
-          setStep("connect");
-        }}
-      >
-        {shortcut ? (
-          <KeyRound className="size-4" />
-        ) : (
-          <Plus className="size-4" />
-        )}
-        {shortcut ? "Get API key" : "Create key"}
-      </Button>
+      {!target && (
+        <Button
+          ref={triggerRef}
+          size={shortcut ? "default" : "sm"}
+          variant={shortcut ? "outline" : "default"}
+          className={shortcut ? "h-8" : "h-7"}
+          onClick={() => {
+            resetDraft();
+            setStep("connect");
+          }}
+        >
+          {shortcut ? (
+            <KeyRound className="size-4" />
+          ) : (
+            <Plus className="size-4" />
+          )}
+          {shortcut ? "Get API key" : "Create key"}
+        </Button>
+      )}
 
       <Dialog
         open={step !== null}
@@ -359,16 +395,21 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
           if (next || pending) return;
           setStep(null);
           resetDraft();
+          target?.onClose();
         }}
       >
         <DialogContent
           ref={popupRef}
           initialFocus={() =>
-            popupRef.current?.querySelector<HTMLButtonElement>(
-              '[data-slot="dialog-close"]',
-            )
+            target
+              ? popupRef.current?.querySelector<HTMLInputElement>(
+                  "#api-key-name",
+                )
+              : popupRef.current?.querySelector<HTMLButtonElement>(
+                  '[data-slot="dialog-close"]',
+                )
           }
-          finalFocus={secret ? false : triggerRef}
+          finalFocus={secret ? false : finalFocus}
           showCloseButton={!pending}
           className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-[520px]"
         >
@@ -446,93 +487,112 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                     />
                   )}
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Label htmlFor="api-key-owner">Linked account</Label>
-                    {session?.role === "admin" &&
-                      accounts.isSuccess &&
-                      !pending && (
-                        <Link
-                          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                          href="/service-accounts"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          prefetch={false}
-                        >
-                          Manage service accounts
-                          <span className="sr-only"> (opens in a new tab)</span>
-                        </Link>
-                      )}
+                {target ? (
+                  <div className="space-y-2 text-sm">
+                    <p>This key acts as</p>
+                    <div className="rounded-lg border p-3">
+                      <p className="font-medium break-all">
+                        {target.account.name}
+                      </p>
+                      <p className="text-muted-foreground">Service account</p>
+                    </div>
+                    <p className="text-[13px] text-muted-foreground">
+                      Requests with this key inherit the service account’s
+                      access.
+                    </p>
                   </div>
-                  <select
-                    id="api-key-owner"
-                    aria-describedby="key-owner-description"
-                    className={SELECT_CLASS}
-                    value={owner}
-                    onChange={(event) => setOwner(event.target.value)}
-                    disabled={pending || session?.role !== "admin"}
-                  >
-                    <option value={session?.id}>
-                      You ·{" "}
-                      {session?.name || session?.login_name || session?.id}
-                    </option>
-                    {owner !== session?.id &&
-                      !services.some((account) => account.id === owner) && (
-                        <option value={owner} disabled>
-                          Selected account not in current list · {owner}
-                        </option>
-                      )}
-                    {services.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        Service account · {account.name || account.id}
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <Label htmlFor="api-key-owner">Linked account</Label>
+                      {session?.role === "admin" &&
+                        accounts.isSuccess &&
+                        !pending && (
+                          <Link
+                            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                            href="/service-accounts"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            prefetch={false}
+                          >
+                            Manage service accounts
+                            <span className="sr-only">
+                              {" "}
+                              (opens in a new tab)
+                            </span>
+                          </Link>
+                        )}
+                    </div>
+                    <select
+                      id="api-key-owner"
+                      aria-describedby="key-owner-description"
+                      className={SELECT_CLASS}
+                      value={owner}
+                      onChange={(event) => setOwner(event.target.value)}
+                      disabled={pending || session?.role !== "admin"}
+                    >
+                      <option value={session?.id}>
+                        You ·{" "}
+                        {session?.name || session?.login_name || session?.id}
                       </option>
-                    ))}
-                  </select>
-                  <p
-                    id="key-owner-description"
-                    className="text-[13px] text-muted-foreground"
-                  >
-                    {owner === session?.id
-                      ? "Requests with this key act as you. Deactivating your account revokes access."
-                      : "Requests with this key act as the service account. Archiving that account revokes access."}
-                  </p>
-                  {accounts.isFetching && (
+                      {owner !== session?.id &&
+                        !services.some((account) => account.id === owner) && (
+                          <option value={owner} disabled>
+                            Selected account not in current list · {owner}
+                          </option>
+                        )}
+                      {services.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          Service account · {account.name || account.id}
+                        </option>
+                      ))}
+                    </select>
                     <p
-                      role="status"
+                      id="key-owner-description"
                       className="text-[13px] text-muted-foreground"
                     >
-                      Loading service accounts…
+                      {owner === session?.id
+                        ? "Requests with this key act as you. Deactivating your account revokes access."
+                        : "Requests with this key act as the service account. Archiving that account revokes access."}
                     </p>
-                  )}
-                  {accounts.error && (
-                    <p role="alert" className="text-[13px] text-destructive">
-                      {accounts.error.message}
-                    </p>
-                  )}
-                  {/* A cold retry clears error; a cached refetch retains it.
+                    {accounts.isFetching && (
+                      <p
+                        role="status"
+                        className="text-[13px] text-muted-foreground"
+                      >
+                        Loading service accounts…
+                      </p>
+                    )}
+                    {accounts.error && (
+                      <p role="alert" className="text-[13px] text-destructive">
+                        {accounts.error.message}
+                      </p>
+                    )}
+                    {/* A cold retry clears error; a cached refetch retains it.
                       Keep recovery mounted and disabled during either request. */}
-                  {((accounts.isFetched && !accounts.data) ||
-                    accounts.isRefetchError) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={accounts.isFetching || pending}
-                      onClick={() => void accounts.refetch()}
-                    >
-                      Retry
-                    </Button>
-                  )}
-                  {accounts.hasNextPage && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={accounts.isFetching || pending}
-                      onClick={() => void accounts.fetchNextPage()}
-                    >
-                      Load more service accounts
-                    </Button>
-                  )}
-                </div>
+                    {((accounts.isFetched && !accounts.data) ||
+                      accounts.isRefetchError) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={accounts.isFetching || pending}
+                        onClick={() => void accounts.refetch()}
+                      >
+                        Retry
+                      </Button>
+                    )}
+                    {accounts.hasNextPage && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={accounts.isFetching || pending}
+                        onClick={() => void accounts.fetchNextPage()}
+                      >
+                        Load more service accounts
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="api-key-scope">Scope</Label>
                   <select
@@ -569,7 +629,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
                   size="sm"
                   disabled={pending || incomplete}
                 >
-                  Create key
+                  {target ? "Add" : "Create key"}
                 </Button>
               </div>
             </form>
@@ -581,7 +641,7 @@ function KeyCreation({ shortcut }: { shortcut: boolean }) {
         <RevealKeyDialog
           secret={secret}
           onClose={discardSecret}
-          finalFocus={triggerRef}
+          finalFocus={finalFocus}
         />
       )}
     </>

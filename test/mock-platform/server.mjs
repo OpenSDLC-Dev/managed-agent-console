@@ -45,6 +45,7 @@ import { emptyGateway, gatewayRoute, resetGateway } from "./gateway.mjs";
 const API_KEY =
   process.env.MOCK_TEST_API_KEY ??
   "sk-map-api01-mock-owned-test-key-00000000000000000000001";
+const FIXTURE_KEY_ID = "apikey_ci01";
 const PORT = Number(process.env.MOCK_PLATFORM_PORT ?? 18080);
 /** The model gateway double (gateway.mjs) — its own port, see gatewayServer. */
 const GATEWAY_PORT = Number(process.env.MOCK_GATEWAY_PORT ?? 18070);
@@ -129,6 +130,26 @@ let envKeyCounter = 1;
 // The plaintext is never stored here either — only the hint the listing shows.
 let apiKeysStore = [];
 let apiKeyCounter = 1;
+let serviceAccounts = [];
+let serviceAccountCounter = 1;
+const serviceAccountPath =
+  /^\/api\/console\/organizations\/default\/service_accounts(?:\/([^/]+)(\/archive)?)?$/;
+
+function makeServiceAccount(id, name, timestamp = now()) {
+  return {
+    id,
+    name,
+    type: "service_account",
+    description: "",
+    organization_role: "developer",
+    created_at: timestamp,
+    created_by_actor_id: MOCK_ACCOUNT.id,
+    updated_at: timestamp,
+    updated_by_actor_id: null,
+    archived_at: null,
+    archived_by_actor_id: null,
+  };
+}
 
 /** Marks a management key this platform minted (internal/api/auth.go). */
 const ISSUED_KEY_PREFIX = "sk-map-api01-";
@@ -176,7 +197,7 @@ const API_KEYS_SEED = [
     principal: null,
   },
   {
-    id: "apikey_ci01",
+    id: FIXTURE_KEY_ID,
     type: "api_key",
     name: "ci-deploy",
     workspace_id: null,
@@ -218,6 +239,18 @@ function resetStore() {
   }
   apiKeysStore = structuredClone(API_KEYS_SEED);
   apiKeyCounter = 1;
+  serviceAccounts = [
+    {
+      ...makeServiceAccount(
+        "svac_mockci01",
+        "ci-deploy",
+        "2026-08-02T10:30:00Z",
+      ),
+      description: null,
+      updated_by_actor_id: MOCK_ACCOUNT.id,
+    },
+  ];
+  serviceAccountCounter = 1;
   agentsStore = structuredClone(agents);
   agentVersionsStore = structuredClone(agentVersions);
   environmentsStore = structuredClone(environments);
@@ -1906,7 +1939,21 @@ function authenticate(req, res) {
   const key =
     req.headers["x-api-key"] ??
     /^Bearer (.+)$/.exec(String(req.headers.authorization ?? ""))?.[1];
-  if (key === API_KEY) return true;
+  if (key === API_KEY) {
+    const credential = apiKeysStore.find((row) => row.id === FIXTURE_KEY_ID);
+    // ownedkeyauth.go checks the live key and owner on every public request.
+    if (
+      credential?.status === "active" &&
+      (credential.expires_at == null ||
+        Date.parse(credential.expires_at) > Date.now()) &&
+      serviceAccounts.some(
+        (account) =>
+          account.id === credential.principal?.service_account_id &&
+          notArchived(account),
+      )
+    )
+      return true;
+  }
   res.writeHead(401, { "content-type": "application/json" });
   res.end(envelope("authentication_error", "invalid or missing API key"));
   return false;
@@ -1946,6 +1993,79 @@ const refuse = (status, message) => ({ [REFUSED]: { status, message } });
 // of the resource at all is the reference's 400 (domain.WellFormedID, #841).
 const invalidAgentId = () => refuse(400, "Invalid agent ID.");
 const invalidThreadId = (id) => refuse(400, `Invalid thread ID: ${id}`);
+
+// internal/api/serviceaccounts.go and store/migrations/0060_owned_api_keys.sql.
+async function serviceAccountResponse(req, url, [, id, archive]) {
+  const account = serviceAccounts.find((row) => row.id === id);
+  if (id && !account) return refuse(404, "Not found");
+  if (req.method === "GET" && !archive) {
+    if (id) return account;
+    const limit = Number(url.searchParams.get("limit") ?? 20);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+      return refuse(400, "limit must be an integer between 1 and 100");
+    const included = url.searchParams.get("include_archived") ?? "false";
+    if (!["true", "false"].includes(included))
+      return refuse(400, "include_archived must be a boolean");
+    return keysetPage(
+      included === "true"
+        ? serviceAccounts
+        : serviceAccounts.filter(notArchived),
+      url,
+    );
+  }
+  if (req.method !== "POST") return null;
+  if (archive) {
+    if (account.archived_at == null) {
+      account.updated_at = account.archived_at = now();
+      account.updated_by_actor_id = account.archived_by_actor_id =
+        MOCK_ACCOUNT.id;
+      for (const key of apiKeysStore)
+        if (key.principal?.service_account_id === id) key.status = "archived";
+    }
+    return account;
+  }
+  const { body, refusal } = decodeBodyObject(await readBody(req));
+  if (refusal) return refuse(400, refusal);
+  const fields = ["description", "organization_role"];
+  if (!id) fields.push("name");
+  if (Object.keys(body).some((field) => !fields.includes(field)))
+    return refuse(400, "request contains an unknown field");
+  if (body.description != null && typeof body.description !== "string")
+    return refuse(400, "description must be a string");
+  if ([...(body.description ?? "")].length > 2000)
+    return refuse(400, "description must not exceed 2000 characters");
+  if (
+    (body.organization_role != null || (!id && "organization_role" in body)) &&
+    !["admin", "developer"].includes(body.organization_role)
+  )
+    return refuse(400, "unsupported organization_role");
+  if (account?.archived_at)
+    return refuse(400, "archived service accounts cannot be updated");
+  if (!id) {
+    if (typeof body.name !== "string" || !/^[a-z0-9-]{1,255}$/.test(body.name))
+      return refuse(
+        400,
+        "name must be 1–255 lowercase letters, digits or hyphens",
+      );
+    if (serviceAccounts.some((row) => row.name === body.name))
+      return refuse(409, "this name is unavailable");
+  }
+  const result =
+    account ??
+    makeServiceAccount(
+      `svac_mock${String(serviceAccountCounter++).padStart(20, "0")}`,
+      body.name,
+    );
+  if ("description" in body) result.description = body.description ?? "";
+  if (body.organization_role != null)
+    result.organization_role = body.organization_role;
+  if (!id) serviceAccounts.unshift(result);
+  else {
+    result.updated_at = now();
+    result.updated_by_actor_id = MOCK_ACCOUNT.id;
+  }
+  return result;
+}
 
 function route(req, url) {
   const path = url.pathname;
@@ -2641,33 +2761,6 @@ const server = createServer(async (req, res) => {
   }
 
   if (
-    url.pathname === "/api/console/organizations/default/service_accounts" &&
-    req.method === "GET"
-  ) {
-    res.setHeader("content-type", "application/json");
-    res.end(
-      JSON.stringify({
-        data: [
-          {
-            id: "svac_mockci01",
-            type: "service_account",
-            name: "ci-deploy",
-            description: null,
-            organization_role: "developer",
-            created_at: "2026-08-02T10:30:00Z",
-            updated_at: "2026-08-02T10:30:00Z",
-            created_by_actor_id: MOCK_ACCOUNT.id,
-            updated_by_actor_id: MOCK_ACCOUNT.id,
-            archived_at: null,
-            archived_by_actor_id: null,
-          },
-        ],
-        next_page: null,
-      }),
-    );
-    return;
-  }
-  if (
     url.pathname === "/api/console/organizations/default/members" &&
     req.method === "GET"
   ) {
@@ -2780,6 +2873,24 @@ const server = createServer(async (req, res) => {
         );
         return;
       }
+      const owner = serviceAccounts.find(
+        (account) => account.id === body.principal_id && notArchived(account),
+      );
+      if (
+        typeof body.principal_id === "string" &&
+        body.principal_id.startsWith("svac_") &&
+        !owner
+      ) {
+        res.writeHead(404);
+        res.end(
+          envelope(
+            "not_found_error",
+            `principal ${body.principal_id} not found`,
+            { error_visibility: "user_facing" },
+          ),
+        );
+        return;
+      }
       // Absent and explicit null both mean "never" (consoleapikeys.go).
       const expiresAt =
         body.expires_at == null ? null : String(body.expires_at);
@@ -2802,13 +2913,12 @@ const server = createServer(async (req, res) => {
         partial_key_hint: partialKeyHint(rawKey),
         status: "active",
         expires_at: expiresAt,
-        principal:
-          body.principal_id === "svac_mockci01"
-            ? {
-                type: "service_account_actor",
-                service_account_id: "svac_mockci01",
-              }
-            : { type: "user_actor", user_id: MOCK_ACCOUNT.id },
+        principal: owner
+          ? {
+              type: "service_account_actor",
+              service_account_id: owner.id,
+            }
+          : { type: "user_actor", user_id: MOCK_ACCOUNT.id },
       };
       apiKeysStore.unshift(row);
       // `noStore(...)` wraps this route and only this one on the platform
@@ -5668,7 +5778,10 @@ const server = createServer(async (req, res) => {
   }
 
   res.setHeader("content-type", "application/json");
-  const result = route(req, url);
+  const serviceAccountMatch = url.pathname.match(serviceAccountPath);
+  const result = serviceAccountMatch
+    ? await serviceAccountResponse(req, url, serviceAccountMatch)
+    : route(req, url);
   if (result?.[REFUSED]) {
     const { status, message } = result[REFUSED];
     res.writeHead(status);

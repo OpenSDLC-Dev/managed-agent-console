@@ -5,6 +5,7 @@ import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { UnavailableSurface } from "@/components/console/bits";
 import { CreateKeyButton } from "@/components/console/api-keys";
 import { ApiKeysTable } from "@/components/console/api-key-list";
+import { useListFilters } from "@/lib/use-list-filters";
 import { useApiKeys } from "@/lib/platform/queries";
 import { isUnimplemented, useSurfaces } from "@/lib/platform/surfaces";
 
@@ -16,6 +17,8 @@ import { isUnimplemented, useSurfaces } from "@/lib/platform/surfaces";
  */
 export default function ApiKeysPage() {
   const keys = useApiKeys();
+  const filters = useListFilters();
+  const linkedKeyId = filters.params.get("key");
   const session = useContext(ConsoleSessionContext)?.data;
   const usage = useSurfaces()?.usage;
   if (keys.error && isUnimplemented(keys.error))
@@ -24,6 +27,8 @@ export default function ApiKeysPage() {
   return (
     <ApiKeysTable
       key={`${session?.id}:${session?.role}`}
+      linkedKeyId={linkedKeyId}
+      onLinkedKeyChange={(key) => filters.update({ key }, "replace")}
       keys={keys.data ?? []}
       loading={keys.isPending}
       error={keys.error}

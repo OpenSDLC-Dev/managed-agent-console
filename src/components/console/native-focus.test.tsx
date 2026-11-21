@@ -1,10 +1,23 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ORGANIZATION, type ServiceAccount } from "@/lib/platform/native";
+import { useTestSearchParams } from "../../../test/search-params";
 import { Members } from "./members";
 import { ServiceAccounts } from "./service-accounts";
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => useTestSearchParams(),
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 const clients: QueryClient[] = [];
 const member = {
@@ -18,7 +31,7 @@ const member = {
   status: "active",
   added_at: "2026-10-01T00:00:00Z",
 };
-const service = {
+const service: ServiceAccount = {
   id: "svac_a",
   type: "service_account",
   name: "build-bot",
@@ -26,7 +39,7 @@ const service = {
   organization_role: "developer",
   created_at: "2026-10-01T00:00:00Z",
   created_by_actor_id: null,
-  updated_at: null,
+  updated_at: "2026-10-01T00:00:00Z",
   updated_by_actor_id: null,
   archived_at: null,
   archived_by_actor_id: null,
@@ -59,8 +72,12 @@ function mount(kind: "members" | "service", pending?: Promise<Response>) {
         if (!pending) throw new Error("unexpected write in no-write control");
         return pending;
       }
-      if (url.includes("service_accounts"))
+      const { pathname } = new URL(url, location.origin);
+      if (pathname === `${ORGANIZATION}/service_accounts`)
         return Response.json({ data: [service], next_page: null });
+      if (pathname === `${ORGANIZATION}/service_accounts/${service.id}`)
+        return Response.json(service);
+      if (pathname.endsWith("/api_keys")) return Response.json([]);
       return Response.json({
         data: [member],
         has_more: false,
@@ -100,7 +117,11 @@ it.each(["members", "service"] as const)(
     await user.click(trigger);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(trigger).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: kind === "members" ? "Cancel" : "Close",
+      }),
+    );
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
@@ -109,42 +130,20 @@ it.each(["members", "service"] as const)(
   },
 );
 
-it.each([
-  ["members", "create", "cancel"],
-  ["members", "create", "escape"],
-  ["service", "create", "cancel"],
-  ["service", "create", "escape"],
-  ["service", "edit", "cancel"],
-] as const)(
-  "focus contract: %s pending %s dismissed by %s restores trigger focus",
-  async (kind, operation, dismissal) => {
+it.each(["cancel", "escape"] as const)(
+  "focus contract: members pending create dismissed by %s restores trigger focus",
+  async (dismissal) => {
     const pending = held();
-    const writes = mount(kind, pending.promise);
+    const writes = mount("members", pending.promise);
     const user = userEvent.setup();
     const trigger = await screen.findByRole("button", {
-      name:
-        kind === "members" ? "Create local member" : "Create service account",
+      name: "Create local member",
     });
-    await screen.findByText(kind === "members" ? "Alice" : "build-bot");
-    await user.click(
-      operation === "edit"
-        ? screen.getByRole("button", { name: "Edit build-bot" })
-        : trigger,
-    );
-    if (kind === "members") {
-      await user.type(screen.getByLabelText("Login name"), "focus-probe");
-      await user.type(screen.getByLabelText("Password"), "password-for-test");
-    } else if (operation === "create") {
-      await user.type(screen.getByLabelText("Name"), "focus-probe-bot");
-    }
-    const submit = screen.getByRole("button", {
-      name:
-        kind === "members"
-          ? "Create member"
-          : operation === "create"
-            ? "Create account"
-            : "Save account",
-    });
+    await screen.findByText("Alice");
+    await user.click(trigger);
+    await user.type(screen.getByLabelText("Login name"), "focus-probe");
+    await user.type(screen.getByLabelText("Password"), "password-for-test");
+    const submit = screen.getByRole("button", { name: "Create member" });
     await user.click(submit);
     try {
       await waitFor(() => expect(writes).toHaveLength(1));
@@ -161,23 +160,111 @@ it.each([
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(writes).toHaveLength(1);
     } finally {
-      await act(async () =>
-        pending.resolve(Response.json(kind === "members" ? member : service)),
+      await act(async () => pending.resolve(Response.json(member)));
+    }
+  },
+);
+
+async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole("button", { name: "More actions for build-bot" }),
+  );
+  await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+  return within(await screen.findByRole("dialog", { name: "build-bot" }));
+}
+
+it.each([
+  ["create", "close"],
+  ["create", "escape"],
+  ["edit", "cancel"],
+] as const)(
+  "focus contract: pending service-account %s resists %s and returns focus after a refused draft is closed",
+  async (operation, dismissal) => {
+    const pending = held();
+    const writes = mount("service", pending.promise);
+    const user = userEvent.setup();
+    const create = await screen.findByRole("button", {
+      name: "Create service account",
+    });
+    const row = await screen.findByRole("row", { name: /build-bot/ });
+    if (operation === "create") await user.click(create);
+    else await openEditor(user);
+    const dialog = screen.getByRole("dialog");
+    const form = within(dialog);
+    const field = form.getByRole("textbox", {
+      name: operation === "create" ? "Name" : /Description/,
+    });
+    await user.type(field, "focus-probe");
+    await user.click(
+      form.getByRole("button", {
+        name: operation === "create" ? "Create service account" : "Save",
+      }),
+    );
+    await waitFor(() => expect(writes).toHaveLength(1));
+    if (dismissal === "escape") await user.keyboard("{Escape}");
+    else
+      await user.click(
+        form.getByRole("button", {
+          name: operation === "create" ? "Close" : "Cancel",
+        }),
+      );
+    expect(dialog).toBeVisible();
+    expect(field).toBeDisabled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await act(async () =>
+      pending.resolve(
+        Response.json(
+          { error: { type: "invalid_request_error", message: "refused" } },
+          { status: 400 },
+        ),
+      ),
+    );
+    expect(await form.findByRole("alert")).toHaveTextContent("refused");
+    if (operation === "create") {
+      await user.click(form.getByRole("button", { name: "Close" }));
+      await user.click(
+        within(await screen.findByRole("alertdialog")).getByRole("button", {
+          name: "Discard",
+        }),
+      );
+      await waitFor(() => expect(create).toHaveFocus());
+    } else {
+      await user.click(form.getByRole("button", { name: "Cancel" }));
+      const details = await screen.findByRole("dialog", { name: service.name });
+      expect(
+        await within(details).findByRole("link", { name: "Open" }),
+      ).toBeVisible();
+      expect(
+        within(details).queryByRole("button", { name: "Save" }),
+      ).toBeNull();
+      await waitFor(() => expect(details).toHaveFocus());
+      await user.click(
+        within(details).getByRole("button", { name: "Close details" }),
+      );
+      await waitFor(() =>
+        expect(
+          within(row).getByRole("button", {
+            name: "More actions for build-bot",
+          }),
+        ).toHaveFocus(),
       );
     }
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writes).toHaveLength(1);
   },
 );
 it("probe: an open service-account editor retains description and role on a 400 refusal", async () => {
   const pending = held();
   mount("service", pending.promise);
   const user = userEvent.setup();
-  await user.click(
-    await screen.findByRole("button", { name: "Edit build-bot" }),
-  );
-  await user.clear(screen.getByLabelText("Description"));
-  await user.type(screen.getByLabelText("Description"), "Retained draft");
-  await user.selectOptions(screen.getByLabelText("Organization role"), "admin");
-  await user.click(screen.getByRole("button", { name: "Save account" }));
+  const editor = await openEditor(user);
+  const description = editor.getByRole("textbox", { name: /Description/ });
+  const role = editor.getByRole("combobox", { name: "Organization role" });
+  await user.clear(description);
+  await user.type(description, "Retained draft");
+  await user.click(role);
+  await user.click(await screen.findByRole("option", { name: "Admin" }));
+  await user.click(editor.getByRole("button", { name: "Save" }));
   await act(async () =>
     pending.resolve(
       Response.json(
@@ -195,6 +282,6 @@ it("probe: an open service-account editor retains description and role on a 400 
     "description refused",
   );
   expect(screen.getByRole("dialog")).toBeInTheDocument();
-  expect(screen.getByLabelText("Description")).toHaveValue("Retained draft");
-  expect(screen.getByLabelText("Organization role")).toHaveValue("admin");
+  expect(description).toHaveValue("Retained draft");
+  expect(role).toHaveTextContent("Admin");
 });
