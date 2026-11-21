@@ -87,7 +87,9 @@ it.each([false, true])(
       const page = {
         request: {
           post: async () => ({ status: () => 200 }),
-          get: async () => ({ json: async () => ({ id: "user_root" }) }),
+          get: async () => ({
+            json: async () => ({ id: "user_root", role: "admin" }),
+          }),
         },
         goto: async () => {},
         on: () => {},

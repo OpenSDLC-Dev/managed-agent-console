@@ -52,8 +52,9 @@ type KeyActionsProps = {
 export function ApiKeyActions({
   apiKey,
   canViewCost,
+  fallbackFocus,
   update,
-}: KeyActionsProps) {
+}: KeyActionsProps & { fallbackFocus?: RefObject<HTMLElement | null> }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -141,7 +142,22 @@ export function ApiKeyActions({
             if (!open) setConfirmDelete(false);
           }}
         >
-          <DialogContent initialFocus={cancel} finalFocus={trigger}>
+          <DialogContent
+            initialFocus={cancel}
+            finalFocus={() => {
+              const button = trigger.current;
+              if (!button?.disabled) return button ?? false;
+              // A pending write may disable the menu. Keep focus in its row
+              // or details until the server has answered.
+              return (
+                fallbackFocus?.current ??
+                button
+                  .closest("tr")
+                  ?.querySelector<HTMLButtonElement>("button[data-key-id]") ??
+                false
+              );
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Delete API key</DialogTitle>
               <DialogDescription>
@@ -280,6 +296,7 @@ export function ApiKeyDetails({
               key={apiKey.id}
               apiKey={apiKey}
               canViewCost={canViewCost}
+              fallbackFocus={closeButton}
               update={update}
             />
           </div>

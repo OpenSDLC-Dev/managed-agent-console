@@ -93,8 +93,11 @@ test("issue a key, see it once, then disable and delete it", async ({
   await actions.getByRole("menuitem", { name: "Delete API key" }).click();
   await page
     .getByRole("button", { name: "Delete API key", exact: true })
-    .click();
+    .press("Enter");
   await expect(row).toHaveCount(0);
+  await expect(
+    page.getByRole("searchbox", { name: "Search keys" }),
+  ).toBeFocused();
   await expect(count).toHaveAttribute("data-visible-count", "2");
   await expectListedKeyStatus(page, keyId, "archived");
   await page.getByRole("combobox", { name: "Status", exact: true }).click();
