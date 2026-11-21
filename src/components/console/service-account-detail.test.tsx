@@ -171,6 +171,62 @@ it("refuses to show a cached record or key count when its refetch is denied", as
   );
 });
 
+it("retains a description draft through a failed background refresh and the next successful read", async () => {
+  const get = vi.spyOn(native, "nativeGet").mockResolvedValue(account);
+  vi.spyOn(http, "consoleKeysGet").mockResolvedValue([]);
+  const { client } = renderView(
+    <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+  );
+  const field = await screen.findByRole("textbox", { name: "Description" });
+  fireEvent.change(field, { target: { value: "My unsaved description" } });
+  const key = ["service-accounts", "detail", account.id];
+  get.mockRejectedValue(new http.PlatformError(503, null));
+  void client.invalidateQueries({ queryKey: key });
+  expect(await screen.findByRole("alert")).toHaveTextContent("HTTP 503");
+  expect(field).toHaveValue("My unsaved description");
+  expect(field).toBeVisible();
+  get.mockResolvedValue({ ...account, description: "New server description" });
+  void client.invalidateQueries({ queryKey: key });
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(screen.getByRole("textbox", { name: "Description" })).toBe(field);
+  expect(field).toHaveValue("My unsaved description");
+  expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+});
+
+it.each([401, 403, 404])(
+  "drops the cached account and its draft after a %s even if the next refresh fails temporarily",
+  async (status) => {
+    const get = vi.spyOn(native, "nativeGet").mockResolvedValue(account);
+    vi.spyOn(http, "consoleKeysGet").mockResolvedValue([owned]);
+    const { client } = renderView(
+      <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+    );
+    const field = await screen.findByRole("textbox", { name: "Description" });
+    fireEvent.change(field, { target: { value: "Private draft" } });
+    const key = ["service-accounts", "detail", account.id];
+    get.mockRejectedValue(new http.PlatformError(status, null));
+    void client.invalidateQueries({ queryKey: key });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "HTTP " + status,
+    );
+    expect(client.getQueryData(key)).toBeNull();
+    get.mockRejectedValue(new http.PlatformError(503, null));
+    void client.invalidateQueries({ queryKey: key });
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("HTTP 503"),
+    );
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByText(account.name)).toBeNull();
+    expect(screen.queryByRole("link", { name: /Build secret/ })).toBeNull();
+    get.mockResolvedValue(account);
+    void client.invalidateQueries({ queryKey: key });
+    expect(
+      await screen.findByRole("textbox", { name: "Description" }),
+    ).toHaveValue(account.description);
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  },
+);
+
 it("shows an archived deep link as read-only and reports an unknown ID", async () => {
   const get = vi
     .spyOn(native, "nativeGet")

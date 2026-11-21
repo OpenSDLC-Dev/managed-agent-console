@@ -286,9 +286,29 @@ test("copy ID, navigate the inspector and open only visible keys belonging to th
       url.pathname === "/api-keys" &&
       url.searchParams.get("key") === "apikey_ci01",
   );
+  const keyDetails = page.getByRole("dialog");
+  await expect(keyDetails).toHaveAccessibleName("ci-deploy");
+  const nextKey = keyDetails.getByRole("button", { name: "Next", exact: true });
+  if (await nextKey.isEnabled()) await nextKey.click();
+  else
+    await keyDetails
+      .getByRole("button", { name: "Previous", exact: true })
+      .click();
+  await expect(keyDetails).not.toHaveAttribute(
+    "data-api-key-detail",
+    "apikey_ci01",
+  );
+  const navigatedId = await keyDetails.getAttribute("data-api-key-detail");
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get("key") === navigatedId,
+  );
+  await page.reload();
+  await expect(keyDetails).toHaveAttribute("data-api-key-detail", navigatedId!);
+  await keyDetails.getByRole("button", { name: "Close details" }).click();
+  await expect(page).toHaveURL((url) => !url.searchParams.has("key"));
   await expect(
-    page.getByRole("dialog", { name: "ci-deploy", exact: true }),
-  ).toBeVisible();
+    page.getByRole("searchbox", { name: "Search keys" }),
+  ).toBeFocused();
 });
 
 test("Create API key assigns the selected account and the new key appears in its details", async ({

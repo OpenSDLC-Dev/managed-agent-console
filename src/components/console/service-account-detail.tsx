@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent, type RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Archive, ArrowUpRight, Ellipsis, Plus, Pencil } from "lucide-react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
@@ -26,6 +26,7 @@ import {
   nativeWrite,
   type ServiceAccount,
 } from "@/lib/platform/native";
+import { PlatformError } from "@/lib/platform/http";
 import { useApiKeys } from "@/lib/platform/queries";
 import { ageLabel } from "@/lib/session-trace/timing";
 import { apiKeyDisplayName, apiKeyStatusLabel } from "./api-key-labels";
@@ -54,10 +55,27 @@ const accountPath = (id: string) =>
 const detailKey = (id: string) => ["service-accounts", "detail", id];
 
 function useServiceAccount(id: string) {
-  return useQuery({
+  const client = useQueryClient();
+  return useQuery<ServiceAccount | null>({
     queryKey: detailKey(id),
-    queryFn: ({ signal }) =>
-      nativeGet<ServiceAccount>(accountPath(id), undefined, signal),
+    queryFn: async ({ signal }) => {
+      try {
+        return await nativeGet<ServiceAccount>(
+          accountPath(id),
+          undefined,
+          signal,
+        );
+      } catch (error) {
+        // A later network failure must not expose a previously revoked record.
+        if (
+          !signal.aborted &&
+          error instanceof PlatformError &&
+          [401, 403, 404].includes(error.status)
+        )
+          client.setQueryData(detailKey(id), null);
+        throw error;
+      }
+    },
   });
 }
 
@@ -95,7 +113,11 @@ function RoleSelect({
     >
       <SelectTrigger
         aria-label="Organization role"
-        className={wide ? "w-full" : undefined}
+        className={
+          wide
+            ? "w-full rounded-lg border-0 bg-muted px-2 dark:bg-muted dark:hover:bg-muted/80"
+            : undefined
+        }
         size="sm"
       >
         <SelectValue />
@@ -462,16 +484,16 @@ export function ServiceAccountDetail({
       <div className="pb-3">
         <Breadcrumb
           parent={{ href: listHref, label: "Service accounts" }}
-          current={detail.error ? id : (detail.data?.name ?? id)}
+          current={detail.data?.name ?? id}
         />
       </div>
-      {detail.error ? (
-        <ErrorState error={detail.error} />
-      ) : detail.data ? (
-        <AccountPage key={id} account={detail.data} />
-      ) : (
-        <DetailSkeleton />
+      {detail.data && <AccountPage key={id} account={detail.data} />}
+      {detail.error && (
+        <div role="alert">
+          <ErrorState error={detail.error} />
+        </div>
       )}
+      {!detail.data && !detail.error && <DetailSkeleton />}
     </div>
   );
 }
@@ -512,7 +534,7 @@ function AccountPage({ account }: { account: ServiceAccount }) {
           <h1
             ref={title}
             tabIndex={-1}
-            className="break-all font-serif text-2xl font-medium"
+            className="break-all font-serif text-2xl font-medium leading-7"
           >
             {account.name}
           </h1>
@@ -553,14 +575,16 @@ function AccountPage({ account }: { account: ServiceAccount }) {
         )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <IdCell id={account.id} />
         <span>
           Created <Day iso={account.created_at} />
         </span>
+        <IdCell id={account.id} />
       </div>
-      <section aria-label="Description" className="mt-6 border-t py-5">
+      <section aria-label="Description" className="mt-[22px]">
         <form onSubmit={saveDescription} className="space-y-2">
-          <Label htmlFor="sa-page-description">Description</Label>
+          <Label htmlFor="sa-page-description" className="font-normal">
+            Description
+          </Label>
           <textarea
             id="sa-page-description"
             ref={descriptionField}
@@ -581,7 +605,7 @@ function AccountPage({ account }: { account: ServiceAccount }) {
             placeholder={
               archived ? "No description." : "e.g. CI/CD pipeline workloads"
             }
-            className="h-[76px] w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 placeholder:text-muted-foreground aria-invalid:border-destructive-surface"
+            className="block h-[76px] w-full resize-none rounded-lg border border-transparent bg-muted px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 placeholder:text-muted-foreground aria-invalid:border-destructive-surface"
           />
           {descriptionInvalid && (
             <p
@@ -603,11 +627,8 @@ function AccountPage({ account }: { account: ServiceAccount }) {
           )}
         </form>
       </section>
-      <section
-        aria-label="Organization role"
-        className="space-y-3 border-t py-5"
-      >
-        <h2 className="text-sm font-medium">Organization role</h2>
+      <section aria-label="Organization role" className="mt-3.5 space-y-1 pb-5">
+        <h2 className="text-sm">Organization role</h2>
         <RoleSelect
           role={account.organization_role}
           wide

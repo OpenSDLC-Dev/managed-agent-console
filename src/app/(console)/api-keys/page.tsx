@@ -26,11 +26,9 @@ export default function ApiKeysPage() {
 
   return (
     <ApiKeysTable
-      key={`${session?.id}:${session?.role}:${linkedKeyId ?? ""}`}
-      initialKeyId={linkedKeyId}
-      onCloseLinkedKey={
-        linkedKeyId ? () => filters.update({ key: null }, "replace") : undefined
-      }
+      key={`${session?.id}:${session?.role}`}
+      linkedKeyId={linkedKeyId}
+      onLinkedKeyChange={(key) => filters.update({ key }, "replace")}
       keys={keys.data ?? []}
       loading={keys.isPending}
       error={keys.error}

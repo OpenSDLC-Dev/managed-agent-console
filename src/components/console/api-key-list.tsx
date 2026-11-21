@@ -143,16 +143,16 @@ export function ApiKeysTable({
   error,
   action,
   canViewCost = false,
-  initialKeyId = null,
-  onCloseLinkedKey,
+  linkedKeyId = null,
+  onLinkedKeyChange,
 }: {
   keys: ApiKeyListItem[];
   loading: boolean;
   error: unknown;
   action?: ReactNode;
   canViewCost?: boolean;
-  initialKeyId?: string | null;
-  onCloseLinkedKey?: () => void;
+  linkedKeyId?: string | null;
+  onLinkedKeyChange?: (id: string | null) => void;
 }) {
   const session = useContext(ConsoleSessionContext)?.data;
   const update = useUpdateApiKey();
@@ -161,7 +161,7 @@ export function ApiKeysTable({
   const [selection, setSelection] = useState<{
     id: string | null;
     removed?: boolean;
-  }>({ id: initialKeyId });
+  }>({ id: null });
   const opener = useRef<HTMLElement>(null);
   const search = useRef<HTMLInputElement>(null);
   // React detaches the ref before removing the row. At that point the action
@@ -191,9 +191,14 @@ export function ApiKeysTable({
     filters.owner || filters.creator || filters.status,
   );
   const filtered = Boolean(filters.query || filterSelected);
-  const selected = rows.find((key) => key.id === selection.id);
-  if (selection.id !== null && !selected && !loading && !error)
+  const selectedId = linkedKeyId ?? selection.id;
+  const selected = rows.find((key) => key.id === selectedId);
+  const missingSelection = !selected && !loading && !error;
+  if (!linkedKeyId && selection.id !== null && missingSelection)
     setSelection({ id: null, removed: true });
+  useEffect(() => {
+    if (linkedKeyId && missingSelection) onLinkedKeyChange?.(null);
+  }, [linkedKeyId, missingSelection, onLinkedKeyChange]);
   // A nonmodal inspector leaves outside focus alone. When its selected row
   // disappears too, return the keyboard to search if the document lost focus.
   useEffect(() => {
@@ -205,7 +210,14 @@ export function ApiKeysTable({
       search.current?.focus();
     }
   }, [selection.removed]);
-  const selectKey = (id: string) => setSelection({ id });
+  function selectKey(id: string | null) {
+    if (linkedKeyId) {
+      setSelection({ id: null });
+      onLinkedKeyChange?.(id);
+    } else {
+      setSelection({ id });
+    }
+  }
   const resetFilters = () => {
     setFilters(clearFilters);
     search.current?.focus();
@@ -389,9 +401,7 @@ export function ApiKeysTable({
                   <TableRow
                     key={key.id}
                     ref={restoreRowFocus}
-                    data-state={
-                      key.id === selection.id ? "selected" : undefined
-                    }
+                    data-state={key.id === selectedId ? "selected" : undefined}
                     className="cursor-pointer"
                     onClick={(event) => {
                       opener.current =
@@ -505,10 +515,7 @@ export function ApiKeysTable({
             apiKey={selected}
             rows={rows}
             onSelect={selectKey}
-            onClose={() => {
-              setSelection({ id: null });
-              onCloseLinkedKey?.();
-            }}
+            onClose={() => selectKey(null)}
             finalFocus={opener}
             fallbackFocus={search}
             update={update}

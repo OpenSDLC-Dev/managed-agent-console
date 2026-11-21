@@ -168,7 +168,7 @@ export function CreateServiceAccountDialog({
               autoComplete="off"
               spellCheck={false}
               placeholder="e.g. research-jobs"
-              className="h-7 font-mono"
+              className="h-7 font-mono focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:focus-visible:border-blue-400"
               disabled={create.isPending}
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -204,7 +204,7 @@ export function CreateServiceAccountDialog({
               name="description"
               rows={3}
               placeholder="e.g. CI/CD pipeline workloads"
-              className="min-h-[76px] w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive-surface dark:bg-input/30"
+              className="min-h-[76px] w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 disabled:opacity-50 aria-invalid:border-destructive-surface dark:bg-input/30 dark:focus-visible:border-blue-400"
               disabled={create.isPending}
               value={description}
               onChange={(event) => setDescription(event.target.value)}

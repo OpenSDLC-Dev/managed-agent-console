@@ -37,6 +37,7 @@ import {
   type ServiceAccount,
   type ServiceAccountPage,
 } from "@/lib/platform/native";
+import { PlatformError } from "@/lib/platform/http";
 import { useListFilters } from "@/lib/use-list-filters";
 import { Day, ErrorState, Time } from "./bits";
 import { IdCell } from "./copy-id";
@@ -141,7 +142,11 @@ function AccountActions({
   );
 }
 
-type Selection = { id: string; mode: "view" | "edit" };
+type Selection = {
+  account: ServiceAccount;
+  mode: "view" | "edit";
+  directoryUpdatedAt: number;
+};
 type Modal =
   { kind: "create" } | { kind: "key" | "archive"; account: ServiceAccount };
 
@@ -166,21 +171,52 @@ function Directory() {
   const create = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLElement>(null);
   const needle = query.trim().toLowerCase();
-  const rows = (directory.data ?? []).filter(
+  const accounts = directory.data ?? [];
+  const rows = accounts.filter(
     (a) =>
       !needle ||
       [a.id, a.name, a.description ?? ""].some((v) =>
         v.toLowerCase().includes(needle),
       ),
   );
-  const index = rows.findIndex((a) => a.id === selection?.id);
-  const selected = rows[index];
-  const editing = selection?.mode === "edit" && !!selected;
-  const busy = pending || editing || !!modal;
+  const selected = selection?.account;
+  const index = rows.findIndex((a) => a.id === selected?.id);
+  const denied =
+    directory.error instanceof PlatformError &&
+    [401, 403, 404].includes(directory.error.status);
+  const settledDirectory = directory.isSuccess && !directory.isFetching;
+  // The directory can still predate a just-created account. A later complete
+  // directory can remove it; a text search or a transient read error cannot.
+  if (
+    selection &&
+    (denied ||
+      (settledDirectory &&
+        directory.dataUpdatedAt !== selection.directoryUpdatedAt &&
+        !accounts.some((a) => a.id === selection.account.id)))
+  ) {
+    setSelection(null);
+  }
+  if (
+    modal &&
+    (denied ||
+      (modal.kind !== "create" &&
+        !pending &&
+        settledDirectory &&
+        !accounts.some((a) => a.id === modal.account.id)))
+  ) {
+    setModal(null);
+  }
+  const editing = selection?.mode === "edit";
+  const busy = pending || editing || !!modal || denied;
   const listHref = `/service-accounts${filters.key ? `?${filters.key}` : ""}`;
   const select = (account: ServiceAccount, mode: Selection["mode"] = "view") =>
-    setSelection({ id: account.id, mode });
+    setSelection({
+      account,
+      mode,
+      directoryUpdatedAt: directory.dataUpdatedAt,
+    });
   function changeQuery(value: string) {
+    opener.current = search.current;
     setSelection(null);
     filters.update({ q: value || null }, "replace");
   }
@@ -253,7 +289,7 @@ function Directory() {
               placeholder="Search service accounts"
               value={query}
               onChange={(event) => changeQuery(event.target.value)}
-              className="h-7 border-transparent bg-muted pr-8 pl-9 text-sm dark:bg-muted"
+              className="h-7 border-transparent bg-muted pr-8 pl-9 text-sm focus-visible:border-blue-600 focus-visible:ring-2 focus-visible:ring-blue-500/20 dark:bg-muted dark:focus-visible:border-blue-400"
             />
             {query && (
               <button
@@ -281,12 +317,13 @@ function Directory() {
                   name="service-account-status"
                   className="peer sr-only"
                   checked={value === archived}
-                  onChange={() => {
+                  onChange={(event) => {
+                    opener.current = event.currentTarget;
                     setSelection(null);
                     filters.update({ status: value ? "archived" : null });
                   }}
                 />
-                <span className="block rounded-md px-3 text-sm leading-6 text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-ring">
+                <span className="block rounded-md px-3 text-sm leading-6 text-muted-foreground peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-ring dark:peer-checked:bg-foreground/15">
                   {value ? "Archived" : "Active"}
                 </span>
               </label>
@@ -311,7 +348,7 @@ function Directory() {
               className="min-w-[580px] table-fixed"
             >
               <colgroup>
-                <col className="w-[24%] lg:w-[280px]" />
+                <col className="w-[24%] lg:w-[272px]" />
                 <col />
                 <col className="w-[16%] lg:w-[120px]" />
                 <col className="w-[19%] lg:w-[135px]" />
@@ -411,7 +448,7 @@ function Directory() {
                       {directory.isPending ? (
                         <span role="status">Loading service accounts…</span>
                       ) : (
-                        <div className="flex flex-col items-center gap-2.5">
+                        <div className="flex translate-y-2.5 flex-col items-center gap-2.5">
                           <Shield
                             aria-hidden
                             className="mb-2 size-14 stroke-1"
@@ -466,7 +503,7 @@ function Directory() {
           <ServiceAccountPanel
             account={selected}
             previous={rows[index - 1]}
-            next={rows[index + 1]}
+            next={index < 0 ? undefined : rows[index + 1]}
             listHref={listHref}
             onEdit={(account) => select(account, "edit")}
             onClose={() => setSelection(null)}
