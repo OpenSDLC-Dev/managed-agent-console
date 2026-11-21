@@ -166,6 +166,42 @@ test("the expanded sidebar offers both versions and a keyboard-accessible accoun
   await expect(account).toBeFocused();
 });
 
+test("an open account menu follows Platform upgrades on the session refresh", async ({
+  page,
+}) => {
+  let stamp: string | undefined;
+  await page.route("**/api/auth/session", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: { ...(await response.json()), platform_version: stamp },
+    });
+  });
+  await page.clock.install();
+  await signIn(page);
+  await page.getByRole("button", { name: "Account menu" }).click();
+  const panel = page.getByRole("dialog", { name: "Account settings" });
+  const platform = panel.locator("[data-platform-version]");
+  const consoleBuild = panel.locator("[data-console-version]");
+  await expect(platform).toBeVisible();
+  await expect(platform).toHaveAttribute("data-platform-version", "");
+  const consoleVersion = await consoleBuild.getAttribute(
+    "data-console-version",
+  );
+  expect(consoleVersion).toBeTruthy();
+
+  for (const release of ["1.2.3", "1.2.4"]) {
+    stamp = release;
+    await page.clock.fastForward(16_000);
+    await expect(platform).toHaveAttribute("data-platform-version", release);
+    await expect(panel).toBeVisible();
+    await expect(consoleBuild).toHaveAttribute(
+      "data-console-version",
+      consoleVersion!,
+    );
+  }
+});
+
 test("the account dot follows a Platform outage and recovers on reconnection", async ({
   page,
   context,

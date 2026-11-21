@@ -10,6 +10,7 @@ export type NativeSession = {
   id: string;
   role: Role;
   role_source: string;
+  platform_version?: string;
   playground_access?: boolean;
   email: string;
   name: string;

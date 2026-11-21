@@ -25,6 +25,7 @@ it("probes the connection with the account panel closed and shows account action
             name: "Stub Operator",
             email: "op@x.test",
             role: "admin",
+            platform_version: "1.2.3",
           })
         : Response.json({ data: [] }),
     ),
@@ -36,7 +37,7 @@ it("probes the connection with the account panel closed and shows account action
   render(
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
-        <SidebarFooter versions={<span>Console v9.9.9</span>} />
+        <SidebarFooter consoleVersion="9.9.9" />
       </ConsoleSessionBoundary>
     </QueryClientProvider>,
   );
@@ -54,6 +55,10 @@ it("probes the connection with the account panel closed and shows account action
   expect(within(panel).getByText("op@x.test")).toBeVisible();
   expect(within(panel).queryByText("Platform Connected")).toBeNull();
   expect(within(panel).queryByText("Theme")).toBeNull();
+  expect(panel.querySelector("[data-platform-version]")).toHaveAttribute(
+    "data-platform-version",
+    "1.2.3",
+  );
   expect(within(panel).getByText("Console v9.9.9")).toBeVisible();
   expect(within(panel).getByRole("button", { name: "Sign out" })).toBeVisible();
 });
@@ -78,7 +83,7 @@ it("derives Playground connectivity from the native session without reading mana
   render(
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
-        <SidebarFooter versions="Console v9.9.9" />
+        <SidebarFooter consoleVersion="9.9.9" />
       </ConsoleSessionBoundary>
     </QueryClientProvider>,
   );
