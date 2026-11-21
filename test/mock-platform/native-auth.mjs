@@ -157,7 +157,8 @@ export async function nativeAuthRoute(req, res, url, readBody) {
   }
   if (url.pathname === "/api/auth/session" && req.method === "GET") {
     const session = authenticateBrowser(req, res);
-    if (session) reply(res, 200, { ...session, platform_version: "dev-mock" });
+    if (session)
+      reply(res, 200, { ...session, platform_version: "v0.6.0-dev-0123abcd" });
     return true;
   }
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {

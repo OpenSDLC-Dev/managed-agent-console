@@ -188,9 +188,9 @@ test("an open account menu follows Platform upgrades on the session refresh", as
   const consoleVersion = await consoleBuild.getAttribute(
     "data-console-version",
   );
-  expect(consoleVersion).toBeTruthy();
+  expect(consoleVersion).toMatch(/^v\d+\.\d+\.\d+(?:-dev-[0-9a-f]{8})?$/);
 
-  for (const release of ["1.2.3", "1.2.4"]) {
+  for (const release of ["1.2.3", "v1.2.3-dev-41a8318b", "v1.2.4"]) {
     stamp = release;
     await page.clock.fastForward(16_000);
     await expect(platform).toHaveAttribute("data-platform-version", release);

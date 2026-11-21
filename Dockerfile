@@ -6,6 +6,7 @@ RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
+ARG CONSOLE_BUILD_VERSION
 RUN pnpm build
 
 # Run — Next standalone output only

@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
+import { consoleBuildVersion } from "./scripts/build-version.mjs";
 
 const nextConfig: NextConfig = {
+  env: {
+    CONSOLE_BUILD_VERSION: consoleBuildVersion(
+      process.cwd(),
+      process.env.CONSOLE_BUILD_VERSION,
+    ),
+  },
   // Single-container deployment (Dockerfile) uses the standalone server.
   output: "standalone",
   // gzip buffers proxied SSE (no bytes → headers held back → the stream

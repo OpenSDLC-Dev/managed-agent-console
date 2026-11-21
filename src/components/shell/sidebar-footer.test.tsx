@@ -37,7 +37,7 @@ it("probes the connection with the account panel closed and shows account action
   render(
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
-        <SidebarFooter consoleVersion="9.9.9" />
+        <SidebarFooter consoleVersion="v9.9.9" />
       </ConsoleSessionBoundary>
     </QueryClientProvider>,
   );
@@ -83,7 +83,7 @@ it("derives Playground connectivity from the native session without reading mana
   render(
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
-        <SidebarFooter consoleVersion="9.9.9" />
+        <SidebarFooter consoleVersion="v9.9.9" />
       </ConsoleSessionBoundary>
     </QueryClientProvider>,
   );

@@ -14,8 +14,9 @@ case "${1:-}" in
   build|push)
     [[ "$ARCH" == amd64 || "$ARCH" == arm64 ]] || exit 1
     if [[ "$1" == build ]]; then
+      stamp="$(node scripts/build-version.mjs)"
       docker build --platform "linux/$ARCH" --build-arg VERSION="$VERSION" \
-        --build-arg REVISION="$SOURCE_SHA" -t "$STAGING-$ARCH" .
+        --build-arg REVISION="$SOURCE_SHA" --build-arg CONSOLE_BUILD_VERSION="$stamp" -t "$STAGING-$ARCH" .
     else
       printf '%s' "$PUBLISH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       docker push "$STAGING-$ARCH"

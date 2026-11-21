@@ -52,12 +52,12 @@ Use that issued key for SDK or CLI access. The browser needs no key configuratio
 To build a candidate image from this checkout:
 
 ```bash
-docker build -t managed-agent-console:local .
+pnpm image:build
 ```
 
 Select that image for the platform's Console service. Keep the application edge in front of it;
 exposing the Next.js container alone does not provide platform APIs or login.
-The account menu reads the running Platform build from the signed-in session. An open Console picks up upgrades automatically. Older Platform builds that omit the version display “Platform version unavailable”.
+The account menu reads the running Platform build from the signed-in session. An open Console picks up upgrades automatically. Older Platform builds that omit the version display “Platform version unavailable”. Both products use the [build version format](docs/releasing.md#build-versions).
 Published images support `linux/amd64` and `linux/arm64`. Pin the verified image digest for deployments.
 
 ## Deploying to a cluster

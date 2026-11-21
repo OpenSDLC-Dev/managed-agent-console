@@ -48,6 +48,9 @@ it("locks release publication behind the read-only default-branch validator", ()
   expect(validate.steps[0].with?.ref).toBe("${{ github.sha }}");
   expect(notes.needs).toBe("validate");
   expect(build.needs).toBe("validate");
+  expect(
+    build.steps.find((step) => step.run?.includes("docker build"))?.run,
+  ).toContain('--build-arg CONSOLE_BUILD_VERSION="v$VERSION"');
   expect(publish.needs).toEqual(["validate", "build", "notes"]);
   for (const job of [notes, build, publish]) {
     expect(job.steps[0].with).toMatchObject({
