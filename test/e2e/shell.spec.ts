@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 
@@ -188,7 +189,10 @@ test("an open account menu follows Platform upgrades on the session refresh", as
   const consoleVersion = await consoleBuild.getAttribute(
     "data-console-version",
   );
-  expect(consoleVersion).toMatch(/^v\d+\.\d+\.\d+(?:-dev-[0-9a-f]{8})?$/);
+  const builtConfig = JSON.parse(
+    readFileSync(".next/required-server-files.json", "utf8"),
+  ).config;
+  expect(consoleVersion).toBe(builtConfig.env.CONSOLE_BUILD_VERSION);
 
   for (const release of ["1.2.3", "v1.2.3-dev-41a8318b", "v1.2.4"]) {
     stamp = release;
