@@ -288,7 +288,8 @@ test("real native password/setup, current authority, management, private bytes/S
   const session = await page.evaluate(
     async () => await (await fetch("/api/auth/session")).json(),
   );
-  expect(Object.keys(session).sort()).toEqual(
+  const { platform_version: platformVersion, ...identity } = session;
+  expect(Object.keys(identity).sort()).toEqual(
     [
       "csrf_token",
       "email",
@@ -302,6 +303,10 @@ test("real native password/setup, current authority, management, private bytes/S
       "signed_in",
     ].sort(),
   );
+  if (platformVersion !== undefined) {
+    expect(typeof platformVersion).toBe("string");
+    expect(platformVersion.length).toBeGreaterThan(0);
+  }
   expect(session.playground_access).toBe(true);
   expect(JSON.stringify(session).includes(cookie.value)).toBe(false);
   expect(
@@ -443,10 +448,12 @@ test("real native password/setup, current authority, management, private bytes/S
     "data-state",
     "up",
   );
+  await userPage.getByRole("button", { name: "Back to all sections" }).click();
   await expect(userPage.locator('[data-nav-group="Settings"]')).toHaveCount(0);
   await page.getByLabel("Role for new-person").selectOption("admin");
   await userPage.reload();
   await expect(userPage.locator("[data-role=admin]")).toBeVisible();
+  await userPage.getByRole("button", { name: "Back to all sections" }).click();
   await userPage.locator('[data-nav-group="Settings"]').click();
   await expect(
     userPage
