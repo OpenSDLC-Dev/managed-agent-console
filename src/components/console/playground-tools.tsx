@@ -34,6 +34,35 @@ export function toolName(tool: unknown) {
   return isObject(tool) && typeof tool.name === "string" ? tool.name : "";
 }
 
+// Raw JSON can reorder or replace tools without using the card controls.
+export function remapExpandedTools(
+  open: number[],
+  before: unknown,
+  after: unknown,
+) {
+  if (!open.length) return open;
+  if (!Array.isArray(before) || !Array.isArray(after)) return [];
+  const oldNames = before.map(toolName);
+  const newNames = after.map(toolName);
+  if (
+    oldNames.length === newNames.length &&
+    oldNames.every((name, index) => name === newNames[index])
+  )
+    return open;
+  return open.flatMap((oldIndex) => {
+    const name = oldNames[oldIndex];
+    const index = newNames.indexOf(name);
+    if (
+      !name ||
+      index < 0 ||
+      index !== newNames.lastIndexOf(name) ||
+      oldNames.indexOf(name) !== oldNames.lastIndexOf(name)
+    )
+      return [];
+    return [index];
+  });
+}
+
 export function addCustomTool(draft: PlaygroundDraft): PlaygroundDraft {
   const tools: unknown[] = Array.isArray(draft.parameters?.tools)
     ? draft.parameters.tools

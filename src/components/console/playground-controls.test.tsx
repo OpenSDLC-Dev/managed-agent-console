@@ -408,6 +408,37 @@ it("prepends and expands every new custom tool, keeping existing tool edits atta
   });
 });
 
+it("keeps expanded cards on their tools when Code removes or reorders declarations", async () => {
+  const { user } = await setup();
+  const add = screen.getByRole("button", { name: "Add" });
+  for (const name of ["Browser use", "Computer use", "Bash"]) {
+    await user.click(add);
+    await user.click(await screen.findByRole("menuitem", { name }));
+  }
+  await user.click(screen.getByRole("button", { name: "computer" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  for (const operation of ["remove", "reverse"]) {
+    await user.click(screen.getByLabelText("Code", { exact: true }));
+    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "JSON request code",
+    });
+    const request = JSON.parse(editor.value);
+    request.tools =
+      operation === "remove" ? request.tools.slice(1) : request.tools.reverse();
+    fireEvent.change(editor, { target: { value: JSON.stringify(request) } });
+    await user.click(screen.getByLabelText("Form", { exact: true }));
+    expect(screen.getByRole("button", { name: "computer" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "browser" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  }
+});
+
 it("preserves Form's thinking budget across templates and lets raw Code keep provider-specific values", async () => {
   // Model discovery can report a small shared limit for a thinking-capable alias.
   const { user, run } = await setup([

@@ -41,6 +41,7 @@ import {
 } from "./playground-templates";
 import { PlaygroundPanes } from "./playground-panes";
 import { switchPlaygroundModel } from "./playground-tool-presets";
+import { remapExpandedTools } from "./playground-tools";
 import { newToolResults } from "./playground-tool-calls";
 import {
   PlaygroundResponse,
@@ -243,6 +244,13 @@ function PlaygroundForm({
     setModelChangeError(undefined);
     try {
       const next = readSnippet(text, codeLanguage, draft);
+      setExpandedTools(
+        remapExpandedTools(
+          expandedTools,
+          draft.parameters?.tools,
+          next.parameters?.tools,
+        ),
+      );
       setDraft(next);
       setCode({ text });
     } catch (cause) {
