@@ -13,7 +13,7 @@ import {
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
-import { playgroundOnly } from "@/lib/routes";
+import { isDashboardPath, playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
@@ -255,7 +255,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               href={DASHBOARD_LINK.href}
               label={DASHBOARD_LINK.label}
               icon={DASHBOARD_LINK.icon}
-              active={pathname === DASHBOARD_LINK.href}
+              active={isDashboardPath(pathname)}
             />
           )}
           {sections.map(({ heading, groups }) => (

@@ -1,4 +1,8 @@
 import { browserPost } from "../e2e/browser-write";
+import {
+  dashboardModelCases,
+  grantDashboardModelDiscovery,
+} from "../e2e/dashboard-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
@@ -30,6 +34,8 @@ export type Surface = {
   mode?: ConsoleMode;
   /** Where the shot starts. Some states need `setup` to finish arriving. */
   route: string;
+  /** Capture the visible viewport for an overlay on a taller page. */
+  viewportOnly?: boolean;
   /**
    * The mock-platform data behind it — a fixture id, or a word for the shape
    * of the response (`populated`, `none` for a 404). Says why the surface
@@ -72,6 +78,75 @@ const SKILL = "skill_reportwriter0000001";
 /** Model gateway ids from `test/mock-platform/gateway.mjs`. */
 const PROVIDER = "gwprov_deepseek01";
 const PLAIN_HTTP_PROVIDER = "gwprov_vllmlocal1";
+
+async function populatedDashboard(
+  page: Page,
+  viewport = { width: 1800, height: 960 },
+) {
+  // Keep the fixed dialogs and header in one desktop screenshot.
+  await page.setViewportSize(viewport);
+  await grantDashboardModelDiscovery(page);
+  await page.reload();
+  await page
+    .getByRole("link", { name: "Open playground", exact: true })
+    .waitFor();
+  await page.locator('[data-dashboard-metric="tokens"] [data-value]').waitFor();
+}
+
+async function openDashboardModelDialog(
+  page: Page,
+  { name, alias, upstream }: (typeof dashboardModelCases)[number],
+  options: {
+    viewport?: { width: number; height: number };
+    selectAlias?: boolean;
+  } = {},
+) {
+  await populatedDashboard(page, options.viewport);
+  await page
+    .getByRole("region", { name: "Models", exact: true })
+    .getByRole("link", { name, exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await dialog
+    .getByRole("button", { name: `Copy model ID ${upstream}`, exact: true })
+    .waitFor();
+  if (alias) {
+    const picker = dialog.getByRole("combobox", {
+      name: "Gateway alias",
+      exact: true,
+    });
+    await picker.waitFor();
+    if (options.selectAlias) {
+      await picker.selectOption(alias);
+      await dialog
+        .getByRole("link", { name: "Try in playground", exact: true })
+        .waitFor();
+    }
+  } else {
+    await dialog
+      .getByRole("link", { name: "View providers", exact: true })
+      .waitFor();
+  }
+  return dialog;
+}
+
+async function settledDashboardModel(
+  page: Page,
+  { name, alias }: (typeof dashboardModelCases)[number],
+) {
+  if (alias) {
+    await grantDashboardModelDiscovery(page);
+    await page.reload();
+  }
+  await page.getByRole("heading", { name, level: 1, exact: true }).waitFor();
+  await page
+    .getByRole("region", { name: "Current deployment" })
+    .getByRole("link", {
+      name: alias ? `Open in Playground for ${alias}` : "View providers",
+      exact: true,
+    })
+    .waitFor();
+}
 
 export const SURFACES: Surface[] = [
   ...NATIVE_SURFACES,
@@ -871,6 +946,7 @@ export const SURFACES: Surface[] = [
     description:
       "The Dashboard shortcut opens key creation without a route change.",
     setup: async (page) => {
+      await populatedDashboard(page);
       const form = await openApiKeyForm(page, "Get API key");
       await form.waitFor();
     },
@@ -880,9 +956,7 @@ export const SURFACES: Surface[] = [
     route: "/dashboard",
     fixture: "all surfaces, 390px viewport",
     description: "Dashboard cards and shortcuts wrap within a narrow viewport.",
-    setup: async (page) => {
-      await page.setViewportSize({ width: 390, height: 844 });
-    },
+    setup: (page) => populatedDashboard(page, { width: 390, height: 844 }),
   },
   {
     id: "dashboard-mobile-nav",
@@ -924,11 +998,123 @@ export const SURFACES: Surface[] = [
   {
     id: "dashboard",
     route: "/dashboard",
-    // The cards are links, and the only platform answer behind them is the
-    // shared surface probe, so a fully-served deployment is the whole state.
-    fixture: "populated",
+    fixture:
+      "daily gateway usage and a signed-in operator with Playground access",
     description:
-      "Landing page: a card per served surface under the nav's own group headings, and the regrouped sidebar beside it.",
+      "A personal greeting, usage overview, four provider model cards and resource links.",
+    setup: populatedDashboard,
+  },
+  ...(["cost", "features"] as const).map((view): Surface => ({
+    id: `dashboard-compare-${view}`,
+    route: "/dashboard",
+    fixture: "three selected upstream models",
+    description: `Dashboard model comparison with the ${view} view selected.`,
+    setup: async (page) => {
+      await populatedDashboard(page);
+      await page
+        .getByRole("button", { name: "Compare models", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Compare models" });
+      if (view === "features") {
+        await dialog
+          .getByRole("combobox", { name: "Model 3", exact: true })
+          .click();
+        await page
+          .getByRole("option", { name: "MiniMax M3", exact: true })
+          .click();
+        await dialog.getByText("Features", { exact: true }).click();
+      }
+      await dialog
+        .getByRole("radio", {
+          name: view === "cost" ? "Cost" : "Features",
+          exact: true,
+          checked: true,
+        })
+        .waitFor();
+    },
+  })),
+  ...dashboardModelCases.map((model): Surface => ({
+    id: `dashboard-model-popup-${model.brand}`,
+    route: "/dashboard",
+    fixture: model.alias
+      ? `gateway alias ${model.alias} listed by Playground`
+      : "no matching provider in the gateway",
+    description: `Dashboard with the ${model.name} pricing and features dialog open.`,
+    setup: async (page) => {
+      await openDashboardModelDialog(page, model, {
+        selectAlias: model.brand === "minimax",
+      });
+    },
+  })),
+  {
+    id: "dashboard-model-popup-options",
+    route: "/dashboard",
+    fixture: "MiniMax CN with an accessible minimax-m3 gateway alias",
+    description:
+      "The single-model More options menu with the local guide and agent draft actions.",
+    setup: async (page) => {
+      const dialog = await openDashboardModelDialog(
+        page,
+        dashboardModelCases[3],
+        { selectAlias: true },
+      );
+      await dialog
+        .getByRole("button", { name: "More options", exact: true })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Build an agent", exact: true })
+        .waitFor();
+    },
+  },
+  ...(["top", "scrolled"] as const).map((position): Surface => ({
+    id: `dashboard-model-popup-mobile-${position}`,
+    route: "/dashboard",
+    viewportOnly: true,
+    fixture: "MiniMax CN and the minimax-m3 alias on a 390px viewport",
+    description:
+      position === "top"
+        ? "The initial model dialog at phone width."
+        : "The model dialog after scrolling its content on a phone.",
+    setup: async (page) => {
+      const dialog = await openDashboardModelDialog(
+        page,
+        dashboardModelCases[3],
+        {
+          viewport: { width: 390, height: 600 },
+          selectAlias: position === "scrolled",
+        },
+      );
+      if (position === "scrolled") {
+        await dialog.locator("[data-model-popup-scroll]").hover();
+        await page.mouse.wheel(0, 650);
+        await page.waitForFunction(() => {
+          const pane = document.querySelector("[data-model-popup-scroll]");
+          return (
+            pane && pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 1
+          );
+        });
+      }
+    },
+  })),
+  ...dashboardModelCases.map((model): Surface => ({
+    id: `dashboard-model-${model.brand}`,
+    route: `/dashboard/models/${model.brand}`,
+    fixture: model.alias
+      ? `gateway alias ${model.alias} listed by Playground`
+      : "no matching provider in the gateway",
+    description: `The ${model.name} overview, upstream identifier, pricing and current deployment.`,
+    setup: (page) => settledDashboardModel(page, model),
+  })),
+  {
+    id: "dashboard-model-minimax-mobile",
+    route: "/dashboard/models/minimax",
+    fixture: "MiniMax CN and the minimax-m3 alias on a 390px viewport",
+    description:
+      "The model reference and its active gateway routes on a narrow screen.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await settledDashboardModel(page, dashboardModelCases[3]);
+    },
   },
   // ---- resource lists --------------------------------------------------
   {

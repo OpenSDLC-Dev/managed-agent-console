@@ -8,17 +8,16 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Play, Plus, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
 import {
-  playgroundModels,
   runPlayground,
   type PlaygroundRequest,
   type PlaygroundReply,
 } from "@/lib/platform/playground";
+import { usePlaygroundModels } from "@/lib/platform/playground-queries";
 import { ErrorState } from "./bits";
 import { PlaygroundCode } from "./playground-code";
 import {
@@ -45,7 +44,7 @@ function Heading({ children }: { children?: ReactNode }) {
   );
 }
 
-export function Playground() {
+export function Playground({ requestedAlias }: { requestedAlias?: string }) {
   const session = useContext(ConsoleSessionContext)?.data;
   return (
     <div
@@ -53,7 +52,11 @@ export function Playground() {
       className="-mx-4 -my-6 flex min-h-[calc(100dvh-var(--console-header-height))] flex-col bg-card sm:-mx-8 lg:h-[calc(100dvh-var(--console-header-height))]"
     >
       {session?.playground_access === true && session.id ? (
-        <PlaygroundForm key={session.id} principalId={session.id} />
+        <PlaygroundForm
+          key={session.id}
+          principalId={session.id}
+          requestedAlias={requestedAlias}
+        />
       ) : (
         <>
           <Heading />
@@ -75,13 +78,16 @@ type PastRun = {
   completedAt: Date;
 };
 
-function PlaygroundForm({ principalId }: { principalId: string }) {
-  const models = useQuery({
-    queryKey: ["playground-models", principalId],
-    queryFn: ({ signal }) => playgroundModels(signal),
-    retry: false,
-  });
+function PlaygroundForm({
+  principalId,
+  requestedAlias,
+}: {
+  principalId: string;
+  requestedAlias?: string;
+}) {
+  const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
+  const [previousAlias, setPreviousAlias] = useState(requestedAlias);
   const [mode, setMode] = useState<"Form" | "Code">("Form");
   const [text, setText] = useState("");
   const [reply, setReply] = useState<PlaygroundReply>();
@@ -125,8 +131,17 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
     };
   }, [historyOpen]);
 
-  const model = draft.selection || models.data?.[0]?.id || "";
-  const available = models.data?.some((entry) => entry.id === model) === true;
+  // A query-only navigation can reuse this form. Keep its prompt and history.
+  if (previousAlias !== requestedAlias) {
+    setPreviousAlias(requestedAlias);
+    if (draft.selection) setDraft({ ...draft, selection: "" });
+  }
+  const chatModels = models.isError ? undefined : models.data;
+  const initialModel = requestedAlias
+    ? chatModels?.find((entry) => entry.id === requestedAlias)
+    : chatModels?.[0];
+  const model = draft.selection || initialModel?.id || "";
+  const available = chatModels?.some((entry) => entry.id === model) === true;
   const running = status === "running";
   const modifier =
     typeof navigator !== "undefined" &&
@@ -308,16 +323,22 @@ function PlaygroundForm({ principalId }: { principalId: string }) {
           </div>
           <div className="min-h-0 flex-1 space-y-3 px-5 py-4 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
             {models.error && <ErrorState error={models.error} />}
-            {models.data?.length === 0 && (
+            {chatModels?.length === 0 && (
               <p role="status" className="text-sm text-muted-foreground">
                 No chat models are configured.
+              </p>
+            )}
+            {requestedAlias && !model && Boolean(chatModels?.length) && (
+              <p role="status" className="text-sm text-muted-foreground">
+                The linked model is unavailable. Select another model to
+                continue.
               </p>
             )}
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
                 model={model}
-                models={models.data ?? []}
+                models={chatModels ?? []}
                 running={running}
                 loading={models.isPending}
                 onChange={setDraft}

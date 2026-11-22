@@ -238,6 +238,9 @@ async function chooseAccountAction(
     await screen.findByRole("button", { name: "More actions for build-bot" }),
   );
   await user.click(await screen.findByRole("menuitem", { name: action }));
+  // The loading panel and the editor share the same dialog name.
+  if (action === "Edit")
+    await screen.findByRole("textbox", { name: /Description/ });
   return within(
     await screen.findByRole(action === "Archive" ? "alertdialog" : "dialog"),
   );

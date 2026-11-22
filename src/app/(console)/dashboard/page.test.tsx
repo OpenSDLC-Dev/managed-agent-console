@@ -9,7 +9,6 @@ import {
   ConsoleSessionContext,
   type useConsoleSession,
 } from "@/components/shell/console-session";
-import { SURFACES } from "@/lib/platform/surfaces";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: ComponentProps<"a">) => (
@@ -22,17 +21,19 @@ vi.mock("next/link", () => ({
 /**
  * The probe answers 404 for `unimplemented` and 200 for the rest. With no
  * argument it never settles, which is the state a page renders in before the
- * platform has said anything — and the one where everything shows.
+ * platform has said anything.
  */
 function renderDashboard(
   unimplemented?: string[],
   status = 404,
   playgroundAccess?: boolean,
+  name: string = TEST_SESSION.name,
+  loginName?: string,
 ) {
   vi.stubGlobal(
     "fetch",
-    withTestSession(
-      vi.fn((input: string) => {
+    vi.fn(
+      withTestSession((input: string) => {
         if (unimplemented === undefined) return new Promise<Response>(() => {});
         const absent = unimplemented.some((s) =>
           s === "api-keys"
@@ -74,7 +75,12 @@ function renderDashboard(
       <ConsoleSessionContext.Provider
         value={
           {
-            data: { ...TEST_SESSION, playground_access: playgroundAccess },
+            data: {
+              ...TEST_SESSION,
+              name,
+              login_name: loginName,
+              playground_access: playgroundAccess,
+            },
           } as ReturnType<typeof useConsoleSession>
         }
       >
@@ -111,114 +117,85 @@ describe("DashboardPage", () => {
   );
   it("probe: drops denied-read cards and shortcuts without hiding readable resources", async () => {
     renderDashboard(["api-keys", "agents", "files", "skills"], 403);
-    await waitFor(() => expect(card("api-keys")).toBeNull());
-    expect(card("agents")).toBeNull();
-    expect(headings()).toContain("Build");
-    expect(headings()).toContain("Organization");
+    await waitFor(() => expect(card("files")).toBeNull());
+    expect(card("skills")).toBeNull();
     expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
-    expect(card("vaults")).not.toBeNull();
+    expect(card("models")).toHaveAttribute("href", "/models");
+    expect(headings()).toEqual(["Usage overview", "Models", "Resources"]);
     expect(
-      screen.getByRole("link", { name: "Explore docs" }),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: "API documentation" }),
+    ).toBeVisible();
+    expect(document.querySelector("[data-no-resource-access]")).toBeNull();
   });
 
-  // The one test that asserts the human strings, so a copy edit reddens this
-  // and not a suite (CLAUDE.md).
-  it("titles the page and exposes the primary shortcuts", () => {
-    renderDashboard();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Dashboard" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Get API key" }),
-    ).toBeInTheDocument();
+  it.each([
+    [8, "Test administrator", "operator", "Good morning, Test"],
+    [12, "Amélie Dupont", "operator", "Good afternoon, Amélie"],
+    [18, "   ", "operator", "Good evening, operator"],
+    [23, "", undefined, "Good evening"],
+  ] as const)(
+    "greets the visitor at local hour %i",
+    (hour, name, login, text) => {
+      const clock = vi.spyOn(Date.prototype, "getHours").mockReturnValue(hour);
+      try {
+        renderDashboard(undefined, 404, true, name, login);
+        expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+          text,
+        );
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
+  it("puts the enabled shortcuts above the Models and Resources sections", () => {
+    renderDashboard(undefined, 404, true);
+    expect(headings()).toEqual(["Models", "Resources"]);
+    expect(screen.getByRole("button", { name: "Get API key" })).toBeVisible();
     expect(
       screen.getByRole("link", { name: "Build an agent" }),
     ).toHaveAttribute("href", "/agents/new");
-    // A card's line is the surface's own `blurb`, the same string its page
-    // header uses — read from the registry rather than repeated here.
-    expect(screen.getByText(SURFACES.agents.blurb)).toBeInTheDocument();
+    expect(
+      [...document.querySelectorAll("[data-dashboard-card]")].map((a) =>
+        a.getAttribute("href"),
+      ),
+    ).toEqual(["/playground", "/models", "/skills", "/files"]);
+    expect(screen.queryByRole("region", { name: "Usage overview" })).toBeNull();
   });
 
-  it("groups the cards under the nav's own headings, in the nav's order", () => {
-    renderDashboard();
-    expect(headings()).toEqual(["Build", "Organization"]);
-  });
-
-  it("gives every surface a card pointing at it", () => {
-    renderDashboard();
-    const routes: [string, string][] = [
-      ["api-keys", "/api-keys"],
-      ["files", "/files"],
-      ["skills", "/skills"],
-      ["models", "/models"],
-      ["providers", "/providers"],
-      ["agents", "/agents"],
-      ["sessions", "/sessions"],
-      ["deployments", "/deployments"],
-      ["memory-stores", "/memory-stores"],
-      ["dreams", "/dreams"],
-      ["environments", "/environments"],
-      ["vaults", "/vaults"],
-      ["usage", "/usage"],
-    ];
-    for (const [surface, href] of routes) {
-      expect(card(surface), surface).not.toBeNull();
-      expect(card(surface)?.getAttribute("href"), surface).toBe(href);
-    }
-    // No card for the page you are standing on.
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(
-      routes.length,
+  it("loads usage only when its probe succeeds", async () => {
+    renderDashboard([]);
+    await screen.findByRole("region", { name: "Usage overview" });
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.some(([url]) => String(url).includes("usage/daily")),
+      ).toBe(true),
     );
   });
 
-  it("drops a card the deployment does not serve, and only that one", async () => {
-    renderDashboard(["skills"]);
-    await waitFor(() => expect(card("skills")).toBeNull());
-    expect(card("files")).not.toBeNull();
-    expect(card("agents")).not.toBeNull();
-    expect(headings()).toContain("Build");
-  });
-
-  it("drops a whole section when the deployment serves none of it", async () => {
-    renderDashboard([
-      "agents",
-      "sessions",
-      "deployments",
-      "files",
-      "skills",
-      "environments",
-      "vaults",
-      "memory_stores",
-      "dreams",
-    ]);
-    await waitFor(() => expect(headings()).not.toContain("Build"));
-    expect(headings()).toEqual(["Organization"]);
-  });
-
-  it("keeps organization links when the gateway is unavailable", async () => {
+  it("keeps public model information when gateway reads are unavailable", async () => {
     renderDashboard(["model-gateway"]);
     await waitFor(() => expect(card("models")).toBeNull());
-    expect(card("providers")).toBeNull();
-    expect(card("usage")).toBeNull();
-    expect(card("api-keys")).not.toBeNull();
-    expect(headings()).toEqual(["Build", "Organization"]);
-  });
-
-  it("shows every card while the probe has not answered", () => {
-    renderDashboard();
-    expect(document.querySelectorAll("[data-dashboard-card]")).toHaveLength(13);
-  });
-
-  it("hides shortcuts whose platform surfaces are unavailable", async () => {
-    renderDashboard(["api-keys", "agents"]);
-    await waitFor(() => expect(card("agents")).toBeNull());
-    expect(screen.queryByRole("link", { name: "Build an agent" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Get API key" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Usage overview" })).toBeNull();
     expect(
-      screen.getByRole("link", { name: "Explore docs" }),
-    ).toBeInTheDocument();
+      vi
+        .mocked(fetch)
+        .mock.calls.some(([url]) => String(url).includes("usage/daily")),
+    ).toBe(false);
+    expect(
+      screen.getByRole("button", { name: "Compare models" }),
+    ).toBeVisible();
+    expect(card("files")).toBeVisible();
+  });
+
+  it("omits an empty Resources section and keeps the remaining shortcuts", async () => {
+    renderDashboard(["model-gateway", "skills", "files"]);
+    await waitFor(() => expect(headings()).toEqual(["Models"]));
+    expect(screen.getByRole("link", { name: "Build an agent" })).toBeVisible();
+    expect(document.querySelector("[data-no-resource-access]")).toBeNull();
   });
 });
 
@@ -266,7 +243,7 @@ it.each([
     ).toBe("success"),
   );
   expect(document.querySelectorAll("[data-dashboard-card]").length).toBe(
-    status === 503 ? 13 : 0,
+    status === 503 ? 3 : 0,
   );
   expect(!!document.querySelector("[data-no-resource-access]")).toBe(denied);
   client.clear();

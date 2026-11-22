@@ -480,7 +480,18 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             await expect(page.locator("p[role=alert]")).toBeVisible();
           }
           if (surface.id === "native-dashboard-unimplemented") {
-            await expect(page.locator("[data-dashboard-card]")).toHaveCount(0);
+            await expect(
+              page.getByRole("button", { name: "Compare models" }),
+            ).toBeVisible();
+            // Playground uses the session grant, independently of collection reads.
+            await expect(
+              page.locator(
+                '[data-dashboard-card]:not([data-dashboard-card="playground"])',
+              ),
+            ).toHaveCount(0);
+            await expect(
+              page.getByRole("region", { name: "Usage overview" }),
+            ).toHaveCount(0);
             await expect(page.locator("[data-no-resource-access]")).toHaveCount(
               0,
             );

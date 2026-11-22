@@ -82,8 +82,8 @@ test("wrong password is rejected; the right one lands on the Dashboard", async (
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
-    page.getByRole("heading", { name: "Dashboard", exact: true }),
-  ).toBeVisible();
+    page.getByRole("main").getByRole("heading", { level: 1 }),
+  ).toHaveAttribute("data-greeting-name", "Test");
 });
 
 test("the shell shows all resources and a live platform connection", async ({

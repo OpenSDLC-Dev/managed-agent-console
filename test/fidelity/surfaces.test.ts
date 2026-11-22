@@ -64,7 +64,13 @@ describe("the fidelity surface manifest", () => {
     const covered = new Set(
       SURFACES.filter((s) => (s.mode ?? DEFAULT_MODE) === DEFAULT_MODE).map(
         (s) =>
-          s.route.replace(/\/[a-z]+_[A-Za-z0-9]+/g, "/[id]").replace(/\/$/, ""),
+          s.route
+            .replace(
+              /^\/dashboard\/models\/(?:deepseek|glm|kimi|minimax)$/,
+              "/dashboard/models/[id]",
+            )
+            .replace(/\/[a-z]+_[A-Za-z0-9]+/g, "/[id]")
+            .replace(/\/$/, ""),
       ),
     );
     const nativeOnly = new Set([

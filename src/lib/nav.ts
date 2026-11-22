@@ -60,7 +60,7 @@ export const PLAYGROUND_LINK = {
   icon: MessageSquare,
 };
 
-// The sidebar, Dashboard and command palette share the same destination order.
+// The sidebar and command palette share the same destination order.
 export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
   {
     heading: "Build",

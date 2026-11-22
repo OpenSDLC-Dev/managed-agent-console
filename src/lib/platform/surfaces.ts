@@ -27,16 +27,7 @@ import { playgroundOnly } from "@/lib/routes";
  * the collection routes below: on an item route a 404 is a genuine not-found
  * and stays an error.
  */
-/**
- * `blurb` is the one line that says what a surface is. It is here rather than
- * inline in each page because two places render it now — the page's own
- * `PageHeader` subtitle and the dashboard's card for that surface — and a
- * sentence kept in two files is a sentence that will disagree with itself.
- *
- * `api-keys` is the exception and says so at its entry: its page header carries
- * a warning rather than a description, so the two are genuinely different
- * sentences and neither is a copy of the other.
- */
+/** The collection read determines which resource links the shell can offer. */
 export const SURFACES = {
   members: {
     path: `${ORGANIZATION}/members`,
@@ -106,9 +97,6 @@ export const SURFACES = {
     path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
     label: "API Keys",
     api: "console",
-    // Shorter than this page's own subtitle, and deliberately: that one warns
-    // what a management key can do and outlives, which is the right thing to
-    // read standing on the page and the wrong thing to fit in a card.
     blurb: "Management credentials for this deployment.",
   },
   // The model gateway's admin API (plan 10), a server of its own reached
