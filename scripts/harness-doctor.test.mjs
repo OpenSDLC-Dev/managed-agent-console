@@ -167,7 +167,7 @@ test("startup names only the current host's drift and leaves the changed role in
   pass(run(cwd, "sync"));
   assert.equal(get(cwd, key), original);
   const config = ".codex/config.toml";
-  const override = '[agents]\nmodel_reasoning_effort = "low"\n';
+  const override = '[agents]\ndefault_subagent_reasoning_effort = "low"\n';
   set(cwd, config, override);
   fail(
     run(cwd, "check", "--host", "codex"),
@@ -176,6 +176,8 @@ test("startup names only the current host's drift and leaves the changed role in
   pass(run(cwd, "check", "--host", "claude"));
   fail(run(cwd, "sync"), /model inheritance/);
   assert.equal(get(cwd, config), override);
+  set(cwd, config, 'agents = { default_subagent_model = "pinned" }\n');
+  fail(run(cwd, "check", "--host", "codex"), /model inheritance/);
   set(cwd, config, 'model = "developer-selection"\n');
   pass(run(cwd, "check", "--host", "codex"));
   const claudeKey = registries.claude;

@@ -538,10 +538,14 @@ function checkCodexDefaults(root) {
       .filter(Boolean)
       .join(".");
     const model =
-      /^agents\.(?:[\w-]+\.)?(?:model|model_reasoning_effort)$/.test(path);
+      /^agents\.(?:default_subagent_(?:model|reasoning_effort)|(?:[\w-]+\.)?(?:model|model_reasoning_effort))$/.test(
+        path,
+      );
     const inline =
       /^agents(?:\.[\w-]+)?$/.test(path) &&
-      /^\{.*\b(?:model|model_reasoning_effort)["']?\s*=/.test(field[2]);
+      /^\{.*\b(?:default_subagent_(?:model|reasoning_effort)|model|model_reasoning_effort)["']?\s*=/.test(
+        field[2],
+      );
     requireThat(
       !model && !inline,
       key +
