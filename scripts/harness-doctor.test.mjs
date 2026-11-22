@@ -1105,6 +1105,134 @@ test("all registered Codex command handlers preserve the native registry and int
   assert.equal(get(cwd, registries.codex), get(cwd, source));
 });
 
+test("the complete Codex handler registry rejects invalid tagged variants and preserves native defaults", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const source = "harness/hooks/codex.json";
+  const dest = registries.codex;
+  const base = JSON.parse(get(cwd, source));
+  const tool = { type: "mcp_tool", server: "workspace", tool: "status" };
+  function withGroups(groups) {
+    return { ...base, hooks: { ...base.hooks, UserPromptSubmit: groups } };
+  }
+  for (const [handler, diagnostic] of [
+    [{}, /\.type/],
+    [{ type: 8 }, /\.type/],
+    [{ type: "unrecognized" }, /\.type/],
+    [{ type: "mcp_tool", tool: "status" }, /\.server/],
+    [{ ...tool, tool: false }, /\.tool/],
+    [{ ...tool, input: null }, /\.input/],
+    [{ ...tool, input: [] }, /\.input/],
+    [{ ...tool, input: { nested: [{ value: null }] } }, /\.input/],
+    [{ ...tool, timeout: 1.5 }, /\.timeout/],
+    [{ ...tool, statusMessage: false }, /\.statusMessage/],
+    [["prompt", "unexpected"], /too many positional/],
+  ]) {
+    const raw = JSON.stringify(withGroups([{ hooks: [handler] }]));
+    set(cwd, dest, raw);
+    preservesConflict(cwd, "codex", source, raw, diagnostic);
+    assert.equal(get(cwd, dest), raw);
+  }
+  for (const [groups, diagnostic] of [
+    [null, /array.*groups/],
+    [[{ hooks: null }], /\.hooks must be an array/],
+    [[{ matcher: 0, hooks: [] }], /\.matcher/],
+    [[[null, [], false]], /too many positional/],
+  ]) {
+    const raw = JSON.stringify(withGroups(groups));
+    preservesConflict(cwd, "codex", source, raw, diagnostic);
+  }
+  const valid = withGroups([
+    {},
+    {
+      matcher: null,
+      hooks: [
+        {
+          ...tool,
+          input: {
+            id: JSON.rawJSON("9007199254740993"),
+            upper: JSON.rawJSON("18446744073709551615"),
+            mixed: [true, 'quoted "key":', 1.25, {}],
+          },
+          timeout: 0,
+          statusMessage: null,
+          async: "ignored by MCP",
+        },
+        { ...tool, server: "", input: {} },
+        { type: "prompt", prompt: 0 },
+        { type: "agent", command: false },
+      ],
+    },
+  ]);
+  valid.description = "Project hooks";
+  valid.hooks.UserPromptSubmit.push([
+    null,
+    [
+      ["mcp_tool", "workspace", "status", {}],
+      ["command", "echo portable", "echo Windows", 30, true, "status", 3],
+      ["agent"],
+    ],
+  ]);
+  valid.hooks.FutureEvent = { arbitrary: [{ type: "unknown" }] };
+  putJson(cwd, source, valid);
+  rmSync(join(cwd, dest));
+  pass(run(cwd, "sync"));
+  const projected = get(cwd, dest);
+  assert.equal(projected, get(cwd, source));
+  pass(run(cwd, "check"));
+  const validText = JSON.stringify(valid);
+  for (const [needle, replacement, diagnostic] of [
+    ['"hooks":{', '"hooks":{},"hooks":{', /repeats.*hooks/],
+    [
+      '"SessionStart":[',
+      '"SessionStart":[],"SessionStart":[',
+      /repeats.*SessionStart/,
+    ],
+    ['"matcher":null', '"matcher":"x","matcher":null', /repeats.*matcher/],
+    [
+      '"type":"mcp_tool"',
+      '"type":"mcp_tool","t\\u0079pe":"mcp_tool"',
+      /repeats.*type/,
+    ],
+    ['"tool":"status"', '"tool":"previous","tool":"status"', /repeats.*tool/],
+    ['"command":', '"command":"previous","command":', /repeats.*command/],
+  ]) {
+    const bad = validText.replace(needle, replacement);
+    assert.notEqual(bad, validText);
+    preservesConflict(cwd, "codex", dest, bad, diagnostic);
+    assert.equal(get(cwd, source), projected);
+  }
+  // Duplicate unknown fields and map entries use their native last value.
+  set(
+    cwd,
+    dest,
+    validText
+      .replace('"tool":"status"', '"meta":1,"meta":2,"tool":"status"')
+      .replace('"mixed":[', '"mixed":null,"mixed":['),
+  );
+  set(
+    cwd,
+    source,
+    validText.replace('"tool":"status"', '"meta":2,"tool":"status"'),
+  );
+  pass(run(cwd, "check"));
+  const incomplete = structuredClone(base);
+  delete incomplete.hooks.PreToolUse[0].hooks;
+  putJson(cwd, source, base);
+  putJson(cwd, dest, incomplete);
+  pass(run(cwd, "sync"));
+  assert.deepEqual(JSON.parse(get(cwd, dest)), base);
+  const positional = structuredClone(base);
+  for (const event of ["SessionStart", "PreToolUse"]) {
+    const { matcher, hooks } = base.hooks[event][0];
+    positional.hooks[event] = [[matcher, [["command", hooks[0].command]]]];
+  }
+  putJson(cwd, source, positional);
+  pass(run(cwd, "sync"));
+  assert.deepEqual(JSON.parse(get(cwd, dest)), positional);
+  pass(run(cwd, "check"));
+});
+
 test("reuse of a recognized command cannot erase an unregistered hook, group, field or duplicate", (t) => {
   const { cwd } = fixture(t);
   pass(run(cwd, "sync"));

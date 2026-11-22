@@ -60,7 +60,41 @@ function git(cwd, args) {
 }
 
 const stat = (file) => lstatSync(file, { throwIfNoEntry: false });
-const object = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const object = (v) =>
+  v !== null &&
+  typeof v === "object" &&
+  !Array.isArray(v) &&
+  !JSON.isRawJSON(v);
+const codexEvents = [
+  "PreToolUse",
+  "PermissionRequest",
+  "PostToolUse",
+  "PreCompact",
+  "PostCompact",
+  "SessionStart",
+  "SessionEnd",
+  "UserPromptSubmit",
+  "SubagentStart",
+  "SubagentStop",
+  "Stop",
+  "Interrupt",
+];
+const duplicateKeys = new WeakMap();
+// codex-rs/config/src/hook_config.rs specifies these tagged records and their field order.
+const codexHandlerFields = {
+  command: [
+    "type",
+    "command",
+    "commandWindows",
+    "timeout",
+    "async",
+    "statusMessage",
+    "additionalContextLimit",
+  ],
+  mcp_tool: ["type", "server", "tool", "input", "timeout", "statusMessage"],
+  prompt: ["type"],
+  agent: ["type"],
+};
 function requireThat(valid, message) {
   if (!valid) throw new Error(message);
 }
@@ -84,28 +118,55 @@ function read(root, key) {
   );
   return readFileSync(path);
 }
+function parseCodexJson(text) {
+  // JSON.parse normally drops earlier members with the same decoded name.
+  // Number just the member names so the built-in parser still validates, decodes
+  // strings, and supplies the original numeric tokens for sync and trust hashing.
+  let index = 0;
+  const numbered = text.replace(
+    /"(?:[^"\\]|\\[\s\S])*"(\s*:)?/g,
+    (literal, colon) =>
+      colon ? '"' + index++ + " " + literal.slice(1) : literal,
+  );
+  return JSON.parse(numbered, (_key, value, context) => {
+    if (typeof value === "number") return JSON.rawJSON(context.source);
+    if (!object(value)) return value;
+    const entries = Object.entries(value).map(([key, child]) => [
+      key.slice(key.indexOf(" ") + 1),
+      child,
+    ]);
+    const result = Object.fromEntries(entries);
+    if (Object.keys(result).length !== entries.length) {
+      const seen = new Set(),
+        repeats = new Set();
+      for (const [name] of entries) {
+        if (seen.has(name)) repeats.add(name);
+        seen.add(name);
+      }
+      duplicateKeys.set(result, repeats);
+    }
+    return result;
+  });
+}
 function json(bytes, key) {
   let result;
+  const codex = key === registries.codex || key === "harness/hooks/codex.json";
   try {
-    // Codex distinguishes 1 from 1.0 and accepts 64-bit unsigned integers.
-    // Keep these tokens lossless for native validation, comparison and sync.
-    const codex =
-      key === registries.codex || key === "harness/hooks/codex.json";
-    result = JSON.parse(
-      bytes.toString(),
-      codex
-        ? (field, value, context) =>
-            typeof value === "number" &&
-            (field === "timeout" || field === "additionalContextLimit")
-              ? JSON.rawJSON(context.source)
-              : value
-        : undefined,
-    );
+    result = codex
+      ? parseCodexJson(
+          Buffer.isBuffer(bytes)
+            ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+                bytes,
+              )
+            : bytes,
+        )
+      : JSON.parse(bytes.toString());
   } catch {
     // Node may include private settings in a syntax error's source excerpt.
     throw new Error(key + " contains invalid JSON.");
   }
   requireThat(object(result), key + " must be a JSON object.");
+  if (codex) checkCodexRegistry(result, key);
   return result;
 }
 function fields(value, keys, label) {
@@ -438,12 +499,21 @@ function checkHookEvents(events, policy, key) {
       key + " has malformed " + event + " hooks.",
     );
     requireThat(
-      registeredSubset(groups, known, (group, candidate) => {
-        if (isDeepStrictEqual(group, candidate)) return true;
-        if (!Array.isArray(group?.hooks) || !Array.isArray(candidate?.hooks))
-          return false;
-        const { hooks, ...metadata } = group;
-        const { hooks: registered, ...expected } = candidate;
+      registeredSubset(groups, known, (entry, target) => {
+        if (isDeepStrictEqual(entry, target)) return true;
+        const codex = key === registries.codex && codexEvents.includes(event);
+        const at = key + " " + event;
+        const group = codex
+          ? codexRecord(entry, ["matcher", "hooks"], at)
+          : entry;
+        const candidate = codex
+          ? codexRecord(target, ["matcher", "hooks"], at)
+          : target;
+        if (!object(group) || !object(candidate)) return false;
+        const empty = key === registries.codex ? [] : undefined;
+        const { hooks = empty, ...metadata } = group;
+        const { hooks: registered = empty, ...expected } = candidate;
+        if (!Array.isArray(hooks) || !Array.isArray(registered)) return false;
         // Only a sole registered group with an existing string matcher can
         // unambiguously own matcher drift (including an older project matcher).
         if (
@@ -454,7 +524,17 @@ function checkHookEvents(events, policy, key) {
           metadata.matcher = expected.matcher;
         return (
           isDeepStrictEqual(metadata, expected) &&
-          registeredSubset(hooks, registered, isDeepStrictEqual)
+          registeredSubset(
+            hooks,
+            registered,
+            codex
+              ? (left, right) =>
+                  isDeepStrictEqual(
+                    codexHandler(left, at),
+                    codexHandler(right, at),
+                  )
+              : isDeepStrictEqual,
+          )
         );
       }),
       message,
@@ -489,72 +569,165 @@ function trackedClaudeSettings(root, key) {
   return git(root, ["cat-file", "blob", entry[1]]);
 }
 
-function checkCodexCommands(groups, event, source) {
-  for (const [i, group] of groups.entries()) {
-    const groupPath = source + " " + event + "[" + i + "]";
+function uniqueFields(value, known, at) {
+  const repeated = duplicateKeys.get(value);
+  if (!repeated) return;
+  for (const field of known)
     requireThat(
-      group.matcher == null || typeof group.matcher === "string",
-      groupPath + ".matcher must be a string or null.",
+      !repeated.has(field),
+      at + " repeats the native field " + field + ".",
     );
-    for (const [j, handler] of group.hooks.entries()) {
-      if (handler.type !== "command") continue;
-      const at = groupPath + ".hooks[" + j + "]";
+}
+
+function codexRecord(raw, fields, at) {
+  if (Array.isArray(raw)) {
+    requireThat(
+      raw.length <= fields.length,
+      at + " has too many positional fields.",
+    );
+    return Object.fromEntries(raw.map((value, i) => [fields[i], value]));
+  }
+  requireThat(object(raw), at + " must be a native hook record.");
+  return raw;
+}
+
+function codexHandler(raw, at) {
+  const type = Array.isArray(raw) ? raw[0] : raw?.type;
+  requireThat(
+    typeof type === "string" && Object.hasOwn(codexHandlerFields, type),
+    at + ".type must be command, mcp_tool, prompt or agent.",
+  );
+  const fields = codexHandlerFields[type];
+  const handler = codexRecord(raw, fields, at);
+  uniqueFields(handler, fields, at);
+  if (type === "command") uniqueFields(handler, ["command_windows"], at);
+  return handler;
+}
+
+function checkHookInteger(handler, key, retained, at) {
+  const value = handler[key];
+  if (value == null) return;
+  const token = JSON.isRawJSON(value) ? value.rawJSON : "";
+  const number = /^\d{1,20}$/.test(token) ? BigInt(token) : -1n;
+  requireThat(
+    number >= 0n && number <= 0xffffffffffffffffn,
+    at + "." + key + " must be an unsigned 64-bit integer or null.",
+  );
+  // The native hook identity is serialized as TOML after event-specific normalization.
+  requireThat(
+    !retained || number <= 0x7fffffffffffffffn,
+    at +
+      "." +
+      key +
+      " exceeds the signed integer range of the Codex hook trust record.",
+  );
+}
+
+function tomlInput(value) {
+  if (value === null) return false;
+  if (JSON.isRawJSON(value)) {
+    return Number.isFinite(Number(value.rawJSON));
+  }
+  return typeof value !== "object" || Object.values(value).every(tomlInput);
+}
+
+function checkCodexHandler(raw, event, at) {
+  const handler = codexHandler(raw, at);
+  // Codex accepts these unit variants and skips them during discovery.
+  if (handler.type === "prompt" || handler.type === "agent") return;
+  requireThat(
+    handler.statusMessage == null || typeof handler.statusMessage === "string",
+    at + ".statusMessage must be a string or null.",
+  );
+  if (handler.type === "mcp_tool") {
+    for (const key of ["server", "tool"])
       requireThat(
-        typeof handler.command === "string" && handler.command.trim(),
-        at + ".command must be a nonempty string.",
+        typeof handler[key] === "string",
+        at + "." + key + " must be a string.",
       );
+    if (Object.hasOwn(handler, "input"))
       requireThat(
-        !Object.hasOwn(handler, "async") || typeof handler.async === "boolean",
-        at + ".async must be a boolean.",
+        object(handler.input) && tomlInput(handler.input),
+        at +
+          ".input must be an object whose values can be represented in TOML.",
       );
-      // Codex accepts the snake_case spelling in JSON, but deserializing both
-      // names drops the entire registry, including its SessionStart and guard.
+    const discovered =
+      event !== "SessionEnd" && handler.server.trim() && handler.tool.trim();
+    checkHookInteger(handler, "timeout", discovered, at);
+    return;
+  }
+  requireThat(
+    typeof handler.command === "string" && handler.command.trim(),
+    at + ".command must be a nonempty string.",
+  );
+  requireThat(
+    !Object.hasOwn(handler, "async") || typeof handler.async === "boolean",
+    at + ".async must be a boolean.",
+  );
+  requireThat(
+    !(
+      Object.hasOwn(handler, "commandWindows") &&
+      Object.hasOwn(handler, "command_windows")
+    ),
+    at + " may use only one of commandWindows and command_windows.",
+  );
+  const windows = handler.commandWindows ?? handler.command_windows;
+  requireThat(
+    windows == null || (typeof windows === "string" && windows.trim()),
+    at + ".commandWindows must be a nonempty string or null.",
+  );
+  checkHookInteger(
+    handler,
+    "timeout",
+    event !== "SessionEnd" && event !== "Interrupt",
+    at,
+  );
+  checkHookInteger(
+    handler,
+    "additionalContextLimit",
+    [
+      "PreToolUse",
+      "PostToolUse",
+      "SessionStart",
+      "UserPromptSubmit",
+      "SubagentStart",
+    ].includes(event),
+    at,
+  );
+}
+
+function checkCodexRegistry(registry, path) {
+  uniqueFields(registry, ["description", "hooks"], path);
+  requireThat(
+    registry.description == null || typeof registry.description === "string",
+    path + ".description must be a string or null.",
+  );
+  if (!Object.hasOwn(registry, "hooks")) return;
+  requireThat(object(registry.hooks), path + ".hooks must be an event table.");
+  uniqueFields(registry.hooks, codexEvents, path + ".hooks");
+  // Unknown events are ignored as a whole, including their payload.
+  for (const event of codexEvents) {
+    if (!Object.hasOwn(registry.hooks, event)) continue;
+    const groups = registry.hooks[event];
+    requireThat(
+      Array.isArray(groups),
+      path + " requires an array of native hook groups for " + event + ".",
+    );
+    for (const [i, raw] of groups.entries()) {
+      const at = path + " " + event + "[" + i + "]";
+      const group = codexRecord(raw, ["matcher", "hooks"], at);
+      uniqueFields(group, ["matcher", "hooks"], at);
       requireThat(
-        !(
-          Object.hasOwn(handler, "commandWindows") &&
-          Object.hasOwn(handler, "command_windows")
-        ),
-        at + " may use only one of commandWindows and command_windows.",
+        group.matcher == null || typeof group.matcher === "string",
+        at + ".matcher must be a string or null.",
       );
-      const windows = handler.commandWindows ?? handler.command_windows;
+      if (!Object.hasOwn(group, "hooks")) continue;
       requireThat(
-        windows == null || (typeof windows === "string" && windows.trim()),
-        at + ".commandWindows must be a nonempty string or null.",
+        Array.isArray(group.hooks),
+        at + ".hooks must be an array of native handlers.",
       );
-      requireThat(
-        handler.statusMessage == null ||
-          typeof handler.statusMessage === "string",
-        at + ".statusMessage must be a string or null.",
-      );
-      for (const key of ["timeout", "additionalContextLimit"]) {
-        const value = handler[key];
-        if (value == null) continue;
-        const token = JSON.isRawJSON(value) ? value.rawJSON : "";
-        const number = /^\d{1,20}$/.test(token) ? BigInt(token) : -1n;
-        requireThat(
-          number >= 0n && number <= 0xffffffffffffffffn,
-          at + "." + key + " must be an unsigned 64-bit integer or null.",
-        );
-        // Codex hashes the normalized handler as TOML. Clamped timeouts and
-        // ignored context limits never enter that signed integer representation.
-        const retained =
-          key === "timeout"
-            ? event !== "SessionEnd" && event !== "Interrupt"
-            : [
-                "PreToolUse",
-                "PostToolUse",
-                "SessionStart",
-                "UserPromptSubmit",
-                "SubagentStart",
-              ].includes(event);
-        requireThat(
-          !retained || number <= 0x7fffffffffffffffn,
-          at +
-            "." +
-            key +
-            " exceeds the signed integer range of the Codex hook trust record.",
-        );
-      }
+      for (const [j, handler] of group.hooks.entries())
+        checkCodexHandler(handler, event, at + ".hooks[" + j + "]");
     }
   }
 }
@@ -568,8 +741,11 @@ function checkRequiredCodexHandler(
   purpose,
 ) {
   const matches = [];
-  for (const group of groups ?? [])
-    for (const handler of group.hooks)
+  const at = source + " " + event;
+  for (const raw of groups ?? []) {
+    const group = codexRecord(raw, ["matcher", "hooks"], at);
+    for (const entry of group.hooks ?? []) {
+      const handler = codexHandler(entry, at);
       if (
         handler.type === "command" &&
         [
@@ -579,6 +755,8 @@ function checkRequiredCodexHandler(
         ].includes(command)
       )
         matches.push({ matcher: group.matcher, handler });
+    }
+  }
   requireThat(
     matches.length === 1 &&
       matches[0].matcher === matcher &&
@@ -606,10 +784,20 @@ function registry(root, host) {
   const key = registries[host],
     source = "harness/hooks/" + host + ".json";
   const native = json(read(root, source), source);
-  if (host !== "antigravity") fields(native, ["hooks"], source);
-  for (const [name, events] of host === "antigravity"
-    ? Object.entries(native)
-    : [["hooks", native.hooks]]) {
+  if (host === "codex") {
+    requireThat(
+      object(native.hooks) &&
+        Object.keys(native).every(
+          (key) => key === "hooks" || key === "description",
+        ),
+      source + " must register hooks and may declare a description.",
+    );
+  } else if (host === "claude") fields(native, ["hooks"], source);
+  for (const [name, events] of host === "codex"
+    ? []
+    : host === "antigravity"
+      ? Object.entries(native)
+      : [["hooks", native.hooks]]) {
     requireThat(object(events), source + " must declare a hook event table.");
     if (host === "antigravity" && Object.hasOwn(events, "enabled"))
       requireThat(
@@ -629,7 +817,6 @@ function registry(root, host) {
           ),
         source + " requires arrays of native hook handlers for " + event + ".",
       );
-      if (host === "codex") checkCodexCommands(entries, event, source);
     }
   }
   const command = hookCommand(
