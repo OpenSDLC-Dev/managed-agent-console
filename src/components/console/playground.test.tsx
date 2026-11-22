@@ -609,6 +609,12 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
   );
   body.system[0].text = "Instructions updated";
   body.messages[0].content[0].text = "Ask again";
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  const editAssistant = screen.getByRole("button", {
+    name: "Edit content blocks for assistant message 2",
+  });
+  expect(editAssistant).toHaveFocus();
+  await user.keyboard("{Enter}");
   expect(
     JSON.parse(
       screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Request body" })

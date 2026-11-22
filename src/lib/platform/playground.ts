@@ -160,6 +160,7 @@ export async function runPlayground(
   let body: MessageBody | undefined;
   let canAssembleBody = true;
   let usage: Usage | undefined;
+  const openBlocks = new Set<number>();
   const toolInputs = new Map<number, string[]>();
   for await (const { event, data } of parseSseStream(response.body)) {
     if (event === "ping") continue;
@@ -167,7 +168,7 @@ export async function runPlayground(
     if (event === "message_stop") {
       const complete =
         canAssembleBody &&
-        toolInputs.size === 0 &&
+        openBlocks.size === 0 &&
         body?.content.every(isPlaygroundBlock) &&
         body;
       return {
@@ -180,17 +181,19 @@ export async function runPlayground(
       } satisfies PlaygroundReply;
     }
     if (event === "content_block_stop") {
-      if (toolInputs.size) {
-        const { index }: Frame = JSON.parse(data);
-        const parts = index === undefined ? undefined : toolInputs.get(index);
-        if (index !== undefined && parts && body) {
-          toolInputs.delete(index);
-          try {
-            const json = parts.join("");
-            if (json) body.content[index].input = JSON.parse(json);
-          } catch {
-            canAssembleBody = false;
-          }
+      const { index }: Frame = JSON.parse(data);
+      if (index === undefined || !openBlocks.delete(index)) {
+        canAssembleBody = false;
+        continue;
+      }
+      const parts = toolInputs.get(index);
+      if (parts && body) {
+        toolInputs.delete(index);
+        try {
+          const json = parts.join("");
+          if (json) body.content[index].input = JSON.parse(json);
+        } catch {
+          canAssembleBody = false;
         }
       }
       continue;
@@ -224,12 +227,15 @@ export async function runPlayground(
         if (body) body.usage = usage;
       }
     } else if (event === "content_block_start" && frame.content_block) {
-      if (body && frame.index === body.content.length)
+      if (body && frame.index === body.content.length) {
+        openBlocks.add(frame.index);
         body.content.push(frame.content_block);
-      else canAssembleBody = false;
+      } else canAssembleBody = false;
       if (frame.content_block.type === "text" && frame.content_block.text)
         append(frame.content_block.text);
     } else if (event === "content_block_delta") {
+      if (frame.index === undefined || !openBlocks.has(frame.index))
+        canAssembleBody = false;
       const block =
         frame.index === undefined ? undefined : body?.content[frame.index];
       if (

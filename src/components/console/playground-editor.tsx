@@ -64,7 +64,7 @@ function ContentField({
   content: PlaygroundContent;
   placeholder: string;
   onChange: (value: PlaygroundContent) => void;
-  onEditBlocks: () => void;
+  onEditBlocks: (triggerId: string) => void;
 }) {
   if (typeof content === "string")
     return (
@@ -108,12 +108,13 @@ function ContentField({
         />
       )}
       <Button
+        id={`${id}-edit-blocks`}
         type="button"
         variant="link"
         size="sm"
         className="mt-1 h-auto px-0 text-xs"
         aria-label={`Edit content blocks for ${label ?? "System"}`}
-        onClick={onEditBlocks}
+        onClick={(event) => onEditBlocks(event.currentTarget.id)}
       >
         Edit content blocks
       </Button>
@@ -136,7 +137,7 @@ export function PlaygroundEditor({
   model: string;
   loading: boolean;
   running: boolean;
-  onEditFullRequest: () => void;
+  onEditFullRequest: (triggerId: string) => void;
 }) {
   const { system, messages } = draft;
   const emptyModelLabel = models.length ? "Select a model" : "No models";
@@ -260,7 +261,9 @@ export function PlaygroundEditor({
               <Ellipsis />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onClick={onEditFullRequest}>
+              <DropdownMenuItem
+                onClick={() => onEditFullRequest("playground-request-options")}
+              >
                 Edit full request
               </DropdownMenuItem>
             </DropdownMenuContent>

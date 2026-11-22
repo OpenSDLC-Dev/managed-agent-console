@@ -145,6 +145,34 @@ it("posts Messages with fresh CSRF and renders only text blocks from the stream"
 });
 
 it.each([
+  { type: "tool_use", id: "tool_empty", name: "lookup", input: {} },
+  { type: "text", text: "partial" },
+])(
+  "keeps an unclosed $type block in Raw without adding it to another request",
+  async (block) => {
+    fixture(
+      [
+        { type: "message_start", message: { type: "message", content: [] } },
+        { type: "content_block_start", index: 0, content_block: block },
+        { type: "message_stop" },
+      ]
+        .map(
+          (f) => "event: " + f.type + "\ndata: " + JSON.stringify(f) + "\n\n",
+        )
+        .join(""),
+    );
+    const result = await runPlayground(
+      prompt,
+      "user_demo",
+      new AbortController().signal,
+      vi.fn(),
+    );
+    expect(result.rawLabel).toBe("Stream events");
+    expect(result.content).toBeUndefined();
+  },
+);
+
+it.each([
   ["event: ping\ndata: {}\n\n", "ended before the response finished"],
   [
     'event: error\ndata: {"error":{"message":"Fixture error"}}\n\n',

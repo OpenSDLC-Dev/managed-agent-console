@@ -113,12 +113,18 @@ function PlaygroundForm({
   const response = useRef<HTMLElement>(null);
   const active = useRef<AbortController | null>(null);
   const nextFocusId = useRef<string | null>(null);
+  const fullRequestOpener = useRef("playground-request-options");
   useLayoutEffect(() => {
     // Restore focus when the new field mounts, before later clicks or typing.
     const id = nextFocusId.current;
     if (!id) return;
     nextFocusId.current = null;
-    document.getElementById(id)?.focus();
+    const target =
+      document.getElementById(id) ??
+      (id === fullRequestOpener.current
+        ? document.getElementById("playground-request-options")
+        : null);
+    target?.focus();
   });
   useEffect(() => () => active.current?.abort(), []);
   useEffect(() => {
@@ -412,7 +418,8 @@ function PlaygroundForm({
                 models={chatModels ?? []}
                 running={running}
                 loading={models.isPending}
-                onEditFullRequest={() => {
+                onEditFullRequest={(triggerId) => {
+                  fullRequestOpener.current = triggerId;
                   nextFocusId.current = "playground-full-back";
                   setCode(undefined);
                   setMode("Full request");
@@ -430,7 +437,7 @@ function PlaygroundForm({
                   mode === "Full request"
                     ? () => {
                         if (!codeReady()) return;
-                        nextFocusId.current = "playground-request-options";
+                        nextFocusId.current = fullRequestOpener.current;
                         setCode(undefined);
                         setMode("Form");
                       }
