@@ -1,14 +1,16 @@
 import { Popover } from "@base-ui/react/popover";
-import { Copy } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { ChevronRight, Copy, Wrench } from "lucide-react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/copy-text";
 import type {
+  PlaygroundBlock,
   PlaygroundReply,
   PlaygroundToolDelta,
 } from "@/lib/platform/playground";
 import { MemoryMarkdown as MarkdownContent } from "./memory-markdown";
+import { isToolUse } from "./playground-tool-calls";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
 
 export type RunStatus = "idle" | "running" | "complete" | "stopped" | "failed";
@@ -82,6 +84,90 @@ function StreamingInput({ index, name, tail, clipped }: ToolInputPreview) {
   );
 }
 
+function isServerResult(block: PlaygroundBlock) {
+  return (
+    block.type.endsWith("_tool_result") && typeof block.tool_use_id === "string"
+  );
+}
+
+function groupResponseText(blocks: PlaygroundBlock[]) {
+  // Providers can split a sentence or Markdown delimiter across text blocks.
+  const parts: (string | PlaygroundBlock)[] = [];
+  for (const block of blocks) {
+    if (block.type !== "text" || typeof block.text !== "string") {
+      parts.push(block);
+      continue;
+    }
+    const previous = parts.at(-1);
+    if (typeof previous === "string")
+      parts[parts.length - 1] = previous + block.text;
+    else parts.push(block.text);
+  }
+  return parts;
+}
+
+function ToolBlockCard({
+  block,
+  name,
+}: {
+  block: PlaygroundBlock;
+  name: string;
+}) {
+  const result = isServerResult(block);
+  const label = result
+    ? "Server tool result"
+    : block.type === "server_tool_use"
+      ? "Server tool use"
+      : "Tool use";
+  const [open, setOpen] = useState(true);
+  const details = useId();
+  return (
+    <div
+      data-block-type={block.type}
+      data-tool-use-id={result ? undefined : String(block.id)}
+      data-server-tool-result-id={
+        result ? String(block.tool_use_id) : undefined
+      }
+      className="rounded-lg border"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${label} ${name}`}
+        aria-controls={details}
+        onClick={() => setOpen(!open)}
+        className="flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring"
+      >
+        <Wrench aria-hidden className="size-3.5 text-muted-foreground" />
+        <span>{label}</span>
+        <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">
+          {name}
+        </code>
+        <ChevronRight
+          aria-hidden
+          className={`ml-auto size-3.5 ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      <pre
+        id={details}
+        hidden={!open}
+        tabIndex={0}
+        className="max-h-72 overflow-auto border-t p-3 font-mono text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]"
+      >
+        {open && (
+          <>
+            {!result && name + "("}
+            <code aria-label={`${result ? "Result" : "Arguments"} for ${name}`}>
+              {JSON.stringify(result ? block.content : block.input, null, 2)}
+            </code>
+            {!result && ")"}
+          </>
+        )}
+      </pre>
+    </div>
+  );
+}
+
 function Metric({ label, detail }: { label: string; detail: string }) {
   return (
     <Popover.Root>
@@ -126,6 +212,14 @@ export function PlaygroundResponse({
   modifier: string;
 }) {
   const [view, setView] = useState<"Rendered" | "Raw">("Rendered");
+  const blocks = reply?.content;
+  const names = new Map(
+    blocks?.filter(isToolUse).map((block) => [block.id, block.name]),
+  );
+  const hasOtherBlocks = blocks?.some(
+    (block) =>
+      block.type !== "text" && !isToolUse(block) && !isServerResult(block),
+  );
   const input = reply?.inputTokens?.toLocaleString("en-US") ?? "—";
   const output = reply?.outputTokens?.toLocaleString("en-US") ?? "—";
   const seconds = reply && (reply.durationMs / 1000).toFixed(1);
@@ -162,9 +256,35 @@ export function PlaygroundResponse({
             <span className="inline-block rounded bg-muted/70 px-2 py-0.5 text-xs text-muted-foreground">
               assistant
             </span>
-            <div aria-busy={status === "running"} className="mt-3">
-              <MarkdownContent content={text} />
-              {!text && reply?.content?.length ? (
+            <div aria-busy={status === "running"} className="mt-3 space-y-3">
+              {blocks ? (
+                groupResponseText(blocks).map((block, index) => {
+                  if (typeof block === "string")
+                    return <MarkdownContent key={index} content={block} />;
+                  if (isToolUse(block))
+                    return (
+                      <ToolBlockCard
+                        key={block.id + ":" + index}
+                        block={block}
+                        name={block.name}
+                      />
+                    );
+                  if (isServerResult(block))
+                    return (
+                      <ToolBlockCard
+                        key={index}
+                        block={block}
+                        name={
+                          names.get(String(block.tool_use_id)) ?? block.type
+                        }
+                      />
+                    );
+                  return null;
+                })
+              ) : (
+                <MarkdownContent content={text} />
+              )}
+              {hasOtherBlocks ? (
                 <button
                   type="button"
                   className="rounded-sm text-sm underline focus-visible:outline-2 focus-visible:outline-ring"

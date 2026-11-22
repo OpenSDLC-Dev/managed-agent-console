@@ -10,6 +10,13 @@ import {
 } from "../e2e/messages-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
+import {
+  clientCalls,
+  hostedResults,
+  serveToolReply,
+  disablePlaygroundStreaming,
+  toolTemplates,
+} from "../e2e/playground-tools-fixture";
 import { NATIVE_SURFACES } from "./native-surfaces";
 import type { Page } from "@playwright/test";
 import { type ConsoleMode, MOCK_URL } from "./consoles";
@@ -1291,7 +1298,7 @@ export const SURFACES: Surface[] = [
     route: "/playground",
     fixture: "a blank request with its system row and no tool definitions",
     description:
-      "The top Add menu with the system-row status and the available custom tool.",
+      "The top Add menu with system status, five tool presets and a custom tool.",
     viewportOnly: true,
     setup: async (page) => {
       await openMessages(page, "/playground");
@@ -1301,6 +1308,16 @@ export const SURFACES: Surface[] = [
     },
   },
   ...[
+    ...toolTemplates.map(({ id, title, name }) => ({
+      id,
+      title,
+      tool:
+        id === "search"
+          ? "deepseek_web_search"
+          : id === "fetch"
+            ? "deepseek_read_url"
+            : name,
+    })),
     { id: "stream", title: "Stream tool arguments live", tool: "make_file" },
     { id: "parallel", title: "Call tools in parallel", tool: "get_time" },
   ].map(({ id, title, tool }): Surface => ({
@@ -1312,6 +1329,11 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await openMessages(page, "/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
+      if (id === "browser")
+        await page
+          .getByRole("navigation", { name: "Template pages" })
+          .getByRole("button", { name: "More" })
+          .click();
       await page.getByRole("button", { name: title, exact: true }).click();
       await page.getByRole("button", { name: tool, exact: true }).waitFor();
       await page
@@ -1319,6 +1341,66 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   })),
+  ...(["client-calls", "client-results", "hosted-results"] as const).map(
+    (view): Surface => ({
+      id: "messages-playground-" + view,
+      route: "/playground",
+      fixture:
+        view === "hosted-results"
+          ? "DeepSeek web search and link-reading blocks"
+          : "two independent client tool calls",
+      description:
+        view === "client-results"
+          ? "Individual manual results with their call IDs and error state."
+          : "The provider response in Rendered view, with arguments and tool output.",
+      setup: async (page) => {
+        await openMessages(page, "/playground");
+        await page.locator('[data-model="deepseek-flash"]').waitFor();
+        await serveToolReply(
+          page,
+          view === "hosted-results" ? hostedResults : clientCalls,
+        );
+        await disablePlaygroundStreaming(page);
+        for (const label of view === "hosted-results"
+          ? ["Web search", "Web fetch"]
+          : ["Computer use", "Browser use"]) {
+          await page.getByRole("button", { name: "Add", exact: true }).click();
+          await page
+            .getByRole("menuitem", { name: label, exact: true })
+            .click();
+        }
+        await page
+          .getByRole("textbox", { name: "Prompt", exact: true })
+          .fill("Inspect the example page.");
+        await page.getByRole("button", { name: "Run prompt" }).click();
+        const response = page.getByRole("region", { name: "Response" });
+        if (view === "hosted-results") {
+          const result = response.getByRole("button", {
+            name: "Server tool result deepseek_web_search",
+          });
+          await result.waitFor();
+          if ((await result.getAttribute("aria-expanded")) !== "true")
+            await result.click();
+          await response.getByLabel("Result for deepseek_web_search").waitFor();
+        } else if (view === "client-results") {
+          await response
+            .getByRole("button", { name: "Add to messages" })
+            .click();
+          await page
+            .getByRole("textbox", { name: "Tool result computer" })
+            .fill("Screenshot captured.");
+          await page
+            .getByRole("textbox", { name: "Tool result browser" })
+            .fill("Page unavailable.");
+          await page
+            .getByRole("checkbox", { name: "Mark browser result as an error" })
+            .check();
+        } else {
+          await response.getByLabel("Arguments for computer").waitFor();
+        }
+      },
+    }),
+  ),
   {
     id: "messages-playground-full-request",
     route: "/playground",

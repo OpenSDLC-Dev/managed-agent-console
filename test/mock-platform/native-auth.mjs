@@ -5,6 +5,9 @@ import { randomBytes } from "node:crypto";
 // Wire: internal/api/login.go and internal/login/session.go.
 export const MOCK_ACCOUNT = {
   signed_in: true,
+  ...(process.env.MOCK_PLAYGROUND_REPLAY === "1" && {
+    playground_access: true,
+  }),
   id: "user_mockadmin01",
   role: "admin",
   role_source: "manual",

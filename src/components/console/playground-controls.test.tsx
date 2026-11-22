@@ -16,6 +16,8 @@ import {
 } from "@/components/shell/console-session";
 import * as gateway from "@/lib/platform/playground";
 import { Playground } from "./playground";
+import { remapExpandedTools } from "./playground-tools";
+import { availablePlaygroundTools } from "./playground-tool-presets";
 
 const models = [
   {
@@ -321,6 +323,45 @@ it("clears the parallel-call constraint when switching tool choice to None", asy
   });
 });
 
+it("keeps invalid custom JSON editable when the tool takes a preset's name and description", async () => {
+  const { user } = await setup([
+    models[0],
+    { ...models[0], id: "deepseek-flash", display_name: "DeepSeek Flash" },
+  ]);
+  const search = availablePlaygroundTools(models[0]).find(
+    ({ id }) => id === "web_search",
+  )!;
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Custom tool" }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    target: { value: search.definition.name },
+  });
+  const schema = screen.getByRole("textbox", { name: "Input schema" });
+  fireEvent.change(schema, {
+    target: { value: JSON.stringify(search.definition.input_schema) },
+  });
+  fireEvent.change(schema, { target: { value: "{" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), {
+    target: { value: search.definition.description },
+  });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(schema).toBeVisible();
+  expect(schema).toHaveFocus();
+  const selector = screen.getByRole("combobox", { name: "Model" });
+  await user.click(selector);
+  await user.click(
+    await screen.findByRole("option", { name: "DeepSeek Flash" }),
+  );
+  expect(selector).toHaveAttribute("data-model", "deepseek-flash");
+  expect(schema).toBeVisible();
+  expect(schema).toHaveValue("{");
+  fireEvent.change(schema, { target: { value: '{"type":"object"}' } });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(screen.getByRole("textbox", { name: /request code$/i })).toBeVisible();
+});
+
 it("retains a partially edited tool schema and reveals it before running or switching request views", async () => {
   const { user, run } = await setup();
   const add = screen.getByRole("button", { name: "Add" });
@@ -406,6 +447,50 @@ it("prepends and expands every new custom tool, keeping existing tool edits atta
       { name: "make_file", input_schema: { type: "object" } },
     ],
   });
+});
+
+it("preserves unique expanded cards when imported tools with duplicate names swap places", () => {
+  const first = { name: "fetch", description: "A" };
+  const second = { name: "fetch", description: "B" };
+  const unique = { name: "other" };
+  const original = [first, second, unique];
+  expect(
+    remapExpandedTools([0, 2], original, structuredClone(original)),
+  ).toEqual([0, 2]);
+  expect(remapExpandedTools([0, 2], original, [second, first, unique])).toEqual(
+    [2],
+  );
+});
+
+it("keeps expanded cards on their tools when Code removes or reorders declarations", async () => {
+  const { user } = await setup();
+  const add = screen.getByRole("button", { name: "Add" });
+  for (const name of ["Browser use", "Computer use", "Bash"]) {
+    await user.click(add);
+    await user.click(await screen.findByRole("menuitem", { name }));
+  }
+  await user.click(screen.getByRole("button", { name: "computer" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  for (const operation of ["remove", "reverse"]) {
+    await user.click(screen.getByLabelText("Code", { exact: true }));
+    const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "JSON request code",
+    });
+    const request = JSON.parse(editor.value);
+    request.tools =
+      operation === "remove" ? request.tools.slice(1) : request.tools.reverse();
+    fireEvent.change(editor, { target: { value: JSON.stringify(request) } });
+    await user.click(screen.getByLabelText("Form", { exact: true }));
+    expect(screen.getByRole("button", { name: "computer" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "browser" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  }
 });
 
 it("preserves Form's thinking budget across templates and lets raw Code keep provider-specific values", async () => {

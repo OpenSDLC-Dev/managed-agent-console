@@ -40,6 +40,9 @@ import {
   type PlaygroundTemplate,
 } from "./playground-templates";
 import { PlaygroundPanes } from "./playground-panes";
+import { switchPlaygroundModel } from "./playground-tool-presets";
+import { remapExpandedTools } from "./playground-tools";
+import { newToolResults } from "./playground-tool-calls";
 import {
   PlaygroundResponse,
   previewToolInput,
@@ -105,12 +108,14 @@ function PlaygroundForm({
 }) {
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
-  const [expandedTool, setExpandedTool] = useState<number | null>(null);
+  const [newRequests, setNewRequests] = useState(0);
+  const [expandedTools, setExpandedTools] = useState<number[]>([]);
   const [template, setTemplate] = useState<{
     title: string;
     draft: PlaygroundDraft;
   }>();
   const [previousAlias, setPreviousAlias] = useState(requestedAlias);
+  const [modelChangeError, setModelChangeError] = useState<string>();
   const [mode, setMode] = useState<"Form" | "Code" | "Full request">("Form");
   const [language, setLanguage] = useState<CodeLanguage>("cURL");
   const [code, setCode] = useState<{ text: string; error?: string }>();
@@ -172,18 +177,48 @@ function PlaygroundForm({
     };
   }, [historyOpen]);
 
+  const chatModels = models.isError ? undefined : models.data;
   // A query-only navigation can reuse this form. Keep its prompt and history.
   if (previousAlias !== requestedAlias) {
     setPreviousAlias(requestedAlias);
-    if (draft.selection) setDraft({ ...draft, selection: "" });
+    const previous =
+      draft.selection || previousAlias || chatModels?.[0]?.id || "";
+    const initialAlias = requestedAlias || chatModels?.[0]?.id || "";
+    const pinDefault =
+      !requestedAlias && Array.isArray(draft.parameters?.tools);
+    const next = switchPlaygroundModel(
+      { ...draft, selection: pinDefault ? initialAlias : "" },
+      previous,
+      initialAlias,
+    );
+    if (typeof next === "string") {
+      setDraft({ ...draft, selection: previous });
+      setModelChangeError(next);
+    } else {
+      setDraft(next);
+      setModelChangeError(undefined);
+    }
     if (code && !code.error) setCode(undefined);
   }
-  const chatModels = models.isError ? undefined : models.data;
   const initialModel = requestedAlias
     ? chatModels?.find((entry) => entry.id === requestedAlias)
     : chatModels?.[0];
   const model = draft.selection || initialModel?.id || "";
-  const available = chatModels?.some((entry) => entry.id === model) === true;
+  const selectedModel = chatModels?.find((entry) => entry.id === model);
+  const hasDeepSeekHistory =
+    model !== "deepseek-flash" &&
+    draft.messages.some(
+      ({ role, content }) =>
+        role === "assistant" &&
+        Array.isArray(content) &&
+        content.some(
+          (block) =>
+            block.type === "server_tool_use" &&
+            (block.name === "deepseek_web_search" ||
+              block.name === "deepseek_read_url"),
+        ),
+    );
+  const available = selectedModel !== undefined;
   const running = status === "running";
   const modifier =
     typeof navigator !== "undefined" &&
@@ -206,8 +241,16 @@ function PlaygroundForm({
   const codeLanguage = mode === "Full request" ? "JSON" : language;
   function editCode(text: string) {
     setShowCodeError(false);
+    setModelChangeError(undefined);
     try {
       const next = readSnippet(text, codeLanguage, draft);
+      setExpandedTools(
+        remapExpandedTools(
+          expandedTools,
+          draft.parameters?.tools,
+          next.parameters?.tools,
+        ),
+      );
       setDraft(next);
       setCode({ text });
     } catch (cause) {
@@ -223,10 +266,11 @@ function PlaygroundForm({
       : undefined;
     if (invalid !== undefined && invalid >= 0) {
       const field = `playground-tool-${invalid}-schema`;
-      if (expandedTool === invalid) document.getElementById(field)?.focus();
+      if (expandedTools.includes(invalid))
+        document.getElementById(field)?.focus();
       else {
         nextFocusId.current = field;
-        setExpandedTool(invalid);
+        setExpandedTools([invalid]);
       }
       return false;
     }
@@ -237,6 +281,7 @@ function PlaygroundForm({
   }
   function reset(preset?: PlaygroundTemplate) {
     if (!codeReady()) return;
+    setModelChangeError(undefined);
     const next = newDraft();
     next.selection = preset || available ? model : "";
     if (preset) {
@@ -250,8 +295,8 @@ function PlaygroundForm({
         tools: structuredClone(preset.tools),
       };
       delete next.parameters.tool_choice;
-    }
-    setExpandedTool(null);
+    } else setNewRequests((previous) => previous + 1);
+    setExpandedTools([]);
     setTemplate(preset ? { title: preset.title, draft: next } : undefined);
     setDraft(next);
     setCode(undefined);
@@ -270,12 +315,12 @@ function PlaygroundForm({
     const id = draft.messages[draft.messages.length - 1].id + 1;
     const messages = draft.messages.filter(hasMessageContent);
     const last = messages.at(-1);
+    let content = blocks;
     // Messages continues a final assistant prefill in the same turn.
     if (last?.role === "assistant") {
       const first = blocks[0];
       // A plain text delta continues its prefill. Annotated blocks retain
       // their boundaries, text offsets, signatures and tool inputs.
-      let content = blocks;
       if (
         typeof last.content === "string" &&
         first.type === "text" &&
@@ -294,11 +339,15 @@ function PlaygroundForm({
         content = [...prefix, ...blocks];
       }
       messages[messages.length - 1] = { ...last, content };
-    } else messages.push({ id, role: "assistant", content: blocks });
+    } else messages.push({ id, role: "assistant", content });
+    const results = newToolResults(content);
     nextFocusId.current = `playground-message-${id + 1}`;
     setDraft({
       ...draft,
-      messages: [...messages, { id: id + 1, role: "user", content: "" }],
+      messages: [
+        ...messages,
+        { id: id + 1, role: "user", content: results.length ? results : "" },
+      ],
     });
     setMode("Form");
     setCode(undefined);
@@ -472,8 +521,8 @@ function PlaygroundForm({
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
-                expandedTool={expandedTool}
-                onExpandTool={setExpandedTool}
+                expandedTools={expandedTools}
+                onExpandTools={setExpandedTools}
                 model={model}
                 models={chatModels ?? []}
                 running={running}
@@ -486,7 +535,26 @@ function PlaygroundForm({
                   setMode("Full request");
                 }}
                 onChange={(next) => {
-                  setDraft(next);
+                  const result =
+                    next.selection === draft.selection
+                      ? next
+                      : switchPlaygroundModel(
+                          next,
+                          model,
+                          next.selection || initialModel?.id || "",
+                        );
+                  if (typeof result === "string") {
+                    setModelChangeError(result);
+                    return;
+                  }
+                  setModelChangeError(undefined);
+                  // A new default in a refreshed catalog must not re-route an
+                  // edited draft's tools without an explicit model change.
+                  setDraft(
+                    result.selection || !model
+                      ? result
+                      : { ...result, selection: model },
+                  );
                   setCode(undefined);
                 }}
               />
@@ -534,6 +602,18 @@ function PlaygroundForm({
                 Set Max tokens to at least {budgetCorrection.toLocaleString()}{" "}
                 in Model settings for this thinking budget, or edit the request
                 in Code.
+              </p>
+            )}
+            {modelChangeError && (
+              <p role="alert" className="text-sm text-destructive">
+                {modelChangeError}
+              </p>
+            )}
+            {hasDeepSeekHistory && (
+              <p role="status" className="text-sm text-muted-foreground">
+                This conversation includes DeepSeek web results. If this model
+                rejects that history, select DeepSeek Flash or start a new
+                request.
               </p>
             )}
             {error && status !== "failed" && (
@@ -607,6 +687,8 @@ function PlaygroundForm({
                 </div>
               ) : (
                 <PlaygroundTemplates
+                  key={`${model}:${newRequests}`}
+                  model={selectedModel}
                   selected={selectedTemplate}
                   onSelect={reset}
                 />
@@ -667,7 +749,7 @@ function PlaygroundForm({
                       setHistoryOpen(false);
                       return;
                     }
-                    setExpandedTool(null);
+                    setExpandedTools([]);
                     setDraft(entry.draft);
                     setCode(undefined);
                     setText(entry.text);

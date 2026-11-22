@@ -1,4 +1,10 @@
-import { ChevronDown, Ellipsis, FileText, Trash2, Wrench } from "lucide-react";
+import {
+  ChevronDown,
+  Ellipsis,
+  StickyNote,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,13 +20,20 @@ import {
   PlaygroundModelSelect,
   PlaygroundSettings,
 } from "./playground-settings";
-import { addCustomTool, PlaygroundTools } from "./playground-tools";
+import {
+  addCustomTool,
+  PlaygroundTools,
+  prependTool,
+  toolName,
+} from "./playground-tools";
+import { availablePlaygroundTools } from "./playground-tool-presets";
 import type {
   PlaygroundMessage,
   PlaygroundContent,
   PlaygroundModel,
   PlaygroundRequest,
 } from "@/lib/platform/playground";
+import { readToolResultTurn, ToolResultFields } from "./playground-tool-calls";
 
 export type PlaygroundDraft = {
   selection: string;
@@ -61,6 +74,8 @@ function ContentField({
   placeholder,
   onChange,
   onEditBlocks,
+  preceding,
+  acceptsImages = false,
 }: {
   id: string;
   label?: string;
@@ -68,7 +83,21 @@ function ContentField({
   placeholder: string;
   onChange: (value: PlaygroundContent) => void;
   onEditBlocks: (triggerId: string) => void;
+  preceding?: PlaygroundContent;
+  acceptsImages?: boolean;
 }) {
+  const toolTurn = preceding !== undefined && readToolResultTurn(content);
+  if (preceding !== undefined && toolTurn)
+    return (
+      <ToolResultFields
+        id={id}
+        turn={toolTurn}
+        preceding={preceding}
+        acceptsImages={acceptsImages}
+        onChange={onChange}
+        onEdit={onEditBlocks}
+      />
+    );
   if (typeof content === "string")
     return (
       <textarea
@@ -132,8 +161,8 @@ export function PlaygroundEditor({
   model,
   loading,
   running,
-  expandedTool,
-  onExpandTool,
+  expandedTools,
+  onExpandTools,
   onEditFullRequest,
 }: {
   draft: PlaygroundDraft;
@@ -142,12 +171,16 @@ export function PlaygroundEditor({
   model: string;
   loading: boolean;
   running: boolean;
-  expandedTool: number | null;
-  onExpandTool: (index: number | null) => void;
+  expandedTools: number[];
+  onExpandTools: (indices: number[]) => void;
   onEditFullRequest: (triggerId: string) => void;
 }) {
   const { system, messages } = draft;
   const modelProps = { models, model, loading, running };
+  const selectedModel = models.find((entry) => entry.id === model);
+  const presets = availablePlaygroundTools(selectedModel);
+  const tools = draft.parameters?.tools;
+  const names = new Set(Array.isArray(tools) ? tools.map(toolName) : []);
   const patch = (change: Partial<PlaygroundDraft>) =>
     onChange({ ...draft, ...change });
   function addMessage(role: PlaygroundMessage["role"]) {
@@ -184,12 +217,17 @@ export function PlaygroundEditor({
             >
               Add <ChevronDown />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[228px]">
+            <DropdownMenuContent
+              align="end"
+              sideOffset={6}
+              className="w-[228px] rounded-xl p-2"
+            >
               <DropdownMenuItem
+                className="gap-2 px-2"
                 disabled={system !== null}
                 onClick={() => patch({ system: "" })}
               >
-                <FileText /> System prompt{" "}
+                <StickyNote /> System prompt{" "}
                 {system !== null && (
                   <span className="ml-auto text-xs text-muted-foreground">
                     Added
@@ -198,16 +236,42 @@ export function PlaygroundEditor({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Tools</DropdownMenuLabel>
+                <DropdownMenuLabel className="px-2">Tools</DropdownMenuLabel>
                 <DropdownMenuItem
+                  className="gap-2 px-2"
                   onClick={() => {
-                    onExpandTool(0);
+                    onExpandTools([0]);
                     onChange(addCustomTool(draft));
                   }}
                 >
                   <Wrench />
                   Custom tool
                 </DropdownMenuItem>
+                {presets.map(({ id, icon: Icon, label, definition }) => {
+                  const added = names.has(definition.name);
+                  return (
+                    <DropdownMenuItem
+                      key={id}
+                      className="gap-2 px-2"
+                      disabled={added}
+                      data-tool-kind={id}
+                      onClick={() => {
+                        onExpandTools([
+                          0,
+                          ...expandedTools.map((index) => index + 1),
+                        ]);
+                        onChange(prependTool(draft, definition));
+                      }}
+                    >
+                      <Icon /> {label}
+                      {added && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          Added
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -234,9 +298,10 @@ export function PlaygroundEditor({
       </div>
       <PlaygroundTools
         draft={draft}
+        presets={presets}
         onChange={onChange}
-        expanded={expandedTool}
-        onExpand={onExpandTool}
+        expanded={expandedTools}
+        onExpand={onExpandTools}
         onEditFullRequest={onEditFullRequest}
       />
       {system !== null && (
@@ -296,6 +361,15 @@ export function PlaygroundEditor({
                 id={`playground-message-${message.id}`}
                 label={i === 0 ? "Prompt" : `${message.role} message ${i + 1}`}
                 content={message.content}
+                acceptsImages={
+                  selectedModel?.capabilities?.image_input?.supported === true
+                }
+                preceding={
+                  message.role === "user" &&
+                  messages[i - 1]?.role === "assistant"
+                    ? messages[i - 1].content
+                    : undefined
+                }
                 onEditBlocks={onEditFullRequest}
                 placeholder={
                   message.role === "user"
