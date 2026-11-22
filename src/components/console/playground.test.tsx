@@ -20,6 +20,7 @@ import {
 } from "@/components/shell/console-session";
 import * as gateway from "@/lib/platform/playground";
 import { Playground } from "./playground";
+import { PlaygroundResponse } from "./playground-response";
 
 const reply: gateway.PlaygroundReply = {
   raw: '{"content":[{"type":"text","text":"OK"}]}',
@@ -121,6 +122,28 @@ it("preselects the linked chat alias, respects manual changes, and keeps the dra
   expect(select).toHaveAttribute("data-model", "another");
   expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
   expect(run).not.toHaveBeenCalled();
+});
+
+it("keeps a tool draft on its chosen route when the catalog default changes", async () => {
+  const flash = { id: "deepseek-flash", display_name: "DeepSeek Flash" };
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([flash]);
+  const client = new QueryClient();
+  const user = userEvent.setup();
+  renderPlayground({ client });
+  const select = await screen.findByRole("combobox", { name: "Model" });
+  await screen.findByText("DeepSeek Flash", { exact: true });
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(await screen.findByRole("menuitem", { name: "Web search" }));
+  await act(async () => {
+    client.setQueryData(
+      ["playground-models", TEST_SESSION.id],
+      [{ id: "other", display_name: "Other" }, flash],
+    );
+  });
+  expect(select).toHaveAttribute("data-model", flash.id);
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(codeEditor().value).toContain('"model": "deepseek-flash"');
+  expect(codeEditor().value).toContain('"type": "deepseek_web_search"');
 });
 
 it("rejects a linked display name or unknown upstream ID and lets the user choose a real alias", async () => {
@@ -753,6 +776,45 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
   await user.click(screen.getByLabelText("Code", { exact: true }));
   expect(JSON.parse(codeEditor().value)).toEqual(body);
 });
+
+it.each([
+  { type: "tool_use", name: "lookup", id: "call_1", input: {} },
+  { type: "thinking", thinking: "Review", signature: "signed" },
+])(
+  "joins adjacent Markdown fragments on either side of a $type block",
+  async (boundary) => {
+    const blocks = [
+      { type: "text", text: "**First" },
+      { type: "text", text: " sentence**" },
+      { type: "text", text: "." },
+      boundary,
+      { type: "text", text: "Second" },
+      { type: "text", text: " sentence." },
+    ];
+    const raw = JSON.stringify({ content: blocks });
+    const user = userEvent.setup();
+    render(
+      <PlaygroundResponse
+        status="complete"
+        text="**First sentence**.Second sentence."
+        toolInputs={[]}
+        reply={{ ...reply, content: blocks, raw }}
+        onAdd={vi.fn()}
+        modifier="Ctrl"
+      />,
+    );
+    expect(
+      screen.getByText("First sentence", { selector: "strong" }),
+    ).toBeVisible();
+    expect(screen.getAllByRole("paragraph").map((p) => p.textContent)).toEqual([
+      "First sentence.",
+      "Second sentence.",
+    ]);
+    await user.click(screen.getByLabelText("Raw", { exact: true }));
+    expect(screen.getByLabelText("Response body").textContent).toBe(raw);
+    expect(blocks).toEqual(JSON.parse(raw).content);
+  },
+);
 
 it("preserves mixed assistant blocks and returns parallel client results in call order", async () => {
   vi.spyOn(gateway, "playgroundModels").mockResolvedValue([

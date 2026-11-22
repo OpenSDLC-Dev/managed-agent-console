@@ -182,10 +182,13 @@ function PlaygroundForm({
     setPreviousAlias(requestedAlias);
     const previous =
       draft.selection || previousAlias || chatModels?.[0]?.id || "";
+    const initialAlias = requestedAlias || chatModels?.[0]?.id || "";
+    const pinDefault =
+      !requestedAlias && Array.isArray(draft.parameters?.tools);
     const next = switchPlaygroundModel(
-      { ...draft, selection: "" },
+      { ...draft, selection: pinDefault ? initialAlias : "" },
       previous,
-      requestedAlias || chatModels?.[0]?.id || "",
+      initialAlias,
     );
     if (typeof next === "string") {
       setDraft({ ...draft, selection: previous });
@@ -201,6 +204,19 @@ function PlaygroundForm({
     : chatModels?.[0];
   const model = draft.selection || initialModel?.id || "";
   const selectedModel = chatModels?.find((entry) => entry.id === model);
+  const hasDeepSeekHistory =
+    model !== "deepseek-flash" &&
+    draft.messages.some(
+      ({ role, content }) =>
+        role === "assistant" &&
+        Array.isArray(content) &&
+        content.some(
+          (block) =>
+            block.type === "server_tool_use" &&
+            (block.name === "deepseek_web_search" ||
+              block.name === "deepseek_read_url"),
+        ),
+    );
   const available = selectedModel !== undefined;
   const running = status === "running";
   const modifier =
@@ -523,7 +539,13 @@ function PlaygroundForm({
                     return;
                   }
                   setModelChangeError(undefined);
-                  setDraft(result);
+                  // A new default in a refreshed catalog must not re-route an
+                  // edited draft's tools without an explicit model change.
+                  setDraft(
+                    result.selection || !model
+                      ? result
+                      : { ...result, selection: model },
+                  );
                   setCode(undefined);
                 }}
               />
@@ -576,6 +598,13 @@ function PlaygroundForm({
             {modelChangeError && (
               <p role="alert" className="text-sm text-destructive">
                 {modelChangeError}
+              </p>
+            )}
+            {hasDeepSeekHistory && (
+              <p role="status" className="text-sm text-muted-foreground">
+                This conversation includes DeepSeek web results. If this model
+                rejects that history, select DeepSeek Flash or start a new
+                request.
               </p>
             )}
             {error && status !== "failed" && (

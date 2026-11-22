@@ -1,3 +1,4 @@
+import { replaceEqualDeep } from "@tanstack/react-query";
 import { Globe, Link2, Monitor, PanelsTopLeft, Terminal } from "lucide-react";
 import type { PlaygroundModel } from "@/lib/platform/playground";
 import type { PlaygroundDraft } from "./playground-editor";
@@ -204,7 +205,7 @@ const webPresets = {
     },
     {
       ...clientFetch,
-      help: "The model can read a URL in the prompt. The provider returns the page content in the response.",
+      help: "The provider reads a URL for the model and returns the page reference with its answer.",
       definition: { type: "deepseek_read_url", name: "deepseek_read_url" },
     },
   ],
@@ -237,11 +238,7 @@ export function switchPlaygroundModel(
     const source = before.find((preset) => matchesToolPreset(tool, preset));
     if (!source || !isObject(tool)) continue;
     const stock = source.definition;
-    const pristine =
-      Object.keys(tool).length === Object.keys(stock).length &&
-      Object.keys(stock).every(
-        (key) => JSON.stringify(tool[key]) === JSON.stringify(stock[key]),
-      );
+    const pristine = replaceEqualDeep(stock, tool) === stock;
     if (!pristine) {
       if (stock.type)
         return `Edit or remove ${stock.name} before switching models. It has provider-specific settings.`;
@@ -262,8 +259,11 @@ export function switchPlaygroundModel(
       choice.type === "tool" &&
       choice.name === stock.name
     ) {
-      if (target.type) delete parameters.tool_choice;
-      else parameters.tool_choice = { ...choice, name: target.name };
+      if (target.type) {
+        const automatic: Record<string, unknown> = { ...choice, type: "auto" };
+        delete automatic.name;
+        parameters.tool_choice = automatic;
+      } else parameters.tool_choice = { ...choice, name: target.name };
     }
   }
   return { ...draft, parameters: { ...parameters, tools: declarations } };

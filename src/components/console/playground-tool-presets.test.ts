@@ -24,18 +24,39 @@ it("converts both web presets on a model change, preserving the rest of the draf
     parameters: {
       temperature: 0,
       tools: [custom, ...clientTools],
-      tool_choice: { type: "tool", name: "web_fetch" },
+      tool_choice: {
+        type: "tool",
+        name: "web_fetch",
+        disable_parallel_tool_use: true,
+        extra: { kept: true },
+      },
     },
   };
   const switched = switchPlaygroundModel(draft, alias, deepseek);
   expect(switched).toEqual({
     ...draft,
-    parameters: { temperature: 0, tools: [custom, ...providerTools] },
+    parameters: {
+      temperature: 0,
+      tools: [custom, ...providerTools],
+      tool_choice: {
+        type: "auto",
+        disable_parallel_tool_use: true,
+        extra: { kept: true },
+      },
+    },
   });
   if (typeof switched === "string") throw new Error(switched);
   expect(switchPlaygroundModel(switched, deepseek, alias)).toEqual({
     ...draft,
-    parameters: { temperature: 0, tools: [custom, ...clientTools] },
+    parameters: {
+      temperature: 0,
+      tools: [custom, ...clientTools],
+      tool_choice: {
+        type: "auto",
+        disable_parallel_tool_use: true,
+        extra: { kept: true },
+      },
+    },
   });
   expect(draft.parameters.tools).toEqual([custom, ...clientTools]);
 });
@@ -47,6 +68,16 @@ it("preserves custom schemas and reports conflicts instead of losing a tool or i
     ...client,
     input_schema: { type: "object", additionalProperties: true },
   };
+  const reordered = {
+    ...client,
+    input_schema: Object.fromEntries(
+      Object.entries(client.input_schema as object).reverse(),
+    ),
+  };
+  const reorderedDraft = { ...newDraft(), parameters: { tools: [reordered] } };
+  expect(switchPlaygroundModel(reorderedDraft, alias, deepseek)).toMatchObject({
+    parameters: { tools: [native] },
+  });
   const draft = { ...newDraft(), parameters: { tools: [custom] } };
   expect(switchPlaygroundModel(draft, alias, deepseek)).toEqual(draft);
   expect(

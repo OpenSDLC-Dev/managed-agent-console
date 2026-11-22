@@ -293,6 +293,13 @@ test("hosted web search and fetch retain their results and signature without man
   expect(JSON.parse(await raw.innerText()).content).toEqual(hostedResults);
   await addToMessages.click();
   await expect(page.locator("[data-tool-result-id]")).toHaveCount(0);
+  await selectAlias(page, "GLM-5.3");
+  const historyNotice = page.getByText(
+    /This conversation includes DeepSeek web results/,
+  );
+  await expect(historyNotice).toBeVisible();
+  await selectAlias(page, "DeepSeek Flash");
+  await expect(historyNotice).toHaveCount(0);
   await page
     .getByRole("textbox", { name: "user message 3", exact: true })
     .fill("Summarize the result.");

@@ -67,7 +67,7 @@ const recipes: Recipe[] = [
   {
     title: "Explain an article",
     description:
-      "Use the article returned by the provider to answer from the page.",
+      "Explain a linked article using the page the provider reads for the model.",
     clientDescription:
       "Ask your client to fetch an article and explain the passages it returns.",
     system:

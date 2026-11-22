@@ -90,6 +90,22 @@ function isServerResult(block: PlaygroundBlock) {
   );
 }
 
+function groupResponseText(blocks: PlaygroundBlock[]) {
+  // Providers can split a sentence or Markdown delimiter across text blocks.
+  const parts: (string | PlaygroundBlock)[] = [];
+  for (const block of blocks) {
+    if (block.type !== "text" || typeof block.text !== "string") {
+      parts.push(block);
+      continue;
+    }
+    const previous = parts.at(-1);
+    if (typeof previous === "string")
+      parts[parts.length - 1] = previous + block.text;
+    else parts.push(block.text);
+  }
+  return parts;
+}
+
 function ToolBlockCard({
   block,
   name,
@@ -197,9 +213,6 @@ export function PlaygroundResponse({
 }) {
   const [view, setView] = useState<"Rendered" | "Raw">("Rendered");
   const blocks = reply?.content;
-  const hasCalls = blocks?.some(
-    (block) => isToolUse(block) || isServerResult(block),
-  );
   const names = new Map(
     blocks?.filter(isToolUse).map((block) => [block.id, block.name]),
   );
@@ -244,8 +257,10 @@ export function PlaygroundResponse({
               assistant
             </span>
             <div aria-busy={status === "running"} className="mt-3 space-y-3">
-              {hasCalls ? (
-                blocks?.map((block, index) => {
+              {blocks ? (
+                groupResponseText(blocks).map((block, index) => {
+                  if (typeof block === "string")
+                    return <MarkdownContent key={index} content={block} />;
                   if (isToolUse(block))
                     return (
                       <ToolBlockCard
@@ -264,8 +279,6 @@ export function PlaygroundResponse({
                         }
                       />
                     );
-                  if (block.type === "text" && typeof block.text === "string")
-                    return <MarkdownContent key={index} content={block.text} />;
                   return null;
                 })
               ) : (

@@ -52,6 +52,8 @@ On desktop the top edges of the back button, workspace selector and Overview lin
 
 Run `pnpm test:e2e test/e2e/messages.spec.ts test/e2e/playground-tools.spec.ts test/e2e/api-keys.spec.ts` for these interactions. After building, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: messages-'` for light and dark screenshots. Both commands use the local mock edge. The API key suite disables recordings during one-time key reveals.
 
+For a manual tool replay, run `pnpm build`. In three terminals, start `MOCK_PLAYGROUND_REPLAY=1 node test/mock-platform/server.mjs`, `pnpm exec next start --hostname 127.0.0.1 --port 3090` and `node test/mock-platform/edge.mjs`. Open [the fixture Playground](http://127.0.0.1:3100/playground) and sign in with the test account from `test/mock-platform/native-auth.mjs`. The replay requires no provider credentials.
+
 ## Playground — checked 2026-11-22
 
 Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. Both the group header and its arrow return to all sections while the editor stays open.
