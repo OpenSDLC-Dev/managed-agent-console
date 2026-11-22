@@ -17,6 +17,7 @@ import {
 import * as gateway from "@/lib/platform/playground";
 import { Playground } from "./playground";
 import { remapExpandedTools } from "./playground-tools";
+import { availablePlaygroundTools } from "./playground-tool-presets";
 
 const models = [
   {
@@ -320,6 +321,31 @@ it("clears the parallel-call constraint when switching tool choice to None", asy
     ...request,
     tool_choice: { type: "none" },
   });
+});
+
+it("keeps invalid custom JSON editable when the tool takes a preset's name and description", async () => {
+  const { user } = await setup();
+  const search = availablePlaygroundTools(models[0]).find(
+    ({ id }) => id === "web_search",
+  )!;
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Custom tool" }),
+  );
+  fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+    target: { value: search.definition.name },
+  });
+  const schema = screen.getByRole("textbox", { name: "Input schema" });
+  fireEvent.change(schema, { target: { value: "{" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Description" }), {
+    target: { value: search.definition.description },
+  });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(schema).toBeVisible();
+  expect(schema).toHaveFocus();
+  fireEvent.change(schema, { target: { value: '{"type":"object"}' } });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(screen.getByRole("textbox", { name: /request code$/i })).toBeVisible();
 });
 
 it("retains a partially edited tool schema and reveals it before running or switching request views", async () => {

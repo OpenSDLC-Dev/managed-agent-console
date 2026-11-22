@@ -356,7 +356,7 @@ export function PlaygroundTools({
               hidden={!open}
               className="space-y-3 px-3 py-3"
             >
-              {preset && isObject(tool) ? (
+              {preset && !edit?.invalid && isObject(tool) ? (
                 <>
                   <p className="text-xs text-muted-foreground">{preset.help}</p>
                   {actions &&
