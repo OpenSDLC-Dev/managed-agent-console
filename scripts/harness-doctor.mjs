@@ -87,7 +87,20 @@ function read(root, key) {
 function json(bytes, key) {
   let result;
   try {
-    result = JSON.parse(bytes.toString());
+    // Codex distinguishes 1 from 1.0 and accepts 64-bit unsigned integers.
+    // Keep these tokens lossless for native validation, comparison and sync.
+    const codex =
+      key === registries.codex || key === "harness/hooks/codex.json";
+    result = JSON.parse(
+      bytes.toString(),
+      codex
+        ? (field, value, context) =>
+            typeof value === "number" &&
+            (field === "timeout" || field === "additionalContextLimit")
+              ? JSON.rawJSON(context.source)
+              : value
+        : undefined,
+    );
   } catch {
     // Node may include private settings in a syntax error's source excerpt.
     throw new Error(key + " contains invalid JSON.");
@@ -476,24 +489,113 @@ function trackedClaudeSettings(root, key) {
   return git(root, ["cat-file", "blob", entry[1]]);
 }
 
-function checkCodexHandler(handler, event, source) {
+function checkCodexCommands(groups, event, source) {
+  for (const [i, group] of groups.entries()) {
+    const groupPath = source + " " + event + "[" + i + "]";
+    requireThat(
+      group.matcher == null || typeof group.matcher === "string",
+      groupPath + ".matcher must be a string or null.",
+    );
+    for (const [j, handler] of group.hooks.entries()) {
+      if (handler.type !== "command") continue;
+      const at = groupPath + ".hooks[" + j + "]";
+      requireThat(
+        typeof handler.command === "string" && handler.command.trim(),
+        at + ".command must be a nonempty string.",
+      );
+      requireThat(
+        !Object.hasOwn(handler, "async") || typeof handler.async === "boolean",
+        at + ".async must be a boolean.",
+      );
+      // Codex accepts the snake_case spelling in JSON, but deserializing both
+      // names drops the entire registry, including its SessionStart and guard.
+      requireThat(
+        !(
+          Object.hasOwn(handler, "commandWindows") &&
+          Object.hasOwn(handler, "command_windows")
+        ),
+        at + " may use only one of commandWindows and command_windows.",
+      );
+      const windows = handler.commandWindows ?? handler.command_windows;
+      requireThat(
+        windows == null || (typeof windows === "string" && windows.trim()),
+        at + ".commandWindows must be a nonempty string or null.",
+      );
+      requireThat(
+        handler.statusMessage == null ||
+          typeof handler.statusMessage === "string",
+        at + ".statusMessage must be a string or null.",
+      );
+      for (const key of ["timeout", "additionalContextLimit"]) {
+        const value = handler[key];
+        if (value == null) continue;
+        const token = JSON.isRawJSON(value) ? value.rawJSON : "";
+        const number = /^\d{1,20}$/.test(token) ? BigInt(token) : -1n;
+        requireThat(
+          number >= 0n && number <= 0xffffffffffffffffn,
+          at + "." + key + " must be an unsigned 64-bit integer or null.",
+        );
+        // Codex hashes the normalized handler as TOML. Clamped timeouts and
+        // ignored context limits never enter that signed integer representation.
+        const retained =
+          key === "timeout"
+            ? event !== "SessionEnd" && event !== "Interrupt"
+            : [
+                "PreToolUse",
+                "PostToolUse",
+                "SessionStart",
+                "UserPromptSubmit",
+                "SubagentStart",
+              ].includes(event);
+        requireThat(
+          !retained || number <= 0x7fffffffffffffffn,
+          at +
+            "." +
+            key +
+            " exceeds the signed integer range of the Codex hook trust record.",
+        );
+      }
+    }
+  }
+}
+
+function checkRequiredCodexHandler(
+  groups,
+  event,
+  matcher,
+  command,
+  source,
+  purpose,
+) {
+  const matches = [];
+  for (const group of groups ?? [])
+    for (const handler of group.hooks)
+      if (
+        handler.type === "command" &&
+        [
+          handler.command,
+          handler.commandWindows,
+          handler.command_windows,
+        ].includes(command)
+      )
+        matches.push({ matcher: group.matcher, handler });
   requireThat(
-    !Object.hasOwn(handler, "async") || handler.async === false,
+    matches.length === 1 &&
+      matches[0].matcher === matcher &&
+      matches[0].handler.command === command,
+    source + " must register " + purpose + " exactly once in " + event + ".",
+  );
+  const { handler } = matches[0];
+  requireThat(
+    handler.async !== true,
     source +
       " must run " +
       event +
       " synchronously. Omit async or set it to false.",
   );
-  // Codex also accepts the snake_case alias in JSON. Both spellings together
-  // invalidate the registry, even if they specify the same command.
-  const windows = ["commandWindows", "command_windows"].filter((key) =>
-    Object.hasOwn(handler, key),
-  );
+  const windows = handler.commandWindows ?? handler.command_windows;
   requireThat(
-    windows.length <= 1 &&
-      windows.every(
-        (key) => handler[key] === null || handler[key] === handler.command,
-      ),
+    windows == null || windows === handler.command,
     source +
       " must use the registered " +
       event +
@@ -527,51 +629,57 @@ function registry(root, host) {
           ),
         source + " requires arrays of native hook handlers for " + event + ".",
       );
+      if (host === "codex") checkCodexCommands(entries, event, source);
     }
   }
   const command = hookCommand(
     "scripts/harness-doctor.mjs session-start " + host,
     "doctor",
   );
-  const start =
-    host === "antigravity"
-      ? native["harness-doctor"]?.SessionStart
-      : native.hooks?.SessionStart;
-  const handlers = host === "antigravity" ? start : start?.[0]?.hooks;
-  requireThat(
-    start?.length === 1 &&
-      handlers.length === 1 &&
-      handlers[0].type === "command" &&
-      handlers[0].command === command &&
-      (host === "antigravity"
-        ? native["harness-doctor"].enabled !== false
-        : start[0].matcher === "startup|clear|fork"),
-    source + " must register the new-session doctor for " + host,
-  );
-  if (host === "claude") {
-    for (const field of ["async", "asyncRewake"])
-      requireThat(
-        !Object.hasOwn(handlers[0], field) || handlers[0][field] === false,
-        source +
-          " must deliver the SessionStart receipt synchronously. Remove " +
-          field +
-          ".",
-      );
-  }
   if (host === "codex") {
-    checkCodexHandler(handlers[0], "SessionStart", source);
-    const before = native.hooks?.PreToolUse;
-    requireThat(
-      before?.length === 1 &&
-        before[0].matcher === ".*" &&
-        before[0].hooks.length === 1 &&
-        before[0].hooks[0].type === "command" &&
-        before[0].hooks[0].command ===
-          hookCommand("harness/hooks/codex-readonly.mjs", "readonly"),
-      source + " must register the read-only role guard for every tool.",
+    checkRequiredCodexHandler(
+      native.hooks.SessionStart,
+      "SessionStart",
+      "startup|clear|fork",
+      command,
+      source,
+      "the new-session doctor",
     );
-    checkCodexHandler(before[0].hooks[0], "PreToolUse", source);
+    checkRequiredCodexHandler(
+      native.hooks.PreToolUse,
+      "PreToolUse",
+      ".*",
+      hookCommand("harness/hooks/codex-readonly.mjs", "readonly"),
+      source,
+      "the read-only role guard for every tool",
+    );
     read(root, "harness/hooks/codex-readonly.mjs");
+  } else {
+    const start =
+      host === "antigravity"
+        ? native["harness-doctor"]?.SessionStart
+        : native.hooks?.SessionStart;
+    const handlers = host === "antigravity" ? start : start?.[0]?.hooks;
+    requireThat(
+      start?.length === 1 &&
+        handlers.length === 1 &&
+        handlers[0].type === "command" &&
+        handlers[0].command === command &&
+        (host === "antigravity"
+          ? native["harness-doctor"].enabled !== false
+          : start[0].matcher === "startup|clear|fork"),
+      source + " must register the new-session doctor for " + host,
+    );
+    if (host === "claude") {
+      for (const field of ["async", "asyncRewake"])
+        requireThat(
+          !Object.hasOwn(handlers[0], field) || handlers[0][field] === false,
+          source +
+            " must deliver the SessionStart receipt synchronously. Remove " +
+            field +
+            ".",
+        );
+    }
   }
   const path = inside(root, key);
   const previous = stat(path) ? read(root, key) : undefined;

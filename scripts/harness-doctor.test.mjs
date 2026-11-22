@@ -1018,6 +1018,93 @@ test("required Codex handlers use the synchronous portable command on Windows an
   }
 });
 
+test("all registered Codex command handlers preserve the native registry and integer tokens", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const source = "harness/hooks/codex.json";
+  const base = JSON.parse(get(cwd, source));
+  const optional = { type: "command", command: "echo progress" };
+  function policyWith(handler) {
+    const policy = structuredClone(base);
+    policy.hooks.UserPromptSubmit = [{ matcher: null, hooks: [handler] }];
+    return policy;
+  }
+  for (const [overrides, field] of [
+    [{ command: false }, "command"],
+    [{ command: " " }, "command"],
+    [{ async: "false" }, "async"],
+    [{ command_windows: false }, "command"],
+    [{ commandWindows: " ", command_windows: null }, "command"],
+    [{ timeout: -1 }, "timeout"],
+    [{ timeout: JSON.rawJSON("1.0") }, "timeout"],
+    [{ timeout: JSON.rawJSON("1e0") }, "timeout"],
+    [{ timeout: JSON.rawJSON("18446744073709551616") }, "timeout"],
+    [{ timeout: JSON.rawJSON("9223372036854775808") }, "timeout"],
+    [{ additionalContextLimit: false }, "additionalContextLimit"],
+    [{ additionalContextLimit: 2.5 }, "additionalContextLimit"],
+    [
+      { additionalContextLimit: JSON.rawJSON("9223372036854775808") },
+      "additionalContextLimit",
+    ],
+    [{ statusMessage: false }, "statusMessage"],
+  ]) {
+    const policy = policyWith({ ...optional, ...overrides });
+    putJson(cwd, registries.codex, policy);
+    const original = get(cwd, registries.codex);
+    preservesConflict(
+      cwd,
+      "codex",
+      source,
+      JSON.stringify(policy),
+      new RegExp("harness/hooks/codex\\.json.*UserPromptSubmit.*" + field, "i"),
+    );
+    assert.equal(get(cwd, registries.codex), original);
+  }
+  const projected = policyWith({
+    ...optional,
+    async: true,
+    command_windows: "echo Windows",
+    statusMessage: "Working",
+    timeout: JSON.rawJSON("9007199254740993"),
+    additionalContextLimit: JSON.rawJSON("9223372036854775807"),
+  });
+  for (const event of ["SessionEnd", "Interrupt"])
+    projected.hooks[event] = [
+      {
+        hooks: [
+          {
+            ...optional,
+            timeout: JSON.rawJSON("18446744073709551615"),
+            additionalContextLimit: JSON.rawJSON("18446744073709551615"),
+          },
+        ],
+      },
+    ];
+  projected.hooks.UserPromptSubmit[0].hooks.push({
+    ...optional,
+    commandWindows: null,
+    timeout: null,
+    statusMessage: null,
+    additionalContextLimit: null,
+  });
+  projected.hooks.SessionStart[0].hooks.unshift({
+    ...optional,
+    async: true,
+    commandWindows: "echo Windows",
+  });
+  projected.hooks.PreToolUse.push({
+    matcher: "Read",
+    hooks: [{ ...optional, async: true }],
+  });
+  putJson(cwd, source, projected);
+  rmSync(join(cwd, registries.codex));
+  pass(run(cwd, "sync"));
+  assert.equal(get(cwd, registries.codex), get(cwd, source));
+  pass(run(cwd, "check", "--host", "codex"));
+  pass(run(cwd, "sync"));
+  assert.equal(get(cwd, registries.codex), get(cwd, source));
+});
+
 test("reuse of a recognized command cannot erase an unregistered hook, group, field or duplicate", (t) => {
   const { cwd } = fixture(t);
   pass(run(cwd, "sync"));
