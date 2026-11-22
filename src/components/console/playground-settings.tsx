@@ -116,6 +116,21 @@ const number =
 // Messages ThinkingConfigEnabledParam requires a budget >= 1,024, below max_tokens.
 const startingThinkingBudget = 1024;
 
+function formatStopSequence(value: string) {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\r", "\\r")
+    .replaceAll("\n", "\\n");
+}
+
+function readStopSequence(text: string) {
+  return text.replace(/\\([\\rn])/g, (_, escaped: string) => {
+    if (escaped === "n") return "\n";
+    if (escaped === "r") return "\r";
+    return "\\";
+  });
+}
+
 type SettingsProps = Omit<ModelSelectProps, "onSelect"> & {
   draft: PlaygroundDraft;
   onChange: (next: PlaygroundDraft) => void;
@@ -163,7 +178,7 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
     Array.isArray(parameters.stop_sequences)
       ? parameters.stop_sequences
           .filter((stop): stop is string => typeof stop === "string")
-          .map((value) => ({ value, text: value.replaceAll("\n", "\\n") }))
+          .map((value) => ({ value, text: formatStopSequence(value) }))
       : [],
   );
   function setParameter(key: string, value: unknown) {
@@ -229,12 +244,12 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
             <div
               role="radiogroup"
               aria-label="Thinking"
-              className="flex rounded-lg bg-muted p-0.5"
+              className="flex w-fit rounded-lg bg-muted p-0.5"
             >
               {["default", "disabled", ...supportedModes].map((mode) => (
                 <label
                   key={mode}
-                  className="relative flex-1 cursor-pointer rounded-md px-1 py-1 text-center text-xs font-medium capitalize has-checked:bg-background has-checked:shadow-sm has-disabled:cursor-default has-disabled:opacity-50 has-focus-visible:outline-2 has-focus-visible:outline-ring"
+                  className="relative cursor-pointer rounded-md px-3 py-1 text-center text-xs font-medium capitalize has-checked:bg-background has-checked:shadow-sm has-disabled:cursor-default has-disabled:opacity-50 has-focus-visible:outline-2 has-focus-visible:outline-ring"
                 >
                   <input
                     type="radio"
@@ -407,7 +422,7 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                               ? {
                                   text: event.target.value,
                                   value: event.target.value
-                                    ? event.target.value.replaceAll("\\n", "\n")
+                                    ? readStopSequence(event.target.value)
                                     : undefined,
                                 }
                               : existing,
@@ -430,7 +445,8 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                 ))}
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   Generation ends when any of these strings is emitted. Use{" "}
-                  <code>{"\\n"}</code> for newlines.
+                  <code>{"\\n"}</code> for a newline and <code>{"\\\\"}</code>{" "}
+                  for a literal backslash.
                 </p>
               </div>
               <div className="flex items-center justify-between">
@@ -444,12 +460,12 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                   aria-label="Streaming"
                   aria-checked={draft.stream === true}
                   onClick={() => onChange({ ...draft, stream: !draft.stream })}
-                  className="inline-flex h-5 w-8 items-center rounded-full bg-muted-foreground/40 p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-foreground"
+                  className="inline-flex h-5 w-9 items-center rounded-full bg-muted-foreground/40 p-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-[#487dcc]"
                 >
                   <span
                     className={cn(
-                      "size-4 rounded-full bg-background shadow-sm transition-transform",
-                      draft.stream === true && "translate-x-3",
+                      "size-4 rounded-full bg-white shadow-sm transition-transform",
+                      draft.stream === true && "translate-x-4",
                     )}
                   />
                 </button>
@@ -492,8 +508,8 @@ export function PlaygroundSettings(props: SettingsProps) {
         showOverlay={false}
         className="top-[calc(var(--console-header-height)+0.75rem)] right-3 bottom-3 left-auto flex h-auto w-[23rem] max-w-[calc(100%-1.5rem)] translate-x-0 translate-y-0 flex-col gap-0 p-0 shadow-lg sm:max-w-[calc(100%-1.5rem)] data-open:zoom-in-100 data-closed:zoom-out-100"
       >
-        <div className="flex items-center justify-between px-5 pt-3">
-          <DialogTitle>Model</DialogTitle>
+        <div className="flex items-center justify-between px-5 pt-5">
+          <DialogTitle className="text-sm">Model</DialogTitle>
           <DialogClose
             render={
               <Button

@@ -143,7 +143,7 @@ it("edits model-scoped settings in the drawer and sends exactly the displayed re
   });
 });
 
-it("keeps encoded fields from Code when setting explicit thinking or editing another stop sequence", async () => {
+it("keeps literal backslashes and line breaks distinct when editing stop sequences from Code", async () => {
   const { user, run } = await setup();
   await user.click(screen.getByLabelText("Code", { exact: true }));
   await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
@@ -151,7 +151,7 @@ it("keeps encoded fields from Code when setting explicit thinking or editing ano
     model: "reason",
     max_tokens: 3000,
     messages: [{ role: "user", content: "hello" }],
-    stop_sequences: ["literal\\n"],
+    stop_sequences: ["literal\\n", "line\r\nbreak"],
     output_config: { effort: "high" },
     stream: true,
   };
@@ -163,12 +163,12 @@ it("keeps encoded fields from Code when setting explicit thinking or editing ano
   const panel = within(screen.getByRole("dialog", { name: "Model" }));
   await user.click(panel.getByRole("radio", { name: "Disabled" }));
   await user.click(panel.getByRole("button", { name: "Advanced" }));
-  expect(panel.getByRole("textbox", { name: "Stop sequence 1" })).toHaveValue(
-    "literal\\n",
-  );
+  const literal = panel.getByRole("textbox", { name: "Stop sequence 1" });
+  await user.type(literal, "X");
+  await user.type(panel.getByRole("textbox", { name: "Stop sequence 2" }), "Y");
   await user.click(panel.getByRole("button", { name: "Add" }));
   await user.type(
-    panel.getByRole("textbox", { name: "Stop sequence 2" }),
+    panel.getByRole("textbox", { name: "Stop sequence 3" }),
     "next",
   );
   await user.keyboard("{Escape}");
@@ -176,7 +176,7 @@ it("keeps encoded fields from Code when setting explicit thinking or editing ano
   expect(run.mock.calls[0][0]).toEqual({
     ...source,
     thinking: { type: "disabled" },
-    stop_sequences: ["literal\\n", "next"],
+    stop_sequences: ["literal\\nX", "line\r\nbreakY", "next"],
   });
 });
 
@@ -252,6 +252,29 @@ it("separates request and turn menus and round-trips edits to custom tools with 
   );
   expect(after).not.toHaveProperty("tools");
   expect(after).not.toHaveProperty("tool_choice");
+});
+
+it("clears the parallel-call constraint when switching tool choice to None", async () => {
+  const { user, run } = await setup();
+  await user.click(
+    screen.getByRole("button", { name: "Call tools in parallel" }),
+  );
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: "JSON request code",
+  });
+  const request = JSON.parse(editor.value);
+  request.tool_choice = { type: "auto", disable_parallel_tool_use: true };
+  fireEvent.change(editor, { target: { value: JSON.stringify(request) } });
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("button", { name: "Auto" }));
+  await user.click(await screen.findByRole("menuitemradio", { name: "None" }));
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run.mock.calls[0][0]).toEqual({
+    ...request,
+    tool_choice: { type: "none" },
+  });
 });
 
 it("retains a partially edited tool schema and reveals it before running or switching request views", async () => {
@@ -341,9 +364,8 @@ it("prepends and expands every new custom tool, keeping existing tool edits atta
   });
 });
 
-it("creates a valid manual thinking budget, explains a later smaller limit and lets raw Code keep provider-specific values", async () => {
+it("preserves Form's thinking budget across templates and lets raw Code keep provider-specific values", async () => {
   const { user, run } = await setup();
-  await user.type(screen.getByLabelText("Prompt"), "Reason");
   const settings = screen.getByRole("button", { name: "Model settings" });
   await user.click(settings);
   let panel = within(screen.getByRole("dialog", { name: "Model" }));
@@ -357,6 +379,10 @@ it("creates a valid manual thinking budget, explains a later smaller limit and l
   await user.click(panel.getByRole("button", { name: "Close settings" }));
   const go = screen.getByRole("button", { name: "Run prompt" });
   expect(go).toBeDisabled();
+  for (const name of ["Stream tool arguments live", "Call tools in parallel"]) {
+    await user.click(screen.getByRole("button", { name }));
+    expect(go).toBeDisabled();
+  }
   expect(go).toHaveAccessibleDescription(/at least 1,025/);
   expect(run).not.toHaveBeenCalled();
   await user.click(settings);

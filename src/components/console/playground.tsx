@@ -241,6 +241,7 @@ function PlaygroundForm({
     next.selection = preset || available ? model : "";
     if (preset) {
       next.tokens = draft.tokens;
+      next.formThinkingBudget = draft.formThinkingBudget;
       next.stream = preset.stream ?? draft.stream;
       next.system = preset.system;
       next.messages[0].content = preset.prompt;

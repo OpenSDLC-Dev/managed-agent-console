@@ -627,8 +627,9 @@ async function openNonStreamingPlayground(
     usage: { input_tokens: 4, output_tokens: 3 },
   };
   await page.route(url.href, (route) => {
-    calls.push(route.request().postDataJSON());
-    return route.fulfill({ json: answer });
+    const body = route.request().postDataJSON();
+    calls.push(body);
+    return route.fulfill({ json: { ...answer, model: body.model } });
   });
   await signIn(page, "/playground");
   return { calls, answer };
@@ -651,19 +652,21 @@ test("model settings follow the selected alias and Advanced edits reach the requ
   const { calls } = await openNonStreamingPlayground(
     page,
     baseURL,
-    "minimax-m3",
+    "deepseek-flash",
   );
   const settings = page.getByRole("button", { name: "Model settings" });
   await settings.click();
   const panel = page.getByRole("dialog", { name: "Model", exact: true });
   const range = panel.getByRole("slider", { name: "Max tokens" });
-  await expect(range).toHaveAttribute("max", "32000");
   await panel.getByRole("combobox", { name: "Model" }).click();
   await page.getByRole("option", { name: "MiniMax M3" }).click();
+  await expect(range).toHaveAttribute("max", "64000");
+  await panel.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: "DeepSeek Flash" }).click();
   await panel
     .getByRole("spinbutton", { name: "Max tokens value" })
-    .fill("100000");
-  await expect(range).toHaveAttribute("max", "100000");
+    .fill("8192");
+  await expect(range).toHaveAttribute("max", "8192");
   const thinking = panel.getByRole("radiogroup", { name: "Thinking" });
   await expect(thinking.getByRole("radio", { name: "Default" })).toBeChecked();
   await expect(thinking.getByRole("radio", { name: "Adaptive" })).toHaveCount(
@@ -702,14 +705,14 @@ test("model settings follow the selected alias and Advanced edits reach the requ
   await expect(settings).toBeFocused();
   await expect(
     page.getByRole("combobox", { name: "Model", exact: true }),
-  ).toHaveAttribute("data-model", "minimax-m3");
+  ).toHaveAttribute("data-model", "deepseek-flash");
   await page
     .getByRole("textbox", { name: "Prompt", exact: true })
     .fill("Reply once");
   const body = await readPlaygroundJSON(page);
   expect(body).toEqual({
-    model: "minimax-m3",
-    max_tokens: 100000,
+    model: "deepseek-flash",
+    max_tokens: 8192,
     stream: false,
     temperature: 0.25,
     stop_sequences: ["END\n"],

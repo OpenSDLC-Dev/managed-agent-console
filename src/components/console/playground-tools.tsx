@@ -225,6 +225,7 @@ export function PlaygroundTools({
           onChange={(next) => {
             const previous = isObject(choice) ? { ...choice } : {};
             delete previous.name;
+            if (next.type === "none") delete previous.disable_parallel_tool_use;
             onChange({
               ...draft,
               parameters: {
