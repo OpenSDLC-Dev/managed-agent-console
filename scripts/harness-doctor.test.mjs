@@ -94,6 +94,11 @@ function fixture(t) {
   pass(command(cwd, "git", ["init", "-q"]));
   set(cwd, "AGENTS.md", guide);
   set(cwd, doctor, get(root, doctor));
+  cpSync(
+    join(root, "scripts/vendor/smol-toml"),
+    join(cwd, "scripts/vendor/smol-toml"),
+    { recursive: true },
+  );
   set(cwd, ".gitattributes", get(root, ".gitattributes"));
   cpSync(join(root, "harness"), join(cwd, "harness"), { recursive: true });
   return { tmp, cwd };
@@ -117,12 +122,14 @@ function commitFixture(cwd) {
 
 test("a clean clone discovers all three host configurations from subdirectories and linked worktrees", (t) => {
   const { tmp, cwd } = fixture(t);
+  set(cwd, ".codex/config.toml", "[features]\nhooks = true\n");
   pass(run(cwd, "sync"));
   pass(command(cwd, "git", ["add", "."]));
   commitFixture(cwd);
   const clone = join(tmp, "clone"),
     linked = join(tmp, "linked");
   pass(command(tmp, "git", ["clone", "-q", cwd, clone]));
+  assert.equal(existsSync(join(clone, "node_modules")), false);
   pass(command(clone, "git", ["worktree", "add", "--detach", linked, "HEAD"]));
   for (const host of hosts) {
     const entry = JSON.parse(get(linked, registries[host]));
@@ -257,7 +264,9 @@ test("Codex project settings cannot disable or duplicate registered hooks", (t) 
 });
 
 function preservesConflict(cwd, host, key, content, pattern) {
-  const original = Buffer.from(content.replaceAll("\n", "\r\n") + "\r\n");
+  const original = Buffer.isBuffer(content)
+    ? content
+    : Buffer.from(content.replaceAll("\n", "\r\n") + "\r\n");
   set(cwd, key, original);
   fail(run(cwd, "check", "--host", host), pattern);
   const receipt = JSON.parse(pass(run(cwd, "session-start", host)))
@@ -314,6 +323,39 @@ test("malformed Codex project declarations fail without changing their bytes", (
   pass(run(cwd, "check", "--host", "codex"));
   pass(run(cwd, "sync"));
   assert.equal(get(cwd, key), valid);
+});
+
+test("Codex rejects invalid TOML values and duplicate declarations before syncing any file", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = ".codex/config.toml";
+  for (const input of [
+    "[features]\nhooks = flase",
+    'allowed_permissions = ["one" "two"]',
+    'model = "mis\\qprint"',
+    "[features]\nhooks = true\nhooks = false",
+    Buffer.concat([
+      Buffer.from('model = "'),
+      Buffer.from([0xff]),
+      Buffer.from('"\r\n'),
+    ]),
+  ]) {
+    preservesConflict(
+      cwd,
+      "codex",
+      key,
+      input,
+      /\.codex\/config\.toml.*invalid TOML/,
+    );
+  }
+  set(cwd, key, 'private_option = "keep-this-private"\nmodel = "bad\\q"\n');
+  const failure = run(cwd, "check", "--host", "codex");
+  fail(failure, /invalid TOML at line 2, column \d+/);
+  assert.doesNotMatch(failure.text, /keep-this-private/);
+  const receipt = JSON.parse(pass(run(cwd, "session-start", "codex")))
+    .hookSpecificOutput.additionalContext;
+  assert.match(receipt, /invalid TOML at line 2/);
+  assert.doesNotMatch(receipt, /keep-this-private/);
 });
 
 test("Codex preserves unknown top-level fields in its dedicated hook registry and reports the conflict", (t) => {
@@ -666,11 +708,13 @@ test("checks the 200 physical lines, alternate instructions, and hook policy fro
   assert.ok(existsSync(join(cwd, ".codex/hooks.json")));
 });
 
-test("Codex denies mutating and shell tools only in the restricted roles", () => {
-  const guard = join(root, "harness/hooks/codex-readonly.mjs");
+test("Codex denies mutating and shell tools only in the restricted roles", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const guard = join(cwd, "harness/hooks/codex-readonly.mjs");
   function invoke(event) {
     return pass(
-      command(root, process.execPath, [guard], {
+      command(cwd, process.execPath, [guard], {
         input: JSON.stringify({
           hook_event_name: "PreToolUse",
           tool_name: "Bash",
@@ -694,6 +738,22 @@ test("Codex denies mutating and shell tools only in the restricted roles", () =>
     assert.equal(invoke({ agent_type, tool_name: "read_file" }), "");
   }
   assert.equal(invoke({}), "");
+  const manifest = JSON.parse(get(cwd, "harness/manifest.json"));
+  manifest.agents = [];
+  putJson(cwd, "harness/manifest.json", manifest);
+  set(cwd, ".codex/agents/orphan-audit.toml", 'name = "orphan-audit"\n');
+  rmSync(join(cwd, ".codex/agents/reviewer.toml"));
+  for (const agent_type of ["orphan-audit", "issue-triage", "reviewer"]) {
+    const refusal = JSON.parse(
+      invoke({ agent_type, agent_id: "child", tool_name: "apply_patch" }),
+    );
+    assert.equal(
+      refusal.hookSpecificOutput.permissionDecision,
+      "deny",
+      agent_type,
+    );
+    assert.equal(invoke({ agent_type, tool_name: "read_file" }), "");
+  }
   assert.equal(
     invoke({
       agent_type: "other",

@@ -1,6 +1,6 @@
 // Codex supplies agent_type from the spawning session. These project roles
 // receive the patch and issue evidence from their parent.
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 const readTools = new Set(["read_file", "grep_files", "list_dir"]);
 let reason;
@@ -16,9 +16,20 @@ try {
     const { agents } = JSON.parse(
       readFileSync(new URL("../manifest.json", import.meta.url), "utf8"),
     );
+    const name = event.agent_type;
+    // A live required role, or a role still discoverable in this checkout, keeps
+    // its file-read permissions while the manifest and generated adapters drift.
     const restricted =
-      !event.agent_type ||
-      agents.some((role) => role.name === event.agent_type);
+      !name ||
+      name === "issue-triage" ||
+      name === "reviewer" ||
+      agents.some((role) => role.name === name) ||
+      (typeof name === "string" &&
+        /^[\w-]+$/.test(name) &&
+        statSync(
+          new URL("../../.codex/agents/" + name + ".toml", import.meta.url),
+          { throwIfNoEntry: false },
+        )?.isFile());
     if (restricted && !readTools.has(event.tool_name)) {
       reason =
         "The read-only reviewer can request evidence from the parent session.";

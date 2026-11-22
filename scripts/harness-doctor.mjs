@@ -612,190 +612,77 @@ function write(root, key, content, previous, mode) {
     rmSync(tmp, { force: true });
   }
 }
-function requireToml(valid, reason) {
-  requireThat(
-    valid,
-    ".codex/config.toml contains invalid TOML: " + reason + ".",
-  );
-}
-// Split statements or inline-table entries only outside nested arrays and tables.
-function* tomlParts(text, separator) {
-  const closing = [];
-  let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (char === "[") closing.push("]");
-    else if (char === "{") closing.push("}");
-    else if (char === "]" || char === "}")
-      requireToml(closing.pop() === char, "unmatched " + char);
-    else if (char === separator && closing.length === 0) {
-      const part = text.slice(start, i).trim();
-      requireToml(part || separator === "\n", "empty inline-table entry");
-      if (part) yield part;
-      start = i + 1;
-    }
-  }
-  requireToml(!closing.length, "missing " + closing.at(-1));
-  const last = text.slice(start).trim();
-  if (last) yield last;
-}
-// A quoted TOML key can name a manifest role using a Unicode escape. Mask
-// punctuation as before so it cannot turn a single literal key into a dotted path.
-function maskTomlToken(token) {
-  const value =
-    token[0] === '"'
-      ? token
-          .slice(1, -1)
-          .replace(
-            /\\(?:u([\da-fA-F]{4})|U([\da-fA-F]{8})|x([\da-fA-F]{2})|.)/g,
-            (_, short, long, byte) => {
-              const code = parseInt(short ?? long ?? byte, 16);
-              return code < 128 ? String.fromCharCode(code) : "\0";
-            },
-          )
-      : token.slice(1, -1);
-  return /^[\w-]+$/.test(value) ? JSON.stringify(value) : '"_"';
-}
-function maskTomlStrings(text) {
-  let masked = "";
-  for (let i = 0; i < text.length;) {
-    const quote = text[i];
-    if (quote === "#") {
-      const newline = text.indexOf("\n", i);
-      i = newline < 0 ? text.length : newline;
-    } else if (quote !== "'" && quote !== '"') masked += text[i++];
-    else {
-      const start = i;
-      const multiline = text.startsWith(quote.repeat(3), i);
-      const delimiter = multiline ? quote.repeat(3) : quote;
-      i += delimiter.length;
-      while (!text.startsWith(delimiter, i)) {
-        requireToml(
-          i < text.length && (multiline || !/[\r\n]/.test(text[i])),
-          "unterminated string",
-        );
-        if (quote === '"' && text[i] === "\\") {
-          i++;
-          requireToml(
-            multiline || !/[\r\n]/.test(text[i]),
-            "line break in a quoted string",
-          );
-        }
-        i++;
-      }
-      i += delimiter.length;
-      if (multiline) {
-        // Four or five closing quotes include one or two literal quotes.
-        for (let extra = 0; extra < 2 && text[i] === quote; extra++) i++;
-      }
-      masked += multiline ? '"_"' : maskTomlToken(text.slice(start, i));
-    }
-  }
-  return masked;
-}
-function tomlKey(raw) {
-  return raw
-    .split(".")
-    .map((segment) => {
-      const key = segment.trim();
-      requireToml(/^(?:[\w-]+|"[\w-]*")$/.test(key), "invalid dotted key");
-      return key.replaceAll('"', "");
-    })
-    .join(".");
-}
-function checkCodexConfig(root, agents) {
+async function checkCodexConfig(root, agents) {
+  // Loading the checked-in parser here also delivers a missing-module error
+  // through the startup receipt when the Codex adapter is incomplete.
+  const { parse } = await import("./vendor/smol-toml/parse.js");
   const key = ".codex/config.toml";
   if (!stat(inside(root, key))) return;
-  // Preserve quoted simple keys. A comment or string containing a sample hook
-  // or model setting cannot introduce a project-level declaration.
-  const text = maskTomlStrings(read(root, key).toString());
-  const managed = new Set(agents.map((agent) => agent.name));
-  function checkOwner(path) {
-    const [section, name] = path.split(".");
+  const contents = read(root, key);
+  let config;
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(contents);
+    config = parse(text, { integersAsBigInt: "asNeeded" });
+  } catch (error) {
+    // The upstream error message includes surrounding private configuration.
+    const location =
+      Number.isInteger(error.line) && Number.isInteger(error.column)
+        ? " at line " + error.line + ", column " + error.column
+        : "";
+    throw new Error(key + " contains invalid TOML" + location + ".");
+  }
+
+  const roles = config.agents ?? {};
+  for (const { name } of agents)
     requireThat(
-      section !== "agents" || !managed.has(name),
+      !Object.hasOwn(roles, name),
       key +
         " overrides managed role " +
         name +
-        " in " +
-        path +
+        " in agents." +
+        name +
         ". Edit harness/agents/" +
         name +
         ".md or harness/manifest.json instead.",
     );
-  }
-  const inlineHook = (path) => /^hooks\.[A-Z][\w]*(?:\.|$)/.test(path);
-  const conflict = (path) =>
-    key +
-    " contains an unregistered project hook in " +
-    path +
-    ". Review it before syncing.";
-  function checkField(parent, statement) {
-    const equals = statement.indexOf("=");
-    const value = statement.slice(equals + 1).trim();
-    const compound = value.startsWith("[") || value.startsWith("{");
-    requireToml(
-      equals > 0 && value && (compound || !/[=,]/.test(value)),
-      "expected a key and value in an assignment",
-    );
-    if (compound)
-      requireToml(
-        value.endsWith(value[0] === "[" ? "]" : "}"),
-        "unexpected text after an array or inline table",
-      );
-    else if (value.startsWith('"'))
-      requireToml(
-        /^"[\w-]*"$/.test(value),
-        "unexpected text after a string value",
-      );
-    const leaf = tomlKey(statement.slice(0, equals));
-    const path = parent ? parent + "." + leaf : leaf;
-    checkOwner(path);
-    requireThat(!inlineHook(path) || /^\[\s*\]$/.test(value), conflict(path));
+  for (const field of [
+    "model",
+    "model_reasoning_effort",
+    "default_subagent_model",
+    "default_subagent_reasoning_effort",
+  ])
     requireThat(
-      !/^features\.(?:codex_hooks|hooks)$/.test(path) || value !== "false",
+      !Object.hasOwn(roles, field),
       key +
-        " disables project hooks with " +
-        path +
-        ". Enable hooks before checking again.",
-    );
-    requireThat(
-      !/^agents\.(?:default_subagent_(?:model|reasoning_effort)|model|model_reasoning_effort)$/.test(
-        path,
-      ),
-      key +
-        " overrides model inheritance in " +
-        path +
+        " overrides model inheritance in agents." +
+        field +
         ". Remove the project subagent override.",
     );
-    if (
-      /^(?:hooks|features|agents)(?:\.|$)/.test(path) &&
-      value.startsWith("{") &&
-      value.endsWith("}")
-    )
-      for (const entry of tomlParts(value.slice(1, -1), ","))
-        checkField(path, entry);
-  }
-  let table = "";
-  for (const line of tomlParts(text, "\n")) {
-    if (line.startsWith("[")) {
-      const array = line.startsWith("[[");
-      requireToml(
-        line.endsWith(array ? "]]" : "]") && !/[\r\n]/.test(line),
-        "malformed table header",
+
+  for (const feature of ["hooks", "codex_hooks"])
+    requireThat(
+      config.features?.[feature] !== false,
+      key +
+        " disables project hooks with features." +
+        feature +
+        ". Enable hooks before checking again.",
+    );
+  for (const [event, groups] of Object.entries(config.hooks ?? {})) {
+    if (/^[A-Z]\w*$/.test(event))
+      requireThat(
+        Array.isArray(groups) && groups.length === 0,
+        key +
+          " contains an unregistered project hook in hooks." +
+          event +
+          ". Review it before syncing.",
       );
-      const width = array ? 2 : 1;
-      table = tomlKey(line.slice(width, -width));
-      checkOwner(table);
-      requireThat(!inlineHook(table), conflict(table));
-    } else checkField(table, line);
   }
 }
-function inspect(root, selected, sync) {
+async function inspect(root, selected, sync) {
   const manifest = catalog(root),
     index = indexModes(root);
   guide(root, index);
-  if (selected.includes("codex")) checkCodexConfig(root, manifest.agents);
+  if (selected.includes("codex")) await checkCodexConfig(root, manifest.agents);
   const outputs = expected(root, manifest, selected, index);
   const conflicts = [],
     changes = [],
@@ -904,7 +791,7 @@ try {
           cli +
           " check [--host HOST] | sync | rules PATH... | session-start HOST",
       );
-    inspect(root, selected, command === "sync");
+    await inspect(root, selected, command === "sync");
     let message =
       "harness-doctor: OK (" + selected.join(", ") + "; " + root + ")";
     if (command === "session-start" && args[0] === "claude")

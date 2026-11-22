@@ -12,3 +12,6 @@
 
 # Captured SSE bytes include a required blank-line frame terminator at EOF.
 test/fixtures/recordings-8/*.sse -text whitespace=-blank-at-eof
+
+# The published smol-toml module contains a trailing space in its digit parser.
+scripts/vendor/smol-toml/primitive.js whitespace=-blank-at-eol

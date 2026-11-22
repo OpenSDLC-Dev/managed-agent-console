@@ -17,3 +17,6 @@ src/components/ui
 .agents/agents/
 .agents/skills/
 .agents/rules/
+
+# Keep the upstream TOML parser byte-for-byte reproducible.
+/scripts/vendor/smol-toml/*.js
