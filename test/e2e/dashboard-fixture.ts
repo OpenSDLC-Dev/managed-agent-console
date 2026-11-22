@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import type { GatewayDeployment } from "../../src/lib/platform/types";
 import { gatewayFixtures } from "../mock-platform/gateway.mjs";
 
 /** Vendor catalog independently checked by the dashboard browser cases. */
@@ -51,21 +52,46 @@ export async function setDashboardSession(
 }
 
 /** The password double serves gateway administration but has no Playground discovery route. */
-export async function grantDashboardModelDiscovery(page: Page) {
+export async function grantDashboardModelDiscovery(
+  page: Page,
+  unreportedLimitFor?: string,
+) {
   await setDashboardSession(page, { playground_access: true });
   // Use the seeded gateway aliases and the fields Playground reads from
   // internal/modelgateway/models.go. A different first model catches a link
   // that opens Playground but silently selects its default.
-  const models = gatewayFixtures()
-    .aliases.filter(({ name }) =>
+  const fixtures = gatewayFixtures();
+  const models = fixtures.aliases
+    .filter(({ name }) =>
       dashboardModelCases.some(({ alias }) => alias === name),
     )
-    .map(({ name, display_name, created_at }) => ({
-      type: "model",
-      id: name,
-      display_name,
-      created_at,
-    }));
+    .map(({ name, display_name, created_at, targets }) => {
+      // Both fixture aliases have one configured target.
+      const deployment = fixtures.deployments.find(
+        ({ id }) => id === targets[0].deployment_id,
+      );
+      const capabilities: GatewayDeployment["capabilities"] | undefined =
+        deployment?.capabilities;
+      const thinking = capabilities?.thinking === true;
+      return {
+        type: "model",
+        id: name,
+        display_name,
+        created_at,
+        // /v1/models returns zero when an alias has no shared reported limit.
+        max_tokens:
+          name === unreportedLimitFor ? 0 : (capabilities?.max_tokens ?? 0),
+        capabilities: {
+          thinking: {
+            supported: thinking,
+            types: {
+              enabled: { supported: thinking },
+              adaptive: { supported: false },
+            },
+          },
+        },
+      };
+    });
   await page.route(
     "**/api/organizations/default/proxy/v1/models?*",
     (route) => {

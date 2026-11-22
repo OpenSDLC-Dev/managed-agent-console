@@ -14,6 +14,9 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Playground puts model settings in a drawer and separates adding tools from adding messages. The two client-tool templates fill the request, keep the selected model and allow inspection of streamed tool arguments.
+- Messages Logs distinguishes the originally requested model from the gateway alias that handled it.
+
 - Playground lets you edit cURL and JSON requests, keep edits when switching back to Form and choose streaming or a single JSON response.
 
 - Model cards, model comparisons and model guides read each deployment's rates and pricing terms from Model Gateway. Operators can record the currency and terms when editing an upstream model.

@@ -66,6 +66,8 @@ let unimplemented = [...UNIMPLEMENTED];
 let forbidden = [];
 
 let requestCounter = 0;
+// An armed Messages fixture holds the response open between test-driven SSE frames.
+let playgroundStream = null;
 let eventCounter = 1000;
 const nextEventId = () => `sevt_mock${String(eventCounter++).padStart(6, "0")}`;
 let outcomeCounter = 1;
@@ -215,6 +217,8 @@ const API_KEYS_SEED = [
 ];
 
 function resetStore() {
+  playgroundStream?.response?.end();
+  playgroundStream = null;
   unimplemented = [...UNIMPLEMENTED];
   resetSessions();
   forbidden = [];
@@ -2553,6 +2557,30 @@ const server = createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  if (req.method === "POST" && url.pathname === "/__playground-stream") {
+    const step = url.searchParams.get("step");
+    if (step === "arm") {
+      playgroundStream?.response?.end();
+      playgroundStream = { response: null };
+    } else if (
+      playgroundStream?.response &&
+      (step === "write" || step === "end")
+    ) {
+      const frames = await readBody(req);
+      if (step === "end") {
+        playgroundStream.response.end(frames);
+        playgroundStream = null;
+      } else {
+        playgroundStream.response.write(frames);
+      }
+    } else {
+      res.writeHead(409).end();
+      return;
+    }
+    res.writeHead(204).end();
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/__live-preview") {
     const state = store.get("sesn_gatedbash00000000001");
     const step = url.searchParams.get("step");
@@ -2715,6 +2743,22 @@ const server = createServer(async (req, res) => {
     res.end(
       envelope("permission_error", `this route requires the ${role} role`),
     );
+    return;
+  }
+
+  if (
+    privateRequest &&
+    req.method === "POST" &&
+    url.pathname === "/v1/messages" &&
+    playgroundStream
+  ) {
+    await readBody(req);
+    playgroundStream.response = res;
+    res.writeHead(200, {
+      "content-type": "text/event-stream",
+      "cache-control": "no-store",
+    });
+    res.flushHeaders();
     return;
   }
 

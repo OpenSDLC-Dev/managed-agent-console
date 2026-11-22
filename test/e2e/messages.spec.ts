@@ -254,6 +254,12 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
   });
   await expect(directId).toBeVisible();
   await expect(
+    details.getByText("Requested model", { exact: true }).locator("+ dd"),
+  ).toHaveText("minimax-m3");
+  await expect(
+    details.getByText("Gateway alias", { exact: true }).locator("+ dd"),
+  ).toHaveText("*");
+  await expect(
     details.getByRole("region", { name: "Authentication" }),
   ).toContainText("apikey_ci01");
   const latency = details.getByRole("button", { name: "About latency" });
@@ -514,7 +520,7 @@ test("edit, preview, run once and restore the Playground response from History",
   await model.click();
   await page.getByRole("option", { name: "MiniMax M3" }).click();
   await main.getByRole("button", { name: "Model settings" }).click();
-  await page.getByLabel("Max tokens").fill("32");
+  await page.getByRole("spinbutton", { name: "Max tokens value" }).fill("32");
   await page.keyboard.press("Escape");
   const prompt = main.getByRole("textbox", { name: "Prompt", exact: true });
   await prompt.fill("Hello from Messages");
@@ -599,8 +605,12 @@ test("edit, preview, run once and restore the Playground response from History",
   expect(sends).toEqual([posted.url()]);
 });
 
-async function openNonStreamingPlayground(page: Page, baseURL?: string) {
-  await grantDashboardModelDiscovery(page);
+async function openNonStreamingPlayground(
+  page: Page,
+  baseURL?: string,
+  unreportedLimitFor?: string,
+) {
+  await grantDashboardModelDiscovery(page, unreportedLimitFor);
   const url = new URL(
     "/api/organizations/default/proxy/v1/messages?beta=true",
     baseURL,
@@ -623,6 +633,367 @@ async function openNonStreamingPlayground(page: Page, baseURL?: string) {
   await signIn(page, "/playground");
   return { calls, answer };
 }
+
+async function readPlaygroundJSON(page: Page) {
+  const main = page.getByRole("main");
+  await main.getByText("Code", { exact: true }).click();
+  await main.getByLabel("Code language").selectOption("JSON");
+  const editor = main.getByRole("textbox", { name: "JSON request code" });
+  const body = JSON.parse(await editor.inputValue());
+  await main.getByText("Form", { exact: true }).click();
+  return body;
+}
+
+test("model settings follow the selected alias and Advanced edits reach the request", async ({
+  page,
+  baseURL,
+}) => {
+  const { calls } = await openNonStreamingPlayground(
+    page,
+    baseURL,
+    "minimax-m3",
+  );
+  const settings = page.getByRole("button", { name: "Model settings" });
+  await settings.click();
+  const panel = page.getByRole("dialog", { name: "Model", exact: true });
+  const range = panel.getByRole("slider", { name: "Max tokens" });
+  await expect(range).toHaveAttribute("max", "32000");
+  await panel.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: "MiniMax M3" }).click();
+  await panel
+    .getByRole("spinbutton", { name: "Max tokens value" })
+    .fill("100000");
+  await expect(range).toHaveAttribute("max", "100000");
+  const thinking = panel.getByRole("radiogroup", { name: "Thinking" });
+  await expect(thinking.getByRole("radio", { name: "Default" })).toBeChecked();
+  await expect(thinking.getByRole("radio", { name: "Adaptive" })).toHaveCount(
+    0,
+  );
+  await thinking.getByText("Enabled", { exact: true }).click();
+  await panel.getByRole("button", { name: "Advanced" }).click();
+  await expect(panel.getByRole("slider", { name: "Temperature" })).toHaveCount(
+    0,
+  );
+  await thinking.getByText("Default", { exact: true }).click();
+  await panel
+    .getByRole("spinbutton", { name: "Temperature value" })
+    .fill("0.25");
+  await expect(panel.getByRole("slider", { name: "Temperature" })).toHaveValue(
+    "0.25",
+  );
+  const add = panel.getByRole("button", { name: "Add", exact: true });
+  await add.click();
+  await panel.getByRole("textbox", { name: "Stop sequence 1" }).fill("END\\n");
+  await add.click();
+  await panel
+    .getByRole("button", { name: "Remove stop sequence" })
+    .last()
+    .click();
+  await expect(
+    panel.getByRole("textbox", { name: "Stop sequence 2" }),
+  ).toHaveCount(0);
+  const streaming = panel.getByRole("switch", { name: "Streaming" });
+  await expect(streaming).toBeChecked();
+  await streaming.click();
+  await expect(
+    panel.getByRole("link", { name: "View API reference" }),
+  ).toHaveAttribute("href", /\/api\/messages\/create$/);
+  await panel.getByRole("button", { name: "Close settings" }).click();
+  await expect(settings).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Model", exact: true }),
+  ).toHaveAttribute("data-model", "minimax-m3");
+  await page
+    .getByRole("textbox", { name: "Prompt", exact: true })
+    .fill("Reply once");
+  const body = await readPlaygroundJSON(page);
+  expect(body).toEqual({
+    model: "minimax-m3",
+    max_tokens: 100000,
+    stream: false,
+    temperature: 0.25,
+    stop_sequences: ["END\n"],
+    messages: [{ role: "user", content: "Reply once" }],
+  });
+  expect(calls).toEqual([]);
+  await page.getByRole("button", { name: "Run prompt" }).click();
+  await expect(
+    page.getByText("Non-streaming reply", { exact: true }),
+  ).toBeVisible();
+  expect(calls).toEqual([body]);
+});
+
+test("Add manages system and custom tools separately from message roles", async ({
+  page,
+  baseURL,
+}) => {
+  const { calls } = await openNonStreamingPlayground(page, baseURL);
+  const add = page.getByRole("button", { name: "Add", exact: true });
+  const menu = page.getByRole("menu");
+  await add.click();
+  await expect(menu.getByRole("menuitem")).toHaveCount(2);
+  await expect(
+    menu.getByRole("menuitem", { name: "System prompt Added" }),
+  ).toBeDisabled();
+  await page.keyboard.press("Escape");
+  const system = page.getByRole("textbox", { name: "System", exact: true });
+  await page.getByRole("button", { name: "Remove system prompt" }).click();
+  await expect(system).toHaveCount(0);
+  await add.click();
+  await menu
+    .getByRole("menuitem", { name: "System prompt", exact: true })
+    .click();
+  await system.fill("Use the supplied tool.");
+  await page
+    .getByRole("textbox", { name: "Prompt", exact: true })
+    .fill("Check the time");
+  await add.click();
+  await menu
+    .getByRole("group", { name: "Tools" })
+    .getByRole("menuitem", { name: "Custom tool" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "get_weather", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
+  const tools = page.getByRole("region", { name: "Tools", exact: true });
+  const schema = {
+    type: "object",
+    properties: { zone: { type: "string" } },
+    required: ["zone"],
+  };
+  await tools
+    .getByRole("textbox", { name: "Name", exact: true })
+    .fill("local_time");
+  await tools
+    .getByRole("textbox", { name: "Description" })
+    .fill("Read local time");
+  await tools
+    .getByRole("textbox", { name: "Input schema" })
+    .fill(JSON.stringify(schema));
+  expect((await readPlaygroundJSON(page)).tools).toEqual([
+    {
+      name: "local_time",
+      description: "Read local time",
+      input_schema: schema,
+    },
+  ]);
+  await tools.getByRole("button", { name: "local_time options" }).click();
+  await menu.getByRole("menuitem", { name: "Remove tool" }).click();
+  await expect(tools).toHaveCount(0);
+  await page.getByRole("button", { name: "More message options" }).click();
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Add user message",
+    "Add assistant message",
+  ]);
+  await menu.getByRole("menuitem", { name: "Add assistant message" }).click();
+  await page
+    .getByRole("textbox", { name: "assistant message 2" })
+    .fill("It is noon.");
+  const body = await readPlaygroundJSON(page);
+  expect(body).not.toHaveProperty("tools");
+  expect(body).toMatchObject({
+    system: "Use the supplied tool.",
+    messages: [
+      { role: "user", content: "Check the time" },
+      { role: "assistant", content: "It is noon." },
+    ],
+  });
+  expect(calls).toEqual([]);
+});
+
+test("select both client tool templates, inspect their schemas and edit without running", async ({
+  page,
+  baseURL,
+}) => {
+  const { calls } = await openNonStreamingPlayground(page, baseURL);
+  const main = page.getByRole("main");
+  await main.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: "MiniMax M3" }).click();
+  const cards = main
+    .getByRole("region", { name: "Response" })
+    .getByRole("list");
+  await expect(cards.getByRole("button")).toHaveCount(2);
+  await expect(cards.getByText("Custom tools", { exact: true })).toHaveCount(2);
+  const stream = cards.getByRole("button", {
+    name: "Stream tool arguments live",
+  });
+  const parallel = cards.getByRole("button", {
+    name: "Call tools in parallel",
+  });
+  await stream.click();
+  await expect(stream).toBeFocused();
+  await expect(stream).toHaveAttribute("aria-pressed", "true");
+  const first = await readPlaygroundJSON(page);
+  expect(first).toMatchObject({
+    model: "minimax-m3",
+    stream: true,
+    messages: [{ role: "user", content: expect.stringContaining("poem.txt") }],
+    tools: [
+      {
+        name: "make_file",
+        input_schema: {
+          type: "object",
+          required: ["filename", "lines_of_text"],
+          properties: {
+            filename: { type: "string" },
+            lines_of_text: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    ],
+  });
+  expect(first.tools[0]).not.toHaveProperty("eager_input_streaming");
+  await main.getByText("Code", { exact: true }).click();
+  await parallel.click();
+  await expect(parallel).toBeFocused();
+  await expect(parallel).toHaveAttribute("aria-pressed", "true");
+  await expect(stream).toHaveAttribute("aria-pressed", "false");
+  await expect(
+    main.getByRole("radio", { name: "Code", exact: true }),
+  ).toBeChecked();
+  await expect(main.getByLabel("Code language")).toHaveValue("JSON");
+  const second = JSON.parse(
+    await main.getByRole("textbox", { name: "JSON request code" }).inputValue(),
+  );
+  expect(second).toMatchObject({
+    model: "minimax-m3",
+    messages: [{ role: "user", content: expect.stringContaining("Tokyo") }],
+    tools: [
+      {
+        name: "get_weather",
+        input_schema: {
+          type: "object",
+          required: ["location"],
+          properties: { location: { type: "string" } },
+        },
+      },
+      {
+        name: "get_time",
+        input_schema: {
+          type: "object",
+          required: ["timezone"],
+          properties: { timezone: { type: "string" } },
+        },
+      },
+    ],
+  });
+  await main.getByText("Form", { exact: true }).click();
+  await main
+    .getByRole("textbox", { name: "Prompt" })
+    .fill("Use both tools in Shanghai.");
+  await expect(main.getByRole("heading", { name: "Press Run" })).toBeVisible();
+  await main.getByRole("button", { name: "New", exact: true }).click();
+  await expect(main.getByRole("textbox", { name: "Prompt" })).toBeEmpty();
+  await expect(main.getByRole("heading", { name: "Tools" })).toHaveCount(0);
+  await expect(parallel).toHaveAttribute("aria-pressed", "false");
+  expect(calls).toEqual([]);
+});
+
+test("a tool template streams partial input in Rendered and Raw until the response completes", async ({
+  page,
+  request,
+}) => {
+  await grantDashboardModelDiscovery(page);
+  const frame = (type: string, fields: object = {}) =>
+    `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;
+  const emit = async (step: "arm" | "write" | "end", frames = "") => {
+    const response = await request.post(
+      "http://127.0.0.1:18080/__playground-stream?step=" + step,
+      { data: frames },
+    );
+    expect(response.status()).toBe(204);
+  };
+  const delta = (part: string) =>
+    frame("content_block_delta", {
+      index: 0,
+      delta: { type: "input_json_delta", partial_json: part },
+    });
+  const nativePath = "/api/organizations/default/proxy/v1/messages";
+  const sends: unknown[] = [];
+  page.on("request", (req) => {
+    if (req.method() === "POST" && new URL(req.url()).pathname === nativePath)
+      sends.push(req.postDataJSON());
+  });
+  await signIn(page, "/playground");
+  await page
+    .getByRole("button", { name: "Stream tool arguments live" })
+    .click();
+  const body = await readPlaygroundJSON(page);
+  expect(sends).toEqual([]);
+  await emit("arm");
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === nativePath &&
+        response.status() === 200,
+    ),
+    page.getByRole("button", { name: "Run prompt" }).click(),
+  ]);
+  expect(sends).toEqual([body]);
+  await emit(
+    "write",
+    [
+      frame("message_start", {
+        message: {
+          id: "msg_stream_tool",
+          type: "message",
+          role: "assistant",
+          model: body.model,
+          content: [],
+          usage: { input_tokens: 3, output_tokens: 0 },
+        },
+      }),
+      frame("content_block_start", {
+        index: 0,
+        content_block: {
+          type: "tool_use",
+          id: "tool_file",
+          name: "make_file",
+          input: {},
+        },
+      }),
+      delta('{"filename":"poem.txt","lines_of_text":["'),
+    ].join(""),
+  );
+  const preview = page.getByRole("region", { name: "Streaming tool input" });
+  const input = preview.getByLabel("Input for make_file, block 1");
+  await expect(input).toHaveText('{"filename":"poem.txt","lines_of_text":["');
+  await expect(
+    page.getByRole("button", { name: "Add to messages" }),
+  ).toBeDisabled();
+  await page.getByText("Raw", { exact: true }).click();
+  await emit("write", delta('one line"]}'));
+  await expect(input).toHaveText(
+    '{"filename":"poem.txt","lines_of_text":["one line"]}',
+  );
+  await emit(
+    "end",
+    [
+      frame("content_block_stop", { index: 0 }),
+      frame("message_delta", {
+        delta: { stop_reason: "tool_use", stop_sequence: null },
+        usage: { output_tokens: 8 },
+      }),
+      frame("message_stop"),
+    ].join(""),
+  );
+  const raw = page.getByLabel("Response body");
+  await expect(raw).toBeVisible();
+  expect(JSON.parse(await raw.innerText())).toMatchObject({
+    stop_reason: "tool_use",
+    content: [
+      {
+        type: "tool_use",
+        name: "make_file",
+        input: { filename: "poem.txt", lines_of_text: ["one line"] },
+      },
+    ],
+  });
+  await expect(preview).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add to messages" }),
+  ).toBeEnabled();
+});
 
 test("edit the full request in Form, return to the fields and run a JSON response", async ({
   page,

@@ -24,6 +24,7 @@ import { PlaygroundCode } from "./playground-code";
 import {
   formatSnippet,
   hasMessageContent,
+  thinkingLimitCorrection,
   historyLabel,
   wireMessage,
   readSnippet,
@@ -34,9 +35,17 @@ import {
   PlaygroundEditor,
   type PlaygroundDraft,
 } from "./playground-editor";
-import { PlaygroundTemplates } from "./playground-templates";
+import {
+  PlaygroundTemplates,
+  type PlaygroundTemplate,
+} from "./playground-templates";
 import { PlaygroundPanes } from "./playground-panes";
-import { PlaygroundResponse, type RunStatus } from "./playground-response";
+import {
+  PlaygroundResponse,
+  previewToolInput,
+  type RunStatus,
+  type ToolInputPreview,
+} from "./playground-response";
 
 function Heading({ children }: { children?: ReactNode }) {
   return (
@@ -96,12 +105,18 @@ function PlaygroundForm({
 }) {
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
+  const [expandedTool, setExpandedTool] = useState<number | null>(null);
+  const [template, setTemplate] = useState<{
+    title: string;
+    draft: PlaygroundDraft;
+  }>();
   const [previousAlias, setPreviousAlias] = useState(requestedAlias);
   const [mode, setMode] = useState<"Form" | "Code" | "Full request">("Form");
   const [language, setLanguage] = useState<CodeLanguage>("cURL");
   const [code, setCode] = useState<{ text: string; error?: string }>();
   const [showCodeError, setShowCodeError] = useState(false);
   const [text, setText] = useState("");
+  const [toolInputs, setToolInputs] = useState<ToolInputPreview[]>([]);
   const [reply, setReply] = useState<PlaygroundReply>();
   const [status, setStatus] = useState<RunStatus>("idle");
   const [error, setError] = useState<string>();
@@ -185,6 +200,9 @@ function PlaygroundForm({
     messages: draft.messages.filter(hasMessageContent).map(wireMessage),
     ...(draft.stream !== undefined ? { stream: draft.stream } : {}),
   };
+  const selectedTemplate =
+    template?.draft === draft ? template.title : undefined;
+  const budgetCorrection = thinkingLimitCorrection(draft);
   const codeLanguage = mode === "Full request" ? "JSON" : language;
   function editCode(text: string) {
     setShowCodeError(false);
@@ -199,25 +217,50 @@ function PlaygroundForm({
       });
     }
   }
-  function codeReady() {
+  function codeReady(checkTools = false) {
+    const invalid = checkTools
+      ? draft.toolSchemas?.findIndex((schema) => schema?.invalid)
+      : undefined;
+    if (invalid !== undefined && invalid >= 0) {
+      const field = `playground-tool-${invalid}-schema`;
+      if (expandedTool === invalid) document.getElementById(field)?.focus();
+      else {
+        nextFocusId.current = field;
+        setExpandedTool(invalid);
+      }
+      return false;
+    }
     if (!code?.error) return true;
     setShowCodeError(true);
     document.getElementById("playground-code")?.focus();
     return false;
   }
-  function reset(prompt = "") {
+  function reset(preset?: PlaygroundTemplate) {
     if (!codeReady()) return;
     const next = newDraft();
-    next.selection = available ? model : "";
-    next.messages[0].content = prompt;
-    if (prompt) nextFocusId.current = "playground-message-0";
+    next.selection = preset || available ? model : "";
+    if (preset) {
+      next.tokens = draft.tokens;
+      next.stream = preset.stream ?? draft.stream;
+      next.system = preset.system;
+      next.messages[0].content = preset.prompt;
+      next.parameters = {
+        ...draft.parameters,
+        tools: structuredClone(preset.tools),
+      };
+      delete next.parameters.tool_choice;
+    }
+    setExpandedTool(null);
+    setTemplate(preset ? { title: preset.title, draft: next } : undefined);
     setDraft(next);
     setCode(undefined);
     setText("");
     setReply(undefined);
     setError(undefined);
     setStatus("idle");
-    setMode("Form");
+    // Full request edits the previous Form draft. A selected Code view and
+    // its snippet language continue with the new template.
+    if (!preset || mode === "Full request") setMode("Form");
     setHistoryOpen(false);
   }
   function addToMessages() {
@@ -266,7 +309,13 @@ function PlaygroundForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (active.current || !codeReady() || !available) return;
+    if (
+      active.current ||
+      !codeReady(true) ||
+      !available ||
+      budgetCorrection !== undefined
+    )
+      return;
     const hasPrompt = request.messages.some(({ content }) =>
       typeof content === "string" ? content.trim() : content.length,
     );
@@ -286,6 +335,7 @@ function PlaygroundForm({
     active.current = controller;
     setHistoryOpen(false);
     setText("");
+    setToolInputs([]);
     setReply(undefined);
     setError(undefined);
     setStatus("running");
@@ -301,6 +351,10 @@ function PlaygroundForm({
           if (controller.signal.aborted) return;
           answer += part;
           setText(answer);
+        },
+        (delta) => {
+          if (!controller.signal.aborted)
+            setToolInputs((previous) => previewToolInput(previous, delta));
         },
       );
       if (controller.signal.aborted) return;
@@ -325,7 +379,10 @@ function PlaygroundForm({
         );
       }
     } finally {
-      if (active.current === controller) active.current = null;
+      if (active.current === controller) {
+        active.current = null;
+        setToolInputs([]);
+      }
     }
   }
   return (
@@ -383,7 +440,7 @@ function PlaygroundForm({
               options={["Form", "Code"] as const}
               value={mode === "Code" ? "Code" : "Form"}
               onChange={(next) => {
-                if (!codeReady()) return;
+                if (!codeReady(true)) return;
                 if (mode === "Full request") setCode(undefined);
                 setMode(next);
               }}
@@ -414,11 +471,14 @@ function PlaygroundForm({
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
+                expandedTool={expandedTool}
+                onExpandTool={setExpandedTool}
                 model={model}
                 models={chatModels ?? []}
                 running={running}
                 loading={models.isPending}
                 onEditFullRequest={(triggerId) => {
+                  if (!codeReady(true)) return;
                   fullRequestOpener.current = triggerId;
                   nextFocusId.current = "playground-full-back";
                   setCode(undefined);
@@ -464,6 +524,17 @@ function PlaygroundForm({
                 }}
               />
             )}
+            {budgetCorrection !== undefined && (
+              <p
+                id="playground-budget-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                Set Max tokens to at least {budgetCorrection.toLocaleString()}{" "}
+                in Model settings for this thinking budget, or edit the request
+                in Code.
+              </p>
+            )}
             {error && status !== "failed" && (
               <p role="alert" className="text-sm text-destructive">
                 {error}
@@ -480,6 +551,7 @@ function PlaygroundForm({
                   event.preventDefault();
                   active.current?.abort();
                   active.current = null;
+                  setToolInputs([]);
                   setStatus("stopped");
                 }}
               >
@@ -493,7 +565,12 @@ function PlaygroundForm({
                 size="sm"
                 aria-label="Run prompt"
                 aria-keyshortcuts="Meta+Enter Control+Enter"
-                disabled={!available}
+                aria-describedby={
+                  budgetCorrection === undefined
+                    ? undefined
+                    : "playground-budget-error"
+                }
+                disabled={!available || budgetCorrection !== undefined}
               >
                 <Play />
                 Run{" "}
@@ -515,7 +592,8 @@ function PlaygroundForm({
           {status === "idle" ? (
             <>
               <span role="status" data-run-status="idle" className="sr-only" />
-              {request.messages.length || draft.system ? (
+              {!selectedTemplate &&
+              (request.messages.length || draft.system) ? (
                 <div className="m-auto px-5 py-16 text-center">
                   <Play
                     aria-hidden
@@ -527,13 +605,17 @@ function PlaygroundForm({
                   </p>
                 </div>
               ) : (
-                <PlaygroundTemplates onSelect={reset} />
+                <PlaygroundTemplates
+                  selected={selectedTemplate}
+                  onSelect={reset}
+                />
               )}
             </>
           ) : (
             <PlaygroundResponse
               status={status}
               text={text}
+              toolInputs={toolInputs}
               error={error}
               reply={reply}
               onAdd={addToMessages}
@@ -584,6 +666,7 @@ function PlaygroundForm({
                       setHistoryOpen(false);
                       return;
                     }
+                    setExpandedTool(null);
                     setDraft(entry.draft);
                     setCode(undefined);
                     setText(entry.text);

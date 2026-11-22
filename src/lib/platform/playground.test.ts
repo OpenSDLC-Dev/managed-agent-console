@@ -215,7 +215,14 @@ it("posts stream false and reads the complete Messages JSON, including usage and
   const append = vi.fn();
   const request = { ...prompt, stream: false };
   const signal = new AbortController().signal;
-  const result = await runPlayground(request, "user_demo", signal, append);
+  const onToolInput = vi.fn();
+  const result = await runPlayground(
+    request,
+    "user_demo",
+    signal,
+    append,
+    onToolInput,
+  );
   expect(fetcher.mock.calls[1]).toEqual([
     resource + "/messages?beta=true",
     expect.objectContaining({
@@ -228,6 +235,7 @@ it("posts stream false and reads the complete Messages JSON, including usage and
     new Headers(fetcher.mock.calls[1][1]?.headers).get("x-csrf-token"),
   ).toBe("test-csrf");
   expect(append.mock.calls).toEqual([["Hello"], [" again"]]);
+  expect(onToolInput).not.toHaveBeenCalled();
   expect(result).toMatchObject({
     rawLabel: "Response body",
     inputTokens: 12,

@@ -500,3 +500,48 @@ test("Dashboard key shortcut assigns the current user", async ({ page }) => {
   ).toBeVisible();
   await page.getByTestId("close-revealed-api-key").click();
 });
+
+test("Messages Overview creates a key, opens it after disabling it, and hides it after deletion", async ({
+  page,
+}) => {
+  await signIn(page, "/messages");
+  const name = "Messages regression key";
+  const form = await openApiKeyForm(page);
+  await form.getByLabel("Name").fill(name);
+  await form.getByLabel("Expires").selectOption("7d");
+  await form.getByRole("button", { name: "Create key", exact: true }).click();
+  await page.getByTestId("close-revealed-api-key").click();
+  const shortcut = page.getByRole("link", { name: new RegExp(name) });
+  await shortcut.click();
+  const details = page.getByRole("dialog", { name, exact: true });
+  await expect(details).toBeVisible();
+  const keyId = new URL(page.url()).searchParams.get("key")!;
+  await expectListedKeyStatus(page, keyId, "active");
+  await page.keyboard.press("Escape");
+  const actions = await openApiKeyMenu(page, name);
+  await actions.getByRole("menuitem", { name: "Disable API key" }).click();
+  const row = page.getByRole("row").filter({ hasText: name });
+  await expect(row.locator("[data-key-status]")).toHaveAttribute(
+    "data-key-status",
+    "inactive",
+  );
+  await page.goto("/messages");
+  await expect(shortcut).toContainText("Disabled");
+  await shortcut.click();
+  await expect(details).toContainText("Disabled");
+  expect(new URL(page.url()).searchParams.get("key")).toBe(keyId);
+  await page.keyboard.press("Escape");
+  await (
+    await openApiKeyMenu(page, name)
+  )
+    .getByRole("menuitem", { name: "Delete API key" })
+    .click();
+  await page
+    .getByRole("button", { name: "Delete API key", exact: true })
+    .click();
+  await expect(row).toHaveCount(0);
+  await expectListedKeyStatus(page, keyId, "archived");
+  await page.goto("/messages");
+  await expect(page.getByRole("link", { name: /ci-deploy/ })).toBeVisible();
+  await expect(shortcut).toHaveCount(0);
+});

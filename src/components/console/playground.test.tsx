@@ -110,6 +110,15 @@ it("preselects the linked chat alias, respects manual changes, and keeps the dra
   view.rerender(await linkedPage());
   expect(select).toHaveAttribute("data-model", "another");
   expect(screen.getByLabelText("Prompt")).toHaveValue("Keep this draft");
+  await user.click(screen.getByRole("button", { name: "New" }));
+  await act(async () => {
+    client.setQueryData(["playground-models", TEST_SESSION.id], [models[0]]);
+  });
+  await user.click(
+    screen.getByRole("button", { name: "Stream tool arguments live" }),
+  );
+  expect(select).toHaveAttribute("data-model", "another");
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
   expect(run).not.toHaveBeenCalled();
 });
 
@@ -209,8 +218,8 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   await user.click(screen.getByRole("combobox", { name: "Model" }));
   await user.click(await screen.findByRole("option", { name: "Fast" }));
   await user.click(screen.getByRole("button", { name: "Model settings" }));
-  await user.clear(screen.getByLabelText("Max tokens"));
-  await user.type(screen.getByLabelText("Max tokens"), "42");
+  await user.clear(screen.getByLabelText("Max tokens value"));
+  await user.type(screen.getByLabelText("Max tokens value"), "42");
   await user.keyboard("{Escape}");
   await user.type(screen.getByLabelText("System", { exact: true }), "Be brief");
   await user.type(screen.getByLabelText("Prompt"), "First turn");
@@ -247,6 +256,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
     request,
     TEST_SESSION.id,
     expect.any(AbortSignal),
+    expect.any(Function),
     expect.any(Function),
   );
   await user.click(screen.getByRole("button", { name: "New" }));
@@ -370,6 +380,7 @@ it("runs edits from cURL and JSON in the selected streaming mode and carries the
     expected,
     TEST_SESSION.id,
     expect.any(AbortSignal),
+    expect.any(Function),
     expect.any(Function),
   );
 });
@@ -509,6 +520,7 @@ it("keeps message roles and edits when removing and restoring System, then runs 
     TEST_SESSION.id,
     expect.any(AbortSignal),
     expect.any(Function),
+    expect.any(Function),
   );
 });
 
@@ -631,6 +643,7 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
     TEST_SESSION.id,
     expect.any(AbortSignal),
     expect.any(Function),
+    expect.any(Function),
   );
   await user.click(
     await screen.findByRole("button", { name: "View content blocks in Raw" }),
@@ -654,13 +667,15 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
   expect(JSON.parse(codeEditor().value)).toEqual(body);
 });
 
-it("pages through templates and fills a draft without calling the model", async () => {
+it("loads supported tool templates into Form and Code without changing the model or sending a request", async () => {
   vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
     { id: "demo", display_name: "Demo" },
+    { id: "my-flash", display_name: "My flash" },
   ]);
   const run = vi.spyOn(gateway, "runPlayground");
   const user = userEvent.setup();
-  renderPlayground();
+  renderPlayground({ page: await linkedPage("my-flash") });
+  await screen.findByText("My flash", { exact: true });
   const history = screen.getByRole("button", { name: "History" });
   await user.click(history);
   expect(screen.getByRole("region", { name: "History" })).toBeVisible();
@@ -670,17 +685,128 @@ it("pages through templates and fills a draft without calling the model", async 
   await user.click(history);
   await user.keyboard("{Escape}");
   expect(history).toHaveFocus();
-  await user.click(screen.getByRole("button", { name: "More" }));
-  expect(
-    screen.queryByRole("button", { name: /Extract structured data/ }),
-  ).not.toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Previous" }));
-  await user.click(
-    screen.getByRole("button", { name: /Extract structured data/ }),
+  const streaming = screen.getByRole("button", {
+    name: "Stream tool arguments live",
+  });
+  const parallel = screen.getByRole("button", {
+    name: "Call tools in parallel",
+  });
+  expect(within(screen.getByRole("list")).getAllByRole("button")).toEqual([
+    streaming,
+    parallel,
+  ]);
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  fireEvent.change(codeEditor(), {
+    target: {
+      value: JSON.stringify({
+        model: "my-flash",
+        messages: [],
+        max_tokens: 648,
+        temperature: 0.4,
+        stream: false,
+        tools: [{ name: "old_tool", input_schema: { type: "object" } }],
+        tool_choice: { type: "tool", name: "old_tool" },
+      }),
+    },
+  });
+  await user.click(parallel);
+  expect(screen.getByRole("radio", { name: "Code" })).toBeChecked();
+  expect(screen.getByLabelText("Code language")).toHaveValue("JSON");
+  const firstPreset = JSON.parse(codeEditor().value);
+  expect(firstPreset).toMatchObject({
+    model: "my-flash",
+    max_tokens: 648,
+    temperature: 0.4,
+    stream: false,
+  });
+  expect(firstPreset).not.toHaveProperty("tool_choice");
+  await user.click(streaming);
+  expect(streaming).toHaveFocus();
+  expect(streaming).toHaveAttribute("aria-pressed", "true");
+  expect(parallel).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("radio", { name: "Code" })).toBeChecked();
+  expect(JSON.parse(codeEditor().value).model).toBe("my-flash");
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  expect(screen.getByLabelText<HTMLTextAreaElement>("Prompt").value).toContain(
+    "poem.txt",
   );
+  await user.click(screen.getByRole("button", { name: "make_file" }));
   expect(
-    (screen.getByLabelText("Prompt") as HTMLTextAreaElement).value,
-  ).toContain("JSON");
+    JSON.parse(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Input schema" })
+        .value,
+    ),
+  ).toMatchObject({
+    properties: { lines_of_text: { type: "array", items: { type: "string" } } },
+  });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  const filePreset = JSON.parse(codeEditor().value);
+  expect(filePreset).toMatchObject({
+    model: "my-flash",
+    max_tokens: 648,
+    temperature: 0.4,
+    stream: true,
+    system: expect.stringContaining("make_file"),
+    tools: [
+      {
+        name: "make_file",
+        input_schema: {
+          type: "object",
+          properties: {
+            filename: { type: "string" },
+            lines_of_text: { type: "array", items: { type: "string" } },
+          },
+          required: ["filename", "lines_of_text"],
+        },
+      },
+    ],
+  });
+  expect(filePreset.tools[0]).not.toHaveProperty("eager_input_streaming");
+  await user.click(parallel);
+  expect(parallel).toHaveFocus();
+  expect(parallel).toHaveAttribute("aria-pressed", "true");
+  expect(streaming).toHaveAttribute("aria-pressed", "false");
+  const body = JSON.parse(codeEditor().value);
+  expect(body).toMatchObject({
+    model: "my-flash",
+    messages: [{ role: "user", content: expect.stringContaining("Tokyo") }],
+    system: expect.stringContaining("one turn"),
+    tools: [
+      {
+        name: "get_weather",
+        input_schema: {
+          type: "object",
+          properties: { location: { type: "string" } },
+          required: ["location"],
+        },
+      },
+      {
+        name: "get_time",
+        input_schema: {
+          type: "object",
+          properties: { timezone: { type: "string" } },
+          required: ["timezone"],
+        },
+      },
+    ],
+  });
+  body.tools[0].description = "Use metric units";
+  fireEvent.change(codeEditor(), { target: { value: JSON.stringify(body) } });
+  expect(
+    screen.queryByRole("button", { name: "Call tools in parallel" }),
+  ).toBeNull();
+  expect(screen.getByRole("heading", { name: "Press Run" })).toBeVisible();
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("button", { name: "get_weather" }));
+  expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
+    "Use metric units",
+  );
+  expect(screen.getByRole("button", { name: "get_time" })).toBeVisible();
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value)).toEqual(body);
+  await user.click(screen.getByLabelText("Form", { exact: true }));
   await user.click(
     screen.getByRole("button", { name: "Remove system prompt" }),
   );
@@ -693,19 +819,169 @@ it("pages through templates and fills a draft without calling the model", async 
   expect(run).not.toHaveBeenCalled();
 });
 
-it("stops immediately and ignores a cancelled stream while the next run is open", async () => {
+it("returns from a replaced full request to Form and starts New from Code in Form", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "my-flash", display_name: "My flash" },
+  ]);
+  const user = userEvent.setup();
+  renderPlayground({ page: await linkedPage("my-flash") });
+  await screen.findByText("My flash", { exact: true });
+  await user.click(
+    screen.getByRole("button", { name: "More request options" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Edit full request" }),
+  );
+  expect(screen.getByRole("textbox", { name: "Request body" })).toBeVisible();
+  await user.click(
+    screen.getByRole("button", { name: "Call tools in parallel" }),
+  );
+  expect(screen.getByRole("radio", { name: "Form" })).toBeChecked();
+  expect(screen.queryByRole("textbox", { name: "Request body" })).toBeNull();
+  expect(screen.getByRole("combobox", { name: "Model" })).toHaveAttribute(
+    "data-model",
+    "my-flash",
+  );
+  expect(screen.getByRole("button", { name: "get_weather" })).toBeVisible();
+  await user.click(screen.getByRole("radio", { name: "Code" }));
+  await user.click(screen.getByRole("button", { name: "New" }));
+  expect(screen.getByRole("radio", { name: "Form" })).toBeChecked();
+  expect(screen.getByLabelText("Prompt")).toHaveValue("");
+  expect(
+    screen.getByRole("button", { name: "Call tools in parallel" }),
+  ).toHaveAttribute("aria-pressed", "false");
+});
+
+it("shows actual tool argument frames in Rendered and Raw before a parallel tool response completes", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "deepseek-flash", display_name: "DeepSeek Flash" },
+  ]);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  let writer!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      writer = controller;
+    },
+  });
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === "/api/auth/session")
+      return Response.json({ ...TEST_SESSION, csrf_token: "fixture" });
+    expect(url).toBe("/api/organizations/default/proxy/v1/messages?beta=true");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      model: "deepseek-flash",
+      stream: true,
+      tools: [{ name: "get_weather" }, { name: "get_time" }],
+    });
+    return new Response(stream, {
+      headers: { "content-type": "text/event-stream" },
+    });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  function frame(type: string, payload: Record<string, unknown> = {}) {
+    writer.enqueue(
+      new TextEncoder().encode(
+        `event: ${type}\ndata: ${JSON.stringify({ type, ...payload })}\n\n`,
+      ),
+    );
+  }
+  function delta(index: number, fragment: string) {
+    frame("content_block_delta", {
+      index,
+      delta: { type: "input_json_delta", partial_json: fragment },
+    });
+  }
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("DeepSeek Flash", { exact: true });
+  await user.click(
+    screen.getByRole("button", { name: "Call tools in parallel" }),
+  );
+  expect(fetcher).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  const add = screen.getByRole("button", { name: "Add to messages" });
+  expect(add).toBeDisabled();
+  await act(async () => {
+    frame("message_start", { message: { type: "message", content: [] } });
+    for (const [index, name] of [
+      "get_weather",
+      "get_time",
+      "get_weather",
+    ].entries()) {
+      frame("content_block_start", {
+        index,
+        content_block: {
+          type: "tool_use",
+          name,
+          id: `tool_${index}`,
+          input: {},
+        },
+      });
+    }
+  });
+  expect(
+    screen.queryByRole("region", { name: "Streaming tool input" }),
+  ).toBeNull();
+  await act(async () => delta(0, '{"location":"'));
+  const weather = await screen.findByLabelText(
+    "Input for get_weather, block 1",
+  );
+  expect(weather.textContent).toBe('{"location":"');
+  await user.click(screen.getByLabelText("Raw", { exact: true }));
+  expect(weather).toBeVisible();
+  const longLocation = "x".repeat(5000);
+  await act(async () => {
+    delta(1, '{"timezone":"Asia/');
+    delta(2, JSON.stringify({ location: longLocation }));
+    delta(0, 'Paris"}');
+  });
+  expect(weather.textContent).toBe('{"location":"Paris"}');
+  expect(screen.getByLabelText("Input for get_time, block 2").textContent).toBe(
+    '{"timezone":"Asia/',
+  );
+  const clipped = screen.getByLabelText(
+    "Input for get_weather, block 3",
+  ).textContent;
+  expect(clipped).toMatch(/^…x+/);
+  expect(clipped?.length).toBeLessThan(longLocation.length);
+  expect(add).toBeDisabled();
+  await act(async () => {
+    delta(1, 'Tokyo"}');
+    for (const index of [0, 1, 2]) frame("content_block_stop", { index });
+    frame("message_stop");
+    writer.close();
+  });
+  const raw = await screen.findByLabelText("Response body");
+  expect(JSON.parse(raw.textContent!).content).toMatchObject([
+    { name: "get_weather", input: { location: "Paris" } },
+    { name: "get_time", input: { timezone: "Asia/Tokyo" } },
+    { name: "get_weather", input: { location: longLocation } },
+  ]);
+  expect(add).toBeEnabled();
+  expect(
+    screen.queryByRole("region", { name: "Streaming tool input" }),
+  ).toBeNull();
+});
+
+it("clears tool previews on Stop, a new run and principal change, and ignores late events", async () => {
   vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
     { id: "demo", display_name: "Demo" },
   ]);
   const requests: {
     signal: AbortSignal;
     append: (part: string) => void;
+    tool: (fragment: string) => void;
     finish: () => void;
   }[] = [];
   vi.spyOn(gateway, "runPlayground").mockImplementation(
-    (_body, _id, signal, append) =>
+    (_body, _id, signal, append, onToolInput) =>
       new Promise<gateway.PlaygroundReply>((resolve) =>
-        requests.push({ signal, append, finish: () => resolve(reply) }),
+        requests.push({
+          signal,
+          append,
+          tool: (fragment) =>
+            onToolInput?.({ index: 0, name: "example", fragment }),
+          finish: () => resolve(reply),
+        }),
       ),
   );
   vi.stubGlobal(
@@ -713,11 +989,25 @@ it("stops immediately and ignores a cancelled stream while the next run is open"
     vi.fn(() => ({ matches: false })),
   );
   const user = userEvent.setup();
-  renderPlayground();
+  const forPrincipal = (id: string) => (
+    <ConsoleSessionContext.Provider
+      value={
+        {
+          data: { ...TEST_SESSION, playground_access: true, id },
+        } as ReturnType<typeof useConsoleSession>
+      }
+    >
+      <Playground />
+    </ConsoleSessionContext.Provider>
+  );
+  const view = renderPlayground({ page: forPrincipal(TEST_SESSION.id) });
   await screen.findByText("Demo", { exact: true });
   await user.type(screen.getByLabelText("Prompt"), "Hello");
   await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  act(() => requests[0].tool("first fragment"));
+  expect(screen.getByText("first fragment")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Stop" }));
+  expect(screen.queryByText("first fragment")).toBeNull();
   expect(requests[0].signal.aborted).toBe(true);
   expect(document.querySelector("[data-run-status]")).toHaveAttribute(
     "data-run-status",
@@ -725,10 +1015,27 @@ it("stops immediately and ignores a cancelled stream while the next run is open"
   );
   expect(requests).toHaveLength(1);
   await user.click(screen.getByRole("button", { name: "Run prompt" }));
-  requests[0].append("stale response");
-  requests[0].finish();
-  await user.click(screen.getByRole("button", { name: "Stop" }));
-  expect(requests[1].signal.aborted).toBe(true);
+  await act(async () => {
+    requests[0].append("stale response");
+    requests[0].tool("old tool");
+    requests[0].finish();
+    requests[1].tool("next fragment");
+  });
   expect(screen.queryByText("stale response")).toBeNull();
-  requests[1].finish();
+  expect(screen.queryByText("old tool")).toBeNull();
+  expect(screen.getByLabelText("Input for example, block 1").textContent).toBe(
+    "next fragment",
+  );
+  view.rerender(forPrincipal("another-account"));
+  expect(requests[1].signal.aborted).toBe(true);
+  await act(async () => {
+    requests[1].tool("previous account");
+    requests[1].finish();
+  });
+  expect(screen.queryByText("next fragment")).toBeNull();
+  expect(screen.queryByText("previous account")).toBeNull();
+  expect(
+    screen.getByRole("heading", { name: "Start with a template" }),
+  ).toBeVisible();
+  expect(screen.getByLabelText("Prompt")).toHaveValue("");
 });

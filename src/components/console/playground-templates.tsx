@@ -1,60 +1,90 @@
-import { Bot, MessageSquareText } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Bot, Wrench } from "lucide-react";
 
-// These starters send ordinary Messages text and work with any chat alias.
-const templates = [
-  [
-    "Extract structured data",
-    "Turn a short note into a JSON object.",
-    "Extract the name, city and occupation as JSON from this note: Sam is a teacher in Lisbon.",
-  ],
-  [
-    "Summarize text",
-    "Condense a passage into its main points.",
-    "Summarize in one sentence: The library will extend its opening hours on weekdays and start a Saturday reading club next month.",
-  ],
-  [
-    "Classify text",
-    "Assign a category to a short message.",
-    "Classify this message as a question, suggestion or bug report: Could we add a dark theme?",
-  ],
-  [
-    "Translate text",
-    "Translate a passage into another language.",
-    "Translate into French: The next train leaves at noon.",
-  ],
-  [
-    "Rewrite a message",
-    "Adjust the tone while preserving the facts.",
-    "Rewrite this message in a friendly tone: Your reservation expires tomorrow. Please confirm by 5 pm.",
-  ],
-  [
-    "Compare options",
-    "Compare two approaches and their tradeoffs.",
-    "Compare walking and cycling for a two-kilometre commute. Give one advantage of each.",
-  ],
-  [
-    "Explain code",
-    "Explain what a short piece of code does.",
-    "Explain this Python expression in one sentence: sorted(set(['pear', 'apple', 'pear']))",
-  ],
-  [
-    "Brainstorm ideas",
-    "Generate ideas within a constraint.",
-    "Suggest three names for a neighborhood book exchange. Keep each name under four words.",
-  ],
-] as const;
+export type PlaygroundTemplate = {
+  title: string;
+  description: string;
+  system: string;
+  prompt: string;
+  stream?: true;
+  tools: Record<string, unknown>[];
+};
+
+const templates: PlaygroundTemplate[] = [
+  {
+    title: "Stream tool arguments live",
+    description:
+      "See file arguments as your model streams them. Chunk sizes vary by provider.",
+    system:
+      "Prepare a single make_file call for the client. Put each line in the lines_of_text array and include the requested filename.",
+    prompt:
+      "Write a 24-line poem about debugging a distributed system at 3 a.m. Save it as poem.txt.",
+    stream: true,
+    tools: [
+      {
+        name: "make_file",
+        description: "Write the supplied lines to a text file.",
+        input_schema: {
+          type: "object",
+          properties: {
+            filename: { type: "string", description: "Name of the text file." },
+            lines_of_text: { type: "array", items: { type: "string" } },
+          },
+          required: ["filename", "lines_of_text"],
+        },
+      },
+    ],
+  },
+  {
+    title: "Call tools in parallel",
+    description:
+      "Request weather and local time from client tools in one turn.",
+    system: [
+      "Help plan a trip using live weather and local time.",
+      "Request all independent lookups together in one turn.",
+      "Wait for the client to return the tool results in a single message before answering.",
+    ].join("\n\n"),
+    prompt:
+      "I'm planning a remote-work week in San Francisco, Tokyo, or Paris. What are the current weather and local time in each city?",
+    tools: [
+      {
+        name: "get_weather",
+        description: "Look up the current weather for a city.",
+        input_schema: {
+          type: "object",
+          properties: {
+            location: { type: "string", description: "City to look up." },
+          },
+          required: ["location"],
+        },
+      },
+      {
+        name: "get_time",
+        description: "Look up the current local time.",
+        input_schema: {
+          type: "object",
+          properties: {
+            timezone: {
+              type: "string",
+              description: "IANA time zone, such as Asia/Tokyo.",
+            },
+          },
+          required: ["timezone"],
+        },
+      },
+    ],
+  },
+];
 
 export function PlaygroundTemplates({
+  selected,
   onSelect,
 }: {
-  onSelect: (prompt: string) => void;
+  selected?: string;
+  onSelect: (template: PlaygroundTemplate) => void;
 }) {
-  const [more, setMore] = useState(false);
   return (
     <div className="mx-auto my-auto w-full max-w-[calc(42rem+2.5rem)] px-5 py-8">
-      <div className="mb-8 text-center">
+      <div className="mb-10 text-center">
         <Bot
           aria-hidden
           className="mx-auto mb-3 size-12 text-[#b6765a]"
@@ -65,37 +95,32 @@ export function PlaygroundTemplates({
           Build your request and press Run.
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-4 @min-[28rem]:grid-cols-2">
-        {templates
-          .slice(more ? 6 : 0, more ? templates.length : 6)
-          .map(([title, description, prompt]) => (
+      <ul className="grid grid-cols-1 gap-4 @min-[28rem]:grid-cols-2">
+        {templates.map((template, index) => (
+          <li key={template.title}>
             <button
-              key={title}
               type="button"
-              onClick={() => onSelect(prompt)}
-              className="flex min-h-[124px] flex-col items-start gap-2 rounded-xl bg-muted/50 p-3.5 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+              aria-label={template.title}
+              aria-describedby={`playground-template-${index}-details`}
+              aria-pressed={selected === template.title}
+              onClick={() => onSelect(template)}
+              className="flex h-full min-h-[124px] w-full flex-col items-start gap-2 rounded-xl border border-transparent bg-muted/60 p-3.5 text-left text-sm hover:bg-muted/85 focus-visible:outline-2 focus-visible:outline-ring aria-pressed:border-foreground/25 aria-pressed:bg-muted"
             >
-              <span className="font-medium">{title}</span>
-              <span className="grow text-[13px] leading-5 text-muted-foreground">
-                {description}
+              <span className="font-medium">{template.title}</span>
+              <span
+                id={`playground-template-${index}-details`}
+                className="grow text-[13px] leading-5 text-muted-foreground"
+              >
+                {template.description}
               </span>
               <span className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
-                <MessageSquareText className="size-3" aria-hidden />
-                Text
+                <Wrench className="size-3" aria-hidden />
+                Custom tools
               </span>
             </button>
-          ))}
-      </div>
-      <div className="mt-3 flex justify-end">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => setMore(!more)}
-        >
-          {more ? "Previous" : "More"}
-        </Button>
-      </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
