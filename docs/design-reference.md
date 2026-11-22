@@ -7,13 +7,13 @@ date. What ships from these facts is `src/app/globals.css`.
 
 ## Dashboard — checked 2026-11-22
 
-In signed-in Chrome, the [reference Dashboard](https://platform.claude.com/dashboard) opens with a time-of-day greeting, Get API key and Build an agent. At 1800 × 945, three 136 px summary cards sit above a full-width Token volume card. Models and Resources each have four columns with 12 px gutters. The model names link to documentation. Compare models opens a dialog with three selectors and Cost and Features views.
+In signed-in Chrome, the [reference Dashboard](https://platform.claude.com/dashboard) opens with a time-of-day greeting, Get API key and Build an agent. At 1800 × 945, three 136 px summary cards sit above a full-width Token volume card. Models and Resources each have four columns with 12 px gutters. All four model cards open the first-party [Models overview](https://platform.claude.com/docs/en/models/overview), which presents use cases, specifications, pricing and platform-specific model IDs. Compare models opens a dialog with three selectors and Cost and Features views.
 
 The self-hosted summary uses the gateway's daily usage. Month-to-date requests occupy the hosted credits slot. Spend includes recorded costs with configured prices. Cache reads and seven-day token volume use the upstream counts recorded by the gateway. The Usage links retain the displayed period. The resource cards lead to tools available to the current session.
 
-The four model cards describe upstream models supported by Platform integrations. Compare models uses provider information and links to its sources. Operators configure their callable aliases and deployment prices in Model gateway. The [provider marks](./provider-marks.md) ship with the Console.
+Each self-hosted card summarizes its model and opens its Console guide in the same tab. The guide connects the upstream specifications to this installation’s provider profile, upstream deployments and gateway aliases. A Playground link requires a matching alias in the signed-in account’s model list. A shared alias can route to another upstream. Public prices carry their source and terms. Recorded usage uses the operator’s configured rates. The [provider marks](./provider-marks.md) ship with the Console.
 
-To repeat the comparison, open both Dashboards in Chrome at the same viewport. Open Get API key and cancel it. Open Compare models, replace one of the three selections, switch to Features and dismiss it with Escape. Check focus returns to the trigger. Follow a model's documentation, a usage period and Open playground. Run `pnpm exec playwright test test/e2e/dashboard.spec.ts` after `pnpm build`.
+To repeat the comparison, open both Dashboards in Chrome at the same viewport. Open Get API key and cancel it. Open Compare models, replace a selection, switch to Features and dismiss it with Escape. Check focus returns to the trigger. Open each model guide, copy its ID and return to Dashboard. Follow a configured alias into Model gateway and Playground. Verify that Playground selects the alias before any prompt runs. Check an unconfigured model and a session without access to provider configuration. Follow both usage periods. Run `pnpm exec playwright test test/e2e/dashboard.spec.ts` after `pnpm build`.
 
 ## Sidebar structure — checked 2026-11-21
 

@@ -19,25 +19,20 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("links each branded card to the corresponding provider's model documentation", () => {
+it("links each branded model summary to its guide inside the Console", () => {
   render(<DashboardModels />);
-  for (const [name, brand, href] of [
-    [
-      "DeepSeek V4.1 Flash",
-      "deepseek",
-      "https://api-docs.deepseek.com/news/news261017/",
-    ],
-    ["GLM-5.3", "glm", "https://docs.z.ai/guides/llm/glm-5.3"],
-    [
-      "Kimi K3",
-      "kimi",
-      "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
-    ],
-    ["MiniMax M3", "minimax", "https://github.com/MiniMax-AI/MiniMax-M3"],
+  for (const [name, brand] of [
+    ["DeepSeek V4.1 Flash", "deepseek"],
+    ["GLM-5.3", "glm"],
+    ["Kimi K3", "kimi"],
+    ["MiniMax M3", "minimax"],
   ]) {
     const card = screen.getByRole("article", { name });
     const link = within(card).getByRole("link", { name });
-    expect(link).toHaveAttribute("href", href);
+    expect(link).toHaveAttribute("href", `/dashboard/models/${brand}`);
+    expect(link).not.toHaveAttribute("target");
+    expect(within(card).getByText("1M context")).toBeVisible();
+    expect(card.querySelector("p")).toHaveTextContent(/coding/i);
     expect(within(card).getByRole("heading", { name })).toContainElement(link);
     expect(card.querySelector("img")).toHaveAttribute(
       "src",
@@ -76,7 +71,7 @@ it("opens the provider cost comparison and restores focus on close", async () =>
   expect(kimi.getByText(/Cache writes cost \$3 for 5 min/)).toBeVisible();
   expect(
     dialog.getByRole("link", { name: "View pricing for GLM-5.3" }),
-  ).toHaveAttribute("href", "https://docs.z.ai/guides/overview/pricing");
+  ).toHaveAttribute("href", "/dashboard/models/glm#pricing");
   expect(
     dialog.getByText(
       "Z.ai international API rates, in USD per million tokens.",
@@ -101,10 +96,7 @@ it("keeps column selections across views and copies the exact upstream ID withou
   await user.click(await screen.findByRole("option", { name: "MiniMax M3" }));
   expect(
     dialog.getByRole("link", { name: "View pricing for MiniMax M3" }),
-  ).toHaveAttribute(
-    "href",
-    "https://platform.minimax.io/docs/pricing/overview",
-  );
+  ).toHaveAttribute("href", "/dashboard/models/minimax#pricing");
   const third = within(
     dialog.getByRole("region", { name: "Comparison column 3" }),
   );
@@ -115,7 +107,7 @@ it("keeps column selections across views and copies the exact upstream ID withou
   await user.click(dialog.getByRole("radio", { name: "Features" }));
   expect(
     third.getByRole("link", { name: "Model documentation for MiniMax M3" }),
-  ).toHaveTextContent("Model documentation");
+  ).toHaveAttribute("href", "/dashboard/models/minimax");
   expect(third.getByText("Upstream model ID")).toBeVisible();
   expect(third.getByText("MiniMax-M3")).toBeVisible();
   expect(third.getByText("512K tokens")).toBeVisible();

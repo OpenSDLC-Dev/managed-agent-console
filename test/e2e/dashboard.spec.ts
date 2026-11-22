@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { grantDashboardPlayground } from "./dashboard-fixture";
+import {
+  dashboardModelCases,
+  grantDashboardModelDiscovery,
+  setDashboardSession,
+} from "./dashboard-fixture";
 import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
@@ -88,7 +92,7 @@ test("dashboard and search stay centered beside the expanded navigation", async 
 test("dashboard opens the usage period and each admitted resource shown on its card", async ({
   page,
 }) => {
-  await grantDashboardPlayground(page);
+  await setDashboardSession(page, { playground_access: true });
   await signIn(page);
   const main = page.getByRole("main");
   const overview = main.getByRole("region", { name: "Usage overview" });
@@ -133,31 +137,17 @@ test("dashboard opens the usage period and each admitted resource shown on its c
   }
 });
 
-test("four provider cards load their local marks and compare model cost and features", async ({
+test("each provider card opens its model overview in the same tab and returns to Dashboard", async ({
   page,
   context,
 }) => {
   await signIn(page);
-  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin: new URL(page.url()).origin,
-  });
   const main = page.getByRole("main");
-  const models = [
-    [
-      "deepseek",
-      "DeepSeek V4.1 Flash",
-      "https://api-docs.deepseek.com/news/news261017/",
-    ],
-    ["glm", "GLM-5.3", "https://docs.z.ai/guides/llm/glm-5.3"],
-    [
-      "kimi",
-      "Kimi K3",
-      "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
-    ],
-    ["minimax", "MiniMax M3", "https://github.com/MiniMax-AI/MiniMax-M3"],
-  ];
-  for (const [brand, name, href] of models) {
-    const mark = main.locator(`img[src="/brands/${brand}.svg"]`);
+  const models = main.getByRole("region", { name: "Models", exact: true });
+  const origin = new URL(page.url()).origin;
+  for (const { brand, name, upstream, alias, docs } of dashboardModelCases) {
+    const card = models.getByRole("article", { name, exact: true });
+    const mark = card.locator(`img[src="/brands/${brand}.svg"]`);
     await expect(mark).toBeVisible();
     await expect
       .poll(() =>
@@ -166,11 +156,60 @@ test("four provider cards load their local marks and compare model cost and feat
         ),
       )
       .toBe(true);
-    await expect(main.getByRole("link", { name, exact: true })).toHaveAttribute(
+    const href = `/dashboard/models/${brand}`;
+    await expect(card.getByRole("link", { name, exact: true })).toHaveAttribute(
       "href",
       href,
     );
+    // A click on the logo exercises the card's full clickable surface.
+    await mark.scrollIntoViewIfNeeded();
+    const bounds = (await mark.boundingBox())!;
+    await page.mouse.click(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+    );
+    await expect(page).toHaveURL(origin + href);
+    await expect(
+      page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("link", { name: "Dashboard", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      main.getByRole("heading", { name, exact: true, level: 1 }),
+    ).toBeVisible();
+    await expect(main.locator(`img[src="/brands/${brand}.svg"]`)).toBeVisible();
+    const specs = main.getByRole("region", { name: "Upstream specifications" });
+    await expect(specs.locator("code")).toHaveText(upstream);
+    await expect(
+      specs.getByRole("link", { name: "Provider specifications" }),
+    ).toHaveAttribute("href", docs);
+    const deployment = main.getByRole("region", { name: "Current deployment" });
+    if (alias)
+      await expect(
+        deployment.getByRole("link", { name: alias, exact: true }),
+      ).toHaveAttribute("href", `/models?model=${alias}`);
+    else
+      await expect(
+        deployment.getByText("No matching provider is configured.", {
+          exact: false,
+        }),
+      ).toBeVisible();
+    await main.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await expect(page).toHaveURL(origin + "/dashboard");
   }
+  expect(context.pages()).toHaveLength(1);
+});
+
+test("model comparison links open the selected local overview and pricing section", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  const origin = new URL(page.url()).origin;
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin,
+  });
+  const main = page.getByRole("main");
   const trigger = main.getByRole("button", { name: "Compare models" });
   await trigger.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Compare models" });
@@ -182,11 +221,13 @@ test("four provider cards load their local marks and compare model cost and feat
   ).toBeChecked();
   const selectors = dialog.getByRole("combobox");
   await expect(selectors).toHaveCount(3);
-  for (const [i, [, name]] of models.slice(0, 3).entries()) {
+  for (const [i, { brand, name }] of dashboardModelCases
+    .slice(0, 3)
+    .entries()) {
     await expect(selectors.nth(i)).toContainText(name);
     await expect(
       dialog.getByRole("link", { name: `View pricing for ${name}` }),
-    ).toBeVisible();
+    ).toHaveAttribute("href", `/dashboard/models/${brand}#pricing`);
   }
   const third = dialog.getByRole("combobox", { name: "Model 3", exact: true });
   await third.click();
@@ -204,12 +245,144 @@ test("four provider cards load their local marks and compare model cost and feat
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe("MiniMax-M3");
+  for (const { brand, name } of [
+    dashboardModelCases[0],
+    dashboardModelCases[1],
+    dashboardModelCases[3],
+  ]) {
+    await expect(
+      dialog.getByRole("link", { name: `Model documentation for ${name}` }),
+    ).toHaveAttribute("href", `/dashboard/models/${brand}`);
+  }
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await trigger.click();
+  await dialog
+    .getByRole("link", { name: "View pricing for DeepSeek V4.1 Flash" })
+    .click();
+  await expect(page).toHaveURL(origin + "/dashboard/models/deepseek#pricing");
+  await expect(main.locator("#pricing")).toBeInViewport();
+  await page.goBack();
+  await trigger.click();
+  await dialog.getByText("Features", { exact: true }).click();
+  await dialog
+    .getByRole("link", { name: "Model documentation for Kimi K3" })
+    .click();
+  await expect(page).toHaveURL(origin + "/dashboard/models/kimi");
+  await expect(
+    main.getByRole("heading", { name: "Kimi K3", level: 1 }),
+  ).toBeVisible();
+  expect(context.pages()).toHaveLength(1);
+});
+
+test("a discovered gateway alias opens Playground with the selected model without a write", async ({
+  page,
+}) => {
+  await grantDashboardModelDiscovery(page);
+  await signIn(page);
+  const writes: string[] = [];
+  page.on("request", (request) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method()))
+      writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  const main = page.getByRole("main");
+  await main.getByRole("link", { name: "MiniMax M3", exact: true }).click();
+  const deployment = main.getByRole("region", { name: "Current deployment" });
+  const alias = deployment.getByRole("link", {
+    name: "minimax-m3",
+    exact: true,
+  });
+  await expect(alias).toHaveAttribute("href", "/models?model=minimax-m3");
+  await alias.click();
+  await expect(page).toHaveURL(/\/models\?model=minimax-m3$/);
+  await expect(
+    main
+      .getByRole("region", { name: "Model details" })
+      .getByRole("heading", { name: "minimax-m3", exact: true }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\/models\/minimax$/);
+  const open = deployment.getByRole("link", {
+    name: "Open in Playground for minimax-m3",
+    exact: true,
+  });
+  await expect(open).toHaveAttribute("href", "/playground?model=minimax-m3");
+  await expect(
+    deployment.getByRole("link", {
+      name: "Open in Playground for agent-default",
+    }),
+  ).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await settleMotion(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await open.click();
+  await expect(page).toHaveURL(/\/playground\?model=minimax-m3$/);
+  const model = main.getByRole("combobox", { name: "Model", exact: true });
+  await expect(model).toHaveAttribute("data-model", "minimax-m3");
+  await expect(model).toContainText("MiniMax M3");
+  expect(writes).toEqual([]);
+});
+
+test("a developer can read the model reference when access to the gateway and Playground is denied", async ({
+  page,
+  request,
+}) => {
+  await expect(
+    await request.post("http://127.0.0.1:18080/__forbid", {
+      data: { paths: ["admin/v1/"] },
+    }),
+  ).toBeOK();
+  await setDashboardSession(page, { role: "developer" });
+  const discovery: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith("/proxy/v1/models")) discovery.push(path);
+  });
+  await signIn(page, "/dashboard/models/minimax");
+  const main = page.getByRole("main");
+  await expect(
+    main.getByRole("heading", { name: "MiniMax M3", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    main
+      .getByRole("region", { name: "Upstream specifications" })
+      .locator("code"),
+  ).toHaveText("MiniMax-M3");
+  const deployment = main.getByRole("region", { name: "Current deployment" });
+  await expect(deployment.getByRole("status")).toHaveText(
+    "Your account cannot view provider configuration.",
+  );
+  await expect(deployment.locator("[data-gateway-alias]")).toHaveCount(0);
+  await expect(main.locator('a[href^="/playground"]')).toHaveCount(0);
+  expect(discovery).toEqual([]);
+  await main.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("a Playground-only user opening a dashboard model bookmark lands in Playground", async ({
+  page,
+}) => {
+  await signIn(page);
+  await setDashboardSession(page, { role: "user", playground_access: true });
+  await page.goto("/dashboard/models/minimax");
+  await expect(page).toHaveURL(/\/playground$/);
+  await expect(
+    page
+      .getByRole("main")
+      .getByRole("heading", { name: "Playground", exact: true, level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Current deployment" }),
+  ).toHaveCount(0);
 });
 
 test("dashboard and navigation fit a narrow viewport without losing destinations", async ({

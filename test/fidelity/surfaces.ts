@@ -1,5 +1,9 @@
 import { browserPost } from "../e2e/browser-write";
-import { grantDashboardPlayground } from "../e2e/dashboard-fixture";
+import {
+  dashboardModelCases,
+  grantDashboardModelDiscovery,
+  setDashboardSession,
+} from "../e2e/dashboard-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
@@ -80,12 +84,30 @@ async function populatedDashboard(
 ) {
   // Keep the fixed comparison dialog and header in one desktop screenshot.
   await page.setViewportSize(viewport);
-  await grantDashboardPlayground(page);
+  await setDashboardSession(page, { playground_access: true });
   await page.reload();
   await page
     .getByRole("link", { name: "Open playground", exact: true })
     .waitFor();
   await page.locator('[data-dashboard-metric="tokens"] [data-value]').waitFor();
+}
+
+async function settledDashboardModel(
+  page: Page,
+  { name, alias }: (typeof dashboardModelCases)[number],
+) {
+  if (alias) {
+    await grantDashboardModelDiscovery(page);
+    await page.reload();
+  }
+  await page.getByRole("heading", { name, level: 1, exact: true }).waitFor();
+  await page
+    .getByRole("region", { name: "Current deployment" })
+    .getByRole("link", {
+      name: alias ? `Open in Playground for ${alias}` : "View providers",
+      exact: true,
+    })
+    .waitFor();
 }
 
 export const SURFACES: Surface[] = [
@@ -973,6 +995,26 @@ export const SURFACES: Surface[] = [
         .waitFor();
     },
   })),
+  ...dashboardModelCases.map((model): Surface => ({
+    id: `dashboard-model-${model.brand}`,
+    route: `/dashboard/models/${model.brand}`,
+    fixture: model.alias
+      ? `gateway alias ${model.alias} listed by Playground`
+      : "no matching provider in the gateway",
+    description: `The ${model.name} overview, upstream identifier, pricing and current deployment.`,
+    setup: (page) => settledDashboardModel(page, model),
+  })),
+  {
+    id: "dashboard-model-minimax-mobile",
+    route: "/dashboard/models/minimax",
+    fixture: "MiniMax CN and the minimax-m3 alias on a 390px viewport",
+    description:
+      "The model reference and its active gateway routes on a narrow screen.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await settledDashboardModel(page, dashboardModelCases[3]);
+    },
+  },
   // ---- resource lists --------------------------------------------------
   {
     id: "agents-list",

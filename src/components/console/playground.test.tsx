@@ -2,8 +2,10 @@ import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TEST_SESSION } from "@/../test/session-fixture";
+import PlaygroundPage from "@/app/(console)/playground/page";
 import {
   ConsoleSessionContext,
   type useConsoleSession,
@@ -19,31 +21,158 @@ const reply: gateway.PlaygroundReply = {
   durationMs: 425,
 };
 
-function renderPlayground(
+function renderPlayground({
   access = true,
   client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   }),
-) {
-  return render(
-    <QueryClientProvider client={client}>
-      <ConsoleSessionContext.Provider
-        value={
-          {
-            data: { ...TEST_SESSION, playground_access: access },
-          } as ReturnType<typeof useConsoleSession>
-        }
-      >
-        <Playground />
-      </ConsoleSessionContext.Provider>
-    </QueryClientProvider>,
-  );
+  page = <Playground />,
+}: {
+  access?: boolean;
+  client?: QueryClient;
+  page?: ReactElement;
+} = {}) {
+  return render(page, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>
+        <ConsoleSessionContext.Provider
+          value={
+            {
+              data: { ...TEST_SESSION, playground_access: access },
+            } as ReturnType<typeof useConsoleSession>
+          }
+        >
+          {children}
+        </ConsoleSessionContext.Provider>
+      </QueryClientProvider>
+    ),
+  });
+}
+
+function linkedPage(model?: string | string[]) {
+  return PlaygroundPage({ searchParams: Promise.resolve({ model }) });
 }
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("preselects the linked chat alias, respects manual changes, and keeps the draft across subsequent links", async () => {
+  const pending = Promise.withResolvers<gateway.PlaygroundModel[]>();
+  vi.spyOn(gateway, "playgroundModels").mockReturnValue(pending.promise);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  const models = [
+    { id: "general", display_name: "General" },
+    { id: "ops/flash+v4", display_name: "Flash" },
+    { id: "manual", display_name: "Manual" },
+    { id: "another", display_name: "Another" },
+  ];
+  const client = new QueryClient();
+  const user = userEvent.setup();
+  const view = renderPlayground({
+    client,
+    page: await linkedPage(["ops/flash+v4", "another"]),
+  });
+  const select = screen.getByRole("combobox", { name: "Model" });
+  expect(select).toHaveAttribute("data-model", "");
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
+  await act(async () => pending.resolve(models));
+  expect(await screen.findByText("Flash", { exact: true })).toBeVisible();
+  expect(select).toHaveAttribute("data-model", "ops/flash+v4");
+  await user.type(screen.getByLabelText("Prompt"), "Keep this draft");
+  await user.click(select);
+  await user.click(await screen.findByRole("option", { name: "Manual" }));
+  await act(async () => {
+    client.setQueryData(
+      ["playground-models", TEST_SESSION.id],
+      [...models].reverse(),
+    );
+  });
+  expect(select).toHaveAttribute("data-model", "manual");
+  view.rerender(await linkedPage("general"));
+  expect(select).toHaveAttribute("data-model", "general");
+  view.rerender(await linkedPage());
+  expect(select).toHaveAttribute("data-model", "another");
+  expect(screen.getByLabelText("Prompt")).toHaveValue("Keep this draft");
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("rejects a linked display name or unknown upstream ID and lets the user choose a real alias", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "ops/flash", display_name: "deepseek-v4-flash" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  const user = userEvent.setup();
+  renderPlayground({ page: await linkedPage("deepseek-v4-flash") });
+  const warning = await screen.findByText(/The linked model is unavailable/);
+  const select = screen.getByRole("combobox", { name: "Model" });
+  expect(select).toHaveTextContent("Select a model");
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(screen.getByLabelText("Request code")).toHaveTextContent(
+    '"model": ""',
+  );
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
+  await user.keyboard("{Control>}{Enter}{/Control}");
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("combobox", { name: "Model" }));
+  await user.click(
+    await screen.findByRole("option", { name: "deepseek-v4-flash" }),
+  );
+  expect(screen.getByRole("combobox", { name: "Model" })).toHaveAttribute(
+    "data-model",
+    "ops/flash",
+  );
+  expect(warning).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Run prompt" })).toBeEnabled();
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("keeps the Platform error and disables a previously available link when the model list fails or the alias disappears", async () => {
+  const models = vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "other", display_name: "Other" },
+    { id: "linked", display_name: "Linked alias" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  const client = new QueryClient();
+  const queryKey = ["playground-models", TEST_SESSION.id];
+  renderPlayground({ client, page: await linkedPage("linked") });
+  await screen.findByText("Linked alias", { exact: true });
+  const button = screen.getByRole("button", { name: "Run prompt" });
+  expect(button).toBeEnabled();
+  models.mockRejectedValueOnce(new Error("Session expired"));
+  await act(() => client.invalidateQueries({ queryKey }));
+  expect(await screen.findByText("Session expired")).toBeVisible();
+  expect(button).toBeDisabled();
+  expect(screen.queryByText(/The linked model is unavailable/)).toBeNull();
+  await act(async () => {
+    client.setQueryData(queryKey, [{ id: "other", display_name: "Other" }]);
+  });
+  expect(
+    await screen.findByText(/The linked model is unavailable/),
+  ).toBeVisible();
+  expect(button).toBeDisabled();
+  await act(async () => {
+    client.setQueryData(queryKey, []);
+  });
+  expect(
+    await screen.findByText("No chat models are configured."),
+  ).toBeVisible();
+  expect(screen.queryByText(/The linked model is unavailable/)).toBeNull();
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("needs Playground admission even when the URL names a model", async () => {
+  const models = vi.spyOn(gateway, "playgroundModels").mockResolvedValue([]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  renderPlayground({ access: false, page: await linkedPage("linked") });
+  expect(
+    screen.getByText(/Ask an administrator to enable Playground access/),
+  ).toBeVisible();
+  expect(screen.queryByRole("combobox", { name: "Model" })).toBeNull();
+  expect(models).not.toHaveBeenCalled();
+  expect(run).not.toHaveBeenCalled();
 });
 
 it("keeps Form and Code on the same Messages request, runs it and restores it from this visit's history", async () => {
@@ -63,7 +192,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   );
   const user = userEvent.setup();
   const client = new QueryClient();
-  renderPlayground(true, client);
+  renderPlayground({ client });
   await screen.findByText("Demo", { exact: true });
   await user.click(screen.getByRole("combobox", { name: "Model" }));
   await user.click(await screen.findByRole("option", { name: "Fast" }));

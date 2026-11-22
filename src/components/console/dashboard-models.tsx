@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import {
   Dialog,
@@ -21,7 +22,11 @@ import {
 import { cn } from "@/lib/utils";
 import { CopyIdButton } from "./copy-id";
 import {
+  dashboardModelPath,
   dashboardModels,
+  modelFeatures,
+  modelPrices,
+  providerPricesChecked,
   type DashboardModel,
 } from "./dashboard-model-catalog";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
@@ -51,22 +56,23 @@ function ModelCard({ model }: { model: DashboardModel }) {
           className="h-14 w-[60px] object-contain"
         />
       </div>
-      <div className="p-4 pt-3">
+      <div className="px-4 py-3">
         <h3
           id={headingId}
           className="text-sm font-medium leading-5 group-hover:underline"
         >
-          <a
-            href={model.docs}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href={dashboardModelPath(model)}
             className="after:absolute after:inset-0 focus-visible:outline-none"
           >
             {model.name}
-          </a>
+          </Link>
         </h3>
+        <p className="mt-1 text-xs leading-4 text-muted-foreground">
+          {model.description}
+        </p>
         <ul className="mt-2 flex flex-wrap gap-1">
-          {model.tags.map((tag) => (
+          {[`${model.contextWindow} context`, ...model.tags].map((tag) => (
             <li
               key={tag}
               className="rounded-full bg-foreground/[0.055] px-2 py-0.5 text-xs leading-4 text-muted-foreground dark:bg-secondary"
@@ -90,19 +96,7 @@ function ComparisonColumn({
   view: ComparisonView;
 }) {
   const [model, setModel] = useState(initial);
-  const rows =
-    view === "Cost"
-      ? [
-          ["Uncached input", model.pricing.uncachedInput],
-          ["Output", model.pricing.output],
-          ["Cached input", model.pricing.cachedInput],
-        ]
-      : [
-          ["Context window", "1M tokens"],
-          ["Max output", model.maxOutput],
-          ["Input", model.inputs],
-          ["Reasoning", model.reasoning],
-        ];
+  const rows = view === "Cost" ? modelPrices(model) : modelFeatures(model);
 
   return (
     <section
@@ -151,15 +145,13 @@ function ComparisonColumn({
           <p className="min-h-[60px] leading-5 text-muted-foreground">
             {model.pricing.terms}
           </p>
-          <a
+          <Link
             className={linkStyle}
-            href={model.pricing.url}
-            target="_blank"
-            rel="noreferrer"
+            href={`${dashboardModelPath(model)}#pricing`}
             aria-label={`View pricing for ${model.name}`}
           >
             View pricing
-          </a>
+          </Link>
         </div>
       ) : (
         <div className="space-y-2 border-t pt-4 text-sm">
@@ -168,15 +160,13 @@ function ComparisonColumn({
             <code className="select-all break-all text-xs">{model.id}</code>
             <CopyIdButton key={model.id} id={model.id} />
           </div>
-          <a
+          <Link
             className={linkStyle}
-            href={model.docs}
-            target="_blank"
-            rel="noreferrer"
+            href={dashboardModelPath(model)}
             aria-label={`Model documentation for ${model.name}`}
           >
             Model documentation
-          </a>
+          </Link>
         </div>
       )}
     </section>
@@ -215,7 +205,7 @@ function Comparison() {
       </div>
       <DialogDescription className="mt-4 text-xs leading-4">
         {view === "Cost"
-          ? "Public provider pricing checked Nov 22, 2026. Your gateway uses its configured rates."
+          ? `Public provider pricing checked ${providerPricesChecked}. Your gateway uses its configured rates.`
           : "Provider model specifications. Use a configured gateway alias for API requests."}
       </DialogDescription>
     </>
