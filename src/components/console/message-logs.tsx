@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -187,43 +187,24 @@ function RequestDetail({ row }: { row: GatewayUsageRow }) {
 export function MessageLogs() {
   const { params, update } = useListFilters();
   const request = params.get("request");
-  const [origin, setOrigin] = useState({
-    seen: request,
-    bookmark: request,
-    navigating: null as string | null,
-  });
-  const query = useMessageLogs(origin.bookmark);
+  const query = useMessageLogs(request);
   const logs = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement>(null);
   const refreshButton = useRef<HTMLButtonElement>(null);
-  const rows = useMemo(
-    () =>
-      query.error ? [] : (query.data?.pages.flatMap((page) => page.rows) ?? []),
-    [query.data, query.error],
-  );
+  const rows = query.rows;
   const index = request
     ? rows.findIndex((row) => row.request_id === request)
     : -1;
   const selected = rows[index];
-  // Internal row switches keep the current query. An unrelated browser bookmark
-  // searches from the head; dismissing returns to the ordinary Load more list.
-  if (origin.seen !== request) {
-    const known = request && (request === origin.navigating || index >= 0);
-    setOrigin({
-      seen: request,
-      bookmark: known ? origin.bookmark : request,
-      navigating: null,
-    });
-  }
   function select(id: string, mode: "push" | "replace" = "push") {
-    setOrigin((current) => ({ ...current, navigating: id }));
+    query.select(id);
     update({ request: id }, mode);
   }
   async function move(direction: "newer" | "older") {
     const href = window.location.href;
     const id = await query.move(direction);
     if (id && window.location.href === href && logs.current)
-      select(id, "replace");
+      update({ request: id }, "replace");
   }
   const close = () => update({ request: null });
   // A different row can open the same inspector. At either end the focused
@@ -346,14 +327,14 @@ export function MessageLogs() {
         />
       )}
       <div className="flex flex-wrap items-center justify-end gap-2 pt-2 text-xs text-muted-foreground">
-        {query.hasNextPage && !origin.bookmark && (
+        {query.hasNextPage && !request && (
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="mr-auto"
             disabled={query.isFetching}
-            onClick={() => void query.move("older")}
+            onClick={() => void query.loadMore()}
           >
             Load more
           </Button>

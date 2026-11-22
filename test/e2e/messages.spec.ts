@@ -345,7 +345,7 @@ test("a failed refresh hides the old log and a later refresh restores it", async
   await expect(page.getByText("Log access withdrawn")).toHaveCount(0);
 });
 
-test("load older Messages and open a request beyond the first displayed page", async ({
+test("load older Messages and keep bookmark neighbors when a new request arrives", async ({
   page,
 }) => {
   const recent = messagesLedger().find(
@@ -371,8 +371,17 @@ test("load older Messages and open a request beyond the first displayed page", a
   await expect(selected).toBeVisible();
   await page.reload();
   await expect(selected).toBeVisible();
+  // A request arrives after the bookmark restores its window. Previous must
+  // still move from request 1 to 2 across the boundary of the older page.
+  rows.unshift({
+    ...recent,
+    id: 52,
+    request_id: "req_page_52",
+    created_at: new Date().toISOString(),
+  });
   const detail = page.getByRole("dialog", { name: "Request details" });
   await detail.getByRole("button", { name: "Previous request" }).click();
+  await expect(page).toHaveURL(/\/messages\/logs\?request=req_page_2$/);
   await expect(
     detail.getByRole("button", { name: "Copy req_page_2", exact: true }),
   ).toBeVisible();

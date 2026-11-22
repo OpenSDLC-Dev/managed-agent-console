@@ -23,9 +23,10 @@ const row = (id: number, changes: Partial<GatewayUsageRow> = {}) => ({
 
 function openQuery(bookmark: string | null = null) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, staleTime: 5_000 } },
   });
-  return renderHook(() => useMessageLogs(bookmark), {
+  return renderHook(({ id }: { id: string | null }) => useMessageLogs(id), {
+    initialProps: { id: bookmark },
     wrapper: ({ children }) => (
       <QueryClientProvider client={client}>
         <ConsoleSessionContext.Provider
@@ -70,10 +71,9 @@ it("reads past agent, other-protocol and older pages and includes the 30-day bou
     );
   vi.stubGlobal("fetch", fetchMock);
   const { result } = openQuery();
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
-  expect(
-    result.current.data?.pages[0].rows.map((request) => request.id),
-  ).toEqual([5, 4]);
+  await waitFor(() =>
+    expect(result.current.rows.map((request) => request.id)).toEqual([5, 4]),
+  );
   expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
     "/admin/v1/usage/requests?limit=1000",
     "/admin/v1/usage/requests?before=6&limit=1000",
@@ -97,41 +97,38 @@ function largeLedger(count: number) {
 it("renders a fifty-request head without reading the rest of a hundred-thousand-row ledger", async () => {
   const fetchMock = largeLedger(100_000);
   const { result } = openQuery();
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  await waitFor(() => expect(result.current.rows).toHaveLength(50));
   expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(result.current.data?.pages[0].rows).toHaveLength(50);
   await act(async () => {
-    await result.current.move("older");
+    await result.current.loadMore();
   });
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toContain("before=99951");
-  await waitFor(() =>
-    expect(result.current.data?.pages.flatMap((p) => p.rows)).toHaveLength(100),
-  );
+  await waitFor(() => expect(result.current.rows).toHaveLength(100));
 });
 
 it("seeks an old bookmark with only one retained window and returns across its numeric boundaries", async () => {
   const fetchMock = largeLedger(2000);
-  const { result } = openQuery("req_51");
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  const { result, rerender } = openQuery("req_51");
+  await waitFor(() => expect(result.current.rows).toHaveLength(50));
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  expect(result.current.data?.pages).toHaveLength(1);
-  const selected = result.current.data!.pages[0];
-  expect(selected.rows).toHaveLength(50);
-  expect(selected.rows.at(-1)?.request_id).toBe("req_51");
-  expect(selected.newer).toHaveLength(38);
+  expect(result.current.rows.at(-1)?.request_id).toBe("req_51");
   await act(async () => {
     expect(await result.current.move("older")).toBe("req_50");
   });
+  expect(result.current.rows.at(-1)?.request_id).toBe("req_51");
+  rerender({ id: "req_50" });
   await waitFor(() =>
-    expect(result.current.data?.pages[0].rows[0].request_id).toBe("req_50"),
+    expect(result.current.rows[0]?.request_id).toBe("req_50"),
   );
-  expect(result.current.data?.pages).toHaveLength(1);
+  await waitFor(() => expect(result.current.isFetching).toBe(false));
+  expect(result.current.rows).toHaveLength(50);
   await act(async () => {
     expect(await result.current.move("newer")).toBe("req_51");
   });
+  rerender({ id: "req_51" });
   await waitFor(() =>
-    expect(result.current.data?.pages[0].rows[0].request_id).toBe("req_100"),
+    expect(result.current.rows[0]?.request_id).toBe("req_100"),
   );
   expect(fetchMock).toHaveBeenCalledTimes(4);
 });
@@ -159,7 +156,7 @@ it("keeps the last visible window when the remaining raw pages contain no direct
     expect(await result.current.move("older")).toBeUndefined();
   });
   await waitFor(() => expect(result.current.hasNextPage).toBe(false));
-  expect(result.current.data?.pages[0].rows).toHaveLength(50);
+  expect(result.current.rows).toHaveLength(50);
 });
 
 it("fails an unfinished read instead of treating a repeated cursor as the end of the logs", async () => {
@@ -168,9 +165,9 @@ it("fails an unfinished read instead of treating a repeated cursor as the end of
   );
   vi.stubGlobal("fetch", fetchMock);
   const { result } = openQuery();
-  await waitFor(() => expect(result.current.isError).toBe(true));
+  await waitFor(() => expect(result.current.error).toBeTruthy());
   expect(result.current.error?.message).toContain("cursor");
-  expect(result.current.data).toBeUndefined();
+  expect(result.current.rows).toHaveLength(0);
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 

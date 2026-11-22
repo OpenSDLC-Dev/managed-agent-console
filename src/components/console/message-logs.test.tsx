@@ -295,6 +295,78 @@ it("keeps an old bookmark and both cross-window drawer moves to at most fifty ta
   expect(table.getAllByRole("row")).toHaveLength(51);
 });
 
+it("keeps the newly selected row when the prior request's older-window read resolves late", async () => {
+  const rows = Array.from({ length: 100 }, (_, i) => row(100 - i));
+  const { user, read } = openLogs(rows, "req_51");
+  const panel = await screen.findByRole("dialog", { name: "Request details" });
+  const table = within(screen.getByRole("table", { name: "Logs" }));
+  let reply!: (response: Response) => void;
+  const delayed = new Promise<Response>((resolve) => {
+    reply = resolve;
+  });
+  read.mockReturnValueOnce(delayed);
+  await user.click(within(panel).getByRole("button", { name: "Next request" }));
+  await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  await user.click(table.getByRole("button", { name: "req_55" }));
+  expect(location.search).toBe("?request=req_55");
+  await act(async () => {
+    reply(Response.json({ data: rows.slice(50), has_more: false }));
+    await delayed;
+  });
+  expect(
+    within(panel).getByRole("button", { name: "Copy req_55" }),
+  ).toBeVisible();
+  expect(table.getByRole("button", { name: "req_55" })).toBeVisible();
+  expect(table.queryByRole("button", { name: "req_50" })).toBeNull();
+  expect(
+    screen.queryByText("Request not found in the last 30 days."),
+  ).toBeNull();
+});
+
+it("revalidates the currently selected request after a newer log arrives and manually refreshes the head", async () => {
+  const rows = Array.from({ length: 100 }, (_, i) => row(100 - i));
+  const { user, client } = openLogs(rows, "req_55");
+  const panel = await screen.findByRole("dialog", { name: "Request details" });
+  const table = within(screen.getByRole("table", { name: "Logs" }));
+  await user.click(table.getByRole("button", { name: "req_51" }));
+  rows.unshift(row(101));
+  await act(async () => {
+    await client.invalidateQueries({
+      queryKey: ["gateway", "usage", "message-logs"],
+    });
+  });
+  expect(location.search).toBe("?request=req_51");
+  expect(
+    within(panel).getByRole("button", { name: "Copy req_51" }),
+  ).toBeVisible();
+  expect(table.getByRole("button", { name: "req_51" })).toBeVisible();
+  expect(
+    screen.queryByText("Request not found in the last 30 days."),
+  ).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(await table.findByRole("button", { name: "req_101" })).toBeVisible();
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("returns to the immediate newer request at the snapshot head boundary despite a concurrent insert", async () => {
+  const rows = Array.from({ length: 100 }, (_, i) => row(100 - i));
+  const { user } = openLogs(rows, "req_50");
+  const panel = await screen.findByRole("dialog", { name: "Request details" });
+  rows.unshift(row(101));
+  await user.click(
+    within(panel).getByRole("button", { name: "Previous request" }),
+  );
+  await waitFor(() => expect(location.search).toBe("?request=req_51"));
+  expect(
+    within(panel).getByRole("button", { name: "Copy req_51" }),
+  ).toBeVisible();
+  const table = within(screen.getByRole("table", { name: "Logs" }));
+  expect(table.queryByRole("button", { name: "req_101" })).toBeNull();
+  expect(table.getAllByRole("row")).toHaveLength(51);
+  await user.click(within(panel).getByRole("button", { name: "Next request" }));
+  await waitFor(() => expect(location.search).toBe("?request=req_50"));
+});
+
 it("keeps the ledger available for a deep link to an expired request", async () => {
   openLogs(
     [
@@ -343,9 +415,10 @@ it("clears the rendered row and inspector when a background refresh revokes acce
       "message-logs",
       TEST_SESSION.id,
       "admin",
+      "request",
       "req_2",
     ]),
-  ).toEqual({ pages: [], pageParams: [] });
+  ).toBeNull();
 });
 
 it("never carries rows across principals, roles, or an unconfirmed session", async () => {
