@@ -734,7 +734,7 @@ test("Add manages system and custom tools separately from message roles", async 
   const add = page.getByRole("button", { name: "Add", exact: true });
   const menu = page.getByRole("menu");
   await add.click();
-  await expect(menu.getByRole("menuitem")).toHaveCount(2);
+  await expect(menu.getByRole("menuitem")).toHaveCount(7);
   await expect(
     menu.getByRole("menuitem", { name: "System prompt Added" }),
   ).toBeDisabled();
@@ -816,7 +816,7 @@ test("select both client tool templates, inspect their schemas and edit without 
   const cards = main
     .getByRole("region", { name: "Response" })
     .getByRole("list");
-  await expect(cards.getByRole("button")).toHaveCount(2);
+  await expect(cards.getByRole("button")).toHaveCount(6);
   await expect(cards.getByText("Custom tools", { exact: true })).toHaveCount(2);
   const stream = cards.getByRole("button", {
     name: "Stream tool arguments live",

@@ -12,6 +12,11 @@ import {
   MOCK_ACCOUNT,
 } from "./native-auth.mjs";
 import { isUtf8 } from "node:buffer";
+import {
+  fixtureModelList,
+  replayToolReply,
+  replayToolStream,
+} from "./playground-tools.mjs";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -2760,6 +2765,41 @@ const server = createServer(async (req, res) => {
     });
     res.flushHeaders();
     return;
+  }
+
+  if (process.env.MOCK_PLAYGROUND_REPLAY === "1" && privateRequest) {
+    if (url.pathname === "/v1/models" && req.method === "GET") {
+      res
+        .writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify(fixtureModelList()));
+      return;
+    }
+    if (url.pathname === "/v1/messages" && req.method === "POST") {
+      let body;
+      let reply;
+      try {
+        body = JSON.parse(await readBody(req));
+        if (
+          !body ||
+          typeof body.model !== "string" ||
+          !Array.isArray(body.messages) ||
+          (body.tools !== undefined && !Array.isArray(body.tools))
+        ) {
+          throw new Error("Invalid replay request");
+        }
+        reply = replayToolReply(body);
+      } catch {
+        res
+          .writeHead(400, { "content-type": "application/json" })
+          .end(envelope("invalid_request_error", "Invalid request JSON"));
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": body.stream ? "text/event-stream" : "application/json",
+      });
+      res.end(body.stream ? replayToolStream(reply) : JSON.stringify(reply));
+      return;
+    }
   }
 
   // A deployment that does not serve some surfaces. The platform has no 501:

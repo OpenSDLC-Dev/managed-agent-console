@@ -40,6 +40,8 @@ import {
   type PlaygroundTemplate,
 } from "./playground-templates";
 import { PlaygroundPanes } from "./playground-panes";
+import { switchPlaygroundModel } from "./playground-tool-presets";
+import { newToolResults } from "./playground-tool-calls";
 import {
   PlaygroundResponse,
   previewToolInput,
@@ -105,12 +107,14 @@ function PlaygroundForm({
 }) {
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
+  const [newRequests, setNewRequests] = useState(0);
   const [expandedTool, setExpandedTool] = useState<number | null>(null);
   const [template, setTemplate] = useState<{
     title: string;
     draft: PlaygroundDraft;
   }>();
   const [previousAlias, setPreviousAlias] = useState(requestedAlias);
+  const [modelChangeError, setModelChangeError] = useState<string>();
   const [mode, setMode] = useState<"Form" | "Code" | "Full request">("Form");
   const [language, setLanguage] = useState<CodeLanguage>("cURL");
   const [code, setCode] = useState<{ text: string; error?: string }>();
@@ -172,18 +176,32 @@ function PlaygroundForm({
     };
   }, [historyOpen]);
 
+  const chatModels = models.isError ? undefined : models.data;
   // A query-only navigation can reuse this form. Keep its prompt and history.
   if (previousAlias !== requestedAlias) {
     setPreviousAlias(requestedAlias);
-    if (draft.selection) setDraft({ ...draft, selection: "" });
+    const previous =
+      draft.selection || previousAlias || chatModels?.[0]?.id || "";
+    const next = switchPlaygroundModel(
+      { ...draft, selection: "" },
+      previous,
+      requestedAlias || chatModels?.[0]?.id || "",
+    );
+    if (typeof next === "string") {
+      setDraft({ ...draft, selection: previous });
+      setModelChangeError(next);
+    } else {
+      setDraft(next);
+      setModelChangeError(undefined);
+    }
     if (code && !code.error) setCode(undefined);
   }
-  const chatModels = models.isError ? undefined : models.data;
   const initialModel = requestedAlias
     ? chatModels?.find((entry) => entry.id === requestedAlias)
     : chatModels?.[0];
   const model = draft.selection || initialModel?.id || "";
-  const available = chatModels?.some((entry) => entry.id === model) === true;
+  const selectedModel = chatModels?.find((entry) => entry.id === model);
+  const available = selectedModel !== undefined;
   const running = status === "running";
   const modifier =
     typeof navigator !== "undefined" &&
@@ -206,6 +224,7 @@ function PlaygroundForm({
   const codeLanguage = mode === "Full request" ? "JSON" : language;
   function editCode(text: string) {
     setShowCodeError(false);
+    setModelChangeError(undefined);
     try {
       const next = readSnippet(text, codeLanguage, draft);
       setDraft(next);
@@ -237,6 +256,7 @@ function PlaygroundForm({
   }
   function reset(preset?: PlaygroundTemplate) {
     if (!codeReady()) return;
+    setModelChangeError(undefined);
     const next = newDraft();
     next.selection = preset || available ? model : "";
     if (preset) {
@@ -250,7 +270,7 @@ function PlaygroundForm({
         tools: structuredClone(preset.tools),
       };
       delete next.parameters.tool_choice;
-    }
+    } else setNewRequests((previous) => previous + 1);
     setExpandedTool(null);
     setTemplate(preset ? { title: preset.title, draft: next } : undefined);
     setDraft(next);
@@ -270,12 +290,12 @@ function PlaygroundForm({
     const id = draft.messages[draft.messages.length - 1].id + 1;
     const messages = draft.messages.filter(hasMessageContent);
     const last = messages.at(-1);
+    let content = blocks;
     // Messages continues a final assistant prefill in the same turn.
     if (last?.role === "assistant") {
       const first = blocks[0];
       // A plain text delta continues its prefill. Annotated blocks retain
       // their boundaries, text offsets, signatures and tool inputs.
-      let content = blocks;
       if (
         typeof last.content === "string" &&
         first.type === "text" &&
@@ -294,11 +314,15 @@ function PlaygroundForm({
         content = [...prefix, ...blocks];
       }
       messages[messages.length - 1] = { ...last, content };
-    } else messages.push({ id, role: "assistant", content: blocks });
+    } else messages.push({ id, role: "assistant", content });
+    const results = newToolResults(content);
     nextFocusId.current = `playground-message-${id + 1}`;
     setDraft({
       ...draft,
-      messages: [...messages, { id: id + 1, role: "user", content: "" }],
+      messages: [
+        ...messages,
+        { id: id + 1, role: "user", content: results.length ? results : "" },
+      ],
     });
     setMode("Form");
     setCode(undefined);
@@ -486,7 +510,20 @@ function PlaygroundForm({
                   setMode("Full request");
                 }}
                 onChange={(next) => {
-                  setDraft(next);
+                  const result =
+                    next.selection === draft.selection
+                      ? next
+                      : switchPlaygroundModel(
+                          next,
+                          model,
+                          next.selection || initialModel?.id || "",
+                        );
+                  if (typeof result === "string") {
+                    setModelChangeError(result);
+                    return;
+                  }
+                  setModelChangeError(undefined);
+                  setDraft(result);
                   setCode(undefined);
                 }}
               />
@@ -534,6 +571,11 @@ function PlaygroundForm({
                 Set Max tokens to at least {budgetCorrection.toLocaleString()}{" "}
                 in Model settings for this thinking budget, or edit the request
                 in Code.
+              </p>
+            )}
+            {modelChangeError && (
+              <p role="alert" className="text-sm text-destructive">
+                {modelChangeError}
               </p>
             )}
             {error && status !== "failed" && (
@@ -607,6 +649,8 @@ function PlaygroundForm({
                 </div>
               ) : (
                 <PlaygroundTemplates
+                  key={`${model}:${newRequests}`}
+                  model={selectedModel}
                   selected={selectedTemplate}
                   onSelect={reset}
                 />

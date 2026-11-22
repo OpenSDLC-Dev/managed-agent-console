@@ -23,8 +23,14 @@ import { Label } from "@/components/ui/label";
 import { SchemaTextarea } from "./schema-textarea";
 import type { PlaygroundDraft } from "./playground-editor";
 import { isObject } from "./playground-snippet";
+import {
+  matchesToolPreset,
+  presetActions,
+  withPresetAction,
+  type PlaygroundToolPreset,
+} from "./playground-tool-presets";
 
-function toolName(tool: unknown) {
+export function toolName(tool: unknown) {
   return isObject(tool) && typeof tool.name === "string" ? tool.name : "";
 }
 
@@ -54,6 +60,16 @@ export function addCustomTool(draft: PlaygroundDraft): PlaygroundDraft {
       required: ["location"],
     },
   };
+  return prependTool(draft, tool);
+}
+
+export function prependTool(
+  draft: PlaygroundDraft,
+  tool: Record<string, unknown>,
+): PlaygroundDraft {
+  const tools: unknown[] = Array.isArray(draft.parameters?.tools)
+    ? draft.parameters.tools
+    : [];
   return {
     ...draft,
     toolSchemas: draft.toolSchemas && [undefined, ...draft.toolSchemas],
@@ -128,12 +144,14 @@ function ChoiceMenu({
 
 export function PlaygroundTools({
   draft,
+  presets,
   onChange,
   expanded,
   onExpand,
   onEditFullRequest,
 }: {
   draft: PlaygroundDraft;
+  presets: PlaygroundToolPreset[];
   onChange: (next: PlaygroundDraft) => void;
   expanded: number | null;
   onExpand: (index: number | null) => void;
@@ -144,6 +162,11 @@ export function PlaygroundTools({
     : [];
   if (!tools.length) return null;
   const choice = draft.parameters?.tool_choice;
+  const hosted = (tool: unknown) =>
+    presets.some(
+      (preset) =>
+        Boolean(preset.definition.type) && matchesToolPreset(tool, preset),
+    );
   function update(
     index: number,
     changes: Record<string, unknown>,
@@ -221,7 +244,14 @@ export function PlaygroundTools({
         </h3>
         <ChoiceMenu
           choice={choice}
-          names={Array.from(new Set(tools.map(toolName).filter(Boolean)))}
+          names={Array.from(
+            new Set(
+              tools
+                .filter((tool) => !hosted(tool))
+                .map(toolName)
+                .filter(Boolean),
+            ),
+          )}
           onChange={(next) => {
             const previous = isObject(choice) ? { ...choice } : {};
             delete previous.name;
@@ -238,13 +268,22 @@ export function PlaygroundTools({
       </div>
       {tools.map((tool, index) => {
         const name = toolName(tool) || `Tool ${index + 1}`;
+        const preset = presets.find((candidate) =>
+          matchesToolPreset(tool, candidate),
+        );
+        const Icon = preset?.icon ?? Wrench;
+        const actions = presetActions(tool);
         const open = expanded === index;
         const prefix = `playground-tool-${index}`;
         const edit = draft.toolSchemas?.[index];
         const custom =
           isObject(tool) && (tool.type == null || tool.type === "custom");
         return (
-          <div key={index} className="overflow-hidden rounded-lg border">
+          <div
+            key={index}
+            data-tool-preset={preset?.id}
+            className="overflow-hidden rounded-lg border"
+          >
             <div className="flex items-center gap-2 bg-muted/50 px-2 py-1">
               <button
                 id={`${prefix}-toggle`}
@@ -257,8 +296,8 @@ export function PlaygroundTools({
                 <ChevronRight
                   className={open ? "size-3 rotate-90" : "size-3"}
                 />
-                <Wrench className="size-3.5 text-muted-foreground" />
-                <span className="truncate">{name}</span>
+                <Icon className="size-3.5 text-muted-foreground" />
+                <span className="truncate font-mono">{name}</span>
               </button>
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -287,7 +326,50 @@ export function PlaygroundTools({
               hidden={!open}
               className="space-y-3 px-3 py-3"
             >
-              {custom ? (
+              {preset && isObject(tool) ? (
+                <>
+                  <p className="text-xs text-muted-foreground">{preset.help}</p>
+                  {actions &&
+                    preset.options?.map((option) => (
+                      <div
+                        key={option.action}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <Label htmlFor={`${prefix}-${option.action}`}>
+                            {option.label}
+                          </Label>
+                          <p
+                            id={`${prefix}-${option.action}-hint`}
+                            className="mt-1 text-xs text-muted-foreground"
+                          >
+                            {option.description}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          id={`${prefix}-${option.action}`}
+                          aria-describedby={`${prefix}-${option.action}-hint`}
+                          aria-checked={actions.includes(option.action)}
+                          onClick={() =>
+                            update(
+                              index,
+                              withPresetAction(
+                                tool,
+                                option,
+                                !actions.includes(option.action),
+                              ),
+                            )
+                          }
+                          className="group inline-flex h-5 w-9 shrink-0 items-center rounded-full bg-muted-foreground/40 p-0.5 focus-visible:outline-2 focus-visible:outline-ring aria-checked:bg-[#487dcc]"
+                        >
+                          <span className="size-4 rounded-full bg-white shadow-sm transition-transform group-aria-checked:translate-x-4" />
+                        </button>
+                      </div>
+                    ))}
+                </>
+              ) : custom ? (
                 <>
                   <p className="text-xs text-muted-foreground">
                     The model calls this tool with arguments matching the

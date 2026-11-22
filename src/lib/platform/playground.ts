@@ -17,6 +17,7 @@ export type PlaygroundModel = {
   display_name: string;
   max_tokens?: number;
   capabilities?: {
+    image_input?: { supported?: boolean };
     thinking?: {
       supported?: boolean;
       types?: {

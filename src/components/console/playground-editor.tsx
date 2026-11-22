@@ -14,13 +14,20 @@ import {
   PlaygroundModelSelect,
   PlaygroundSettings,
 } from "./playground-settings";
-import { addCustomTool, PlaygroundTools } from "./playground-tools";
+import {
+  addCustomTool,
+  PlaygroundTools,
+  prependTool,
+  toolName,
+} from "./playground-tools";
+import { availablePlaygroundTools } from "./playground-tool-presets";
 import type {
   PlaygroundMessage,
   PlaygroundContent,
   PlaygroundModel,
   PlaygroundRequest,
 } from "@/lib/platform/playground";
+import { readToolResultTurn, ToolResultFields } from "./playground-tool-calls";
 
 export type PlaygroundDraft = {
   selection: string;
@@ -61,6 +68,8 @@ function ContentField({
   placeholder,
   onChange,
   onEditBlocks,
+  preceding,
+  acceptsImages = false,
 }: {
   id: string;
   label?: string;
@@ -68,7 +77,21 @@ function ContentField({
   placeholder: string;
   onChange: (value: PlaygroundContent) => void;
   onEditBlocks: (triggerId: string) => void;
+  preceding?: PlaygroundContent;
+  acceptsImages?: boolean;
 }) {
+  const toolTurn = preceding !== undefined && readToolResultTurn(content);
+  if (preceding !== undefined && toolTurn)
+    return (
+      <ToolResultFields
+        id={id}
+        turn={toolTurn}
+        preceding={preceding}
+        acceptsImages={acceptsImages}
+        onChange={onChange}
+        onEdit={onEditBlocks}
+      />
+    );
   if (typeof content === "string")
     return (
       <textarea
@@ -148,6 +171,10 @@ export function PlaygroundEditor({
 }) {
   const { system, messages } = draft;
   const modelProps = { models, model, loading, running };
+  const selectedModel = models.find((entry) => entry.id === model);
+  const presets = availablePlaygroundTools(selectedModel);
+  const tools = draft.parameters?.tools;
+  const names = new Set(Array.isArray(tools) ? tools.map(toolName) : []);
   const patch = (change: Partial<PlaygroundDraft>) =>
     onChange({ ...draft, ...change });
   function addMessage(role: PlaygroundMessage["role"]) {
@@ -208,6 +235,27 @@ export function PlaygroundEditor({
                   <Wrench />
                   Custom tool
                 </DropdownMenuItem>
+                {presets.map(({ id, icon: Icon, label, definition }) => {
+                  const added = names.has(definition.name);
+                  return (
+                    <DropdownMenuItem
+                      key={id}
+                      disabled={added}
+                      data-tool-kind={id}
+                      onClick={() => {
+                        onExpandTool(0);
+                        onChange(prependTool(draft, definition));
+                      }}
+                    >
+                      <Icon /> {label}
+                      {added && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          Added
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })}
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -234,6 +282,7 @@ export function PlaygroundEditor({
       </div>
       <PlaygroundTools
         draft={draft}
+        presets={presets}
         onChange={onChange}
         expanded={expandedTool}
         onExpand={onExpandTool}
@@ -296,6 +345,15 @@ export function PlaygroundEditor({
                 id={`playground-message-${message.id}`}
                 label={i === 0 ? "Prompt" : `${message.role} message ${i + 1}`}
                 content={message.content}
+                acceptsImages={
+                  selectedModel?.capabilities?.image_input?.supported === true
+                }
+                preceding={
+                  message.role === "user" &&
+                  messages[i - 1]?.role === "assistant"
+                    ? messages[i - 1].content
+                    : undefined
+                }
                 onEditBlocks={onEditFullRequest}
                 placeholder={
                   message.role === "user"

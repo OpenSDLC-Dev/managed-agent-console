@@ -82,6 +82,7 @@ export async function grantDashboardModelDiscovery(
         max_tokens:
           name === unreportedLimitFor ? 0 : (capabilities?.max_tokens ?? 0),
         capabilities: {
+          image_input: { supported: capabilities?.vision === true },
           thinking: {
             supported: thinking,
             types: {

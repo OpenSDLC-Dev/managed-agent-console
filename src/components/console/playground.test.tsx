@@ -328,6 +328,58 @@ it("continues a final assistant prefill in the same message", async () => {
   expect(screen.getByLabelText("user message 3")).toHaveValue("");
 });
 
+it("correlates outstanding client calls from an assistant prefill and its completion", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const prefill = {
+    type: "tool_use",
+    name: "original",
+    id: "first",
+    input: {},
+  };
+  const completed = { type: "tool_use", name: "next", id: "second", input: {} };
+  vi.spyOn(gateway, "runPlayground").mockResolvedValue({
+    ...reply,
+    content: [completed],
+  });
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  fireEvent.change(codeEditor(), {
+    target: {
+      value: JSON.stringify({
+        ...JSON.parse(codeEditor().value),
+        messages: [
+          { role: "user", content: "Check both" },
+          { role: "assistant", content: [prefill] },
+        ],
+      }),
+    },
+  });
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Add to messages" }),
+  );
+  expect(
+    screen.getByRole("textbox", { name: "Tool result original" }),
+  ).toHaveFocus();
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value).messages.slice(1)).toEqual([
+    { role: "assistant", content: [prefill, completed] },
+    {
+      role: "user",
+      content: [
+        { type: "tool_result", tool_use_id: "first", content: "" },
+        { type: "tool_result", tool_use_id: "second", content: "" },
+      ],
+    },
+  ]);
+});
+
 it("runs edits from cURL and JSON in the selected streaming mode and carries the same fields back into Form", async () => {
   vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
     { id: "demo", display_name: "Demo" },
@@ -584,7 +636,17 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
           {
             type: "tool_result",
             tool_use_id: "tool_a",
-            content: [{ type: "text", text: "Found" }],
+            content: [
+              { type: "text", text: "Found" },
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: "image/png",
+                  data: "aW1hZ2U=",
+                },
+              },
+            ],
           },
         ],
       },
@@ -648,15 +710,37 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
     expect.any(Function),
     expect.any(Function),
   );
-  await user.click(
-    await screen.findByRole("button", { name: "View content blocks in Raw" }),
-  );
+  const call = await screen.findByRole("button", { name: "Tool use lookup" });
+  expect(call).toHaveAttribute("aria-expanded", "true");
+  expect(
+    JSON.parse(screen.getByLabelText("Arguments for lookup").textContent!),
+  ).toEqual(tool.input);
+  await user.click(screen.getByLabelText("Raw", { exact: true }));
   expect(screen.getByLabelText("Response body")).toHaveTextContent(result.raw);
   await user.click(screen.getByRole("button", { name: "Add to messages" }));
+  const output = screen.getByRole("textbox", { name: /Tool result lookup/ });
+  expect(output).toHaveFocus();
+  expect(
+    screen.queryByRole("button", { name: "Attach image for lookup" }),
+  ).toBeNull();
+  await user.type(output, "Both cities found.");
   await user.click(screen.getByLabelText("Code", { exact: true }));
   expect(JSON.parse(codeEditor().value)).toEqual({
     ...body,
-    messages: [...body.messages, { role: "assistant", content: [tool] }],
+    messages: [
+      ...body.messages,
+      { role: "assistant", content: [tool] },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: tool.id,
+            content: "Both cities found.",
+          },
+        ],
+      },
+    ],
   });
   await user.click(screen.getByRole("button", { name: "History" }));
   await user.click(
@@ -668,6 +752,201 @@ it("preserves nested Messages blocks through Form, Code, the sent body, a tool-o
   await user.click(screen.getByRole("button", { name: "Close history" }));
   await user.click(screen.getByLabelText("Code", { exact: true }));
   expect(JSON.parse(codeEditor().value)).toEqual(body);
+});
+
+it("preserves mixed assistant blocks and returns parallel client results in call order", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    {
+      id: "demo",
+      display_name: "Demo",
+      capabilities: { image_input: { supported: true } },
+    },
+  ]);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const calls = [
+    { type: "tool_use", id: "c1", name: "bash", input: { command: "pwd" } },
+    {
+      type: "tool_use",
+      id: "c2",
+      name: "computer",
+      input: { action: "screenshot" },
+    },
+    {
+      type: "tool_use",
+      id: "c3",
+      name: "browser",
+      toolset_name: "browser",
+      input: { action: "view" },
+    },
+    { type: "tool_use", id: "c4", name: "lookup", input: { city: "Paris" } },
+    { type: "tool_use", id: "c5", name: "lookup", input: { city: "Tokyo" } },
+  ];
+  const blocks = [
+    { type: "thinking", thinking: "Consider locations", signature: "signed" },
+    { type: "text", text: "First lookups" },
+    ...calls.slice(0, 2),
+    {
+      type: "server_tool_use",
+      id: "server1",
+      name: "web_search",
+      input: { query: "Paris" },
+    },
+    {
+      type: "web_search_tool_result",
+      tool_use_id: "server1",
+      content: [
+        {
+          type: "web_search_result",
+          title: "Paris",
+          url: "https://example.com/paris",
+        },
+      ],
+    },
+    { type: "text", text: "Other lookups" },
+    ...calls.slice(2),
+  ];
+  const run = vi
+    .spyOn(gateway, "runPlayground")
+    .mockResolvedValueOnce({
+      ...reply,
+      content: blocks,
+      raw: JSON.stringify({ content: blocks }),
+    })
+    .mockResolvedValue(reply);
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "Check these cities");
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  const response = within(screen.getByRole("region", { name: "Response" }));
+  const cards = await response.findAllByRole("button", { name: /^Tool use / });
+  expect(cards).toHaveLength(5);
+  expect(
+    response.queryByRole("button", { name: "Tool use web_search" }),
+  ).toBeNull();
+  expect(
+    response.getByRole("button", { name: "Server tool use web_search" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  expect(
+    response.getByRole("button", { name: "Server tool result web_search" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  expect(
+    JSON.parse(response.getByLabelText("Result for web_search").textContent!),
+  ).toEqual([
+    {
+      type: "web_search_result",
+      title: "Paris",
+      url: "https://example.com/paris",
+    },
+  ]);
+  for (const [at, card] of cards.entries()) {
+    expect(card).toHaveAttribute("aria-expanded", "true");
+    const panel = document.getElementById(card.getAttribute("aria-controls")!)!;
+    expect(
+      JSON.parse(
+        within(panel).getByLabelText(`Arguments for ${calls[at].name}`)
+          .textContent!,
+      ),
+    ).toEqual(calls[at].input);
+    card.focus();
+    await user.keyboard("{Enter}");
+    expect(panel).not.toBeVisible();
+  }
+  expect(
+    response.getByText("First lookups").compareDocumentPosition(cards[0]) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    cards[1].compareDocumentPosition(response.getByText("Other lookups")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  await user.keyboard("{Control>}{Shift>}{Enter}{/Shift}{/Control}");
+  const fields = screen.getAllByRole("textbox", { name: /Tool result / });
+  expect(fields).toHaveLength(5);
+  expect(fields[0]).toHaveFocus();
+  for (const [index, field] of fields.entries()) {
+    expect(field).toHaveAccessibleDescription(calls[index].id);
+    await user.type(field, "Manual result " + (index + 1));
+  }
+  await user.click(
+    screen.getByRole("checkbox", { name: "Mark computer result as an error" }),
+  );
+  async function attach() {
+    await user.click(
+      screen.getByRole("button", { name: "Attach image for computer" }),
+    );
+    const dialog = within(screen.getByRole("dialog", { name: "Attach image" }));
+    const useFile = dialog.getByRole("button", { name: "Attach" });
+    expect(useFile).toBeDisabled();
+    await user.click(dialog.getByLabelText("Image file"));
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(run).toHaveBeenCalledTimes(1);
+    await user.upload(
+      dialog.getByLabelText("Image file"),
+      new File(["image bytes"], "screen.png", { type: "image/png" }),
+    );
+    await waitFor(() => expect(useFile).toBeEnabled());
+    await user.click(useFile);
+  }
+  await attach();
+  await user.click(screen.getByRole("button", { name: "Remove screen.png" }));
+  expect(
+    screen.queryByRole("button", { name: "Remove screen.png" }),
+  ).toBeNull();
+  await attach();
+  await user.type(
+    screen.getByRole("textbox", { name: "Additional user message" }),
+    "Please check the screen.",
+  );
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  expect(codeEditor().value).toContain("aW1hZ2UgYnl0ZXM=");
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  expect(
+    screen.getByRole("button", { name: "Remove screen.png" }),
+  ).toBeVisible();
+  expect(run).toHaveBeenCalledTimes(1);
+  await user.keyboard("{Control>}{Enter}{/Control}");
+  expect(run.mock.calls[1][0].messages).toEqual([
+    { role: "user", content: "Check these cities" },
+    { role: "assistant", content: blocks },
+    {
+      role: "user",
+      content: [
+        ...calls.map((call, index) => ({
+          type: "tool_result",
+          tool_use_id: call.id,
+          content: "Manual result " + (index + 1),
+          ...(index === 1 && { is_error: true }),
+          ...(call.toolset_name && { toolset_name: call.toolset_name }),
+        })),
+        { type: "text", text: "Image for tool use c2: screen.png" },
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/png",
+            data: "aW1hZ2UgYnl0ZXM=",
+          },
+        },
+        { type: "text", text: "Please check the screen." },
+      ],
+    },
+  ]);
+  await user.click(screen.getByRole("button", { name: "New" }));
+  expect(screen.queryByRole("textbox", { name: /Tool result / })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "History" }));
+  const history = within(screen.getByRole("region", { name: "History" }));
+  await user.click(
+    history.getAllByRole("button", { name: /Check these cities/ })[0],
+  );
+  await user.click(history.getByRole("button", { name: "Close history" }));
+  expect(
+    screen.getByRole("textbox", { name: /Tool result computer/ }),
+  ).toHaveValue("Manual result 2");
+  expect(
+    screen.getByRole("button", { name: "Remove screen.png" }),
+  ).toBeVisible();
 });
 
 it("loads supported tool templates into Form and Code without changing the model or sending a request", async () => {
@@ -694,10 +973,8 @@ it("loads supported tool templates into Form and Code without changing the model
   const parallel = screen.getByRole("button", {
     name: "Call tools in parallel",
   });
-  expect(within(screen.getByRole("list")).getAllByRole("button")).toEqual([
-    streaming,
-    parallel,
-  ]);
+  const cards = within(screen.getByRole("list")).getAllByRole("button");
+  expect(cards.indexOf(streaming)).toBeLessThan(cards.indexOf(parallel));
   await user.click(screen.getByLabelText("Code", { exact: true }));
   await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
   fireEvent.change(codeEditor(), {
