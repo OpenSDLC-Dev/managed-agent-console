@@ -5,6 +5,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
+import { replaceEqualDeep } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,13 +43,9 @@ export function remapExpandedTools(
 ) {
   if (!open.length) return open;
   if (!Array.isArray(before) || !Array.isArray(after)) return [];
+  if (replaceEqualDeep(before, after) === before) return open;
   const oldNames = before.map(toolName);
   const newNames = after.map(toolName);
-  if (
-    oldNames.length === newNames.length &&
-    oldNames.every((name, index) => name === newNames[index])
-  )
-    return open;
   return open.flatMap((oldIndex) => {
     const name = oldNames[oldIndex];
     const index = newNames.indexOf(name);

@@ -16,6 +16,7 @@ import {
 } from "@/components/shell/console-session";
 import * as gateway from "@/lib/platform/playground";
 import { Playground } from "./playground";
+import { remapExpandedTools } from "./playground-tools";
 
 const models = [
   {
@@ -406,6 +407,19 @@ it("prepends and expands every new custom tool, keeping existing tool edits atta
       { name: "make_file", input_schema: { type: "object" } },
     ],
   });
+});
+
+it("preserves unique expanded cards when imported tools with duplicate names swap places", () => {
+  const first = { name: "fetch", description: "A" };
+  const second = { name: "fetch", description: "B" };
+  const unique = { name: "other" };
+  const original = [first, second, unique];
+  expect(
+    remapExpandedTools([0, 2], original, structuredClone(original)),
+  ).toEqual([0, 2]);
+  expect(remapExpandedTools([0, 2], original, [second, first, unique])).toEqual(
+    [2],
+  );
 });
 
 it("keeps expanded cards on their tools when Code removes or reorders declarations", async () => {
