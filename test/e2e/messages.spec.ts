@@ -739,6 +739,7 @@ test("Add manages system and custom tools separately from message roles", async 
     menu.getByRole("menuitem", { name: "System prompt Added" }),
   ).toBeDisabled();
   await page.keyboard.press("Escape");
+  await expect(add).toBeFocused();
   const system = page.getByRole("textbox", { name: "System", exact: true });
   await page.getByRole("button", { name: "Remove system prompt" }).click();
   await expect(system).toHaveCount(0);

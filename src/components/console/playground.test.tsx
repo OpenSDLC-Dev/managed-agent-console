@@ -6,6 +6,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -487,8 +488,10 @@ it("keeps message roles and edits when removing and restoring System, then runs 
   await user.type(screen.getByLabelText("Prompt"), "A question");
   const more = screen.getByRole("button", { name: "More message options" });
   await user.click(more);
+  const menu = await screen.findByRole("menu");
+  await waitFor(() => expect(menu).toContainElement(document.activeElement));
   await user.keyboard("{Escape}");
-  expect(more).toHaveFocus();
+  await waitFor(() => expect(more).toHaveFocus());
   await user.keyboard("{ArrowDown}");
   await user.click(
     await screen.findByRole("menuitem", { name: "Add user message" }),
