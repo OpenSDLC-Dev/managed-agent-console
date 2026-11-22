@@ -10,10 +10,18 @@ import { AGENT_TEMPLATES } from "@/lib/agent-config/templates";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { cn } from "@/lib/utils";
 
-export function AgentCreateForm({ onCancel }: { onCancel?: () => void }) {
+export function AgentCreateForm({
+  onCancel,
+  initialModel,
+}: {
+  onCancel?: () => void;
+  initialModel?: string;
+}) {
   const leave = useLeaveConfirmation();
   const [template, setTemplate] = useState("blank");
   const chosen = AGENT_TEMPLATES.find((t) => t.key === template);
+  const initial = chosen ? formFromConfig(chosen.config) : newAgentForm();
+  if (initialModel) initial.modelId = initialModel;
 
   return (
     <div>
@@ -22,7 +30,7 @@ export function AgentCreateForm({ onCancel }: { onCancel?: () => void }) {
           {
             key: "blank",
             title: "Blank",
-            description: "All tools enabled, nothing prefilled.",
+            description: "All tools enabled, no starter instructions.",
           },
           ...AGENT_TEMPLATES,
         ].map((t) => (
@@ -49,7 +57,7 @@ export function AgentCreateForm({ onCancel }: { onCancel?: () => void }) {
       <AgentEditor
         key={template}
         mode="create"
-        initial={chosen ? formFromConfig(chosen.config) : newAgentForm()}
+        initial={initial}
         onCancel={onCancel}
       />
     </div>

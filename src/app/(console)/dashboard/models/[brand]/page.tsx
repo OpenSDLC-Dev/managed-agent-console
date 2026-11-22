@@ -8,6 +8,7 @@ import {
   dashboardModelPath,
   dashboardModels,
   modelFeatures,
+  modelPricingTerms,
   modelPrices,
   providerPricesChecked,
 } from "@/components/console/dashboard-model-catalog";
@@ -124,8 +125,8 @@ export default async function DashboardModelPage({
           </h2>
           <ModelFacts rows={modelPrices(model)} />
           <p className="text-xs leading-5 text-muted-foreground">
-            {model.pricing.terms} Checked {providerPricesChecked}. Your gateway
-            uses the rates set on each upstream deployment.
+            {modelPricingTerms(model)} Checked {providerPricesChecked}. Your
+            gateway uses the rates set on each upstream deployment.
           </p>
           <div className="mt-auto pt-2">
             <a

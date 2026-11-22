@@ -19,7 +19,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it("links each branded model summary to its guide inside the Console", () => {
+it("gives each branded card a local guide fallback and a model dialog", () => {
   render(<DashboardModels />);
   for (const [name, brand] of [
     ["DeepSeek V4.1 Flash", "deepseek"],
@@ -30,7 +30,8 @@ it("links each branded model summary to its guide inside the Console", () => {
     const card = screen.getByRole("article", { name });
     const link = within(card).getByRole("link", { name });
     expect(link).toHaveAttribute("href", `/dashboard/models/${brand}`);
-    expect(link).not.toHaveAttribute("target");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("aria-haspopup", "dialog");
     expect(within(card).getByText("1M context")).toBeVisible();
     expect(card.querySelector("p")).toHaveTextContent(/coding/i);
     expect(within(card).getByRole("heading", { name })).toContainElement(link);
@@ -41,6 +42,24 @@ it("links each branded model summary to its guide inside the Console", () => {
     expect(within(card).getAllByRole("listitem")).toHaveLength(3);
     expect(within(link).queryByRole("list")).toBeNull();
   }
+});
+
+it("opens the selected card with Enter and restores it on Escape", async () => {
+  const user = userEvent.setup();
+  render(<DashboardModels />);
+  const trigger = screen.getByRole("link", { name: "Kimi K3" });
+  trigger.focus();
+  await user.keyboard("{Enter}");
+  const detail = await screen.findByRole("dialog", { name: "Kimi K3" });
+  await waitFor(() =>
+    expect(within(detail).getByRole("button", { name: "Close" })).toHaveFocus(),
+  );
+  expect(
+    within(detail).getByRole("button", { name: "Copy model ID kimi-k3" }),
+  ).toBeVisible();
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(trigger).toHaveFocus());
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
 });
 
 it("opens the provider cost comparison and restores focus on close", async () => {

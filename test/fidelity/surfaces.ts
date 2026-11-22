@@ -2,7 +2,6 @@ import { browserPost } from "../e2e/browser-write";
 import {
   dashboardModelCases,
   grantDashboardModelDiscovery,
-  setDashboardSession,
 } from "../e2e/dashboard-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
@@ -35,6 +34,8 @@ export type Surface = {
   mode?: ConsoleMode;
   /** Where the shot starts. Some states need `setup` to finish arriving. */
   route: string;
+  /** Capture the visible viewport for an overlay on a taller page. */
+  viewportOnly?: boolean;
   /**
    * The mock-platform data behind it — a fixture id, or a word for the shape
    * of the response (`populated`, `none` for a 404). Says why the surface
@@ -82,14 +83,51 @@ async function populatedDashboard(
   page: Page,
   viewport = { width: 1800, height: 960 },
 ) {
-  // Keep the fixed comparison dialog and header in one desktop screenshot.
+  // Keep the fixed dialogs and header in one desktop screenshot.
   await page.setViewportSize(viewport);
-  await setDashboardSession(page, { playground_access: true });
+  await grantDashboardModelDiscovery(page);
   await page.reload();
   await page
     .getByRole("link", { name: "Open playground", exact: true })
     .waitFor();
   await page.locator('[data-dashboard-metric="tokens"] [data-value]').waitFor();
+}
+
+async function openDashboardModelDialog(
+  page: Page,
+  { name, alias, upstream }: (typeof dashboardModelCases)[number],
+  options: {
+    viewport?: { width: number; height: number };
+    selectAlias?: boolean;
+  } = {},
+) {
+  await populatedDashboard(page, options.viewport);
+  await page
+    .getByRole("region", { name: "Models", exact: true })
+    .getByRole("link", { name, exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await dialog
+    .getByRole("button", { name: `Copy model ID ${upstream}`, exact: true })
+    .waitFor();
+  if (alias) {
+    const picker = dialog.getByRole("combobox", {
+      name: "Gateway alias",
+      exact: true,
+    });
+    await picker.waitFor();
+    if (options.selectAlias) {
+      await picker.selectOption(alias);
+      await dialog
+        .getByRole("link", { name: "Try in playground", exact: true })
+        .waitFor();
+    }
+  } else {
+    await dialog
+      .getByRole("link", { name: "View providers", exact: true })
+      .waitFor();
+  }
+  return dialog;
 }
 
 async function settledDashboardModel(
@@ -993,6 +1031,69 @@ export const SURFACES: Surface[] = [
           checked: true,
         })
         .waitFor();
+    },
+  })),
+  ...dashboardModelCases.map((model): Surface => ({
+    id: `dashboard-model-popup-${model.brand}`,
+    route: "/dashboard",
+    fixture: model.alias
+      ? `gateway alias ${model.alias} listed by Playground`
+      : "no matching provider in the gateway",
+    description: `Dashboard with the ${model.name} pricing and features dialog open.`,
+    setup: async (page) => {
+      await openDashboardModelDialog(page, model, {
+        selectAlias: model.brand === "minimax",
+      });
+    },
+  })),
+  {
+    id: "dashboard-model-popup-options",
+    route: "/dashboard",
+    fixture: "MiniMax CN with an accessible minimax-m3 gateway alias",
+    description:
+      "The single-model More options menu with the local guide and agent draft actions.",
+    setup: async (page) => {
+      const dialog = await openDashboardModelDialog(
+        page,
+        dashboardModelCases[3],
+        { selectAlias: true },
+      );
+      await dialog
+        .getByRole("button", { name: "More options", exact: true })
+        .click();
+      await page
+        .getByRole("menuitem", { name: "Build an agent", exact: true })
+        .waitFor();
+    },
+  },
+  ...(["top", "scrolled"] as const).map((position): Surface => ({
+    id: `dashboard-model-popup-mobile-${position}`,
+    route: "/dashboard",
+    viewportOnly: true,
+    fixture: "MiniMax CN and the minimax-m3 alias on a 390px viewport",
+    description:
+      position === "top"
+        ? "The initial model dialog at phone width."
+        : "The model dialog after scrolling its content on a phone.",
+    setup: async (page) => {
+      const dialog = await openDashboardModelDialog(
+        page,
+        dashboardModelCases[3],
+        {
+          viewport: { width: 390, height: 600 },
+          selectAlias: position === "scrolled",
+        },
+      );
+      if (position === "scrolled") {
+        await dialog.locator("[data-model-popup-scroll]").hover();
+        await page.mouse.wheel(0, 650);
+        await page.waitForFunction(() => {
+          const pane = document.querySelector("[data-model-popup-scroll]");
+          return (
+            pane && pane.scrollTop >= pane.scrollHeight - pane.clientHeight - 1
+          );
+        });
+      }
     },
   })),
   ...dashboardModelCases.map((model): Surface => ({

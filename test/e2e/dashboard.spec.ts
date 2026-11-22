@@ -137,16 +137,21 @@ test("dashboard opens the usage period and each admitted resource shown on its c
   }
 });
 
-test("each provider card opens its model overview in the same tab and returns to Dashboard", async ({
+test("all four model cards open a single-model dialog on Dashboard and return focus to the card", async ({
   page,
   context,
 }) => {
+  await grantDashboardModelDiscovery(page);
   await signIn(page);
   const main = page.getByRole("main");
   const models = main.getByRole("region", { name: "Models", exact: true });
   const origin = new URL(page.url()).origin;
-  for (const { brand, name, upstream, alias, docs } of dashboardModelCases) {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin,
+  });
+  for (const { brand, name, upstream, alias } of dashboardModelCases) {
     const card = models.getByRole("article", { name, exact: true });
+    const trigger = card.getByRole("link", { name, exact: true });
     const mark = card.locator(`img[src="/brands/${brand}.svg"]`);
     await expect(mark).toBeVisible();
     await expect
@@ -156,18 +161,118 @@ test("each provider card opens its model overview in the same tab and returns to
         ),
       )
       .toBe(true);
+    await expect(trigger).toHaveAttribute("href", `/dashboard/models/${brand}`);
+    await expect(trigger).toHaveAttribute("target", "_blank");
+    await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    if (brand === "glm") {
+      await trigger.click();
+    } else {
+      // Exercise the actual click targets under the stretched title link:
+      // a vendor mark, a capability label, and the empty corner of the band.
+      const target = {
+        deepseek: mark,
+        kimi: card.getByRole("listitem").first(),
+        minimax: card,
+      }[brand];
+      await target.scrollIntoViewIfNeeded();
+      const bounds = (await target.boundingBox())!;
+      if (brand === "minimax")
+        await page.mouse.click(bounds.x + bounds.width - 12, bounds.y + 12);
+      else
+        await page.mouse.click(
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2,
+        );
+    }
+    const dialog = page.getByRole("dialog", { name, exact: true });
+    await expect(
+      dialog.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    await expect(page).toHaveURL(origin + "/dashboard");
+    await expect(
+      dialog.locator(`img[src="/brands/${brand}.svg"]`),
+    ).toBeVisible();
+    expect(context.pages()).toHaveLength(1);
+    const close = dialog.getByRole("button", { name: "Close", exact: true });
+    await expect(close).toBeFocused();
+    await expect(dialog.getByText("Cost", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Features", { exact: true })).toBeVisible();
+    await dialog
+      .getByRole("button", { name: `Copy model ID ${upstream}`, exact: true })
+      .click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(upstream);
+    await expect(
+      dialog.getByRole("link", { name: "View full pricing", exact: true }),
+    ).toHaveAttribute("href", `/dashboard/models/${brand}#pricing`);
+    const playground = dialog.getByRole("link", {
+      name: "Try in playground",
+      exact: true,
+    });
+    if (alias) {
+      const picker = dialog.getByRole("combobox", {
+        name: "Gateway alias",
+        exact: true,
+      });
+      await expect(picker).toBeVisible();
+      await expect(playground).toHaveCount(0);
+      await picker.selectOption(alias);
+      await expect(playground).toHaveAttribute(
+        "href",
+        `/playground?model=${alias}`,
+      );
+    } else {
+      await expect(dialog.getByRole("status")).toContainText(
+        "No matching provider is configured.",
+      );
+      await expect(playground).toHaveCount(0);
+    }
+    if (brand === "deepseek") {
+      const viewport = page.viewportSize()!;
+      await settleMotion(page);
+      const bounds = (await dialog.boundingBox())!;
+      expect(bounds.x + bounds.width / 2).toBeCloseTo(viewport.width / 2, 0);
+      expect(bounds.y + bounds.height / 2).toBeCloseTo(viewport.height / 2, 0);
+      await page.keyboard.press("Escape");
+    } else if (brand === "kimi") {
+      const bounds = (await dialog.boundingBox())!;
+      await page.mouse.click(bounds.x - 12, bounds.y + 24);
+    } else {
+      await close.click();
+    }
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(page).toHaveURL(origin + "/dashboard");
+  }
+});
+
+test("the model dialog opens from the keyboard and its guide and pricing links keep native navigation", async ({
+  page,
+  context,
+}) => {
+  await signIn(page);
+  const main = page.getByRole("main");
+  const models = main.getByRole("region", { name: "Models", exact: true });
+  const origin = new URL(page.url()).origin;
+  for (const { brand, name, upstream, alias, docs } of dashboardModelCases) {
+    const trigger = models.getByRole("link", { name, exact: true });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name, exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(origin + "/dashboard");
+    await dialog
+      .getByRole("button", { name: "More options", exact: true })
+      .click();
+    const guide = page.getByRole("menuitem", {
+      name: "View model guide",
+      exact: true,
+    });
     const href = `/dashboard/models/${brand}`;
-    await expect(card.getByRole("link", { name, exact: true })).toHaveAttribute(
-      "href",
-      href,
-    );
-    // A click on the logo exercises the card's full clickable surface.
-    await mark.scrollIntoViewIfNeeded();
-    const bounds = (await mark.boundingBox())!;
-    await page.mouse.click(
-      bounds.x + bounds.width / 2,
-      bounds.y + bounds.height / 2,
-    );
+    await expect(guide).toHaveAttribute("href", href);
+    await guide.click();
     await expect(page).toHaveURL(origin + href);
     await expect(
       page
@@ -197,6 +302,26 @@ test("each provider card opens its model overview in the same tab and returns to
     await main.getByRole("link", { name: "Dashboard", exact: true }).click();
     await expect(page).toHaveURL(origin + "/dashboard");
   }
+  const deepseek = models.getByRole("link", {
+    name: "DeepSeek V4.1 Flash",
+    exact: true,
+  });
+  await deepseek.click();
+  await page
+    .getByRole("dialog", { name: "DeepSeek V4.1 Flash", exact: true })
+    .getByRole("link", { name: "View full pricing", exact: true })
+    .click();
+  await expect(page).toHaveURL(origin + "/dashboard/models/deepseek#pricing");
+  await expect(main.locator("#pricing")).toBeInViewport();
+  await main.getByRole("link", { name: "Dashboard", exact: true }).click();
+  // The card is still a real link for a deliberate open-in-new-tab action.
+  const [newTab] = await Promise.all([
+    context.waitForEvent("page"),
+    deepseek.click({ button: "middle" }),
+  ]);
+  await expect(newTab).toHaveURL(origin + "/dashboard/models/deepseek");
+  await newTab.close();
+  await expect(page).toHaveURL(origin + "/dashboard");
   expect(context.pages()).toHaveLength(1);
 });
 
@@ -279,7 +404,7 @@ test("model comparison links open the selected local overview and pricing sectio
   expect(context.pages()).toHaveLength(1);
 });
 
-test("a discovered gateway alias opens Playground with the selected model without a write", async ({
+test("a discovered gateway alias opens Playground and a new agent draft with the selected model without a write", async ({
   page,
 }) => {
   await grantDashboardModelDiscovery(page);
@@ -291,6 +416,59 @@ test("a discovered gateway alias opens Playground with the selected model withou
   });
   const main = page.getByRole("main");
   await main.getByRole("link", { name: "MiniMax M3", exact: true }).click();
+  const preview = page.getByRole("dialog", { name: "MiniMax M3", exact: true });
+  const picker = preview.getByRole("combobox", {
+    name: "Gateway alias",
+    exact: true,
+  });
+  const tryModel = preview.getByRole("link", {
+    name: "Try in playground",
+    exact: true,
+  });
+  const more = preview.getByRole("button", {
+    name: "More options",
+    exact: true,
+  });
+  const createAgent = page.getByRole("menuitem", {
+    name: "Build an agent",
+    exact: true,
+  });
+  await picker.selectOption("agent-default");
+  await expect(tryModel).toHaveCount(0);
+  await more.click();
+  await expect(createAgent).toHaveAttribute(
+    "href",
+    "/agents/new?model=agent-default",
+  );
+  await page.keyboard.press("Escape");
+  await expect(preview).toBeVisible();
+  await expect(more).toBeFocused();
+  await picker.selectOption("minimax-m3");
+  await expect(tryModel).toHaveAttribute(
+    "href",
+    "/playground?model=minimax-m3",
+  );
+  await tryModel.click();
+  await expect(page).toHaveURL(/\/playground\?model=minimax-m3$/);
+  const model = main.getByRole("combobox", { name: "Model", exact: true });
+  await expect(model).toHaveAttribute("data-model", "minimax-m3");
+  await expect(model).toContainText("MiniMax M3");
+  await page.goto("/dashboard");
+  await main.getByRole("link", { name: "MiniMax M3", exact: true }).click();
+  await picker.selectOption("minimax-m3");
+  await more.click();
+  await expect(createAgent).toHaveAttribute(
+    "href",
+    "/agents/new?model=minimax-m3",
+  );
+  await createAgent.click();
+  await expect(page).toHaveURL(/\/agents\/new\?model=minimax-m3$/);
+  await expect(model).toHaveAttribute("data-model", "minimax-m3");
+  await expect(model.getByText("minimax-m3", { exact: true })).toBeVisible();
+  await expect(
+    main.getByRole("textbox", { name: "Name", exact: true }),
+  ).toHaveValue("");
+  await page.goto("/dashboard/models/minimax");
   const deployment = main.getByRole("region", { name: "Current deployment" });
   const alias = deployment.getByRole("link", {
     name: "minimax-m3",
@@ -326,10 +504,42 @@ test("a discovered gateway alias opens Playground with the selected model withou
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await open.click();
   await expect(page).toHaveURL(/\/playground\?model=minimax-m3$/);
-  const model = main.getByRole("combobox", { name: "Model", exact: true });
   await expect(model).toHaveAttribute("data-model", "minimax-m3");
   await expect(model).toContainText("MiniMax M3");
   expect(writes).toEqual([]);
+});
+
+test("a model with one discovered alias offers Playground when agent creation is unavailable", async ({
+  page,
+  request,
+}) => {
+  await expect(
+    await request.post("http://127.0.0.1:18080/__forbid", {
+      data: { paths: ["v1/agents"] },
+    }),
+  ).toBeOK();
+  await grantDashboardModelDiscovery(page);
+  await signIn(page);
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "MiniMax M3", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "MiniMax M3", exact: true });
+  await expect(
+    dialog.getByRole("link", { name: "Try in playground", exact: true }),
+  ).toHaveAttribute("href", "/playground?model=minimax-m3");
+  await expect(
+    dialog.getByRole("combobox", { name: "Gateway alias", exact: true }),
+  ).toHaveCount(0);
+  await dialog
+    .getByRole("button", { name: "More options", exact: true })
+    .click();
+  await expect(
+    page.getByRole("menuitem", { name: "View model guide", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Build an agent", exact: true }),
+  ).toHaveCount(0);
 });
 
 test("a developer can read the model reference when access to the gateway and Playground is denied", async ({
@@ -347,8 +557,20 @@ test("a developer can read the model reference when access to the gateway and Pl
     const path = new URL(request.url()).pathname;
     if (path.endsWith("/proxy/v1/models")) discovery.push(path);
   });
-  await signIn(page, "/dashboard/models/minimax");
+  await signIn(page);
   const main = page.getByRole("main");
+  await main.getByRole("link", { name: "MiniMax M3", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "MiniMax M3", exact: true });
+  await expect(
+    dialog.getByRole("button", {
+      name: "Copy model ID MiniMax-M3",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("link", { name: "Try in playground", exact: true }),
+  ).toHaveCount(0);
+  await page.goto("/dashboard/models/minimax");
   await expect(
     main.getByRole("heading", { name: "MiniMax M3", level: 1 }),
   ).toBeVisible();
@@ -365,6 +587,53 @@ test("a developer can read the model reference when access to the gateway and Pl
   await expect(main.locator('a[href^="/playground"]')).toHaveCount(0);
   expect(discovery).toEqual([]);
   await main.getByRole("link", { name: "Dashboard", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("the dark model dialog scrolls independently on a narrow screen and restores card focus", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.setViewportSize({ width: 390, height: 600 });
+  await grantDashboardModelDiscovery(page);
+  await signIn(page);
+  const trigger = page
+    .getByRole("main")
+    .getByRole("link", { name: "MiniMax M3", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "MiniMax M3", exact: true });
+  await dialog
+    .getByRole("combobox", { name: "Gateway alias", exact: true })
+    .selectOption("minimax-m3");
+  const action = dialog.getByRole("link", {
+    name: "Try in playground",
+    exact: true,
+  });
+  await expect(action).toHaveAttribute("href", "/playground?model=minimax-m3");
+  const content = dialog.locator("[data-model-popup-scroll]");
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(600);
+  const scrollOffset = await page.evaluate(() => window.scrollY);
+  const initial = await content.evaluate((el) => el.scrollTop);
+  await content.hover();
+  await page.mouse.wheel(0, 650);
+  await expect
+    .poll(() => content.evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(initial);
+  await expect(dialog.getByText("Features", { exact: true })).toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollOffset);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await settleMotion(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(trigger).toBeFocused();
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 

@@ -1,8 +1,25 @@
 "use client";
 
+import { Bot, BookOpen, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useContext, useId, type ReactNode } from "react";
+import {
+  createContext,
+  Fragment,
+  useContext,
+  useId,
+  useState,
+  type ReactNode,
+} from "react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { isPermissionDenied } from "@/lib/platform/denied";
 import {
   useGatewayAliases,
@@ -17,12 +34,131 @@ import {
   type SurfaceState,
 } from "@/lib/platform/surfaces";
 import type { GatewayDeployment, GatewayProvider } from "@/lib/platform/types";
-import type { DashboardModel } from "./dashboard-model-catalog";
+import { cn } from "@/lib/utils";
+import {
+  dashboardModelPath,
+  type DashboardModel,
+} from "./dashboard-model-catalog";
 
 const linkStyle =
   "rounded-sm underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
+const PopupModel = createContext<DashboardModel | null>(null);
+type PopupAlias = { name: string; mixed: boolean };
+
+function PopupActions({
+  model,
+  aliases = [],
+  listed,
+  agentsAllowed,
+  notice,
+}: {
+  model: DashboardModel;
+  aliases?: PopupAlias[];
+  listed?: Set<string>;
+  agentsAllowed?: boolean;
+  notice?: ReactNode;
+}) {
+  const [chosen, choose] = useState("");
+  const single = aliases.length === 1 ? aliases[0] : undefined;
+  // A shared fallback requires an explicit choice even if it is the only route.
+  const selected = chosen
+    ? aliases.find((alias) => alias.name === chosen)
+    : single && !single.mixed
+      ? single
+      : undefined;
+  const query = selected && new URLSearchParams({ model: selected.name });
+  const canTry = selected && listed?.has(selected.name);
+  const status =
+    notice ??
+    (selected && !canTry
+      ? "This alias is not listed in Playground."
+      : undefined);
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      {aliases.length > 0 && (!single || single.mixed || !selected) && (
+        <select
+          aria-label="Gateway alias"
+          className="h-7 max-w-full min-w-0 rounded-md border bg-background px-1.5 text-sm outline-ring focus-visible:outline-2"
+          value={selected?.name ?? ""}
+          onChange={(event) => choose(event.target.value)}
+        >
+          <option value="">Choose an alias</option>
+          {aliases.map((alias) => (
+            <option key={alias.name} value={alias.name}>
+              {alias.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {status && (
+        <span role="status" className="text-muted-foreground">
+          {status}
+        </span>
+      )}
+      {(selected?.mixed || single?.mixed) && (
+        <span className="text-muted-foreground">
+          Also routes to other upstream models
+        </span>
+      )}
+      <div className="inline-flex shrink-0 items-center">
+        {canTry && (
+          <Link
+            href={`/playground?${query}`}
+            data-playground-popup-try=""
+            title={`Try ${selected.name} in Playground`}
+            className={cn(buttonVariants({ size: "sm" }), "rounded-r-none")}
+          >
+            Try in playground
+          </Link>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="More options"
+            className={cn(
+              buttonVariants({
+                size: "icon-sm",
+                variant: canTry ? "default" : "secondary",
+              }),
+              canTry && "w-6 rounded-l-none border-l-primary-foreground/30",
+            )}
+          >
+            <ChevronDown aria-hidden className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align={canTry ? "end" : "start"}
+            className="w-max"
+          >
+            <DropdownMenuGroup>
+              {selected && (
+                <DropdownMenuLabel className="max-w-64 break-all">
+                  Gateway alias · <code>{selected.name}</code>
+                </DropdownMenuLabel>
+              )}
+              {agentsAllowed && selected && (
+                <DropdownMenuItem
+                  render={<Link href={`/agents/new?${query}`} />}
+                  title={`Build with ${selected.name}`}
+                >
+                  <Bot aria-hidden /> Build an agent
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                render={<Link href={dashboardModelPath(model)} />}
+              >
+                <BookOpen aria-hidden /> View model guide
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
 function Notice({ children }: { children: ReactNode }) {
+  const popup = useContext(PopupModel);
+  if (popup) return <PopupActions model={popup} notice={children} />;
   return (
     <p role="status" className="text-sm text-muted-foreground">
       {children}
@@ -49,7 +185,7 @@ function SurfaceNotice({
   }
 }
 
-function ReadNotice({
+function readMessage({
   error,
   name,
   retry,
@@ -58,34 +194,44 @@ function ReadNotice({
   name: string;
   retry: () => void;
 }) {
-  if (!error) return <Notice>Loading {name}…</Notice>;
+  if (!error) return `Loading ${name}…`;
   if (
     isPermissionDenied(error) ||
     (error instanceof PlatformError && error.status === 401)
   )
-    return <Notice>Your account cannot view {name}.</Notice>;
-  if (isUnimplemented(error))
-    return <Notice>This Platform does not expose {name}.</Notice>;
+    return `Your account cannot view ${name}.`;
+  if (isUnimplemented(error)) return `This Platform does not expose ${name}.`;
   return (
-    <Notice>
+    <>
       Could not load {name}.{" "}
       <button type="button" className={linkStyle} onClick={() => retry()}>
         Retry
       </button>
-    </Notice>
+    </>
   );
 }
 
-type Gates = { aliasAccess?: SurfaceState; playgroundPrincipal?: string };
+function ReadNotice(props: Parameters<typeof readMessage>[0]) {
+  return <Notice>{readMessage(props)}</Notice>;
+}
+
+type Gates = {
+  aliasAccess?: SurfaceState;
+  playgroundPrincipal?: string;
+  agentsAllowed: boolean;
+};
 type Upstream = { deployment: GatewayDeployment; provider: GatewayProvider };
 
 function AliasList({
   upstreams,
   playgroundPrincipal,
+  agentsAllowed,
 }: {
   upstreams: Upstream[];
   playgroundPrincipal?: string;
+  agentsAllowed: boolean;
 }) {
+  const popup = useContext(PopupModel);
   const read = useGatewayAliases();
   const ids = new Set(upstreams.map(({ deployment }) => deployment.id));
   const enabledIds = new Set(
@@ -128,6 +274,37 @@ function AliasList({
       ? models.data?.filter((m) => candidates.has(m.id)).map((m) => m.id)
       : [],
   );
+  const mixed = (alias: (typeof aliases)[number]) =>
+    alias.targets.some((target) => !ids.has(target.deployment_id));
+  if (popup) {
+    let notice: ReactNode;
+    if (!candidates.size)
+      notice = "No enabled chat alias routes to this model.";
+    else if (!principal) notice = "Playground access is unavailable.";
+    else if (models.error || !models.data)
+      notice = readMessage({
+        error: models.error,
+        name: "Playground models",
+        retry: models.refetch,
+      });
+    else if (!listed.size)
+      notice = "No matching alias is listed in Playground.";
+    return (
+      <PopupActions
+        model={popup}
+        aliases={aliases
+          .filter(
+            (alias) =>
+              candidates.has(alias.name) &&
+              (agentsAllowed || listed.has(alias.name)),
+          )
+          .map((alias) => ({ name: alias.name, mixed: mixed(alias) }))}
+        listed={listed}
+        agentsAllowed={agentsAllowed}
+        notice={notice}
+      />
+    );
+  }
   return (
     <>
       <ul className="divide-y">
@@ -135,7 +312,6 @@ function AliasList({
           const modelQuery = new URLSearchParams({
             model: alias.name,
           }).toString();
-          const mixed = alias.targets.some((t) => !ids.has(t.deployment_id));
           return (
             <li
               key={alias.name}
@@ -149,7 +325,7 @@ function AliasList({
                 >
                   {alias.name}
                 </Link>
-                {mixed && (
+                {mixed(alias) && (
                   <p className="text-xs text-muted-foreground">
                     Also routes to other upstream models
                   </p>
@@ -192,10 +368,12 @@ function Upstreams({
   providers,
   aliasAccess,
   playgroundPrincipal,
+  agentsAllowed,
 }: Gates & {
   model: DashboardModel;
   providers: GatewayProvider[];
 }) {
+  const popup = useContext(PopupModel);
   const read = useGatewayDeployments();
   if (read.error || !read.data)
     return (
@@ -234,6 +412,17 @@ function Upstreams({
         .
       </Notice>
     );
+  const aliasList =
+    aliasAccess?.status === "available" ? (
+      <AliasList
+        upstreams={upstreams}
+        playgroundPrincipal={playgroundPrincipal}
+        agentsAllowed={agentsAllowed}
+      />
+    ) : (
+      <SurfaceNotice state={aliasAccess} name="gateway aliases" />
+    );
+  if (popup) return aliasList;
   return (
     <>
       <div className="space-y-2">
@@ -271,14 +460,7 @@ function Upstreams({
       </div>
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Gateway aliases</h3>
-        {aliasAccess?.status === "available" ? (
-          <AliasList
-            upstreams={upstreams}
-            playgroundPrincipal={playgroundPrincipal}
-          />
-        ) : (
-          <SurfaceNotice state={aliasAccess} name="gateway aliases" />
-        )}
+        {aliasList}
       </div>
     </>
   );
@@ -319,6 +501,7 @@ function AdmittedGateway({
     <Providers
       model={model}
       aliasAccess={access.models}
+      agentsAllowed={access.agents?.status === "available"}
       playgroundPrincipal={playgroundPrincipal}
     />
   ) : (
@@ -326,7 +509,13 @@ function AdmittedGateway({
   );
 }
 
-export function DashboardModelGateway({ model }: { model: DashboardModel }) {
+export function DashboardModelGateway({
+  model,
+  mode = "detail",
+}: {
+  model: DashboardModel;
+  mode?: "detail" | "popup";
+}) {
   const heading = useId();
   const session = useContext(ConsoleSessionContext);
   const user = session?.data;
@@ -347,7 +536,7 @@ export function DashboardModelGateway({ model }: { model: DashboardModel }) {
   } else {
     content = (
       <AdmittedGateway
-        key={user.id}
+        key={user.id + ":" + model.id}
         model={model}
         playgroundPrincipal={
           user.playground_access === true ? user.id : undefined
@@ -355,6 +544,12 @@ export function DashboardModelGateway({ model }: { model: DashboardModel }) {
       />
     );
   }
+  if (mode === "popup")
+    return (
+      <section aria-label="Current deployment" className="min-w-0 max-w-full">
+        <PopupModel.Provider value={model}>{content}</PopupModel.Provider>
+      </section>
+    );
   return (
     <section aria-labelledby={heading} className="space-y-4">
       <h2 id={heading} className="text-base font-semibold">

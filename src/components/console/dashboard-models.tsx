@@ -21,10 +21,12 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CopyIdButton } from "./copy-id";
+import { DashboardModelPopup } from "./dashboard-model-popup";
 import {
   dashboardModelPath,
   dashboardModels,
   modelFeatures,
+  modelPricingTerms,
   modelPrices,
   providerPricesChecked,
   type DashboardModel,
@@ -38,51 +40,76 @@ type ComparisonView = (typeof sections)[number];
 
 function ModelCard({ model }: { model: DashboardModel }) {
   const headingId = useId();
+  const trigger = useRef<HTMLAnchorElement>(null);
+  const [open, setOpen] = useState(false);
   return (
-    <article
-      aria-labelledby={headingId}
-      data-dashboard-model={model.id}
-      className="group relative isolate flex min-h-[191px] min-w-0 flex-col overflow-hidden rounded-xl bg-foreground/[0.035] outline-offset-2 transition-colors hover:bg-foreground/[0.06] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring dark:bg-card dark:hover:bg-secondary"
-    >
-      <div
-        className={cn("grid h-[90px] shrink-0 place-items-center", model.band)}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <article
+        aria-labelledby={headingId}
+        data-dashboard-model={model.id}
+        className="group relative isolate flex min-h-[191px] min-w-0 flex-col overflow-hidden rounded-xl bg-foreground/[0.035] outline-offset-2 transition-colors hover:bg-foreground/[0.06] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring dark:bg-card dark:hover:bg-secondary"
       >
-        <Image
-          src={`/brands/${model.brand}.svg`}
-          width={60}
-          height={56}
-          alt=""
-          unoptimized
-          className="h-14 w-[60px] object-contain"
-        />
-      </div>
-      <div className="px-4 py-3">
-        <h3
-          id={headingId}
-          className="text-sm font-medium leading-5 group-hover:underline"
+        <div
+          className={cn(
+            "grid h-[90px] shrink-0 place-items-center",
+            model.band,
+          )}
         >
-          <Link
-            href={dashboardModelPath(model)}
-            className="after:absolute after:inset-0 focus-visible:outline-none"
+          <Image
+            src={`/brands/${model.brand}.svg`}
+            width={60}
+            height={56}
+            alt=""
+            unoptimized
+            className="h-14 w-[60px] object-contain"
+          />
+        </div>
+        <div className="px-4 py-3">
+          <h3
+            id={headingId}
+            className="text-sm font-medium leading-5 group-hover:underline"
           >
-            {model.name}
-          </Link>
-        </h3>
-        <p className="mt-1 text-xs leading-4 text-muted-foreground">
-          {model.description}
-        </p>
-        <ul className="mt-2 flex flex-wrap gap-1">
-          {[`${model.contextWindow} context`, ...model.tags].map((tag) => (
-            <li
-              key={tag}
-              className="rounded-full bg-foreground/[0.055] px-2 py-0.5 text-xs leading-4 text-muted-foreground dark:bg-secondary"
+            <a
+              ref={trigger}
+              href={dashboardModelPath(model)}
+              target="_blank"
+              rel="noreferrer"
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                setOpen(true);
+              }}
+              className="after:absolute after:inset-0 focus-visible:outline-none"
             >
-              {tag}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </article>
+              {model.name}
+            </a>
+          </h3>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">
+            {model.description}
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1">
+            {[`${model.contextWindow} context`, ...model.tags].map((tag) => (
+              <li
+                key={tag}
+                className="rounded-full bg-foreground/[0.055] px-2 py-0.5 text-xs leading-4 text-muted-foreground dark:bg-secondary"
+              >
+                {tag}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </article>
+      <DashboardModelPopup model={model} finalFocus={trigger} />
+    </Dialog>
   );
 }
 
@@ -143,7 +170,7 @@ function ComparisonColumn({
       {view === "Cost" ? (
         <div className="space-y-2 border-t pt-4 text-sm">
           <p className="min-h-[60px] leading-5 text-muted-foreground">
-            {model.pricing.terms}
+            {modelPricingTerms(model)}
           </p>
           <Link
             className={linkStyle}

@@ -22,6 +22,7 @@ export interface DashboardModel {
     uncachedInput: string;
     output: string;
     cachedInput: string;
+    cacheWrites?: readonly { ttl: string; price: string }[];
   };
 }
 
@@ -101,11 +102,14 @@ export const dashboardModels: readonly DashboardModel[] = [
     reasoning: "Configurable",
     pricing: {
       url: "https://platform.kimi.ai/docs/pricing/chat",
-      terms:
-        "Standard API rates in USD per million tokens. Cache writes cost $3 for 5 min or $6 for 1 hr.",
+      terms: "Standard API rates in USD per million tokens.",
       uncachedInput: "$3.00",
       output: "$15.00",
       cachedInput: "$0.30",
+      cacheWrites: [
+        { ttl: "5 min", price: "$3" },
+        { ttl: "1 hr", price: "$6" },
+      ],
     },
   },
   {
@@ -159,4 +163,12 @@ export function modelPrices(model: DashboardModel) {
     ["Output", model.pricing.output],
     ["Cached input", model.pricing.cachedInput],
   ];
+}
+
+export function modelPricingTerms({ pricing }: DashboardModel) {
+  if (!pricing.cacheWrites?.length) return pricing.terms;
+  const writes = pricing.cacheWrites
+    .map(({ ttl, price }) => `${price} for ${ttl}`)
+    .join(" or ");
+  return `${pricing.terms} Cache writes cost ${writes}.`;
 }

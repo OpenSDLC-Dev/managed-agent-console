@@ -51,7 +51,11 @@ const providers = fixture.providers as GatewayProvider[];
 const mmAlias = aliases.find((a) => a.name === "minimax-m3")!;
 const mmUpstream = deployments.find((d) => d.upstream_model === "MiniMax-M3")!;
 
-function harness(model = minimax, user: Session = regular) {
+function harness(
+  model = minimax,
+  user: Session = regular,
+  mode: "detail" | "popup" = "detail",
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -60,7 +64,7 @@ function harness(model = minimax, user: Session = regular) {
       <ConsoleSessionContext.Provider
         value={{ data, error } as ReturnType<typeof useConsoleSession>}
       >
-        <DashboardModelGateway model={entry} />
+        <DashboardModelGateway model={entry} mode={mode} />
       </ConsoleSessionContext.Provider>
     </QueryClientProvider>
   );
@@ -93,7 +97,11 @@ const paths = (calls: ReturnType<typeof stubGatewayFetch>) =>
   calls.mock.calls.map(([url]) => new URL(url, "http://console").pathname);
 
 beforeEach(() =>
-  probes.mockReturnValue({ providers: available, models: available }),
+  probes.mockReturnValue({
+    providers: available,
+    models: available,
+    agents: available,
+  }),
 );
 afterEach(() => {
   cleanup();
@@ -367,4 +375,202 @@ it("hides cached private values on refusal or failure and supports a successful 
   expect(paths(calls)).not.toContain(
     "/api/organizations/default/proxy/v1/messages",
   );
+});
+
+async function openOptions(user = userEvent.setup()) {
+  await user.click(screen.getByRole("button", { name: "More options" }));
+  await screen.findByRole("menu");
+}
+
+it("opens Playground and agent creation with the same exact chat alias, and keeps the model guide local", async () => {
+  const alias = "team/research + notes & QA";
+  const calls = stubGatewayFetch((_method, path) => {
+    if (path === "aliases")
+      return Response.json({ data: [{ ...mmAlias, name: alias }] });
+    if (path === catalogue) return listed(alias);
+  });
+  harness(minimax, regular, "popup");
+  const query = new URLSearchParams({ model: alias }).toString();
+  expect(
+    await screen.findByRole("link", { name: "Try in playground" }),
+  ).toHaveAttribute("href", `/playground?${query}`);
+  expect(screen.queryByRole("combobox")).toBeNull();
+  const user = userEvent.setup();
+  await openOptions(user);
+  expect(
+    screen.getByRole("menuitem", { name: "Build an agent" }),
+  ).toHaveAttribute("href", `/agents/new?${query}`);
+  expect(
+    screen.getByRole("menuitem", { name: "View model guide" }),
+  ).toHaveAttribute("href", "/dashboard/models/minimax");
+  expect(screen.getByText(alias)).toBeVisible();
+  for (const [, init] of calls.mock.calls)
+    expect(init?.method ?? "GET").toBe("GET");
+});
+
+it("requires an explicit alias when the agent and Playground actions have different choices", async () => {
+  stubGatewayFetch((_method, path) =>
+    path === catalogue ? listed("minimax-m3") : undefined,
+  );
+  harness(minimax, regular, "popup");
+  const selector = await screen.findByRole("combobox", {
+    name: "Gateway alias",
+  });
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  const user = userEvent.setup();
+  await openOptions(user);
+  expect(screen.queryByRole("menuitem", { name: "Build an agent" })).toBeNull();
+  await user.keyboard("{Escape}");
+  await user.selectOptions(selector, "agent-default");
+  expect(
+    await screen.findByText("Also routes to other upstream models"),
+  ).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "This alias is not listed in Playground.",
+  );
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  await openOptions(user);
+  expect(
+    screen.getByRole("menuitem", { name: "Build an agent" }),
+  ).toHaveAttribute("href", "/agents/new?model=agent-default");
+  await user.keyboard("{Escape}");
+  await user.selectOptions(selector, "minimax-m3");
+  expect(
+    screen.getByRole("link", { name: "Try in playground" }),
+  ).toHaveAttribute("href", "/playground?model=minimax-m3");
+  expect(screen.queryByText("Also routes to other upstream models")).toBeNull();
+  await openOptions(user);
+  expect(
+    screen.getByRole("menuitem", { name: "Build an agent" }),
+  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+});
+
+it("requires a choice even when the only available alias routes to more than one model", async () => {
+  const shared = aliases.find((alias) => alias.name === "agent-default")!;
+  stubGatewayFetch((_method, path) => {
+    if (path === "aliases") return Response.json({ data: [shared] });
+    if (path === catalogue) return listed(shared.name);
+  });
+  harness(minimax, regular, "popup");
+  const selector = await screen.findByRole("combobox", {
+    name: "Gateway alias",
+  });
+  expect(
+    screen.getByText("Also routes to other upstream models"),
+  ).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  await userEvent.setup().selectOptions(selector, shared.name);
+  expect(
+    await screen.findByRole("link", { name: "Try in playground" }),
+  ).toHaveAttribute("href", "/playground?model=agent-default");
+});
+
+it("checks agent and Playground access independently and hides cached actions on revoked access", async () => {
+  const calls = stubGatewayFetch((_method, path) => {
+    if (path === "aliases") return Response.json({ data: [mmAlias] });
+    if (path === catalogue) return listed(mmAlias.name);
+  });
+  const { update } = harness(
+    minimax,
+    { ...regular, playground_access: false },
+    "popup",
+  );
+  await screen.findByText("Playground access is unavailable.");
+  expect(paths(calls)).not.toContain(catalogue);
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  const user = userEvent.setup();
+  await openOptions(user);
+  expect(
+    screen.getByRole("menuitem", { name: "Build an agent" }),
+  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+  await user.keyboard("{Escape}");
+  probes.mockReturnValue({
+    providers: available,
+    models: available,
+    agents: denied,
+  });
+  update(minimax, regular);
+  expect(
+    await screen.findByRole("link", { name: "Try in playground" }),
+  ).toBeVisible();
+  await openOptions(user);
+  expect(screen.queryByRole("menuitem", { name: "Build an agent" })).toBeNull();
+  expect(
+    screen.getByRole("menuitem", { name: "View model guide" }),
+  ).toBeVisible();
+  await user.keyboard("{Escape}");
+  update(minimax, { ...regular, playground_access: false });
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+});
+
+it("retains a local guide without querying private deployment data when access is unknown", async () => {
+  probes.mockReturnValue({
+    providers: { status: "unknown" },
+    models: available,
+    agents: available,
+  });
+  const calls = stubGatewayFetch();
+  harness(minimax, regular, "popup");
+  expect(screen.getByRole("status")).toHaveTextContent("could not be verified");
+  await openOptions();
+  expect(
+    screen.getByRole("menuitem", { name: "View model guide" }),
+  ).toHaveAttribute("href", "/dashboard/models/minimax");
+  expect(screen.queryByRole("menuitem", { name: "Build an agent" })).toBeNull();
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  expect(calls).not.toHaveBeenCalled();
+});
+
+it.each(["wildcard", "disabled upstream"])(
+  "offers only the guide for a %s even if Playground lists its name",
+  async (condition) => {
+    const calls = stubGatewayFetch((_method, path) => {
+      if (path === "aliases")
+        return Response.json({
+          data: [
+            condition === "wildcard" ? { ...mmAlias, name: "*" } : mmAlias,
+          ],
+        });
+      if (path === "deployments" && condition === "disabled upstream")
+        return Response.json({ data: [{ ...mmUpstream, enabled: false }] });
+      if (path === catalogue) return listed(mmAlias.name, "*");
+    });
+    harness(minimax, regular, "popup");
+    await screen.findByText("No enabled chat alias routes to this model.");
+    expect(paths(calls)).not.toContain(catalogue);
+    await openOptions();
+    expect(screen.getByRole("menuitem")).toHaveAccessibleName(
+      "View model guide",
+    );
+    expect(
+      screen.queryByRole("link", { name: "Try in playground" }),
+    ).toBeNull();
+  },
+);
+
+it("removes a stale Playground action after a discovery failure while allowing the admitted agent action", async () => {
+  let failed = false;
+  stubGatewayFetch((_method, path) => {
+    if (path === "aliases") return Response.json({ data: [mmAlias] });
+    if (path === catalogue) return failed ? failure(503) : listed(mmAlias.name);
+  });
+  const { client } = harness(minimax, regular, "popup");
+  await screen.findByRole("link", { name: "Try in playground" });
+  failed = true;
+  await act(() =>
+    client.invalidateQueries({ queryKey: ["playground-models"] }),
+  );
+  await screen.findByText(/Could not load Playground models/);
+  expect(screen.queryByRole("link", { name: "Try in playground" })).toBeNull();
+  const user = userEvent.setup();
+  await openOptions(user);
+  expect(
+    screen.getByRole("menuitem", { name: "Build an agent" }),
+  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+  await user.keyboard("{Escape}");
+  failed = false;
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  expect(
+    await screen.findByRole("link", { name: "Try in playground" }),
+  ).toHaveAttribute("href", "/playground?model=minimax-m3");
 });
