@@ -22,13 +22,11 @@ import {
 import { cn } from "@/lib/utils";
 import { CopyIdButton } from "./copy-id";
 import { DashboardModelPopup } from "./dashboard-model-popup";
+import { DashboardModelPrices } from "./dashboard-model-gateway";
 import {
   dashboardModelPath,
   dashboardModels,
   modelFeatures,
-  modelPricingTerms,
-  modelPrices,
-  providerPricesChecked,
   type DashboardModel,
 } from "./dashboard-model-catalog";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
@@ -123,7 +121,6 @@ function ComparisonColumn({
   view: ComparisonView;
 }) {
   const [model, setModel] = useState(initial);
-  const rows = view === "Cost" ? modelPrices(model) : modelFeatures(model);
 
   return (
     <section
@@ -156,22 +153,9 @@ function ComparisonColumn({
       <p className="my-3 min-h-10 text-sm leading-5 text-muted-foreground">
         {model.description}
       </p>
-      <dl className="text-sm text-muted-foreground">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex min-h-[53px] items-center justify-between gap-2 border-t py-2.5"
-          >
-            <dt>{label}</dt>
-            <dd className="text-right">{value}</dd>
-          </div>
-        ))}
-      </dl>
       {view === "Cost" ? (
-        <div className="space-y-2 border-t pt-4 text-sm">
-          <p className="min-h-[60px] leading-5 text-muted-foreground">
-            {modelPricingTerms(model)}
-          </p>
+        <div className="space-y-4 text-sm">
+          <DashboardModelPrices model={model} layout="comparison" />
           <Link
             className={linkStyle}
             href={`${dashboardModelPath(model)}#pricing`}
@@ -181,20 +165,33 @@ function ComparisonColumn({
           </Link>
         </div>
       ) : (
-        <div className="space-y-2 border-t pt-4 text-sm">
-          <h3 className="text-muted-foreground">Upstream model ID</h3>
-          <div className="flex items-center gap-1">
-            <code className="select-all break-all text-xs">{model.id}</code>
-            <CopyIdButton key={model.id} id={model.id} />
+        <>
+          <dl className="text-sm text-muted-foreground">
+            {modelFeatures(model).map(([label, value]) => (
+              <div
+                key={label}
+                className="flex min-h-[53px] items-center justify-between gap-2 border-t py-2.5"
+              >
+                <dt>{label}</dt>
+                <dd className="text-right">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="space-y-2 border-t pt-4 text-sm">
+            <h3 className="text-muted-foreground">Upstream model ID</h3>
+            <div className="flex items-center gap-1">
+              <code className="select-all break-all text-xs">{model.id}</code>
+              <CopyIdButton key={model.id} id={model.id} />
+            </div>
+            <Link
+              className={linkStyle}
+              href={dashboardModelPath(model)}
+              aria-label={`Model documentation for ${model.name}`}
+            >
+              Model documentation
+            </Link>
           </div>
-          <Link
-            className={linkStyle}
-            href={dashboardModelPath(model)}
-            aria-label={`Model documentation for ${model.name}`}
-          >
-            Model documentation
-          </Link>
-        </div>
+        </>
       )}
     </section>
   );
@@ -232,7 +229,7 @@ function Comparison() {
       </div>
       <DialogDescription className="mt-4 text-xs leading-4">
         {view === "Cost"
-          ? `Public provider pricing checked ${providerPricesChecked}. Your gateway uses its configured rates.`
+          ? "Prices per million tokens from your upstream deployments."
           : "Provider model specifications. Use a configured gateway alias for API requests."}
       </DialogDescription>
     </>

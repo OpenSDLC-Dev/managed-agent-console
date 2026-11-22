@@ -237,13 +237,20 @@ export interface GatewayDeploymentCreate {
   display_name?: string;
   capabilities: GatewayDeployment["capabilities"];
   prices: Partial<GatewayDeployment["prices"]>;
+  price_currency?: string;
+  price_note?: string;
 }
 
 /** deployments.go updateDeployment: capabilities and prices are replaced whole. */
 export type GatewayDeploymentUpdate = Partial<
   Pick<
     GatewayDeployment,
-    "display_name" | "capabilities" | "prices" | "enabled"
+    | "display_name"
+    | "capabilities"
+    | "prices"
+    | "price_currency"
+    | "price_note"
+    | "enabled"
   >
 >;
 

@@ -20,6 +20,7 @@ import { EditProviderButton } from "@/components/console/edit-provider-dialog";
 import { ProviderKeys } from "@/components/console/provider-keys";
 import { UpstreamModels } from "@/components/console/upstream-models";
 import { Button } from "@/components/ui/button";
+import { isTemporaryReadError } from "@/lib/platform/http";
 import {
   useDeleteGatewayProvider,
   useGatewayProfiles,
@@ -39,8 +40,15 @@ export default function ProviderDetailPage({
   const update = useUpdateGatewayProvider(id);
   const remove = useDeleteGatewayProvider(id);
 
-  if (error) return <ErrorState error={error} />;
+  if (error && (!provider || !isTemporaryReadError(error)))
+    return <ErrorState error={error} />;
   if (isPending || !provider) return <DetailSkeleton />;
+
+  // Keep the active pricing draft mounted when the overview temporarily disappears.
+  const upstreamModels = (
+    <UpstreamModels key={id} provider={provider} providerError={error} />
+  );
+  if (error) return <div>{upstreamModels}</div>;
 
   const headers = Object.entries(provider.headers);
   const vendor = vendorLabel(provider, profiles.data?.data);
@@ -135,7 +143,7 @@ export default function ProviderDetailPage({
         </FieldList>
       </DetailSection>
       <ProviderKeys provider={provider} vendor={vendor} />
-      <UpstreamModels provider={provider} />
+      {upstreamModels}
     </div>
   );
 }

@@ -12,6 +12,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Model cards, model comparisons and model guides read each deployment's rates and pricing terms from Model Gateway. Operators can record the currency and terms when editing an upstream model.
 - The Dashboard shows recorded gateway usage and compares four integrated models. Each model card opens a dialog with its specifications, prices and copyable ID. Use a configured gateway alias in Playground or a new agent draft, or open the model's full Console guide.
 - Search active or archived service accounts across the directory. Copy an account ID, edit its description or role, inspect and issue its API keys, or open a shareable detail page. Unfinished creation forms now prompt before dismissal.
 - Deleted API keys disappear from the Keys page and its filters. Platform retains their history for administrative queries.

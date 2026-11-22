@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
   render,
@@ -8,10 +9,21 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import {
+  ConsoleSessionContext,
+  type useConsoleSession,
+} from "@/components/shell/console-session";
 import { copyText } from "@/lib/copy-text";
+import { stubGatewayFetch } from "../../../test/mock-platform/gateway-fetch";
+import { gatewayFixtures } from "../../../test/mock-platform/gateway.mjs";
+import { TEST_SESSION } from "../../../test/session-fixture";
 import { DashboardModels } from "./dashboard-models";
 
 vi.mock("@/lib/copy-text", () => ({ copyText: vi.fn() }));
+vi.mock("@/lib/platform/surfaces", async (actual) => ({
+  ...(await actual<typeof import("@/lib/platform/surfaces")>()),
+  useSurfaces: () => ({ providers: { status: "available" } }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -62,9 +74,35 @@ it("opens the selected card with Enter and restores it on Escape", async () => {
   expect(trigger).toHaveAttribute("aria-expanded", "false");
 });
 
-it("opens the provider cost comparison and restores focus on close", async () => {
+it("compares the selected deployments' live rates and restores focus on close", async () => {
   const user = userEvent.setup();
-  render(<DashboardModels />);
+  const { providers, deployments } = gatewayFixtures();
+  const provider = {
+    ...providers[0],
+    profile: "moonshot",
+    name: "Moonshot CN",
+  };
+  const deployment = {
+    ...deployments[0],
+    provider_id: provider.id,
+    upstream_model: "kimi-k3",
+    price_currency: "CNY",
+    price_note: "5-minute cache writes",
+    prices: { input: 19.5, output: 99.5, cache_read: 2, cache_write: 20 },
+  };
+  const calls = stubGatewayFetch((_method, path) => {
+    if (path === "providers") return Response.json({ data: [provider] });
+    if (path === "deployments") return Response.json({ data: [deployment] });
+  });
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ConsoleSessionContext.Provider
+        value={{ data: TEST_SESSION } as ReturnType<typeof useConsoleSession>}
+      >
+        <DashboardModels />
+      </ConsoleSessionContext.Provider>
+    </QueryClientProvider>,
+  );
   const trigger = screen.getByRole("button", { name: "Compare models" });
   await user.click(trigger);
   const dialog = within(
@@ -86,16 +124,19 @@ it("opens the provider cost comparison and restores focus on close", async () =>
   const kimi = within(
     dialog.getByRole("region", { name: "Comparison column 3" }),
   );
-  expect(kimi.getByText("$15.00")).toBeVisible();
-  expect(kimi.getByText(/Cache writes cost \$3 for 5 min/)).toBeVisible();
+  expect(await kimi.findByText("99.5")).toBeVisible();
+  expect(kimi.getByText("CNY per million tokens")).toBeVisible();
+  expect(kimi.getByText("5-minute cache writes")).toBeVisible();
   expect(
     dialog.getByRole("link", { name: "View pricing for GLM-5.3" }),
   ).toHaveAttribute("href", "/dashboard/models/glm#pricing");
+  const glm = within(
+    dialog.getByRole("region", { name: "Comparison column 2" }),
+  );
+  expect(glm.getByRole("status")).toHaveTextContent("No matching provider");
   expect(
-    dialog.getByText(
-      "Z.ai international API rates, in USD per million tokens.",
-    ),
-  ).toBeVisible();
+    calls.mock.calls.map(([url]) => new URL(url, "http://console").pathname),
+  ).toEqual(["/admin/v1/providers", "/admin/v1/deployments"]);
   await user.click(dialog.getByRole("button", { name: "Close" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(trigger).toHaveFocus());
@@ -119,10 +160,7 @@ it("keeps column selections across views and copies the exact upstream ID withou
   const third = within(
     dialog.getByRole("region", { name: "Comparison column 3" }),
   );
-  expect(third.getByText("$1.20")).toBeVisible();
-  expect(
-    third.getByText(/Standard tier, up to 512K input tokens/),
-  ).toBeVisible();
+  expect(third.getByRole("status")).toHaveTextContent("could not be verified");
   await user.click(dialog.getByRole("radio", { name: "Features" }));
   expect(
     third.getByRole("link", { name: "Model documentation for MiniMax M3" }),

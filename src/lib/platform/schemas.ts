@@ -863,6 +863,8 @@ export const GatewayDeploymentSchema = z.object({
   display_name: z.string(),
   capabilities: GatewayCapabilitiesSchema,
   prices: GatewayPricesSchema,
+  price_currency: z.string().optional(),
+  price_note: z.string().optional(),
   enabled: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),

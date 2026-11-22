@@ -16,14 +16,7 @@ export interface DashboardModel {
   contextWindow: string;
   maxOutput: string;
   reasoning: string;
-  pricing: {
-    url: string;
-    terms: string;
-    uncachedInput: string;
-    output: string;
-    cachedInput: string;
-    cacheWrites?: readonly { ttl: string; price: string }[];
-  };
+  providerPricingUrl: string;
 }
 
 export const dashboardModels: readonly DashboardModel[] = [
@@ -49,13 +42,8 @@ export const dashboardModels: readonly DashboardModel[] = [
     contextWindow: "1M",
     maxOutput: "384K tokens",
     reasoning: "Optional",
-    pricing: {
-      url: "https://api-docs.deepseek.com/quick_start/pricing/",
-      terms: "Off-peak to peak rates, in USD per million tokens.",
-      uncachedInput: "$0.15–0.30",
-      output: "$0.60–1.20",
-      cachedInput: "$0.003–0.006",
-    },
+    providerPricingUrl:
+      "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
   },
   {
     id: "glm-5.3",
@@ -74,13 +62,7 @@ export const dashboardModels: readonly DashboardModel[] = [
     contextWindow: "1M",
     maxOutput: "128K tokens",
     reasoning: "Always on",
-    pricing: {
-      url: "https://docs.z.ai/guides/overview/pricing",
-      terms: "Z.ai international API rates, in USD per million tokens.",
-      uncachedInput: "$1.40",
-      output: "$4.40",
-      cachedInput: "$0.26",
-    },
+    providerPricingUrl: "https://docs.bigmodel.cn/cn/guide/start/pricing",
   },
   {
     id: "kimi-k3",
@@ -100,17 +82,7 @@ export const dashboardModels: readonly DashboardModel[] = [
     // https://platform.kimi.ai/docs/api/chat documents the K3 maximum after input.
     maxOutput: "Up to 1,048,576 tokens",
     reasoning: "Configurable",
-    pricing: {
-      url: "https://platform.kimi.ai/docs/pricing/chat",
-      terms: "Standard API rates in USD per million tokens.",
-      uncachedInput: "$3.00",
-      output: "$15.00",
-      cachedInput: "$0.30",
-      cacheWrites: [
-        { ttl: "5 min", price: "$3" },
-        { ttl: "1 hr", price: "$6" },
-      ],
-    },
+    providerPricingUrl: "https://platform.kimi.com/docs/pricing/chat",
   },
   {
     id: "MiniMax-M3",
@@ -131,18 +103,9 @@ export const dashboardModels: readonly DashboardModel[] = [
     // the recommended 128K output setting from the model's 512K maximum.
     maxOutput: "512K tokens",
     reasoning: "Adaptive",
-    pricing: {
-      url: "https://platform.minimax.io/docs/pricing/overview",
-      terms:
-        "Standard tier, up to 512K input tokens, in USD per million tokens. Longer inputs and Priority have separate rates.",
-      uncachedInput: "$0.30",
-      output: "$1.20",
-      cachedInput: "$0.06",
-    },
+    providerPricingUrl: "https://platform.minimax.cn/docs/pricing/overview",
   },
 ];
-
-export const providerPricesChecked = "Nov 22, 2026";
 
 export function dashboardModelPath(model: DashboardModel) {
   return `/dashboard/models/${model.brand}`;
@@ -155,20 +118,4 @@ export function modelFeatures(model: DashboardModel) {
     ["Input", model.inputs],
     ["Reasoning", model.reasoning],
   ];
-}
-
-export function modelPrices(model: DashboardModel) {
-  return [
-    ["Uncached input", model.pricing.uncachedInput],
-    ["Output", model.pricing.output],
-    ["Cached input", model.pricing.cachedInput],
-  ];
-}
-
-export function modelPricingTerms({ pricing }: DashboardModel) {
-  if (!pricing.cacheWrites?.length) return pricing.terms;
-  const writes = pricing.cacheWrites
-    .map(({ ttl, price }) => `${price} for ${ttl}`)
-    .join(" or ");
-  return `${pricing.terms} Cache writes cost ${writes}.`;
 }

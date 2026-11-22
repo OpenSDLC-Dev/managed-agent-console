@@ -31,7 +31,11 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
-import { wireDecimal, wireInteger } from "@/lib/platform/http";
+import {
+  isTemporaryReadError,
+  wireDecimal,
+  wireInteger,
+} from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -65,13 +69,49 @@ export function priceLine(p: Prices): string {
  * admin API lists them all). "Used by" names the models that route to each,
  * which is also why the gateway refuses to delete one of those.
  */
-export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
-  const { data, error, isPending } = useGatewayDeployments();
+export function UpstreamModels({
+  provider,
+  providerError,
+}: {
+  provider: GatewayProvider;
+  providerError?: Error | null;
+}) {
+  const { data, error } = useGatewayDeployments();
+  if (!data || (error && !isTemporaryReadError(error)))
+    return (
+      <DetailSection title="Upstream models">
+        {error ? (
+          <ErrorState error={error} />
+        ) : (
+          <p role="status">Loading upstream models…</p>
+        )}
+      </DetailSection>
+    );
+  return (
+    <ProviderUpstreams
+      key={provider.id}
+      provider={provider}
+      deployments={data.data}
+      refreshError={providerError ?? error}
+    />
+  );
+}
+
+function ProviderUpstreams({
+  provider,
+  deployments,
+  refreshError,
+}: {
+  provider: GatewayProvider;
+  deployments: GatewayDeployment[];
+  refreshError: Error | null;
+}) {
   const aliases = useGatewayAliases();
   const update = useUpdateGatewayDeployment();
   const remove = useDeleteGatewayDeployment();
-  const [editing, setEditing] = useState<GatewayDeployment>();
-  const rows = (data?.data ?? []).filter((d) => d.provider_id === provider.id);
+  const [editor, setEditor] = useState<{ deployment?: GatewayDeployment }>();
+  const editing = editor?.deployment;
+  const rows = deployments.filter((d) => d.provider_id === provider.id);
   const usedBy = (id: string) =>
     (aliases.data?.data ?? [])
       .filter((a) => a.targets.some((t) => t.deployment_id === id))
@@ -134,7 +174,12 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       header: "Price in / out / cache write / read",
       className: "text-right whitespace-nowrap",
       cell: (d) => (
-        <span className="tabular-nums" data-prices={JSON.stringify(d.prices)}>
+        <span
+          className="tabular-nums"
+          data-prices={JSON.stringify(d.prices)}
+          data-price-currency={d.price_currency ?? ""}
+        >
+          {d.price_currency && `${d.price_currency} `}
           {priceLine(d.prices)}
         </span>
       ),
@@ -187,7 +232,7 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
             size="sm"
             className="h-7 text-muted-foreground"
             aria-label={`Edit ${d.upstream_model}`}
-            onClick={() => setEditing(d)}
+            onClick={() => setEditor({ deployment: d })}
           >
             <Pencil className="size-3.5" />
           </Button>
@@ -208,53 +253,46 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
   return (
     <DetailSection
       title="Upstream models"
-      action={<AddUpstreamModelButton provider={provider} />}
+      action={
+        !refreshError && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setEditor({})}
+          >
+            <Plus className="size-4" /> Add upstream model
+          </Button>
+        )
+      }
     >
       <p className="pb-3 text-[13px] text-muted-foreground">
         Models this account serves. Prices are per million tokens and set the
         cost in Usage.
       </p>
-      {error ? (
-        <ErrorState error={error} />
+      {refreshError ? (
+        <ErrorState error={refreshError} />
       ) : (
         <DataTable
           columns={columns}
           rows={rows}
           rowKey={(d) => d.id}
-          loading={isPending}
           empty={<EmptyState title="No upstream models yet" />}
         />
       )}
-      {editing && (
+      {editor && (!editing || rows.some((d) => d.id === editing.id)) && (
         <UpstreamModelDialog
           provider={provider}
           deployment={editing}
-          onClose={() => setEditing(undefined)}
+          priceMetadata={
+            editing
+              ? editing.price_currency !== undefined
+              : deployments[0] && "price_currency" in deployments[0]
+          }
+          onClose={() => setEditor(undefined)}
         />
       )}
     </DetailSection>
-  );
-}
-
-function AddUpstreamModelButton({ provider }: { provider: GatewayProvider }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8"
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="size-4" /> Add upstream model
-      </Button>
-      {open && (
-        <UpstreamModelDialog
-          provider={provider}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
   );
 }
 
@@ -270,10 +308,12 @@ const limitText = (v: number | undefined) => (v ? String(v) : "");
 function UpstreamModelDialog({
   provider,
   deployment,
+  priceMetadata,
   onClose,
 }: {
   provider: GatewayProvider;
   deployment?: GatewayDeployment;
+  priceMetadata?: boolean;
   onClose: () => void;
 }) {
   const create = useCreateGatewayDeployment();
@@ -301,6 +341,10 @@ function UpstreamModelDialog({
     cache_write: priceText(deployment?.prices.cache_write),
     cache_read: priceText(deployment?.prices.cache_read),
   });
+  const [currency, setCurrency] = useState(
+    deployment ? (deployment.price_currency ?? "") : priceMetadata ? "CNY" : "",
+  );
+  const [priceNote, setPriceNote] = useState(deployment?.price_note ?? "");
 
   const capabilities = {
     ...flags,
@@ -316,13 +360,38 @@ function UpstreamModelDialog({
   }
 
   const submit = () => {
+    // An initially empty catalog can reveal a legacy Platform while the form is open.
+    const labels = {
+      ...(priceMetadata !== false &&
+        currency !== (deployment?.price_currency ?? "") && {
+          price_currency: currency.trim(),
+        }),
+      ...(priceMetadata !== false &&
+        priceNote !== (deployment?.price_note ?? "") && {
+          price_note: priceNote.trim(),
+        }),
+    };
     if (deployment) {
+      const changedCapabilities =
+        CAPABILITIES.some(
+          (key) => flags[key] !== deployment.capabilities[key],
+        ) ||
+        maxInput.trim() !==
+          limitText(deployment.capabilities.max_input_tokens) ||
+        maxOutput.trim() !== limitText(deployment.capabilities.max_tokens);
       update.mutate(
         {
           id: deployment.id,
-          display_name: displayName.trim(),
-          capabilities,
-          prices: priceBody as Prices,
+          ...(displayName !== deployment.display_name && {
+            display_name: displayName.trim(),
+          }),
+          ...(changedCapabilities && { capabilities }),
+          ...(PRICES.some(
+            ([key]) => priceBody[key] !== deployment.prices[key],
+          ) && {
+            prices: priceBody as Prices,
+          }),
+          ...labels,
         },
         { onSuccess: onClose },
       );
@@ -335,6 +404,7 @@ function UpstreamModelDialog({
           ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
           capabilities,
           prices: priceBody,
+          ...labels,
         },
         { onSuccess: onClose },
       );
@@ -459,9 +529,37 @@ function UpstreamModelDialog({
                 </div>
               ))}
             </div>
+            {priceMetadata !== false && (
+              <div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+                <div className="space-y-1.5">
+                  <Label htmlFor="upstream-price-currency">
+                    Price currency
+                  </Label>
+                  <Input
+                    id="upstream-price-currency"
+                    name="price_currency"
+                    placeholder="CNY"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    value={currency}
+                    onChange={(event) => setCurrency(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="upstream-price-note">Pricing terms</Label>
+                  <Input
+                    id="upstream-price-note"
+                    name="price_note"
+                    placeholder="e.g. Standard service, up to 512K input tokens"
+                    value={priceNote}
+                    onChange={(event) => setPriceNote(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              No currency: the gateway stores the number you enter. A blank
-              price leaves the cost of those tokens out of Usage.
+              Usage applies these fixed rates to future requests. Blank rates
+              contribute zero to the recorded cost.
             </p>
           </fieldset>
         </div>

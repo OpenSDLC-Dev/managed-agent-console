@@ -42,6 +42,18 @@ export class SessionPrincipalChangedError extends Error {
   }
 }
 
+/** A failed background read may keep a previously authorized editor mounted. */
+export function isTemporaryReadError(error: unknown): boolean {
+  return (
+    error instanceof TypeError ||
+    (error instanceof PlatformError &&
+      !error.signedOut &&
+      (error.status === 408 ||
+        error.status === 429 ||
+        (error.status >= 500 && error.status !== 501)))
+  );
+}
+
 /** Keyset-cursor list envelope; sessions additionally carry prev_page. */
 export interface Page<T> {
   data: T[];

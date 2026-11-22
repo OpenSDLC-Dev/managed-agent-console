@@ -33,12 +33,17 @@ import {
   useSurfaces,
   type SurfaceState,
 } from "@/lib/platform/surfaces";
-import type { GatewayDeployment, GatewayProvider } from "@/lib/platform/types";
+import type { GatewayProvider } from "@/lib/platform/types";
 import { cn } from "@/lib/utils";
 import {
   dashboardModelPath,
   type DashboardModel,
 } from "./dashboard-model-catalog";
+import {
+  DeploymentPrices,
+  type ModelUpstream,
+  type PriceLayout,
+} from "./dashboard-model-prices";
 
 const linkStyle =
   "rounded-sm underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-ring";
@@ -219,15 +224,15 @@ type Gates = {
   aliasAccess?: SurfaceState;
   playgroundPrincipal?: string;
   agentsAllowed: boolean;
+  pricing?: PriceLayout;
 };
-type Upstream = { deployment: GatewayDeployment; provider: GatewayProvider };
 
 function AliasList({
   upstreams,
   playgroundPrincipal,
   agentsAllowed,
 }: {
-  upstreams: Upstream[];
+  upstreams: ModelUpstream[];
   playgroundPrincipal?: string;
   agentsAllowed: boolean;
 }) {
@@ -369,6 +374,7 @@ function Upstreams({
   aliasAccess,
   playgroundPrincipal,
   agentsAllowed,
+  pricing,
 }: Gates & {
   model: DashboardModel;
   providers: GatewayProvider[];
@@ -384,7 +390,7 @@ function Upstreams({
       />
     );
   const byId = new Map(providers.map((p) => [p.id, p]));
-  const upstreams: Upstream[] = [];
+  const upstreams: ModelUpstream[] = [];
   for (const deployment of read.data.data) {
     const provider = byId.get(deployment.provider_id);
     if (
@@ -412,6 +418,8 @@ function Upstreams({
         .
       </Notice>
     );
+  if (pricing)
+    return <DeploymentPrices upstreams={upstreams} layout={pricing} />;
   const aliasList =
     aliasAccess?.status === "available" ? (
       <AliasList
@@ -492,14 +500,17 @@ function Providers({ model, ...gates }: Gates & { model: DashboardModel }) {
 function AdmittedGateway({
   model,
   playgroundPrincipal,
+  pricing,
 }: {
   model: DashboardModel;
   playgroundPrincipal?: string;
+  pricing?: PriceLayout;
 }) {
   const access = useSurfaces();
   return access?.providers?.status === "available" ? (
     <Providers
       model={model}
+      pricing={pricing}
       aliasAccess={access.models}
       agentsAllowed={access.agents?.status === "available"}
       playgroundPrincipal={playgroundPrincipal}
@@ -507,6 +518,47 @@ function AdmittedGateway({
   ) : (
     <SurfaceNotice state={access?.providers} name="provider configuration" />
   );
+}
+
+function GatewayContent({
+  model,
+  pricing,
+}: {
+  model: DashboardModel;
+  pricing?: PriceLayout;
+}) {
+  const session = useContext(ConsoleSessionContext);
+  const user = session?.data;
+  if (session?.isPending) {
+    return <Notice>Checking access to provider configuration…</Notice>;
+  }
+  if (session?.error || user?.signed_in !== true || !user.id || !user.role) {
+    return (
+      <Notice>Access to provider configuration could not be verified.</Notice>
+    );
+  }
+  if (user.role === "user")
+    return <Notice>Your account cannot view provider configuration.</Notice>;
+  return (
+    <AdmittedGateway
+      key={user.id + ":" + model.id}
+      model={model}
+      pricing={pricing}
+      playgroundPrincipal={
+        user.playground_access === true ? user.id : undefined
+      }
+    />
+  );
+}
+
+export function DashboardModelPrices({
+  model,
+  layout,
+}: {
+  model: DashboardModel;
+  layout: PriceLayout;
+}) {
+  return <GatewayContent model={model} pricing={layout} />;
 }
 
 export function DashboardModelGateway({
@@ -517,33 +569,7 @@ export function DashboardModelGateway({
   mode?: "detail" | "popup";
 }) {
   const heading = useId();
-  const session = useContext(ConsoleSessionContext);
-  const user = session?.data;
-  let content: ReactNode;
-  if (session?.isPending) {
-    content = <Notice>Checking access to provider configuration…</Notice>;
-  } else if (
-    session?.error ||
-    user?.signed_in !== true ||
-    !user.id ||
-    !user.role
-  ) {
-    content = (
-      <Notice>Access to provider configuration could not be verified.</Notice>
-    );
-  } else if (user.role === "user") {
-    content = <Notice>Your account cannot view provider configuration.</Notice>;
-  } else {
-    content = (
-      <AdmittedGateway
-        key={user.id + ":" + model.id}
-        model={model}
-        playgroundPrincipal={
-          user.playground_access === true ? user.id : undefined
-        }
-      />
-    );
-  }
+  const content = <GatewayContent model={model} />;
   if (mode === "popup")
     return (
       <section aria-label="Current deployment" className="min-w-0 max-w-full">
