@@ -6,7 +6,10 @@ Work from the current Git worktree. Read [STATE.md](./STATE.md) for active work.
 Look for this session's independent `SessionStart` hook receipt, `harness-doctor: OK`.
 If it is missing, run `node scripts/harness-doctor.mjs check` from the root. Inspect the
 active worktree, project instruction precedence and native hook trust. A manual pass
-verifies files. Confirm the hook separately in a new trusted session.
+verifies files. Confirm the hook separately in a new trusted session. Claude loads
+shared settings from its primary working directory. From a subdirectory, restart
+Claude at the root reported by `git rev-parse --show-toplevel`, or pass that root's
+absolute `.claude/settings.json` path to `claude --settings`. Check for a fresh receipt.
 
 Read every rule returned by `node scripts/harness-doctor.mjs rules <path> ...`
 before changing those paths. This also works when a client omits scoped rules.

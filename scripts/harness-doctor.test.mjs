@@ -126,6 +126,16 @@ test("a clean clone discovers all three host configurations from subdirectories 
       host === "antigravity"
         ? entry["harness-doctor"].SessionStart[0]
         : entry.hooks.SessionStart[0].hooks[0];
+    if (host === "claude") {
+      const matcher = new RegExp(
+        "^(?:" + entry.hooks.SessionStart[0].matcher + ")$",
+      );
+      for (const reason of ["startup", "clear", "fork"])
+        assert.ok(
+          matcher.test(reason),
+          "Claude SessionStart must cover " + reason,
+        );
+    }
     const [, alias, body] = /^git -c "alias\.([\w-]+)=!([^"]+)" [\w-]+$/.exec(
       native.command,
     );
@@ -294,6 +304,99 @@ test("registered hook drift is repairable and custom hooks, malformed files and 
   set(cwd, ".claude/agents/unregistered.md", "personal");
   fail(run(cwd, "sync"), /unregistered.md/);
   assert.equal(get(cwd, ".claude/agents/unregistered.md"), "personal");
+});
+
+test("missing tracked Claude settings recover independent settings from this worktree's index", (t) => {
+  const { cwd } = fixture(t);
+  const key = registries.claude;
+  const staged = {
+    enabledPlugins: { "typescript-lsp@claude-plugins-official": true },
+    permissions: { deny: ["private"] },
+    env: { LOCAL_PROJECT_OPTION: "staged" },
+  };
+  putJson(cwd, key, staged);
+  pass(command(cwd, "git", ["add", "--", key]));
+  rmSync(join(cwd, key));
+  fail(run(cwd, "check"), /\.claude\/settings.json is missing/);
+  assert.ok(!existsSync(join(cwd, key)));
+  pass(run(cwd, "sync"));
+  const policy = JSON.parse(get(cwd, "harness/hooks/claude.json"));
+  assert.deepEqual(JSON.parse(get(cwd, key)), {
+    ...staged,
+    hooks: policy.hooks,
+  });
+  assert.deepEqual(
+    JSON.parse(pass(command(cwd, "git", ["show", ":" + key]))),
+    staged,
+  );
+  pass(run(cwd, "check"));
+});
+
+test("disabling Claude hooks is a read-only diagnostic in check, sync and startup", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = registries.claude;
+  putJson(cwd, key, { ...JSON.parse(get(cwd, key)), disableAllHooks: true });
+  const original = get(cwd, key);
+  for (const action of ["check", "sync"])
+    fail(run(cwd, action), /\.claude\/settings.json.*disableAllHooks/);
+  const receipt = JSON.parse(pass(run(cwd, "session-start", "claude")));
+  assert.match(
+    receipt.hookSpecificOutput.additionalContext,
+    /FAIL[\s\S]*disableAllHooks/,
+  );
+  assert.equal(get(cwd, key), original);
+});
+
+test("the canonical Claude startup hook always delivers context synchronously on clear", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const source = "harness/hooks/claude.json";
+  const baseline = get(cwd, source);
+  for (const option of ["async", "asyncRewake", "missing-clear"]) {
+    const policy = JSON.parse(baseline);
+    const group = policy.hooks.SessionStart[0];
+    if (option === "missing-clear") group.matcher = "startup|fork";
+    else group.hooks[0][option] = true;
+    putJson(cwd, source, policy);
+    putJson(cwd, registries.claude, policy);
+    fail(run(cwd, "check"), /harness\/hooks\/claude\.json/);
+  }
+});
+
+test("reuse of a recognized command cannot erase an unregistered hook, group, field or duplicate", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  for (const host of hosts) {
+    const key = registries[host];
+    const original = get(cwd, key);
+    for (const variation of [
+      "event",
+      "extraGroup",
+      "handlerField",
+      "duplicateHandler",
+      "groupField",
+    ]) {
+      const settings = JSON.parse(original);
+      const policy =
+        host === "antigravity" ? settings["harness-doctor"] : settings.hooks;
+      const group = policy.SessionStart[0];
+      const handlers =
+        host === "antigravity" ? policy.SessionStart : group.hooks;
+      if (variation === "event") policy.Stop = [structuredClone(group)];
+      if (variation === "extraGroup")
+        policy.SessionStart.push({ ...group, matcher: "private" });
+      if (variation === "handlerField") handlers[0].once = true;
+      if (variation === "duplicateHandler")
+        handlers.push(structuredClone(handlers[0]));
+      if (variation === "groupField") group.extra = true;
+      putJson(cwd, key, settings);
+      const saved = get(cwd, key);
+      fail(run(cwd, "sync"), /unregistered/);
+      assert.equal(get(cwd, key), saved, host + " " + variation);
+    }
+    set(cwd, key, original);
+  }
 });
 
 test("checks the 200 physical lines, alternate instructions, and hook policy from source", (t) => {

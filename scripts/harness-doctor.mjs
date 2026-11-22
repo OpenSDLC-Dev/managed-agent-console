@@ -379,17 +379,72 @@ function expected(root, manifest, selected, index) {
   return outputs;
 }
 
-function commands(value) {
-  if (Array.isArray(value)) return value.flatMap(commands);
-  if (!object(value)) return [];
-  return Object.hasOwn(value, "command")
-    ? [value.command]
-    : Object.values(value).flatMap(commands);
-}
 function hookCommand(task, alias) {
   return (
     'git -c "alias.console-' + alias + "=!node " + task + '" console-' + alias
   );
+}
+// A group or handler can only occupy one slot in the registered event. Missing
+// registrations are generated again, while extra copies and custom fields survive.
+function registeredSubset(actual, registered, matches) {
+  const remaining = [...registered];
+  return actual.every((entry) => {
+    const index = remaining.findIndex((candidate) => matches(entry, candidate));
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+    return true;
+  });
+}
+function checkHookEvents(events, policy, key) {
+  requireThat(object(events), key + " has malformed hook events.");
+  for (const [event, groups] of Object.entries(events)) {
+    const known = policy[event];
+    const message =
+      key +
+      " contains an unregistered " +
+      event +
+      " group, handler or field. Review it before syncing.";
+    requireThat(Object.hasOwn(policy, event), message);
+    if (!Array.isArray(known)) {
+      requireThat(isDeepStrictEqual(groups, known), message);
+      continue;
+    }
+    requireThat(
+      Array.isArray(groups),
+      key + " has malformed " + event + " hooks.",
+    );
+    requireThat(
+      registeredSubset(groups, known, (group, candidate) => {
+        if (isDeepStrictEqual(group, candidate)) return true;
+        if (!Array.isArray(group?.hooks) || !Array.isArray(candidate?.hooks))
+          return false;
+        const { hooks, ...metadata } = group;
+        const { hooks: registered, ...expected } = candidate;
+        // Only a sole registered group with an existing string matcher can
+        // unambiguously own matcher drift (including an older project matcher).
+        if (
+          known.length === 1 &&
+          typeof expected.matcher === "string" &&
+          typeof metadata.matcher === "string"
+        )
+          metadata.matcher = expected.matcher;
+        return (
+          isDeepStrictEqual(metadata, expected) &&
+          registeredSubset(hooks, registered, isDeepStrictEqual)
+        );
+      }),
+      message,
+    );
+  }
+}
+function stagedClaudeSettings(root, key) {
+  const entry = git(root, ["ls-files", "--stage", "--", key]).trimEnd();
+  if (!entry) return undefined;
+  requireThat(
+    /^100(?:644|755) [a-f0-9]+ 0\t[^\n]+$/.test(entry),
+    key + " has no regular, resolved entry in this worktree's Git index.",
+  );
+  return git(root, ["show", ":" + key]);
 }
 function registry(root, host) {
   const key = registries[host],
@@ -412,9 +467,20 @@ function registry(root, host) {
       handlers[0].command === command &&
       (host === "antigravity"
         ? native["harness-doctor"].enabled !== false
-        : start[0].matcher === "startup|fork"),
+        : start[0].matcher ===
+          (host === "claude" ? "startup|clear|fork" : "startup|fork")),
     source + " must register the new-session doctor for " + host,
   );
+  if (host === "claude") {
+    for (const field of ["async", "asyncRewake"])
+      requireThat(
+        !Object.hasOwn(handlers[0], field) || handlers[0][field] === false,
+        source +
+          " must deliver the SessionStart receipt synchronously. Remove " +
+          field +
+          ".",
+      );
+  }
   if (host === "codex") {
     const before = native.hooks?.PreToolUse;
     requireThat(
@@ -429,10 +495,18 @@ function registry(root, host) {
     read(root, "harness/hooks/codex-readonly.mjs");
   }
   const path = inside(root, key);
-  if (!stat(path)) return { previous: undefined, next: native };
-  const previous = read(root, key);
-  const actual = json(previous, key);
+  const previous = stat(path) ? read(root, key) : undefined;
+  const baseline =
+    previous ??
+    (host === "claude" ? stagedClaudeSettings(root, key) : undefined);
+  if (baseline === undefined) return { previous, next: native };
+  const actual = json(baseline, key);
   if (host === "claude") {
+    requireThat(
+      actual.disableAllHooks !== true,
+      key +
+        " sets disableAllHooks to true. Enable project hooks before checking again.",
+    );
     for (const setting of [
       "CLAUDE_CODE_SUBAGENT_MODEL",
       "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL",
@@ -446,33 +520,6 @@ function registry(root, host) {
       );
     }
   }
-  const known = new Set(commands(native));
-  const checkGroups = (events, agy) => {
-    requireThat(object(events), key + " has malformed hook events.");
-    for (const [event, groups] of Object.entries(events)) {
-      if (agy && event === "enabled" && typeof groups === "boolean") continue;
-      requireThat(
-        Array.isArray(groups),
-        key + " has malformed " + event + " hooks.",
-      );
-      for (const group of groups) {
-        const hooks =
-          agy && Object.hasOwn(group ?? {}, "command") ? [group] : group?.hooks;
-        requireThat(
-          Array.isArray(hooks) && hooks.length,
-          key + " contains an unregistered or malformed " + event + " handler.",
-        );
-        for (const hook of hooks)
-          requireThat(
-            object(hook) && hook.type === "command" && known.has(hook.command),
-            key +
-              " contains an unregistered " +
-              event +
-              " handler. Review it before syncing.",
-          );
-      }
-    }
-  };
   if (host === "antigravity") {
     for (const [name, events] of Object.entries(actual)) {
       requireThat(
@@ -482,11 +529,12 @@ function registry(root, host) {
           name +
           ". Review it before syncing.",
       );
-      checkGroups(events, true);
+      checkHookEvents(events, native[name], key);
     }
     return { previous, next: native };
   }
-  if (Object.hasOwn(actual, "hooks")) checkGroups(actual.hooks, false);
+  if (Object.hasOwn(actual, "hooks"))
+    checkHookEvents(actual.hooks, native.hooks, key);
   return { previous, next: { ...actual, hooks: native.hooks } };
 }
 function write(root, key, content, previous, mode) {

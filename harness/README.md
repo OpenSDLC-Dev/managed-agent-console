@@ -14,4 +14,6 @@ node --test scripts/harness-doctor.test.mjs
 
 The Codex role hook reads the native `agent_type` and tool name. It declines calls outside the file-read/search capabilities for Console triage and review. Trust the project hook through the normal client flow. Supply evidence directly when a restricted client has no native file tool.
 
+Claude reads shared `.claude/settings.json` from the primary working directory. A bare session started under a worktree subdirectory can load the root guide and still miss the startup hook. Start a fresh session at the root printed by `git rev-parse --show-toplevel`, or use `claude --settings "<absolute-worktree-root>/.claude/settings.json"` and look for the independent receipt. [Claude project settings](https://code.claude.com/docs/en/settings#project-settings)
+
 When upgrading a client, start a fresh session using a clean temporary worktree and observe the hook response separately from the root guide. Invoke the review skill, start a named child, check its model and tools, and inspect a representative file with matching rules. In a scratch checkout change one adapter and confirm a new session names it. Keep actual CLI results separate from offline protocol replay.
