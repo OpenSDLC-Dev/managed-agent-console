@@ -144,6 +144,21 @@ test("client calls accept individual results, error status and a screenshot in t
   await expect(zoom).toBeChecked();
   await zoom.click();
   await addTool(page, "Browser use");
+  const computerCard = page.getByRole("button", {
+    name: "computer",
+    exact: true,
+  });
+  const browserCard = page.getByRole("button", {
+    name: "browser",
+    exact: true,
+  });
+  await expect(computerCard).toHaveAttribute("aria-expanded", "true");
+  await expect(browserCard).toHaveAttribute("aria-expanded", "true");
+  await computerCard.click();
+  await expect(zoom).toBeHidden();
+  await expect(browserCard).toHaveAttribute("aria-expanded", "true");
+  await computerCard.click();
+  await expect(zoom).not.toBeChecked();
   for (const name of [
     "JavaScript execution",
     "File upload",

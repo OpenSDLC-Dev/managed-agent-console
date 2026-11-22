@@ -161,8 +161,8 @@ export function PlaygroundEditor({
   model,
   loading,
   running,
-  expandedTool,
-  onExpandTool,
+  expandedTools,
+  onExpandTools,
   onEditFullRequest,
 }: {
   draft: PlaygroundDraft;
@@ -171,8 +171,8 @@ export function PlaygroundEditor({
   model: string;
   loading: boolean;
   running: boolean;
-  expandedTool: number | null;
-  onExpandTool: (index: number | null) => void;
+  expandedTools: number[];
+  onExpandTools: (indices: number[]) => void;
   onEditFullRequest: (triggerId: string) => void;
 }) {
   const { system, messages } = draft;
@@ -240,7 +240,7 @@ export function PlaygroundEditor({
                 <DropdownMenuItem
                   className="gap-2 px-2"
                   onClick={() => {
-                    onExpandTool(0);
+                    onExpandTools([0]);
                     onChange(addCustomTool(draft));
                   }}
                 >
@@ -256,7 +256,10 @@ export function PlaygroundEditor({
                       disabled={added}
                       data-tool-kind={id}
                       onClick={() => {
-                        onExpandTool(0);
+                        onExpandTools([
+                          0,
+                          ...expandedTools.map((index) => index + 1),
+                        ]);
                         onChange(prependTool(draft, definition));
                       }}
                     >
@@ -297,8 +300,8 @@ export function PlaygroundEditor({
         draft={draft}
         presets={presets}
         onChange={onChange}
-        expanded={expandedTool}
-        onExpand={onExpandTool}
+        expanded={expandedTools}
+        onExpand={onExpandTools}
         onEditFullRequest={onEditFullRequest}
       />
       {system !== null && (

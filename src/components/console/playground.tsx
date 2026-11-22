@@ -108,7 +108,7 @@ function PlaygroundForm({
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
   const [newRequests, setNewRequests] = useState(0);
-  const [expandedTool, setExpandedTool] = useState<number | null>(null);
+  const [expandedTools, setExpandedTools] = useState<number[]>([]);
   const [template, setTemplate] = useState<{
     title: string;
     draft: PlaygroundDraft;
@@ -258,10 +258,11 @@ function PlaygroundForm({
       : undefined;
     if (invalid !== undefined && invalid >= 0) {
       const field = `playground-tool-${invalid}-schema`;
-      if (expandedTool === invalid) document.getElementById(field)?.focus();
+      if (expandedTools.includes(invalid))
+        document.getElementById(field)?.focus();
       else {
         nextFocusId.current = field;
-        setExpandedTool(invalid);
+        setExpandedTools([invalid]);
       }
       return false;
     }
@@ -287,7 +288,7 @@ function PlaygroundForm({
       };
       delete next.parameters.tool_choice;
     } else setNewRequests((previous) => previous + 1);
-    setExpandedTool(null);
+    setExpandedTools([]);
     setTemplate(preset ? { title: preset.title, draft: next } : undefined);
     setDraft(next);
     setCode(undefined);
@@ -512,8 +513,8 @@ function PlaygroundForm({
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
-                expandedTool={expandedTool}
-                onExpandTool={setExpandedTool}
+                expandedTools={expandedTools}
+                onExpandTools={setExpandedTools}
                 model={model}
                 models={chatModels ?? []}
                 running={running}
@@ -740,7 +741,7 @@ function PlaygroundForm({
                       setHistoryOpen(false);
                       return;
                     }
-                    setExpandedTool(null);
+                    setExpandedTools([]);
                     setDraft(entry.draft);
                     setCode(undefined);
                     setText(entry.text);

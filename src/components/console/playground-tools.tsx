@@ -153,8 +153,8 @@ export function PlaygroundTools({
   draft: PlaygroundDraft;
   presets: PlaygroundToolPreset[];
   onChange: (next: PlaygroundDraft) => void;
-  expanded: number | null;
-  onExpand: (index: number | null) => void;
+  expanded: number[];
+  onExpand: (indices: number[]) => void;
   onEditFullRequest: (triggerId: string) => void;
 }) {
   const tools: unknown[] = Array.isArray(draft.parameters?.tools)
@@ -222,11 +222,9 @@ export function PlaygroundTools({
     )
       delete parameters.tool_choice;
     onExpand(
-      expanded !== null && expanded > index
-        ? expanded - 1
-        : expanded === index
-          ? null
-          : expanded,
+      expanded
+        .filter((open) => open !== index)
+        .map((open) => (open > index ? open - 1 : open)),
     );
     const toolSchemas = draft.toolSchemas?.slice();
     toolSchemas?.splice(index, 1);
@@ -273,7 +271,7 @@ export function PlaygroundTools({
         );
         const Icon = preset?.icon ?? Wrench;
         const actions = presetActions(tool);
-        const open = expanded === index;
+        const open = expanded.includes(index);
         const prefix = `playground-tool-${index}`;
         const edit = draft.toolSchemas?.[index];
         const custom =
@@ -290,7 +288,13 @@ export function PlaygroundTools({
                 type="button"
                 aria-expanded={open}
                 aria-controls={`${prefix}-fields`}
-                onClick={() => onExpand(open ? null : index)}
+                onClick={() =>
+                  onExpand(
+                    open
+                      ? expanded.filter((item) => item !== index)
+                      : [...expanded, index],
+                  )
+                }
                 className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-1 text-left text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring"
               >
                 <ChevronRight
