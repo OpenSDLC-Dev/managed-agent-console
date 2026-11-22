@@ -41,6 +41,11 @@ test("refused resource reads leave only local entry points", async ({
       paths: ["v1/", "api/console/", "admin/v1/"],
     },
   });
+  const dailyReads: string[] = [];
+  page.on("request", (req) => {
+    const path = new URL(req.url()).pathname;
+    if (path.endsWith("/usage/daily")) dailyReads.push(path);
+  });
   await signIn(page);
   await page.goto("/dashboard");
   await expect(page.locator("nav [data-nav-group]")).toHaveCount(0);
@@ -51,7 +56,17 @@ test("refused resource reads leave only local entry points", async ({
   await expect(page.getByRole("link", { name: "Build an agent" })).toHaveCount(
     0,
   );
-  await expect(page.getByRole("link", { name: "Explore docs" })).toBeVisible();
+  await expect(page.locator("[data-no-resource-access]")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Usage overview" }),
+  ).toHaveCount(0);
+  expect(dailyReads).toEqual([]);
+  await expect(
+    page.getByRole("link", { name: "Platform documentation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Compare models" }),
+  ).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("option")).toHaveCount(1);
   await expect(page.getByRole("option", { name: "Dashboard" })).toBeVisible();

@@ -1,9 +1,10 @@
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { gatewayFixtures } from "@/../test/mock-platform/gateway.mjs";
 import NewAgentPage from "./page";
 
 vi.mock("next/navigation", () => ({
@@ -42,10 +43,17 @@ vi.mock("@/components/ui/select", async () => {
     SelectTrigger: (props: {
       children?: React.ReactNode;
       "aria-label"?: string;
+      id?: string;
+      "data-model"?: string;
     }) =>
       React.createElement(
         "button",
-        { type: "button", "aria-label": props["aria-label"] },
+        {
+          type: "button",
+          id: props.id,
+          "aria-label": props["aria-label"],
+          "data-model": props["data-model"],
+        },
         props.children,
       ),
     SelectValue: () => {
@@ -77,16 +85,24 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderPage() {
+async function renderPage(model?: string | string[]) {
   vi.stubGlobal(
     "fetch",
-    withTestSession(
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ data: [] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
+    vi.fn(
+      withTestSession(
+        async (input: RequestInfo | URL) =>
+          new Response(
+            JSON.stringify({
+              data:
+                String(input).endsWith("/aliases") && model
+                  ? [{ ...gatewayFixtures().aliases[0], name: "team/model+A" }]
+                  : [],
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
       ),
     ),
   );
@@ -98,14 +114,14 @@ function renderPage() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <NewAgentPage />
+      {await NewAgentPage({ searchParams: Promise.resolve({ model }) })}
     </QueryClientProvider>,
   );
 }
 
 describe("NewAgentPage", () => {
   it("renders the header and a create-mode editor seeded with defaults", async () => {
-    renderPage();
+    await renderPage();
 
     expect(
       screen.getByRole("heading", { name: "Create agent" }),
@@ -125,7 +141,7 @@ describe("NewAgentPage", () => {
 
   it("seeds the editor from a starter template and back to blank", async () => {
     const user = userEvent.setup();
-    renderPage();
+    await renderPage();
 
     const runnerCard = screen.getByRole("button", { name: /Code task runner/ });
     await user.click(runnerCard);
@@ -148,5 +164,28 @@ describe("NewAgentPage", () => {
     expect(
       screen.getByRole("checkbox", { name: "bash enabled" }),
     ).toBeChecked();
+  });
+
+  it("passes the requested gateway model to blank and template drafts", async () => {
+    const user = userEvent.setup();
+    await renderPage(["team/model+A", "unused"]);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Model")).toHaveAttribute(
+        "data-model",
+        "team/model+A",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: /Code task runner/ }));
+    expect(screen.getByLabelText("Model")).toHaveAttribute(
+      "data-model",
+      "team/model+A",
+    );
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.every(
+          ([, options]) => (options?.method ?? "GET") === "GET",
+        ),
+    ).toBe(true);
   });
 });

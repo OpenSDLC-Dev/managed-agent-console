@@ -56,6 +56,7 @@ export function PlaygroundEditor({
   running: boolean;
 }) {
   const { system, messages } = draft;
+  const emptyModelLabel = models.length ? "Select a model" : "No models";
   const patch = (change: Partial<PlaygroundDraft>) =>
     onChange({ ...draft, ...change });
   function addMessage(role: PlaygroundMessage["role"]) {
@@ -97,7 +98,7 @@ export function PlaygroundEditor({
                   ? "Loading models…"
                   : model
                     ? `${model} (unavailable)`
-                    : "No models")}
+                    : emptyModelLabel)}
             </SelectValue>
           </SelectTrigger>
           <SelectContent align="start" alignItemWithTrigger={false}>

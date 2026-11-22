@@ -2,6 +2,10 @@
 export const LANDING_ROUTE = "/dashboard";
 export const PLAYGROUND_ROUTE = "/playground";
 
+export function isDashboardPath(pathname: string) {
+  return pathname === LANDING_ROUTE || pathname.startsWith(`${LANDING_ROUTE}/`);
+}
+
 export function playgroundOnly(
   session?: {
     role?: string;

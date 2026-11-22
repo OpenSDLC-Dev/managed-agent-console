@@ -12,6 +12,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- The Dashboard shows recorded gateway usage and compares four integrated models. Each model card opens a dialog with its specifications, prices and copyable ID. Use a configured gateway alias in Playground or a new agent draft, or open the model's full Console guide.
 - Search active or archived service accounts across the directory. Copy an account ID, edit its description or role, inspect and issue its API keys, or open a shareable detail page. Unfinished creation forms now prompt before dismissal.
 - Deleted API keys disappear from the Keys page and its filters. Platform retains their history for administrative queries.
 - Search, filter and inspect API keys, manage them from the row or details panel, and open their month-to-date gateway costs. Key creation now starts with CLI sign-in or an account-linked API key.

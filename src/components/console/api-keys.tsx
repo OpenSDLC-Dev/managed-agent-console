@@ -371,9 +371,8 @@ export function KeyCreation({
       {!target && (
         <Button
           ref={triggerRef}
-          size={shortcut ? "default" : "sm"}
-          variant={shortcut ? "outline" : "default"}
-          className={shortcut ? "h-8" : "h-7"}
+          size="sm"
+          variant={shortcut ? "secondary" : "default"}
           onClick={() => {
             resetDraft();
             setStep("connect");

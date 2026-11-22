@@ -10,7 +10,11 @@ import {
 import { PageHeader } from "./page-header";
 import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
 import { PlatformError } from "@/lib/platform/http";
-import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import {
+  isDashboardPath,
+  PLAYGROUND_ROUTE,
+  playgroundOnly,
+} from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import { PortalContainer } from "@/components/ui/portal-container";
 
@@ -84,7 +88,7 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
   const session = useContext(ConsoleSessionContext)?.data;
   const surface = surfaceOfPath(pathname);
   if (playgroundOnly(session)) {
-    if (pathname === LANDING_ROUTE) redirect(PLAYGROUND_ROUTE);
+    if (isDashboardPath(pathname)) redirect(PLAYGROUND_ROUTE);
     if (surface)
       return (
         <div>

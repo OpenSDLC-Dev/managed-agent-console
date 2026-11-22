@@ -137,7 +137,7 @@ for (const surface of SURFACES.filter((s) => s.mode !== "platform")) {
     await mkdir(`${OUT}/${theme}`, { recursive: true });
     await page.screenshot({
       path: `${OUT}/${theme}/${surface.id}.png`,
-      fullPage: true,
+      fullPage: !surface.viewportOnly,
     });
   });
 }
