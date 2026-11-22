@@ -4,6 +4,10 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Plan 11 — Portable agent harness acceptance
+
+Windows Claude Code, Codex CLI and Linux Antigravity CLI discovered project skills and dispatched a named reviewer against isolated loopback endpoints. The parent and child used the same model and reasoning settings. Untrusted Codex hooks produced no startup receipt, and the trusted project guard refused a write from triage. A fresh Antigravity session named the damaged adapter. A plain Claude subdirectory launch required the root settings file to deliver the receipt. [Acceptance evidence](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/289)
+
 ## Platform plan 73 Playground acceptance
 
 On 2026-11-20, Chrome signed in through the real native HTTP stack. The

@@ -4,11 +4,6 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-### Portable agent harness
-
-[Plan 11](./docs/plan/11_portable-agent-harness.md) adds three CLI adapters and
-their startup check. Native loader acceptance and CI are in progress.
-
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from
