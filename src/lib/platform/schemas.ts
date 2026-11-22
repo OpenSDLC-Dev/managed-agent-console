@@ -3,8 +3,8 @@
  * of truth for both the console's types (`./types` infers from here) and the
  * fixture-conformance suite (`./schemas.test.ts`).
  *
- * Transcribed from the platform checkout (file:line cites below); per CLAUDE.md
- * principle 1, update against the source, never from memory. Reference-wire
+ * Transcribed from the platform checkout (file:line cites below). Follow
+ * harness/rules/platform-contract.md when updating these types. Reference-wire
  * audit against `@anthropic-ai/sdk`'s generated types: docs/wire-divergences.md.
  *
  * **Verification instrument only.** Nothing here runs in the browser or the

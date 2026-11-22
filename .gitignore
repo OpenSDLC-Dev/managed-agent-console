@@ -27,7 +27,11 @@ fidelity-shots/
 .claude/*
 !.claude/settings.json
 !.claude/agents/
+!.claude/rules/
 !.claude/skills/
+
+# Personal, higher-precedence Claude instructions
+CLAUDE.local.md
 
 # Next.js extras
 *.tsbuildinfo

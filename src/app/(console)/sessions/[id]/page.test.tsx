@@ -281,7 +281,7 @@ describe("SessionDetailPage", () => {
       }),
     ).toBeInTheDocument();
     const chips = screen.getByTestId("session-chips");
-    // Counters as raw integers (CLAUDE.md's data-* convention); the rendered
+    // Counters as raw integers (harness/rules/ui-evidence.md's data-* convention); the rendered
     // string is owned by `utils.test.ts` and the e2e formatting test.
     const usage = within(chips).getByTestId("usage-chip");
     expect(usage).toHaveAttribute("data-input-tokens", "1234");

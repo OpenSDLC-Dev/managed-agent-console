@@ -106,7 +106,7 @@ test("sessions list filters by status", async ({ page }) => {
   await expect(
     page.getByRole("cell", { name: "Survey agent frameworks" }),
   ).toBeVisible();
-  // Tokens column carries the usage counters as raw integers (CLAUDE.md);
+  // Tokens column carries the usage counters as raw integers (harness/rules/ui-evidence.md);
   // the rendered string is asserted once, in session-live.spec.ts. Scoped to
   // its row, not `.first()` — the list sorts newest-first, so position is not
   // identity.

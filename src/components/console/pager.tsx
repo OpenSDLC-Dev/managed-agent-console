@@ -13,7 +13,7 @@ export function Pager({
   onNext: () => void;
 }) {
   return (
-    // Cursor state, machine-readable (see CLAUDE.md): whether the wire handed
+    // Cursor state, machine-readable (see harness/rules/ui-evidence.md): whether the wire handed
     // back a page token in either direction. Disabled buttons say the same
     // thing, but only by inference from a control's enabled-ness.
     <div

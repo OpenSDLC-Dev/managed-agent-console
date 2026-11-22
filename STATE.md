@@ -1,8 +1,13 @@
 # STATE.md — Active work
 
-Conventions: [CLAUDE.md](./CLAUDE.md) · changes: [CHANGELOG.md](./CHANGELOG.md).
+Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md).
 
 ## Active work
+
+### Portable agent harness
+
+[Plan 11](./docs/plan/11_portable-agent-harness.md) adds three CLI adapters and
+their startup check. Native loader acceptance and CI are in progress.
 
 ### Owner verification
 

@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git -c \"alias.console-doctor=!node scripts/harness-doctor.mjs session-start codex\" console-doctor"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git -c \"alias.console-readonly=!node harness/hooks/codex-readonly.mjs\" console-readonly"
+          }
+        ]
+      }
+    ]
+  }
+}

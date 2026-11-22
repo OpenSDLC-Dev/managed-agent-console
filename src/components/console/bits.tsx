@@ -247,7 +247,7 @@ export function ListSkeleton({ rows = 3 }: { rows?: number }) {
 
 /**
  * Stands in for a whole page whose surface this deployment does not
- * implement (CLAUDE.md principle 3). Not an error state: the platform is
+ * implement (harness/rules/platform-contract.md). Not an error state: the platform is
  * healthy, the endpoint is simply absent, so the page says so calmly and
  * drops the actions and filters that would act on it.
  */

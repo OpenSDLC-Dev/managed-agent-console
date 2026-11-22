@@ -42,7 +42,7 @@ describe("Pager", () => {
 
   it("states its cursor position machine-readably", () => {
     // Disabled buttons imply the same thing, but only by inference from a
-    // control's enabled-ness (CLAUDE.md's data-* convention).
+    // control's enabled-ness (harness/rules/ui-evidence.md's data-* convention).
     const noop = () => {};
     const { rerender } = render(
       <Pager hasPrev={false} hasNext onPrev={noop} onNext={noop} />,

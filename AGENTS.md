@@ -1,25 +1,58 @@
-# AGENTS.md
+# Console contributor guide
 
-For AI coding agents and reviewers (Codex, CodeRabbit, and similar).
+## Start the session
 
-**[CLAUDE.md](./CLAUDE.md) is the canonical contributor guide** — read it before making or reviewing
-a change. These are the rules most often violated by tools that skip it:
+Work from the current Git worktree. Read [STATE.md](./STATE.md) for active work.
+Look for this session's independent `SessionStart` hook receipt, `harness-doctor: OK`.
+If it is missing, run `node scripts/harness-doctor.mjs check` from the root. Inspect the
+active worktree, project instruction precedence and native hook trust. A manual pass
+verifies files. Confirm the hook separately in a new trusted session.
 
-- **Never guess a wire shape.** The platform's implemented surface is the single source of truth
-  (`../managed-agent-platform`'s `internal/api/`, `internal/domain/`). A wire shape without a source
-  is a defect.
-- **Browser requests use platform sessions, never an API key.** No `NEXT_PUBLIC_*`
-  carries a credential; `.env*` is gitignored — flag any real key in a diff.
-- **The platform owns native login and current authority.** Native calls use HttpOnly cookies and
-  edge-owned private routes. Next.js has no credential proxy or local identity-provider session.
-  Missing session metadata fails closed. Navigation admission never replaces a server check.
-- **Never commit to `main`.** Branch → PR → CI green **and** zero unresolved review threads → squash
-  merge, with a Conventional Commit PR title.
-- **Green means:** `pnpm lint` (zero warnings), `format:check`, `typecheck`, `test:coverage`,
-  `test:e2e`, on a 3-OS matrix plus a trivy-gated Docker build.
-- **Thin console.** The platform owns semantics; no client-side recomputation of platform state, no
-  validation stricter than the wire's, no speculative abstractions.
-- **Docs move with code, in the same PR**, and stay terse — see CLAUDE.md's "Writing it down".
+Read every rule returned by `node scripts/harness-doctor.mjs rules <path> ...`
+before changing those paths. This also works when a client omits scoped rules.
+Change shared instructions in `harness/`. Run `node scripts/harness-doctor.mjs sync`
+and then `check` for generated drift. On a writable task, fix the source or adapter and
+repeat the check. During a read-only task, report the affected capability and paths.
+Preserve unknown hooks and local settings for their owner to reconcile.
+
+## Authority and evidence
+
+This console serves operators of self-hosted managed-agent-platform deployments.
+The sibling platform checkout owns API truth and identity. Verify its implemented
+contract before changing Console behavior. Use the Managed Agents section of
+platform.claude.com for UI fidelity. The [platform contract](./harness/rules/platform-contract.md)
+and [UI evidence](./harness/rules/ui-evidence.md) rules explain these boundaries.
+Build and verification commands live in [package.json](./package.json) and
+[development instructions](./README.md#development). Use live services only with
+explicit opt-in. A missing prerequisite on an opted-in run is a failure.
+
+## Issues and delivery
+
+Use the GitHub backlog. File issues with a type and exactly two labels: priority
+(`p0`, `p1`, `p2`) and difficulty (`easy`, `medium`, `hard`). Choose Bug for a
+regression, Feature for a capability or improvement and Task for a concrete piece of work.
+Missing type, priority or difficulty defaults to Feature, `p1` or `hard`, respectively.
+
+Check the issue and [plans](./docs/plan/) for an existing plan. Otherwise run
+`node scripts/issue-triage.mjs NUMBER` and give its JSON unchanged to a fresh
+[issue-triage](./harness/agents/issue-triage.md) role. Supply source evidence on request.
+Only the maintainer updates labels. Start easy work directly, write a plan for medium
+work, and record the necessary human decision for hard work.
+
+Branch from fresh main. Update [CHANGELOG.md](./CHANGELOG.md) for notable changes,
+STATE.md for active work and plan status when the lifecycle changes. Keep progress
+in STATE.md and archived acceptance in [HISTORY.md](./docs/HISTORY.md). Write each
+fact once and cite its source. Report observed results and identify unverified claims.
+
+For changes beyond a typo, commit and run [review-branch](./harness/skills/review-branch/SKILL.md).
+The reviewer must work independently. Verify parent and child model settings before
+counting its verdict. Give evidence for fixes and refutations in the PR. Use a Conventional
+Commit PR title. Squash merge after required CI passes and every review thread is resolved,
+then sync main. [Releases](./docs/releasing.md) have a separate workflow.
+
+Keep working while an authorized step remains. Pause for human decisions, destructive
+actions or changes outside the repository. End task reports with **Blocked on me**,
+**Changed** and **Found**, in that order.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

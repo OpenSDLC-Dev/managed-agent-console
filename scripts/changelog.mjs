@@ -4,7 +4,7 @@
  * (plan 05 decisions 1 and 2).
  *
  * `skip-changelog` keeps the tool away from the changelog, because this
- * repository's changelog is hand-written prose and CLAUDE.md says a change's
+ * repository's changelog is hand-written prose and AGENTS.md says a change's
  * narrative is written once. release-please owns package.json, the tag and the
  * GitHub Release; these two verbs own what it will not touch:
  *

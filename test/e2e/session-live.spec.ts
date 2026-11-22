@@ -23,7 +23,7 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
   );
 
   // The meta chip-row replaces the overview field table. Counters are read as
-  // raw integers (see CLAUDE.md) — the rendered string has exactly one
+  // raw integers (see harness/rules/ui-evidence.md) — the rendered string has exactly one
   // dedicated assertion, in "token and duration formatting" below.
   const chips = page.getByTestId("session-chips");
   await expect(chips).toContainText("General task agent · v1");
@@ -112,7 +112,7 @@ test("a row opens the detail panel and Debug shows the raw wire", async ({
 });
 
 /**
- * The one place the *rendered* number strings are asserted (CLAUDE.md's
+ * The one place the *rendered* number strings are asserted (harness/rules/ui-evidence.md's
  * `data-*` convention). Everything else in this suite reads raw values off
  * attributes, so changing `tokenCount` or `durationLabel` — a copy edit, a
  * separator, a unit — reddens this test alone instead of the trace suite.

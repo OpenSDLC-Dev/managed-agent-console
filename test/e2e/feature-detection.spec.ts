@@ -8,7 +8,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 /**
- * CLAUDE.md principle 3: a surface this deployment does not implement is
+ * harness/rules/platform-contract.md: a surface this deployment does not implement is
  * hidden, not surfaced as an error. The mock replays what the platform
  * actually answers for an unregistered route — a plain 404/not_found_error,
  * indistinguishable by status from a real miss (issue #33).
@@ -35,7 +35,7 @@ test("a surface the deployment does not implement leaves the nav and the palette
   });
   await expect(input).toBeVisible();
   // An empty query lists exactly the section shortcuts, read by surface id
-  // rather than by label (CLAUDE.md's data-* convention).
+  // rather than by label (harness/rules/ui-evidence.md's data-* convention).
   const option = (surface: string) =>
     page.locator(`[role=option][data-surface=${surface}]`);
   await expect(option("sessions")).toBeVisible();

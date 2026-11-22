@@ -58,7 +58,7 @@ function MetaColumn({
 
 /**
  * Machine-readable token counters for the surfaces that also render them as a
- * formatted string (the `data-*` state convention — see CLAUDE.md). Absent
+ * formatted string (the `data-*` state convention — see harness/rules/ui-evidence.md). Absent
  * when the event carries no usage, so `[data-input-tokens]` selects exactly
  * the rows that have one.
  */

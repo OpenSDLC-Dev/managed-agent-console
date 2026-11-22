@@ -8,3 +8,12 @@ src/components/ui
 # release-please rewrites this file compactly on every release PR; prettier
 # would reformat it and fail format:check on a file no human edits.
 .release-please-manifest.json
+
+# The doctor formats these generated adapters. Its sources remain subject to Prettier.
+.claude/agents/
+.claude/skills/
+.claude/rules/
+.codex/agents/
+.agents/agents/
+.agents/skills/
+.agents/rules/

@@ -811,7 +811,7 @@ describe("a copy listed before the session that mounts it", () => {
     // Once a read of the session names the mount, the copy is that
     // resource's row, removed as a resource. Nothing is checked on a confirm
     // instead: the platform deletes a mounted copy as it deletes any other
-    // (CLAUDE.md principle 4).
+    // (harness/rules/platform-contract.md).
     act(() =>
       client.setQueryData(["session", session.id], {
         ...session,

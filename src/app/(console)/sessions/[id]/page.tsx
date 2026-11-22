@@ -545,7 +545,7 @@ function SessionWorkspace({ id }: { id: string }) {
             )}
 
             <DetailSection title="Events">
-              {/* Derived trace state, machine-readable (see CLAUDE.md): which tab
+              {/* Derived trace state, machine-readable (see harness/rules/ui-evidence.md): which tab
             and filter are active, and how much of the log they leave visible.
             e2e reads these instead of the rendered strings.
 

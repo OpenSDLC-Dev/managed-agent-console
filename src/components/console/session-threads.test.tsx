@@ -150,7 +150,7 @@ it("renders a never-run thread's null usage as pending instead of throwing", () 
   expect(tokens).not.toHaveAttribute("data-input-tokens");
   expect(tokens).not.toHaveAttribute("data-output-tokens");
   // The one assertion on this cell's human string; everything else reads the
-  // attribute (CLAUDE.md's derived-state rule).
+  // attribute (harness/rules/ui-evidence.md's derived-state rule).
   expect(tokens).toHaveTextContent(/^—$/);
 
   const preview = screen.getByRole("region", { name: "Thread details" });

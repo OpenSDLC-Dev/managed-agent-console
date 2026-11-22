@@ -10,8 +10,8 @@ import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
 import { MESSAGES_ROUTE, playgroundOnly } from "@/lib/routes";
 
 /**
- * Feature detection for surfaces a deployment does not serve (CLAUDE.md
- * principle 3).
+ * Feature detection follows harness/rules/platform-contract.md for surfaces
+ * a deployment does not serve.
  *
  * The platform has no "not implemented" status — there is no 501 anywhere in
  * it. An unregistered route falls through the router's catch-all and answers

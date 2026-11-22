@@ -1,0 +1,10 @@
+{
+  "harness-doctor": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "git -c \"alias.console-doctor=!node scripts/harness-doctor.mjs session-start antigravity\" console-doctor"
+      }
+    ]
+  }
+}
