@@ -475,15 +475,45 @@ function trackedClaudeSettings(root, key) {
   requireThat(entry, key + " has no regular entry in this worktree's HEAD.");
   return git(root, ["cat-file", "blob", entry[1]]);
 }
+
+function checkCodexHandler(handler, event, source) {
+  requireThat(
+    !Object.hasOwn(handler, "async") || handler.async === false,
+    source +
+      " must run " +
+      event +
+      " synchronously. Omit async or set it to false.",
+  );
+  // Codex also accepts the snake_case alias in JSON. Both spellings together
+  // invalidate the registry, even if they specify the same command.
+  const windows = ["commandWindows", "command_windows"].filter((key) =>
+    Object.hasOwn(handler, key),
+  );
+  requireThat(
+    windows.length <= 1 &&
+      windows.every(
+        (key) => handler[key] === null || handler[key] === handler.command,
+      ),
+    source +
+      " must use the registered " +
+      event +
+      " command on Windows. Omit the override or use a single matching Windows command.",
+  );
+}
 function registry(root, host) {
   const key = registries[host],
     source = "harness/hooks/" + host + ".json";
   const native = json(read(root, source), source);
   if (host !== "antigravity") fields(native, ["hooks"], source);
-  for (const events of host === "antigravity"
-    ? Object.values(native)
-    : [native.hooks]) {
+  for (const [name, events] of host === "antigravity"
+    ? Object.entries(native)
+    : [["hooks", native.hooks]]) {
     requireThat(object(events), source + " must declare a hook event table.");
+    if (host === "antigravity" && Object.hasOwn(events, "enabled"))
+      requireThat(
+        typeof events.enabled === "boolean",
+        source + " requires a boolean enabled flag for " + name + ".",
+      );
     for (const [event, entries] of Object.entries(events)) {
       // Antigravity registrations also carry lowercase metadata such as enabled.
       if (host === "antigravity" && !/^[A-Z]/.test(event)) continue;
@@ -529,6 +559,7 @@ function registry(root, host) {
       );
   }
   if (host === "codex") {
+    checkCodexHandler(handlers[0], "SessionStart", source);
     const before = native.hooks?.PreToolUse;
     requireThat(
       before?.length === 1 &&
@@ -539,6 +570,7 @@ function registry(root, host) {
           hookCommand("harness/hooks/codex-readonly.mjs", "readonly"),
       source + " must register the read-only role guard for every tool.",
     );
+    checkCodexHandler(before[0].hooks[0], "PreToolUse", source);
     read(root, "harness/hooks/codex-readonly.mjs");
   }
   const path = inside(root, key);

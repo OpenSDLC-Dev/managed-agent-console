@@ -52,7 +52,10 @@ function command(cwd, program, args, options = {}) {
   env.GIT_CONFIG_COUNT = String(entry + 1);
   env["GIT_CONFIG_KEY_" + entry] = "core.hooksPath";
   env["GIT_CONFIG_VALUE_" + entry] = emptyHooks;
-  const result = spawnSync(program, args, {
+  // A caller's git -c settings outrank GIT_CONFIG_COUNT in Git children.
+  const commandArgs =
+    program === "git" ? ["-c", "core.hooksPath=" + emptyHooks, ...args] : args;
+  const result = spawnSync(program, commandArgs, {
     cwd,
     ...options,
     env,
@@ -149,6 +152,44 @@ test("fixture commits ignore a hostile global pre-commit hook", (t) => {
       command(cwd, "git", ["config", "--global", "core.hooksPath"], options),
     ).trimEnd(),
     hooks,
+  );
+});
+
+test("fixture Git commands override a caller's inherited -c hooksPath", (t) => {
+  const { cwd, tmp } = fixture(t);
+  const personal = join(tmp, "caller-hooks");
+  set(personal, "pre-commit", "#!/bin/sh\nexit 86\n");
+  chmodSync(join(personal, "pre-commit"), 0o755);
+  const forwarded = pass(
+    command(
+      cwd,
+      "git",
+      [
+        "-c",
+        "core.hooksPath=" + personal,
+        "-c",
+        "fixture.marker=preserved",
+        "-c",
+        "alias.fixture-parameters=!node -p process.env.GIT_CONFIG_PARAMETERS",
+        "fixture-parameters",
+      ],
+      { env: { GIT_CONFIG_PARAMETERS: "" } },
+    ),
+  ).trimEnd();
+  const options = { env: { GIT_CONFIG_PARAMETERS: forwarded } };
+  assert.equal(
+    pass(
+      command(cwd, "git", ["config", "--get", "fixture.marker"], options),
+    ).trimEnd(),
+    "preserved",
+  );
+  pass(command(cwd, "git", ["add", "."], options));
+  commitFixture(cwd, options);
+  assert.equal(
+    pass(
+      command(cwd, "git", ["config", "--get", "core.hooksPath"], options),
+    ).trimEnd(),
+    emptyHooks,
   );
 });
 
@@ -463,8 +504,11 @@ function preservesConflict(cwd, host, key, content, pattern) {
     : Buffer.from(content.replaceAll("\n", "\r\n") + "\r\n");
   set(cwd, key, original);
   fail(run(cwd, "check", "--host", host), pattern);
-  const receipt = JSON.parse(pass(run(cwd, "session-start", host)))
-    .hookSpecificOutput.additionalContext;
+  const envelope = JSON.parse(pass(run(cwd, "session-start", host)));
+  const receipt =
+    host === "antigravity"
+      ? envelope.injectSteps[0].systemMessage.systemMessage
+      : envelope.hookSpecificOutput.additionalContext;
   assert.match(receipt, /harness-doctor: FAIL/);
   assert.match(receipt, pattern);
   fail(run(cwd, "sync"), pattern);
@@ -490,6 +534,9 @@ test("malformed Codex project declarations fail without changing their bytes", (
     "features.hooks = true = false",
     "features = { hooks = false } trailing",
     'model = "developer" trailing',
+    "example = 2023-02-29",
+    Buffer.from("example = 2024-01-01T00:00:00+0000"),
+    "[[a.b.c]]\n[a.b]\n[a]\nb.extra = 1",
   ])
     preservesConflict(
       cwd,
@@ -510,6 +557,13 @@ test("malformed Codex project declarations fail without changing their bytes", (
     '["projects"."a.b #{[]"]',
     '"" = "quoted empty key"',
     "value = 1979-05-27 07:32:00Z",
+    "leap = 2024-02-29",
+    "offset = 2024-01-01T00:00:00+00:00",
+    "[[a.b.c]]",
+    "[a.b]",
+    "extra = 1",
+    "[a]",
+    "other.extra = 1",
     "[features]",
     "hooks = true",
   ].join("\n");
@@ -878,6 +932,89 @@ test("the canonical Claude startup hook always delivers context synchronously on
     putJson(cwd, source, policy);
     putJson(cwd, registries.claude, policy);
     fail(run(cwd, "check"), /harness\/hooks\/claude\.json/);
+  }
+});
+
+test("Antigravity validates the enabled flag on required and optional named hooks", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const host = "antigravity";
+  const source = "harness/hooks/antigravity.json";
+  const base = JSON.parse(get(cwd, source));
+  for (const [name, enabled] of [
+    ["harness-doctor", "false"],
+    ["harness-doctor", null],
+    ["harness-doctor", false],
+    ["optional", 0],
+  ]) {
+    const policy = structuredClone(base);
+    policy[name] = { ...policy["harness-doctor"], enabled };
+    putJson(cwd, registries[host], policy);
+    const original = get(cwd, registries[host]);
+    preservesConflict(
+      cwd,
+      host,
+      source,
+      JSON.stringify(policy),
+      /harness\/hooks\/antigravity\.json/,
+    );
+    assert.equal(get(cwd, registries[host]), original);
+  }
+  for (const enabled of [true, false]) {
+    const policy = structuredClone(base);
+    policy["harness-doctor"].enabled = true;
+    policy.optional = { enabled, Stop: [] };
+    putJson(cwd, source, policy);
+    putJson(cwd, registries[host], policy);
+    pass(run(cwd, "check", "--host", host));
+  }
+});
+
+test("required Codex handlers use the synchronous portable command on Windows and other hosts", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const source = "harness/hooks/codex.json";
+  const base = JSON.parse(get(cwd, source));
+  for (const event of ["SessionStart", "PreToolUse"]) {
+    for (const override of [
+      { async: true },
+      { async: "false" },
+      { async: null },
+      { commandWindows: "echo private-command" },
+      { command_windows: "echo private-command" },
+      { commandWindows: "" },
+      { commandWindows: "same", command_windows: "same" },
+    ]) {
+      const policy = structuredClone(base);
+      const handler = policy.hooks[event][0].hooks[0];
+      for (const [field, value] of Object.entries(override))
+        handler[field] = value === "same" ? handler.command : value;
+      putJson(cwd, registries.codex, policy);
+      const original = get(cwd, registries.codex);
+      preservesConflict(
+        cwd,
+        "codex",
+        source,
+        JSON.stringify(policy),
+        new RegExp("harness/hooks/codex\\.json.*" + event),
+      );
+      assert.equal(get(cwd, registries.codex), original);
+    }
+    for (const windows of [
+      {},
+      { commandWindows: null },
+      { commandWindows: "same" },
+      { command_windows: "same" },
+    ]) {
+      const policy = structuredClone(base);
+      const handler = policy.hooks[event][0].hooks[0];
+      handler.async = false;
+      for (const [field, value] of Object.entries(windows))
+        handler[field] = value === "same" ? handler.command : value;
+      putJson(cwd, source, policy);
+      putJson(cwd, registries.codex, policy);
+      pass(run(cwd, "check", "--host", "codex"));
+    }
   }
 });
 
