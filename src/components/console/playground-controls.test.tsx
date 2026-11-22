@@ -324,7 +324,10 @@ it("clears the parallel-call constraint when switching tool choice to None", asy
 });
 
 it("keeps invalid custom JSON editable when the tool takes a preset's name and description", async () => {
-  const { user } = await setup();
+  const { user } = await setup([
+    models[0],
+    { ...models[0], id: "deepseek-flash", display_name: "DeepSeek Flash" },
+  ]);
   const search = availablePlaygroundTools(models[0]).find(
     ({ id }) => id === "web_search",
   )!;
@@ -336,6 +339,9 @@ it("keeps invalid custom JSON editable when the tool takes a preset's name and d
     target: { value: search.definition.name },
   });
   const schema = screen.getByRole("textbox", { name: "Input schema" });
+  fireEvent.change(schema, {
+    target: { value: JSON.stringify(search.definition.input_schema) },
+  });
   fireEvent.change(schema, { target: { value: "{" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Description" }), {
     target: { value: search.definition.description },
@@ -343,6 +349,14 @@ it("keeps invalid custom JSON editable when the tool takes a preset's name and d
   await user.click(screen.getByLabelText("Code", { exact: true }));
   expect(schema).toBeVisible();
   expect(schema).toHaveFocus();
+  const selector = screen.getByRole("combobox", { name: "Model" });
+  await user.click(selector);
+  await user.click(
+    await screen.findByRole("option", { name: "DeepSeek Flash" }),
+  );
+  expect(selector).toHaveAttribute("data-model", "deepseek-flash");
+  expect(schema).toBeVisible();
+  expect(schema).toHaveValue("{");
   fireEvent.change(schema, { target: { value: '{"type":"object"}' } });
   await user.click(screen.getByLabelText("Code", { exact: true }));
   expect(screen.getByRole("textbox", { name: /request code$/i })).toBeVisible();

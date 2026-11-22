@@ -241,6 +241,9 @@ export function switchPlaygroundModel(
   const declarations = [...tools];
   const parameters = { ...draft.parameters };
   for (const [index, tool] of tools.entries()) {
+    // A pending edit belongs to a client tool, even if its last valid JSON
+    // happens to match the stock preset.
+    if (draft.toolSchemas?.[index]?.invalid) continue;
     const source = before.find((preset) => matchesToolPreset(tool, preset));
     if (!source || !isObject(tool)) continue;
     const stock = source.definition;
