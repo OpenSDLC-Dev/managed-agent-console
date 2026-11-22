@@ -31,7 +31,7 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
-import { wireDecimal, wireInteger } from "@/lib/platform/http";
+import { PlatformError, wireDecimal, wireInteger } from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -67,7 +67,14 @@ export function priceLine(p: Prices): string {
  */
 export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
   const { data, error } = useGatewayDeployments();
-  if (error || !data)
+  const temporaryFailure =
+    error instanceof TypeError ||
+    (error instanceof PlatformError &&
+      !error.signedOut &&
+      (error.status === 408 ||
+        error.status === 429 ||
+        (error.status >= 500 && error.status !== 501)));
+  if (!data || (error && !temporaryFailure))
     return (
       <DetailSection title="Upstream models">
         {error ? (
@@ -82,6 +89,7 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       key={provider.id}
       provider={provider}
       deployments={data.data}
+      refreshError={error}
     />
   );
 }
@@ -89,14 +97,17 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
 function ProviderUpstreams({
   provider,
   deployments,
+  refreshError,
 }: {
   provider: GatewayProvider;
   deployments: GatewayDeployment[];
+  refreshError: Error | null;
 }) {
   const aliases = useGatewayAliases();
   const update = useUpdateGatewayDeployment();
   const remove = useDeleteGatewayDeployment();
-  const [editing, setEditing] = useState<GatewayDeployment>();
+  const [editor, setEditor] = useState<{ deployment?: GatewayDeployment }>();
+  const editing = editor?.deployment;
   const rows = deployments.filter((d) => d.provider_id === provider.id);
   const usedBy = (id: string) =>
     (aliases.data?.data ?? [])
@@ -218,7 +229,7 @@ function ProviderUpstreams({
             size="sm"
             className="h-7 text-muted-foreground"
             aria-label={`Edit ${d.upstream_model}`}
-            onClick={() => setEditing(d)}
+            onClick={() => setEditor({ deployment: d })}
           >
             <Pencil className="size-3.5" />
           </Button>
@@ -240,60 +251,45 @@ function ProviderUpstreams({
     <DetailSection
       title="Upstream models"
       action={
-        <AddUpstreamModelButton
-          provider={provider}
-          priceMetadata={deployments[0] && "price_currency" in deployments[0]}
-        />
+        !refreshError && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setEditor({})}
+          >
+            <Plus className="size-4" /> Add upstream model
+          </Button>
+        )
       }
     >
       <p className="pb-3 text-[13px] text-muted-foreground">
         Models this account serves. Prices are per million tokens and set the
         cost in Usage.
       </p>
-      <DataTable
-        columns={columns}
-        rows={rows}
-        rowKey={(d) => d.id}
-        empty={<EmptyState title="No upstream models yet" />}
-      />
-      {editing && rows.some((d) => d.id === editing.id) && (
+      {refreshError ? (
+        <ErrorState error={refreshError} />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(d) => d.id}
+          empty={<EmptyState title="No upstream models yet" />}
+        />
+      )}
+      {editor && (!editing || rows.some((d) => d.id === editing.id)) && (
         <UpstreamModelDialog
           provider={provider}
           deployment={editing}
-          priceMetadata={editing.price_currency !== undefined}
-          onClose={() => setEditing(undefined)}
+          priceMetadata={
+            editing
+              ? editing.price_currency !== undefined
+              : deployments[0] && "price_currency" in deployments[0]
+          }
+          onClose={() => setEditor(undefined)}
         />
       )}
     </DetailSection>
-  );
-}
-
-function AddUpstreamModelButton({
-  provider,
-  priceMetadata,
-}: {
-  provider: GatewayProvider;
-  priceMetadata?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-8"
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="size-4" /> Add upstream model
-      </Button>
-      {open && (
-        <UpstreamModelDialog
-          provider={provider}
-          priceMetadata={priceMetadata}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
   );
 }
 

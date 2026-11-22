@@ -300,6 +300,49 @@ describe("UpstreamModels", () => {
     expect(body).not.toHaveProperty("price_note");
   });
 
+  it("keeps a price draft through a failed deployment refresh and saves it after recovery", async () => {
+    let unavailable = false;
+    const fetchMock = stubGatewayFetch((method, path) =>
+      unavailable && method === "GET" && path === "deployments"
+        ? Response.json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "Temporarily unavailable" },
+            },
+            { status: 503 },
+          )
+        : undefined,
+    );
+    const client = renderModels();
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
+    );
+    const note = screen.getByLabelText("Pricing terms");
+    await userEvent.clear(note);
+    await userEvent.type(note, "Peak price");
+    unavailable = true;
+    await act(() =>
+      client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+    );
+    expect(
+      await screen.findByText("Temporarily unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Pricing terms")).toHaveValue("Peak price");
+    expect(flash).not.toBeInTheDocument();
+    expect(screen.queryByText("Add upstream model")).toBeNull();
+    unavailable = false;
+    await act(() =>
+      client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("Temporarily unavailable")).toBeNull(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sentBody(fetchMock, "POST")).toEqual({ price_note: "Peak price" });
+  });
+
   it("withdraws an open price editor if the deployments read is revoked", async () => {
     let revoked = false;
     stubGatewayFetch((method, path) =>
