@@ -180,6 +180,50 @@ it("keeps literal backslashes and line breaks distinct when editing stop sequenc
   });
 });
 
+it("shows the actual request values when the slider's initial range or advertised thinking modes differ", async () => {
+  const { user, run } = await setup();
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  const body = {
+    model: "reason",
+    max_tokens: 12000,
+    temperature: 1.75,
+    thinking: { type: "adaptive" },
+    messages: [{ role: "user", content: "Which settings?" }],
+    stream: false,
+  };
+  fireEvent.change(screen.getByRole("textbox", { name: "JSON request code" }), {
+    target: { value: JSON.stringify(body) },
+  });
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("button", { name: "Model settings" }));
+  const panel = within(screen.getByRole("dialog", { name: "Model" }));
+  await user.click(panel.getByRole("button", { name: "Use model default" }));
+  expect(panel.getByRole("radio", { name: "Default" })).toBeChecked();
+  await user.click(panel.getByRole("combobox", { name: "Model" }));
+  await user.click(await screen.findByRole("option", { name: "General" }));
+  expect(panel.getByRole("slider", { name: "Max tokens" })).toHaveValue(
+    "12000",
+  );
+  await user.click(panel.getByRole("button", { name: "Advanced" }));
+  const temperature = panel.getByRole("spinbutton", {
+    name: "Temperature value",
+  });
+  const slider = panel.getByRole("slider", { name: "Temperature" });
+  expect(slider).toHaveValue("1.75");
+  fireEvent.change(temperature, { target: { value: "-0.25" } });
+  expect(slider).toHaveValue("-0.25");
+  await user.click(panel.getByRole("button", { name: "Close settings" }));
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run.mock.calls[0][0]).toEqual({
+    model: "general",
+    max_tokens: 12000,
+    temperature: -0.25,
+    messages: body.messages,
+    stream: false,
+  });
+});
+
 it("separates request and turn menus and round-trips edits to custom tools with a forced choice", async () => {
   const { user, run } = await setup();
   await user.type(screen.getByLabelText("Prompt"), "Weather");

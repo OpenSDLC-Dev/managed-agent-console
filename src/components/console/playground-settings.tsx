@@ -156,6 +156,11 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
     (mode) => thinking?.types?.[mode]?.supported,
   );
   const canSetThinking = thinking?.supported && supportedModes.length > 0;
+  const hasUnlistedThinking =
+    parameters.thinking != null &&
+    (!canSetThinking ||
+      (currentThinking !== "disabled" &&
+        !supportedModes.some((mode) => mode === currentThinking)));
   const [advanced, setAdvanced] = useState(false);
   const [editingLimit, setEditingLimit] = useState(Number(draft.tokens) || 1);
   // A zero or missing max_tokens means the gateway has no shared model limit.
@@ -163,13 +168,20 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
   const budgetFitsModel =
     !reportedLimit || reportedLimit > startingThinkingBudget;
   const needsMoreTokens = !(Number(draft.tokens) > startingThinkingBudget);
-  const rangeMax =
-    reportedLimit && reportedLimit > 0
-      ? reportedLimit
-      : Math.max(1, editingLimit, Number(draft.tokens) || 0);
+  const tokenValue = Number(draft.tokens) || 1;
+  const rangeMax = Math.max(1, editingLimit, tokenValue, reportedLimit ?? 0);
   const [temperatureText, setTemperatureText] = useState(
-    String(parameters.temperature ?? 1),
+    String(parameters.temperature ?? ""),
   );
+  const numericTemperature = Number(temperatureText || 1);
+  const temperatureValue = Number.isFinite(numericTemperature)
+    ? numericTemperature
+    : 1;
+  // ModelInfo does not report sampling bounds. Keep typed values reachable.
+  const [temperatureRange, setTemperatureRange] = useState(() => ({
+    min: Math.min(0, temperatureValue),
+    max: Math.max(1, temperatureValue),
+  }));
   // Keep an explicit temperature from Code visible so it can be changed or cleared.
   const showTemperature =
     !(currentThinking === "enabled" || currentThinking === "adaptive") ||
@@ -209,13 +221,20 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
     });
   }
   function setTokens(value: string) {
-    if (!reportedLimit && Number.isFinite(Number(value)))
+    if (Number.isFinite(Number(value)))
       setEditingLimit(Math.max(editingLimit, Number(value)));
     onChange({ ...draft, tokens: value });
   }
   function setTemperature(value: string) {
     setTemperatureText(value);
-    setParameter("temperature", value === "" ? undefined : Number(value));
+    const numeric = Number(value);
+    if (numeric < temperatureRange.min || numeric > temperatureRange.max) {
+      setTemperatureRange({
+        min: Math.min(temperatureRange.min, numeric),
+        max: Math.max(temperatureRange.max, numeric),
+      });
+    }
+    setParameter("temperature", value === "" ? undefined : numeric);
   }
   function updateStops(next: typeof stops) {
     setStops(next);
@@ -233,7 +252,10 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
         <PlaygroundModelSelect
           {...modelProps}
           fullWidth
-          onSelect={(selection) => onChange({ ...draft, selection })}
+          onSelect={(selection) => {
+            setEditingLimit(tokenValue);
+            onChange({ ...draft, selection });
+          }}
         />
         {canSetThinking && (
           <div className="space-y-2">
@@ -285,12 +307,13 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
             )}
           </div>
         )}
-        {!canSetThinking && parameters.thinking != null && (
+        {hasUnlistedThinking && (
           <div className="flex items-center justify-between gap-3">
-            <InfoLabel
-              label="Thinking"
-              help="This request sets a thinking mode. The selected model hasn’t advertised support for it."
-            />
+            <p className="text-xs text-muted-foreground">
+              {typeof currentThinking === "string"
+                ? `The selected model does not list the requested thinking mode (${currentThinking}).`
+                : "The selected model does not list this thinking configuration."}
+            </p>
             <Button
               type="button"
               variant="secondary"
@@ -307,7 +330,7 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
               label="Max tokens"
               help={
                 reportedLimit
-                  ? `Limit the number of output tokens. This alias supports up to ${reportedLimit.toLocaleString()} tokens.`
+                  ? `The gateway reports an output limit of ${reportedLimit.toLocaleString()} tokens for this alias.`
                   : "Limit the number of output tokens. Enter a larger value to extend the slider’s range."
               }
             />
@@ -329,10 +352,10 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
             aria-label="Max tokens"
             type="range"
             className={slider}
-            min={Math.min(tokenMinimum, rangeMax)}
+            min={Math.max(1, Math.min(tokenMinimum, tokenValue))}
             max={rangeMax}
             step={1}
-            value={Math.min(rangeMax, Number(draft.tokens) || 1)}
+            value={tokenValue}
             onChange={(event) => setTokens(event.target.value)}
           />
           {correction !== undefined && (
@@ -372,13 +395,12 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                   <div className="flex items-center justify-between gap-3">
                     <InfoLabel
                       label="Temperature"
-                      help="Change sampling randomness from 0 to 1."
+                      help="Adjust sampling randomness. Accepted values depend on the model. Clear the value to use its default."
                     />
                     <Input
                       aria-label="Temperature value"
                       type="number"
-                      min={0}
-                      max={1}
+                      placeholder="Default"
                       step="any"
                       value={temperatureText}
                       onChange={(event) => setTemperature(event.target.value)}
@@ -389,10 +411,10 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                     aria-label="Temperature"
                     type="range"
                     className={slider}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={temperatureText === "" ? 1 : Number(temperatureText)}
+                    min={temperatureRange.min}
+                    max={temperatureRange.max}
+                    step="any"
+                    value={temperatureValue}
                     onChange={(event) => setTemperature(event.target.value)}
                   />
                 </div>
