@@ -16,6 +16,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - Search active or archived service accounts across the directory. Copy an account ID, edit its description or role, inspect and issue its API keys, or open a shareable detail page. Unfinished creation forms now prompt before dismissal.
 - Deleted API keys disappear from the Keys page and its filters. Platform retains their history for administrative queries.
 - Search, filter and inspect API keys, manage them from the row or details panel, and open their month-to-date gateway costs. Key creation now starts with CLI sign-in or an account-linked API key.
+- Work on an issue without a plan now starts with an independent, read-only difficulty review.
 - Issue reports now use GitHub's Bug, Feature and Task types. Two labels show priority and difficulty.
 - Open Playground from Build → Messages or the Dashboard resource card. Edit and run a request beside its rendered or raw response, inspect token usage, and add the answer to the next turn.
 - Group console navigation under Build and Organization, with dedicated submenu panels and a full-width return to all sections. Place Model Gateway directly after Keys in Organization. Move search into the global header.
