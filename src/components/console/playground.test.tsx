@@ -489,7 +489,7 @@ it("keeps message roles and edits when removing and restoring System, then runs 
   const more = screen.getByRole("button", { name: "More message options" });
   await user.click(more);
   const menu = await screen.findByRole("menu");
-  await waitFor(() => expect(menu).toContainElement(document.activeElement));
+  await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
   await user.keyboard("{Escape}");
   await waitFor(() => expect(more).toHaveFocus());
   await user.keyboard("{ArrowDown}");
