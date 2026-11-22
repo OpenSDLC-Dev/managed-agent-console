@@ -89,7 +89,7 @@ export const dashboardModels: readonly DashboardModel[] = [
     providerName: "Moonshot AI",
     profile: "moonshot",
     gatewayNote:
-      "The Moonshot profile supports Messages and Chat Completions. Kimi K3 lets agents use thinking on reasoning tasks or turn it off.",
+      "The Moonshot profile supports Messages and Chat Completions. A Messages API caller can enable or disable thinking for Kimi K3.",
     band: "bg-[#e8e5db] dark:bg-[#3d3d35]",
     docs: "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
     tags: ["Vision", "Video"],
@@ -116,7 +116,7 @@ export const dashboardModels: readonly DashboardModel[] = [
     providerName: "MiniMax",
     profile: "minimax",
     gatewayNote:
-      "The MiniMax profile supports regional endpoints for Messages and Chat Completions. It maps an agent’s thinking request to MiniMax’s adaptive mode.",
+      "The MiniMax profile supports regional endpoints. When the gateway converts a Messages request to Chat Completions, it maps enabled thinking to MiniMax’s adaptive mode.",
     band: "bg-[#bacbc5] dark:bg-[#31443d]",
     docs: "https://github.com/MiniMax-AI/MiniMax-M3",
     tags: ["Vision", "Video"],
