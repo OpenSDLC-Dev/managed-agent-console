@@ -1,4 +1,10 @@
-import { ChevronDown, Ellipsis, FileText, Trash2, Wrench } from "lucide-react";
+import {
+  ChevronDown,
+  Ellipsis,
+  StickyNote,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -211,12 +217,17 @@ export function PlaygroundEditor({
             >
               Add <ChevronDown />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[228px]">
+            <DropdownMenuContent
+              align="end"
+              sideOffset={6}
+              className="w-[228px] rounded-xl p-2"
+            >
               <DropdownMenuItem
+                className="gap-2 px-2"
                 disabled={system !== null}
                 onClick={() => patch({ system: "" })}
               >
-                <FileText /> System prompt{" "}
+                <StickyNote /> System prompt{" "}
                 {system !== null && (
                   <span className="ml-auto text-xs text-muted-foreground">
                     Added
@@ -225,8 +236,9 @@ export function PlaygroundEditor({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Tools</DropdownMenuLabel>
+                <DropdownMenuLabel className="px-2">Tools</DropdownMenuLabel>
                 <DropdownMenuItem
+                  className="gap-2 px-2"
                   onClick={() => {
                     onExpandTool(0);
                     onChange(addCustomTool(draft));
@@ -240,6 +252,7 @@ export function PlaygroundEditor({
                   return (
                     <DropdownMenuItem
                       key={id}
+                      className="gap-2 px-2"
                       disabled={added}
                       data-tool-kind={id}
                       onClick={() => {

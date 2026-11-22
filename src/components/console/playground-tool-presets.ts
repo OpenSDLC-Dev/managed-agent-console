@@ -1,5 +1,11 @@
 import { replaceEqualDeep } from "@tanstack/react-query";
-import { Globe, Link2, Monitor, PanelsTopLeft, Terminal } from "lucide-react";
+import {
+  Globe,
+  Link,
+  MousePointer2,
+  SquareMousePointer,
+  Terminal,
+} from "lucide-react";
 import type { PlaygroundModel } from "@/lib/platform/playground";
 import type { PlaygroundDraft } from "./playground-editor";
 import { isObject } from "./playground-snippet";
@@ -47,7 +53,7 @@ const bash: PlaygroundToolPreset = {
 const computer: PlaygroundToolPreset = {
   id: "computer",
   label: "Computer use",
-  icon: Monitor,
+  icon: MousePointer2,
   help: "The model requests screenshots, mouse actions, and keyboard input for a desktop. You supply the results.",
   options: [
     {
@@ -98,7 +104,7 @@ const computer: PlaygroundToolPreset = {
 const browser: PlaygroundToolPreset = {
   id: "browser",
   label: "Browser use",
-  icon: PanelsTopLeft,
+  icon: SquareMousePointer,
   help: "The model requests actions in a browser you control. Enter the page content, a screenshot, or an action result to continue.",
   options: [
     {
@@ -181,7 +187,7 @@ const clientSearch: PlaygroundToolPreset = {
 const clientFetch: PlaygroundToolPreset = {
   id: "web_fetch",
   label: "Web fetch",
-  icon: Link2,
+  icon: Link,
   help: "The model requests a URL. Enter the page content to continue.",
   definition: {
     name: "web_fetch",
