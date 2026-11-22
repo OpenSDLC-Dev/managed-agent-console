@@ -35,13 +35,16 @@ it("links each branded card to the corresponding provider's model documentation"
     ],
     ["MiniMax M3", "minimax", "https://github.com/MiniMax-AI/MiniMax-M3"],
   ]) {
-    const link = screen.getByRole("link", { name });
+    const card = screen.getByRole("article", { name });
+    const link = within(card).getByRole("link", { name });
     expect(link).toHaveAttribute("href", href);
-    expect(link.querySelector("img")).toHaveAttribute(
+    expect(within(card).getByRole("heading", { name })).toContainElement(link);
+    expect(card.querySelector("img")).toHaveAttribute(
       "src",
       `/brands/${brand}.svg`,
     );
-    expect(within(link).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(card).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(link).queryByRole("list")).toBeNull();
   }
 });
 
@@ -72,7 +75,7 @@ it("opens the provider cost comparison and restores focus on close", async () =>
   expect(kimi.getByText("$15.00")).toBeVisible();
   expect(kimi.getByText(/Cache writes cost \$3 for 5 min/)).toBeVisible();
   expect(
-    dialog.getByRole("link", { name: "View GLM-5.3 pricing" }),
+    dialog.getByRole("link", { name: "View pricing for GLM-5.3" }),
   ).toHaveAttribute("href", "https://docs.z.ai/guides/overview/pricing");
   expect(
     dialog.getByText(
@@ -97,7 +100,7 @@ it("keeps column selections across views and copies the exact upstream ID withou
   await user.click(dialog.getByRole("combobox", { name: "Model 3" }));
   await user.click(await screen.findByRole("option", { name: "MiniMax M3" }));
   expect(
-    dialog.getByRole("link", { name: "View MiniMax M3 pricing" }),
+    dialog.getByRole("link", { name: "View pricing for MiniMax M3" }),
   ).toHaveAttribute(
     "href",
     "https://platform.minimax.io/docs/pricing/overview",
@@ -110,6 +113,9 @@ it("keeps column selections across views and copies the exact upstream ID withou
     third.getByText(/Standard tier, up to 512K input tokens/),
   ).toBeVisible();
   await user.click(dialog.getByRole("radio", { name: "Features" }));
+  expect(
+    third.getByRole("link", { name: "Model documentation for MiniMax M3" }),
+  ).toHaveTextContent("Model documentation");
   expect(third.getByText("Upstream model ID")).toBeVisible();
   expect(third.getByText("MiniMax-M3")).toBeVisible();
   expect(third.getByText("512K tokens")).toBeVisible();

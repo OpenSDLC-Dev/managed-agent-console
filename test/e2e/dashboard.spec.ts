@@ -137,8 +137,10 @@ test("four provider cards load their local marks and compare model cost and feat
   page,
   context,
 }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await signIn(page);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(page.url()).origin,
+  });
   const main = page.getByRole("main");
   const models = [
     [
@@ -173,6 +175,9 @@ test("four provider cards load their local marks and compare model cost and feat
   await trigger.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Compare models" });
   await expect(
+    dialog.getByRole("button", { name: "Close", exact: true }),
+  ).toBeFocused();
+  await expect(
     dialog.getByRole("radio", { name: "Cost", exact: true }),
   ).toBeChecked();
   const selectors = dialog.getByRole("combobox");
@@ -180,7 +185,7 @@ test("four provider cards load their local marks and compare model cost and feat
   for (const [i, [, name]] of models.slice(0, 3).entries()) {
     await expect(selectors.nth(i)).toContainText(name);
     await expect(
-      dialog.getByRole("link", { name: `View ${name} pricing` }),
+      dialog.getByRole("link", { name: `View pricing for ${name}` }),
     ).toBeVisible();
   }
   const third = dialog.getByRole("combobox", { name: "Model 3", exact: true });

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -32,14 +32,12 @@ const sections = ["Cost", "Features"] as const;
 type ComparisonView = (typeof sections)[number];
 
 function ModelCard({ model }: { model: DashboardModel }) {
+  const headingId = useId();
   return (
-    <a
-      href={model.docs}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={model.name}
+    <article
+      aria-labelledby={headingId}
       data-dashboard-model={model.id}
-      className="group flex min-h-[191px] min-w-0 flex-col overflow-hidden rounded-xl bg-foreground/[0.035] outline-offset-2 transition-colors hover:bg-foreground/[0.06] focus-visible:outline-2 focus-visible:outline-ring dark:bg-card dark:hover:bg-secondary"
+      className="group relative isolate flex min-h-[191px] min-w-0 flex-col overflow-hidden rounded-xl bg-foreground/[0.035] outline-offset-2 transition-colors hover:bg-foreground/[0.06] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring dark:bg-card dark:hover:bg-secondary"
     >
       <div
         className={cn("grid h-[90px] shrink-0 place-items-center", model.band)}
@@ -54,8 +52,18 @@ function ModelCard({ model }: { model: DashboardModel }) {
         />
       </div>
       <div className="p-4 pt-3">
-        <h3 className="text-sm font-medium leading-5 group-hover:underline">
-          {model.name}
+        <h3
+          id={headingId}
+          className="text-sm font-medium leading-5 group-hover:underline"
+        >
+          <a
+            href={model.docs}
+            target="_blank"
+            rel="noreferrer"
+            className="after:absolute after:inset-0 focus-visible:outline-none"
+          >
+            {model.name}
+          </a>
         </h3>
         <ul className="mt-2 flex flex-wrap gap-1">
           {model.tags.map((tag) => (
@@ -68,7 +76,7 @@ function ModelCard({ model }: { model: DashboardModel }) {
           ))}
         </ul>
       </div>
-    </a>
+    </article>
   );
 }
 
@@ -148,7 +156,7 @@ function ComparisonColumn({
             href={model.pricing.url}
             target="_blank"
             rel="noreferrer"
-            aria-label={`View ${model.name} pricing`}
+            aria-label={`View pricing for ${model.name}`}
           >
             View pricing
           </a>
@@ -165,7 +173,7 @@ function ComparisonColumn({
             href={model.docs}
             target="_blank"
             rel="noreferrer"
-            aria-label={`Read ${model.name} documentation`}
+            aria-label={`Model documentation for ${model.name}`}
           >
             Model documentation
           </a>
