@@ -612,26 +612,36 @@ function write(root, key, content, previous, mode) {
     rmSync(tmp, { force: true });
   }
 }
-// Split TOML statements or inline-table entries after masking strings and comments.
-// Nested arrays and tables can contain either separator.
+function requireToml(valid, reason) {
+  requireThat(
+    valid,
+    ".codex/config.toml contains invalid TOML: " + reason + ".",
+  );
+}
+// Split statements or inline-table entries only outside nested arrays and tables.
 function* tomlParts(text, separator) {
-  let start = 0,
-    depth = 0;
+  const closing = [];
+  let start = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    if (char === "[" || char === "{") depth++;
-    else if (char === "]" || char === "}") depth--;
-    else if (char === separator && depth === 0) {
-      yield text.slice(start, i).trim();
+    if (char === "[") closing.push("]");
+    else if (char === "{") closing.push("}");
+    else if (char === "]" || char === "}")
+      requireToml(closing.pop() === char, "unmatched " + char);
+    else if (char === separator && closing.length === 0) {
+      const part = text.slice(start, i).trim();
+      requireToml(part || separator === "\n", "empty inline-table entry");
+      if (part) yield part;
       start = i + 1;
     }
   }
-  yield text.slice(start).trim();
+  requireToml(!closing.length, "missing " + closing.at(-1));
+  const last = text.slice(start).trim();
+  if (last) yield last;
 }
 // A quoted TOML key can name a manifest role using a Unicode escape. Mask
 // punctuation as before so it cannot turn a single literal key into a dotted path.
 function maskTomlToken(token) {
-  if (token.startsWith("#")) return "";
   const value =
     token[0] === '"'
       ? token
@@ -646,17 +656,59 @@ function maskTomlToken(token) {
       : token.slice(1, -1);
   return /^[\w-]+$/.test(value) ? JSON.stringify(value) : '"_"';
 }
+function maskTomlStrings(text) {
+  let masked = "";
+  for (let i = 0; i < text.length;) {
+    const quote = text[i];
+    if (quote === "#") {
+      const newline = text.indexOf("\n", i);
+      i = newline < 0 ? text.length : newline;
+    } else if (quote !== "'" && quote !== '"') masked += text[i++];
+    else {
+      const start = i;
+      const multiline = text.startsWith(quote.repeat(3), i);
+      const delimiter = multiline ? quote.repeat(3) : quote;
+      i += delimiter.length;
+      while (!text.startsWith(delimiter, i)) {
+        requireToml(
+          i < text.length && (multiline || !/[\r\n]/.test(text[i])),
+          "unterminated string",
+        );
+        if (quote === '"' && text[i] === "\\") {
+          i++;
+          requireToml(
+            multiline || !/[\r\n]/.test(text[i]),
+            "line break in a quoted string",
+          );
+        }
+        i++;
+      }
+      i += delimiter.length;
+      if (multiline) {
+        // Four or five closing quotes include one or two literal quotes.
+        for (let extra = 0; extra < 2 && text[i] === quote; extra++) i++;
+      }
+      masked += multiline ? '"_"' : maskTomlToken(text.slice(start, i));
+    }
+  }
+  return masked;
+}
+function tomlKey(raw) {
+  return raw
+    .split(".")
+    .map((segment) => {
+      const key = segment.trim();
+      requireToml(/^(?:[\w-]+|"[\w-]*")$/.test(key), "invalid dotted key");
+      return key.replaceAll('"', "");
+    })
+    .join(".");
+}
 function checkCodexConfig(root, agents) {
   const key = ".codex/config.toml";
   if (!stat(inside(root, key))) return;
   // Preserve quoted simple keys. A comment or string containing a sample hook
   // or model setting cannot introduce a project-level declaration.
-  const text = read(root, key)
-    .toString()
-    .replace(
-      /"""(?:\\[\s\S]|"(?!"")|[^"\\])*"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'[^'\n]*'|#[^\n]*/g,
-      maskTomlToken,
-    );
+  const text = maskTomlStrings(read(root, key).toString());
   const managed = new Set(agents.map((agent) => agent.name));
   function checkOwner(path) {
     const [section, name] = path.split(".");
@@ -679,11 +731,25 @@ function checkCodexConfig(root, agents) {
     path +
     ". Review it before syncing.";
   function checkField(parent, statement) {
-    const field = /^([\w.'"\s-]+?)\s*=\s*([\s\S]*)$/.exec(statement);
-    if (!field) return;
-    const leaf = field[1].replace(/['"\s]/g, "");
+    const equals = statement.indexOf("=");
+    const value = statement.slice(equals + 1).trim();
+    const compound = value.startsWith("[") || value.startsWith("{");
+    requireToml(
+      equals > 0 && value && (compound || !/[=,]/.test(value)),
+      "expected a key and value in an assignment",
+    );
+    if (compound)
+      requireToml(
+        value.endsWith(value[0] === "[" ? "]" : "}"),
+        "unexpected text after an array or inline table",
+      );
+    else if (value.startsWith('"'))
+      requireToml(
+        /^"[\w-]*"$/.test(value),
+        "unexpected text after a string value",
+      );
+    const leaf = tomlKey(statement.slice(0, equals));
     const path = parent ? parent + "." + leaf : leaf;
-    const value = field[2].trim();
     checkOwner(path);
     requireThat(!inlineHook(path) || /^\[\s*\]$/.test(value), conflict(path));
     requireThat(
@@ -712,9 +778,14 @@ function checkCodexConfig(root, agents) {
   }
   let table = "";
   for (const line of tomlParts(text, "\n")) {
-    const header = /^\[\[?\s*([\w.'"\s-]+?)\s*\]\]?$/.exec(line);
-    if (header) {
-      table = header[1].replace(/['"\s]/g, "");
+    if (line.startsWith("[")) {
+      const array = line.startsWith("[[");
+      requireToml(
+        line.endsWith(array ? "]]" : "]") && !/[\r\n]/.test(line),
+        "malformed table header",
+      );
+      const width = array ? 2 : 1;
+      table = tomlKey(line.slice(width, -width));
       checkOwner(table);
       requireThat(!inlineHook(table), conflict(table));
     } else checkField(table, line);

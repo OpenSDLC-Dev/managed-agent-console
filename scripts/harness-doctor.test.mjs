@@ -268,6 +268,54 @@ function preservesConflict(cwd, host, key, content, pattern) {
   assert.deepEqual(readFileSync(join(cwd, key)), original);
 }
 
+test("malformed Codex project declarations fail without changing their bytes", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = ".codex/config.toml";
+  for (const broken of [
+    "[agents.reviewer",
+    "agents = { reviewer = {",
+    "features = [true}",
+    "features = false]",
+    'developer_instructions = "unterminated',
+    "notes = '''truncated multiline\n[features]",
+    "[features]\nhooks",
+    "[features]\nhooks = # a missing value",
+    "features = { hooks false }",
+    "features..hooks = true",
+    "features = = true",
+    "features.hooks = true = false",
+    "features = { hooks = false } trailing",
+    'model = "developer" trailing',
+  ])
+    preservesConflict(
+      cwd,
+      "codex",
+      key,
+      broken,
+      /\.codex\/config\.toml.*invalid TOML/,
+    );
+
+  const valid = [
+    'notes = """[unbalanced } and "\\\"" inside a multiline string',
+    "# still in the string",
+    'with a final quoted word: "text""""',
+    "literal = '''[brackets} and ends with a quote''''",
+    'labels = [ "comma, braces} and bracket]", # ] is a comment',
+    "  { name = 'a.b', values = [1, 2] },",
+    "]",
+    '["projects"."a.b #{[]"]',
+    '"" = "quoted empty key"',
+    "value = 1979-05-27 07:32:00Z",
+    "[features]",
+    "hooks = true",
+  ].join("\n");
+  set(cwd, key, valid);
+  pass(run(cwd, "check", "--host", "codex"));
+  pass(run(cwd, "sync"));
+  assert.equal(get(cwd, key), valid);
+});
+
 test("Codex preserves unknown top-level fields in its dedicated hook registry and reports the conflict", (t) => {
   const { cwd } = fixture(t);
   pass(run(cwd, "sync"));
