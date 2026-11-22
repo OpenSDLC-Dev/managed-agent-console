@@ -3,6 +3,11 @@ import {
   dashboardModelCases,
   grantDashboardModelDiscovery,
 } from "../e2e/dashboard-fixture";
+import {
+  DIRECT_REQUEST,
+  messagesLedger,
+  serveMessagesLedger,
+} from "../e2e/messages-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
@@ -91,6 +96,16 @@ async function populatedDashboard(
     .getByRole("link", { name: "Open playground", exact: true })
     .waitFor();
   await page.locator('[data-dashboard-metric="tokens"] [data-value]').waitFor();
+}
+
+async function openMessages(
+  page: Page,
+  route: string,
+  rows = messagesLedger(),
+) {
+  await grantDashboardModelDiscovery(page);
+  await serveMessagesLedger(page, rows);
+  await page.goto(new URL(route, page.url()).href);
 }
 
 async function openDashboardModelDialog(
@@ -1183,6 +1198,145 @@ export const SURFACES: Surface[] = [
     description:
       "Model gateway models: name and display name, kind, and the upstream models each routes to by tier and share.",
   },
+  {
+    id: "messages-overview",
+    route: "/messages",
+    fixture:
+      "two direct Messages API calls in the last 30 days and active API keys",
+    description:
+      "Messages navigation, usage cards, API key shortcuts and resources.",
+    setup: async (page) => {
+      await openMessages(page, "/messages");
+      await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
+    },
+  },
+  {
+    id: "messages-workspace-menu",
+    route: "/messages",
+    fixture: "the platform's default workspace",
+    description: "The selected workspace in the Messages sidebar.",
+    setup: async (page) => {
+      await openMessages(page, "/messages");
+      await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
+      await page.getByRole("combobox", { name: "Workspace" }).click();
+      await page
+        .getByRole("option", { name: "Default", exact: true })
+        .waitFor();
+    },
+  },
+  {
+    id: "messages-overview-narrow",
+    route: "/messages",
+    fixture: "Messages Overview at phone width",
+    description: "Usage cards, Keys and Resources on a narrow viewport.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await openMessages(page, "/messages");
+      await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
+    },
+  },
+  {
+    id: "messages-playground",
+    route: "/playground",
+    fixture: "two discovered chat aliases and an empty prompt",
+    description: "The request builder, starter templates and Messages sidebar.",
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.getByRole("button", { name: "Run prompt" }).waitFor();
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+    },
+  },
+  {
+    id: "messages-playground-full-request",
+    route: "/playground",
+    fixture: "editable JSON body for a direct Messages request",
+    description:
+      "The Form tab's full request view with headers, body and Back.",
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page
+        .getByRole("textbox", { name: "Prompt", exact: true })
+        .fill("Summarize this message.");
+      await page.getByRole("button", { name: "More request options" }).click();
+      await page.getByRole("menuitem", { name: "Edit full request" }).click();
+      await page.getByRole("textbox", { name: "Request body" }).waitFor();
+    },
+  },
+  {
+    id: "messages-playground-snippet-settings",
+    route: "/playground",
+    fixture: "the stream option for the current Messages request",
+    description:
+      "The code editor's snippet settings and selected Streaming option.",
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page.getByText("Code", { exact: true }).click();
+      await page.getByRole("button", { name: "Code snippet settings" }).click();
+      await page.getByRole("menuitemcheckbox", { name: "Streaming" }).waitFor();
+    },
+  },
+  {
+    id: "messages-playground-code-invalid",
+    route: "/playground",
+    fixture: "user edits an incomplete JSON request",
+    description:
+      "The editable request retains the operator's draft and shows why it cannot return to Form.",
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page
+        .getByRole("textbox", { name: "Prompt", exact: true })
+        .fill("Summarize this message.");
+      await page.getByText("Code", { exact: true }).click();
+      await page.getByLabel("Code language").selectOption("JSON");
+      const code = page.getByRole("textbox", { name: "JSON request code" });
+      await code.fill('{"model": "deepseek-flash",');
+      await page.getByText("Form", { exact: true }).click();
+      await page.getByRole("main").getByRole("alert").waitFor();
+    },
+  },
+  {
+    id: "messages-logs",
+    route: "/messages/logs",
+    fixture: "a direct API key request and a failed Playground request",
+    description:
+      "Request metadata, copy controls, refresh and the last update time.",
+    setup: async (page) => {
+      await openMessages(page, "/messages/logs");
+      await page
+        .getByRole("button", { name: "Copy " + DIRECT_REQUEST })
+        .waitFor();
+    },
+  },
+  {
+    id: "messages-logs-empty",
+    route: "/messages/logs",
+    fixture: "empty gateway ledger",
+    description: "No Messages requests in the last 30 days.",
+    setup: async (page) => {
+      await openMessages(page, "/messages/logs", []);
+      await page.getByText("No logs in the last 30 days.").waitFor();
+    },
+  },
+  ...["desktop", "narrow"].map((size): Surface => ({
+    id:
+      size === "desktop" ? "messages-log-detail" : "messages-log-detail-narrow",
+    route: "/messages/logs?request=" + DIRECT_REQUEST,
+    viewportOnly: true,
+    fixture: "direct API key request with reported tokens and timing",
+    description: "Selected log and request metadata on " + size + " screens.",
+    setup: async (page) => {
+      if (size === "narrow")
+        await page.setViewportSize({ width: 390, height: 844 });
+      await openMessages(page, "/messages/logs?request=" + DIRECT_REQUEST);
+      const details = page.getByRole("dialog", { name: "Request details" });
+      await details
+        .getByRole("button", { name: "Copy " + DIRECT_REQUEST })
+        .waitFor();
+    },
+  })),
   {
     id: "usage-overview",
     route: "/usage",

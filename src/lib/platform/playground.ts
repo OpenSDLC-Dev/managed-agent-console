@@ -6,6 +6,11 @@ const TENANCY = {
   "x-workspace-id": "default",
 };
 
+export const playgroundMessageHeaders = {
+  ...TENANCY,
+  "content-type": "application/json",
+} as const;
+
 export type PlaygroundModel = { id: string; display_name: string };
 
 export async function playgroundModels(signal: AbortSignal) {
@@ -43,7 +48,7 @@ export type PlaygroundRequest = {
   max_tokens: number;
   system?: string;
   messages: PlaygroundMessage[];
-  stream: true;
+  stream?: boolean | null;
 };
 
 export type PlaygroundReply = {
@@ -74,7 +79,7 @@ type Frame = {
   error?: { message?: string };
 };
 
-// The private Messages route uses the gateway's Anthropic SSE contract.
+// servePlayground forwards both Messages response modes to the same gateway.
 export async function runPlayground(
   request: PlaygroundRequest,
   principalId: string,
@@ -85,8 +90,7 @@ export async function runPlayground(
   const response = await fetch(resourceURL("v1/messages?beta=true"), {
     method: "POST",
     headers: {
-      ...TENANCY,
-      "content-type": "application/json",
+      ...playgroundMessageHeaders,
       ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
     body: JSON.stringify(request),
@@ -94,6 +98,28 @@ export async function runPlayground(
     signal,
   });
   await assertOk(response);
+  if (!request.stream) {
+    if (!response.headers.get("content-type")?.startsWith("application/json"))
+      throw new Error("The gateway did not return a JSON response.");
+    const body: MessageBody = await response.json();
+    if (!body || !Array.isArray(body.content))
+      throw new Error("The gateway did not return a Messages response body.");
+    for (const block of body.content) {
+      if (
+        block?.type === "text" &&
+        typeof block.text === "string" &&
+        block.text
+      )
+        append(block.text);
+    }
+    return {
+      raw: JSON.stringify(body, null, 2),
+      rawLabel: "Response body",
+      inputTokens: body.usage?.input_tokens,
+      outputTokens: body.usage?.output_tokens,
+      durationMs: performance.now() - started,
+    };
+  }
   if (
     !response.body ||
     !response.headers.get("content-type")?.startsWith("text/event-stream")

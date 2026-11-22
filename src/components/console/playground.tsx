@@ -21,6 +21,12 @@ import { usePlaygroundModels } from "@/lib/platform/playground-queries";
 import { ErrorState } from "./bits";
 import { PlaygroundCode } from "./playground-code";
 import {
+  formatSnippet,
+  hasMessageContent,
+  readSnippet,
+  type CodeLanguage,
+} from "./playground-snippet";
+import {
   newDraft,
   PlaygroundEditor,
   type PlaygroundDraft,
@@ -88,7 +94,10 @@ function PlaygroundForm({
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
   const [previousAlias, setPreviousAlias] = useState(requestedAlias);
-  const [mode, setMode] = useState<"Form" | "Code">("Form");
+  const [mode, setMode] = useState<"Form" | "Code" | "Full request">("Form");
+  const [language, setLanguage] = useState<CodeLanguage>("cURL");
+  const [code, setCode] = useState<{ text: string; error?: string }>();
+  const [showCodeError, setShowCodeError] = useState(false);
   const [text, setText] = useState("");
   const [reply, setReply] = useState<PlaygroundReply>();
   const [status, setStatus] = useState<RunStatus>("idle");
@@ -135,6 +144,7 @@ function PlaygroundForm({
   if (previousAlias !== requestedAlias) {
     setPreviousAlias(requestedAlias);
     if (draft.selection) setDraft({ ...draft, selection: "" });
+    if (code && !code.error) setCode(undefined);
   }
   const chatModels = models.isError ? undefined : models.data;
   const initialModel = requestedAlias
@@ -149,19 +159,44 @@ function PlaygroundForm({
       ? "⌘"
       : "Ctrl";
   const request: PlaygroundRequest = {
+    ...draft.parameters,
     model,
     max_tokens: Number(draft.tokens),
-    ...(draft.system ? { system: draft.system } : {}),
+    ...(draft.system || (draft.system === "" && draft.includeEmptySystem)
+      ? { system: draft.system }
+      : {}),
     messages: draft.messages
-      .filter((m) => m.content.length > 0)
+      .filter(hasMessageContent)
       .map(({ role, content }) => ({ role, content })),
-    stream: true,
+    ...(draft.stream !== undefined ? { stream: draft.stream } : {}),
   };
+  const codeLanguage = mode === "Full request" ? "JSON" : language;
+  function editCode(text: string) {
+    setShowCodeError(false);
+    try {
+      const next = readSnippet(text, codeLanguage, draft);
+      setDraft(next);
+      setCode({ text });
+    } catch (cause) {
+      setCode({
+        text,
+        error: cause instanceof Error ? cause.message : "Invalid request code.",
+      });
+    }
+  }
+  function codeReady() {
+    if (!code?.error) return true;
+    setShowCodeError(true);
+    document.getElementById("playground-code")?.focus();
+    return false;
+  }
   function reset(prompt = "") {
+    if (!codeReady()) return;
     const next = newDraft();
     next.selection = available ? model : "";
     next.messages[0].content = prompt;
     setDraft(next);
+    setCode(undefined);
     setText("");
     setReply(undefined);
     setError(undefined);
@@ -176,11 +211,9 @@ function PlaygroundForm({
       );
   }
   function addToMessages() {
-    if (status !== "complete" || !text) return;
+    if (status !== "complete" || !text || !codeReady()) return;
     const id = draft.messages[draft.messages.length - 1].id + 1;
-    const messages = draft.messages.filter(
-      (message) => message.content.length > 0,
-    );
+    const messages = draft.messages.filter(hasMessageContent);
     const last = messages.at(-1);
     // Messages continues a final assistant prefill in the same turn.
     if (last?.role === "assistant")
@@ -191,6 +224,7 @@ function PlaygroundForm({
       messages: [...messages, { id: id + 1, role: "user", content: "" }],
     });
     setMode("Form");
+    setCode(undefined);
     setStatus("idle");
     setText("");
     setReply(undefined);
@@ -202,7 +236,7 @@ function PlaygroundForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (active.current || !available) return;
+    if (active.current || !codeReady() || !available) return;
     const hasPrompt = request.messages.some((message) =>
       message.content.trim(),
     );
@@ -317,8 +351,12 @@ function PlaygroundForm({
             <PlaygroundViewSwitch
               label="Request view"
               options={["Form", "Code"] as const}
-              value={mode}
-              onChange={setMode}
+              value={mode === "Code" ? "Code" : "Form"}
+              onChange={(next) => {
+                if (!codeReady()) return;
+                if (mode === "Full request") setCode(undefined);
+                setMode(next);
+              }}
             />
           </div>
           <div className="min-h-0 flex-1 space-y-3 px-5 py-4 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
@@ -334,6 +372,15 @@ function PlaygroundForm({
                 continue.
               </p>
             )}
+            {mode !== "Form" &&
+              model &&
+              !available &&
+              Boolean(chatModels?.length) && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  This model is unavailable. Select an available model in Form
+                  or edit the model alias in Code.
+                </p>
+              )}
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
@@ -341,10 +388,56 @@ function PlaygroundForm({
                 models={chatModels ?? []}
                 running={running}
                 loading={models.isPending}
-                onChange={setDraft}
+                onEditFullRequest={() => {
+                  setCode(undefined);
+                  setMode("Full request");
+                  requestAnimationFrame(() =>
+                    document.getElementById("playground-full-back")?.focus(),
+                  );
+                }}
+                onChange={(next) => {
+                  setDraft(next);
+                  setCode(undefined);
+                }}
               />
             ) : (
-              <PlaygroundCode request={request} />
+              <PlaygroundCode
+                language={codeLanguage}
+                snippet={code?.text ?? formatSnippet(request, codeLanguage)}
+                onBack={
+                  mode === "Full request"
+                    ? () => {
+                        if (!codeReady()) return;
+                        setCode(undefined);
+                        setMode("Form");
+                        requestAnimationFrame(() =>
+                          document
+                            .getElementById("playground-request-options")
+                            ?.focus(),
+                        );
+                      }
+                    : undefined
+                }
+                error={showCodeError ? code?.error : undefined}
+                running={running}
+                streaming={request.stream === true}
+                onChange={editCode}
+                onStreamingChange={(stream) => {
+                  if (!codeReady()) return;
+                  setDraft({ ...draft, stream });
+                  setCode(undefined);
+                }}
+                onLanguageChange={(next) => {
+                  if (!codeReady()) return;
+                  setLanguage(next);
+                  setCode(undefined);
+                }}
+                onDiscard={() => {
+                  setCode(undefined);
+                  setShowCodeError(false);
+                  document.getElementById("playground-code")?.focus();
+                }}
+              />
             )}
             {error && status !== "failed" && (
               <p role="alert" className="text-sm text-destructive">
@@ -383,7 +476,7 @@ function PlaygroundForm({
                   aria-hidden
                   className="ml-1 rounded bg-background/20 px-1 font-mono text-xs"
                 >
-                  {modifier} ↵
+                  {modifier} Enter
                 </kbd>
               </Button>
             )}
@@ -462,7 +555,12 @@ function PlaygroundForm({
                   aria-current={reply === entry.reply ? true : undefined}
                   className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted"
                   onClick={() => {
+                    if (!codeReady()) {
+                      setHistoryOpen(false);
+                      return;
+                    }
                     setDraft(entry.draft);
+                    setCode(undefined);
                     setText(entry.text);
                     setReply(entry.reply);
                     setStatus("complete");

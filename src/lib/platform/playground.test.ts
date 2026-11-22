@@ -160,6 +160,67 @@ it.each([
   },
 );
 
+it("posts stream false and reads the complete Messages JSON, including usage and non-text blocks in Raw", async () => {
+  const message = {
+    id: "msg_whole",
+    type: "message",
+    role: "assistant",
+    model: "demo",
+    content: [
+      { type: "text", text: "Hello" },
+      { type: "thinking", thinking: "Reasoning" },
+      { type: "text", text: " again" },
+    ],
+    stop_reason: "end_turn",
+    usage: { input_tokens: 12, output_tokens: 3 },
+  };
+  const fetcher = fixture(
+    JSON.stringify(message),
+    "application/json; charset=utf-8",
+  );
+  const append = vi.fn();
+  const request = { ...prompt, stream: false };
+  const signal = new AbortController().signal;
+  const result = await runPlayground(request, "user_demo", signal, append);
+  expect(fetcher.mock.calls[1]).toEqual([
+    resource + "/messages?beta=true",
+    expect.objectContaining({
+      method: "POST",
+      signal,
+      body: JSON.stringify(request),
+    }),
+  ]);
+  expect(
+    new Headers(fetcher.mock.calls[1][1]?.headers).get("x-csrf-token"),
+  ).toBe("test-csrf");
+  expect(append.mock.calls).toEqual([["Hello"], [" again"]]);
+  expect(result).toMatchObject({
+    rawLabel: "Response body",
+    inputTokens: 12,
+    outputTokens: 3,
+  });
+  expect(JSON.parse(result.raw)).toEqual(message);
+});
+
+it.each([
+  [true, "application/json", "{}", "streaming response"],
+  [false, "text/event-stream", "event: ping\ndata: {}\n\n", "JSON response"],
+  [false, "application/json", "{}", "Messages response body"],
+] as const)(
+  "rejects an unexpected response for stream %s (%s)",
+  async (stream, contentType, body, message) => {
+    fixture(body, contentType);
+    await expect(
+      runPlayground(
+        { ...prompt, stream },
+        "user_demo",
+        new AbortController().signal,
+        vi.fn(),
+      ),
+    ).rejects.toThrow(message);
+  },
+);
+
 it("displays the completed gateway body and its reported usage, preserving unknown response fields", async () => {
   const message = {
     id: "msg_demo",

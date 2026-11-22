@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
-import { PLAYGROUND_ROUTE } from "@/lib/routes";
+import { isMessageReport, PLAYGROUND_ROUTE } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import {
   useAgents,
@@ -41,7 +41,9 @@ import {
   useVaults,
 } from "@/lib/platform/queries";
 import {
+  canReadMessageReports,
   isSurfaceVisible,
+  messageReportState,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
@@ -83,8 +85,7 @@ const matches = (query: string, ...fields: (string | null | undefined)[]) =>
  * search endpoint, so this filters what the lists already serve).
  */
 function useSearchItems(query: string): Item[] {
-  const playgroundAccess = useContext(ConsoleSessionContext)?.data
-    ?.playground_access;
+  const session = useContext(ConsoleSessionContext)?.data;
   const limit = 50;
   const agents = useAgents({ limit });
   const deployments = useDeployments({ limit });
@@ -109,7 +110,10 @@ function useSearchItems(query: string): Item[] {
     const items: Item[] = SECTIONS.filter(
       (s) =>
         visible(s) &&
-        (s.href !== PLAYGROUND_ROUTE || playgroundAccess === true) &&
+        (!isMessageReport(s.href) ||
+          (canReadMessageReports(session) &&
+            messageReportState(s.href, surfaces)?.status === "available")) &&
+        (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
         (!q || s.label.toLowerCase().includes(q)),
     );
     if (!q) return items;
@@ -223,7 +227,7 @@ function useSearchItems(query: string): Item[] {
     return items.filter(visible);
   }, [
     query,
-    playgroundAccess,
+    session,
     surfaces,
     agents.data,
     sessions.data,

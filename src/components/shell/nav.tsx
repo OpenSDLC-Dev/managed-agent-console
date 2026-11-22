@@ -6,14 +6,24 @@ import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
+  canReadMessageReports,
   isSurfaceVisible,
+  messageReportState,
   surfaceOfPath,
   surfaceRoute,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
-import { isDashboardPath, playgroundOnly } from "@/lib/routes";
+import { isDashboardPath, isMessageReport, playgroundOnly } from "@/lib/routes";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
@@ -140,10 +150,13 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     groups: groups
       .map((group) => ({
         ...group,
-        items: group.items.filter(({ surface }) =>
-          surface
-            ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
-            : limited || session?.playground_access === true,
+        items: group.items.filter(({ surface, href }) =>
+          isMessageReport(href)
+            ? canReadMessageReports(session) &&
+              messageReportState(href, surfaces)?.status === "available"
+            : surface
+              ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
+              : limited || session?.playground_access === true,
         ),
       }))
       .filter(({ items }) => items.length > 0),
@@ -238,6 +251,26 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               </span>
             </button>
           </h2>
+          {panel.label === "Messages" && (
+            <Select value={CONSOLE_WORKSPACE}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Workspace"
+                className="mb-2 w-full border-0 bg-muted px-2.5 shadow-none"
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="size-3 rounded-sm bg-indigo-500"
+                  />
+                  <SelectValue>Default</SelectValue>
+                </span>
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value={CONSOLE_WORKSPACE}>Default</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           {panel.items.map(({ href, label, surface }) => (
             <NavLink
               key={href}
@@ -268,8 +301,15 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                   ({ href }) => href === activeHref,
                 )?.label;
                 const first = group.items[0];
+                const waitingForOverview =
+                  group.label === "Messages" &&
+                  canReadMessageReports(session) &&
+                  !surfaces;
                 const destination =
-                  !mobile && !current && (!first.surface || surfaces)
+                  !mobile &&
+                  !current &&
+                  !waitingForOverview &&
+                  (!first.surface || surfaces)
                     ? first.href
                     : undefined;
                 return (

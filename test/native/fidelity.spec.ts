@@ -837,9 +837,9 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             ).toHaveAttribute("data-value", "120");
             break;
           case "native-playground-code":
-            await expect(page.getByLabel("Request code")).toContainText(
-              "Write a short greeting.",
-            );
+            await expect(
+              page.getByRole("textbox", { name: /request code$/i }),
+            ).toHaveValue(/Write a short greeting\./);
             break;
           case "native-playground-settings":
             await expect(page.getByLabel("Max tokens")).toBeVisible();

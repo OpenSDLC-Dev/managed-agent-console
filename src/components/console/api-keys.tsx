@@ -207,7 +207,13 @@ function RevealKeyDialog({
 /**
  * The Dashboard and Keys page enter the same connection flow.
  */
-export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
+export function CreateKeyButton({
+  shortcut = false,
+  subtle = false,
+}: {
+  shortcut?: boolean;
+  subtle?: boolean;
+}) {
   const session = useContext(ConsoleSessionContext)?.data;
   if (
     !session?.signed_in ||
@@ -218,15 +224,21 @@ export function CreateKeyButton({ shortcut = false }: { shortcut?: boolean }) {
   // A replaced principal (or changed role) cannot retain a draft, picker,
   // mutation observer or one-time reveal from the previous authority.
   return (
-    <KeyCreation key={`${session.id}:${session.role}`} shortcut={shortcut} />
+    <KeyCreation
+      key={`${session.id}:${session.role}`}
+      shortcut={shortcut}
+      subtle={subtle}
+    />
   );
 }
 
 export function KeyCreation({
   shortcut = false,
+  subtle = false,
   target,
 }: {
   shortcut?: boolean;
+  subtle?: boolean;
   target?: {
     account: ServiceAccount;
     onClose: () => void;
@@ -372,7 +384,7 @@ export function KeyCreation({
         <Button
           ref={triggerRef}
           size="sm"
-          variant={shortcut ? "secondary" : "default"}
+          variant={shortcut || subtle ? "secondary" : "default"}
           onClick={() => {
             resetDraft();
             setStep("connect");
@@ -381,7 +393,7 @@ export function KeyCreation({
           {shortcut ? (
             <KeyRound className="size-4" />
           ) : (
-            <Plus className="size-4" />
+            !subtle && <Plus className="size-4" />
           )}
           {shortcut ? "Get API key" : "Create key"}
         </Button>

@@ -31,11 +31,27 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
 
-## Playground — checked 2026-11-21
+## Messages — checked 2026-11-22
 
-Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. The reference opens Messages on Overview. Playground is the first supported destination in the self-hosted Messages group. Both the group header and its arrow return to all sections while the editor stays open.
+Signed-in Chrome opened **Build → Messages** on [Overview](https://platform.claude.com/workspaces/default/messages-overview). The Default workspace selector sits above the page links. Tokens and Requests cover 30 days. The Cache hit rate information button specifies seven days. Open playground, API keys and Resources follow the cards. The self-hosted preview uses the key directory visible to the current account. Platform supplies the key hint, owner, creator and expiration. It has no key last-used timestamp. Batches has no self-hosted endpoint.
 
-At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle. Form and Code share the left column, with model settings at the top and Run at the bottom. The empty right column contains a 672px template grid with 16px gaps. More and Previous page through it. The self-hosted editor uses the gateway's model aliases, text-message templates and a copyable request. History covers runs in the open page. The platform does not store prompt history or host shared requests.
+[Logs](https://platform.claude.com/workspaces/default/logs) shows individual requests from the last 30 days with Copy ID, a timestamp and Refresh. Selecting a request adds its ID to the URL and opens a right drawer. Previous and Next follow the list order. The gateway ledger identifies direct Messages requests by endpoint and the absence of an agent session. It contains token counts, latency, status and attribution. It does not retain prompts, replies, streaming mode, service tier or a direct caller's client application. The ledger cursor orders by ID and has no date or endpoint filter. A complete first read can require multiple pages.
+
+### Repeat the Messages comparison
+
+Open both signed-in consoles in Chrome at the same viewport. Use the same account role for a repeat comparison. Use the mock fixture for submissions.
+
+1. Open Messages from the desktop sidebar. Check the selected Overview link, Default workspace menu, metric explanations, Usage and Logs links. Open a key, return, then open and dismiss Create key. A Playground-only user lands on Playground.
+2. Open Playground, edit a template, switch between Form and Code, and copy the request. Check invalid edits, the Streaming setting, Run, Stop, Rendered, Raw, Add to messages and History. Use the fixture to verify the submitted body and response.
+3. Open Logs. Copy an ID, open the row with the keyboard, switch requests, reload its URL, then close with Escape. Refresh after adding a fixture record. Repeat on a phone width and with an empty list or a refused ledger read.
+
+Run `pnpm test:e2e test/e2e/messages.spec.ts` for the interaction suite. After building, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: messages-'` for the light and dark screenshots. Both commands use the local mock edge.
+
+## Playground — checked 2026-11-22
+
+Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. Both the group header and its arrow return to all sections while the editor stays open.
+
+At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle. Form and Code share the left column, with model settings at the top and Run at the bottom. The empty right column contains a 672px template grid with 16px gaps. More and Previous page through it. Code has an editable snippet, Copy code and a Streaming setting. The self-hosted editor uses gateway aliases, text-message templates and editable cURL and JSON. History covers runs in the open page. The platform does not store prompt history or host shared requests.
 
 After a signed-in Haiku run, the right column switched to Rendered and Raw views. Add to messages worked from either view and placed the answer above a fresh user message. The footer showed token counts, cost and duration. The native Messages stream supplies token counts. The Console measures elapsed time and omits the hosted price estimate.
 

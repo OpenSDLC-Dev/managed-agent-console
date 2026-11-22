@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useContext } from "react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
-import { nativeGet, ORGANIZATION } from "./native";
+import { nativeGet, ORGANIZATION, type NativeSession } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
-import { playgroundOnly } from "@/lib/routes";
+import { MESSAGES_ROUTE, playgroundOnly } from "@/lib/routes";
 
 /**
  * Feature detection for surfaces a deployment does not serve (CLAUDE.md
@@ -163,6 +163,32 @@ export function isUnimplemented(error: unknown): boolean {
 export type SurfaceState =
   | { status: "available" | "unimplemented" | "unknown" }
   | { status: "denied"; error: PlatformError };
+
+/** Overview can still show owned keys when the gateway ledger is unavailable. */
+export function messageReportState(
+  pathname: string,
+  surfaces: Record<Surface, SurfaceState> | undefined,
+): SurfaceState | undefined {
+  if (!surfaces) return undefined;
+  const reads =
+    pathname === MESSAGES_ROUTE
+      ? [surfaces.usage, surfaces["api-keys"]]
+      : [surfaces.usage];
+  return (
+    reads.find((read) => read.status === "available") ??
+    reads.find((read) => read.status === "unknown") ??
+    reads.find((read) => read.status === "denied") ??
+    reads[0]
+  );
+}
+
+export function canReadMessageReports(session?: Partial<NativeSession> | null) {
+  return (
+    session?.signed_in === true &&
+    Boolean(session.id) &&
+    (session.role === "admin" || session.role === "developer")
+  );
+}
 
 /** Hide only confirmed absence or a refused collection read, never uncertainty. */
 export function isSurfaceVisible(
