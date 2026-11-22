@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -39,6 +40,7 @@ function renderModels() {
       <UpstreamModels provider={DEEPSEEK} />
     </QueryClientProvider>,
   );
+  return client;
 }
 
 const row = async (model: string) =>
@@ -192,10 +194,9 @@ describe("UpstreamModels", () => {
     await userEvent.clear(screen.getByLabelText("Pricing terms"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(sentBody(fetchMock, "POST")).toMatchObject({
+    expect(sentBody(fetchMock, "POST")).toEqual({
       price_currency: "",
       price_note: "",
-      prices: { input: 1, output: 2, cache_read: 0.1, cache_write: null },
     });
   });
 
@@ -213,6 +214,9 @@ describe("UpstreamModels", () => {
         : undefined,
     );
     renderModels();
+    expect(
+      screen.queryByRole("button", { name: "Add upstream model" }),
+    ).toBeNull();
     const flash = await row("deepseek-v4-flash");
     await userEvent.click(
       within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
@@ -225,6 +229,95 @@ describe("UpstreamModels", () => {
     expect(body).not.toHaveProperty("price_currency");
     expect(body).not.toHaveProperty("price_note");
     expect(body).toHaveProperty("prices.cache_read", null);
+  });
+
+  it("accepts an explicit currency on the first deployment in an empty catalog", async () => {
+    const fetchMock = stubGatewayFetch((method, path) =>
+      method === "GET" && path === "deployments"
+        ? Response.json({ data: [] })
+        : undefined,
+    );
+    renderModels();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add upstream model" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    await userEvent.type(
+      dialog.getByLabelText("Upstream model ID"),
+      "first-model",
+    );
+    await userEvent.type(dialog.getByLabelText("Price currency"), "CNY");
+    await userEvent.type(dialog.getByLabelText("Output"), "0");
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Add upstream model" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sentBody(fetchMock, "POST")).toMatchObject({
+      prices: { output: 0 },
+      price_currency: "CNY",
+    });
+  });
+
+  it("withdraws an open price editor if the deployments read is revoked", async () => {
+    let revoked = false;
+    stubGatewayFetch((method, path) =>
+      revoked && method === "GET" && path === "deployments"
+        ? Response.json(
+            {
+              type: "error",
+              error: {
+                type: "permission_error",
+                message: "Deployment access revoked.",
+              },
+            },
+            { status: 403 },
+          )
+        : undefined,
+    );
+    const client = renderModels();
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
+    );
+    expect(screen.getByLabelText("Pricing terms")).toBeVisible();
+    revoked = true;
+    await act(() =>
+      client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+    );
+    expect(await screen.findByText("Deployment access revoked.")).toBeVisible();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add upstream model" }),
+    ).toBeNull();
+  });
+
+  it("preserves another operator's rates and existing note when only currency changes", async () => {
+    let input = 1;
+    const fetchMock = stubGatewayFetch((method, path) =>
+      method === "GET" && path === "deployments"
+        ? Response.json({
+            data: gatewayFixtures().deployments.map((d) => ({
+              ...d,
+              prices: { ...d.prices, input },
+              price_note: " Peak hours ",
+              price_currency: "",
+            })),
+          })
+        : undefined,
+    );
+    const client = renderModels();
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
+    );
+    await userEvent.type(screen.getByLabelText("Price currency"), "CNY");
+    input = 9.75;
+    await act(() =>
+      client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sentBody(fetchMock, "POST")).toEqual({ price_currency: "CNY" });
   });
 
   // The row toggle shares its hook with the edit dialog, which answers a

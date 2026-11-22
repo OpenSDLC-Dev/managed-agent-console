@@ -66,12 +66,38 @@ export function priceLine(p: Prices): string {
  * which is also why the gateway refuses to delete one of those.
  */
 export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
-  const { data, error, isPending } = useGatewayDeployments();
+  const { data, error } = useGatewayDeployments();
+  if (error || !data)
+    return (
+      <DetailSection title="Upstream models">
+        {error ? (
+          <ErrorState error={error} />
+        ) : (
+          <p role="status">Loading upstream models…</p>
+        )}
+      </DetailSection>
+    );
+  return (
+    <ProviderUpstreams
+      key={provider.id}
+      provider={provider}
+      deployments={data.data}
+    />
+  );
+}
+
+function ProviderUpstreams({
+  provider,
+  deployments,
+}: {
+  provider: GatewayProvider;
+  deployments: GatewayDeployment[];
+}) {
   const aliases = useGatewayAliases();
   const update = useUpdateGatewayDeployment();
   const remove = useDeleteGatewayDeployment();
   const [editing, setEditing] = useState<GatewayDeployment>();
-  const rows = (data?.data ?? []).filter((d) => d.provider_id === provider.id);
+  const rows = deployments.filter((d) => d.provider_id === provider.id);
   const usedBy = (id: string) =>
     (aliases.data?.data ?? [])
       .filter((a) => a.targets.some((t) => t.deployment_id === id))
@@ -216,7 +242,7 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       action={
         <AddUpstreamModelButton
           provider={provider}
-          priceMetadata={data?.data[0] && "price_currency" in data.data[0]}
+          priceMetadata={deployments[0] && "price_currency" in deployments[0]}
         />
       }
     >
@@ -224,18 +250,13 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
         Models this account serves. Prices are per million tokens and set the
         cost in Usage.
       </p>
-      {error ? (
-        <ErrorState error={error} />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(d) => d.id}
-          loading={isPending}
-          empty={<EmptyState title="No upstream models yet" />}
-        />
-      )}
-      {editing && (
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(d) => d.id}
+        empty={<EmptyState title="No upstream models yet" />}
+      />
+      {editing && rows.some((d) => d.id === editing.id) && (
         <UpstreamModelDialog
           provider={provider}
           deployment={editing}
@@ -342,20 +363,33 @@ function UpstreamModelDialog({
   const submit = () => {
     // Omit untouched metadata so an older Platform can still save numeric rates.
     const labels = {
-      ...(currency.trim() !== (deployment?.price_currency ?? "") && {
+      ...(currency !== (deployment?.price_currency ?? "") && {
         price_currency: currency.trim(),
       }),
-      ...(priceNote.trim() !== (deployment?.price_note ?? "") && {
+      ...(priceNote !== (deployment?.price_note ?? "") && {
         price_note: priceNote.trim(),
       }),
     };
     if (deployment) {
+      const changedCapabilities =
+        CAPABILITIES.some(
+          (key) => flags[key] !== deployment.capabilities[key],
+        ) ||
+        maxInput.trim() !==
+          limitText(deployment.capabilities.max_input_tokens) ||
+        maxOutput.trim() !== limitText(deployment.capabilities.max_tokens);
       update.mutate(
         {
           id: deployment.id,
-          display_name: displayName.trim(),
-          capabilities,
-          prices: priceBody as Prices,
+          ...(displayName !== deployment.display_name && {
+            display_name: displayName.trim(),
+          }),
+          ...(changedCapabilities && { capabilities }),
+          ...(PRICES.some(
+            ([key]) => priceBody[key] !== deployment.prices[key],
+          ) && {
+            prices: priceBody as Prices,
+          }),
           ...labels,
         },
         { onSuccess: onClose },
