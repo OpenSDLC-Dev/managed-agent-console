@@ -361,14 +361,16 @@ function UpstreamModelDialog({
   }
 
   const submit = () => {
-    // Omit untouched metadata so an older Platform can still save numeric rates.
+    // An initially empty catalog can reveal a legacy Platform while the form is open.
     const labels = {
-      ...(currency !== (deployment?.price_currency ?? "") && {
-        price_currency: currency.trim(),
-      }),
-      ...(priceNote !== (deployment?.price_note ?? "") && {
-        price_note: priceNote.trim(),
-      }),
+      ...(priceMetadata !== false &&
+        currency !== (deployment?.price_currency ?? "") && {
+          price_currency: currency.trim(),
+        }),
+      ...(priceMetadata !== false &&
+        priceNote !== (deployment?.price_note ?? "") && {
+          price_note: priceNote.trim(),
+        }),
     };
     if (deployment) {
       const changedCapabilities =

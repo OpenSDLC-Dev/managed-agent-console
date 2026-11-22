@@ -258,6 +258,48 @@ describe("UpstreamModels", () => {
     });
   });
 
+  it("omits newly hidden pricing fields when an empty catalog reveals an old Platform", async () => {
+    let firstDeploymentExists = false;
+    const fetchMock = stubGatewayFetch((method, path) =>
+      method === "GET" && path === "deployments"
+        ? Response.json({
+            data: firstDeploymentExists
+              ? gatewayFixtures().deployments.map((d) => ({
+                  ...d,
+                  price_currency: undefined,
+                  price_note: undefined,
+                }))
+              : [],
+          })
+        : undefined,
+    );
+    const client = renderModels();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Add upstream model" }),
+    );
+    const dialog = within(screen.getByRole("dialog"));
+    await userEvent.type(
+      dialog.getByLabelText("Upstream model ID"),
+      "second-model",
+    );
+    await userEvent.type(dialog.getByLabelText("Price currency"), "CNY");
+    await userEvent.type(dialog.getByLabelText("Pricing terms"), "Standard");
+    firstDeploymentExists = true;
+    await act(() =>
+      client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+    );
+    await waitFor(() =>
+      expect(dialog.queryByLabelText("Price currency")).toBeNull(),
+    );
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Add upstream model" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const body = sentBody(fetchMock, "POST");
+    expect(body).not.toHaveProperty("price_currency");
+    expect(body).not.toHaveProperty("price_note");
+  });
+
   it("withdraws an open price editor if the deployments read is revoked", async () => {
     let revoked = false;
     stubGatewayFetch((method, path) =>
