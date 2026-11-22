@@ -256,6 +256,121 @@ test("Codex project settings cannot disable or duplicate registered hooks", (t) 
   fail(run(cwd, "check"), /harness\/hooks\/codex.json/);
 });
 
+function preservesConflict(cwd, host, key, content, pattern) {
+  const original = Buffer.from(content.replaceAll("\n", "\r\n") + "\r\n");
+  set(cwd, key, original);
+  fail(run(cwd, "check", "--host", host), pattern);
+  const receipt = JSON.parse(pass(run(cwd, "session-start", host)))
+    .hookSpecificOutput.additionalContext;
+  assert.match(receipt, /harness-doctor: FAIL/);
+  assert.match(receipt, pattern);
+  fail(run(cwd, "sync"), pattern);
+  assert.deepEqual(readFileSync(join(cwd, key)), original);
+}
+
+test("Codex preserves unknown top-level fields in its dedicated hook registry and reports the conflict", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = registries.codex;
+  const managed = JSON.parse(get(cwd, key));
+  for (const [field, value] of [
+    ["disableAllHooks", true],
+    ["SessionStart", [{ type: "command", command: "private" }]],
+    ["extra", "private Ω"],
+  ]) {
+    const settings = field === "extra" ? {} : managed;
+    preservesConflict(
+      cwd,
+      "codex",
+      key,
+      JSON.stringify({ ...settings, [field]: value }, null, 4),
+      new RegExp("unregistered.*" + field),
+    );
+  }
+  putJson(cwd, key, {});
+  pass(run(cwd, "sync"));
+  assert.deepEqual(JSON.parse(get(cwd, key)), managed);
+});
+
+test("Codex registrations cannot substitute or widen any role owned by the manifest", (t) => {
+  const { cwd } = fixture(t);
+  const source = "harness/manifest.json";
+  const manifest = JSON.parse(get(cwd, source));
+  manifest.agents.push({ ...manifest.agents[0], name: "audit-team" });
+  set(
+    cwd,
+    "harness/agents/audit-team.md",
+    get(cwd, "harness/agents/reviewer.md"),
+  );
+  putJson(cwd, source, manifest);
+  pass(run(cwd, "sync"));
+  const key = ".codex/config.toml";
+  for (const [role, settings] of [
+    ["reviewer", '[agents.reviewer]\nconfig_file = "./private.toml"'],
+    ["issue-triage", '[agents."issue-triage".features]\nshell_tool = true'],
+    [
+      "audit-team",
+      '"agents".\'audit-team\'.developer_instructions = "replacement"',
+    ],
+    [
+      "reviewer",
+      "agents = { reviewer = { features = { shell_tool = true } } }",
+    ],
+    [
+      "reviewer",
+      '[agents]\n"revi\\u0065wer" = { config_file = "private.toml" }',
+    ],
+  ]) {
+    preservesConflict(
+      cwd,
+      "codex",
+      key,
+      settings,
+      new RegExp("managed role " + role),
+    );
+  }
+  const independent =
+    '[agents.personal]\nconfig_file = "personal.toml"\nmodel = "private"\n[agents.personal.features]\nshell_tool = true\n';
+  set(cwd, key, independent);
+  pass(run(cwd, "check", "--host", "codex"));
+  pass(run(cwd, "sync"));
+  assert.equal(get(cwd, key), independent);
+});
+
+test("Claude guards child-only model and effort switches while preserving shared session settings", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = registries.claude;
+  const managed = JSON.parse(get(cwd, key));
+  for (const [setting, value] of [
+    ["CLAUDE_CODE_SUBAGENT_MODEL_FORCE", "Yes"],
+    ["CLAUDE_CODE_SUBAGENT_EFFORT", "low"],
+  ]) {
+    preservesConflict(
+      cwd,
+      "claude",
+      key,
+      JSON.stringify({ ...managed, env: { [setting]: value } }, null, 4),
+      new RegExp(setting),
+    );
+  }
+  const shared = {
+    ...managed,
+    model: "developer-model",
+    effortLevel: "high",
+    maxEffortLevel: "high",
+    env: {
+      CLAUDE_CODE_EFFORT_LEVEL: "high",
+      CLAUDE_CODE_SUBAGENT_MODEL_FORCE: "off",
+    },
+  };
+  putJson(cwd, key, shared);
+  const before = get(cwd, key);
+  pass(run(cwd, "check", "--host", "claude"));
+  pass(run(cwd, "sync"));
+  assert.equal(get(cwd, key), before);
+});
+
 test("skill attachments retain arbitrary bytes and executable mode", (t) => {
   const { cwd } = fixture(t);
   const suffix = "skills/review-branch/bin/probe";

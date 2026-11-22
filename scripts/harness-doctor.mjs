@@ -536,6 +536,22 @@ function registry(root, host) {
           ". Remove the override from the project settings.",
       );
     }
+    // FORCE makes the effective subagent model (possibly set by the user's
+    // environment) outrank the registered role's explicit model: inherit.
+    requireThat(
+      !/^(?:1|true|yes|on)$/i.test(
+        actual.env?.CLAUDE_CODE_SUBAGENT_MODEL_FORCE,
+      ),
+      key +
+        " enables CLAUDE_CODE_SUBAGENT_MODEL_FORCE. Remove the child model override.",
+    );
+    requireThat(
+      !/^(?:low|medium|high|xhigh|max)$/i.test(
+        actual.env?.CLAUDE_CODE_SUBAGENT_EFFORT,
+      ),
+      key +
+        " sets CLAUDE_CODE_SUBAGENT_EFFORT ahead of the inherited session effort. Remove the child effort override.",
+    );
   }
   if (host === "antigravity") {
     for (const [name, events] of Object.entries(actual)) {
@@ -552,6 +568,17 @@ function registry(root, host) {
   }
   if (Object.hasOwn(actual, "hooks"))
     checkHookEvents(actual.hooks, native.hooks, key);
+  if (host === "codex") {
+    for (const field of Object.keys(actual))
+      requireThat(
+        Object.hasOwn(native, field),
+        key +
+          " contains an unregistered top-level key " +
+          JSON.stringify(field) +
+          ". Review it before syncing.",
+      );
+    return { previous, next: native };
+  }
   return { previous, next: { ...actual, hooks: native.hooks } };
 }
 function write(root, key, content, previous, mode) {
@@ -601,7 +628,25 @@ function* tomlParts(text, separator) {
   }
   yield text.slice(start).trim();
 }
-function checkCodexConfig(root) {
+// A quoted TOML key can name a manifest role using a Unicode escape. Mask
+// punctuation as before so it cannot turn a single literal key into a dotted path.
+function maskTomlToken(token) {
+  if (token.startsWith("#")) return "";
+  const value =
+    token[0] === '"'
+      ? token
+          .slice(1, -1)
+          .replace(
+            /\\(?:u([\da-fA-F]{4})|U([\da-fA-F]{8})|x([\da-fA-F]{2})|.)/g,
+            (_, short, long, byte) => {
+              const code = parseInt(short ?? long ?? byte, 16);
+              return code < 128 ? String.fromCharCode(code) : "\0";
+            },
+          )
+      : token.slice(1, -1);
+  return /^[\w-]+$/.test(value) ? JSON.stringify(value) : '"_"';
+}
+function checkCodexConfig(root, agents) {
   const key = ".codex/config.toml";
   if (!stat(inside(root, key))) return;
   // Preserve quoted simple keys. A comment or string containing a sample hook
@@ -610,13 +655,23 @@ function checkCodexConfig(root) {
     .toString()
     .replace(
       /"""(?:\\[\s\S]|"(?!"")|[^"\\])*"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'[^'\n]*'|#[^\n]*/g,
-      (part) =>
-        part.startsWith("#")
-          ? ""
-          : /^["'][\w-]+["']$/.test(part)
-            ? part
-            : '"_"',
+      maskTomlToken,
     );
+  const managed = new Set(agents.map((agent) => agent.name));
+  function checkOwner(path) {
+    const [section, name] = path.split(".");
+    requireThat(
+      section !== "agents" || !managed.has(name),
+      key +
+        " overrides managed role " +
+        name +
+        " in " +
+        path +
+        ". Edit harness/agents/" +
+        name +
+        ".md or harness/manifest.json instead.",
+    );
+  }
   const inlineHook = (path) => /^hooks\.[A-Z][\w]*(?:\.|$)/.test(path);
   const conflict = (path) =>
     key +
@@ -629,6 +684,7 @@ function checkCodexConfig(root) {
     const leaf = field[1].replace(/['"\s]/g, "");
     const path = parent ? parent + "." + leaf : leaf;
     const value = field[2].trim();
+    checkOwner(path);
     requireThat(!inlineHook(path) || /^\[\s*\]$/.test(value), conflict(path));
     requireThat(
       !/^features\.(?:codex_hooks|hooks)$/.test(path) || value !== "false",
@@ -638,7 +694,7 @@ function checkCodexConfig(root) {
         ". Enable hooks before checking again.",
     );
     requireThat(
-      !/^agents\.(?:default_subagent_(?:model|reasoning_effort)|(?:[\w-]+\.)?(?:model|model_reasoning_effort))$/.test(
+      !/^agents\.(?:default_subagent_(?:model|reasoning_effort)|model|model_reasoning_effort)$/.test(
         path,
       ),
       key +
@@ -659,6 +715,7 @@ function checkCodexConfig(root) {
     const header = /^\[\[?\s*([\w.'"\s-]+?)\s*\]\]?$/.exec(line);
     if (header) {
       table = header[1].replace(/['"\s]/g, "");
+      checkOwner(table);
       requireThat(!inlineHook(table), conflict(table));
     } else checkField(table, line);
   }
@@ -667,7 +724,7 @@ function inspect(root, selected, sync) {
   const manifest = catalog(root),
     index = indexModes(root);
   guide(root, index);
-  if (selected.includes("codex")) checkCodexConfig(root);
+  if (selected.includes("codex")) checkCodexConfig(root, manifest.agents);
   const outputs = expected(root, manifest, selected, index);
   const conflicts = [],
     changes = [],
