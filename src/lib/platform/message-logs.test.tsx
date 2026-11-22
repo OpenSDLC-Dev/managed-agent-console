@@ -25,18 +25,24 @@ function openQuery(bookmark: string | null = null) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 5_000 } },
   });
-  return renderHook(({ id }: { id: string | null }) => useMessageLogs(id), {
-    initialProps: { id: bookmark },
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={client}>
-        <ConsoleSessionContext.Provider
-          value={{ data: TEST_SESSION } as ReturnType<typeof useConsoleSession>}
-        >
-          {children}
-        </ConsoleSessionContext.Provider>
-      </QueryClientProvider>
-    ),
-  });
+  const view = renderHook(
+    ({ id }: { id: string | null }) => useMessageLogs(id),
+    {
+      initialProps: { id: bookmark },
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <ConsoleSessionContext.Provider
+            value={
+              { data: TEST_SESSION } as ReturnType<typeof useConsoleSession>
+            }
+          >
+            {children}
+          </ConsoleSessionContext.Provider>
+        </QueryClientProvider>
+      ),
+    },
+  );
+  return { ...view, client };
 }
 
 afterEach(() => {
@@ -157,6 +163,33 @@ it("keeps the last visible window when the remaining raw pages contain no direct
   });
   await waitFor(() => expect(result.current.hasNextPage).toBe(false));
   expect(result.current.rows).toHaveLength(50);
+});
+
+it("releases a prepared request window after its last observer leaves", async () => {
+  largeLedger(100);
+  const { result, rerender, client, unmount } = openQuery("req_51");
+  await waitFor(() => expect(result.current.rows).toHaveLength(50));
+  await act(async () => {
+    expect(await result.current.move("older")).toBe("req_50");
+  });
+  rerender({ id: "req_50" });
+  await waitFor(() =>
+    expect(result.current.rows[0]?.request_id).toBe("req_50"),
+  );
+  const key = [
+    "gateway",
+    "usage",
+    "message-logs",
+    TEST_SESSION.id,
+    "admin",
+    "request",
+    "req_50",
+  ];
+  expect(
+    client.getQueryCache().find({ queryKey: key, exact: true })?.gcTime,
+  ).toBe(0);
+  unmount();
+  await waitFor(() => expect(client.getQueryState(key)).toBeUndefined());
 });
 
 it("fails an unfinished read instead of treating a repeated cursor as the end of the logs", async () => {

@@ -9,7 +9,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   messageLedgerPages,
   messageReadRefused,
@@ -80,6 +80,16 @@ export function useMessageLogs(request: string | null = null) {
   ];
   const listKey = [...scope, "list"];
   const selectionKey = [...scope, "request", request];
+  const handoff = useRef<{
+    key: string;
+    page: LogPage;
+    updatedAt: number;
+  } | null>(null);
+  function prepared() {
+    return handoff.current?.key === JSON.stringify(selectionKey)
+      ? handoff.current
+      : undefined;
+  }
   const moveKey = useMemo(
     () => ["message-log-navigation", account?.id, account?.role, request],
     [account?.id, account?.role, request],
@@ -95,6 +105,7 @@ export function useMessageLogs(request: string | null = null) {
       return await readWindow(cursor, signal, seek);
     } catch (error) {
       if (!signal.aborted && messageReadRefused(error)) {
+        handoff.current = null;
         client.setQueryData<Pages>(listKey, { pages: [], pageParams: [] });
         client.setQueriesData<LogPage | null>(
           { queryKey: [...scope, "request"] },
@@ -135,17 +146,18 @@ export function useMessageLogs(request: string | null = null) {
           }
         : skipToken,
     initialData: () =>
-      request ? listedWindow(list.data?.pages, request) : undefined,
-    initialDataUpdatedAt: list.dataUpdatedAt,
+      prepared()?.page ??
+      (request ? listedWindow(list.data?.pages, request) : undefined),
+    initialDataUpdatedAt: () => prepared()?.updatedAt ?? list.dataUpdatedAt,
     refetchOnMount: false,
     gcTime: 0,
   });
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    handoff.current = null;
+    return () => {
       void client.cancelQueries({ queryKey: moveKey });
-    },
-    [client, moveKey],
-  );
+    };
+  }, [client, moveKey]);
 
   const active = request ? detail : list;
   const error =
@@ -162,7 +174,12 @@ export function useMessageLogs(request: string | null = null) {
   );
 
   function remember(id: string, page: LogPage, updatedAt: number) {
-    client.setQueryData([...scope, "request", id], page, { updatedAt });
+    const key = [...scope, "request", id];
+    // setQueryData creates an unobserved query with the default five-minute
+    // lifetime. Let the destination observer create it with gcTime zero.
+    if (client.getQueryState(key))
+      client.setQueryData(key, page, { updatedAt });
+    else handoff.current = { key: JSON.stringify(key), page, updatedAt };
   }
   function select(id: string) {
     void client.cancelQueries({ queryKey: moveKey });
