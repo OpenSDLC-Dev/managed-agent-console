@@ -98,7 +98,8 @@ function RequestDetail({ row }: { row: GatewayUsageRow }) {
         <Field label="Time">
           <RequestTime iso={row.created_at} />
         </Field>
-        <Field label="Model">{row.model || "—"}</Field>
+        <Field label="Requested model">{row.model || "—"}</Field>
+        <Field label="Gateway alias">{row.alias || "—"}</Field>
         <Field label="Type">
           <span title="Streaming mode is unavailable in the gateway ledger.">
             —
@@ -265,7 +266,7 @@ export function MessageLogs() {
     },
     {
       key: "model",
-      header: "Model",
+      header: <span title="Model name sent with the request">Model</span>,
       cell: (row) => <span data-model={row.model}>{row.model || "—"}</span>,
     },
     {

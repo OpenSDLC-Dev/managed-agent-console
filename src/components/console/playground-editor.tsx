@@ -1,21 +1,20 @@
-import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, Ellipsis, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Ellipsis, FileText, Trash2, Wrench } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  PlaygroundModelSelect,
+  PlaygroundSettings,
+} from "./playground-settings";
+import { addCustomTool, PlaygroundTools } from "./playground-tools";
 import type {
   PlaygroundMessage,
   PlaygroundContent,
@@ -34,7 +33,11 @@ export type PlaygroundDraft = {
     parameters?: Record<string, unknown>;
   })[];
   includeEmptySystem?: boolean;
-  // Code can set additional Messages parameters that the Form does not edit.
+  // Code can intentionally use a provider-specific thinking budget.
+  formThinkingBudget?: number;
+  // Raw input keeps invalid or partly formatted JSON editable without sending it.
+  toolSchemas?: ({ text: string; invalid: boolean } | undefined)[];
+  // Preserve additional Messages parameters across Form and Code.
   parameters?: Record<string, unknown>;
 };
 
@@ -129,6 +132,8 @@ export function PlaygroundEditor({
   model,
   loading,
   running,
+  expandedTool,
+  onExpandTool,
   onEditFullRequest,
 }: {
   draft: PlaygroundDraft;
@@ -137,10 +142,12 @@ export function PlaygroundEditor({
   model: string;
   loading: boolean;
   running: boolean;
+  expandedTool: number | null;
+  onExpandTool: (index: number | null) => void;
   onEditFullRequest: (triggerId: string) => void;
 }) {
   const { system, messages } = draft;
-  const emptyModelLabel = models.length ? "Select a model" : "No models";
+  const modelProps = { models, model, loading, running };
   const patch = (change: Partial<PlaygroundDraft>) =>
     onChange({ ...draft, ...change });
   function addMessage(role: PlaygroundMessage["role"]) {
@@ -163,74 +170,11 @@ export function PlaygroundEditor({
     <fieldset disabled={running} className="min-w-0 space-y-4">
       <legend className="sr-only">Request fields</legend>
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={model || null}
-          onValueChange={(value) => {
-            if (value) patch({ selection: value });
-          }}
-          disabled={!models.length || running}
-        >
-          <SelectTrigger
-            size="sm"
-            aria-label="Model"
-            data-model={model}
-            className="w-[13.5rem] max-w-[65%] border-transparent bg-muted/70 text-sm font-medium"
-          >
-            <SelectValue>
-              {models.find((m) => m.id === model)?.display_name ??
-                (loading
-                  ? "Loading models…"
-                  : model
-                    ? `${model} (unavailable)`
-                    : emptyModelLabel)}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent align="start" alignItemWithTrigger={false}>
-            {models.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.display_name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Popover.Root>
-          <Popover.Trigger
-            type="button"
-            aria-label="Model settings"
-            title="Model settings"
-            disabled={running}
-            className={buttonVariants({
-              variant: "secondary",
-              size: "icon-sm",
-            })}
-          >
-            <SlidersHorizontal />
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Positioner
-              side="bottom"
-              align="start"
-              sideOffset={6}
-              className="z-40"
-            >
-              <Popover.Popup className="w-64 rounded-xl border bg-popover p-4 text-popover-foreground shadow-md">
-                <Popover.Title className="mb-3 text-sm font-semibold">
-                  Model settings
-                </Popover.Title>
-                <Label htmlFor="playground-tokens">Max tokens</Label>
-                <Input
-                  id="playground-tokens"
-                  type="number"
-                  min={1}
-                  step={1}
-                  className="mt-2"
-                  value={draft.tokens}
-                  onChange={(e) => patch({ tokens: e.target.value })}
-                />
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
-        </Popover.Root>
+        <PlaygroundModelSelect
+          {...modelProps}
+          onSelect={(selection) => patch({ selection })}
+        />
+        <PlaygroundSettings {...modelProps} draft={draft} onChange={onChange} />
         <div className="ml-auto flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -240,13 +184,31 @@ export function PlaygroundEditor({
             >
               Add <ChevronDown />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {system === null && (
-                <DropdownMenuItem onClick={() => patch({ system: "" })}>
-                  System prompt
+            <DropdownMenuContent align="end" className="w-[228px]">
+              <DropdownMenuItem
+                disabled={system !== null}
+                onClick={() => patch({ system: "" })}
+              >
+                <FileText /> System prompt{" "}
+                {system !== null && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    Added
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Tools</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => {
+                    onExpandTool(0);
+                    onChange(addCustomTool(draft));
+                  }}
+                >
+                  <Wrench />
+                  Custom tool
                 </DropdownMenuItem>
-              )}
-              {messageOptions}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -270,6 +232,13 @@ export function PlaygroundEditor({
           </DropdownMenu>
         </div>
       </div>
+      <PlaygroundTools
+        draft={draft}
+        onChange={onChange}
+        expanded={expandedTool}
+        onExpand={onExpandTool}
+        onEditFullRequest={onEditFullRequest}
+      />
       {system !== null && (
         <section>
           <div className="mb-1.5 flex h-6 items-center justify-between">

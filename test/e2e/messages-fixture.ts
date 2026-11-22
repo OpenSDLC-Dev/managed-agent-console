@@ -23,7 +23,8 @@ export function messagesLedger(): GatewayUsageRow[] {
       created_at: time(1),
       api_key_id: "apikey_ci01",
       model: "minimax-m3",
-      alias: "minimax-m3",
+      // A wildcard route preserves the caller's model independently.
+      alias: "*",
       // An API-key client may supply a session ID for upstream affinity.
       session_id: "client-affinity-01",
       principal_id: "prn_messages_operator",

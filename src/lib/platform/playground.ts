@@ -11,7 +11,21 @@ export const playgroundMessageHeaders = {
   "content-type": "application/json",
 } as const;
 
-export type PlaygroundModel = { id: string; display_name: string };
+// modelgateway/models.go describes the capabilities shared by every target.
+export type PlaygroundModel = {
+  id: string;
+  display_name: string;
+  max_tokens?: number;
+  capabilities?: {
+    thinking?: {
+      supported?: boolean;
+      types?: {
+        enabled?: { supported: boolean };
+        adaptive?: { supported: boolean };
+      };
+    };
+  };
+};
 
 export async function playgroundModels(signal: AbortSignal) {
   const models: PlaygroundModel[] = [];
@@ -83,6 +97,12 @@ export type PlaygroundReply = {
   content?: PlaygroundBlock[];
 };
 
+export type PlaygroundToolDelta = {
+  index: number;
+  name: string;
+  fragment: string;
+};
+
 type Usage = { input_tokens?: number; output_tokens?: number };
 type Block = PlaygroundBlock & {
   text?: string;
@@ -108,6 +128,7 @@ export async function runPlayground(
   principalId: string,
   signal: AbortSignal,
   append: (text: string) => void,
+  onToolInput?: (delta: PlaygroundToolDelta) => void,
 ): Promise<PlaygroundReply> {
   const started = performance.now();
   const response = await fetch(resourceURL("v1/messages?beta=true"), {
@@ -265,6 +286,17 @@ export async function runPlayground(
         const parts = toolInputs.get(frame.index) ?? [];
         parts.push(frame.delta.partial_json);
         toolInputs.set(frame.index, parts);
+        if (
+          openBlocks.has(frame.index) &&
+          block.type === "tool_use" &&
+          typeof block.name === "string" &&
+          frame.delta.partial_json
+        )
+          onToolInput?.({
+            index: frame.index,
+            name: block.name,
+            fragment: frame.delta.partial_json,
+          });
       } else if (
         block?.type === "thinking" &&
         frame.delta?.type === "thinking_delta" &&

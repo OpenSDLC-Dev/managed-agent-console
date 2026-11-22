@@ -1,10 +1,13 @@
 import { Popover } from "@base-ui/react/popover";
 import { Copy } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/copy-text";
-import type { PlaygroundReply } from "@/lib/platform/playground";
+import type {
+  PlaygroundReply,
+  PlaygroundToolDelta,
+} from "@/lib/platform/playground";
 import { MemoryMarkdown as MarkdownContent } from "./memory-markdown";
 import { PlaygroundViewSwitch } from "./playground-view-switch";
 
@@ -15,6 +18,69 @@ const labels = {
   stopped: "Stopped",
   failed: "Failed",
 };
+
+export type ToolInputPreview = {
+  index: number;
+  name: string;
+  tail: string;
+  clipped: boolean;
+};
+
+export function previewToolInput(
+  previous: ToolInputPreview[],
+  { index, name, fragment }: PlaygroundToolDelta,
+) {
+  // The gateway reader already assembles the full input. Keep only a bounded
+  // display tail for each of the most recent calls while it is in flight.
+  const maxLength = 4096;
+  const maxCalls = 8;
+  const at = previous.findIndex((tool) => tool.index === index);
+  const prior = previous[at];
+  const combined =
+    fragment.length >= maxLength
+      ? fragment.slice(-maxLength)
+      : (prior?.tail ?? "") + fragment;
+  const tool = {
+    index,
+    name,
+    tail: combined.slice(-maxLength),
+    clipped:
+      Boolean(prior?.clipped) ||
+      (prior?.tail.length ?? 0) + fragment.length > maxLength,
+  };
+  if (at === -1) return [...previous.slice(1 - maxCalls), tool];
+  const updated = previous.slice();
+  updated[at] = tool;
+  return updated;
+}
+
+function StreamingInput({ index, name, tail, clipped }: ToolInputPreview) {
+  const output = useRef<HTMLPreElement>(null);
+  const follow = useRef(true);
+  useLayoutEffect(() => {
+    if (output.current && follow.current)
+      output.current.scrollTop = output.current.scrollHeight;
+  }, [tail]);
+  return (
+    <div className="rounded-lg bg-muted/40 p-3">
+      <span className="font-mono text-xs font-medium">{name}</span>
+      <pre
+        ref={output}
+        aria-label={`Input for ${name}, block ${index + 1}`}
+        className="mt-1 max-h-64 overflow-auto font-mono text-xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]"
+        tabIndex={0}
+        onScroll={({ currentTarget: element }) => {
+          follow.current =
+            element.scrollTop + element.clientHeight >=
+            element.scrollHeight - 1;
+        }}
+      >
+        {clipped && "…"}
+        {tail}
+      </pre>
+    </div>
+  );
+}
 
 function Metric({ label, detail }: { label: string; detail: string }) {
   return (
@@ -45,6 +111,7 @@ function Metric({ label, detail }: { label: string; detail: string }) {
 export function PlaygroundResponse({
   status,
   text,
+  toolInputs,
   error,
   reply,
   onAdd,
@@ -52,6 +119,7 @@ export function PlaygroundResponse({
 }: {
   status: Exclude<RunStatus, "idle">;
   text: string;
+  toolInputs: ToolInputPreview[];
   error?: string;
   reply?: PlaygroundReply;
   onAdd: () => void;
@@ -133,10 +201,18 @@ export function PlaygroundResponse({
               <code>{reply.raw}</code>
             </pre>
           </>
-        ) : (
+        ) : status === "running" && !toolInputs.length ? (
           <p className="text-sm text-muted-foreground">
             The response body is available when the request completes.
           </p>
+        ) : null}
+        {status === "running" && toolInputs.length > 0 && (
+          <section aria-label="Streaming tool input" className="mt-3 space-y-2">
+            <h3 className="text-sm font-medium">Streaming tool input</h3>
+            {toolInputs.map((tool) => (
+              <StreamingInput key={tool.index} {...tool} />
+            ))}
+          </section>
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-5 py-2">

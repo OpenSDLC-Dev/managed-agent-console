@@ -37,23 +37,29 @@ Signed-in Chrome opened **Build → Messages** on [Overview](https://platform.cl
 
 [Logs](https://platform.claude.com/workspaces/default/logs) shows individual requests from the last 30 days with Copy ID, a timestamp and Refresh. Selecting a request adds its ID to the URL and opens a right drawer. Previous and Next follow the list order. An owned API key still identifies a direct call when a client sends a routing affinity. The ledger cannot distinguish an OAuth call carrying that header from a delegated agent call. Both are excluded. The ledger provides token counts, latency, status and attribution. Prompts, replies, streaming mode, service tier and client application are unavailable. Platform retention can be shorter than 30 days. The ledger cursor orders by ID and has no date or endpoint filter. Overview accumulates counters per page. Logs reads additional pages when the operator asks for older records or opens an older request URL.
 
+The Model column shows the name the client requested. The drawer also shows the gateway alias matched at the time, which can be a wildcard. A deployment rename leaves both fields intact. Platform does not record the upstream model name on the usage row.
+
 ### Repeat the Messages comparison
 
 Open both signed-in consoles in Chrome at the same viewport. Use the same account role for a repeat comparison. Use the mock fixture for submissions.
 
 On desktop the top edges of the back button, workspace selector and Overview link are 40 px apart. The following links start every 36 px.
 
-1. Open Messages from the desktop sidebar. Check the selected Overview link, Default workspace menu, metric explanations, Usage and Logs links. Open a key, return, then open and dismiss Create key. A Playground-only user lands on Playground.
-2. Open Playground, edit a template, switch between Form and Code, and copy the request. Check invalid edits, the Streaming setting, Run, Stop, Rendered, Raw, Add to messages and History. Use the fixture to verify the submitted body and response.
-3. Open Logs. Copy an ID, open the row with the keyboard, switch requests, reload its URL, then close with Escape. Close the drawer by clicking the page heading. Refresh after adding a fixture record. Repeat at phone width and with an empty list or a refused ledger read.
+1. Open Messages from the desktop sidebar. Check the selected Overview link, Default workspace menu, metric explanations, Usage and Logs links. In the fixture, create a user key from Overview and disable it. Follow the key from Overview to its details, archive it, then check that it disappears. A Playground-only user lands on Playground.
+2. In Playground, open Model settings, change the output limit, expand Advanced and toggle Streaming. Open the top Add menu, add a custom tool, edit its schema and inspect the request in Code. Use the bottom Add to append a message. Switch between the two supported templates and check the selected card, model, and tool schemas. Use the fixture to compare Run, Stop, live tool input, Rendered, Raw, Add to messages and History.
+3. In Logs, copy an ID, open the row with the keyboard and compare Requested model with Gateway alias. Switch requests, reload its URL, then close with Escape. Close the drawer by clicking the page heading. Refresh after adding a fixture record. Repeat at phone width and with an empty list or a refused ledger read.
 
-Run `pnpm test:e2e test/e2e/messages.spec.ts` for the interaction suite. After building, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: messages-'` for the light and dark screenshots. Both commands use the local mock edge.
+Run `pnpm test:e2e test/e2e/messages.spec.ts test/e2e/api-keys.spec.ts` for these interactions. After building, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: messages-'` for light and dark screenshots. Both commands use the local mock edge. The API key suite disables recordings during one-time key reveals.
 
 ## Playground — checked 2026-11-22
 
 Signed-in Chrome placed [Playground](https://platform.claude.com/workspaces/default/playground) under **Build → Messages** and in the Dashboard's Resources section. Both the group header and its arrow return to all sections while the editor stays open.
 
-At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle. Form and Code share the left column, with model settings at the top and Run at the bottom. The empty right column contains a 672px template grid with 16px gaps. More and Previous page through it. Code has an editable snippet, Copy code and a Streaming setting. The self-hosted editor uses gateway aliases, text-message templates and editable cURL and JSON. History covers runs in the open page. The platform does not store prompt history or host shared requests.
+At 1800 × 945 the reference starts with a 50/50 split and a 12px resize handle. Form and Code share the left column, with model settings at the top and Run at the bottom. The empty right column contains a 672px template grid with 16px gaps. Selecting a template fills the request and leaves its card selected. The reference pages through 12 cards. The current gateway can run the two client-tool examples on the second page, **Stream tool arguments live** and **Call tools in parallel**. Console keeps the chosen gateway alias. It shows tool-input fragments as the provider sends them. The client supplies tool results.
+
+Model settings opens a right drawer. It repeats the model selector and places the token limit above Advanced, which contains stop sequences and Streaming. Console reads thinking modes and output limits from the selected gateway alias. Token and temperature sliders expand to include an entered value. The gateway leaves sampling bounds to the upstream model. Switching aliases preserves the draft and identifies a thinking mode the new alias does not advertise. The top Add menu adds a system prompt or tools. The lower Add control appends conversation turns. The hosted Structured output and built-in tools have no corresponding capability on the configured aliases.
+
+Code has an editable snippet, Copy code and a Streaming setting. The self-hosted editor supports cURL and JSON. History covers runs in the open page. The platform does not store prompt history or host shared requests.
 
 After a signed-in Haiku run, the right column switched to Rendered and Raw views. Add to messages worked from either view and placed the answer above a fresh user message. The footer showed token counts, cost and duration. The native Messages stream supplies token counts. The Console measures elapsed time and omits the hosted price estimate.
 

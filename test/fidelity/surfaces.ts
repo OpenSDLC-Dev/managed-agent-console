@@ -1247,6 +1247,79 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "messages-playground-settings",
+    route: "/playground",
+    fixture:
+      "a chat alias reporting a 32,000-token limit and supported thinking modes",
+    description:
+      "The Model panel with its model picker, thinking modes and token controls.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page.getByRole("button", { name: "Model settings" }).click();
+      await page.getByRole("radiogroup", { name: "Thinking" }).waitFor();
+    },
+  },
+  {
+    id: "messages-playground-advanced-narrow",
+    route: "/playground",
+    fixture: "a model with no reported output limit on a 390px viewport",
+    description:
+      "Advanced settings with an editable output budget, a stop sequence and the streaming switch.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await grantDashboardModelDiscovery(page, "minimax-m3");
+      await page.reload();
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page.getByRole("button", { name: "Model settings" }).click();
+      const panel = page.getByRole("dialog", { name: "Model", exact: true });
+      await panel.getByRole("combobox", { name: "Model" }).click();
+      await page.getByRole("option", { name: "MiniMax M3" }).click();
+      await panel
+        .getByRole("spinbutton", { name: "Max tokens value" })
+        .fill("8192");
+      await panel.getByRole("button", { name: "Advanced" }).click();
+      await panel.getByRole("button", { name: "Add", exact: true }).click();
+      await panel.getByRole("textbox", { name: "Stop sequence 1" }).fill("END");
+      await panel.getByRole("switch", { name: "Streaming" }).waitFor();
+    },
+  },
+  {
+    id: "messages-playground-add",
+    route: "/playground",
+    fixture: "a blank request with its system row and no tool definitions",
+    description:
+      "The top Add menu with the system-row status and the available custom tool.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Custom tool" }).waitFor();
+    },
+  },
+  ...[
+    { id: "stream", title: "Stream tool arguments live", tool: "make_file" },
+    { id: "parallel", title: "Call tools in parallel", tool: "get_time" },
+  ].map(({ id, title, tool }): Surface => ({
+    id: "messages-playground-template-" + id,
+    route: "/playground",
+    fixture: title,
+    description:
+      "The selected template card and its editable system, tool definitions and user prompt.",
+    setup: async (page) => {
+      await openMessages(page, "/playground");
+      await page.locator('[data-model="deepseek-flash"]').waitFor();
+      await page.getByRole("button", { name: title, exact: true }).click();
+      await page.getByRole("button", { name: tool, exact: true }).waitFor();
+      await page
+        .getByRole("button", { name: title, exact: true, pressed: true })
+        .waitFor();
+    },
+  })),
+  {
     id: "messages-playground-full-request",
     route: "/playground",
     fixture: "editable JSON body for a direct Messages request",

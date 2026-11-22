@@ -842,7 +842,9 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             ).toHaveValue(/Write a short greeting\./);
             break;
           case "native-playground-settings":
-            await expect(page.getByLabel("Max tokens")).toBeVisible();
+            await expect(
+              page.getByRole("spinbutton", { name: "Max tokens value" }),
+            ).toBeVisible();
             break;
           case "native-playground-response":
             await expect(

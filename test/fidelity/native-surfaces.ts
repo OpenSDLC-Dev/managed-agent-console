@@ -18,7 +18,8 @@ export const NATIVE_SURFACES = [
     id: "native-playground-settings",
     route: "/playground",
     fixture: "chat model settings",
-    description: "Max tokens opens beside the selected chat model.",
+    description:
+      "The Model drawer contains the current selection, token limit and Advanced controls.",
   },
   {
     id: "native-playground-response",

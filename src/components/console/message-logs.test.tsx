@@ -207,6 +207,35 @@ it("opens the underlined latency label from the keyboard and dismisses its help 
   await waitFor(() => expect(panel).not.toBeInTheDocument());
 });
 
+it.each([
+  ["deepseek-v4-flash", "deepseek-v4-flash"],
+  ["glm-4.7-flash", "glm-4.7-flash"],
+  ["custom-model", "*"],
+  ["custom-model", ""],
+  ["", "*"],
+])(
+  "shows the recorded request model %j and matched alias %j independently",
+  async (model, alias) => {
+    const { user } = openLogs([row(1, { model, alias })]);
+    const table = within(screen.getByRole("table", { name: "Logs" }));
+    const opener = await table.findByRole("button", { name: "req_1" });
+    expect(opener.closest("tr")!.querySelector("[data-model]")).toHaveAttribute(
+      "data-model",
+      model,
+    );
+    await user.click(opener);
+    const detail = within(
+      await screen.findByRole("dialog", { name: "Request details" }),
+    );
+    expect(
+      detail.getByText("Requested model").nextElementSibling?.textContent,
+    ).toBe(model || "—");
+    expect(
+      detail.getByText("Gateway alias").nextElementSibling?.textContent,
+    ).toBe(alias || "—");
+  },
+);
+
 it("includes cache reads and writes in table input and distinguishes zero from an unreported total", async () => {
   openLogs([
     row(3, { input_tokens: 15, cache_read_tokens: 20, cache_write_tokens: 7 }),
