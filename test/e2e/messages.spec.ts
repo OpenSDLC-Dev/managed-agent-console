@@ -566,9 +566,9 @@ test("edit, preview, run once and restore the Playground response from History",
   );
   await main.getByText("Rendered", { exact: true }).click();
   await main.getByRole("button", { name: "Add to messages" }).click();
-  await expect(main.getByLabel("assistant message 2")).toHaveValue(
-    "Fixture response",
-  );
+  await expect(
+    main.getByRole("textbox", { name: "assistant message 2", exact: true }),
+  ).toHaveValue("Fixture response");
   await main.getByRole("button", { name: "New", exact: true }).click();
   await expect(prompt).toBeEmpty();
   await main.getByRole("button", { name: "History" }).click();

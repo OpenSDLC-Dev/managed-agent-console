@@ -863,10 +863,18 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             );
             break;
           case "native-playground-continuation":
-            await expect(page.getByLabel("assistant message 2")).toHaveValue(
-              "Fixture response",
-            );
-            await expect(page.getByLabel("user message 3")).toBeEmpty();
+            await expect(
+              page.getByRole("textbox", {
+                name: "assistant message 2",
+                exact: true,
+              }),
+            ).toHaveValue("Fixture response");
+            await expect(
+              page.getByRole("textbox", {
+                name: "user message 3",
+                exact: true,
+              }),
+            ).toBeEmpty();
             break;
           case "native-playground-history":
             await expect(
