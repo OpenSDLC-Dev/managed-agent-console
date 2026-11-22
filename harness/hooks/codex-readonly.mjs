@@ -35,8 +35,9 @@ try {
         "The read-only reviewer can request evidence from the parent session.";
     }
   }
-} catch (error) {
-  reason = "Unable to verify read-only role permissions. " + error.message;
+} catch {
+  reason =
+    "Unable to verify read-only role permissions from the hook event and manifest.";
 }
 if (reason) {
   console.log(

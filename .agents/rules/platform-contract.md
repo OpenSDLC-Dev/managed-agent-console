@@ -1,6 +1,6 @@
 ---
 trigger: glob
-globs: "**/src/**,**/test/**"
+globs: "src/**,test/**"
 ---
 
 # Platform contracts and authority

@@ -4,6 +4,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -15,9 +16,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { after, test } from "node:test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const emptyHooks = mkdtempSync(join(tmpdir(), "Console empty Git hooks "));
+after(() => rmSync(emptyHooks, { recursive: true, force: true }));
 const doctor = "scripts/harness-doctor.mjs";
 const hosts = ["claude", "codex", "antigravity"];
 const registries = {
@@ -34,7 +37,7 @@ const guide = [
   "",
 ].join("\n");
 function command(cwd, program, args, options = {}) {
-  const env = { ...process.env };
+  const env = { ...process.env, ...options.env };
   for (const key of [
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -45,11 +48,15 @@ function command(cwd, program, args, options = {}) {
     "GIT_PREFIX",
   ])
     delete env[key];
+  const entry = Number(env.GIT_CONFIG_COUNT ?? 0);
+  env.GIT_CONFIG_COUNT = String(entry + 1);
+  env["GIT_CONFIG_KEY_" + entry] = "core.hooksPath";
+  env["GIT_CONFIG_VALUE_" + entry] = emptyHooks;
   const result = spawnSync(program, args, {
     cwd,
+    ...options,
     env,
     encoding: "utf8",
-    ...options,
   });
   assert.ifError(result.error);
   return {
@@ -104,21 +111,208 @@ function fixture(t) {
   return { tmp, cwd };
 }
 
-function commitFixture(cwd) {
+function commitFixture(cwd, options) {
   pass(
-    command(cwd, "git", [
-      "-c",
-      "user.name=Fixture",
-      "-c",
-      "user.email=fixture@example.invalid",
-      "-c",
-      "commit.gpgSign=false",
-      "commit",
-      "-qm",
-      "fixture",
-    ]),
+    command(
+      cwd,
+      "git",
+      [
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "-c",
+        "commit.gpgSign=false",
+        "commit",
+        "-qm",
+        "fixture",
+      ],
+      options,
+    ),
   );
 }
+
+test("fixture commits ignore a hostile global pre-commit hook", (t) => {
+  const { cwd, tmp } = fixture(t);
+  const hooks = join(tmp, "personal-hooks");
+  const config = join(tmp, "personal.gitconfig");
+  set(hooks, "pre-commit", "#!/bin/sh\nexit 86\n");
+  chmodSync(join(hooks, "pre-commit"), 0o755);
+  pass(
+    command(cwd, "git", ["config", "--file", config, "core.hooksPath", hooks]),
+  );
+  const options = { env: { ...process.env, GIT_CONFIG_GLOBAL: config } };
+  pass(command(cwd, "git", ["add", "."], options));
+  commitFixture(cwd, options);
+  assert.equal(
+    pass(
+      command(cwd, "git", ["config", "--global", "core.hooksPath"], options),
+    ).trimEnd(),
+    hooks,
+  );
+});
+
+test("malformed JSON never discloses configuration excerpts in diagnostics", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = registries.claude;
+  const contents = '{"env": {"X": PRIVATEKEY}}\r\n';
+  set(cwd, key, contents);
+  for (const args of [["check"], ["sync"], ["session-start", "claude"]]) {
+    const result = run(cwd, ...args);
+    const diagnostic =
+      args[0] === "session-start"
+        ? JSON.parse(pass(result)).hookSpecificOutput.additionalContext
+        : result.text;
+    if (args[0] !== "session-start") assert.notEqual(result.status, 0);
+    assert.doesNotMatch(diagnostic, /PRIVATE/);
+    assert.match(
+      diagnostic,
+      /FAIL[\s\S]*\.claude\/settings\.json.*invalid JSON/,
+    );
+    assert.equal(get(cwd, key), contents);
+  }
+});
+
+test("regular-looking skill files with Git symlink mode fail on portable checkouts", (t) => {
+  const { cwd } = fixture(t);
+  pass(command(cwd, "git", ["config", "core.symlinks", "false"]));
+  const suffix = "skills/review-branch/link.txt";
+  const value = "relative-target";
+  set(cwd, "harness/" + suffix, value);
+  pass(run(cwd, "sync"));
+  pass(run(cwd, "check"));
+  const oid = pass(
+    command(cwd, "git", ["hash-object", "-w", "--stdin"], { input: value }),
+  ).trimEnd();
+  for (const [prefix, host] of [
+    [".claude/", "claude"],
+    [".agents/", "codex"],
+    ["harness/", "antigravity"],
+  ]) {
+    const key = prefix + suffix;
+    pass(
+      command(cwd, "git", [
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        "120000," + oid + "," + key,
+      ]),
+    );
+    pass(command(cwd, "git", ["checkout-index", "--force", "--", key]));
+    assert.ok(lstatSync(join(cwd, key)).isFile());
+    if (prefix === ".claude/") pass(run(cwd, "check", "--host", "codex"));
+    for (const args of [["check", "--host", host], ["sync"]]) {
+      const result = run(cwd, ...args);
+      fail(result, /120000/);
+      assert.ok(result.text.includes(key), result.text);
+    }
+    assert.equal(get(cwd, key), value);
+    pass(
+      command(cwd, "git", [
+        "update-index",
+        "--cacheinfo",
+        "100644," + oid + "," + key,
+      ]),
+    );
+  }
+});
+
+function startupHandler(settings, host) {
+  return host === "antigravity"
+    ? settings["harness-doctor"].SessionStart[0]
+    : settings.hooks.SessionStart[0].hooks[0];
+}
+
+test("a prior committed hook policy can migrate without erasing a local handler", (t) => {
+  const { cwd } = fixture(t);
+  putJson(cwd, registries.claude, { enabledPlugins: { typescript: true } });
+  pass(run(cwd, "sync"));
+  pass(command(cwd, "git", ["add", "."]));
+  commitFixture(cwd);
+  for (const host of hosts) {
+    const source = "harness/hooks/" + host + ".json";
+    const policy = JSON.parse(get(cwd, source));
+    startupHandler(policy, host).timeout = 30;
+    putJson(cwd, source, policy);
+    pass(command(cwd, "git", ["add", source]));
+    const key = registries[host];
+    const previous = get(cwd, key);
+    const custom = JSON.parse(previous);
+    startupHandler(custom, host).timeout = 99;
+    putJson(cwd, key, custom);
+    const saved = get(cwd, key);
+    fail(run(cwd, "sync"), /unregistered/);
+    assert.equal(get(cwd, key), saved);
+    set(cwd, key, previous);
+    fail(run(cwd, "check", "--host", host), /differs from its source/);
+    pass(run(cwd, "sync"));
+    assert.equal(startupHandler(JSON.parse(get(cwd, key)), host).timeout, 30);
+  }
+  assert.deepEqual(JSON.parse(get(cwd, registries.claude)).enabledPlugins, {
+    typescript: true,
+  });
+  pass(run(cwd, "check"));
+});
+
+test("array-like objects cannot register canonical hook groups or handlers", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  function arrayLike(array) {
+    return { ...array, length: array.length };
+  }
+  for (const [host, event, handlers] of [
+    ["claude", "SessionStart", false],
+    ["claude", "SessionStart", true],
+    ["codex", "PreToolUse", false],
+    ["codex", "PreToolUse", true],
+    ["antigravity", "SessionStart", false],
+    ["claude", "Stop", true],
+    ["antigravity", "Stop", false],
+  ]) {
+    const source = "harness/hooks/" + host + ".json";
+    const good = get(cwd, source);
+    const policy = JSON.parse(good);
+    const events =
+      host === "antigravity" ? policy["harness-doctor"] : policy.hooks;
+    if (event === "Stop") events.Stop = structuredClone(events.SessionStart);
+    if (handlers) events[event][0].hooks = arrayLike(events[event][0].hooks);
+    else events[event] = arrayLike(events[event]);
+    putJson(cwd, source, policy);
+    const dest = registries[host];
+    rmSync(join(cwd, dest));
+    for (const args of [["check", "--host", host], ["sync"]]) {
+      const result = run(cwd, ...args);
+      fail(result, /harness\/hooks\//);
+      assert.ok(result.text.includes(source), result.text);
+    }
+    assert.equal(existsSync(join(cwd, dest)), false);
+    set(cwd, source, good);
+    pass(run(cwd, "sync"));
+  }
+});
+
+test(
+  "a worktree with a trailing space retains its identity beside another checkout",
+  { skip: process.platform === "win32" },
+  (t) => {
+    const { cwd, tmp } = fixture(t);
+    pass(run(cwd, "sync"));
+    pass(command(cwd, "git", ["add", "."]));
+    commitFixture(cwd);
+    const spaced = join(tmp, "base ");
+    pass(command(tmp, "git", ["clone", "-q", cwd, spaced]));
+    const key = ".codex/agents/reviewer.toml";
+    const good = get(cwd, key);
+    set(cwd, key, "sibling drift\n");
+    const diagnostic = pass(run(spaced, "check"));
+    assert.ok(diagnostic.includes(realpathSync.native(spaced)), diagnostic);
+    set(spaced, key, "target drift\n");
+    pass(run(spaced, "sync"));
+    assert.equal(get(spaced, key), good);
+    assert.equal(get(cwd, key), "sibling drift\n");
+  },
+);
 
 test("a clean clone discovers all three host configurations from subdirectories and linked worktrees", (t) => {
   const { tmp, cwd } = fixture(t);
@@ -427,6 +621,35 @@ test("Codex registrations cannot substitute or widen any role owned by the manif
   assert.equal(get(cwd, key), independent);
 });
 
+test("Codex diagnoses explicit subagent disablement with native V2 precedence", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = ".codex/config.toml";
+  for (const disabled of [
+    "[features]\nmulti_agent = false",
+    "agents.enabled = false",
+    "features = { multi_agent = false, multi_agent_v2 = { enabled = false } }",
+  ]) {
+    preservesConflict(
+      cwd,
+      "codex",
+      key,
+      disabled,
+      /\.codex\/config\.toml disables required subagents/,
+    );
+  }
+  for (const enabled of [
+    "features.multi_agent = true",
+    "features.multi_agent_v2 = false",
+    "[features]\nmulti_agent = false\nmulti_agent_v2 = true",
+    "[agents]\nenabled = false\n[features.multi_agent_v2]\nenabled = true",
+  ]) {
+    set(cwd, key, enabled);
+    pass(run(cwd, "check", "--host", "codex"));
+    assert.equal(get(cwd, key), enabled);
+  }
+});
+
 test("Claude guards child-only model and effort switches while preserving shared session settings", (t) => {
   const { cwd } = fixture(t);
   pass(run(cwd, "sync"));
@@ -493,6 +716,12 @@ test("skill attachments retain arbitrary bytes and executable mode", (t) => {
 
 test("rules returns the complete union for planned paths relative to the caller", (t) => {
   const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  for (const rule of JSON.parse(get(cwd, "harness/manifest.json")).rules) {
+    const native = get(cwd, ".agents/rules/" + rule.name + ".md");
+    const glob = JSON.parse(/^globs: (.+)$/m.exec(native)[1]);
+    assert.deepEqual(glob.split(","), rule.paths);
+  }
   const paths = pass(
     command(join(cwd, "harness"), process.execPath, [
       join(cwd, doctor),
@@ -508,6 +737,7 @@ test("rules returns the complete union for planned paths relative to the caller"
     assert.equal(paths.split(key).length, 2, "one copy for overlapping inputs");
   }
   assert.equal(pass(run(cwd, "rules", "LICENSE")), "");
+  assert.equal(pass(run(cwd, "rules", "examples/nested/src/app/page.ts")), "");
   fail(run(cwd, "rules", "../other/file"), /outside the worktree/);
   const source = "harness/rules/ui-evidence.md";
   set(cwd, source, get(cwd, source) + "\n[missing](./gone.md)\n");
@@ -771,5 +1001,17 @@ test("Codex denies mutating and shell tools only in the restricted roles", (t) =
     JSON.parse(invoke({ hook_event_name: "PostToolUse" })).hookSpecificOutput
       .permissionDecision,
     "deny",
+  );
+  const malformed = JSON.parse(
+    pass(
+      command(cwd, process.execPath, [guard], {
+        input: '{"tool": PRIVATEKEY}',
+      }),
+    ),
+  );
+  assert.equal(malformed.hookSpecificOutput.permissionDecision, "deny");
+  assert.doesNotMatch(
+    malformed.hookSpecificOutput.permissionDecisionReason,
+    /PRIVATE/,
   );
 });

@@ -85,13 +85,15 @@ function read(root, key) {
   return readFileSync(path);
 }
 function json(bytes, key) {
+  let result;
   try {
-    const result = JSON.parse(bytes.toString());
-    requireThat(object(result), "expected an object");
-    return result;
-  } catch (error) {
-    throw new Error(key + ": " + error.message);
+    result = JSON.parse(bytes.toString());
+  } catch {
+    // Node may include private settings in a syntax error's source excerpt.
+    throw new Error(key + " contains invalid JSON.");
   }
+  requireThat(object(result), key + " must be a JSON object.");
+  return result;
 }
 function fields(value, keys, label) {
   requireThat(
@@ -261,27 +263,39 @@ function guide(root, index) {
   );
 }
 
-function indexModes(root) {
+function indexModes(root, selected) {
   const rows = git(root, [
     "ls-files",
     "--stage",
     "-z",
     "--",
     "harness/skills",
-    ".agents/skills",
-    ".claude/skills",
+    ...new Set(
+      selected.flatMap((host) =>
+        registriesFor[host].filter((dir) => dir.endsWith("/skills")),
+      ),
+    ),
     "CLAUDE.local.md",
   ]);
   const modes = new Map();
   for (const row of rows.split("\0").filter(Boolean)) {
     const tab = row.indexOf("\t");
-    modes.set(row.slice(tab + 1), row.slice(0, 6) === "100755");
+    const key = row.slice(tab + 1);
+    const [mode, , stage] = row.slice(0, tab).split(" ");
+    if (key !== "CLAUDE.local.md") {
+      requireThat(
+        mode === "100644" || mode === "100755",
+        key + " has Git mode " + mode + ". Track a regular skill file.",
+      );
+      requireThat(stage === "0", key + " has unresolved Git index entries.");
+    }
+    modes.set(key, mode);
   }
   return modes;
 }
 function executable(root, key, index) {
   return process.platform === "win32"
-    ? !!index.get(key)
+    ? index.get(key) === "100755"
     : Boolean(stat(inside(root, key)).mode & 0o111);
 }
 const bytes = (text) => Buffer.from(text);
@@ -327,10 +341,7 @@ function expected(root, manifest, selected, index) {
     if (selected.includes("antigravity"))
       add(
         ".agents/rules/" + name + ".md",
-        "---\ntrigger: glob\nglobs: " +
-          q(paths.map((p) => (p.startsWith("**/") ? p : "**/" + p)).join(",")) +
-          "\n---\n\n" +
-          text,
+        "---\ntrigger: glob\nglobs: " + q(paths.join(",")) + "\n---\n\n" + text,
       );
   }
   for (const {
@@ -469,6 +480,25 @@ function registry(root, host) {
     source = "harness/hooks/" + host + ".json";
   const native = json(read(root, source), source);
   if (host !== "antigravity") fields(native, ["hooks"], source);
+  for (const events of host === "antigravity"
+    ? Object.values(native)
+    : [native.hooks]) {
+    requireThat(object(events), source + " must declare a hook event table.");
+    for (const [event, entries] of Object.entries(events)) {
+      // Antigravity registrations also carry lowercase metadata such as enabled.
+      if (host === "antigravity" && !/^[A-Z]/.test(event)) continue;
+      requireThat(
+        Array.isArray(entries) &&
+          entries.every(
+            (entry) =>
+              object(entry) &&
+              (host === "antigravity" ||
+                (Array.isArray(entry.hooks) && entry.hooks.every(object))),
+          ),
+        source + " requires arrays of native hook handlers for " + event + ".",
+      );
+    }
+  }
   const command = hookCommand(
     "scripts/harness-doctor.mjs session-start " + host,
     "doctor",
@@ -480,7 +510,7 @@ function registry(root, host) {
   const handlers = host === "antigravity" ? start : start?.[0]?.hooks;
   requireThat(
     start?.length === 1 &&
-      handlers?.length === 1 &&
+      handlers.length === 1 &&
       handlers[0].type === "command" &&
       handlers[0].command === command &&
       (host === "antigravity"
@@ -503,7 +533,7 @@ function registry(root, host) {
     requireThat(
       before?.length === 1 &&
         before[0].matcher === ".*" &&
-        before[0].hooks?.length === 1 &&
+        before[0].hooks.length === 1 &&
         before[0].hooks[0].type === "command" &&
         before[0].hooks[0].command ===
           hookCommand("harness/hooks/codex-readonly.mjs", "readonly"),
@@ -553,22 +583,8 @@ function registry(root, host) {
         " sets CLAUDE_CODE_SUBAGENT_EFFORT ahead of the inherited session effort. Remove the child effort override.",
     );
   }
-  if (host === "antigravity") {
-    for (const [name, events] of Object.entries(actual)) {
-      requireThat(
-        Object.hasOwn(native, name),
-        key +
-          " contains an unregistered hook " +
-          name +
-          ". Review it before syncing.",
-      );
-      checkHookEvents(events, native[name], key);
-    }
-    return { previous, next: native };
-  }
-  if (Object.hasOwn(actual, "hooks"))
-    checkHookEvents(actual.hooks, native.hooks, key);
-  if (host === "codex") {
+  const managed = host === "claude" ? { hooks: actual.hooks } : actual;
+  if (host === "codex")
     for (const field of Object.keys(actual))
       requireThat(
         Object.hasOwn(native, field),
@@ -577,9 +593,46 @@ function registry(root, host) {
           JSON.stringify(field) +
           ". Review it before syncing.",
       );
-    return { previous, next: native };
+  try {
+    if (host === "antigravity") {
+      for (const [name, events] of Object.entries(actual)) {
+        requireThat(
+          Object.hasOwn(native, name),
+          key +
+            " contains an unregistered hook " +
+            name +
+            ". Review it before syncing.",
+        );
+        checkHookEvents(events, native[name], key);
+      }
+    } else if (Object.hasOwn(actual, "hooks"))
+      checkHookEvents(actual.hooks, native.hooks, key);
+  } catch (error) {
+    // A maintainer can update policy before generating adapters. Only the
+    // exact previous canonical registry authorizes replacing an old handler.
+    if (!matchesCommittedPolicy(root, source, managed)) throw error;
   }
-  return { previous, next: { ...actual, hooks: native.hooks } };
+  return {
+    previous,
+    next: host === "claude" ? { ...actual, hooks: native.hooks } : native,
+  };
+}
+
+function matchesCommittedPolicy(root, source, managed) {
+  try {
+    const tree = git(root, ["ls-tree", "HEAD", "--", source]);
+    const blob = /^100(?:644|755) blob ([a-f0-9]+)\t/.exec(tree)?.[1];
+    return (
+      !!blob &&
+      isDeepStrictEqual(
+        managed,
+        json(git(root, ["cat-file", "blob", blob]), source),
+      )
+    );
+  } catch {
+    // An unborn repository or an unreadable prior policy cannot establish ownership.
+    return false;
+  }
 }
 function write(root, key, content, previous, mode) {
   const path = inside(root, key);
@@ -633,6 +686,22 @@ async function checkCodexConfig(root, agents) {
   }
 
   const roles = config.agents ?? {};
+  // Codex selects an enabled V2 subagent backend before checking the V1 switches.
+  const v2 = config.features?.multi_agent_v2;
+  if (v2 !== true && v2?.enabled !== true) {
+    for (const [setting, value] of [
+      ["features.multi_agent", config.features?.multi_agent],
+      ["agents.enabled", roles.enabled],
+    ]) {
+      requireThat(
+        value !== false,
+        key +
+          " disables required subagents with " +
+          setting +
+          ". Enable the project subagent backend.",
+      );
+    }
+  }
   for (const { name } of agents)
     requireThat(
       !Object.hasOwn(roles, name),
@@ -680,7 +749,7 @@ async function checkCodexConfig(root, agents) {
 }
 async function inspect(root, selected, sync) {
   const manifest = catalog(root),
-    index = indexModes(root);
+    index = indexModes(root, selected);
   guide(root, index);
   if (selected.includes("codex")) await checkCodexConfig(root, manifest.agents);
   const outputs = expected(root, manifest, selected, index);
@@ -711,7 +780,7 @@ async function inspect(root, selected, sync) {
     const modeChanged = previous && executable(root, key, index) !== mode;
     if (!data.equals(previous ?? Buffer.alloc(0)) || !previous || modeChanged)
       changes.push({ key, previous, data, mode });
-    if (process.platform === "win32" && !!index.get(key) !== mode)
+    if (process.platform === "win32" && (index.get(key) === "100755") !== mode)
       indexChanges.push(
         key + " needs git add --chmod=" + (mode ? "+x" : "-x") + " -- " + key,
       );
@@ -766,7 +835,10 @@ const [command = "check", ...args] = process.argv.slice(2);
 let root;
 try {
   root = realpathSync.native(
-    git(process.cwd(), ["rev-parse", "--show-toplevel"]).trim(),
+    git(process.cwd(), ["rev-parse", "--show-toplevel"]).replace(
+      process.platform === "win32" ? /\r?\n$/ : /\n$/,
+      "",
+    ),
   );
   if (command === "rules") {
     requireThat(args.length, "rules requires at least one repository path.");

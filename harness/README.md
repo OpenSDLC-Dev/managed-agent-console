@@ -8,7 +8,7 @@ node scripts/harness-doctor.mjs check
 node --test scripts/harness-doctor.test.mjs
 ```
 
-`check --host claude|codex|antigravity` checks the common source and one client's adapters. `rules <path> ...` prints the path and full text of every matching rule, including for files being planned. A client that only accepts exact file reads can ask its caller to run this lookup and supply the results.
+`check --host claude|codex|antigravity` checks the common source and one client's adapters. `rules <path> ...` prints the path and full text of every matching rule, including for files being planned. Run this lookup explicitly in headless Antigravity sessions. A role that only accepts exact file reads can ask its caller to supply the results.
 
 `sync` repairs registered output. Review unexpected files and hooks before reconciling them. Claude settings outside the hook registry remain local to that client. On Windows Git records executable bits in the index. Follow a reported `git add --chmod` instruction for tracked executable skill attachments.
 

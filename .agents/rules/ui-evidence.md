@@ -1,6 +1,6 @@
 ---
 trigger: glob
-globs: "**/src/app/**,**/src/components/**,**/test/e2e/**,**/test/fidelity/**"
+globs: "src/app/**,src/components/**,test/e2e/**,test/fidelity/**"
 ---
 
 # UI evidence
