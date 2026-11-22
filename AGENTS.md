@@ -21,7 +21,7 @@ Preserve unknown hooks and local settings for their owner to reconcile.
 ## Authority and evidence
 
 This console serves operators of self-hosted managed-agent-platform deployments.
-The sibling platform checkout owns API truth and identity. Verify its implemented
+The platform owns API truth and identity. Verify its implemented
 contract before changing Console behavior. Use the Managed Agents section of
 platform.claude.com for UI fidelity. The [platform contract](./harness/rules/platform-contract.md)
 and [UI evidence](./harness/rules/ui-evidence.md) rules explain these boundaries.
