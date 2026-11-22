@@ -37,8 +37,8 @@ const models = [
   },
 ];
 
-async function setup() {
-  vi.spyOn(gateway, "playgroundModels").mockResolvedValue(models);
+async function setup(availableModels = models) {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue(availableModels);
   const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue({
     raw: '{"content":[]}',
     rawLabel: "Response body",
@@ -409,7 +409,11 @@ it("prepends and expands every new custom tool, keeping existing tool edits atta
 });
 
 it("preserves Form's thinking budget across templates and lets raw Code keep provider-specific values", async () => {
-  const { user, run } = await setup();
+  // Model discovery can report a small shared limit for a thinking-capable alias.
+  const { user, run } = await setup([
+    models[0],
+    { ...models[1], max_tokens: 512 },
+  ]);
   const settings = screen.getByRole("button", { name: "Model settings" });
   await user.click(settings);
   let panel = within(screen.getByRole("dialog", { name: "Model" }));

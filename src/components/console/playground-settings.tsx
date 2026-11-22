@@ -165,8 +165,6 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
   const [editingLimit, setEditingLimit] = useState(Number(draft.tokens) || 1);
   // A zero or missing max_tokens means the gateway has no shared model limit.
   const reportedLimit = selected?.max_tokens;
-  const budgetFitsModel =
-    !reportedLimit || reportedLimit > startingThinkingBudget;
   const needsMoreTokens = !(Number(draft.tokens) > startingThinkingBudget);
   const tokenValue = Number(draft.tokens) || 1;
   const rangeMax = Math.max(1, editingLimit, tokenValue, reportedLimit ?? 0);
@@ -279,7 +277,6 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                     name="playground-thinking"
                     value={mode}
                     checked={(currentThinking ?? "default") === mode}
-                    disabled={mode === "enabled" && !budgetFitsModel}
                     aria-describedby={
                       mode === "enabled"
                         ? "playground-thinking-budget"
@@ -296,13 +293,11 @@ function SettingsFields({ draft, onChange, ...modelProps }: SettingsProps) {
                 id="playground-thinking-budget"
                 className="text-xs leading-relaxed text-muted-foreground"
               >
-                {!budgetFitsModel
-                  ? "Manual thinking requires a model with at least 1,025 output tokens."
-                  : activeBudget !== undefined
-                    ? `The request includes a ${activeBudget.toLocaleString()}-token thinking budget. Edit it in Code.`
-                    : needsMoreTokens
-                      ? "Choosing Enabled sets Max tokens to 1,025 for a 1,024-token thinking budget."
-                      : "Enabled uses a 1,024-token thinking budget."}
+                {activeBudget !== undefined
+                  ? `The request includes a ${activeBudget.toLocaleString()}-token thinking budget. Edit it in Code.`
+                  : needsMoreTokens
+                    ? "Choosing Enabled sets Max tokens to 1,025 for a 1,024-token thinking budget."
+                    : "Enabled uses a 1,024-token thinking budget."}
               </p>
             )}
           </div>
