@@ -3,6 +3,7 @@
 import {
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -23,6 +24,8 @@ import { PlaygroundCode } from "./playground-code";
 import {
   formatSnippet,
   hasMessageContent,
+  historyLabel,
+  wireMessage,
   readSnippet,
   type CodeLanguage,
 } from "./playground-snippet";
@@ -109,6 +112,14 @@ function PlaygroundForm({
   const form = useRef<HTMLFormElement>(null);
   const response = useRef<HTMLElement>(null);
   const active = useRef<AbortController | null>(null);
+  const nextFocusId = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    // Restore focus when the new field mounts, before later clicks or typing.
+    const id = nextFocusId.current;
+    if (!id) return;
+    nextFocusId.current = null;
+    document.getElementById(id)?.focus();
+  });
   useEffect(() => () => active.current?.abort(), []);
   useEffect(() => {
     if (!historyOpen) return;
@@ -162,12 +173,10 @@ function PlaygroundForm({
     ...draft.parameters,
     model,
     max_tokens: Number(draft.tokens),
-    ...(draft.system || (draft.system === "" && draft.includeEmptySystem)
+    ...(draft.system || draft.includeEmptySystem
       ? { system: draft.system }
       : {}),
-    messages: draft.messages
-      .filter(hasMessageContent)
-      .map(({ role, content }) => ({ role, content })),
+    messages: draft.messages.filter(hasMessageContent).map(wireMessage),
     ...(draft.stream !== undefined ? { stream: draft.stream } : {}),
   };
   const codeLanguage = mode === "Full request" ? "JSON" : language;
@@ -195,6 +204,7 @@ function PlaygroundForm({
     const next = newDraft();
     next.selection = available ? model : "";
     next.messages[0].content = prompt;
+    if (prompt) nextFocusId.current = "playground-message-0";
     setDraft(next);
     setCode(undefined);
     setText("");
@@ -203,22 +213,39 @@ function PlaygroundForm({
     setStatus("idle");
     setMode("Form");
     setHistoryOpen(false);
-    if (prompt)
-      requestAnimationFrame(() =>
-        form.current
-          ?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')
-          ?.focus(),
-      );
   }
   function addToMessages() {
-    if (status !== "complete" || !text || !codeReady()) return;
+    const blocks = reply?.content;
+    if (status !== "complete" || !blocks?.length || !codeReady()) return;
     const id = draft.messages[draft.messages.length - 1].id + 1;
     const messages = draft.messages.filter(hasMessageContent);
     const last = messages.at(-1);
     // Messages continues a final assistant prefill in the same turn.
-    if (last?.role === "assistant")
-      messages[messages.length - 1] = { ...last, content: last.content + text };
-    else messages.push({ id, role: "assistant", content: text });
+    if (last?.role === "assistant") {
+      const first = blocks[0];
+      // A plain text delta continues its prefill. Annotated blocks retain
+      // their boundaries, text offsets, signatures and tool inputs.
+      let content = blocks;
+      if (
+        typeof last.content === "string" &&
+        first.type === "text" &&
+        typeof first.text === "string" &&
+        Object.keys(first).length === 2
+      )
+        content = [
+          { ...first, text: last.content + first.text },
+          ...blocks.slice(1),
+        ];
+      else {
+        const prefix =
+          typeof last.content === "string"
+            ? [{ type: "text", text: last.content }]
+            : last.content;
+        content = [...prefix, ...blocks];
+      }
+      messages[messages.length - 1] = { ...last, content };
+    } else messages.push({ id, role: "assistant", content: blocks });
+    nextFocusId.current = `playground-message-${id + 1}`;
     setDraft({
       ...draft,
       messages: [...messages, { id: id + 1, role: "user", content: "" }],
@@ -229,16 +256,13 @@ function PlaygroundForm({
     setText("");
     setReply(undefined);
     setError(undefined);
-    requestAnimationFrame(() =>
-      document.getElementById(`playground-message-${id + 1}`)?.focus(),
-    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (active.current || !codeReady() || !available) return;
-    const hasPrompt = request.messages.some((message) =>
-      message.content.trim(),
+    const hasPrompt = request.messages.some(({ content }) =>
+      typeof content === "string" ? content.trim() : content.length,
     );
     if (
       !hasPrompt ||
@@ -389,11 +413,9 @@ function PlaygroundForm({
                 running={running}
                 loading={models.isPending}
                 onEditFullRequest={() => {
+                  nextFocusId.current = "playground-full-back";
                   setCode(undefined);
                   setMode("Full request");
-                  requestAnimationFrame(() =>
-                    document.getElementById("playground-full-back")?.focus(),
-                  );
                 }}
                 onChange={(next) => {
                   setDraft(next);
@@ -408,13 +430,9 @@ function PlaygroundForm({
                   mode === "Full request"
                     ? () => {
                         if (!codeReady()) return;
+                        nextFocusId.current = "playground-request-options";
                         setCode(undefined);
                         setMode("Form");
-                        requestAnimationFrame(() =>
-                          document
-                            .getElementById("playground-request-options")
-                            ?.focus(),
-                        );
                       }
                     : undefined
                 }
@@ -568,9 +586,7 @@ function PlaygroundForm({
                     setMode("Form");
                   }}
                 >
-                  <span className="truncate">
-                    {entry.draft.messages.find((m) => m.content)?.content}
-                  </span>
+                  <span className="truncate">{historyLabel(entry.draft)}</span>
                   <time
                     dateTime={entry.completedAt.toISOString()}
                     data-completed-at={entry.completedAt.getTime()}

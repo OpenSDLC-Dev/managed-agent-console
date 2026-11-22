@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import type {
   PlaygroundMessage,
+  PlaygroundContent,
   PlaygroundModel,
   PlaygroundRequest,
 } from "@/lib/platform/playground";
@@ -26,8 +27,12 @@ export type PlaygroundDraft = {
   selection: string;
   tokens: string;
   stream: PlaygroundRequest["stream"];
-  system: string | null;
-  messages: (PlaygroundMessage & { id: number; includeEmpty?: boolean })[];
+  system: PlaygroundContent | null;
+  messages: (Pick<PlaygroundMessage, "role" | "content"> & {
+    id: number;
+    includeEmpty?: boolean;
+    parameters?: Record<string, unknown>;
+  })[];
   includeEmptySystem?: boolean;
   // Code can set additional Messages parameters that the Form does not edit.
   parameters?: Record<string, unknown>;
@@ -45,6 +50,76 @@ export function newDraft(): PlaygroundDraft {
 
 const field =
   "block min-h-9 w-full resize-none rounded-lg border border-transparent bg-muted/70 px-3 py-2 text-sm leading-5 field-sizing-content placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring";
+
+function ContentField({
+  id,
+  label,
+  content,
+  placeholder,
+  onChange,
+  onEditBlocks,
+}: {
+  id: string;
+  label?: string;
+  content: PlaygroundContent;
+  placeholder: string;
+  onChange: (value: PlaygroundContent) => void;
+  onEditBlocks: () => void;
+}) {
+  if (typeof content === "string")
+    return (
+      <textarea
+        id={id}
+        aria-label={label}
+        value={content}
+        rows={1}
+        placeholder={placeholder}
+        className={field}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  const block = content.length === 1 ? content[0] : undefined;
+  const editableText =
+    block?.type === "text" && typeof block.text === "string"
+      ? block.text
+      : undefined;
+  return (
+    <>
+      {block && editableText !== undefined ? (
+        <textarea
+          id={id}
+          aria-label={label}
+          value={editableText}
+          rows={1}
+          placeholder={placeholder}
+          className={field}
+          onChange={(event) =>
+            onChange([{ ...block, text: event.target.value }])
+          }
+        />
+      ) : (
+        <textarea
+          id={id}
+          aria-label={label}
+          readOnly
+          rows={3}
+          className="max-h-40 w-full rounded-lg bg-muted/70 px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring"
+          value={JSON.stringify(content, null, 2)}
+        />
+      )}
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="mt-1 h-auto px-0 text-xs"
+        aria-label={`Edit content blocks for ${label ?? "System"}`}
+        onClick={onEditBlocks}
+      >
+        Edit content blocks
+      </Button>
+    </>
+  );
+}
 
 export function PlaygroundEditor({
   draft,
@@ -206,13 +281,12 @@ export function PlaygroundEditor({
               <Trash2 />
             </Button>
           </div>
-          <textarea
+          <ContentField
             id="playground-system"
-            value={system}
-            rows={1}
+            content={system}
             placeholder="Instructions that apply to every turn (optional)"
-            className={field}
-            onChange={(e) => patch({ system: e.target.value })}
+            onEditBlocks={onEditFullRequest}
+            onChange={(value) => patch({ system: value })}
           />
         </section>
       )}
@@ -246,25 +320,20 @@ export function PlaygroundEditor({
                   </Button>
                 )}
               </div>
-              <textarea
+              <ContentField
                 id={`playground-message-${message.id}`}
-                aria-label={
-                  i === 0 ? "Prompt" : `${message.role} message ${i + 1}`
-                }
-                rows={1}
-                value={message.content}
-                className={field}
+                label={i === 0 ? "Prompt" : `${message.role} message ${i + 1}`}
+                content={message.content}
+                onEditBlocks={onEditFullRequest}
                 placeholder={
                   message.role === "user"
                     ? "What the user says to the model"
                     : "What the assistant says"
                 }
-                onChange={(e) =>
+                onChange={(content) =>
                   patch({
                     messages: messages.map((m) =>
-                      m.id === message.id
-                        ? { ...m, content: e.target.value }
-                        : m,
+                      m.id === message.id ? { ...m, content } : m,
                     ),
                   })
                 }

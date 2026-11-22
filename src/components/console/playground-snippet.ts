@@ -1,4 +1,7 @@
-import type { PlaygroundRequest } from "@/lib/platform/playground";
+import {
+  isPlaygroundContent,
+  type PlaygroundRequest,
+} from "@/lib/platform/playground";
 import type { PlaygroundDraft } from "./playground-editor";
 
 export type CodeLanguage = "cURL" | "JSON";
@@ -7,6 +10,25 @@ export function hasMessageContent(
   message: PlaygroundDraft["messages"][number],
 ) {
   return message.content.length > 0 || message.includeEmpty === true;
+}
+
+export function wireMessage({
+  role,
+  content,
+  parameters,
+}: PlaygroundDraft["messages"][number]) {
+  return { ...parameters, role, content };
+}
+
+export function historyLabel(draft: PlaygroundDraft) {
+  const content = draft.messages.find(hasMessageContent)?.content;
+  if (typeof content === "string" || !content) return content ?? "";
+  const firstText = content.find(
+    (block) => block.type === "text" && typeof block.text === "string",
+  );
+  return typeof firstText?.text === "string"
+    ? firstText.text
+    : content.map((block) => block.type).join(", ");
 }
 
 // A quoted here-document keeps every JSON string literal, including shell syntax.
@@ -64,24 +86,25 @@ export function readSnippet(
     throw new Error("Enter a positive whole number for max_tokens.");
   if (stream != null && typeof stream !== "boolean")
     throw new Error("Set stream to true or false.");
-  if (system !== undefined && typeof system !== "string")
-    throw new Error("Use a text system prompt in Playground.");
+  if (system != null && !isPlaygroundContent(system))
+    throw new Error("Enter a string or an array of content blocks for system.");
   if (!Array.isArray(messages)) throw new Error("Enter an array of messages.");
   const turns = messages.map((message: unknown, id) => {
     if (
       !isObject(message) ||
       (message.role !== "user" && message.role !== "assistant") ||
-      typeof message.content !== "string" ||
-      Object.keys(message).some((key) => key !== "role" && key !== "content")
+      !isPlaygroundContent(message.content)
     )
       throw new Error(
-        "Each Playground message needs a user or assistant role and text content.",
+        "Each message needs a user or assistant role and a string or array of content blocks.",
       );
+    const { role, content, ...parameters } = message;
     return {
       id,
-      role: message.role,
-      content: message.content,
-      includeEmpty: message.content === "",
+      role,
+      content,
+      includeEmpty: content.length === 0,
+      parameters,
     } as const;
   });
   // Code omits untouched empty Form rows. Keep those rows when the code edit
@@ -91,15 +114,16 @@ export function readSnippet(
     turns.length === previousTurns.length &&
     turns.every(
       (turn, i) =>
-        turn.role === previousTurns[i].role &&
-        turn.content === previousTurns[i].content,
+        JSON.stringify(wireMessage(turn)) ===
+        JSON.stringify(wireMessage(previousTurns[i])),
     );
   return {
     selection: model,
     tokens: String(max_tokens),
     stream,
-    system: system ?? (previous.system === "" ? "" : null),
-    includeEmptySystem: system === "",
+    system:
+      system === undefined ? (previous.system === "" ? "" : null) : system,
+    includeEmptySystem: system === "" || system === null,
     messages: sameTurns
       ? previous.messages
       : turns.length

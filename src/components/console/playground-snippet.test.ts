@@ -36,7 +36,7 @@ it("round-trips multiline prompts literally and keeps explicit empty fields dist
   );
   expect(result.includeEmptySystem).toBe(true);
   expect(result.messages).toEqual([
-    { id: 0, role: "user", content: "", includeEmpty: true },
+    { id: 0, role: "user", content: "", includeEmpty: true, parameters: {} },
   ]);
 });
 
@@ -46,20 +46,17 @@ it.each([
   [JSON.stringify({ ...request, max_tokens: 0 }), "positive whole number"],
   [JSON.stringify({ ...request, stream: "yes" }), "stream to true or false"],
   [
-    JSON.stringify({ ...request, system: [{ type: "text", text: "Hello" }] }),
-    "text system prompt",
+    JSON.stringify({ ...request, system: { type: "text", text: "Hello" } }),
+    "array of content blocks for system",
   ],
   [JSON.stringify({ ...request, messages: "hello" }), "array of messages"],
   [
     JSON.stringify({
       ...request,
-      messages: [{ role: "user", content: [], extra: true }],
+      messages: [{ role: "user", content: [null] }],
     }),
-    "user or assistant role and text content",
+    "user or assistant role and a string or array of content blocks",
   ],
-])(
-  "rejects edits the streaming text form cannot represent (%#)",
-  (source, explanation) => {
-    expect(() => readSnippet(source, "JSON", newDraft())).toThrow(explanation);
-  },
-);
+])("rejects invalid Messages request fields (%#)", (source, explanation) => {
+  expect(() => readSnippet(source, "JSON", newDraft())).toThrow(explanation);
+});

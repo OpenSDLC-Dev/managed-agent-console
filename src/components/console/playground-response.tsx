@@ -96,6 +96,15 @@ export function PlaygroundResponse({
             </span>
             <div aria-busy={status === "running"} className="mt-3">
               <MarkdownContent content={text} />
+              {!text && reply?.content?.length ? (
+                <button
+                  type="button"
+                  className="rounded-sm text-sm underline focus-visible:outline-2 focus-visible:outline-ring"
+                  onClick={() => setView("Raw")}
+                >
+                  View content blocks in Raw
+                </button>
+              ) : null}
             </div>
           </>
         ) : reply ? (
@@ -136,7 +145,12 @@ export function PlaygroundResponse({
           size="sm"
           aria-label="Add to messages"
           aria-keyshortcuts="Shift+Meta+Enter Shift+Control+Enter"
-          disabled={status !== "complete" || !text}
+          disabled={status !== "complete" || !reply?.content?.length}
+          title={
+            reply?.rawLabel === "Stream events"
+              ? "Inspect the original stream in Raw to continue this response."
+              : undefined
+          }
           onClick={onAdd}
         >
           Add to messages{" "}

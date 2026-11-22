@@ -169,6 +169,12 @@ it("posts stream false and reads the complete Messages JSON, including usage and
     content: [
       { type: "text", text: "Hello" },
       { type: "thinking", thinking: "Reasoning" },
+      {
+        type: "tool_use",
+        id: "tool_one",
+        name: "lookup",
+        input: { days: [1, 2] },
+      },
       { type: "text", text: " again" },
     ],
     stop_reason: "end_turn",
@@ -200,6 +206,62 @@ it("posts stream false and reads the complete Messages JSON, including usage and
     outputTokens: 3,
   });
   expect(JSON.parse(result.raw)).toEqual(message);
+  expect(result.content).toEqual(message.content);
+});
+
+it("assembles streamed tool arguments without flattening the surrounding content and keeps invalid fragments only in Raw", async () => {
+  const signature = {
+    type: "thinking",
+    thinking: "Consider",
+    signature: "bound",
+  };
+  const block = { type: "tool_use", id: "tool_a", name: "lookup", input: {} };
+  const frames = (lastPart: string) =>
+    [
+      {
+        type: "message_start",
+        message: { type: "message", content: [], usage: { input_tokens: 3 } },
+      },
+      { type: "content_block_start", index: 0, content_block: signature },
+      { type: "content_block_stop", index: 0 },
+      { type: "content_block_start", index: 1, content_block: block },
+      {
+        type: "content_block_delta",
+        index: 1,
+        delta: { type: "input_json_delta", partial_json: '{"cities":' },
+      },
+      {
+        type: "content_block_delta",
+        index: 1,
+        delta: { type: "input_json_delta", partial_json: lastPart },
+      },
+      { type: "content_block_stop", index: 1 },
+      { type: "message_stop" },
+    ]
+      .map((f) => "event: " + f.type + "\ndata: " + JSON.stringify(f) + "\n\n")
+      .join("");
+  fixture(frames('["Lyon"]}'));
+  const append = vi.fn();
+  const full = await runPlayground(
+    prompt,
+    "user_demo",
+    new AbortController().signal,
+    append,
+  );
+  const blocks = [signature, { ...block, input: { cities: ["Lyon"] } }];
+  expect(full.content).toEqual(blocks);
+  expect(JSON.parse(full.raw).content).toEqual(blocks);
+  expect(append).not.toHaveBeenCalled();
+  fixture(frames("["));
+  const partial = await runPlayground(
+    prompt,
+    "user_demo",
+    new AbortController().signal,
+    append,
+  );
+  expect(partial.rawLabel).toBe("Stream events");
+  expect(partial.content).toBeUndefined();
+  expect(partial.raw).toContain("input_json_delta");
 });
 
 it.each([

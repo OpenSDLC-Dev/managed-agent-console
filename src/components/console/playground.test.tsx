@@ -23,6 +23,7 @@ import { Playground } from "./playground";
 const reply: gateway.PlaygroundReply = {
   raw: '{"content":[{"type":"text","text":"OK"}]}',
   rawLabel: "Response body",
+  content: [{ type: "text", text: "OK" }],
   inputTokens: 10,
   outputTokens: 1,
   durationMs: 425,
@@ -291,7 +292,7 @@ it("continues a final assistant prefill in the same message", async () => {
   vi.spyOn(gateway, "runPlayground").mockImplementation(
     async (_req, _id, _signal, append) => {
       append("ground");
-      return reply;
+      return { ...reply, content: [{ type: "text", text: "ground" }] };
     },
   );
   vi.stubGlobal(
@@ -509,6 +510,142 @@ it("keeps message roles and edits when removing and restoring System, then runs 
     expect.any(AbortSignal),
     expect.any(Function),
   );
+});
+
+it("preserves nested Messages blocks through Form, Code, the sent body, a tool-only reply and history", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const tool = {
+    type: "tool_use",
+    id: "tool_b",
+    name: "lookup",
+    input: { places: ["Lyon", "Paris"] },
+  };
+  const result = {
+    ...reply,
+    content: [tool],
+    raw: JSON.stringify({ content: [tool] }),
+  };
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(result);
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.click(
+    screen.getByRole("button", { name: "More request options" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Edit full request" }),
+  );
+  const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: "Request body",
+  });
+  const cache = { type: "ephemeral", ttl: "5m" };
+  const body = {
+    ...JSON.parse(editor.value),
+    system: [{ type: "text", text: "Instructions", cache_control: cache }],
+    messages: [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Ask", cache_control: cache }],
+        extension: { keep: true },
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "Reasoning", signature: "signed" },
+          {
+            type: "tool_use",
+            id: "tool_a",
+            name: "lookup",
+            input: { places: ["Xi'an"] },
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "tool_a",
+            content: [{ type: "text", text: "Found" }],
+          },
+        ],
+      },
+    ],
+    tools: [
+      {
+        name: "lookup",
+        input_schema: {
+          type: "object",
+          properties: { places: { type: "array" } },
+        },
+      },
+    ],
+  };
+  fireEvent.change(editor, { target: { value: JSON.stringify(body) } });
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(
+    screen.getByRole("button", { name: "More request options" }),
+  ).toHaveFocus();
+  const system = screen.getByLabelText("System", { exact: true });
+  await user.type(system, " updated");
+  expect(system).toHaveFocus();
+  expect(system).toHaveValue("Instructions updated");
+  await user.type(screen.getByLabelText("Prompt"), " again");
+  expect(screen.getByLabelText("assistant message 2")).toHaveAttribute(
+    "readonly",
+  );
+  expect(
+    JSON.parse(
+      screen.getByLabelText<HTMLTextAreaElement>("user message 3").value,
+    ),
+  ).toEqual(body.messages[2].content);
+  await user.click(
+    screen.getByRole("button", {
+      name: "Edit content blocks for assistant message 2",
+    }),
+  );
+  body.system[0].text = "Instructions updated";
+  body.messages[0].content[0].text = "Ask again";
+  expect(
+    JSON.parse(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Request body" })
+        .value,
+    ),
+  ).toEqual(body);
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(codeEditor().value).toContain('"signature": "signed"');
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  expect(JSON.parse(codeEditor().value)).toEqual(body);
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run).toHaveBeenCalledExactlyOnceWith(
+    body,
+    TEST_SESSION.id,
+    expect.any(AbortSignal),
+    expect.any(Function),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "View content blocks in Raw" }),
+  );
+  expect(screen.getByLabelText("Response body")).toHaveTextContent(result.raw);
+  await user.click(screen.getByRole("button", { name: "Add to messages" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value)).toEqual({
+    ...body,
+    messages: [...body.messages, { role: "assistant", content: [tool] }],
+  });
+  await user.click(screen.getByRole("button", { name: "History" }));
+  await user.click(
+    within(screen.getByRole("region", { name: "History" })).getByRole(
+      "button",
+      { name: /Ask again/ },
+    ),
+  );
+  await user.click(screen.getByRole("button", { name: "Close history" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value)).toEqual(body);
 });
 
 it("pages through templates and fills a draft without calling the model", async () => {
