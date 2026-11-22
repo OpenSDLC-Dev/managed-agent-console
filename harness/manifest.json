@@ -1,0 +1,29 @@
+{
+  "skills": ["review-branch"],
+  "rules": [
+    { "name": "platform-contract", "paths": ["src/**", "test/**"] },
+    {
+      "name": "ui-evidence",
+      "paths": [
+        "src/app/**",
+        "src/components/**",
+        "test/e2e/**",
+        "test/fidelity/**"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "name": "issue-triage",
+      "description": "Independently assess the difficulty of a Console issue using evidence supplied by the caller.",
+      "claudeTools": ["Read", "Grep", "Glob"],
+      "antigravityTools": ["read_file"]
+    },
+    {
+      "name": "reviewer",
+      "description": "Review the committed Console diff against the platform contract and report reproducible merge blockers.",
+      "claudeTools": ["Read", "Grep", "Glob"],
+      "antigravityTools": ["read_file"]
+    }
+  ]
+}

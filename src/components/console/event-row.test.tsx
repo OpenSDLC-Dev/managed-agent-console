@@ -191,7 +191,7 @@ describe("TranscriptRow", () => {
       "0:09",
     );
     // The duration's raw value is the assertion; `durationLabel`'s output has
-    // its own test in timing.test.ts (CLAUDE.md's data-* convention).
+    // its own test in timing.test.ts (harness/rules/ui-evidence.md's data-* convention).
     expect(screen.getByTitle("model request duration")).toHaveAttribute(
       "data-duration-ms",
       "3000",
@@ -358,7 +358,7 @@ describe("EventDetailPanel", () => {
 describe("IdleBand", () => {
   it("carries the idle interval it renders", () => {
     // The value is the assertion; `durationLabel`'s output is asserted once,
-    // in timing.test.ts (CLAUDE.md's data-* convention).
+    // in timing.test.ts (harness/rules/ui-evidence.md's data-* convention).
     render(<IdleBand ms={25_000} />);
     const band = screen.getByTestId("idle-band");
     expect(band).toHaveAttribute("data-idle-ms", "25000");

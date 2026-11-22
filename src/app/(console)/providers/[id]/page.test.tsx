@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe("ProviderDetailPage", () => {
-  // The one test that asserts the overview's human strings (CLAUDE.md).
+  // The one test that asserts the overview's human strings (harness/rules/ui-evidence.md).
   it("shows the overview the provider was created with", async () => {
     stubGatewayFetch();
     renderPage("gwprov_minimaxcn1");

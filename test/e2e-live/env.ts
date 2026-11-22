@@ -4,7 +4,7 @@ import { loadEnvConfig } from "@next/env";
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 /**
- * Live-tier configuration (CLAUDE.md contract): consent comes from
+ * Live-tier configuration (AGENTS.md contract): consent comes from
  * RUN_LIVE_CONSOLE_TESTS=1; once consented, missing configuration FAILS —
  * it never silently skips. `.env.local` is parsed by @next/env, exactly the
  * way `next dev`/`next start` read it (quotes, export prefixes, comments,

@@ -16,6 +16,8 @@ const eslintConfig = defineConfig([
     // locally the two scripts run in either order and its vendored reporter
     // assets would otherwise fail `--max-warnings 0`.
     "coverage/**",
+    // Published parser sources are copied verbatim for offline harness startup.
+    "scripts/vendor/smol-toml/*.js",
   ]),
   // Keep zod out of the client bundle (plan 04 decision 1). The wire schemas
   // are a verification instrument: consumers import the inferred types from

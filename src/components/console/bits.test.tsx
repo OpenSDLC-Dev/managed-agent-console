@@ -101,7 +101,7 @@ describe("Day", () => {
     // and the 1st west of it, so one key's expiry falls on different days for
     // two operators reading one deployment. Asserted as two instants of the
     // same UTC day agreeing rather than as a second copy of the rendered
-    // string: exactly one test per formatter may assert that (CLAUDE.md).
+    // string: exactly one test per formatter may assert that (harness/rules/ui-evidence.md).
     const lastSecond = render(<Day iso="2026-08-02T23:59:59Z" />).container;
     const firstSecond = render(<Day iso="2026-08-02T00:00:01Z" />).container;
     expect(lastSecond.textContent).toBe(firstSecond.textContent);

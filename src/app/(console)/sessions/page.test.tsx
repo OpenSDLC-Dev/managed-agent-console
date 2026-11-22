@@ -274,7 +274,7 @@ describe("SessionsPage", () => {
     expect(table.getByText("idle")).toBeInTheDocument();
     expect(table.getByText("archived")).toBeInTheDocument();
     expect(table.getAllByText("Support bot · v2")).toHaveLength(2);
-    // Counters as raw integers (CLAUDE.md); the rendered string is asserted
+    // Counters as raw integers (harness/rules/ui-evidence.md); the rendered string is asserted
     // once, in the formatting test below.
     const cells = table.getAllByTestId("tokens-cell");
     expect(cells).toHaveLength(2);

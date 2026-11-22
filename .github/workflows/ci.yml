@@ -31,6 +31,10 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Check project agent adapters and replay hook contracts
+        run: |
+          node scripts/harness-doctor.mjs check
+          node --test scripts/harness-doctor.test.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm format:check

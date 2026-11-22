@@ -78,7 +78,7 @@ describe("isPlainHttp", () => {
 });
 
 describe("EnabledBadge", () => {
-  // The one assertion of its human strings (CLAUDE.md).
+  // The one assertion of its human strings (harness/rules/ui-evidence.md).
   it("reads enabled or disabled, with the state on data-enabled", () => {
     render(
       <>

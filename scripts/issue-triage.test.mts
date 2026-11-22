@@ -95,15 +95,17 @@ it("rejects PRs and accepts only a single issue number", () => {
 });
 
 it("connects the start-of-work instructions to a reviewer with only file reading and search", () => {
-  const guide = readFileSync("CLAUDE.md", "utf8");
+  const guide = readFileSync("AGENTS.md", "utf8");
   expect(guide).toContain("node scripts/issue-triage.mjs NUMBER");
-  const rolePath = ".claude/agents/issue-triage.md";
+  const rolePath = "harness/agents/issue-triage.md";
   expect(guide).toContain(`(./${rolePath})`);
-  const role = readFileSync(rolePath, "utf8");
+  const role = readFileSync(".claude/agents/issue-triage.md", "utf8");
+  expect(role).toContain(readFileSync(rolePath, "utf8"));
   const meta = parse(role.split(/^---\s*$/m)[1]);
   expect(meta).toEqual({
     name: "issue-triage",
     description: expect.any(String),
     tools: "Read, Grep, Glob",
+    model: "inherit",
   });
 });

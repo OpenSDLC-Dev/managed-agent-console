@@ -3,7 +3,7 @@ import { tokenAttr, tokenCount } from "./utils";
 
 /**
  * The unit-tier owner of `tokenCount`'s rendered string, mirroring what
- * `timing.test.ts` is for `durationLabel` (CLAUDE.md's `data-*` convention:
+ * `timing.test.ts` is for `durationLabel` (harness/rules/ui-evidence.md's `data-*` convention:
  * one designated test per formatter, everyone else reads the attribute).
  * Without this the format's only owner would be an e2e test, and `pnpm test`
  * would stay green through a broken counter.

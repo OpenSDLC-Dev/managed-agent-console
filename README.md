@@ -137,7 +137,7 @@ Once opted in, missing configuration **fails** rather than skips. It creates `li
 
 ## Contributing
 
-Read [CLAUDE.md](./CLAUDE.md) first — the design principles (notably: the platform's implemented API is the single source of truth, never guess at wire shapes) and the PR-based workflow. Why the repo is shaped as it is: [docs/HISTORY.md](./docs/HISTORY.md).
+Read [AGENTS.md](./AGENTS.md) for repository conventions and the PR workflow. The [project harness](./harness/README.md) describes configuration checks for Claude Code, Codex and Antigravity CLI. [docs/HISTORY.md](./docs/HISTORY.md) records archived work.
 
 ## License
 

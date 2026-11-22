@@ -24,7 +24,7 @@ import { type ConsoleMode, MOCK_URL } from "./consoles";
 /**
  * The enumerated surface list the Chrome fidelity pass walks (plan 04 slice 4).
  *
- * CLAUDE.md requires a Chrome comparison against the Claude Console reference
+ * harness/rules/ui-evidence.md requires a Chrome comparison against the Claude Console reference
  * before a UI slice is done. Until now that pass covered whatever was navigated
  * to that day, so "fidelity verified" reported effort rather than coverage.
  * This file is the coverage denominator: every visually distinct state the

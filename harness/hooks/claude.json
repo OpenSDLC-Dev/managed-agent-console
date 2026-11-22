@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git -c \"alias.console-doctor=!node scripts/harness-doctor.mjs session-start claude\" console-doctor"
+          }
+        ]
+      }
+    ]
+  }
+}

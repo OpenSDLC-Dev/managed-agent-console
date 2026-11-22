@@ -1,0 +1,7 @@
+{
+  "name": "smol-toml",
+  "version": "1.9.1",
+  "private": true,
+  "type": "module",
+  "license": "BSD-3-Clause"
+}

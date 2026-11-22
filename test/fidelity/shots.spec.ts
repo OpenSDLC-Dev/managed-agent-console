@@ -10,7 +10,7 @@ import { LANDING_ROUTE } from "../../src/lib/routes";
  * gitignored `fidelity-shots/<theme>/`.
  *
  * These are not assertions. A shot that renders is not a shot that matches the
- * reference — the comparison is the human half of CLAUDE.md's fidelity clause,
+ * reference — the comparison is the human half of harness/rules/ui-evidence.md's fidelity clause,
  * made against docs/design-reference.md. What this guarantees is only that the
  * pass has a complete, named denominator to compare.
  *
