@@ -1,7 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { Suspense } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ProviderDetailPage from "./page";
@@ -38,13 +45,14 @@ function renderPage(id: string) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  render(
     <QueryClientProvider client={client}>
       <Suspense fallback={null}>
         <ProviderDetailPage params={asParams(id)} />
       </Suspense>
     </QueryClientProvider>,
   );
+  return client;
 }
 
 afterEach(() => {
@@ -69,6 +77,65 @@ describe("ProviderDetailPage", () => {
     expect(screen.getByText("Gateway default")).toBeInTheDocument();
     expect(screen.getByText("Not sent")).toBeInTheDocument();
   });
+
+  it.each(["Add", "Edit"])(
+    "keeps the %s pricing draft when the whole gateway is unavailable",
+    async (action) => {
+      let unavailable = false;
+      const fetchMock = stubGatewayFetch((method, path) =>
+        unavailable && method === "GET"
+          ? Response.json(
+              {
+                type: "error",
+                error: { type: "api_error", message: `Cannot load ${path}` },
+              },
+              { status: 503 },
+            )
+          : undefined,
+      );
+      const client = renderPage("gwprov_deepseek01");
+      await userEvent.click(
+        await screen.findByRole("button", {
+          name:
+            action === "Edit" ? "Edit deepseek-v4-flash" : "Add upstream model",
+        }),
+      );
+      const form = within(screen.getByRole("dialog"));
+      if (action === "Add")
+        await userEvent.type(
+          form.getByLabelText("Upstream model ID"),
+          "new-flash",
+        );
+      await userEvent.clear(form.getByLabelText("Pricing terms"));
+      await userEvent.type(
+        form.getByLabelText("Pricing terms"),
+        "Domestic standard",
+      );
+      const refresh = () =>
+        act(() => client.invalidateQueries({ queryKey: ["gateway"] }));
+      unavailable = true;
+      await refresh();
+      expect(
+        await screen.findByText("Cannot load providers/gwprov_deepseek01"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Overview")).toBeNull();
+      expect(screen.getByLabelText("Pricing terms")).toHaveValue(
+        "Domestic standard",
+      );
+      unavailable = false;
+      await refresh();
+      await screen.findByText("Overview");
+      await userEvent.click(
+        form.getByRole("button", {
+          name: action === "Edit" ? "Save" : "Add upstream model",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(sentBody(fetchMock, "POST")).toMatchObject({
+        price_note: "Domestic standard",
+      });
+    },
+  );
 
   it("formats a stall timeout set on the provider", async () => {
     stubGatewayFetch((method, rest) =>

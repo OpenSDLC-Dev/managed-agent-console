@@ -31,7 +31,11 @@ import type {
   GatewayProvider,
 } from "@/lib/platform/types";
 import { EnabledBadge } from "./gateway-bits";
-import { PlatformError, wireDecimal, wireInteger } from "@/lib/platform/http";
+import {
+  isTemporaryReadError,
+  wireDecimal,
+  wireInteger,
+} from "@/lib/platform/http";
 
 const KINDS: GatewayKind[] = ["chat", "embedding", "rerank"];
 const CAPABILITIES = ["tools", "thinking", "vision"] as const;
@@ -65,16 +69,15 @@ export function priceLine(p: Prices): string {
  * admin API lists them all). "Used by" names the models that route to each,
  * which is also why the gateway refuses to delete one of those.
  */
-export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
+export function UpstreamModels({
+  provider,
+  providerError,
+}: {
+  provider: GatewayProvider;
+  providerError?: Error | null;
+}) {
   const { data, error } = useGatewayDeployments();
-  const temporaryFailure =
-    error instanceof TypeError ||
-    (error instanceof PlatformError &&
-      !error.signedOut &&
-      (error.status === 408 ||
-        error.status === 429 ||
-        (error.status >= 500 && error.status !== 501)));
-  if (!data || (error && !temporaryFailure))
+  if (!data || (error && !isTemporaryReadError(error)))
     return (
       <DetailSection title="Upstream models">
         {error ? (
@@ -89,7 +92,7 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       key={provider.id}
       provider={provider}
       deployments={data.data}
-      refreshError={error}
+      refreshError={providerError ?? error}
     />
   );
 }

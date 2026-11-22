@@ -497,6 +497,9 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
     }),
   ).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("button", { name: "Menu", exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
