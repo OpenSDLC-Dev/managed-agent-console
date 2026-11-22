@@ -41,6 +41,8 @@ Signed-in Chrome opened **Build → Messages** on [Overview](https://platform.cl
 
 Open both signed-in consoles in Chrome at the same viewport. Use the same account role for a repeat comparison. Use the mock fixture for submissions.
 
+On desktop the top edges of the back button, workspace selector and Overview link are 40 px apart. The following links start every 36 px.
+
 1. Open Messages from the desktop sidebar. Check the selected Overview link, Default workspace menu, metric explanations, Usage and Logs links. Open a key, return, then open and dismiss Create key. A Playground-only user lands on Playground.
 2. Open Playground, edit a template, switch between Form and Code, and copy the request. Check invalid edits, the Streaming setting, Run, Stop, Rendered, Raw, Add to messages and History. Use the fixture to verify the submitted body and response.
 3. Open Logs. Copy an ID, open the row with the keyboard, switch requests, reload its URL, then close with Escape. Close the drawer by clicking the page heading. Refresh after adding a fixture record. Repeat at phone width and with an empty list or a refused ledger read.

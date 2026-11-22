@@ -46,6 +46,18 @@ test("Messages navigation, Overview links and the selected API key", async ({
   );
   const workspace = nav.getByRole("combobox", { name: "Workspace" });
   await expect(workspace.getByText("Default", { exact: true })).toBeVisible();
+  const back = await nav
+    .getByRole("button", { name: /back to all sections/i })
+    .boundingBox();
+  const selector = await workspace.boundingBox();
+  const [overview, playground] = await nav
+    .getByRole("link")
+    .evaluateAll((links) =>
+      links.map((link) => link.getBoundingClientRect().top),
+    );
+  expect(selector!.y - back!.y).toBe(40);
+  expect(overview - selector!.y).toBe(40);
+  expect(playground - overview).toBe(36);
   await workspace.click();
   const options = page.getByRole("listbox").getByRole("option");
   await expect(options).toHaveCount(1);

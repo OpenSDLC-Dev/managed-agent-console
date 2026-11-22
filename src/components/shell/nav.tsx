@@ -169,6 +169,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
   const panel = groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
+  const messagesPanel = panelLabel === "Messages";
 
   useEffect(() => {
     const restoreRoutePanel = () => {
@@ -228,8 +229,16 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
       className="flex flex-col gap-4 px-2 pt-2"
     >
       {panel ? (
-        <div className="flex flex-col gap-1">
-          <h2 aria-label={panel.label} className="mb-2">
+        <div
+          className={cn(
+            "flex flex-col",
+            messagesPanel ? "[&>a]:px-2" : "gap-1",
+          )}
+        >
+          <h2
+            aria-label={panel.label}
+            className={messagesPanel ? "mb-3" : "mb-2"}
+          >
             <button
               type="button"
               aria-label={`${panel.label}, back to all sections`}
@@ -237,7 +246,8 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               data-nav-back
               onClick={back}
               className={cn(
-                "grid h-9 w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg px-2.5",
+                "grid w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg",
+                messagesPanel ? "h-7 px-1.5" : "h-9 px-2.5",
                 HOVER,
               )}
             >
@@ -251,14 +261,14 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               </span>
             </button>
           </h2>
-          {panel.label === "Messages" && (
+          {messagesPanel && (
             <Select value={CONSOLE_WORKSPACE}>
               <SelectTrigger
                 size="sm"
                 aria-label="Workspace"
-                className="mb-2 w-full border-0 bg-muted px-2.5 shadow-none"
+                className="mb-3 w-full border-0 bg-muted px-3 shadow-none"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-3">
                   <span
                     aria-hidden
                     className="size-3 rounded-sm bg-indigo-500"
