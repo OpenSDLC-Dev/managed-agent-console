@@ -12,6 +12,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Work on an issue without a plan now starts with an independent, read-only difficulty review.
 - Search active or archived service accounts across the directory. Copy an account ID, edit its description or role, inspect and issue its API keys, or open a shareable detail page. Unfinished creation forms now prompt before dismissal.
 - Deleted API keys disappear from the Keys page and its filters. Platform retains their history for administrative queries.
 - Search, filter and inspect API keys, manage them from the row or details panel, and open their month-to-date gateway costs. Key creation now starts with CLI sign-in or an account-linked API key.

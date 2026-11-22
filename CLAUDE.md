@@ -62,6 +62,12 @@ Assign each open issue and every new issue a GitHub issue type and exactly two l
 
 Choose the type, priority and difficulty when filing an issue. For missing information, use `Feature`, `p1` or `hard` for the corresponding field. Maintainers can revise each choice as evidence arrives.
 
+When taking up an issue, check its links and `docs/plan/` for a plan that covers the pending work. Follow that plan and its current status if it exists. For work without a plan, complete the review before planning or coding.
+
+1. Run `node scripts/issue-triage.mjs NUMBER`. Pass its JSON unchanged to a fresh [`issue-triage` reviewer](./.claude/agents/issue-triage.md) with only file read and search tools. In a runner without that tool set, give a tool-free reviewer the same brief, issue evidence and relevant source and tests. Supply additional files it requests.
+2. Check the verdict against its cited evidence. The maintainer updates the difficulty label if the evidence changes it.
+3. Start `easy` work directly. Write a plan in `docs/plan/` before implementing `medium` work. For `hard` work, record the human decision in the issue or plan before implementation.
+
 ## Iteration workflow
 
 Every change lands through a PR; **never commit directly to `main`**.
