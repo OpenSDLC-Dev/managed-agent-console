@@ -130,14 +130,14 @@ test("a clean clone discovers all three host configurations from subdirectories 
       host === "antigravity"
         ? entry["harness-doctor"].SessionStart[0]
         : entry.hooks.SessionStart[0].hooks[0];
-    if (host === "claude") {
+    if (host === "claude" || host === "codex") {
       const matcher = new RegExp(
         "^(?:" + entry.hooks.SessionStart[0].matcher + ")$",
       );
       for (const reason of ["startup", "clear", "fork"])
         assert.ok(
           matcher.test(reason),
-          "Claude SessionStart must cover " + reason,
+          host + " SessionStart must cover " + reason,
         );
     }
     const [, alias, body] = /^git -c "alias\.([\w-]+)=!([^"]+)" [\w-]+$/.exec(
@@ -213,6 +213,47 @@ test("startup names only the current host's drift and leaves the changed role in
   manifest.agents[0].antigravityTools.push("run_command");
   putJson(cwd, "harness/manifest.json", manifest);
   fail(run(cwd, "check"), /file-read\/search-only/);
+});
+
+test("Codex project settings cannot disable or duplicate registered hooks", (t) => {
+  const { cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  const key = ".codex/config.toml";
+  for (const [settings, diagnostic] of [
+    ["[features]\nhooks = false # disabled", /disables project hooks/],
+    ["features.codex_hooks = false", /disables project hooks/],
+    ['features = { "hooks" = false }', /disables project hooks/],
+    [
+      '[[hooks.SessionStart]]\nmatcher = "startup"\n[[hooks.SessionStart.hooks]]\ntype = "command"\ncommand = "private"',
+      /unregistered.*hooks.SessionStart/,
+    ],
+    [
+      '[hooks]\nStop = [{ hooks = [{ type = "command", command = "private" }] }]',
+      /unregistered.*hooks.Stop/,
+    ],
+    [
+      'hooks = { PreToolUse = [{ hooks = [{ type = "command", command = "private" }] }] }',
+      /unregistered.*hooks.PreToolUse/,
+    ],
+  ]) {
+    set(cwd, key, settings);
+    fail(run(cwd, "check", "--host", "codex"), diagnostic);
+    fail(run(cwd, "sync"), diagnostic);
+    assert.equal(get(cwd, key), settings);
+  }
+  set(cwd, key, "[features]\nhooks = true\n[hooks]\nStop = []\n");
+  pass(run(cwd, "check", "--host", "codex"));
+  set(
+    cwd,
+    key,
+    'developer_instructions = """\n[features]\nhooks = false\n[[hooks.SessionStart]]\n"""',
+  );
+  pass(run(cwd, "check", "--host", "codex"));
+  const policy = JSON.parse(get(cwd, "harness/hooks/codex.json"));
+  policy.hooks.SessionStart[0].matcher = "startup|fork";
+  putJson(cwd, "harness/hooks/codex.json", policy);
+  putJson(cwd, registries.codex, policy);
+  fail(run(cwd, "check"), /harness\/hooks\/codex.json/);
 });
 
 test("skill attachments retain arbitrary bytes and executable mode", (t) => {

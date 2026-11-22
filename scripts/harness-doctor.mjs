@@ -485,8 +485,7 @@ function registry(root, host) {
       handlers[0].command === command &&
       (host === "antigravity"
         ? native["harness-doctor"].enabled !== false
-        : start[0].matcher ===
-          (host === "claude" ? "startup|clear|fork" : "startup|fork")),
+        : start[0].matcher === "startup|clear|fork"),
     source + " must register the new-session doctor for " + host,
   );
   if (host === "claude") {
@@ -586,46 +585,89 @@ function write(root, key, content, previous, mode) {
     rmSync(tmp, { force: true });
   }
 }
-function checkCodexDefaults(root) {
+// Split TOML statements or inline-table entries after masking strings and comments.
+// Nested arrays and tables can contain either separator.
+function* tomlParts(text, separator) {
+  let start = 0,
+    depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === "[" || char === "{") depth++;
+    else if (char === "]" || char === "}") depth--;
+    else if (char === separator && depth === 0) {
+      yield text.slice(start, i).trim();
+      start = i + 1;
+    }
+  }
+  yield text.slice(start).trim();
+}
+function checkCodexConfig(root) {
   const key = ".codex/config.toml";
   if (!stat(inside(root, key))) return;
-  // Local agents may inherit a project [agents] default ahead of the developer's
-  // session. Also recognize dotted keys and the single-line inline-table form.
-  let table = "";
-  for (const line of read(root, key).toString().split(/\r?\n/)) {
-    const header = /^\s*\[\[?\s*([\w.'"\s-]+?)\s*\]\]?\s*(?:#.*)?$/.exec(line);
-    if (header) {
-      table = header[1].replace(/['"\s]/g, "");
-      continue;
-    }
-    const field = /^\s*([\w.'"\s-]+?)\s*=\s*(.*)$/.exec(line);
-    if (!field) continue;
-    const path = [table, field[1].replace(/['"\s]/g, "")]
-      .filter(Boolean)
-      .join(".");
-    const model =
-      /^agents\.(?:default_subagent_(?:model|reasoning_effort)|(?:[\w-]+\.)?(?:model|model_reasoning_effort))$/.test(
-        path,
-      );
-    const inline =
-      /^agents(?:\.[\w-]+)?$/.test(path) &&
-      /^\{.*\b(?:default_subagent_(?:model|reasoning_effort)|model|model_reasoning_effort)["']?\s*=/.test(
-        field[2],
-      );
+  // Preserve quoted simple keys. A comment or string containing a sample hook
+  // or model setting cannot introduce a project-level declaration.
+  const text = read(root, key)
+    .toString()
+    .replace(
+      /"""(?:\\[\s\S]|"(?!"")|[^"\\])*"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'[^'\n]*'|#[^\n]*/g,
+      (part) =>
+        part.startsWith("#")
+          ? ""
+          : /^["'][\w-]+["']$/.test(part)
+            ? part
+            : '"_"',
+    );
+  const inlineHook = (path) => /^hooks\.[A-Z][\w]*(?:\.|$)/.test(path);
+  const conflict = (path) =>
+    key +
+    " contains an unregistered project hook in " +
+    path +
+    ". Review it before syncing.";
+  function checkField(parent, statement) {
+    const field = /^([\w.'"\s-]+?)\s*=\s*([\s\S]*)$/.exec(statement);
+    if (!field) return;
+    const leaf = field[1].replace(/['"\s]/g, "");
+    const path = parent ? parent + "." + leaf : leaf;
+    const value = field[2].trim();
+    requireThat(!inlineHook(path) || /^\[\s*\]$/.test(value), conflict(path));
     requireThat(
-      !model && !inline,
+      !/^features\.(?:codex_hooks|hooks)$/.test(path) || value !== "false",
+      key +
+        " disables project hooks with " +
+        path +
+        ". Enable hooks before checking again.",
+    );
+    requireThat(
+      !/^agents\.(?:default_subagent_(?:model|reasoning_effort)|(?:[\w-]+\.)?(?:model|model_reasoning_effort))$/.test(
+        path,
+      ),
       key +
         " overrides model inheritance in " +
         path +
         ". Remove the project subagent override.",
     );
+    if (
+      /^(?:hooks|features|agents)(?:\.|$)/.test(path) &&
+      value.startsWith("{") &&
+      value.endsWith("}")
+    )
+      for (const entry of tomlParts(value.slice(1, -1), ","))
+        checkField(path, entry);
+  }
+  let table = "";
+  for (const line of tomlParts(text, "\n")) {
+    const header = /^\[\[?\s*([\w.'"\s-]+?)\s*\]\]?$/.exec(line);
+    if (header) {
+      table = header[1].replace(/['"\s]/g, "");
+      requireThat(!inlineHook(table), conflict(table));
+    } else checkField(table, line);
   }
 }
 function inspect(root, selected, sync) {
   const manifest = catalog(root),
     index = indexModes(root);
   guide(root, index);
-  if (selected.includes("codex")) checkCodexDefaults(root);
+  if (selected.includes("codex")) checkCodexConfig(root);
   const outputs = expected(root, manifest, selected, index);
   const conflicts = [],
     changes = [],
