@@ -5,6 +5,16 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+## Dashboard — checked 2026-11-22
+
+In signed-in Chrome, the [reference Dashboard](https://platform.claude.com/dashboard) opens with a time-of-day greeting, Get API key and Build an agent. At 1800 × 945, three 136 px summary cards sit above a full-width Token volume card. Models and Resources each have four columns with 12 px gutters. The model names link to documentation. Compare models opens a dialog with three selectors and Cost and Features views.
+
+The self-hosted summary uses the gateway's daily usage. Month-to-date requests occupy the hosted credits slot. Spend includes recorded costs with configured prices. Cache reads and seven-day token volume use the upstream counts recorded by the gateway. The Usage links retain the displayed period. The resource cards lead to tools available to the current session.
+
+The four model cards describe upstream models supported by Platform integrations. Compare models uses provider information and links to its sources. Operators configure their callable aliases and deployment prices in Model gateway. The [provider marks](./provider-marks.md) ship with the Console.
+
+To repeat the comparison, open both Dashboards in Chrome at the same viewport. Open Get API key and cancel it. Open Compare models, replace one of the three selections, switch to Features and dismiss it with Escape. Check focus returns to the trigger. Follow a model's documentation, a usage period and Open playground. Run `pnpm exec playwright test test/e2e/dashboard.spec.ts` after `pnpm build`.
+
 ## Sidebar structure — checked 2026-11-21
 
 Signed-in Chrome showed Dashboard above Build and Organization. The [Claude Dashboard](https://platform.claude.com/dashboard) opens a separate navigation panel for each category. Agents contains sessions, deployments, environments, memory and vaults. Resources contains files, skills and webhooks. Keys includes API keys and service accounts. Settings includes Members.
@@ -284,10 +294,6 @@ width plus its gap. The 2026-09-10 Dashboard pass restores the measured 36px row
   are close (the last approximates a circle-diamond-circle node graph with circles); `API keys` keeps
   `KeySquare` rather than the round-bowed key the reference draws, because `KeyRound` is already
   Credential vaults' and one icon may mean one thing.
-- **The Dashboard is a router, not a report.** The reference's opens on credits, spend, models and
-  resource cards; ours has no billing, no model catalogue and no usage surface to show, so it is one
-  card per served surface under the sidebar's own headings. It is also the console's first page that
-  is **not** a platform surface, so it never joins the 404 probe and is always shown.
 - **Navigation follows the deployment's collection reads** (issue #33). A self-hosted deployment may
   lack a surface or refuse the current person's read. Confirmed absence (`404 not_found_error` or
   `501`) and refused reads (`403 permission_error`) hide entry points, for different reasons.

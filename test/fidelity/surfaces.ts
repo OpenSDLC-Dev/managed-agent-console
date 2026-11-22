@@ -1,4 +1,5 @@
 import { browserPost } from "../e2e/browser-write";
+import { grantDashboardPlayground } from "../e2e/dashboard-fixture";
 import type { ApiKeyListItem } from "../../src/lib/platform/types";
 import { openApiKeyForm, openApiKeyMenu } from "../api-key-flow";
 import { NATIVE_SURFACES } from "./native-surfaces";
@@ -72,6 +73,20 @@ const SKILL = "skill_reportwriter0000001";
 /** Model gateway ids from `test/mock-platform/gateway.mjs`. */
 const PROVIDER = "gwprov_deepseek01";
 const PLAIN_HTTP_PROVIDER = "gwprov_vllmlocal1";
+
+async function populatedDashboard(
+  page: Page,
+  viewport = { width: 1800, height: 960 },
+) {
+  // Keep the fixed comparison dialog and header in one desktop screenshot.
+  await page.setViewportSize(viewport);
+  await grantDashboardPlayground(page);
+  await page.reload();
+  await page
+    .getByRole("link", { name: "Open playground", exact: true })
+    .waitFor();
+  await page.locator('[data-dashboard-metric="tokens"] [data-value]').waitFor();
+}
 
 export const SURFACES: Surface[] = [
   ...NATIVE_SURFACES,
@@ -871,6 +886,7 @@ export const SURFACES: Surface[] = [
     description:
       "The Dashboard shortcut opens key creation without a route change.",
     setup: async (page) => {
+      await populatedDashboard(page);
       const form = await openApiKeyForm(page, "Get API key");
       await form.waitFor();
     },
@@ -880,9 +896,7 @@ export const SURFACES: Surface[] = [
     route: "/dashboard",
     fixture: "all surfaces, 390px viewport",
     description: "Dashboard cards and shortcuts wrap within a narrow viewport.",
-    setup: async (page) => {
-      await page.setViewportSize({ width: 390, height: 844 });
-    },
+    setup: (page) => populatedDashboard(page, { width: 390, height: 844 }),
   },
   {
     id: "dashboard-mobile-nav",
@@ -924,12 +938,41 @@ export const SURFACES: Surface[] = [
   {
     id: "dashboard",
     route: "/dashboard",
-    // The cards are links, and the only platform answer behind them is the
-    // shared surface probe, so a fully-served deployment is the whole state.
-    fixture: "populated",
+    fixture:
+      "daily gateway usage and a signed-in operator with Playground access",
     description:
-      "Landing page: a card per served surface under the nav's own group headings, and the regrouped sidebar beside it.",
+      "A personal greeting, usage overview, four provider model cards and resource links.",
+    setup: populatedDashboard,
   },
+  ...(["cost", "features"] as const).map((view): Surface => ({
+    id: `dashboard-compare-${view}`,
+    route: "/dashboard",
+    fixture: "three selected upstream models",
+    description: `Dashboard model comparison with the ${view} view selected.`,
+    setup: async (page) => {
+      await populatedDashboard(page);
+      await page
+        .getByRole("button", { name: "Compare models", exact: true })
+        .click();
+      const dialog = page.getByRole("dialog", { name: "Compare models" });
+      if (view === "features") {
+        await dialog
+          .getByRole("combobox", { name: "Model 3", exact: true })
+          .click();
+        await page
+          .getByRole("option", { name: "MiniMax M3", exact: true })
+          .click();
+        await dialog.getByText("Features", { exact: true }).click();
+      }
+      await dialog
+        .getByRole("radio", {
+          name: view === "cost" ? "Cost" : "Features",
+          exact: true,
+          checked: true,
+        })
+        .waitFor();
+    },
+  })),
   // ---- resource lists --------------------------------------------------
   {
     id: "agents-list",

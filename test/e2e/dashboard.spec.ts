@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { grantDashboardPlayground } from "./dashboard-fixture";
 import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
+
+test.beforeEach(async ({ request }) => {
+  await expect(await request.post("http://127.0.0.1:18080/__reset")).toBeOK();
+});
 
 test("dashboard and search stay centered beside the expanded navigation", async ({
   page,
@@ -11,15 +16,12 @@ test("dashboard and search stay centered beside the expanded navigation", async 
   const layout = page.locator("[data-dashboard-layout]");
   const main = page.getByRole("main");
   const keyShortcut = main.getByRole("button", { name: "Get API key" });
-  for (const shortcut of [
-    main.getByRole("link", { name: "Explore docs" }),
-    keyShortcut,
-  ]) {
-    await expect(shortcut).not.toHaveCSS(
-      "border-top-color",
-      "rgba(0, 0, 0, 0)",
-    );
-  }
+  await expect(keyShortcut).toBeVisible();
+  await expect(
+    page
+      .getByRole("banner")
+      .getByRole("link", { name: "Platform documentation" }),
+  ).toBeVisible();
   const bounds = await layout.boundingBox();
   const mainBounds = await main.boundingBox();
   expect(bounds!.width).toBe(960);
@@ -83,6 +85,128 @@ test("dashboard and search stay centered beside the expanded navigation", async 
   await expect(page).toHaveURL(/\/agents\/new$/);
 });
 
+test("dashboard opens the usage period and each admitted resource shown on its card", async ({
+  page,
+}) => {
+  await grantDashboardPlayground(page);
+  await signIn(page);
+  const main = page.getByRole("main");
+  const overview = main.getByRole("region", { name: "Usage overview" });
+  for (const [title, range] of [
+    ["Requests this month", "mtd"],
+    ["Spend this month", "mtd"],
+    ["Prompt caching", "mtd"],
+    ["Token volume", "7"],
+  ]) {
+    const entry = overview.getByRole("link", { name: title, exact: true });
+    await expect(entry).toHaveAttribute("href", `/usage?range=${range}`);
+  }
+  for (const [metric, range] of [
+    ["spend", "mtd"],
+    ["tokens", "7"],
+  ]) {
+    const value = overview.locator(
+      `[data-dashboard-metric="${metric}"] [data-value]`,
+    );
+    await expect(value).toBeVisible();
+    // The title link extends across the card, including the painted value.
+    const bounds = (await value.boundingBox())!;
+    await page.mouse.click(bounds.x + 2, bounds.y + bounds.height / 2);
+    await expect(page.getByRole("combobox", { name: "Period" })).toHaveValue(
+      range,
+    );
+    await page.goBack();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  }
+  for (const [action, path] of [
+    ["Open playground", "/playground"],
+    ["View models", "/models"],
+    ["Browse skills", "/skills"],
+    ["Browse files", "/files"],
+  ]) {
+    const link = main.getByRole("link", { name: action, exact: true });
+    await expect(link).toHaveAttribute("href", path);
+    await link.click();
+    await expect(page).toHaveURL((url) => url.pathname === path);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  }
+});
+
+test("four provider cards load their local marks and compare model cost and features", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await signIn(page);
+  const main = page.getByRole("main");
+  const models = [
+    [
+      "deepseek",
+      "DeepSeek V4.1 Flash",
+      "https://api-docs.deepseek.com/news/news261017/",
+    ],
+    ["glm", "GLM-5.3", "https://docs.z.ai/guides/llm/glm-5.3"],
+    [
+      "kimi",
+      "Kimi K3",
+      "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
+    ],
+    ["minimax", "MiniMax M3", "https://github.com/MiniMax-AI/MiniMax-M3"],
+  ];
+  for (const [brand, name, href] of models) {
+    const mark = main.locator(`img[src="/brands/${brand}.svg"]`);
+    await expect(mark).toBeVisible();
+    await expect
+      .poll(() =>
+        mark.evaluate(
+          (img: HTMLImageElement) => img.complete && img.naturalWidth > 0,
+        ),
+      )
+      .toBe(true);
+    await expect(main.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      href,
+    );
+  }
+  const trigger = main.getByRole("button", { name: "Compare models" });
+  await trigger.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Compare models" });
+  await expect(
+    dialog.getByRole("radio", { name: "Cost", exact: true }),
+  ).toBeChecked();
+  const selectors = dialog.getByRole("combobox");
+  await expect(selectors).toHaveCount(3);
+  for (const [i, [, name]] of models.slice(0, 3).entries()) {
+    await expect(selectors.nth(i)).toContainText(name);
+    await expect(
+      dialog.getByRole("link", { name: `View ${name} pricing` }),
+    ).toBeVisible();
+  }
+  const third = dialog.getByRole("combobox", { name: "Model 3", exact: true });
+  await third.click();
+  await page.getByRole("option", { name: "MiniMax M3", exact: true }).click();
+  await expect(third).toContainText("MiniMax M3");
+  await dialog
+    .getByRole("radio", { name: "Cost", exact: true })
+    .press("ArrowRight");
+  await expect(
+    dialog.getByRole("radio", { name: "Features", exact: true }),
+  ).toBeChecked();
+  await dialog
+    .getByRole("button", { name: "Copy MiniMax-M3", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("MiniMax-M3");
+  await settleMotion(page);
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
 test("dashboard and navigation fit a narrow viewport without losing destinations", async ({
   page,
 }) => {
@@ -97,15 +221,42 @@ test("dashboard and navigation fit a narrow viewport without losing destinations
       .locator("[data-console-header]")
       .getByRole("button", { name: /^Search Console/ }),
   ).toHaveCSS("width", "32px");
+  const main = page.getByRole("main");
+  await expect(
+    main.getByRole("link", { name: "MiniMax M3", exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  for (const card of await page.locator("[data-dashboard-card]").all()) {
+  for (const card of await main
+    .locator(
+      "[data-dashboard-card], [data-dashboard-metric], img[src^='/brands/']",
+    )
+    .all()) {
     const bounds = await card.boundingBox();
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   }
+  const compare = main.getByRole("button", { name: "Compare models" });
+  await compare.click();
+  const comparison = page.getByRole("dialog", {
+    name: "Compare models",
+    exact: true,
+  });
+  await comparison.getByText("Features", { exact: true }).click();
+  const selector = comparison.getByRole("combobox", {
+    name: "Model 3",
+    exact: true,
+  });
+  await selector.click();
+  await page.getByRole("option", { name: "MiniMax M3", exact: true }).click();
+  await expect(selector).toContainText("MiniMax M3");
+  const bounds = (await comparison.boundingBox())!;
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  await comparison.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(compare).toBeFocused();
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const menu = page.getByRole("button", { name: "Menu", exact: true });

@@ -1,13 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  render,
-  renderHook,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-import DashboardPage from "@/app/(console)/dashboard/page";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { NativeSession } from "./native";
 import type { ReactNode } from "react";
 import {
@@ -253,51 +246,37 @@ describe("useSurfaces", () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      function CurrentSession() {
+      function CurrentSession({ children }: { children: ReactNode }) {
         const session = useConsoleSession();
         return (
           <ConsoleSessionContext.Provider value={session}>
-            <output data-testid="current-role">{session.data?.role}</output>
-            {session.data && <DashboardPage />}
+            {session.data && children}
           </ConsoleSessionContext.Provider>
         );
       }
-      const view = render(
-        <QueryClientProvider client={client}>
-          <CurrentSession />
-        </QueryClientProvider>,
-      );
-      const directoryLinks = () =>
-        Array.from(view.container.querySelectorAll("a"))
-          .map((link) => link.getAttribute("href"))
-          .filter((href) =>
-            ["/members", "/service-accounts"].includes(href ?? ""),
-          )
-          .sort();
+      const view = renderHook(useSurfaces, {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>
+            <CurrentSession>{children}</CurrentSession>
+          </QueryClientProvider>
+        ),
+      });
+      const directoryStates = () => [
+        view.result.current?.members.status,
+        view.result.current?.["service-accounts"].status,
+      ];
       try {
+        const initial = before === "admin" ? "available" : "denied";
         await waitFor(() =>
-          expect(screen.getByTestId("current-role").textContent).toBe(before),
-        );
-        await waitFor(() => {
-          expect(
-            client.getQueriesData({ queryKey: ["surfaces"] })[0]?.[1],
-          ).toBeDefined();
-          expect(client.isFetching({ queryKey: ["surfaces"] })).toBe(0);
-        });
-        expect(directoryLinks()).toEqual(
-          before === "admin" ? ["/members", "/service-accounts"] : [],
+          expect(directoryStates()).toEqual([initial, initial]),
         );
         fetcher.mockClear();
         current = { ...current, role: after };
         // Only refresh the real session observer, never surfaces or focus.
         await client.invalidateQueries({ queryKey: ["console-session"] });
+        const refreshed = after === "admin" ? "available" : "denied";
         await waitFor(() =>
-          expect(screen.getByTestId("current-role").textContent).toBe(after),
-        );
-        await waitFor(() =>
-          expect(directoryLinks()).toEqual(
-            after === "admin" ? ["/members", "/service-accounts"] : [],
-          ),
+          expect(directoryStates()).toEqual([refreshed, refreshed]),
         );
         expect(
           fetcher.mock.calls.filter(([url]) =>

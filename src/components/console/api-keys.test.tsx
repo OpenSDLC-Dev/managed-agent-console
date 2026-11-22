@@ -1130,9 +1130,7 @@ it.each([false, true])(
     const { fetcher } = nativeFetch(options);
     nativeView(session, shortcut, shortcut ? <DashboardPage /> : undefined);
     if (shortcut)
-      expect(
-        screen.getByRole("heading", { name: "Dashboard" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     await openKeyForm(shortcut);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Directory page unavailable",
@@ -1188,9 +1186,7 @@ it.each([false, true])(
       shortcut ? <DashboardPage /> : undefined,
     );
     if (shortcut)
-      expect(
-        screen.getByRole("heading", { name: "Dashboard" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     client.setQueryData(["unrelated-public-cache"], "retained");
     await openKeyForm(shortcut);
     await screen.findByRole("option", { name: /First service/ });
@@ -1279,9 +1275,7 @@ it.each([
     const mock = nativeFetch(options);
     nativeView(session, shortcut, shortcut ? <DashboardPage /> : undefined);
     if (shortcut)
-      expect(
-        screen.getByRole("heading", { name: "Dashboard" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     await openKeyForm(shortcut);
     if (cached) {
       await screen.findByRole("option", { name: /First service/ });
@@ -1334,9 +1328,7 @@ it.each(
       shortcut ? <DashboardPage /> : undefined,
     );
     if (shortcut)
-      expect(
-        screen.getByRole("heading", { name: "Dashboard" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     await openKeyForm(shortcut);
     await screen.findByRole("option", { name: /First service/ });
     await userEvent.click(keyForm().getByRole("button", { name: "Close" }));

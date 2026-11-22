@@ -1,0 +1,150 @@
+import "@testing-library/jest-dom/vitest";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { copyText } from "@/lib/copy-text";
+import { DashboardModels } from "./dashboard-models";
+
+vi.mock("@/lib/copy-text", () => ({ copyText: vi.fn() }));
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+it("links each branded card to the corresponding provider's model documentation", () => {
+  render(<DashboardModels />);
+  for (const [name, brand, href] of [
+    [
+      "DeepSeek V4.1 Flash",
+      "deepseek",
+      "https://api-docs.deepseek.com/news/news261017/",
+    ],
+    ["GLM-5.3", "glm", "https://docs.z.ai/guides/llm/glm-5.3"],
+    [
+      "Kimi K3",
+      "kimi",
+      "https://platform.kimi.ai/docs/guide/kimi-k3-quickstart",
+    ],
+    ["MiniMax M3", "minimax", "https://github.com/MiniMax-AI/MiniMax-M3"],
+  ]) {
+    const link = screen.getByRole("link", { name });
+    expect(link).toHaveAttribute("href", href);
+    expect(link.querySelector("img")).toHaveAttribute(
+      "src",
+      `/brands/${brand}.svg`,
+    );
+    expect(within(link).getAllByRole("listitem")).toHaveLength(3);
+  }
+});
+
+it("opens the provider cost comparison and restores focus on close", async () => {
+  const user = userEvent.setup();
+  render(<DashboardModels />);
+  const trigger = screen.getByRole("button", { name: "Compare models" });
+  await user.click(trigger);
+  const dialog = within(
+    await screen.findByRole("dialog", { name: "Compare models" }),
+  );
+  await waitFor(() =>
+    expect(dialog.getByRole("button", { name: "Close" })).toHaveFocus(),
+  );
+  expect(dialog.getByRole("radio", { name: "Cost" })).toBeChecked();
+  expect(dialog.getByRole("combobox", { name: "Model 1" })).toHaveTextContent(
+    "DeepSeek V4.1 Flash",
+  );
+  expect(dialog.getByRole("combobox", { name: "Model 2" })).toHaveTextContent(
+    "GLM-5.3",
+  );
+  expect(dialog.getByRole("combobox", { name: "Model 3" })).toHaveTextContent(
+    "Kimi K3",
+  );
+  const kimi = within(
+    dialog.getByRole("region", { name: "Comparison column 3" }),
+  );
+  expect(kimi.getByText("$15.00")).toBeVisible();
+  expect(kimi.getByText(/Cache writes cost \$3 for 5 min/)).toBeVisible();
+  expect(
+    dialog.getByRole("link", { name: "View GLM-5.3 pricing" }),
+  ).toHaveAttribute("href", "https://docs.z.ai/guides/overview/pricing");
+  expect(
+    dialog.getByText(
+      "Z.ai international API rates, in USD per million tokens.",
+    ),
+  ).toBeVisible();
+  await user.click(dialog.getByRole("button", { name: "Close" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await waitFor(() => expect(trigger).toHaveFocus());
+});
+
+it("keeps column selections across views and copies the exact upstream ID without requesting a model", async () => {
+  const user = userEvent.setup();
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  vi.mocked(copyText).mockResolvedValue(true);
+  render(<DashboardModels />);
+  await user.click(screen.getByRole("button", { name: "Compare models" }));
+  const dialog = within(
+    await screen.findByRole("dialog", { name: "Compare models" }),
+  );
+  await user.click(dialog.getByRole("combobox", { name: "Model 3" }));
+  await user.click(await screen.findByRole("option", { name: "MiniMax M3" }));
+  expect(
+    dialog.getByRole("link", { name: "View MiniMax M3 pricing" }),
+  ).toHaveAttribute(
+    "href",
+    "https://platform.minimax.io/docs/pricing/overview",
+  );
+  const third = within(
+    dialog.getByRole("region", { name: "Comparison column 3" }),
+  );
+  expect(third.getByText("$1.20")).toBeVisible();
+  expect(
+    third.getByText(/Standard tier, up to 512K input tokens/),
+  ).toBeVisible();
+  await user.click(dialog.getByRole("radio", { name: "Features" }));
+  expect(third.getByText("Upstream model ID")).toBeVisible();
+  expect(third.getByText("MiniMax-M3")).toBeVisible();
+  expect(third.getByText("512K tokens")).toBeVisible();
+  await user.click(third.getByRole("button", { name: "Copy MiniMax-M3" }));
+  expect(copyText).toHaveBeenCalledWith("MiniMax-M3");
+  await user.click(dialog.getByRole("radio", { name: "Cost" }));
+  expect(dialog.getByRole("combobox", { name: "Model 3" })).toHaveTextContent(
+    "MiniMax M3",
+  );
+  expect(dialog.getByRole("combobox", { name: "Model 1" })).toHaveTextContent(
+    "DeepSeek V4.1 Flash",
+  );
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("allows the same model in two columns and dismisses an open selector before the comparison", async () => {
+  const user = userEvent.setup();
+  render(<DashboardModels />);
+  await user.click(screen.getByRole("button", { name: "Compare models" }));
+  const dialog = within(
+    await screen.findByRole("dialog", { name: "Compare models" }),
+  );
+  const third = dialog.getByRole("combobox", { name: "Model 3" });
+  await user.click(third);
+  await user.click(await screen.findByRole("option", { name: "GLM-5.3" }));
+  expect(third).toHaveTextContent("GLM-5.3");
+  expect(dialog.getByRole("combobox", { name: "Model 2" })).toHaveTextContent(
+    "GLM-5.3",
+  );
+  await user.click(third);
+  await screen.findByRole("listbox");
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+  expect(screen.getByRole("dialog", { name: "Compare models" })).toBeVisible();
+  expect(third).toHaveFocus();
+});
