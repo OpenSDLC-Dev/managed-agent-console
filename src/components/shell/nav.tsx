@@ -6,14 +6,24 @@ import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
+  canReadMessageReports,
   isSurfaceVisible,
+  messageReportState,
   surfaceOfPath,
   surfaceRoute,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
-import { isDashboardPath, playgroundOnly } from "@/lib/routes";
+import { isDashboardPath, isMessageReport, playgroundOnly } from "@/lib/routes";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
 import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
@@ -140,10 +150,13 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     groups: groups
       .map((group) => ({
         ...group,
-        items: group.items.filter(({ surface }) =>
-          surface
-            ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
-            : limited || session?.playground_access === true,
+        items: group.items.filter(({ surface, href }) =>
+          isMessageReport(href)
+            ? canReadMessageReports(session) &&
+              messageReportState(href, surfaces)?.status === "available"
+            : surface
+              ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
+              : limited || session?.playground_access === true,
         ),
       }))
       .filter(({ items }) => items.length > 0),
@@ -156,6 +169,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
   const panel = groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
+  const messagesPanel = panelLabel === "Messages";
 
   useEffect(() => {
     const restoreRoutePanel = () => {
@@ -215,8 +229,16 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
       className="flex flex-col gap-4 px-2 pt-2"
     >
       {panel ? (
-        <div className="flex flex-col gap-1">
-          <h2 aria-label={panel.label} className="mb-2">
+        <div
+          className={cn(
+            "flex flex-col",
+            messagesPanel ? "[&>a]:px-2" : "gap-1",
+          )}
+        >
+          <h2
+            aria-label={panel.label}
+            className={messagesPanel ? "mb-3" : "mb-2"}
+          >
             <button
               type="button"
               aria-label={`${panel.label}, back to all sections`}
@@ -224,7 +246,8 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               data-nav-back
               onClick={back}
               className={cn(
-                "grid h-9 w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg px-2.5",
+                "grid w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg",
+                messagesPanel ? "h-7 px-1.5" : "h-9 px-2.5",
                 HOVER,
               )}
             >
@@ -238,6 +261,26 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               </span>
             </button>
           </h2>
+          {messagesPanel && (
+            <Select value={CONSOLE_WORKSPACE}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Workspace"
+                className="mb-3 w-full border-0 bg-muted px-3 shadow-none"
+              >
+                <span className="flex items-center gap-3">
+                  <span
+                    aria-hidden
+                    className="size-3 rounded-sm bg-indigo-500"
+                  />
+                  <SelectValue>Default</SelectValue>
+                </span>
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value={CONSOLE_WORKSPACE}>Default</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           {panel.items.map(({ href, label, surface }) => (
             <NavLink
               key={href}
@@ -268,8 +311,15 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                   ({ href }) => href === activeHref,
                 )?.label;
                 const first = group.items[0];
+                const waitingForOverview =
+                  group.label === "Messages" &&
+                  canReadMessageReports(session) &&
+                  !surfaces;
                 const destination =
-                  !mobile && !current && (!first.surface || surfaces)
+                  !mobile &&
+                  !current &&
+                  !waitingForOverview &&
+                  (!first.surface || surfaces)
                     ? first.href
                     : undefined;
                 return (

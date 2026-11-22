@@ -7,9 +7,16 @@ import {
   useSyncExternalStore,
   type RefObject,
 } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { IdCell } from "./copy-id";
+import { cn } from "@/lib/utils";
+import { CopyIdButton, IdCell } from "./copy-id";
 
 function subscribeViewport(callback: () => void) {
   window.addEventListener("resize", callback);
@@ -25,6 +32,9 @@ export function ResourceInspector({
   next,
   onSelect,
   onClose,
+  onPreviousPage,
+  onNextPage,
+  dismissOnOutsidePress,
   dialogLabel,
   returnFocus,
   fallbackFocus,
@@ -39,6 +49,7 @@ export function ResourceInspector({
     | "deployment"
     | "deployment-run"
     | "service-account"
+    | "request"
     | "model";
   children: React.ReactNode;
   id: string;
@@ -46,6 +57,9 @@ export function ResourceInspector({
   next?: string;
   onSelect?: (id: string) => void;
   onClose: () => void;
+  onPreviousPage?: () => void;
+  onNextPage?: () => void;
+  dismissOnOutsidePress?: (target: Element) => boolean;
   dialogLabel?: string;
   returnFocus?: RefObject<HTMLElement | null>;
   fallbackFocus?: RefObject<HTMLElement | null>;
@@ -60,9 +74,15 @@ export function ResourceInspector({
     deployment: "Deployment",
     "deployment-run": "Deployment run",
     "service-account": "Service account",
+    request: "Request",
     model: "Model",
   }[kind];
+  const request = kind === "request";
+  const PreviousIcon = request ? ChevronUp : ChevronLeft;
+  const NextIcon = request ? ChevronDown : ChevronRight;
+  const actionSize = request ? "icon-xs" : "icon";
   const panel = useRef<HTMLElement>(null);
+  const outsideClose = useRef(false);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(560);
   const maxWidth = useSyncExternalStore(
@@ -81,6 +101,7 @@ export function ResourceInspector({
     const finalFocus = returnFocus;
     panel.current?.focus();
     return () => {
+      if (outsideClose.current) return;
       // These are the requested focus target and close reason at dismissal.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const target = restoreToFallback?.current
@@ -97,6 +118,24 @@ export function ResourceInspector({
     };
   }, [fallbackFocus, restoreToFallback, returnFocus]);
 
+  useEffect(() => {
+    if (!dismissOnOutsidePress) return;
+    function outside(event: MouseEvent) {
+      const target = event.target;
+      if (
+        event.button === 0 &&
+        target instanceof Element &&
+        !panel.current?.contains(target) &&
+        dismissOnOutsidePress?.(target)
+      ) {
+        outsideClose.current = true;
+        onClose();
+      }
+    }
+    document.addEventListener("click", outside, true);
+    return () => document.removeEventListener("click", outside, true);
+  }, [dismissOnOutsidePress, onClose]);
+
   return (
     <aside
       ref={panel}
@@ -104,7 +143,12 @@ export function ResourceInspector({
       aria-label={dialogLabel ?? label + " details"}
       tabIndex={-1}
       {...{ ["data-" + kind + "-id"]: id }}
-      className="fixed top-[calc(var(--console-header-height,0px)+0.5rem)] right-2 bottom-2 z-30 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none"
+      className={cn(
+        "fixed right-2 bottom-2 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none",
+        request
+          ? "top-2 z-40"
+          : "top-[calc(var(--console-header-height,0px)+0.5rem)] z-30",
+      )}
       style={{ width: visibleWidth }}
       onKeyDown={(event) => {
         if (
@@ -158,43 +202,55 @@ export function ResourceInspector({
           }
         }}
       />
-      <div className="flex shrink-0 items-center gap-2 px-4 py-2">
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-2 px-4 py-2",
+          request && "min-h-12",
+        )}
+      >
         <span
-          className={
+          className={cn(
             kind !== "skill"
               ? "text-sm text-muted-foreground max-[480px]:sr-only"
-              : "text-sm text-muted-foreground"
-          }
+              : "text-sm text-muted-foreground",
+            request && "text-xs",
+          )}
         >
           {label}
         </span>
-        <IdCell key={id} id={id} />
-        <div className="ml-auto flex gap-1">
+        {request ? (
+          <CopyIdButton key={id} id={id} showValue />
+        ) : (
+          <IdCell key={id} id={id} />
+        )}
+        <div className={cn("ml-auto flex gap-1", request && "shrink-0 gap-0")}>
           {onSelect && (
             <>
               <Button
                 variant="ghost"
-                size="icon"
+                size={actionSize}
                 aria-label={"Previous " + label.toLowerCase()}
-                disabled={!previous}
-                onClick={() => previous && onSelect(previous)}
+                disabled={!previous && !onPreviousPage}
+                onClick={() =>
+                  previous ? onSelect(previous) : onPreviousPage?.()
+                }
               >
-                <ChevronLeft />
+                <PreviousIcon />
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
+                size={actionSize}
                 aria-label={"Next " + label.toLowerCase()}
-                disabled={!next}
-                onClick={() => next && onSelect(next)}
+                disabled={!next && !onNextPage}
+                onClick={() => (next ? onSelect(next) : onNextPage?.())}
               >
-                <ChevronRight />
+                <NextIcon />
               </Button>
             </>
           )}
           <Button
             variant="ghost"
-            size="icon"
+            size={actionSize}
             aria-label="Close details"
             onClick={onClose}
           >
@@ -203,11 +259,12 @@ export function ResourceInspector({
         </div>
       </div>
       <div
-        className={
+        className={cn(
           kind !== "skill"
             ? "min-h-0 flex-1 px-4 pb-4 pt-1"
-            : "min-h-0 flex-1 p-4"
-        }
+            : "min-h-0 flex-1 p-4",
+          request && "pt-0",
+        )}
       >
         {children}
       </div>

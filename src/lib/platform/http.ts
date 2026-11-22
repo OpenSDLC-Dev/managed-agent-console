@@ -265,8 +265,10 @@ const gatewayUrl = (path: string) =>
 export async function gatewayGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(`${gatewayUrl(path)}${queryString(params)}`);
+  const url = `${gatewayUrl(path)}${queryString(params)}`;
+  const response = signal ? await fetch(url, { signal }) : await fetch(url);
   await assertOk(response);
   return (await response.json()) as T;
 }

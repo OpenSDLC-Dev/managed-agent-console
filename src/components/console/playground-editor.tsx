@@ -1,5 +1,5 @@
 import { Popover } from "@base-ui/react/popover";
-import { ChevronDown, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Ellipsis, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,20 +18,31 @@ import {
 } from "@/components/ui/select";
 import type {
   PlaygroundMessage,
+  PlaygroundContent,
   PlaygroundModel,
+  PlaygroundRequest,
 } from "@/lib/platform/playground";
 
 export type PlaygroundDraft = {
   selection: string;
   tokens: string;
-  system: string | null;
-  messages: (PlaygroundMessage & { id: number })[];
+  stream: PlaygroundRequest["stream"];
+  system: PlaygroundContent | null;
+  messages: (Pick<PlaygroundMessage, "role" | "content"> & {
+    id: number;
+    includeEmpty?: boolean;
+    parameters?: Record<string, unknown>;
+  })[];
+  includeEmptySystem?: boolean;
+  // Code can set additional Messages parameters that the Form does not edit.
+  parameters?: Record<string, unknown>;
 };
 
 export function newDraft(): PlaygroundDraft {
   return {
     selection: "",
     tokens: "1024",
+    stream: true,
     system: "",
     messages: [{ id: 0, role: "user", content: "" }],
   };
@@ -40,6 +51,77 @@ export function newDraft(): PlaygroundDraft {
 const field =
   "block min-h-9 w-full resize-none rounded-lg border border-transparent bg-muted/70 px-3 py-2 text-sm leading-5 field-sizing-content placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
+function ContentField({
+  id,
+  label,
+  content,
+  placeholder,
+  onChange,
+  onEditBlocks,
+}: {
+  id: string;
+  label?: string;
+  content: PlaygroundContent;
+  placeholder: string;
+  onChange: (value: PlaygroundContent) => void;
+  onEditBlocks: (triggerId: string) => void;
+}) {
+  if (typeof content === "string")
+    return (
+      <textarea
+        id={id}
+        aria-label={label}
+        value={content}
+        rows={1}
+        placeholder={placeholder}
+        className={field}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    );
+  const block = content.length === 1 ? content[0] : undefined;
+  const editableText =
+    block?.type === "text" && typeof block.text === "string"
+      ? block.text
+      : undefined;
+  return (
+    <>
+      {block && editableText !== undefined ? (
+        <textarea
+          id={id}
+          aria-label={label}
+          value={editableText}
+          rows={1}
+          placeholder={placeholder}
+          className={field}
+          onChange={(event) =>
+            onChange([{ ...block, text: event.target.value }])
+          }
+        />
+      ) : (
+        <textarea
+          id={id}
+          aria-label={label}
+          readOnly
+          rows={3}
+          className="max-h-40 w-full rounded-lg bg-muted/70 px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring"
+          value={JSON.stringify(content, null, 2)}
+        />
+      )}
+      <Button
+        id={`${id}-edit-blocks`}
+        type="button"
+        variant="link"
+        size="sm"
+        className="mt-1 h-auto px-0 text-xs"
+        aria-label={`Edit content blocks for ${label ?? "System"}`}
+        onClick={(event) => onEditBlocks(event.currentTarget.id)}
+      >
+        Edit content blocks
+      </Button>
+    </>
+  );
+}
+
 export function PlaygroundEditor({
   draft,
   onChange,
@@ -47,6 +129,7 @@ export function PlaygroundEditor({
   model,
   loading,
   running,
+  onEditFullRequest,
 }: {
   draft: PlaygroundDraft;
   onChange: (next: PlaygroundDraft) => void;
@@ -54,6 +137,7 @@ export function PlaygroundEditor({
   model: string;
   loading: boolean;
   running: boolean;
+  onEditFullRequest: (triggerId: string) => void;
 }) {
   const { system, messages } = draft;
   const emptyModelLabel = models.length ? "Select a model" : "No models";
@@ -147,7 +231,7 @@ export function PlaygroundEditor({
             </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
               type="button"
@@ -165,6 +249,25 @@ export function PlaygroundEditor({
               {messageOptions}
             </DropdownMenuContent>
           </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              id="playground-request-options"
+              type="button"
+              disabled={running}
+              aria-label="More request options"
+              title="More request options"
+              className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+            >
+              <Ellipsis />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-auto">
+              <DropdownMenuItem
+                onClick={() => onEditFullRequest("playground-request-options")}
+              >
+                Edit full request
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       {system !== null && (
@@ -176,18 +279,17 @@ export function PlaygroundEditor({
               variant="ghost"
               size="icon-xs"
               aria-label="Remove system prompt"
-              onClick={() => patch({ system: null })}
+              onClick={() => patch({ system: null, includeEmptySystem: false })}
             >
               <Trash2 />
             </Button>
           </div>
-          <textarea
+          <ContentField
             id="playground-system"
-            value={system}
-            rows={1}
+            content={system}
             placeholder="Instructions that apply to every turn (optional)"
-            className={field}
-            onChange={(e) => patch({ system: e.target.value })}
+            onEditBlocks={onEditFullRequest}
+            onChange={(value) => patch({ system: value })}
           />
         </section>
       )}
@@ -221,25 +323,20 @@ export function PlaygroundEditor({
                   </Button>
                 )}
               </div>
-              <textarea
+              <ContentField
                 id={`playground-message-${message.id}`}
-                aria-label={
-                  i === 0 ? "Prompt" : `${message.role} message ${i + 1}`
-                }
-                rows={1}
-                value={message.content}
-                className={field}
+                label={i === 0 ? "Prompt" : `${message.role} message ${i + 1}`}
+                content={message.content}
+                onEditBlocks={onEditFullRequest}
                 placeholder={
                   message.role === "user"
                     ? "What the user says to the model"
                     : "What the assistant says"
                 }
-                onChange={(e) =>
+                onChange={(content) =>
                   patch({
                     messages: messages.map((m) =>
-                      m.id === message.id
-                        ? { ...m, content: e.target.value }
-                        : m,
+                      m.id === message.id ? { ...m, content } : m,
                     ),
                   })
                 }

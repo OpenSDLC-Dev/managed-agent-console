@@ -8,9 +8,13 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Messages now opens on Overview with usage, recent API keys and resources. Logs shows direct Messages requests and Playground runs with a copyable request ID and a shareable details drawer.
+
 - Playground runs a prompt against configured chat models and streams the answer. Administrators can approve access for the `user` role in Members. [Platform #995](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/995)
 
 ### Changed
+
+- Playground lets you edit cURL and JSON requests, keep edits when switching back to Form and choose streaming or a single JSON response.
 
 - Model cards, model comparisons and model guides read each deployment's rates and pricing terms from Model Gateway. Operators can record the currency and terms when editing an upstream model.
 - The Dashboard shows recorded gateway usage and compares four integrated models. Each model card opens a dialog with its specifications, prices and copyable ID. Use a configured gateway alias in Playground or a new agent draft, or open the model's full Console guide.

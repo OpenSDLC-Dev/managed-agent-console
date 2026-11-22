@@ -17,6 +17,7 @@ export interface Column<T> {
 }
 
 export function DataTable<T>({
+  label,
   columns,
   rows,
   rowKey,
@@ -25,6 +26,7 @@ export function DataTable<T>({
   onRowClick,
   activeRowKey,
 }: {
+  label?: string;
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
@@ -35,7 +37,7 @@ export function DataTable<T>({
 }) {
   return (
     <div>
-      <Table>
+      <Table aria-label={label}>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             {columns.map((column) => (

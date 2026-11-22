@@ -413,6 +413,7 @@ describe("CommandPalette", () => {
       NAV_DESTINATIONS.filter(
         (item) =>
           item.href !== "/playground" &&
+          !item.href.startsWith("/messages") &&
           !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,
     );

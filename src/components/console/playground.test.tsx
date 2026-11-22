@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -16,6 +23,7 @@ import { Playground } from "./playground";
 const reply: gateway.PlaygroundReply = {
   raw: '{"content":[{"type":"text","text":"OK"}]}',
   rawLabel: "Response body",
+  content: [{ type: "text", text: "OK" }],
   inputTokens: 10,
   outputTokens: 1,
   durationMs: 425,
@@ -51,6 +59,12 @@ function renderPlayground({
 
 function linkedPage(model?: string | string[]) {
   return PlaygroundPage({ searchParams: Promise.resolve({ model }) });
+}
+
+function codeEditor() {
+  return screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: /request code$/i,
+  });
 }
 
 afterEach(() => {
@@ -110,9 +124,7 @@ it("rejects a linked display name or unknown upstream ID and lets the user choos
   const select = screen.getByRole("combobox", { name: "Model" });
   expect(select).toHaveTextContent("Select a model");
   await user.click(screen.getByLabelText("Code", { exact: true }));
-  expect(screen.getByLabelText("Request code")).toHaveTextContent(
-    '"model": ""',
-  );
+  expect(codeEditor().value).toContain('"model": ""');
   expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
   await user.keyboard("{Control>}{Enter}{/Control}");
   await user.click(screen.getByLabelText("Form", { exact: true }));
@@ -210,9 +222,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   await user.type(screen.getByLabelText("user message 3"), "Next turn");
   await user.click(screen.getByLabelText("Code", { exact: true }));
   await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
-  const request = JSON.parse(
-    screen.getByLabelText("Request code").textContent!,
-  );
+  const request = JSON.parse(codeEditor().value);
   expect(request).toEqual({
     model: "fast",
     max_tokens: 42,
@@ -268,9 +278,7 @@ it("keeps Form and Code on the same Messages request, runs it and restores it fr
   expect(await screen.findByText("fast (unavailable)")).toBeVisible();
   expect(screen.getByRole("button", { name: "Run prompt" })).toBeDisabled();
   await user.click(screen.getByLabelText("Code", { exact: true }));
-  expect(screen.getByLabelText("Request code")).toHaveTextContent(
-    '"model": "fast"',
-  );
+  expect(codeEditor().value).toContain('"model": "fast"');
   await user.click(screen.getByLabelText("Form", { exact: true }));
   await user.click(screen.getByRole("combobox", { name: "Model" }));
   await user.click(await screen.findByRole("option", { name: "Demo" }));
@@ -284,7 +292,7 @@ it("continues a final assistant prefill in the same message", async () => {
   vi.spyOn(gateway, "runPlayground").mockImplementation(
     async (_req, _id, _signal, append) => {
       append("ground");
-      return reply;
+      return { ...reply, content: [{ type: "text", text: "ground" }] };
     },
   );
   vi.stubGlobal(
@@ -307,6 +315,343 @@ it("continues a final assistant prefill in the same message", async () => {
     "Playground",
   );
   expect(screen.getByLabelText("user message 3")).toHaveValue("");
+});
+
+it("runs edits from cURL and JSON in the selected streaming mode and carries the same fields back into Form", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+    { id: "fast", display_name: "Fast" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "First draft");
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(codeEditor()).toHaveAccessibleName("cURL request code");
+  const curl = codeEditor().value.replace("First draft", "Edited in cURL");
+  fireEvent.change(codeEditor(), { target: { value: curl } });
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  await user.click(
+    screen.getByRole("button", { name: "Code snippet settings" }),
+  );
+  const streaming = await screen.findByRole("menuitemcheckbox", {
+    name: "Streaming",
+  });
+  expect(streaming).toHaveAttribute("aria-checked", "true");
+  await user.click(streaming);
+  await user.keyboard("{Escape}");
+  const body = {
+    ...JSON.parse(codeEditor().value),
+    model: "fast",
+    max_tokens: 32,
+    temperature: 0.2,
+    system: "",
+  };
+  expect(body.messages).toEqual([{ role: "user", content: "Edited in cURL" }]);
+  expect(body.stream).toBe(false);
+  fireEvent.change(codeEditor(), { target: { value: JSON.stringify(body) } });
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent(
+    "Fast",
+  );
+  expect(screen.getByLabelText("Prompt")).toHaveValue("Edited in cURL");
+  await user.type(screen.getByLabelText("Prompt"), " and Form");
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  const expected = {
+    ...body,
+    messages: [{ role: "user", content: "Edited in cURL and Form" }],
+  };
+  expect(JSON.parse(codeEditor().value)).toEqual(expected);
+  expect(run).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run).toHaveBeenCalledExactlyOnceWith(
+    expected,
+    TEST_SESSION.id,
+    expect.any(AbortSignal),
+    expect.any(Function),
+  );
+});
+
+it("keeps invalid code in place on Run, language and Form changes until the user repairs or discards it", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "Keep this");
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  const original = codeEditor().value;
+  const edited = original.replace("$ANTHROPIC_BASE_URL", "edited-host");
+  fireEvent.change(codeEditor(), { target: { value: edited } });
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Keep the generated cURL command",
+  );
+  expect(codeEditor()).toHaveFocus();
+  expect(codeEditor()).toHaveAttribute("aria-invalid", "true");
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  expect(screen.getByLabelText("Code language")).toHaveValue("cURL");
+  expect(codeEditor()).toHaveValue(edited);
+  await user.click(
+    screen.getByRole("button", { name: "Discard invalid edits" }),
+  );
+  expect(codeEditor()).toHaveValue(original);
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  const json = codeEditor().value;
+  fireEvent.change(codeEditor(), { target: { value: "{" } });
+  await user.keyboard("{Control>}{Enter}{/Control}");
+  expect(screen.getByRole("alert")).toHaveTextContent("valid JSON");
+  expect(codeEditor()).toHaveValue("{");
+  fireEvent.change(codeEditor(), {
+    target: { value: json.replace("Keep this", "Repaired") },
+  });
+  expect(screen.queryByRole("alert")).toBeNull();
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  expect(screen.getByLabelText("Prompt")).toHaveValue("Repaired");
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("edits the full request inside Form with read-only routing headers and returns valid edits through Back", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("Prompt"), "Initial");
+  await user.click(
+    screen.getByRole("button", { name: "More request options" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Edit full request" }),
+  );
+  expect(screen.getByRole("radio", { name: "Form" })).toBeChecked();
+  expect(screen.getByRole("heading", { name: "Headers" })).toBeVisible();
+  expect(screen.getByText("x-workspace-id")).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Body" })).toBeVisible();
+  const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: "Request body",
+  });
+  const body = JSON.parse(editor.value);
+  expect(body.messages[0].content).toBe("Initial");
+  fireEvent.change(editor, {
+    target: { value: JSON.stringify({ ...body, messages: [[]] }) },
+  });
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(editor).toHaveAttribute("aria-invalid", "true");
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run).not.toHaveBeenCalled();
+  fireEvent.change(editor, {
+    target: {
+      value: JSON.stringify({
+        ...body,
+        messages: [{ role: "user", content: "From full request" }],
+        stream: false,
+      }),
+    },
+  });
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.getByLabelText("Prompt")).toHaveValue("From full request");
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(codeEditor().value).toContain('"stream": false');
+  expect(run).not.toHaveBeenCalled();
+});
+
+it("keeps message roles and edits when removing and restoring System, then runs the displayed draft with Command+Enter", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(reply);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.type(screen.getByLabelText("System", { exact: true }), "First");
+  await user.type(screen.getByLabelText("Prompt"), "A question");
+  const more = screen.getByRole("button", { name: "More message options" });
+  await user.click(more);
+  await user.keyboard("{Escape}");
+  expect(more).toHaveFocus();
+  await user.keyboard("{ArrowDown}");
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Add user message" }),
+  );
+  await user.type(screen.getByLabelText("user message 2"), "A clarification");
+  await user.click(
+    screen.getByRole("button", { name: "Remove system prompt" }),
+  );
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  const withoutSystem = JSON.parse(codeEditor().value);
+  expect(withoutSystem).not.toHaveProperty("system");
+  expect(withoutSystem.messages).toEqual([
+    { role: "user", content: "A question" },
+    { role: "user", content: "A clarification" },
+  ]);
+  await user.click(screen.getByLabelText("Form", { exact: true }));
+  await user.click(screen.getByRole("button", { name: "Add" }));
+  await user.click(
+    await screen.findByRole("menuitem", { name: "System prompt" }),
+  );
+  const system = screen.getByLabelText("System", { exact: true });
+  expect(system).toHaveValue("");
+  await user.type(system, "Revised instruction");
+  expect(run).not.toHaveBeenCalled();
+  await user.keyboard("{Meta>}{Enter}{/Meta}");
+  expect(run).toHaveBeenCalledExactlyOnceWith(
+    { ...withoutSystem, system: "Revised instruction" },
+    TEST_SESSION.id,
+    expect.any(AbortSignal),
+    expect.any(Function),
+  );
+});
+
+it("preserves nested Messages blocks through Form, Code, the sent body, a tool-only reply and history", async () => {
+  vi.spyOn(gateway, "playgroundModels").mockResolvedValue([
+    { id: "demo", display_name: "Demo" },
+  ]);
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const tool = {
+    type: "tool_use",
+    id: "tool_b",
+    name: "lookup",
+    input: { places: ["Lyon", "Paris"] },
+  };
+  const result = {
+    ...reply,
+    content: [tool],
+    raw: JSON.stringify({ content: [tool] }),
+  };
+  const run = vi.spyOn(gateway, "runPlayground").mockResolvedValue(result);
+  const user = userEvent.setup();
+  renderPlayground();
+  await screen.findByText("Demo", { exact: true });
+  await user.click(
+    screen.getByRole("button", { name: "More request options" }),
+  );
+  await user.click(
+    await screen.findByRole("menuitem", { name: "Edit full request" }),
+  );
+  const editor = screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: "Request body",
+  });
+  const cache = { type: "ephemeral", ttl: "5m" };
+  const body = {
+    ...JSON.parse(editor.value),
+    system: [{ type: "text", text: "Instructions", cache_control: cache }],
+    messages: [
+      {
+        role: "user",
+        content: [{ type: "text", text: "Ask", cache_control: cache }],
+        extension: { keep: true },
+      },
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "Reasoning", signature: "signed" },
+          {
+            type: "tool_use",
+            id: "tool_a",
+            name: "lookup",
+            input: { places: ["Xi'an"] },
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "tool_a",
+            content: [{ type: "text", text: "Found" }],
+          },
+        ],
+      },
+    ],
+    tools: [
+      {
+        name: "lookup",
+        input_schema: {
+          type: "object",
+          properties: { places: { type: "array" } },
+        },
+      },
+    ],
+  };
+  fireEvent.change(editor, { target: { value: JSON.stringify(body) } });
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(
+    screen.getByRole("button", { name: "More request options" }),
+  ).toHaveFocus();
+  const system = screen.getByLabelText("System", { exact: true });
+  await user.type(system, " updated");
+  expect(system).toHaveFocus();
+  expect(system).toHaveValue("Instructions updated");
+  await user.type(screen.getByLabelText("Prompt"), " again");
+  expect(screen.getByLabelText("assistant message 2")).toHaveAttribute(
+    "readonly",
+  );
+  expect(
+    JSON.parse(
+      screen.getByLabelText<HTMLTextAreaElement>("user message 3").value,
+    ),
+  ).toEqual(body.messages[2].content);
+  await user.click(
+    screen.getByRole("button", {
+      name: "Edit content blocks for assistant message 2",
+    }),
+  );
+  body.system[0].text = "Instructions updated";
+  body.messages[0].content[0].text = "Ask again";
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  const editAssistant = screen.getByRole("button", {
+    name: "Edit content blocks for assistant message 2",
+  });
+  expect(editAssistant).toHaveFocus();
+  await user.keyboard("{Enter}");
+  expect(
+    JSON.parse(
+      screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Request body" })
+        .value,
+    ),
+  ).toEqual(body);
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(codeEditor().value).toContain('"signature": "signed"');
+  await user.selectOptions(screen.getByLabelText("Code language"), "JSON");
+  expect(JSON.parse(codeEditor().value)).toEqual(body);
+  await user.click(screen.getByRole("button", { name: "Run prompt" }));
+  expect(run).toHaveBeenCalledExactlyOnceWith(
+    body,
+    TEST_SESSION.id,
+    expect.any(AbortSignal),
+    expect.any(Function),
+  );
+  await user.click(
+    await screen.findByRole("button", { name: "View content blocks in Raw" }),
+  );
+  expect(screen.getByLabelText("Response body")).toHaveTextContent(result.raw);
+  await user.click(screen.getByRole("button", { name: "Add to messages" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value)).toEqual({
+    ...body,
+    messages: [...body.messages, { role: "assistant", content: [tool] }],
+  });
+  await user.click(screen.getByRole("button", { name: "History" }));
+  await user.click(
+    within(screen.getByRole("region", { name: "History" })).getByRole(
+      "button",
+      { name: /Ask again/ },
+    ),
+  );
+  await user.click(screen.getByRole("button", { name: "Close history" }));
+  await user.click(screen.getByLabelText("Code", { exact: true }));
+  expect(JSON.parse(codeEditor().value)).toEqual(body);
 });
 
 it("pages through templates and fills a draft without calling the model", async () => {

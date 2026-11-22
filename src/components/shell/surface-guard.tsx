@@ -8,10 +8,18 @@ import {
   UnavailableSurface,
 } from "@/components/console/bits";
 import { PageHeader } from "./page-header";
-import { SURFACES, useSurfaces, surfaceOfPath } from "@/lib/platform/surfaces";
+import {
+  canReadMessageReports,
+  messageReportState,
+  SURFACES,
+  useSurfaces,
+  surfaceOfPath,
+} from "@/lib/platform/surfaces";
 import { PlatformError } from "@/lib/platform/http";
 import {
   isDashboardPath,
+  isMessageReport,
+  MESSAGE_LOGS_ROUTE,
   PLAYGROUND_ROUTE,
   playgroundOnly,
 } from "@/lib/routes";
@@ -85,10 +93,12 @@ function ServiceAccountAdmission({
 export function SurfaceGuard({ children }: { children: React.ReactNode }) {
   const surfaces = useSurfaces();
   const pathname = usePathname();
-  const session = useContext(ConsoleSessionContext)?.data;
+  const account = useContext(ConsoleSessionContext);
+  const session = account?.data;
   const surface = surfaceOfPath(pathname);
   if (playgroundOnly(session)) {
-    if (isDashboardPath(pathname)) redirect(PLAYGROUND_ROUTE);
+    if (isDashboardPath(pathname) || isMessageReport(pathname))
+      redirect(PLAYGROUND_ROUTE);
     if (surface)
       return (
         <div>
@@ -106,6 +116,36 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           />
         </div>
       );
+  }
+  if (isMessageReport(pathname)) {
+    const label = pathname === MESSAGE_LOGS_ROUTE ? "Logs" : "Messages";
+    if (account?.error)
+      return (
+        <>
+          <PageHeader title={label} />
+          <ErrorState error={account.error} />
+        </>
+      );
+    const access = messageReportState(pathname, surfaces);
+    if (!canReadMessageReports(session) || access?.status === "denied")
+      return (
+        <>
+          <PageHeader title={label} />
+          <ErrorState
+            error={
+              access?.status === "denied"
+                ? access.error
+                : new Error(
+                    "This page requires a developer or administrator session.",
+                  )
+            }
+          />
+        </>
+      );
+    if (access?.status === "unimplemented")
+      return <UnavailableSurface surface="usage" />;
+    if (access?.status !== "available")
+      return <UnconfirmedNativeSurface label={label} pending={!access} />;
   }
   if (!surface) return <>{children}</>;
   const state = surfaces?.[surface];

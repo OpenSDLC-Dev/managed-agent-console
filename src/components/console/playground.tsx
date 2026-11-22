@@ -3,6 +3,7 @@
 import {
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FormEvent,
@@ -20,6 +21,14 @@ import {
 import { usePlaygroundModels } from "@/lib/platform/playground-queries";
 import { ErrorState } from "./bits";
 import { PlaygroundCode } from "./playground-code";
+import {
+  formatSnippet,
+  hasMessageContent,
+  historyLabel,
+  wireMessage,
+  readSnippet,
+  type CodeLanguage,
+} from "./playground-snippet";
 import {
   newDraft,
   PlaygroundEditor,
@@ -88,7 +97,10 @@ function PlaygroundForm({
   const models = usePlaygroundModels(principalId);
   const [draft, setDraft] = useState(newDraft);
   const [previousAlias, setPreviousAlias] = useState(requestedAlias);
-  const [mode, setMode] = useState<"Form" | "Code">("Form");
+  const [mode, setMode] = useState<"Form" | "Code" | "Full request">("Form");
+  const [language, setLanguage] = useState<CodeLanguage>("cURL");
+  const [code, setCode] = useState<{ text: string; error?: string }>();
+  const [showCodeError, setShowCodeError] = useState(false);
   const [text, setText] = useState("");
   const [reply, setReply] = useState<PlaygroundReply>();
   const [status, setStatus] = useState<RunStatus>("idle");
@@ -100,6 +112,20 @@ function PlaygroundForm({
   const form = useRef<HTMLFormElement>(null);
   const response = useRef<HTMLElement>(null);
   const active = useRef<AbortController | null>(null);
+  const nextFocusId = useRef<string | null>(null);
+  const fullRequestOpener = useRef("playground-request-options");
+  useLayoutEffect(() => {
+    // Restore focus when the new field mounts, before later clicks or typing.
+    const id = nextFocusId.current;
+    if (!id) return;
+    nextFocusId.current = null;
+    const target =
+      document.getElementById(id) ??
+      (id === fullRequestOpener.current
+        ? document.getElementById("playground-request-options")
+        : null);
+    target?.focus();
+  });
   useEffect(() => () => active.current?.abort(), []);
   useEffect(() => {
     if (!historyOpen) return;
@@ -135,6 +161,7 @@ function PlaygroundForm({
   if (previousAlias !== requestedAlias) {
     setPreviousAlias(requestedAlias);
     if (draft.selection) setDraft({ ...draft, selection: "" });
+    if (code && !code.error) setCode(undefined);
   }
   const chatModels = models.isError ? undefined : models.data;
   const initialModel = requestedAlias
@@ -149,62 +176,99 @@ function PlaygroundForm({
       ? "⌘"
       : "Ctrl";
   const request: PlaygroundRequest = {
+    ...draft.parameters,
     model,
     max_tokens: Number(draft.tokens),
-    ...(draft.system ? { system: draft.system } : {}),
-    messages: draft.messages
-      .filter((m) => m.content.length > 0)
-      .map(({ role, content }) => ({ role, content })),
-    stream: true,
+    ...(draft.system || draft.includeEmptySystem
+      ? { system: draft.system }
+      : {}),
+    messages: draft.messages.filter(hasMessageContent).map(wireMessage),
+    ...(draft.stream !== undefined ? { stream: draft.stream } : {}),
   };
+  const codeLanguage = mode === "Full request" ? "JSON" : language;
+  function editCode(text: string) {
+    setShowCodeError(false);
+    try {
+      const next = readSnippet(text, codeLanguage, draft);
+      setDraft(next);
+      setCode({ text });
+    } catch (cause) {
+      setCode({
+        text,
+        error: cause instanceof Error ? cause.message : "Invalid request code.",
+      });
+    }
+  }
+  function codeReady() {
+    if (!code?.error) return true;
+    setShowCodeError(true);
+    document.getElementById("playground-code")?.focus();
+    return false;
+  }
   function reset(prompt = "") {
+    if (!codeReady()) return;
     const next = newDraft();
     next.selection = available ? model : "";
     next.messages[0].content = prompt;
+    if (prompt) nextFocusId.current = "playground-message-0";
     setDraft(next);
+    setCode(undefined);
     setText("");
     setReply(undefined);
     setError(undefined);
     setStatus("idle");
     setMode("Form");
     setHistoryOpen(false);
-    if (prompt)
-      requestAnimationFrame(() =>
-        form.current
-          ?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Prompt"]')
-          ?.focus(),
-      );
   }
   function addToMessages() {
-    if (status !== "complete" || !text) return;
+    const blocks = reply?.content;
+    if (status !== "complete" || !blocks?.length || !codeReady()) return;
     const id = draft.messages[draft.messages.length - 1].id + 1;
-    const messages = draft.messages.filter(
-      (message) => message.content.length > 0,
-    );
+    const messages = draft.messages.filter(hasMessageContent);
     const last = messages.at(-1);
     // Messages continues a final assistant prefill in the same turn.
-    if (last?.role === "assistant")
-      messages[messages.length - 1] = { ...last, content: last.content + text };
-    else messages.push({ id, role: "assistant", content: text });
+    if (last?.role === "assistant") {
+      const first = blocks[0];
+      // A plain text delta continues its prefill. Annotated blocks retain
+      // their boundaries, text offsets, signatures and tool inputs.
+      let content = blocks;
+      if (
+        typeof last.content === "string" &&
+        first.type === "text" &&
+        typeof first.text === "string" &&
+        Object.keys(first).length === 2
+      )
+        content = [
+          { ...first, text: last.content + first.text },
+          ...blocks.slice(1),
+        ];
+      else {
+        const prefix =
+          typeof last.content === "string"
+            ? [{ type: "text", text: last.content }]
+            : last.content;
+        content = [...prefix, ...blocks];
+      }
+      messages[messages.length - 1] = { ...last, content };
+    } else messages.push({ id, role: "assistant", content: blocks });
+    nextFocusId.current = `playground-message-${id + 1}`;
     setDraft({
       ...draft,
       messages: [...messages, { id: id + 1, role: "user", content: "" }],
     });
     setMode("Form");
+    setCode(undefined);
     setStatus("idle");
     setText("");
     setReply(undefined);
     setError(undefined);
-    requestAnimationFrame(() =>
-      document.getElementById(`playground-message-${id + 1}`)?.focus(),
-    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (active.current || !available) return;
-    const hasPrompt = request.messages.some((message) =>
-      message.content.trim(),
+    if (active.current || !codeReady() || !available) return;
+    const hasPrompt = request.messages.some(({ content }) =>
+      typeof content === "string" ? content.trim() : content.length,
     );
     if (
       !hasPrompt ||
@@ -317,8 +381,12 @@ function PlaygroundForm({
             <PlaygroundViewSwitch
               label="Request view"
               options={["Form", "Code"] as const}
-              value={mode}
-              onChange={setMode}
+              value={mode === "Code" ? "Code" : "Form"}
+              onChange={(next) => {
+                if (!codeReady()) return;
+                if (mode === "Full request") setCode(undefined);
+                setMode(next);
+              }}
             />
           </div>
           <div className="min-h-0 flex-1 space-y-3 px-5 py-4 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
@@ -334,6 +402,15 @@ function PlaygroundForm({
                 continue.
               </p>
             )}
+            {mode !== "Form" &&
+              model &&
+              !available &&
+              Boolean(chatModels?.length) && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  This model is unavailable. Select an available model in Form
+                  or edit the model alias in Code.
+                </p>
+              )}
             {mode === "Form" ? (
               <PlaygroundEditor
                 draft={draft}
@@ -341,10 +418,51 @@ function PlaygroundForm({
                 models={chatModels ?? []}
                 running={running}
                 loading={models.isPending}
-                onChange={setDraft}
+                onEditFullRequest={(triggerId) => {
+                  fullRequestOpener.current = triggerId;
+                  nextFocusId.current = "playground-full-back";
+                  setCode(undefined);
+                  setMode("Full request");
+                }}
+                onChange={(next) => {
+                  setDraft(next);
+                  setCode(undefined);
+                }}
               />
             ) : (
-              <PlaygroundCode request={request} />
+              <PlaygroundCode
+                language={codeLanguage}
+                snippet={code?.text ?? formatSnippet(request, codeLanguage)}
+                onBack={
+                  mode === "Full request"
+                    ? () => {
+                        if (!codeReady()) return;
+                        nextFocusId.current = fullRequestOpener.current;
+                        setCode(undefined);
+                        setMode("Form");
+                      }
+                    : undefined
+                }
+                error={showCodeError ? code?.error : undefined}
+                running={running}
+                streaming={request.stream === true}
+                onChange={editCode}
+                onStreamingChange={(stream) => {
+                  if (!codeReady()) return;
+                  setDraft({ ...draft, stream });
+                  setCode(undefined);
+                }}
+                onLanguageChange={(next) => {
+                  if (!codeReady()) return;
+                  setLanguage(next);
+                  setCode(undefined);
+                }}
+                onDiscard={() => {
+                  setCode(undefined);
+                  setShowCodeError(false);
+                  document.getElementById("playground-code")?.focus();
+                }}
+              />
             )}
             {error && status !== "failed" && (
               <p role="alert" className="text-sm text-destructive">
@@ -383,7 +501,7 @@ function PlaygroundForm({
                   aria-hidden
                   className="ml-1 rounded bg-background/20 px-1 font-mono text-xs"
                 >
-                  {modifier} ↵
+                  {modifier} Enter
                 </kbd>
               </Button>
             )}
@@ -462,7 +580,12 @@ function PlaygroundForm({
                   aria-current={reply === entry.reply ? true : undefined}
                   className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted aria-[current=true]:bg-muted"
                   onClick={() => {
+                    if (!codeReady()) {
+                      setHistoryOpen(false);
+                      return;
+                    }
                     setDraft(entry.draft);
+                    setCode(undefined);
                     setText(entry.text);
                     setReply(entry.reply);
                     setStatus("complete");
@@ -470,9 +593,7 @@ function PlaygroundForm({
                     setMode("Form");
                   }}
                 >
-                  <span className="truncate">
-                    {entry.draft.messages.find((m) => m.content)?.content}
-                  </span>
+                  <span className="truncate">{historyLabel(entry.draft)}</span>
                   <time
                     dateTime={entry.completedAt.toISOString()}
                     data-completed-at={entry.completedAt.getTime()}

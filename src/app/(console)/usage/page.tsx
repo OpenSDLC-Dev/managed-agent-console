@@ -80,19 +80,31 @@ const BY = [
 ] as const;
 type By = (typeof BY)[number][0];
 
+function revealUsageAnchor(element: HTMLDivElement | null) {
+  if (element && window.location.hash === `#${element.id}`) {
+    element.scrollIntoView({ block: "start" });
+  }
+}
+
 function Tile({
+  id,
   label,
   value,
   note,
   data,
 }: {
+  id?: string;
   label: string;
   value: string;
   note?: React.ReactNode;
   data: Record<string, number>;
 }) {
   return (
-    <div className="rounded-lg border bg-card px-3 py-2.5">
+    <div
+      id={id}
+      ref={id ? revealUsageAnchor : undefined}
+      className="scroll-mt-16 rounded-lg border bg-card px-3 py-2.5"
+    >
       <div className="text-[12.5px] text-muted-foreground">{label}</div>
       <div
         className="text-xl font-medium tabular-nums"
@@ -238,6 +250,7 @@ function UsageOverview() {
               data={{ errors: totals.errors }}
             />
             <Tile
+              id="input-tokens"
               label="Input tokens"
               value={tokenCount(totals.input_tokens)}
               note={

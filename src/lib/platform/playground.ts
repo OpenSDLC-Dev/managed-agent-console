@@ -6,6 +6,11 @@ const TENANCY = {
   "x-workspace-id": "default",
 };
 
+export const playgroundMessageHeaders = {
+  ...TENANCY,
+  "content-type": "application/json",
+} as const;
+
 export type PlaygroundModel = { id: string; display_name: string };
 
 export async function playgroundModels(signal: AbortSignal) {
@@ -33,17 +38,40 @@ export async function playgroundModels(signal: AbortSignal) {
   }
 }
 
+// Messages accepts text shorthand or ordered content blocks. The platform
+// owns each block's fields, including provider-specific extensions.
+export type PlaygroundBlock = { type: string } & Record<string, unknown>;
+export type PlaygroundContent = string | PlaygroundBlock[];
+
+export function isPlaygroundBlock(value: unknown): value is PlaygroundBlock {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof value.type === "string"
+  );
+}
+
+export function isPlaygroundContent(
+  value: unknown,
+): value is PlaygroundContent {
+  return (
+    typeof value === "string" ||
+    (Array.isArray(value) && value.every(isPlaygroundBlock))
+  );
+}
+
 export type PlaygroundMessage = {
   role: "user" | "assistant";
-  content: string;
-};
+  content: PlaygroundContent;
+} & Record<string, unknown>;
 
 export type PlaygroundRequest = {
   model: string;
   max_tokens: number;
-  system?: string;
+  system?: PlaygroundContent | null;
   messages: PlaygroundMessage[];
-  stream: true;
+  stream?: boolean | null;
 };
 
 export type PlaygroundReply = {
@@ -52,11 +80,11 @@ export type PlaygroundReply = {
   inputTokens?: number;
   outputTokens?: number;
   durationMs: number;
+  content?: PlaygroundBlock[];
 };
 
 type Usage = { input_tokens?: number; output_tokens?: number };
-type Block = {
-  type: string;
+type Block = PlaygroundBlock & {
   text?: string;
   thinking?: string;
   signature?: string;
@@ -74,7 +102,7 @@ type Frame = {
   error?: { message?: string };
 };
 
-// The private Messages route uses the gateway's Anthropic SSE contract.
+// servePlayground forwards both Messages response modes to the same gateway.
 export async function runPlayground(
   request: PlaygroundRequest,
   principalId: string,
@@ -85,8 +113,7 @@ export async function runPlayground(
   const response = await fetch(resourceURL("v1/messages?beta=true"), {
     method: "POST",
     headers: {
-      ...TENANCY,
-      "content-type": "application/json",
+      ...playgroundMessageHeaders,
       ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
     body: JSON.stringify(request),
@@ -94,6 +121,33 @@ export async function runPlayground(
     signal,
   });
   await assertOk(response);
+  if (!request.stream) {
+    if (!response.headers.get("content-type")?.startsWith("application/json"))
+      throw new Error("The gateway did not return a JSON response.");
+    const body: MessageBody = await response.json();
+    if (
+      !body ||
+      !Array.isArray(body.content) ||
+      !body.content.every(isPlaygroundBlock)
+    )
+      throw new Error("The gateway did not return a Messages response body.");
+    for (const block of body.content) {
+      if (
+        block?.type === "text" &&
+        typeof block.text === "string" &&
+        block.text
+      )
+        append(block.text);
+    }
+    return {
+      raw: JSON.stringify(body, null, 2),
+      rawLabel: "Response body",
+      content: body.content,
+      inputTokens: body.usage?.input_tokens,
+      outputTokens: body.usage?.output_tokens,
+      durationMs: performance.now() - started,
+    };
+  }
   if (
     !response.body ||
     !response.headers.get("content-type")?.startsWith("text/event-stream")
@@ -106,20 +160,44 @@ export async function runPlayground(
   let body: MessageBody | undefined;
   let canAssembleBody = true;
   let usage: Usage | undefined;
+  const openBlocks = new Set<number>();
+  const toolInputs = new Map<number, string[]>();
   for await (const { event, data } of parseSseStream(response.body)) {
     if (event === "ping") continue;
     events.push(`event: ${event}\ndata: ${data}`);
     if (event === "message_stop") {
-      const complete = canAssembleBody && body;
+      const complete =
+        canAssembleBody &&
+        openBlocks.size === 0 &&
+        body?.content.every(isPlaygroundBlock) &&
+        body;
       return {
         raw: complete ? JSON.stringify(complete, null, 2) : events.join("\n\n"),
         rawLabel: complete ? "Response body" : "Stream events",
+        content: complete ? complete.content : undefined,
         inputTokens: usage?.input_tokens,
         outputTokens: usage?.output_tokens,
         durationMs: performance.now() - started,
       } satisfies PlaygroundReply;
     }
-    if (event === "content_block_stop") continue;
+    if (event === "content_block_stop") {
+      const { index }: Frame = JSON.parse(data);
+      if (index === undefined || !openBlocks.delete(index)) {
+        canAssembleBody = false;
+        continue;
+      }
+      const parts = toolInputs.get(index);
+      if (parts && body) {
+        toolInputs.delete(index);
+        try {
+          const json = parts.join("");
+          if (json) body.content[index].input = JSON.parse(json);
+        } catch {
+          canAssembleBody = false;
+        }
+      }
+      continue;
+    }
     if (
       ![
         "error",
@@ -149,12 +227,15 @@ export async function runPlayground(
         if (body) body.usage = usage;
       }
     } else if (event === "content_block_start" && frame.content_block) {
-      if (body && frame.index === body.content.length)
+      if (body && frame.index === body.content.length) {
+        openBlocks.add(frame.index);
         body.content.push(frame.content_block);
-      else canAssembleBody = false;
+      } else canAssembleBody = false;
       if (frame.content_block.type === "text" && frame.content_block.text)
         append(frame.content_block.text);
     } else if (event === "content_block_delta") {
+      if (frame.index === undefined || !openBlocks.has(frame.index))
+        canAssembleBody = false;
       const block =
         frame.index === undefined ? undefined : body?.content[frame.index];
       if (
@@ -165,6 +246,25 @@ export async function runPlayground(
           block.text = (block.text ?? "") + frame.delta.text;
         else canAssembleBody = false;
         if (frame.delta.text) append(frame.delta.text);
+      } else if (
+        block?.type === "text" &&
+        frame.delta?.type === "citations_delta" &&
+        frame.delta.citation
+      ) {
+        block.citations ??= [];
+        if (Array.isArray(block.citations))
+          block.citations.push(frame.delta.citation);
+        else canAssembleBody = false;
+      } else if (
+        block &&
+        frame.index !== undefined &&
+        "input" in block &&
+        frame.delta?.type === "input_json_delta" &&
+        typeof frame.delta.partial_json === "string"
+      ) {
+        const parts = toolInputs.get(frame.index) ?? [];
+        parts.push(frame.delta.partial_json);
+        toolInputs.set(frame.index, parts);
       } else if (
         block?.type === "thinking" &&
         frame.delta?.type === "thinking_delta" &&

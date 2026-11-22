@@ -178,22 +178,28 @@ afterEach(() => {
 });
 
 describe("Nav", () => {
-  it("places approved Playground in Build > Messages and restores focus on return", async () => {
+  it("opens Messages on Overview, includes approved Playground and restores focus on return", async () => {
     renderNav([], {}, 404, true);
     const group = groupRow("Messages");
-    expect(group.getAttribute("href")).toBe("/playground");
+    await waitFor(() => expect(group.getAttribute("href")).toBe("/messages"));
     expect(group.previousElementSibling?.textContent).toBe("Build");
     expect(group.nextElementSibling?.textContent).toBe("Agents");
     expect(
       within(navigation()).queryByRole("link", { name: "Playground" }),
     ).toBeNull();
     await userEvent.click(group);
-    const link = within(navigation()).getByRole("link", { name: "Playground" });
+    const link = within(navigation()).getByRole("link", { name: "Overview" });
+    expect(
+      within(navigation()).getByRole("link", { name: "Playground" }),
+    ).toBeDefined();
+    expect(
+      within(navigation()).getByRole("link", { name: "Logs" }),
+    ).toBeDefined();
     expect(link.getAttribute("aria-current")).toBe("page");
     await userEvent.click(within(back()).getByText("Messages"));
     expect(document.activeElement).toBe(groupRow("Messages"));
-    expect(groupRow("Messages").textContent).toBe("Messages Playground");
-    expect(navState.pathname).toBe("/playground");
+    expect(groupRow("Messages").textContent).toBe("Messages Overview");
+    expect(navState.pathname).toBe("/messages");
   });
 
   it("starts with the ordered top-level categories and no submenu links", async () => {

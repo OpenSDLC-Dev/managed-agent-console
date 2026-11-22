@@ -145,6 +145,34 @@ it("posts Messages with fresh CSRF and renders only text blocks from the stream"
 });
 
 it.each([
+  { type: "tool_use", id: "tool_empty", name: "lookup", input: {} },
+  { type: "text", text: "partial" },
+])(
+  "keeps an unclosed $type block in Raw without adding it to another request",
+  async (block) => {
+    fixture(
+      [
+        { type: "message_start", message: { type: "message", content: [] } },
+        { type: "content_block_start", index: 0, content_block: block },
+        { type: "message_stop" },
+      ]
+        .map(
+          (f) => "event: " + f.type + "\ndata: " + JSON.stringify(f) + "\n\n",
+        )
+        .join(""),
+    );
+    const result = await runPlayground(
+      prompt,
+      "user_demo",
+      new AbortController().signal,
+      vi.fn(),
+    );
+    expect(result.rawLabel).toBe("Stream events");
+    expect(result.content).toBeUndefined();
+  },
+);
+
+it.each([
   ["event: ping\ndata: {}\n\n", "ended before the response finished"],
   [
     'event: error\ndata: {"error":{"message":"Fixture error"}}\n\n',
@@ -156,6 +184,129 @@ it.each([
     fixture(frames);
     await expect(
       runPlayground(prompt, "user_demo", new AbortController().signal, vi.fn()),
+    ).rejects.toThrow(message);
+  },
+);
+
+it("posts stream false and reads the complete Messages JSON, including usage and non-text blocks in Raw", async () => {
+  const message = {
+    id: "msg_whole",
+    type: "message",
+    role: "assistant",
+    model: "demo",
+    content: [
+      { type: "text", text: "Hello" },
+      { type: "thinking", thinking: "Reasoning" },
+      {
+        type: "tool_use",
+        id: "tool_one",
+        name: "lookup",
+        input: { days: [1, 2] },
+      },
+      { type: "text", text: " again" },
+    ],
+    stop_reason: "end_turn",
+    usage: { input_tokens: 12, output_tokens: 3 },
+  };
+  const fetcher = fixture(
+    JSON.stringify(message),
+    "application/json; charset=utf-8",
+  );
+  const append = vi.fn();
+  const request = { ...prompt, stream: false };
+  const signal = new AbortController().signal;
+  const result = await runPlayground(request, "user_demo", signal, append);
+  expect(fetcher.mock.calls[1]).toEqual([
+    resource + "/messages?beta=true",
+    expect.objectContaining({
+      method: "POST",
+      signal,
+      body: JSON.stringify(request),
+    }),
+  ]);
+  expect(
+    new Headers(fetcher.mock.calls[1][1]?.headers).get("x-csrf-token"),
+  ).toBe("test-csrf");
+  expect(append.mock.calls).toEqual([["Hello"], [" again"]]);
+  expect(result).toMatchObject({
+    rawLabel: "Response body",
+    inputTokens: 12,
+    outputTokens: 3,
+  });
+  expect(JSON.parse(result.raw)).toEqual(message);
+  expect(result.content).toEqual(message.content);
+});
+
+it("assembles streamed tool arguments without flattening the surrounding content and keeps invalid fragments only in Raw", async () => {
+  const signature = {
+    type: "thinking",
+    thinking: "Consider",
+    signature: "bound",
+  };
+  const block = { type: "tool_use", id: "tool_a", name: "lookup", input: {} };
+  const frames = (lastPart: string) =>
+    [
+      {
+        type: "message_start",
+        message: { type: "message", content: [], usage: { input_tokens: 3 } },
+      },
+      { type: "content_block_start", index: 0, content_block: signature },
+      { type: "content_block_stop", index: 0 },
+      { type: "content_block_start", index: 1, content_block: block },
+      {
+        type: "content_block_delta",
+        index: 1,
+        delta: { type: "input_json_delta", partial_json: '{"cities":' },
+      },
+      {
+        type: "content_block_delta",
+        index: 1,
+        delta: { type: "input_json_delta", partial_json: lastPart },
+      },
+      { type: "content_block_stop", index: 1 },
+      { type: "message_stop" },
+    ]
+      .map((f) => "event: " + f.type + "\ndata: " + JSON.stringify(f) + "\n\n")
+      .join("");
+  fixture(frames('["Lyon"]}'));
+  const append = vi.fn();
+  const full = await runPlayground(
+    prompt,
+    "user_demo",
+    new AbortController().signal,
+    append,
+  );
+  const blocks = [signature, { ...block, input: { cities: ["Lyon"] } }];
+  expect(full.content).toEqual(blocks);
+  expect(JSON.parse(full.raw).content).toEqual(blocks);
+  expect(append).not.toHaveBeenCalled();
+  fixture(frames("["));
+  const partial = await runPlayground(
+    prompt,
+    "user_demo",
+    new AbortController().signal,
+    append,
+  );
+  expect(partial.rawLabel).toBe("Stream events");
+  expect(partial.content).toBeUndefined();
+  expect(partial.raw).toContain("input_json_delta");
+});
+
+it.each([
+  [true, "application/json", "{}", "streaming response"],
+  [false, "text/event-stream", "event: ping\ndata: {}\n\n", "JSON response"],
+  [false, "application/json", "{}", "Messages response body"],
+] as const)(
+  "rejects an unexpected response for stream %s (%s)",
+  async (stream, contentType, body, message) => {
+    fixture(body, contentType);
+    await expect(
+      runPlayground(
+        { ...prompt, stream },
+        "user_demo",
+        new AbortController().signal,
+        vi.fn(),
+      ),
     ).rejects.toThrow(message);
   },
 );
