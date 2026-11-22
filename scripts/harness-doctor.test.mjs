@@ -99,10 +99,7 @@ function fixture(t) {
   return { tmp, cwd };
 }
 
-test("a clean clone discovers all three host configurations from subdirectories and linked worktrees", (t) => {
-  const { tmp, cwd } = fixture(t);
-  pass(run(cwd, "sync"));
-  pass(command(cwd, "git", ["add", "."]));
+function commitFixture(cwd) {
   pass(
     command(cwd, "git", [
       "-c",
@@ -116,6 +113,13 @@ test("a clean clone discovers all three host configurations from subdirectories 
       "fixture",
     ]),
   );
+}
+
+test("a clean clone discovers all three host configurations from subdirectories and linked worktrees", (t) => {
+  const { tmp, cwd } = fixture(t);
+  pass(run(cwd, "sync"));
+  pass(command(cwd, "git", ["add", "."]));
+  commitFixture(cwd);
   const clone = join(tmp, "clone"),
     linked = join(tmp, "linked");
   pass(command(tmp, "git", ["clone", "-q", cwd, clone]));
@@ -330,6 +334,43 @@ test("missing tracked Claude settings recover independent settings from this wor
     staged,
   );
   pass(run(cwd, "check"));
+});
+
+test("a staged deletion recovers Claude settings from HEAD and preserves both the index and unknown hooks", (t) => {
+  const { cwd } = fixture(t);
+  const key = registries.claude;
+  pass(run(cwd, "sync"));
+  const settings = {
+    ...JSON.parse(get(cwd, key)),
+    enabledPlugins: { "typescript-lsp@claude-plugins-official": true },
+    permissions: { deny: ["private"] },
+  };
+  for (const custom of [false, true]) {
+    if (custom)
+      settings.hooks.Stop = [
+        { hooks: [{ type: "command", command: "private" }] },
+      ];
+    putJson(cwd, key, settings);
+    pass(command(cwd, "git", ["add", "--", key]));
+    commitFixture(cwd);
+    pass(command(cwd, "git", ["rm", "--", key]));
+    const staged = () =>
+      pass(
+        command(cwd, "git", ["diff", "--cached", "--name-status", "--", key]),
+      );
+    const before = staged();
+    assert.match(before, /^D\s+\.claude\/settings.json/);
+    if (custom) {
+      fail(run(cwd, "sync"), /unregistered Stop/);
+      assert.ok(!existsSync(join(cwd, key)));
+    } else {
+      fail(run(cwd, "check"), /\.claude\/settings.json is missing/);
+      pass(run(cwd, "sync"));
+      assert.deepEqual(JSON.parse(get(cwd, key)), settings);
+      pass(run(cwd, "check"));
+    }
+    assert.equal(staged(), before);
+  }
 });
 
 test("disabling Claude hooks is a read-only diagnostic in check, sync and startup", (t) => {

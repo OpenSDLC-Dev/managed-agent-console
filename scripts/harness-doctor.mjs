@@ -437,14 +437,32 @@ function checkHookEvents(events, policy, key) {
     );
   }
 }
-function stagedClaudeSettings(root, key) {
-  const entry = git(root, ["ls-files", "--stage", "--", key]).trimEnd();
-  if (!entry) return undefined;
-  requireThat(
-    /^100(?:644|755) [a-f0-9]+ 0\t[^\n]+$/.test(entry),
-    key + " has no regular, resolved entry in this worktree's Git index.",
-  );
-  return git(root, ["show", ":" + key]);
+function trackedClaudeSettings(root, key) {
+  const staged = git(root, ["ls-files", "--stage", "--", key]).trimEnd();
+  if (staged) {
+    const entry = /^100(?:644|755) ([a-f0-9]+) 0\t[^\n]+$/.exec(staged);
+    requireThat(
+      entry,
+      key + " has no regular, resolved entry in this worktree's Git index.",
+    );
+    return git(root, ["cat-file", "blob", entry[1]]);
+  }
+  // A staged deletion removes the index entry. Recover the committed settings
+  // of this worktree without staging the replacement. An unborn HEAD has no deletions.
+  const deleted = git(root, [
+    "diff",
+    "--cached",
+    "--no-renames",
+    "--diff-filter=D",
+    "--name-only",
+    "--",
+    key,
+  ]);
+  if (!deleted.trim()) return undefined;
+  const tree = git(root, ["ls-tree", "HEAD", "--", key]).trimEnd();
+  const entry = /^100(?:644|755) blob ([a-f0-9]+)\t[^\n]+$/.exec(tree);
+  requireThat(entry, key + " has no regular entry in this worktree's HEAD.");
+  return git(root, ["cat-file", "blob", entry[1]]);
 }
 function registry(root, host) {
   const key = registries[host],
@@ -498,7 +516,7 @@ function registry(root, host) {
   const previous = stat(path) ? read(root, key) : undefined;
   const baseline =
     previous ??
-    (host === "claude" ? stagedClaudeSettings(root, key) : undefined);
+    (host === "claude" ? trackedClaudeSettings(root, key) : undefined);
   if (baseline === undefined) return { previous, next: native };
   const actual = json(baseline, key);
   if (host === "claude") {
