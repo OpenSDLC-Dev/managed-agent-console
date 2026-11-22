@@ -1320,21 +1320,29 @@ export const SURFACES: Surface[] = [
       await page.getByText("No logs in the last 30 days.").waitFor();
     },
   },
-  ...["desktop", "narrow"].map((size): Surface => ({
-    id:
-      size === "desktop" ? "messages-log-detail" : "messages-log-detail-narrow",
+  ...["", "-narrow", "-latency"].map((view): Surface => ({
+    id: "messages-log-detail" + view,
     route: "/messages/logs?request=" + DIRECT_REQUEST,
     viewportOnly: true,
     fixture: "direct API key request with reported tokens and timing",
-    description: "Selected log and request metadata on " + size + " screens.",
+    description:
+      view === "-latency"
+        ? "The request's processing time and reported time to first token."
+        : "Selected log and request metadata on " +
+          (view ? "narrow" : "desktop") +
+          " screens.",
     setup: async (page) => {
-      if (size === "narrow")
+      if (view === "-narrow")
         await page.setViewportSize({ width: 390, height: 844 });
       await openMessages(page, "/messages/logs?request=" + DIRECT_REQUEST);
       const details = page.getByRole("dialog", { name: "Request details" });
       await details
         .getByRole("button", { name: "Copy " + DIRECT_REQUEST })
         .waitFor();
+      if (view === "-latency") {
+        await details.getByRole("button", { name: "About latency" }).click();
+        await details.getByRole("dialog", { name: "Latency" }).waitFor();
+      }
     },
   })),
   {

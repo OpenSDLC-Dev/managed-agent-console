@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -59,9 +60,17 @@ function openLogs(rows: GatewayUsageRow[], request?: string) {
     "",
     "/messages/logs" + (request ? "?" + new URLSearchParams({ request }) : ""),
   );
-  const read = vi.fn(async () =>
-    Response.json({ data: rows, has_more: false }),
-  );
+  const read = vi.fn(async (path: string) => {
+    const query = new URL(path, "http://console.test").searchParams;
+    const remaining = rows.filter(
+      (row) => row.id < Number(query.get("before") ?? Infinity),
+    );
+    const limit = Number(query.get("limit") ?? 100);
+    return Response.json({
+      data: remaining.slice(0, limit),
+      has_more: remaining.length > limit,
+    });
+  });
   vi.stubGlobal("fetch", read);
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -241,6 +250,51 @@ it("restores deep links beyond the first visible page and reads all tokens from 
   ).toBeVisible();
 });
 
+it("switches visible rows in place and dismisses on an outside click without stealing focus", async () => {
+  const { user } = openLogs([row(2), row(1)]);
+  render(<button>Outside control</button>);
+  const first = await screen.findByRole("button", { name: "req_2" });
+  await user.click(first);
+  const panel = await screen.findByRole("dialog", { name: "Request details" });
+  const second = screen.getByRole("button", { name: "req_1" }).closest("tr")!;
+  await user.click(within(second).getByText("OK"));
+  expect(location.search).toBe("?request=req_1");
+  expect(screen.getByRole("dialog", { name: "Request details" })).toBe(panel);
+  expect(
+    within(panel).getByRole("button", { name: "Copy req_1" }),
+  ).toBeVisible();
+  await user.click(screen.getByRole("heading", { name: "Logs" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(location.search).toBe("");
+  await user.click(first);
+  const outside = screen.getByRole("button", { name: "Outside control" });
+  await user.click(outside);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(outside).toHaveFocus();
+});
+
+it("keeps an old bookmark and both cross-window drawer moves to at most fifty table rows", async () => {
+  const { user } = openLogs(
+    Array.from({ length: 2000 }, (_, i) => row(2000 - i)),
+    "req_51",
+  );
+  const panel = await screen.findByRole("dialog", { name: "Request details" });
+  const table = within(screen.getByRole("table", { name: "Logs" }));
+  expect(table.getAllByRole("row")).toHaveLength(51);
+  expect(table.queryByRole("button", { name: "req_2000" })).toBeNull();
+  expect(table.getByRole("button", { name: "req_51" })).toBeVisible();
+  await user.click(within(panel).getByRole("button", { name: "Next request" }));
+  await waitFor(() => expect(location.search).toBe("?request=req_50"));
+  expect(table.getByRole("button", { name: "req_1" })).toBeVisible();
+  expect(table.getAllByRole("row")).toHaveLength(51);
+  await user.click(
+    within(panel).getByRole("button", { name: "Previous request" }),
+  );
+  await waitFor(() => expect(location.search).toBe("?request=req_51"));
+  expect(table.getByRole("button", { name: "req_100" })).toBeVisible();
+  expect(table.getAllByRole("row")).toHaveLength(51);
+});
+
 it("keeps the ledger available for a deep link to an expired request", async () => {
   openLogs(
     [
@@ -261,8 +315,8 @@ it("keeps the ledger available for a deep link to an expired request", async () 
   expect(screen.getByRole("button", { name: "req_2" })).toBeVisible();
 });
 
-it("clears the rendered row and inspector when a refresh revokes access", async () => {
-  const { read, client, user } = openLogs([row(2)], "req_2");
+it("clears the rendered row and inspector when a background refresh revokes access", async () => {
+  const { read, client } = openLogs([row(2)], "req_2");
   await screen.findByRole("dialog");
   read.mockResolvedValueOnce(
     Response.json(
@@ -273,7 +327,11 @@ it("clears the rendered row and inspector when a refresh revokes access", async 
       { status: 403 },
     ),
   );
-  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  await act(async () => {
+    await client.invalidateQueries({
+      queryKey: ["gateway", "usage", "message-logs"],
+    });
+  });
   expect(await screen.findByText("Access revoked")).toBeVisible();
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("button", { name: "req_2" })).toBeNull();
@@ -285,8 +343,9 @@ it("clears the rendered row and inspector when a refresh revokes access", async 
       "message-logs",
       TEST_SESSION.id,
       "admin",
+      "req_2",
     ]),
-  ).toEqual([]);
+  ).toEqual({ pages: [], pageParams: [] });
 });
 
 it("never carries rows across principals, roles, or an unconfirmed session", async () => {

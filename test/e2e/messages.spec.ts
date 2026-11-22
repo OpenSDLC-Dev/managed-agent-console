@@ -167,6 +167,30 @@ test("the cache hit rate uses seven days while tokens and requests use 30", asyn
   await expect(cache).toContainText("40 cached input tokens");
 });
 
+test("a cold seven-day caching link scrolls to Input tokens when the daily report arrives late", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 320 });
+  await signIn(page);
+  let delayed = false;
+  await page.route(
+    (url) => url.pathname === "/admin/v1/usage/daily",
+    async (route) => {
+      if (new URL(route.request().frame().url()).pathname !== "/usage")
+        return route.fallback();
+      delayed = true;
+      // The anchor is absent when the browser first resolves the hash.
+      await new Promise((resolve) => setTimeout(resolve, 650));
+      return route.continue();
+    },
+  );
+  await page.goto("/usage?range=7#input-tokens");
+  const main = page.getByRole("main");
+  await expect(main.getByRole("combobox", { name: "Period" })).toHaveValue("7");
+  await expect(main.locator("#input-tokens")).toBeInViewport({ ratio: 0.8 });
+  expect(delayed).toBe(true);
+});
+
 test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and refresh", async ({
   page,
   context,
@@ -198,8 +222,8 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
   const failure = logRow(page, PLAYGROUND_REQUEST);
   await expect(failure).toContainText("Error");
   await expect(failure.getByRole("cell").nth(4)).toHaveText("—");
-  // Only the direct API-key request and the Playground call survive. The
-  // first cursor page contains a session, an embedding and Chat Completions.
+  // The API-key request keeps its client-supplied affinity ID. The first
+  // cursor page contains a delegated Agent call, an embedding and Chat Completions.
   await expect(table.getByRole("row")).toHaveCount(3);
   await direct.getByRole("button", { name: "Copy " + DIRECT_REQUEST }).click();
   await expect
@@ -225,7 +249,14 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
   ).toContainText("apikey_ci01");
   const latency = details.getByRole("button", { name: "About latency" });
   await latency.click();
-  await expect(details.getByText(/Time to first token/)).toBeVisible();
+  const latencyInfo = details.getByRole("dialog", {
+    name: "Latency",
+    exact: true,
+  });
+  await expect(latencyInfo).toContainText("Time to first token");
+  await page.keyboard.press("Escape");
+  await expect(latencyInfo).toHaveCount(0);
+  await expect(directId).toBeVisible();
   await expect(
     details.getByRole("button", { name: "Previous request" }),
   ).toBeDisabled();
@@ -250,7 +281,11 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
   );
   await page.reload();
   await expect(playgroundId).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page
+    .getByRole("main")
+    .getByRole("heading", { name: "Logs", exact: true })
+    .click({ position: { x: 8, y: 8 } });
+  await expect(page).toHaveURL(/\/messages\/logs$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(/As of /)).toBeVisible();
 
@@ -335,6 +370,13 @@ test("load older Messages and open a request beyond the first displayed page", a
     .getByRole("button", { name: "Copy req_page_1", exact: true });
   await expect(selected).toBeVisible();
   await page.reload();
+  await expect(selected).toBeVisible();
+  const detail = page.getByRole("dialog", { name: "Request details" });
+  await detail.getByRole("button", { name: "Previous request" }).click();
+  await expect(
+    detail.getByRole("button", { name: "Copy req_page_2", exact: true }),
+  ).toBeVisible();
+  await detail.getByRole("button", { name: "Next request" }).click();
   await expect(selected).toBeVisible();
 });
 
@@ -539,10 +581,7 @@ test("edit, preview, run once and restore the Playground response from History",
   expect(sends).toEqual([posted.url()]);
 });
 
-test("edit the full request in Form, return to the fields and run a JSON response", async ({
-  page,
-  baseURL,
-}) => {
+async function openNonStreamingPlayground(page: Page, baseURL?: string) {
   await grantDashboardModelDiscovery(page);
   const url = new URL(
     "/api/organizations/default/proxy/v1/messages?beta=true",
@@ -564,6 +603,14 @@ test("edit the full request in Form, return to the fields and run a JSON respons
     return route.fulfill({ json: answer });
   });
   await signIn(page, "/playground");
+  return { calls, answer };
+}
+
+test("edit the full request in Form, return to the fields and run a JSON response", async ({
+  page,
+  baseURL,
+}) => {
+  const { calls, answer } = await openNonStreamingPlayground(page, baseURL);
   const main = page.getByRole("main");
   await expect(
     main.getByRole("combobox", { name: "Model", exact: true }),
@@ -601,5 +648,107 @@ test("edit the full request in Form, return to the fields and run a JSON respons
   const raw = main.getByLabel("Response body");
   await expect(raw).toBeVisible();
   expect(JSON.parse(await raw.innerText())).toEqual(answer);
+  expect(calls).toEqual([request]);
+});
+
+test("cache-controlled system blocks and nested tool results survive Form, Code and Run", async ({
+  page,
+  baseURL,
+}) => {
+  const { calls } = await openNonStreamingPlayground(page, baseURL);
+  // The Platform converter fixtures exercise both cached system blocks and
+  // tool_result blocks containing an array of text blocks.
+  const request = {
+    model: "minimax-m3",
+    max_tokens: 32,
+    stream: false,
+    system: [
+      {
+        type: "text",
+        text: "Reply in the same language.\nPreserve all quoted names.",
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    tools: [
+      {
+        name: "get_time",
+        description: "Read the fixture clock.",
+        input_schema: {
+          type: "object",
+          properties: { zone: { type: "string" } },
+          required: ["zone"],
+        },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: [{ type: "text", text: "What time is it in Shanghai?" }],
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "toolu_clock",
+            name: "get_time",
+            input: { zone: "Asia/Shanghai" },
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_clock",
+            content: [{ type: "text", text: "15:00\n上海时间" }],
+          },
+          { type: "text", text: "Please include the zone." },
+        ],
+      },
+    ],
+  };
+  const main = page.getByRole("main");
+  await expect(
+    main.getByRole("combobox", { name: "Model", exact: true }),
+  ).toBeEnabled();
+  await main.getByRole("button", { name: "More request options" }).click();
+  await page.getByRole("menuitem", { name: "Edit full request" }).click();
+  await main
+    .getByRole("textbox", { name: "Request body" })
+    .fill(JSON.stringify(request));
+  await main.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(main.getByRole("alert")).toHaveCount(0);
+  await main.getByText("Code", { exact: true }).click();
+  await main.getByLabel("Code language").selectOption("JSON");
+  const json = main.getByRole("textbox", { name: "JSON request code" });
+  expect(JSON.parse(await json.inputValue())).toEqual(request);
+  await main.getByText("Form", { exact: true }).click();
+  await expect(
+    main.getByRole("radio", { name: "Form", exact: true }),
+  ).toBeChecked();
+  const system = main.getByRole("textbox", { name: "System", exact: true });
+  await expect(system).toHaveValue(request.system[0].text);
+  // Editing the text and restoring it must preserve its array and cache metadata.
+  await system.fill("A temporary edit");
+  await system.fill(request.system[0].text);
+  await expect(
+    main.getByRole("textbox", { name: "user message 3" }),
+  ).toHaveJSProperty("readOnly", true);
+  await main
+    .getByRole("button", {
+      name: "Edit content blocks for user message 3",
+      exact: true,
+    })
+    .click();
+  const fullBody = main.getByRole("textbox", { name: "Request body" });
+  expect(JSON.parse(await fullBody.inputValue())).toEqual(request);
+  await main.getByRole("button", { name: "Back", exact: true }).click();
+  expect(calls).toEqual([]);
+  await main.getByRole("button", { name: "Run prompt" }).click();
+  await expect(
+    main.getByText("Non-streaming reply", { exact: true }),
+  ).toBeVisible();
   expect(calls).toEqual([request]);
 });

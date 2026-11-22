@@ -32,6 +32,9 @@ export function ResourceInspector({
   next,
   onSelect,
   onClose,
+  onPreviousPage,
+  onNextPage,
+  dismissOnOutsidePress,
   dialogLabel,
   returnFocus,
   fallbackFocus,
@@ -54,6 +57,9 @@ export function ResourceInspector({
   next?: string;
   onSelect?: (id: string) => void;
   onClose: () => void;
+  onPreviousPage?: () => void;
+  onNextPage?: () => void;
+  dismissOnOutsidePress?: (target: Element) => boolean;
   dialogLabel?: string;
   returnFocus?: RefObject<HTMLElement | null>;
   fallbackFocus?: RefObject<HTMLElement | null>;
@@ -76,6 +82,7 @@ export function ResourceInspector({
   const NextIcon = request ? ChevronDown : ChevronRight;
   const actionSize = request ? "icon-xs" : "icon";
   const panel = useRef<HTMLElement>(null);
+  const outsideClose = useRef(false);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(560);
   const maxWidth = useSyncExternalStore(
@@ -94,6 +101,7 @@ export function ResourceInspector({
     const finalFocus = returnFocus;
     panel.current?.focus();
     return () => {
+      if (outsideClose.current) return;
       // These are the requested focus target and close reason at dismissal.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const target = restoreToFallback?.current
@@ -109,6 +117,24 @@ export function ResourceInspector({
       else if (fallback?.isConnected) fallback.focus();
     };
   }, [fallbackFocus, restoreToFallback, returnFocus]);
+
+  useEffect(() => {
+    if (!dismissOnOutsidePress) return;
+    function outside(event: MouseEvent) {
+      const target = event.target;
+      if (
+        event.button === 0 &&
+        target instanceof Element &&
+        !panel.current?.contains(target) &&
+        dismissOnOutsidePress?.(target)
+      ) {
+        outsideClose.current = true;
+        onClose();
+      }
+    }
+    document.addEventListener("click", outside, true);
+    return () => document.removeEventListener("click", outside, true);
+  }, [dismissOnOutsidePress, onClose]);
 
   return (
     <aside
@@ -204,8 +230,10 @@ export function ResourceInspector({
                 variant="ghost"
                 size={actionSize}
                 aria-label={"Previous " + label.toLowerCase()}
-                disabled={!previous}
-                onClick={() => previous && onSelect(previous)}
+                disabled={!previous && !onPreviousPage}
+                onClick={() =>
+                  previous ? onSelect(previous) : onPreviousPage?.()
+                }
               >
                 <PreviousIcon />
               </Button>
@@ -213,8 +241,8 @@ export function ResourceInspector({
                 variant="ghost"
                 size={actionSize}
                 aria-label={"Next " + label.toLowerCase()}
-                disabled={!next}
-                onClick={() => next && onSelect(next)}
+                disabled={!next && !onNextPage}
+                onClick={() => (next ? onSelect(next) : onNextPage?.())}
               >
                 <NextIcon />
               </Button>

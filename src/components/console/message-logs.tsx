@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import { Field } from "./detail";
 import { ResourceInspector } from "./resource-inspector";
 import { duration, exactCount } from "./usage-bits";
 
-const pageSize = 50;
 const requestTime = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
@@ -186,25 +185,46 @@ function RequestDetail({ row }: { row: GatewayUsageRow }) {
 }
 
 export function MessageLogs() {
-  const query = useMessageLogs();
   const { params, update } = useListFilters();
   const request = params.get("request");
-  const [limit, setLimit] = useState(pageSize);
+  const [origin, setOrigin] = useState({
+    seen: request,
+    bookmark: request,
+    navigating: null as string | null,
+  });
+  const query = useMessageLogs(origin.bookmark);
   const logs = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement>(null);
   const refreshButton = useRef<HTMLButtonElement>(null);
-  const rows = query.error ? [] : (query.data ?? []);
+  const rows = useMemo(
+    () =>
+      query.error ? [] : (query.data?.pages.flatMap((page) => page.rows) ?? []),
+    [query.data, query.error],
+  );
   const index = request
     ? rows.findIndex((row) => row.request_id === request)
     : -1;
   const selected = rows[index];
-  // A deep link or Next can select a request beyond the currently displayed page.
-  const visibleCount = Math.max(
-    limit,
-    Math.ceil((index + 1) / pageSize) * pageSize,
-  );
-  const select = (id: string, mode: "push" | "replace" = "push") =>
+  // Internal row switches keep the current query. An unrelated browser bookmark
+  // searches from the head; dismissing returns to the ordinary Load more list.
+  if (origin.seen !== request) {
+    const known = request && (request === origin.navigating || index >= 0);
+    setOrigin({
+      seen: request,
+      bookmark: known ? origin.bookmark : request,
+      navigating: null,
+    });
+  }
+  function select(id: string, mode: "push" | "replace" = "push") {
+    setOrigin((current) => ({ ...current, navigating: id }));
     update({ request: id }, mode);
+  }
+  async function move(direction: "newer" | "older") {
+    const href = window.location.href;
+    const id = await query.move(direction);
+    if (id && window.location.href === href && logs.current)
+      select(id, "replace");
+  }
   const close = () => update({ request: null });
   // A different row can open the same inspector. At either end the focused
   // navigation button also becomes disabled. Keep the keyboard in the panel.
@@ -307,8 +327,8 @@ export function MessageLogs() {
       <header className="pb-3">
         <h1 className="font-serif text-2xl font-medium leading-7">Logs</h1>
         <p className="mt-2 text-sm leading-5 text-muted-foreground">
-          Messages API requests and Playground runs from the last 30 days.
-          Managed Agent sessions are excluded.
+          Messages API requests and Playground runs retained by the gateway from
+          the last 30 days. Managed Agent sessions are excluded.
         </p>
       </header>
       {query.error ? (
@@ -317,7 +337,7 @@ export function MessageLogs() {
         <DataTable
           label="Logs"
           columns={columns}
-          rows={rows.slice(0, visibleCount)}
+          rows={rows}
           rowKey={(row) => row.request_id}
           onRowClick={openRow}
           activeRowKey={request ?? undefined}
@@ -326,13 +346,14 @@ export function MessageLogs() {
         />
       )}
       <div className="flex flex-wrap items-center justify-end gap-2 pt-2 text-xs text-muted-foreground">
-        {rows.length > visibleCount && (
+        {query.hasNextPage && !origin.bookmark && (
           <Button
             type="button"
             size="sm"
             variant="outline"
             className="mr-auto"
-            onClick={() => setLimit(visibleCount + pageSize)}
+            disabled={query.isFetching}
+            onClick={() => void query.move("older")}
           >
             Load more
           </Button>
@@ -371,6 +392,19 @@ export function MessageLogs() {
           previous={rows[index - 1]?.request_id}
           next={selected ? rows[index + 1]?.request_id : undefined}
           onSelect={(id) => select(id, "replace")}
+          onPreviousPage={
+            selected && query.hasPreviousPage && !query.isFetching
+              ? () => void move("newer")
+              : undefined
+          }
+          onNextPage={
+            selected && query.hasNextPage && !query.isFetching
+              ? () => void move("older")
+              : undefined
+          }
+          dismissOnOutsidePress={(target) =>
+            !logs.current?.contains(target.closest("tbody tr"))
+          }
           onClose={close}
           returnFocus={opener}
           fallbackFocus={refreshButton}

@@ -13,7 +13,7 @@ export function messagesLedger(): GatewayUsageRow[] {
     new Date(Date.now() - days * 86_400_000).toISOString();
 
   return [
-    { ...agent, id: 12, request_id: "req_messages_agent" },
+    { ...agent, id: 12, request_id: "req_messages_agent", api_key_id: "" },
     { ...embedding, id: 11 },
     { ...completion, id: 10 },
     {
@@ -24,7 +24,8 @@ export function messagesLedger(): GatewayUsageRow[] {
       api_key_id: "apikey_ci01",
       model: "minimax-m3",
       alias: "minimax-m3",
-      session_id: null,
+      // An API-key client may supply a session ID for upstream affinity.
+      session_id: "client-affinity-01",
       principal_id: "prn_messages_operator",
       input_tokens: 48,
       output_tokens: 12,
