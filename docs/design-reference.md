@@ -35,7 +35,7 @@ Signed-in Chrome showed a 448px search trigger centered in the 48px header. Open
 
 Signed-in Chrome opened **Build → Messages** on [Overview](https://platform.claude.com/workspaces/default/messages-overview). The Default workspace selector sits above the page links. Tokens and Requests cover 30 days. The Cache hit rate information button specifies seven days. Open playground, API keys and Resources follow the cards. The self-hosted preview uses the key directory visible to the current account. Platform supplies the key hint, owner, creator and expiration. It has no key last-used timestamp. Batches has no self-hosted endpoint.
 
-[Logs](https://platform.claude.com/workspaces/default/logs) shows individual requests from the last 30 days with Copy ID, a timestamp and Refresh. Selecting a request adds its ID to the URL and opens a right drawer. Previous and Next follow the list order. The gateway ledger identifies direct Messages requests by endpoint and the absence of an agent session. It contains token counts, latency, status and attribution. It does not retain prompts, replies, streaming mode, service tier or a direct caller's client application. The ledger cursor orders by ID and has no date or endpoint filter. A complete first read can require multiple pages.
+[Logs](https://platform.claude.com/workspaces/default/logs) shows individual requests from the last 30 days with Copy ID, a timestamp and Refresh. Selecting a request adds its ID to the URL and opens a right drawer. Previous and Next follow the list order. An owned API key still identifies a direct call when a client sends a routing affinity. The ledger cannot distinguish an OAuth call carrying that header from a delegated agent call. Both are excluded. The ledger provides token counts, latency, status and attribution. Prompts, replies, streaming mode, service tier and client application are unavailable. Platform retention can be shorter than 30 days. The ledger cursor orders by ID and has no date or endpoint filter. Overview accumulates counters per page. Logs reads additional pages when the operator asks for older records or opens an older request URL.
 
 ### Repeat the Messages comparison
 
@@ -43,7 +43,7 @@ Open both signed-in consoles in Chrome at the same viewport. Use the same accoun
 
 1. Open Messages from the desktop sidebar. Check the selected Overview link, Default workspace menu, metric explanations, Usage and Logs links. Open a key, return, then open and dismiss Create key. A Playground-only user lands on Playground.
 2. Open Playground, edit a template, switch between Form and Code, and copy the request. Check invalid edits, the Streaming setting, Run, Stop, Rendered, Raw, Add to messages and History. Use the fixture to verify the submitted body and response.
-3. Open Logs. Copy an ID, open the row with the keyboard, switch requests, reload its URL, then close with Escape. Refresh after adding a fixture record. Repeat on a phone width and with an empty list or a refused ledger read.
+3. Open Logs. Copy an ID, open the row with the keyboard, switch requests, reload its URL, then close with Escape. Close the drawer by clicking the page heading. Refresh after adding a fixture record. Repeat at phone width and with an empty list or a refused ledger read.
 
 Run `pnpm test:e2e test/e2e/messages.spec.ts` for the interaction suite. After building, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: messages-'` for the light and dark screenshots. Both commands use the local mock edge.
 

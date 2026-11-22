@@ -5,7 +5,6 @@ import {
   ConsoleSessionContext,
   type useConsoleSession,
 } from "@/components/shell/console-session";
-import type { GatewayUsageRow } from "@/lib/platform/types";
 import { TEST_SESSION } from "../../../test/session-fixture";
 import { MessagesOverview } from "./messages-overview";
 
@@ -18,9 +17,8 @@ vi.mock("@/lib/platform/surfaces", async (original) => ({
   ...(await original<typeof import("@/lib/platform/surfaces")>()),
   useSurfaces: reads.surfaces,
 }));
-vi.mock("@/lib/platform/message-logs", async (original) => ({
-  ...(await original<typeof import("@/lib/platform/message-logs")>()),
-  useMessageLogs: reads.usage,
+vi.mock("@/lib/platform/message-stats", () => ({
+  useMessageStats: reads.usage,
 }));
 vi.mock("@/lib/platform/queries", async (original) => ({
   ...(await original<typeof import("@/lib/platform/queries")>()),
@@ -30,15 +28,14 @@ vi.mock("./api-keys", () => ({
   CreateKeyButton: () => <button>Create key</button>,
 }));
 
-const now = Date.parse("2026-11-22T04:00:00Z");
-const usageRow = (age: number, counters: Partial<GatewayUsageRow> = {}) => ({
-  created_at: new Date(now - age * 86_400_000).toISOString(),
-  input_tokens: null,
-  cache_read_tokens: null,
-  cache_write_tokens: null,
-  output_tokens: null,
-  ...counters,
-});
+const empty = {
+  requests: 0,
+  reported: 0,
+  input: 0,
+  output: 0,
+  read: 0,
+  write: 0,
+};
 function open(usage = "available", keys = "available") {
   reads.surfaces.mockReturnValue({
     usage: { status: usage },
@@ -59,7 +56,7 @@ function open(usage = "available", keys = "available") {
 const metric = (label: string) =>
   within(screen.getByRole("region", { name: label }));
 beforeEach(() => {
-  reads.usage.mockReturnValue({ data: [], dataUpdatedAt: now });
+  reads.usage.mockReturnValue({ data: { month: empty, week: empty } });
   reads.keys.mockReturnValue({ data: [] });
 });
 afterEach(() => {
@@ -82,7 +79,9 @@ it("reports zero requests separately from requests with missing usage", () => {
   expect(metric("Cache hit rate").getByText("Not caching")).toBeVisible();
   expect(reads.keys).not.toHaveBeenCalled();
   cleanup();
-  reads.usage.mockReturnValue({ data: [usageRow(1)], dataUpdatedAt: now });
+  reads.usage.mockReturnValue({
+    data: { month: { ...empty, requests: 1 }, week: { ...empty, requests: 1 } },
+  });
   open("available", "denied");
   expect(metric("Requests").getByText("1")).toBeVisible();
   expect(metric("Tokens").getByText("Usage not reported")).toBeVisible();
@@ -91,20 +90,13 @@ it("reports zero requests separately from requests with missing usage", () => {
   ).toBeVisible();
 });
 
-it("includes writes in the cache denominator and scopes the cache window to seven days", () => {
-  const old = usageRow(8, {
-    input_tokens: 0,
-    output_tokens: 1,
-    cache_read_tokens: 100,
-    cache_write_tokens: 0,
+it("shows zero cache hits when writes have been recorded", () => {
+  reads.usage.mockReturnValue({
+    data: {
+      month: { ...empty, input: 110, output: 1, requests: 2, reported: 2 },
+      week: { ...empty, input: 10, write: 10, requests: 1, reported: 1 },
+    },
   });
-  const recent = usageRow(7, {
-    input_tokens: 0,
-    output_tokens: 0,
-    cache_read_tokens: 0,
-    cache_write_tokens: 10,
-  });
-  reads.usage.mockReturnValue({ data: [old, recent], dataUpdatedAt: now });
   open();
   expect(metric("Tokens").getByText("111")).toBeVisible();
   expect(metric("Cache hit rate").getByText("0%")).toBeVisible();

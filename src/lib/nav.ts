@@ -24,7 +24,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
-import { LANDING_ROUTE, MESSAGES_ROUTE, MESSAGE_LOGS_ROUTE, PLAYGROUND_ROUTE } from "./routes";
+import {
+  LANDING_ROUTE,
+  MESSAGES_ROUTE,
+  MESSAGE_LOGS_ROUTE,
+  PLAYGROUND_ROUTE,
+} from "./routes";
 
 export interface Destination {
   key: string;
@@ -71,9 +76,19 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
         label: "Messages",
         icon: MessageSquare,
         items: [
-          { key: "nav-message-overview", label: "Overview", href: MESSAGES_ROUTE, icon: LayoutDashboard },
+          {
+            key: "nav-message-overview",
+            label: "Overview",
+            href: MESSAGES_ROUTE,
+            icon: LayoutDashboard,
+          },
           PLAYGROUND_LINK,
-          { key: "nav-message-logs", label: "Logs", href: MESSAGE_LOGS_ROUTE, icon: List },
+          {
+            key: "nav-message-logs",
+            label: "Logs",
+            href: MESSAGE_LOGS_ROUTE,
+            icon: List,
+          },
         ],
       },
       {

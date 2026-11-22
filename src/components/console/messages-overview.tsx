@@ -6,14 +6,11 @@ import { Popover } from "@base-ui/react/popover";
 import { ArrowUpRight, BookOpen, FileText, Gauge, Info } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  messageInputTokens,
-  useMessageLogs,
-} from "@/lib/platform/message-logs";
+import { useMessageStats } from "@/lib/platform/message-stats";
 import type { NativeSession } from "@/lib/platform/native";
 import { useApiKeys } from "@/lib/platform/queries";
 import { useSurfaces } from "@/lib/platform/surfaces";
-import type { ApiKeyListItem, GatewayUsageRow } from "@/lib/platform/types";
+import type { ApiKeyListItem } from "@/lib/platform/types";
 import { MESSAGE_LOGS_ROUTE, PLAYGROUND_ROUTE } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
@@ -33,26 +30,6 @@ const percent = new Intl.NumberFormat("en-US", {
   style: "percent",
   maximumFractionDigits: 1,
 });
-
-// The ledger emits all four token counters together when the upstream reports usage.
-// A request without usage still counts as a request. A missing report cannot establish zero usage.
-function messageTotals(rows: GatewayUsageRow[]) {
-  let input = 0;
-  let output = 0;
-  let read = 0;
-  let write = 0;
-  let reported = 0;
-  for (const row of rows) {
-    const tokens = messageInputTokens(row);
-    if (!tokens || row.output_tokens == null) continue;
-    reported++;
-    input += tokens.total;
-    output += row.output_tokens;
-    read += tokens.read;
-    write += tokens.write;
-  }
-  return { input, output, read, write, reported };
-}
 
 function Metric({
   title,
@@ -111,15 +88,14 @@ function Metric({
 }
 
 function MessageMetrics() {
-  const usage = useMessageLogs();
+  const usage = useMessageStats();
   if (usage.error) return <ErrorState error={usage.error} />;
   if (!usage.data) return <ListSkeleton rows={2} />;
-  const rows = usage.data;
-  const { input, output, reported } = messageTotals(rows);
-  const known = reported > 0 || rows.length === 0;
-  const weekStart = usage.dataUpdatedAt - 7 * 86_400_000;
-  const week = rows.filter((row) => Date.parse(row.created_at) >= weekStart);
-  const cache = messageTotals(week);
+  const {
+    month: { input, output, reported, requests },
+    week: cache,
+  } = usage.data;
+  const known = reported > 0 || requests === 0;
   const caching = cache.read + cache.write > 0;
   const rate =
     caching && cache.input > 0 ? percent.format(cache.read / cache.input) : "—";
@@ -127,7 +103,7 @@ function MessageMetrics() {
     <div className="grid gap-4 md:grid-cols-3">
       <Metric
         title="Tokens"
-        hint="Reported input and output tokens for direct Messages requests over the last 30 days. Input includes cache reads and writes."
+        hint="Reported tokens from direct requests still in the gateway log for the last 30 days. Input includes cache reads and writes."
         href="/usage"
         action="Open usage"
         value={tokenCount(known ? input + output : null)}
@@ -139,38 +115,38 @@ function MessageMetrics() {
             <span>{exactCount(output)} output</span>
           </>
         )}
-        {reported < rows.length && (
+        {reported < requests && (
           <span>
             {reported
-              ? `Usage reported for ${reported} of ${rows.length} requests`
+              ? `Usage reported for ${reported} of ${requests} requests`
               : "Usage not reported"}
           </span>
         )}
       </Metric>
       <Metric
         title="Requests"
-        hint="Direct Messages API requests and Playground runs in the last 30 days, including errors."
+        hint="Direct Messages API requests and Playground runs still in the gateway log for the last 30 days. Includes recorded errors. The gateway's retention period can be shorter."
         href={MESSAGE_LOGS_ROUTE}
         action="Open logs"
-        value={exactCount(rows.length)}
+        value={exactCount(requests)}
       >
         Last 30 days
       </Metric>
       <Metric
         title="Cache hit rate"
-        hint="Share of reported input tokens served from cache for direct Messages API requests and Playground runs in the last 7 days. Usage includes other gateway traffic."
+        hint="Share of reported input tokens served from cache in the last 7 days, from direct requests still in the gateway log. Usage includes other gateway traffic."
         href="/usage?range=7#input-tokens"
         action="Open caching"
         value={rate}
       >
         {caching
           ? `${exactCount(cache.read)} cached input tokens`
-          : week.length > 0 && !cache.reported
+          : cache.requests > 0 && !cache.reported
             ? "Usage not reported"
-            : cache.reported < week.length
+            : cache.reported < cache.requests
               ? "No reported cache use"
               : "Not caching"}
-        {!caching && (cache.reported > 0 || !week.length) && (
+        {!caching && (cache.reported > 0 || !cache.requests) && (
           <a
             href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching"
             target="_blank"
