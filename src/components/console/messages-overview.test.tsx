@@ -75,7 +75,10 @@ it("keeps the accessible section and skips a denied read", () => {
 
 it("reports zero requests separately from requests with missing usage", () => {
   open("available", "denied");
-  expect(metric("Tokens").getByText("0", { exact: true })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Tokens" })).toHaveAttribute(
+    "data-value",
+    "0",
+  );
   expect(metric("Cache hit rate").getByText("Not caching")).toBeVisible();
   expect(reads.keys).not.toHaveBeenCalled();
   cleanup();
@@ -83,7 +86,14 @@ it("reports zero requests separately from requests with missing usage", () => {
     data: { month: { ...empty, requests: 1 }, week: { ...empty, requests: 1 } },
   });
   open("available", "denied");
-  expect(metric("Requests").getByText("1")).toBeVisible();
+  expect(screen.getByRole("region", { name: "Requests" })).toHaveAttribute(
+    "data-value",
+    "1",
+  );
+  expect(screen.getByRole("region", { name: "Tokens" })).toHaveAttribute(
+    "data-value",
+    "",
+  );
   expect(metric("Tokens").getByText("Usage not reported")).toBeVisible();
   expect(
     metric("Cache hit rate").getByText("Usage not reported"),
@@ -98,6 +108,24 @@ it("shows zero cache hits when writes have been recorded", () => {
     },
   });
   open();
-  expect(metric("Tokens").getByText("111")).toBeVisible();
-  expect(metric("Cache hit rate").getByText("0%")).toBeVisible();
+  expect(
+    screen.getByRole("region", { name: "Cache hit rate" }),
+  ).toHaveAttribute("data-value", "0");
+});
+
+it("formats the cache share and identifies how many requests reported usage", () => {
+  reads.usage.mockReturnValue({
+    data: {
+      month: { ...empty, input: 96, output: 12, requests: 2, reported: 1 },
+      week: { ...empty, input: 96, read: 40, requests: 2, reported: 1 },
+    },
+  });
+  open();
+  expect(metric("Cache hit rate").getByText("41.7%")).toBeVisible();
+  expect(
+    metric("Cache hit rate").getByText("40 cached input tokens"),
+  ).toBeVisible();
+  expect(
+    metric("Tokens").getByText("Usage reported for 1 of 2 requests"),
+  ).toBeVisible();
 });

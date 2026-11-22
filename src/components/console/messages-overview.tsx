@@ -37,18 +37,24 @@ function Metric({
   href,
   action,
   value,
+  format = exactCount,
   children,
+  ...counts
 }: {
   title: string;
   hint: string;
   href: string;
   action: string;
-  value: string;
+  value: number | null;
+  format?: (value: number) => string;
   children: ReactNode;
+  [attribute: `data-${string}`]: number;
 }) {
   return (
     <section
       aria-label={title}
+      data-value={value ?? ""}
+      {...counts}
       className="flex min-w-0 flex-col rounded-xl bg-muted/70 p-4"
     >
       <div className="flex items-center justify-between gap-2">
@@ -78,7 +84,7 @@ function Metric({
         </Link>
       </div>
       <p className="mt-5 text-[22px] leading-7 font-medium tabular-nums">
-        {value}
+        {value === null ? "—" : format(value)}
       </p>
       <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {children}
@@ -97,8 +103,7 @@ function MessageMetrics() {
   } = usage.data;
   const known = reported > 0 || requests === 0;
   const caching = cache.read + cache.write > 0;
-  const rate =
-    caching && cache.input > 0 ? percent.format(cache.read / cache.input) : "—";
+  const rate = caching && cache.input > 0 ? cache.read / cache.input : null;
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <Metric
@@ -106,7 +111,12 @@ function MessageMetrics() {
         hint="Reported tokens from direct requests still in the gateway log for the last 30 days. Input includes cache reads and writes."
         href="/usage"
         action="Open usage"
-        value={tokenCount(known ? input + output : null)}
+        value={known ? input + output : null}
+        format={tokenCount}
+        data-input-tokens={input}
+        data-output-tokens={output}
+        data-reported={reported}
+        data-requests={requests}
       >
         <span>Last 30 days</span>
         {known && (
@@ -128,7 +138,7 @@ function MessageMetrics() {
         hint="Direct Messages API requests and Playground runs still in the gateway log for the last 30 days. Includes recorded errors. The gateway's retention period can be shorter."
         href={MESSAGE_LOGS_ROUTE}
         action="Open logs"
-        value={exactCount(requests)}
+        value={requests}
       >
         Last 30 days
       </Metric>
@@ -138,6 +148,11 @@ function MessageMetrics() {
         href="/usage?range=7#input-tokens"
         action="Open caching"
         value={rate}
+        format={percent.format}
+        data-cache-read-tokens={cache.read}
+        data-input-tokens={cache.input}
+        data-reported={cache.reported}
+        data-requests={cache.requests}
       >
         {caching
           ? `${exactCount(cache.read)} cached input tokens`

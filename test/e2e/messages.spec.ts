@@ -63,14 +63,15 @@ test("Messages navigation, Overview links and the selected API key", async ({
     main.getByRole("heading", { name: "Messages", level: 1 }),
   ).toBeVisible();
   const tokens = main.getByRole("region", { name: "Tokens", exact: true });
-  await expect(tokens.getByText("108", { exact: true })).toBeVisible();
-  await expect(tokens).toContainText("96 input");
-  await expect(tokens).toContainText("12 output");
-  await expect(tokens).toContainText("Usage reported for 1 of 2 requests");
+  await expect(tokens).toHaveAttribute("data-value", "108");
+  await expect(tokens).toHaveAttribute("data-input-tokens", "96");
+  await expect(tokens).toHaveAttribute("data-output-tokens", "12");
+  await expect(tokens).toHaveAttribute("data-reported", "1");
+  await expect(tokens).toHaveAttribute("data-requests", "2");
   const requests = main.getByRole("region", { name: "Requests", exact: true });
-  await expect(requests.getByText("2", { exact: true })).toBeVisible();
+  await expect(requests).toHaveAttribute("data-value", "2");
   const cache = main.getByRole("region", { name: "Cache hit rate" });
-  await expect(cache.getByText("41.7%", { exact: true })).toBeVisible();
+  await expect(cache).toHaveAttribute("data-value", String(40 / 96));
   const cacheInfo = cache.getByRole("button", {
     name: "More info about Cache hit rate",
     exact: true,
@@ -153,18 +154,14 @@ test("the cache hit rate uses seven days while tokens and requests use 30", asyn
   await signIn(page, "/messages");
   const main = page.getByRole("main");
   await expect(
-    main
-      .getByRole("region", { name: "Tokens", exact: true })
-      .getByText("140", { exact: true }),
-  ).toBeVisible();
+    main.getByRole("region", { name: "Tokens", exact: true }),
+  ).toHaveAttribute("data-value", "140");
   await expect(
-    main
-      .getByRole("region", { name: "Requests", exact: true })
-      .getByText("3", { exact: true }),
-  ).toBeVisible();
+    main.getByRole("region", { name: "Requests", exact: true }),
+  ).toHaveAttribute("data-value", "3");
   const cache = main.getByRole("region", { name: "Cache hit rate" });
-  await expect(cache.getByText("41.7%", { exact: true })).toBeVisible();
-  await expect(cache).toContainText("40 cached input tokens");
+  await expect(cache).toHaveAttribute("data-value", String(40 / 96));
+  await expect(cache).toHaveAttribute("data-cache-read-tokens", "40");
 });
 
 test("a cold seven-day caching link scrolls to Input tokens when the daily report arrives late", async ({
