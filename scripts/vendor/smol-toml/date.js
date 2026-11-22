@@ -87,6 +87,14 @@ export class TomlDate extends Date {
                     date = '';
                 }
             }
+            // Date normalizes impossible days. Check the authored calendar date
+            // independently so a valid numeric offset can still cross midnight.
+            if (hasDate) {
+                const authoredDay = date.slice(0, 10);
+                const calendar = new Date(authoredDay + 'T00:00:00Z');
+                if (Number.isNaN(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== authoredDay)
+                    date = '';
+            }
         }
         super(date);
         if (!isNaN(this.getTime())) {

@@ -88,6 +88,8 @@ function peekTable(ctx, key, table, meta, type) {
     }
     state.d = true;
     if (type === 1 /* Type.EXPLICIT */) {
+        // An array-created parent now has its own explicit table header.
+        state.t = type;
         t = hasOwn ? t[k] : (t[k] = Object.create(null));
     }
     else if (type === 0 /* Type.DOTTED */ && hasOwn) {

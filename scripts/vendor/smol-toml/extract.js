@@ -250,6 +250,9 @@ function parseDate(ctx, c, endChr) {
         if (c === 0x2b /* + */ || c === 0x2d /* - */) {
             // Temporal's ZonedDateTime is weird asf when it comes to dealing with traditional offsets...
             // It's 1.2x faster to allocate a new string to pass to ZDT than use Instant.toZonedDateTimeISO
+            const offset = ctx.s.slice(ctx.p, ctx.p + 6);
+            if (!/^[+-](?:[01]\d|2[0-3]):[0-5]\d$/.test(offset))
+                TomlError.x('invalid date-time: malformed numeric offset', ctx, ctx.p);
             let t = ctx.s.slice(startPtr, ctx.p += 6);
             return readDate(ctx, t, 1, unsafeSeparator, startPtr, !ctx.ld && ('[' + ctx.s.slice(ctx.p - 6, ctx.p) + ']'));
         }
