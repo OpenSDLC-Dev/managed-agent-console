@@ -129,6 +129,14 @@ const CREDENTIALS = [
   credential("gwcred_vl000001", "gwprov_vllmlocal1", "", ["anthropic"], 1),
 ];
 
+const deploymentPrices = (prices = {}) => ({
+  input: null,
+  output: null,
+  cache_write: null,
+  cache_read: null,
+  ...prices,
+});
+
 const deployment = (id, providerId, upstream, kind, extra = {}) => ({
   type: "deployment",
   id,
@@ -137,7 +145,9 @@ const deployment = (id, providerId, upstream, kind, extra = {}) => ({
   kind,
   display_name: "",
   capabilities: { tools: false, thinking: false, vision: false },
-  prices: { input: null, output: null, cache_write: null, cache_read: null },
+  prices: deploymentPrices(),
+  price_currency: "",
+  price_note: "",
   enabled: true,
   created_at: "2026-10-08T09:10:00Z",
   updated_at: "2026-10-08T09:10:00Z",
@@ -457,10 +467,30 @@ function patchRefusal(body, fixed, mutable) {
       body[key] === null &&
       !["headers", "stall_timeout_ms", "protocols"].includes(key)
     ) {
-      return invalid(`${key} must not be null`);
+      return invalid(
+        `${key}: null is not a value of this field; leave the field out to keep it`,
+      );
     }
   }
   return undefined;
+}
+
+/** deployments.go: an empty unit is allowed, and price notes follow checkOptionalName. */
+function priceMetadataRefusal(body) {
+  const currency = body.price_currency ?? "";
+  const note = body.price_note ?? "";
+  if (
+    typeof currency !== "string" ||
+    (currency && !/^[A-Z]{3}$/.test(currency))
+  )
+    return invalid(
+      "price_currency must be empty or three uppercase ASCII letters",
+    );
+  if (typeof note !== "string") return invalid("price_note must be a string");
+  if ([...note].length > 256)
+    return invalid("price_note is longer than 256 characters");
+  if (/\p{Cc}/u.test(note))
+    return invalid("price_note contains a control character");
 }
 
 const atCreation = (...names) =>
@@ -681,6 +711,8 @@ export function gatewayRoute(method, rest, params, body = {}) {
       if (!["chat", "embedding", "rerank"].includes(body.kind)) {
         return invalid("kind is required: chat, embedding or rerank");
       }
+      const refusal = priceMetadataRefusal(body);
+      if (refusal) return refusal;
       const created = {
         type: "deployment",
         id: nextId("gwdep_"),
@@ -694,13 +726,9 @@ export function gatewayRoute(method, rest, params, body = {}) {
           vision: false,
           ...body.capabilities,
         },
-        prices: {
-          input: null,
-          output: null,
-          cache_write: null,
-          cache_read: null,
-          ...body.prices,
-        },
+        prices: deploymentPrices(body.prices),
+        price_currency: body.price_currency ?? "",
+        price_note: body.price_note ?? "",
         enabled: body.enabled ?? true,
         created_at: nowIso(),
         updated_at: nowIso(),
@@ -718,10 +746,26 @@ export function gatewayRoute(method, rest, params, body = {}) {
       const refused = patchRefusal(
         body,
         atCreation("provider_id", "upstream_model", "kind"),
-        ["display_name", "capabilities", "prices", "enabled"],
+        [
+          "display_name",
+          "capabilities",
+          "prices",
+          "price_currency",
+          "price_note",
+          "enabled",
+        ],
       );
       if (refused) return refused;
-      return ok(apply(found, body));
+      const priceRefusal = priceMetadataRefusal(body);
+      if (priceRefusal) return priceRefusal;
+      return ok(
+        apply(
+          found,
+          "prices" in body
+            ? { ...body, prices: deploymentPrices(body.prices) }
+            : body,
+        ),
+      );
     }
     if (method === "DELETE") {
       const naming = aliases.filter((a) =>

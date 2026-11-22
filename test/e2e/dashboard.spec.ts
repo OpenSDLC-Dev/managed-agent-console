@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import {
   dashboardModelCases,
@@ -224,9 +224,11 @@ test("all four model cards open a single-model dialog on Dashboard and return fo
         `/playground?model=${alias}`,
       );
     } else {
-      await expect(dialog.getByRole("status")).toContainText(
-        "No matching provider is configured.",
-      );
+      await expect(
+        dialog
+          .getByRole("region", { name: "Current deployment" })
+          .getByRole("status"),
+      ).toContainText("No matching provider is configured.");
       await expect(playground).toHaveCount(0);
     }
     if (brand === "deepseek") {
@@ -509,6 +511,91 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
   expect(writes).toEqual([]);
 });
 
+test("a provider rate edit reaches the model card, comparison and model guide", async ({
+  page,
+}) => {
+  const modelName = "DeepSeek V4.1 Flash";
+  const deploymentId = "gwdep_dsflash01";
+  const deploymentSelector = `[data-pricing-deployment="${deploymentId}"]`;
+  const terms = "Domestic standard service for the operator's test deployment.";
+  const readUpdatedRates = async (surface: Locator) => {
+    const pricing = surface.locator(deploymentSelector);
+    await expect(pricing).toBeVisible();
+    await expect(pricing).toHaveAttribute("data-price-currency", "CNY");
+    for (const [kind, value] of [
+      ["input", "7.625"],
+      ["output", "0"],
+      ["cache_read", "0.03125"],
+      ["cache_write", ""],
+    ]) {
+      await expect(
+        pricing.locator(`[data-price-kind="${kind}"]`),
+      ).toHaveAttribute("data-price", value);
+    }
+    await expect(pricing).toContainText(terms);
+  };
+
+  await signIn(page);
+  const main = page.getByRole("main");
+  const trigger = main.getByRole("link", { name: modelName, exact: true });
+  const card = page.getByRole("dialog", { name: modelName, exact: true });
+  await trigger.click();
+  const previous = card.locator(deploymentSelector);
+  await expect(previous).toHaveAttribute("data-price-currency", "");
+  await expect(previous.locator('[data-price-kind="input"]')).toHaveAttribute(
+    "data-price",
+    "1",
+  );
+  await card.getByRole("link", { name: "View full pricing" }).click();
+  await main
+    .getByRole("region", { name: "Current deployment" })
+    .getByRole("link", { name: "DeepSeek", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Edit deepseek-v4-flash", exact: true })
+    .click();
+  const edit = page.getByRole("dialog", { name: "Edit upstream model" });
+  await edit.getByLabel("Price currency", { exact: true }).fill("CNY");
+  await edit.getByLabel("Pricing terms", { exact: true }).fill(terms);
+  await edit.getByLabel("Input", { exact: true }).fill("7.625");
+  await edit.getByLabel("Output", { exact: true }).fill("0");
+  await edit.getByLabel("Cache read", { exact: true }).fill("0.03125");
+  await expect(edit.getByLabel("Cache write", { exact: true })).toHaveValue("");
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname ===
+        `/admin/v1/deployments/${deploymentId}`,
+  );
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  const response = await saved;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({
+    id: deploymentId,
+    prices: { input: 7.625, output: 0, cache_write: null, cache_read: 0.03125 },
+    price_currency: "CNY",
+    price_note: terms,
+  });
+  await expect(edit).toBeHidden();
+  await page.getByRole("link", { name: "Agent Console", exact: true }).click();
+  await trigger.click();
+  await readUpdatedRates(card);
+  await card.getByRole("button", { name: "Close", exact: true }).click();
+  await main
+    .getByRole("button", { name: "Compare models", exact: true })
+    .click();
+  const column = page.getByRole("region", {
+    name: "Comparison column 1",
+    exact: true,
+  });
+  await readUpdatedRates(column);
+  await column
+    .getByRole("link", { name: `View pricing for ${modelName}` })
+    .click();
+  await expect(page).toHaveURL(/\/dashboard\/models\/deepseek#pricing$/);
+  await readUpdatedRates(main.locator("#pricing"));
+});
+
 test("a model with one discovered alias offers Playground when agent creation is unavailable", async ({
   page,
   request,
@@ -570,6 +657,11 @@ test("a developer can read the model reference when access to the gateway and Pl
   await expect(
     dialog.getByRole("link", { name: "Try in playground", exact: true }),
   ).toHaveCount(0);
+  await expect(dialog.locator("[data-pricing-deployment]")).toHaveCount(0);
+  const blocked = "Your account cannot view provider configuration.";
+  await expect(
+    dialog.getByRole("region", { name: "Cost" }).getByRole("status"),
+  ).toHaveText(blocked);
   await page.goto("/dashboard/models/minimax");
   await expect(
     main.getByRole("heading", { name: "MiniMax M3", level: 1 }),
@@ -580,14 +672,28 @@ test("a developer can read the model reference when access to the gateway and Pl
       .locator("code"),
   ).toHaveText("MiniMax-M3");
   const deployment = main.getByRole("region", { name: "Current deployment" });
-  await expect(deployment.getByRole("status")).toHaveText(
-    "Your account cannot view provider configuration.",
-  );
+  await expect(deployment.getByRole("status")).toHaveText(blocked);
   await expect(deployment.locator("[data-gateway-alias]")).toHaveCount(0);
+  await expect(main.locator("#pricing [data-pricing-deployment]")).toHaveCount(
+    0,
+  );
   await expect(main.locator('a[href^="/playground"]')).toHaveCount(0);
   expect(discovery).toEqual([]);
   await main.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await main
+    .getByRole("button", { name: "Compare models", exact: true })
+    .click();
+  const comparison = page.getByRole("dialog", {
+    name: "Compare models",
+    exact: true,
+  });
+  await expect(
+    comparison
+      .getByRole("region", { name: "Comparison column 1" })
+      .getByRole("status"),
+  ).toHaveText(blocked);
+  await expect(comparison.locator("[data-pricing-deployment]")).toHaveCount(0);
 });
 
 test("the dark model dialog scrolls independently on a narrow screen and restores card focus", async ({

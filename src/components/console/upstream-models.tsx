@@ -134,7 +134,12 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
       header: "Price in / out / cache write / read",
       className: "text-right whitespace-nowrap",
       cell: (d) => (
-        <span className="tabular-nums" data-prices={JSON.stringify(d.prices)}>
+        <span
+          className="tabular-nums"
+          data-prices={JSON.stringify(d.prices)}
+          data-price-currency={d.price_currency ?? ""}
+        >
+          {d.price_currency && `${d.price_currency} `}
           {priceLine(d.prices)}
         </span>
       ),
@@ -208,7 +213,12 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
   return (
     <DetailSection
       title="Upstream models"
-      action={<AddUpstreamModelButton provider={provider} />}
+      action={
+        <AddUpstreamModelButton
+          provider={provider}
+          priceMetadata={data?.data[0] && "price_currency" in data.data[0]}
+        />
+      }
     >
       <p className="pb-3 text-[13px] text-muted-foreground">
         Models this account serves. Prices are per million tokens and set the
@@ -229,6 +239,7 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
         <UpstreamModelDialog
           provider={provider}
           deployment={editing}
+          priceMetadata={editing.price_currency !== undefined}
           onClose={() => setEditing(undefined)}
         />
       )}
@@ -236,7 +247,13 @@ export function UpstreamModels({ provider }: { provider: GatewayProvider }) {
   );
 }
 
-function AddUpstreamModelButton({ provider }: { provider: GatewayProvider }) {
+function AddUpstreamModelButton({
+  provider,
+  priceMetadata,
+}: {
+  provider: GatewayProvider;
+  priceMetadata?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -251,6 +268,7 @@ function AddUpstreamModelButton({ provider }: { provider: GatewayProvider }) {
       {open && (
         <UpstreamModelDialog
           provider={provider}
+          priceMetadata={priceMetadata}
           onClose={() => setOpen(false)}
         />
       )}
@@ -270,10 +288,12 @@ const limitText = (v: number | undefined) => (v ? String(v) : "");
 function UpstreamModelDialog({
   provider,
   deployment,
+  priceMetadata,
   onClose,
 }: {
   provider: GatewayProvider;
   deployment?: GatewayDeployment;
+  priceMetadata?: boolean;
   onClose: () => void;
 }) {
   const create = useCreateGatewayDeployment();
@@ -301,6 +321,10 @@ function UpstreamModelDialog({
     cache_write: priceText(deployment?.prices.cache_write),
     cache_read: priceText(deployment?.prices.cache_read),
   });
+  const [currency, setCurrency] = useState(
+    deployment ? (deployment.price_currency ?? "") : priceMetadata ? "CNY" : "",
+  );
+  const [priceNote, setPriceNote] = useState(deployment?.price_note ?? "");
 
   const capabilities = {
     ...flags,
@@ -316,6 +340,15 @@ function UpstreamModelDialog({
   }
 
   const submit = () => {
+    // Omit untouched metadata so an older Platform can still save numeric rates.
+    const labels = {
+      ...(currency.trim() !== (deployment?.price_currency ?? "") && {
+        price_currency: currency.trim(),
+      }),
+      ...(priceNote.trim() !== (deployment?.price_note ?? "") && {
+        price_note: priceNote.trim(),
+      }),
+    };
     if (deployment) {
       update.mutate(
         {
@@ -323,6 +356,7 @@ function UpstreamModelDialog({
           display_name: displayName.trim(),
           capabilities,
           prices: priceBody as Prices,
+          ...labels,
         },
         { onSuccess: onClose },
       );
@@ -335,6 +369,7 @@ function UpstreamModelDialog({
           ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
           capabilities,
           prices: priceBody,
+          ...labels,
         },
         { onSuccess: onClose },
       );
@@ -459,9 +494,37 @@ function UpstreamModelDialog({
                 </div>
               ))}
             </div>
+            {priceMetadata !== false && (
+              <div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+                <div className="space-y-1.5">
+                  <Label htmlFor="upstream-price-currency">
+                    Price currency
+                  </Label>
+                  <Input
+                    id="upstream-price-currency"
+                    name="price_currency"
+                    placeholder="CNY"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    value={currency}
+                    onChange={(event) => setCurrency(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="upstream-price-note">Pricing terms</Label>
+                  <Input
+                    id="upstream-price-note"
+                    name="price_note"
+                    placeholder="e.g. Standard service, up to 512K input tokens"
+                    value={priceNote}
+                    onChange={(event) => setPriceNote(event.target.value)}
+                  />
+                </div>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              No currency: the gateway stores the number you enter. A blank
-              price leaves the cost of those tokens out of Usage.
+              Usage applies these fixed rates to future requests. Blank rates
+              contribute zero to the recorded cost.
             </p>
           </fieldset>
         </div>

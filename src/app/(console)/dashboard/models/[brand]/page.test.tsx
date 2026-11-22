@@ -1,17 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
-import {
-  dashboardModels,
-  type DashboardModel,
-} from "@/components/console/dashboard-model-catalog";
+import { afterEach, expect, it } from "vitest";
+import { dashboardModels } from "@/components/console/dashboard-model-catalog";
 import DashboardModelPage from "./page";
-
-vi.mock("@/components/console/dashboard-model-gateway", () => ({
-  DashboardModelGateway: ({ model }: { model: DashboardModel }) => (
-    <section aria-label="Current deployment">{model.profile}</section>
-  ),
-}));
 
 afterEach(cleanup);
 
@@ -32,7 +23,9 @@ it.each(dashboardModels)(
     );
     expect(
       screen.getByRole("region", { name: "Current deployment" }),
-    ).toHaveTextContent(model.profile);
+    ).toHaveTextContent(
+      "Access to provider configuration could not be verified.",
+    );
     expect(model.upstreamIds).toContain(model.id);
     const specs = within(
       screen.getByRole("region", { name: "Upstream specifications" }),
@@ -45,14 +38,14 @@ it.each(dashboardModels)(
       specs.getByRole("link", { name: "Provider specifications" }),
     ).toHaveAttribute("href", model.docs);
     const prices = within(
-      screen.getByRole("region", { name: "Provider pricing" }),
+      screen.getByRole("region", { name: "Deployment pricing" }),
+    );
+    expect(prices.getByRole("status")).toHaveTextContent(
+      "Access to provider configuration could not be verified.",
     );
     expect(
-      prices.getByText(model.pricing.terms, { exact: false }),
-    ).toBeVisible();
-    expect(
       prices.getByRole("link", { name: "Provider price list" }),
-    ).toHaveAttribute("href", model.pricing.url);
+    ).toHaveAttribute("href", model.providerPricingUrl);
     expect(screen.getByRole("link", { current: "page" })).toHaveTextContent(
       model.name,
     );

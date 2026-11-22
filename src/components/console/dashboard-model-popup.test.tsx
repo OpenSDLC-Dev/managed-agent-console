@@ -78,7 +78,7 @@ async function openPopup(model: DashboardModel) {
 }
 
 it.each(dashboardModels)(
-  "shows public facts, units, and the brand mark for $name",
+  "shows public specifications for $name and withholds deployment prices from a regular user",
   async (model) => {
     const { dialog } = await openPopup(model);
     const popup = within(dialog);
@@ -88,18 +88,10 @@ it.each(dashboardModels)(
       `/brands/${model.brand}.svg`,
     );
     const cost = popup.getByRole("region", { name: "Cost" });
-    expect(
-      within(cost).getByText(`${model.pricing.uncachedInput} / MTok`),
-    ).toBeVisible();
-    expect(
-      within(cost).getByText(`${model.pricing.output} / MTok`),
-    ).toBeVisible();
-    expect(
-      within(cost).getByText(`${model.pricing.cachedInput} / MTok`),
-    ).toBeVisible();
-    expect(
-      popup.getByText(model.pricing.terms, { exact: false }),
-    ).toBeVisible();
+    expect(within(cost).getByRole("status")).toHaveTextContent(
+      "Your account cannot view provider configuration.",
+    );
+    expect(cost.querySelector("[data-pricing-deployment]")).toBeNull();
     const features = popup.getByRole("region", { name: "Features" });
     expect(
       within(features).getByText(`${model.contextWindow} tokens`),
@@ -107,18 +99,6 @@ it.each(dashboardModels)(
     expect(within(features).getByText(model.maxOutput)).toBeVisible();
     expect(within(features).getByText(model.inputs)).toBeVisible();
     expect(within(features).getByText(model.reasoning)).toBeVisible();
-    if (model.brand === "kimi") {
-      expect(
-        within(cost).getByText("Write (5 min)").parentElement,
-      ).toHaveTextContent("$3 / MTok");
-      expect(
-        within(cost).getByText("Write (1 hr)").parentElement,
-      ).toHaveTextContent("$6 / MTok");
-    } else {
-      expect(within(cost).getByText("Write").parentElement).toHaveTextContent(
-        "Not separately listed",
-      );
-    }
     expect(
       popup.getByRole("link", { name: "View full pricing" }),
     ).toHaveAttribute("href", `${dashboardModelPath(model)}#pricing`);

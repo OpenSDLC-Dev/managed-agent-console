@@ -101,6 +101,11 @@ describe("UpstreamModels", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "tools" }));
     await userEvent.type(screen.getByLabelText("Context window"), "64000");
     await userEvent.type(screen.getByLabelText("Input"), "0.5");
+    expect(screen.getByLabelText("Price currency")).toHaveValue("CNY");
+    await userEvent.type(
+      screen.getByLabelText("Pricing terms"),
+      "Standard API",
+    );
     await userEvent.click(
       screen
         .getAllByRole("button", { name: "Add upstream model" })
@@ -118,6 +123,8 @@ describe("UpstreamModels", () => {
         max_input_tokens: 64000,
       },
       prices: { input: 0.5 },
+      price_currency: "CNY",
+      price_note: "Standard API",
     });
     expect(await screen.findByText("deepseek-v4-lite")).toBeInTheDocument();
   });
@@ -153,12 +160,71 @@ describe("UpstreamModels", () => {
     const body = sentBody(fetchMock, "POST") as Record<string, unknown>;
     expect(body).not.toHaveProperty("upstream_model");
     expect(body).not.toHaveProperty("kind");
+    expect(body).not.toHaveProperty("price_currency");
+    expect(body).not.toHaveProperty("price_note");
     expect(body.prices).toEqual({
       input: 4,
       output: 16,
       cache_write: null,
       cache_read: null,
     });
+  });
+
+  it("clears existing price metadata without altering recorded rates", async () => {
+    const seed = gatewayFixtures().deployments;
+    const fetchMock = stubGatewayFetch((method, path) =>
+      method === "GET" && path === "deployments"
+        ? Response.json({
+            data: seed.map((d) => ({
+              ...d,
+              price_currency: "CNY",
+              price_note: "Peak hours",
+            })),
+          })
+        : undefined,
+    );
+    renderModels();
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
+    );
+    await userEvent.clear(screen.getByLabelText("Price currency"));
+    await userEvent.clear(screen.getByLabelText("Pricing terms"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(sentBody(fetchMock, "POST")).toMatchObject({
+      price_currency: "",
+      price_note: "",
+      prices: { input: 1, output: 2, cache_read: 0.1, cache_write: null },
+    });
+  });
+
+  it("can edit numeric rates from a Platform that predates price metadata", async () => {
+    const seed = gatewayFixtures().deployments;
+    const fetchMock = stubGatewayFetch((method, path) =>
+      method === "GET" && path === "deployments"
+        ? Response.json({
+            data: seed.map((deployment) => ({
+              ...deployment,
+              price_currency: undefined,
+              price_note: undefined,
+            })),
+          })
+        : undefined,
+    );
+    renderModels();
+    const flash = await row("deepseek-v4-flash");
+    await userEvent.click(
+      within(flash).getByRole("button", { name: "Edit deepseek-v4-flash" }),
+    );
+    expect(screen.queryByLabelText("Price currency")).toBeNull();
+    await userEvent.clear(screen.getByLabelText("Cache read"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const body = sentBody(fetchMock, "POST");
+    expect(body).not.toHaveProperty("price_currency");
+    expect(body).not.toHaveProperty("price_note");
+    expect(body).toHaveProperty("prices.cache_read", null);
   });
 
   // The row toggle shares its hook with the edit dialog, which answers a

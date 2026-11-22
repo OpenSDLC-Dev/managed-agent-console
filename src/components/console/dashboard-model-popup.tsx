@@ -14,32 +14,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { copyText } from "@/lib/copy-text";
-import { cn } from "@/lib/utils";
 import {
   dashboardModelPath,
   modelFeatures,
   type DashboardModel,
 } from "./dashboard-model-catalog";
-import { DashboardModelGateway } from "./dashboard-model-gateway";
+import {
+  DashboardModelGateway,
+  DashboardModelPrices,
+} from "./dashboard-model-gateway";
 
-function FactRows({
-  rows,
-  compact = false,
-}: {
-  rows: string[][];
-  compact?: boolean;
-}) {
+function FactRows({ rows }: { rows: string[][] }) {
   return (
     <dl className="text-muted-foreground">
       {rows.map(([label, value]) => (
         <div
           key={label}
-          className={cn(
-            "flex items-center justify-between gap-3",
-            compact
-              ? "min-h-6 text-xs"
-              : "min-h-[53px] border-t py-2.5 text-sm",
-          )}
+          className="flex min-h-[53px] items-center justify-between gap-3 border-t py-2.5 text-sm"
         >
           <dt>{label}</dt>
           <dd className="text-right tabular-nums">{value}</dd>
@@ -57,13 +48,6 @@ export function DashboardModelPopup({
   finalFocus?: RefObject<HTMLAnchorElement | null>;
 }) {
   const popup = useRef<HTMLDivElement>(null);
-  const { pricing } = model;
-  const writes = pricing.cacheWrites?.length
-    ? pricing.cacheWrites.map(({ ttl, price }) => [
-        `Write (${ttl})`,
-        `${price} / MTok`,
-      ])
-    : [["Write", "Not separately listed"]];
 
   return (
     <>
@@ -128,21 +112,7 @@ export function DashboardModelPopup({
           <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-10">
             <section aria-label="Cost" className="min-w-0">
               <h3 className="pb-2.5 text-[13px] font-medium leading-5">Cost</h3>
-              <FactRows
-                rows={[
-                  ["Input", `${pricing.uncachedInput} / MTok`],
-                  ["Output", `${pricing.output} / MTok`],
-                ]}
-              />
-              <div className="border-t py-4">
-                <h4 className="mb-2 text-sm font-normal text-muted-foreground">
-                  Prompt caching
-                </h4>
-                <FactRows
-                  compact
-                  rows={[...writes, ["Read", `${pricing.cachedInput} / MTok`]]}
-                />
-              </div>
+              <DashboardModelPrices model={model} layout="popup" />
             </section>
             <section aria-label="Features" className="min-w-0">
               <h3 className="pb-2.5 text-[13px] font-medium leading-5">
@@ -152,7 +122,6 @@ export function DashboardModelPopup({
             </section>
           </div>
           <p className="mt-auto pt-5 text-xs leading-4 text-muted-foreground">
-            Provider list prices. {pricing.terms}{" "}
             <Link
               href={`${dashboardModelPath(model)}#pricing`}
               className="rounded-sm text-[#355984] underline decoration-current/35 underline-offset-3 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring dark:text-[#a0bee6]"

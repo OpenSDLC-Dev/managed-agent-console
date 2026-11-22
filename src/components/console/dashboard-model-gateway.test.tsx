@@ -28,7 +28,10 @@ import {
   dashboardModels,
   type DashboardModel,
 } from "./dashboard-model-catalog";
-import { DashboardModelGateway } from "./dashboard-model-gateway";
+import {
+  DashboardModelGateway,
+  DashboardModelPrices,
+} from "./dashboard-model-gateway";
 
 const probes = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/platform/surfaces", async (actual) => ({
@@ -54,7 +57,7 @@ const mmUpstream = deployments.find((d) => d.upstream_model === "MiniMax-M3")!;
 function harness(
   model = minimax,
   user: Session = regular,
-  mode: "detail" | "popup" = "detail",
+  mode: "detail" | "popup" | "prices" = "detail",
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -64,7 +67,11 @@ function harness(
       <ConsoleSessionContext.Provider
         value={{ data, error } as ReturnType<typeof useConsoleSession>}
       >
-        <DashboardModelGateway model={entry} mode={mode} />
+        {mode === "prices" ? (
+          <DashboardModelPrices model={entry} layout="popup" />
+        ) : (
+          <DashboardModelGateway model={entry} mode={mode} />
+        )}
       </ConsoleSessionContext.Provider>
     </QueryClientProvider>
   );
@@ -107,6 +114,108 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   probes.mockReset();
+});
+
+it("shows each matching deployment's own prices and terms, including explicit zero and unspecified currency", async () => {
+  const other = {
+    ...mmUpstream,
+    id: "gwdep_secondary",
+    price_note: "Older deployment",
+    enabled: false,
+    prices: {
+      input: 0.000000000001,
+      output: null,
+      cache_read: null,
+      cache_write: null,
+    },
+  };
+  const calls = stubGatewayFetch((_method, path) => {
+    if (path === "deployments")
+      return Response.json({
+        data: [
+          {
+            ...mmUpstream,
+            price_currency: "CNY",
+            price_note: "Standard tier",
+            prices: {
+              input: 2.1,
+              output: 8.4,
+              cache_read: 0,
+              cache_write: null,
+            },
+          },
+          other,
+          {
+            ...other,
+            id: "gwdep_other_vendor",
+            provider_id: "gwprov_deepseek01",
+            price_note: "Wrong provider",
+          },
+          {
+            ...other,
+            id: "gwdep_other_model",
+            upstream_model: "MiniMax-M3.1",
+            price_note: "Wrong model",
+          },
+        ],
+      });
+  });
+  harness(minimax, regular, "prices");
+  await screen.findByText("Standard tier");
+  const primary = screen
+    .getByText("Standard tier")
+    .closest("[data-pricing-deployment]")!;
+  expect(primary).toHaveAttribute("data-pricing-deployment", mmUpstream.id);
+  expect(primary).toHaveAttribute("data-price-currency", "CNY");
+  expect(
+    primary.querySelector('[data-price-kind="cache_read"]'),
+  ).toHaveTextContent(/^0$/);
+  expect(
+    primary.querySelector('[data-price-kind="cache_write"]'),
+  ).toHaveTextContent("Not set");
+  const secondary = screen
+    .getByText("Older deployment")
+    .closest("[data-pricing-deployment]")!;
+  expect(secondary).toHaveAttribute("data-pricing-deployment", other.id);
+  expect(secondary).toHaveTextContent("Currency not specified");
+  expect(secondary).toHaveTextContent("Disabled");
+  expect(secondary).toHaveTextContent("0.000000000001");
+  expect(screen.queryByText("Wrong provider")).toBeNull();
+  expect(screen.queryByText("Wrong model")).toBeNull();
+  expect(paths(calls)).toEqual([
+    "/admin/v1/providers",
+    "/admin/v1/deployments",
+  ]);
+});
+
+it("withdraws cached pricing on a refused refresh or a loss of current authority", async () => {
+  let refused = false;
+  const calls = stubGatewayFetch((_method, path) =>
+    path === "deployments"
+      ? refused
+        ? failure(403)
+        : Response.json({
+            data: [{ ...mmUpstream, price_note: "Account-specific rate" }],
+          })
+      : undefined,
+  );
+  const { update, client } = harness(minimax, regular, "prices");
+  await screen.findByText("Account-specific rate");
+  refused = true;
+  await act(() =>
+    client.invalidateQueries({ queryKey: ["gateway", "deployments"] }),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "cannot view upstream models",
+  );
+  expect(document.querySelector("[data-pricing-deployment]")).toBeNull();
+  const count = calls.mock.calls.length;
+  update(minimax, { ...regular, role: "user" });
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "cannot view provider configuration",
+  );
+  expect(document.querySelector("[data-pricing-deployment]")).toBeNull();
+  expect(calls.mock.calls).toHaveLength(count);
 });
 
 it("joins the exact profile, upstream and targets across all priorities, and opens only aliases in the session catalogue", async () => {

@@ -8,11 +8,11 @@ import {
   dashboardModelPath,
   dashboardModels,
   modelFeatures,
-  modelPricingTerms,
-  modelPrices,
-  providerPricesChecked,
 } from "@/components/console/dashboard-model-catalog";
-import { DashboardModelGateway } from "@/components/console/dashboard-model-gateway";
+import {
+  DashboardModelGateway,
+  DashboardModelPrices,
+} from "@/components/console/dashboard-model-gateway";
 import { cn } from "@/lib/utils";
 
 const sourceStyle =
@@ -121,17 +121,13 @@ export default async function DashboardModelPage({
           className="flex scroll-mt-6 flex-col gap-3 rounded-xl bg-muted/55 p-5"
         >
           <h2 id="pricing-title" className="text-base font-semibold">
-            Provider pricing
+            Deployment pricing
           </h2>
-          <ModelFacts rows={modelPrices(model)} />
-          <p className="text-xs leading-5 text-muted-foreground">
-            {modelPricingTerms(model)} Checked {providerPricesChecked}. Your
-            gateway uses the rates set on each upstream deployment.
-          </p>
+          <DashboardModelPrices model={model} layout="detail" />
           <div className="mt-auto pt-2">
             <a
               className={sourceStyle}
-              href={model.pricing.url}
+              href={model.providerPricingUrl}
               target="_blank"
               rel="noreferrer"
             >
