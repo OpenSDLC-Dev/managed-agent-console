@@ -187,13 +187,15 @@ Signed-in Chrome showed searchable Files and Skills tables, a serif page title, 
 
 Files stage a single file before upload. Ordinary uploads have no downloadable content. The console reads the platform’s metadata by ID and only requests previews for downloadable text up to 1 MiB. Files and custom skills have named single and bulk deletion confirmations. Bulk deletion calls the existing per-ID endpoints and retains refused IDs for retry. Selecting a catalog skill disables bulk deletion.
 
+Selecting a row shows a floating bar with the count, an × to clear, a divider and Delete. In signed-in Chrome the 40 px desktop bar sits 24 px above the viewport bottom, centered in the list pane. It stays there when the table scrolls or a detail drawer opens. The delete confirmation opens above the bar. Clearing with the keyboard returns focus to the last selection checkbox. When the pane is narrow, the drawer keeps its Rendered and API controls above the bar.
+
 Create skill and Update share one drag-and-drop form. Creation returns to the list. Directory uploads preserve relative paths. For a loose SKILL.md the form supplies the directory required by the platform, using its frontmatter name when available. The platform validates the bundle and supplies the display name and version description. The hosted form advertises 8 MB; this deployment accepts 30 MiB of uncompressed skill contents. The standalone detail also preserves historical descriptions, version downloads and version deletion.
 
 ### Repeat the Files and Skills comparison
 
 1. Build with `pnpm build`, then run `pnpm exec playwright test test/e2e/resource-library.spec.ts test/e2e/skills-inspector.spec.ts test/e2e/resources.spec.ts`. These run in the standard E2E suite against the resettable project fixture.
 2. Exercise staged upload, dismissal, full-ID copy, lookup and clear, drawer tabs and navigation, allowed and unavailable downloads, single deletion, mixed selection and partial bulk retry. Delete the final row on the last page and verify the earlier files are visible. Create a custom skill with another inspector open, update it, download and delete a version, and verify the catalog remains read-only.
-3. Run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (files-list|skills-list|file-inspector|file-upload|file-delete-confirmation|skill-(inspector|detail|upload|update|lookup-miss))'`. Compare the two Chrome themes in `fidelity-shots/` with the signed-in reference at [Files](https://platform.claude.com/workspaces/default/files) and [Skills](https://platform.claude.com/workspaces/default/skills). Use disposable data for write checks.
+3. Run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (files-(list|selection)|skills-(list|selection)|file-inspector|file-upload|file-delete-confirmation|skill-(inspector|detail|upload|update|lookup-miss))'`. Compare the two Chrome themes in `fidelity-shots/` with the signed-in reference at [Files](https://platform.claude.com/workspaces/default/files) and [Skills](https://platform.claude.com/workspaces/default/skills). Check that the bulk bar stays centered in the list pane at desktop and phone widths and that the last row scrolls fully above it. Use disposable data for write checks.
 
 ## Session resources — checked 2026-09-06
 

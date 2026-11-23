@@ -10,9 +10,10 @@ import {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Toolbar } from "@base-ui/react/toolbar";
 import { FileStack, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +32,7 @@ import { ErrorState, UnavailableSurface } from "./bits";
 import { Pager } from "./pager";
 import { PlatformError, type Page } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
+import { cn } from "@/lib/utils";
 import type { useCursorPage } from "@/lib/platform/use-cursor-page";
 import {
   InvalidLibraryID,
@@ -126,6 +128,7 @@ export function ResourceLibrary<T extends RecordWithID>({
   const router = useRouter();
   const active = params.get(kind);
   const input = useRef<HTMLInputElement>(null);
+  const lastCheckbox = useRef<HTMLInputElement>(null);
   const trigger = useRef<HTMLElement>(null);
   const client = useQueryClient();
   const [draft, setDraft] = useState("");
@@ -160,7 +163,10 @@ export function ResourceLibrary<T extends RecordWithID>({
   const [selection, setSelection] = useState({ scope, ids: [] as string[] });
   if (selection.scope !== scope) setSelection({ scope, ids: [] });
   const selected = rows.filter((row) => selection.ids.includes(row.id));
-  const select = (ids: string[]) => setSelection({ scope, ids });
+  function select(ids: string[], checkbox: HTMLInputElement) {
+    lastCheckbox.current = checkbox;
+    setSelection({ scope, ids });
+  }
   const [deletion, setDeletion] = useState<{
     rows: T[];
     bulk: boolean;
@@ -279,7 +285,10 @@ export function ResourceLibrary<T extends RecordWithID>({
               selected.length > 0 && selected.length < rows.length;
         }}
         onChange={(event) =>
-          select(event.target.checked ? rows.map((row) => row.id) : [])
+          select(
+            event.target.checked ? rows.map((row) => row.id) : [],
+            event.currentTarget,
+          )
         }
       />
     ),
@@ -296,6 +305,7 @@ export function ResourceLibrary<T extends RecordWithID>({
             event.target.checked
               ? [...selection.ids, row.id]
               : selection.ids.filter((id) => id !== row.id),
+            event.currentTarget,
           )
         }
       />
@@ -332,63 +342,41 @@ export function ResourceLibrary<T extends RecordWithID>({
         </div>
         <UploadButton onCreated={created} />
       </header>
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <form
-          className="relative w-80 max-w-full"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submitLookup();
+      <form
+        className="relative mb-3 w-80 max-w-full"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submitLookup();
+        }}
+      >
+        <Search
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          ref={input}
+          className="h-8 border-0 bg-muted pl-8 pr-8 shadow-none"
+          value={draft}
+          aria-label={"Find " + kind + " by ID"}
+          placeholder={"Find " + kind + " by ID"}
+          onChange={(event) => {
+            searchIntent.current++;
+            setDraft(event.target.value);
           }}
-        >
-          <Search
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            ref={input}
-            className="h-8 border-0 bg-muted pl-8 pr-8 shadow-none"
-            value={draft}
-            aria-label={"Find " + kind + " by ID"}
-            placeholder={"Find " + kind + " by ID"}
-            onChange={(event) => {
-              searchIntent.current++;
-              setDraft(event.target.value);
-            }}
-          />
-          {draft && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="absolute top-1 right-1"
-              aria-label="Clear search"
-              onClick={clear}
-            >
-              <X />
-            </Button>
-          )}
-        </form>
-        {!!selected.length && (
-          <div
-            className="flex items-center gap-2 text-sm"
-            data-selected-count={selected.length}
+        />
+        {draft && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="absolute top-1 right-1"
+            aria-label="Clear search"
+            onClick={clear}
           >
-            <span>{selected.length} selected</span>
-            <Button size="sm" variant="ghost" onClick={() => select([])}>
-              Clear selection
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={selected.some((row) => canDelete && !canDelete(row))}
-              onClick={() => setDeletion({ rows: selected, bulk: true })}
-            >
-              <Trash2 />
-              Delete
-            </Button>
-          </div>
+            <X />
+          </Button>
         )}
-      </div>
+      </form>
       {error && !missing ? (
         <ErrorState error={error as Error} />
       ) : !loading && !rows.length && !trimmed && page.hasPrev ? (
@@ -444,6 +432,49 @@ export function ResourceLibrary<T extends RecordWithID>({
             if (list.data?.next_page) page.goNext(list.data.next_page);
           }}
         />
+      )}
+      {!!selected.length && (
+        <div className="flex justify-center pb-(--resource-selection-space)">
+          <Toolbar.Root
+            aria-label={title + " selection"}
+            data-selected-count={selected.length}
+            className="fixed bottom-(--resource-selection-bottom) z-41 flex items-center gap-2 rounded-xl bg-popover p-1.5 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:bg-[#303030] forced-colors:border"
+          >
+            <span className="px-1.5 font-medium whitespace-nowrap text-muted-foreground">
+              {selected.length} selected
+            </span>
+            <Toolbar.Button
+              aria-label="Clear selection"
+              title="Clear selection"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "rounded-lg pointer-coarse:size-11",
+              )}
+              onClick={(event) => {
+                setSelection({ scope, ids: [] });
+                if (event.detail === 0) {
+                  const checkbox = lastCheckbox.current;
+                  (checkbox?.isConnected ? checkbox : input.current)?.focus();
+                }
+              }}
+            >
+              <X aria-hidden className="size-4" />
+            </Toolbar.Button>
+            <Toolbar.Separator className="mx-2 my-1 self-stretch border-l" />
+            <Toolbar.Button
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "gap-1.5 rounded-lg px-2 text-sm font-normal pointer-coarse:min-h-11",
+              )}
+              focusableWhenDisabled={false}
+              disabled={selected.some((row) => canDelete && !canDelete(row))}
+              onClick={() => setDeletion({ rows: selected, bulk: true })}
+            >
+              <Trash2 aria-hidden className="size-4" />
+              Delete
+            </Toolbar.Button>
+          </Toolbar.Root>
+        </div>
       )}
       {active && (
         <Inspector

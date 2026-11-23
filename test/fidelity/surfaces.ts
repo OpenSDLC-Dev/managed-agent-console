@@ -1199,6 +1199,46 @@ export const SURFACES: Surface[] = [
     description: "Resource list with byte sizes and an upload action.",
   },
   {
+    id: "files-selection",
+    route: "/files",
+    fixture: "one selected file",
+    description:
+      "Selected count, clear and Delete at the bottom of the content pane.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await page
+        .getByRole("checkbox", { name: "Select research-notes.md" })
+        .check();
+    },
+  },
+  {
+    id: "skills-selection",
+    route: "/skills",
+    fixture: "one selected custom skill",
+    description:
+      "Bottom selection toolbar with Delete available for the custom skill.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await page
+        .getByRole("checkbox", { name: "Select Weekly report writer" })
+        .check();
+    },
+  },
+  {
+    id: "skills-selection-narrow",
+    route: "/skills",
+    fixture: "one selected catalog skill",
+    description:
+      "Selection toolbar in a narrow viewport with catalog deletion disabled.",
+    viewportOnly: true,
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("checkbox", { name: "Select Excel spreadsheets" })
+        .check();
+    },
+  },
+  {
     id: "file-inspector",
     route: "/files?file=file_notes0000000000001",
     fixture: "uploaded research notes",

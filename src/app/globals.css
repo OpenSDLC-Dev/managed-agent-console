@@ -214,6 +214,30 @@ body:has([data-library-inspector])
   [data-sonner-toaster][data-y-position="bottom"] {
   bottom: max(4.5rem, var(--offset-bottom, 0px), env(safe-area-inset-bottom));
 }
+html:has([data-resource-library] [data-selected-count]) {
+  --resource-selection-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  --resource-selection-space: calc(var(--resource-selection-bottom) + 3.5rem);
+  scroll-padding-bottom: var(--resource-selection-space);
+}
+html:has([data-resource-library] [data-selected-count])
+  [data-sonner-toaster][data-y-position="bottom"] {
+  bottom: max(
+    var(--offset-bottom, 0px),
+    calc(
+      var(--resource-selection-space) + var(--resource-inspector-footer, 0.5rem)
+    )
+  );
+}
+/* Leave both bottom controls reachable when the list pane is narrow.
+   At md the 16rem sidebar starts sharing the viewport with the list. */
+@media (width < 38rem), (48rem <= width < 54rem) {
+  html:has([data-library-inspector]) {
+    --resource-inspector-footer: 4.5rem;
+  }
+  [data-library-inspector] {
+    padding-bottom: var(--resource-selection-space, 0px);
+  }
+}
 @media (prefers-color-scheme: dark) {
   main:has([data-resource-library]) {
     background-color: #191919;
