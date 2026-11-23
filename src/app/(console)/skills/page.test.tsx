@@ -26,64 +26,6 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(route.query),
 }));
 
-// Minimal harness for base-ui's portal Select (status-filter.test.tsx pattern).
-vi.mock("@/components/ui/select", async () => {
-  const React = await vi.importActual<typeof import("react")>("react");
-  interface CtxShape {
-    value: string;
-    onValueChange: (value: string) => void;
-  }
-  const Ctx = React.createContext<CtxShape>({
-    value: "",
-    onValueChange: () => {},
-  });
-  return {
-    Select: ({
-      value,
-      onValueChange,
-      children,
-    }: CtxShape & { children?: React.ReactNode }) =>
-      React.createElement(
-        Ctx.Provider,
-        { value: { value, onValueChange } },
-        children,
-      ),
-    SelectTrigger: (props: {
-      children?: React.ReactNode;
-      "aria-label"?: string;
-    }) =>
-      React.createElement(
-        "button",
-        { type: "button", "aria-label": props["aria-label"] },
-        props.children,
-      ),
-    SelectValue: () => {
-      const ctx = React.useContext(Ctx);
-      return React.createElement(
-        "span",
-        { "data-testid": "select-value" },
-        ctx.value,
-      );
-    },
-    SelectContent: ({ children }: { children?: React.ReactNode }) =>
-      React.createElement("div", null, children),
-    SelectItem: ({
-      value,
-      children,
-    }: {
-      value: string;
-      children?: React.ReactNode;
-    }) => {
-      const ctx = React.useContext(Ctx);
-      return React.createElement(
-        "button",
-        { type: "button", onClick: () => ctx.onValueChange(value) },
-        children,
-      );
-    },
-  };
-});
-
 const skill = (
   over: Partial<Skill> & { id: string; display_name: string },
 ): Skill => ({
@@ -166,15 +108,21 @@ describe("SkillsPage", () => {
   });
 
   it("looks up an exact ID without adding a speculative list search parameter", async () => {
-    stubFetch(() => json({ data: [] }));
+    stubFetch((url) =>
+      url.pathname.endsWith("/xlsx")
+        ? json(skill({ id: "xlsx", display_name: "Excel" }))
+        : json({ data: [] }),
+    );
     renderPage();
     await userEvent.type(
       screen.getByRole("textbox", { name: "Find skill by ID" }),
       "xlsx{Enter}",
     );
-    expect(pushSpy).toHaveBeenCalledWith("/skills?skill=xlsx", {
-      scroll: false,
-    });
+    await waitFor(() =>
+      expect(pushSpy).toHaveBeenCalledWith("/skills?skill=xlsx", {
+        scroll: false,
+      }),
+    );
   });
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
@@ -223,7 +171,7 @@ describe("SkillsPage", () => {
     renderPage();
     expect(await screen.findByText("No skills yet")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Upload skill/ }),
+      screen.getAllByRole("button", { name: /Create skill/ })[0],
     ).toBeInTheDocument();
   });
 
@@ -249,7 +197,7 @@ describe("SkillsPage", () => {
     expect(table.getByText("custom")).toBeInTheDocument();
     expect(table.getByText("anthropic")).toBeInTheDocument();
     expect(table.getByText("1759178010641556")).toBeInTheDocument();
-    expect(table.getByText("none")).toBeInTheDocument();
+    expect(table.getByText("—")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("PDF tools"));
     expect(pushSpy).toHaveBeenCalledWith("/skills?skill=skl_1", {
@@ -257,22 +205,31 @@ describe("SkillsPage", () => {
     });
   });
 
-  it("refetches with source=custom when the source filter changes", async () => {
-    const fetchMock = stubFetch(() =>
-      json({ data: [skill({ id: "skl_1", display_name: "PDF tools" })] }),
+  it("reports a lookup miss inline and restores the list when cleared", async () => {
+    stubFetch((url) =>
+      url.pathname.endsWith("/missing")
+        ? json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "Skill not found" },
+            },
+            404,
+          )
+        : json({ data: [skill({ id: "skl_1", display_name: "PDF tools" })] }),
     );
     renderPage();
-    await screen.findByText("PDF tools");
-
-    // The filter dropdown items render lowercase source names.
-    await userEvent.click(screen.getByRole("button", { name: "custom" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const url = new URL(
-      String(fetchMock.mock.calls[1][0]),
-      "http://console.test",
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Find skill by ID" }),
+      "missing{Enter}",
     );
-    expect(url.searchParams.get("source")).toBe("custom");
-    expect(url.searchParams.get("page")).toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: "Skill not found" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Skill details" })).toBeNull();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Clear search" })[0],
+    );
+    expect(await screen.findByText("PDF tools")).toBeVisible();
   });
 
   it("pages forward with the cursor", async () => {

@@ -373,7 +373,7 @@ describe("CommandPalette", () => {
     expect(selectedLabel()).toContain("report.pdf");
 
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(routerState.push).toHaveBeenCalledWith("/files");
+    expect(routerState.push).toHaveBeenCalledWith("/files?file=file_01");
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   });
 

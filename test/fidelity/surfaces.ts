@@ -1187,7 +1187,7 @@ export const SURFACES: Surface[] = [
   {
     id: "skills-list",
     route: "/skills",
-    fixture: "1 skill",
+    fixture: "one custom and one catalog skill",
     description:
       "GA skill names, source labels, version IDs and upload action.",
   },
@@ -1197,6 +1197,75 @@ export const SURFACES: Surface[] = [
     // The session's output and mount copy list under its scope_id only (#578).
     fixture: "1 upload",
     description: "Resource list with byte sizes and an upload action.",
+  },
+  {
+    id: "file-inspector",
+    route: "/files?file=file_notes0000000000001",
+    fixture: "uploaded research notes",
+    description:
+      "File metadata and preview availability with the list retained.",
+  },
+  {
+    id: "file-inspector-api",
+    route: "/files?file=file_notes0000000000001",
+    fixture: "uploaded research notes",
+    description: "The API representation of the inspected file.",
+    setup: async (page) => {
+      await page
+        .getByRole("region", { name: "File details" })
+        .getByText("API", { exact: true })
+        .click();
+    },
+  },
+  {
+    id: "file-upload",
+    route: "/files",
+    fixture: "staged file",
+    description: "File awaiting explicit upload.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Upload file" }).first().click();
+      await page.getByLabel("File to upload").setInputFiles({
+        name: "notes.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Test file."),
+      });
+    },
+  },
+  {
+    id: "file-delete-confirmation",
+    route: "/files",
+    fixture: "one selected upload",
+    description: "Named file deletion requires confirmation.",
+    setup: async (page) => {
+      await page
+        .getByRole("button", { name: "Actions for research-notes.md" })
+        .click();
+      await page.getByRole("menuitem", { name: "Delete" }).click();
+    },
+  },
+  {
+    id: "skill-update",
+    route: "/skills?skill=" + SKILL,
+    fixture: SKILL,
+    description: "Staged custom skill version dialog.",
+    setup: async (page) => {
+      await page
+        .getByRole("region", { name: "Skill details" })
+        .getByRole("button", { name: "Update" })
+        .click();
+    },
+  },
+  {
+    id: "skill-lookup-miss",
+    route: "/skills",
+    fixture: "unknown skill ID",
+    description: "Lookup miss in the list with clear search controls.",
+    setup: async (page) => {
+      await page
+        .getByRole("textbox", { name: "Find skill by ID" })
+        .fill("unknown-skill");
+      await page.getByRole("heading", { name: "Skill not found" }).waitFor();
+    },
   },
   {
     id: "models-list",
@@ -1724,7 +1793,7 @@ export const SURFACES: Surface[] = [
     route: "/skills?skill=missing-skill",
     fixture: "none",
     description:
-      "An exact ID lookup failure with the list and close action still available.",
+      "A bookmarked missing skill leaves the list and close action available.",
   },
   {
     id: "deployment-detail",
@@ -1912,9 +1981,11 @@ export const SURFACES: Surface[] = [
     id: "skill-upload",
     route: "/skills",
     fixture: "skill upload dialog",
-    description: "Display name with ZIP and directory upload choices.",
+    description: "Drop zone for archives, loose files, and a skill directory.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Upload skill" }).click();
+      await page
+        .getByRole("button", { name: "Create skill", exact: true })
+        .click();
     },
   },
 

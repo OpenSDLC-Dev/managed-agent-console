@@ -1,33 +1,73 @@
 "use client";
-import { ResourceDownload } from "./resource-download";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Trash2, Upload } from "lucide-react";
-import { DetailSection, Field, JsonBlock } from "@/components/console/detail";
-import { DataTable, type Column } from "@/components/console/data-table";
-import {
-  Day,
-  EmptyState,
-  ErrorState,
-  DetailSkeleton,
-} from "@/components/console/bits";
-import { ConfirmIconButton } from "@/components/console/archive-button";
-import { Breadcrumb } from "@/components/console/breadcrumb";
-import { ResourceActions } from "@/components/console/resource-actions";
-import { IdCell } from "@/components/console/copy-id";
-import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { BookOpen, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Pager } from "@/components/console/pager";
+import { Badge } from "@/components/ui/badge";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import {
   useDeleteSkill,
   useDeleteSkillVersion,
   useSkill,
   useSkillVersions,
-  useUploadSkillVersion,
 } from "@/lib/platform/queries";
+import { platformGet } from "@/lib/platform/http";
 import type { SkillVersion } from "@/lib/platform/types";
+import { DetailSkeleton, EmptyState, ErrorState } from "./bits";
+import { Breadcrumb } from "./breadcrumb";
+import { CopyIdButton, IdCell } from "./copy-id";
+import { Field, JsonBlock } from "./detail";
+import { ResourceActions } from "./resource-actions";
+import { ConfirmIconButton } from "./archive-button";
+import { ResourceDownload } from "./resource-download";
+import { ResourceDate } from "./library-format";
+import { Pager } from "./pager";
+import { PlaygroundViewSwitch } from "./playground-view-switch";
+import { UpdateSkillDialog } from "./upload-skill-button";
+
+function SkillDescription({
+  id,
+  latest,
+  rows,
+  loading,
+}: {
+  id: string;
+  latest: string | null;
+  rows: SkillVersion[];
+  loading: boolean;
+}) {
+  const current = rows.find((version) => version.id === latest);
+  // The latest version may be on a different page of version history.
+  const exact = useQuery({
+    queryKey: ["skill-version", id, latest],
+    queryFn: () =>
+      platformGet<SkillVersion>(
+        "v1/skills/" +
+          encodeURIComponent(id) +
+          "/versions/" +
+          encodeURIComponent(latest!),
+      ),
+    enabled: !!latest && !current && !loading,
+  });
+  const description = current?.description ?? exact.data?.description;
+  return (
+    <section className="mb-6">
+      <h3 className="mb-2 text-sm font-medium">Description</h3>
+      {exact.error && !current ? (
+        <ErrorState error={exact.error} />
+      ) : (
+        <p
+          className="whitespace-pre-wrap break-words rounded-lg bg-muted px-3 py-2 text-sm"
+          aria-busy={loading || exact.isFetching}
+        >
+          {description ?? (loading || exact.isFetching ? "Loading…" : "—")}
+        </p>
+      )}
+    </section>
+  );
+}
 
 export function SkillDetail({
   id,
@@ -38,265 +78,196 @@ export function SkillDetail({
   inspector?: boolean;
   onDeleted?: () => void;
 }) {
-  const [view, setView] = useState("rendered");
+  const [view, setView] = useState<"Rendered" | "API">("Rendered");
+  const [updating, setUpdating] = useState(false);
   const router = useRouter();
-  const { data: skill, error, isPending } = useSkill(id);
-  const pagination = useCursorPage(id);
-  const versions = useSkillVersions(id, pagination.page);
-  const uploadVersion = useUploadSkillVersion(id);
+  const { data: skill, error } = useSkill(id);
+  const page = useCursorPage(id);
+  const versions = useSkillVersions(id, page.page);
   const deleteVersion = useDeleteSkillVersion(id);
-  const deleteSkill = useDeleteSkill(id);
-  const input = useRef<HTMLInputElement>(null);
-  const folderInput = useRef<HTMLInputElement>(null);
-
+  const remove = useDeleteSkill(id);
   if (error) return <ErrorState error={error} />;
-  if (isPending || !skill) {
-    return <DetailSkeleton />;
-  }
-
-  const Heading = inspector ? "h2" : "h1";
+  if (!skill) return <DetailSkeleton />;
   const custom = skill.source.type === "custom";
-  const versionRows = versions.data?.data ?? [];
-
-  const columns: Column<SkillVersion>[] = [
-    {
-      key: "version",
-      header: "Version ID",
-      cell: (v) => <IdCell id={v.id} />,
-    },
-    { key: "name", header: "Name", cell: (v) => v.name },
-    {
-      key: "description",
-      header: "Description",
-      className: "w-full",
-      cell: (v) => v.description,
-    },
-    {
-      key: "created",
-      header: "Created",
-      cell: (v) => <Day iso={v.created_at} />,
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (v) => (
-        <span className="cursor-pointer">
-          {/* Zip download streams through the BFF; dual-auth on the wire. */}
-          <ResourceDownload
-            path={`v1/skills/${encodeURIComponent(id)}/versions/${encodeURIComponent(v.id)}/content`}
-            filename={`${v.id}.zip`}
-            aria-label={`Download version ${v.id}`}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Download className="size-3.5" />
-          </ResourceDownload>
-          {custom && (
-            <ConfirmIconButton
-              label={`Delete version ${v.id}`}
-              title="Delete version"
-              description="Deleting a skill version is permanent. The last version can only be removed by deleting the skill."
-              pending={deleteVersion.isPending}
-              onConfirm={() => deleteVersion.mutate(v.id)}
-            >
-              <Trash2 className="size-3.5" />
-            </ConfirmIconButton>
-          )}
-        </span>
-      ),
-    },
-  ];
-
+  const rows = versions.data?.data ?? [];
+  const Heading = inspector ? "h2" : "h1";
   return (
-    <div className={inspector ? "flex h-full flex-col" : undefined}>
+    <div className={inspector ? "flex h-full flex-col" : "max-w-4xl"}>
       {!inspector && (
         <Breadcrumb
           parent={{ href: "/skills", label: "Skills" }}
           current={skill.display_name}
         />
       )}
-      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 pb-5">
+      <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
         <Heading
           className={
             inspector
-              ? "min-w-0 break-words text-sm font-medium"
-              : "min-w-0 break-words text-[22px] font-medium leading-7"
+              ? "flex min-w-0 items-center gap-2 break-all text-sm font-medium"
+              : "font-serif text-2xl"
           }
         >
+          {inspector && <BookOpen className="size-4 shrink-0" />}
           {skill.display_name}
         </Heading>
-        <span className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="font-normal">
-            {skill.source.type}
-          </Badge>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!custom}
+            onClick={() => setUpdating(true)}
+          >
+            Update
+          </Button>
           {custom && (
-            <>
-              <input
-                ref={input}
-                type="file"
-                multiple
-                aria-label="New version files"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = [...(e.target.files ?? [])];
-                  if (picked.length > 0) uploadVersion.mutate(picked);
-                  e.target.value = "";
-                }}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8"
-                disabled={uploadVersion.isPending}
-                onClick={() => input.current?.click()}
-              >
-                <Upload className="size-4" />
-                {uploadVersion.isPending ? "Uploading…" : "New version"}
-              </Button>
-              <input
-                ref={folderInput}
-                type="file"
-                multiple
-                {...{ webkitdirectory: "" }}
-                aria-label="New version folder"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = [...(e.target.files ?? [])];
-                  if (picked.length > 0) uploadVersion.mutate(picked);
-                  e.target.value = "";
-                }}
-              />
-              <Button
-                variant="outline"
-                disabled={uploadVersion.isPending}
-                onClick={() => folderInput.current?.click()}
-              >
-                Upload folder
-              </Button>
-              <ResourceActions
-                resource="skill"
-                deleteDescription="Deleting this skill permanently deletes all its versions."
-                onDelete={() =>
-                  deleteSkill.mutate(undefined, {
-                    onSuccess: () =>
-                      onDeleted ? onDeleted() : router.push("/skills"),
-                  })
-                }
-                deletePending={deleteSkill.isPending}
-              />
-            </>
-          )}
-        </span>
-      </div>
-      <fieldset
-        className={
-          inspector
-            ? "order-last flex shrink-0 justify-end gap-1 pt-3 text-[13px]"
-            : "mb-5 flex gap-1 text-sm"
-        }
-      >
-        <legend className="sr-only">Pane view</legend>
-        {["rendered", "api"].map((value) => (
-          <label key={value} className="flex items-center gap-1.5">
-            <input
-              className="peer sr-only"
-              type="radio"
-              name={"skill-view-" + id}
-              value={value}
-              checked={view === value}
-              onChange={() => setView(value)}
+            <ResourceActions
+              resource="skill"
+              deleteDescription={
+                "Deleting " +
+                skill.display_name +
+                " permanently deletes all its versions. Existing code that references this skill will stop working."
+              }
+              deletePending={remove.isPending}
+              onDelete={() =>
+                remove.mutate(undefined, {
+                  onSuccess: () =>
+                    onDeleted ? onDeleted() : router.push("/skills"),
+                })
+              }
             />
-            <span className="inline-block rounded-md border border-transparent px-2 py-1 text-muted-foreground peer-checked:border-border peer-checked:text-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
-              {value === "api" ? "API" : "Rendered"}
-            </span>
-          </label>
-        ))}
-      </fieldset>
+          )}
+        </div>
+      </div>
       <div className={inspector ? "min-h-0 flex-1 overflow-y-auto" : undefined}>
-        {view === "api" ? (
-          <div className="space-y-3">
-            <code className="break-all text-sm">
+        {view === "API" ? (
+          <>
+            <code className="text-xs">
               GET /v1/skills/{encodeURIComponent(id)}
             </code>
             <JsonBlock value={skill} />
-          </div>
+          </>
         ) : (
           <>
-            <DetailSection title="Overview">
-              <dl className="grid grid-cols-[minmax(80px,35%)_1fr] gap-y-2 text-sm">
-                <Field label="ID">
-                  <IdCell id={skill.id} />
-                </Field>
-                <Field label="Latest version ID">
-                  {skill.latest_version_id ? (
-                    <IdCell id={skill.latest_version_id} />
-                  ) : (
-                    "none"
-                  )}
-                </Field>
-                <Field label="Created">
-                  <Day iso={skill.created_at} />
-                </Field>
-                <Field label="Updated">
-                  <Day iso={skill.updated_at} />
-                </Field>
-              </dl>
-            </DetailSection>
-            <DetailSection title="Versions">
+            <dl className="mb-6 grid grid-cols-[minmax(72px,25%)_1fr] gap-y-2 text-xs">
+              <Field label="ID">
+                <CopyIdButton showValue id={id} />
+              </Field>
+              <Field label="Created">
+                <ResourceDate iso={skill.created_at} />
+              </Field>
+              <Field label="Updated">
+                <ResourceDate iso={skill.updated_at} />
+              </Field>
+              <Field label="Source">
+                <span data-source={skill.source.type} className="capitalize">
+                  {skill.source.type}
+                </span>
+              </Field>
+            </dl>
+            {inspector && (
+              <SkillDescription
+                id={id}
+                latest={skill.latest_version_id}
+                rows={versions.isPlaceholderData ? [] : rows}
+                loading={versions.isPending}
+              />
+            )}
+            <section>
+              <h3 className="mb-2 text-sm font-medium">Versions</h3>
               {versions.error ? (
                 <ErrorState error={versions.error} />
-              ) : inspector ? (
-                <div
-                  aria-busy={versions.isPending || undefined}
-                  className="divide-y"
-                >
-                  {versionRows.map((v) => (
-                    <div key={v.id} className="space-y-2 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <IdCell id={v.id} />
-                        {v.id === skill.latest_version_id && (
-                          <Badge variant="outline" data-latest="true">
-                            Latest
-                          </Badge>
+              ) : versions.isPending ? (
+                <DetailSkeleton />
+              ) : rows.length ? (
+                <ul aria-label="Skill versions" className="divide-y">
+                  {rows.map((v) => (
+                    <li
+                      key={v.id}
+                      data-version-id={v.id}
+                      className="group/version flex flex-wrap items-center gap-2 py-2 text-xs [&>[data-id]]:max-w-full [&_code]:break-all"
+                    >
+                      <IdCell id={v.id} full />
+                      <ResourceDate iso={v.created_at} />
+                      {v.id === skill.latest_version_id && (
+                        <Badge
+                          data-latest="true"
+                          variant="secondary"
+                          className="bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                        >
+                          Latest
+                        </Badge>
+                      )}
+                      <span className="ml-auto inline-flex items-center gap-1 opacity-0 group-hover/version:opacity-100 group-focus-within/version:opacity-100 [@media(hover:none)]:opacity-100">
+                        <ResourceDownload
+                          aria-label={"Download version " + v.id}
+                          className="p-1"
+                          filename={v.id + ".zip"}
+                          path={
+                            "v1/skills/" +
+                            encodeURIComponent(id) +
+                            "/versions/" +
+                            encodeURIComponent(v.id) +
+                            "/content"
+                          }
+                        >
+                          <Download className="size-3.5" />
+                        </ResourceDownload>
+                        {custom && (
+                          <ConfirmIconButton
+                            label={"Delete version " + v.id}
+                            title="Delete version"
+                            description="Deleting a skill version is permanent. The last version can only be removed by deleting the skill."
+                            pending={deleteVersion.isPending}
+                            onConfirm={() => deleteVersion.mutate(v.id)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </ConfirmIconButton>
                         )}
-                        <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-                          <Day iso={v.created_at} />
-                          {columns.at(-1)!.cell(v)}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium">{v.name}</p>
-                      <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                        {v.description}
-                      </p>
-                    </div>
+                      </span>
+                      {!inspector && (
+                        <div className="w-full text-sm">
+                          <p className="font-medium">{v.name}</p>
+                          <p className="whitespace-pre-wrap text-muted-foreground">
+                            {v.description}
+                          </p>
+                        </div>
+                      )}
+                    </li>
                   ))}
-                  {!versions.isPending && !versionRows.length && (
-                    <EmptyState title="No versions" />
-                  )}
-                </div>
+                </ul>
               ) : (
-                <DataTable
-                  columns={columns}
-                  rows={versionRows}
-                  rowKey={(v) => v.id}
-                  loading={versions.isPending}
-                  empty={<EmptyState title="No versions" />}
+                <EmptyState title="No versions" />
+              )}
+              {(page.hasPrev || !!versions.data?.next_page) && (
+                <Pager
+                  hasPrev={page.hasPrev && !versions.isFetching}
+                  hasNext={!!versions.data?.next_page && !versions.isFetching}
+                  onPrev={page.goPrev}
+                  onNext={() => {
+                    if (versions.data?.next_page)
+                      page.goNext(versions.data.next_page);
+                  }}
                 />
               )}
-            </DetailSection>
-            <Pager
-              hasPrev={pagination.hasPrev && !versions.isFetching}
-              hasNext={
-                Boolean(versions.data?.next_page) && !versions.isFetching
-              }
-              onPrev={pagination.goPrev}
-              onNext={() => {
-                if (versions.data?.next_page)
-                  pagination.goNext(versions.data.next_page);
-              }}
-            />
+            </section>
           </>
         )}
       </div>
+      <div className="flex justify-end pt-3">
+        <PlaygroundViewSwitch
+          label="Pane view"
+          options={["Rendered", "API"]}
+          value={view}
+          onChange={setView}
+        />
+      </div>
+      {updating && custom && (
+        <UpdateSkillDialog
+          id={id}
+          onClose={() => setUpdating(false)}
+          onCreated={page.first}
+        />
+      )}
     </div>
   );
 }

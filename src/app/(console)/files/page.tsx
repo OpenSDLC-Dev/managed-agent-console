@@ -1,157 +1,122 @@
 "use client";
 
-import { useRef } from "react";
-import { Trash2, Upload } from "lucide-react";
-import { PageHeader } from "@/components/shell/page-header";
-import { DataTable, type Column } from "@/components/console/data-table";
-import { Pager } from "@/components/console/pager";
-import {
-  Day,
-  EmptyState,
-  ErrorState,
-  UnavailableSurface,
-} from "@/components/console/bits";
-import { IdCell } from "@/components/console/copy-id";
+import { Suspense, useState } from "react";
+import { Download, Upload } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useDeleteFile, useFiles, useUploadFile } from "@/lib/platform/queries";
-import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
+import { getFile, useFiles, useUploadFile } from "@/lib/platform/queries";
 import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { PlatformFile } from "@/lib/platform/types";
+import type { Column } from "@/components/console/data-table";
+import { IdCell } from "@/components/console/copy-id";
+import {
+  FileInspector,
+  fileContentPath,
+} from "@/components/console/file-inspector";
+import { FileSize, ResourceDate } from "@/components/console/library-format";
+import { ResourceDownload } from "@/components/console/resource-download";
+import {
+  LibraryRowMenu,
+  ResourceLibrary,
+} from "@/components/console/resource-library";
+import { ResourceUploadDialog } from "@/components/console/resource-upload-dialog";
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-const COLUMNS: Column<PlatformFile>[] = [
-  { key: "id", header: "ID", cell: (f) => <IdCell id={f.id} /> },
+const columns: Column<PlatformFile>[] = [
+  { key: "id", header: "ID", cell: (file) => <IdCell id={file.id} full /> },
   {
-    key: "filename",
-    header: "Filename",
+    key: "name",
+    header: "Name",
     className: "w-full",
-    cell: (f) => f.filename,
-  },
-  {
-    key: "mime",
-    header: "Type",
-    cell: (f) => (
-      <span className="font-mono text-[12px] text-muted-foreground">
-        {f.mime_type}
-      </span>
-    ),
+    cell: (file) => file.filename,
   },
   {
     key: "size",
     header: "Size",
-    cell: (f) => (
-      <span data-size-bytes={f.size_bytes}>{formatBytes(f.size_bytes)}</span>
-    ),
-  },
-  // No Scope column: this unfiltered list never carries a session-scoped row
-  // (files.go listFiles, platform #578, as on the reference). A session's
-  // copies and outputs are listed in its Resources (useSessionFiles).
-  {
-    key: "downloadable",
-    header: "Downloadable",
-    // Management-lane downloads of plain uploads 400 on the platform
-    // (downloadable:false) — surface the flag instead of a dead button.
-    cell: (f) => (f.downloadable ? "yes" : "no"),
+    cell: (file) => <FileSize bytes={file.size_bytes} />,
   },
   {
     key: "created",
     header: "Created",
-    cell: (f) => <Day iso={f.created_at} />,
+    cell: (file) => <ResourceDate iso={file.created_at} />,
+  },
+  {
+    key: "expires",
+    header: "Expires",
+    cell: (file) =>
+      file.expires_at ? <ResourceDate iso={file.expires_at} /> : "—",
   },
 ];
 
-export default function FilesPage() {
-  const pager = useCursorPage("files");
-  const { data, error, isPending, isPlaceholderData } = useFiles(pager.page);
+function FileUploadButton({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
   const upload = useUploadFile();
-  const remove = useDeleteFile();
-  const input = useRef<HTMLInputElement>(null);
-
-  const columns: Column<PlatformFile>[] = [
-    ...COLUMNS,
-    {
-      key: "actions",
-      header: "",
-      cell: (f) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-muted-foreground"
-          aria-label={`Delete ${f.filename}`}
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(f.id)}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      ),
-    },
-  ];
-
-  if (isUnimplemented(error)) return <UnavailableSurface surface="files" />;
-
   return (
-    <div>
-      <PageHeader
-        title="Files"
-        subtitle={SURFACES.files.blurb}
-        actions={
-          <>
-            <input
-              ref={input}
-              type="file"
-              aria-label="Upload file"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) upload.mutate(file);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              className="h-8"
-              disabled={upload.isPending}
-              onClick={() => input.current?.click()}
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Upload />
+        Upload file
+      </Button>
+      {open && (
+        <ResourceUploadDialog
+          mode="file"
+          onClose={() => setOpen(false)}
+          onSubmit={async ([file]) => {
+            await upload.mutateAsync(file);
+            toast.success("File uploaded");
+            onCreated();
+          }}
+        />
+      )}
+    </>
+  );
+}
+function FilesList() {
+  const page = useCursorPage("files");
+  const list = useFiles(page.page);
+  return (
+    <ResourceLibrary
+      kind="file"
+      title="Files"
+      description="Upload and manage files to use with the API."
+      page={page}
+      list={list}
+      getRecord={getFile}
+      columns={columns}
+      name={(file) => file.filename}
+      UploadButton={FileUploadButton}
+      action={(file, remove) => (
+        <div className="inline-flex items-center gap-1">
+          {file.downloadable ? (
+            <ResourceDownload
+              aria-label={"Download " + file.filename}
+              className="inline-flex size-6 items-center justify-center text-muted-foreground"
+              onClick={(event) => event.stopPropagation()}
+              path={fileContentPath(file.id)}
+              filename={file.filename}
             >
-              <Upload className="size-4" />
-              {upload.isPending ? "Uploading…" : "Upload file"}
+              <Download className="size-3.5" />
+            </ResourceDownload>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={"Download " + file.filename}
+              disabled
+            >
+              <Download />
             </Button>
-          </>
-        }
-      />
-      {upload.error instanceof Error && (
-        <p className="pb-2 text-sm text-destructive">
-          Upload failed: {upload.error.message}
-        </p>
+          )}
+          <LibraryRowMenu name={file.filename} onDelete={remove} />
+        </div>
       )}
-      {error ? (
-        <ErrorState error={error} />
-      ) : (
-        <>
-          <DataTable
-            columns={columns}
-            rows={data?.data ?? []}
-            rowKey={(f) => f.id}
-            loading={isPending}
-            empty={
-              <EmptyState
-                title="No files yet"
-                hint="Upload a file to make it mountable in sessions."
-              />
-            }
-          />
-          <Pager
-            hasPrev={pager.hasPrev && !isPlaceholderData}
-            hasNext={!!data?.next_page && !isPlaceholderData}
-            onPrev={pager.goPrev}
-            onNext={() => data?.next_page && pager.goNext(data.next_page)}
-          />
-        </>
-      )}
-    </div>
+      Inspector={FileInspector}
+    />
+  );
+}
+export default function FilesPage() {
+  return (
+    <Suspense>
+      <FilesList />
+    </Suspense>
   );
 }

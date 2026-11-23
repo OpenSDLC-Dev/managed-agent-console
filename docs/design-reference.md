@@ -181,19 +181,19 @@ A test-owned upload scoped as an output through SQL survived archive and returne
 checks deletion against stored output bytes without claiming a model-harvest run.
 Re-shot and inspected `files-list` and `session-delete` in both Chrome themes.
 
-## Skills — checked 2026-09-11
+## Files and Skills — checked 2026-11-23
 
-Chrome and DevTools confirm an exact-ID lookup and a non-modal right inspector:
-560px wide, fixed 8px from the viewport edges, with a draggable separator,
-double-click reset, previous/next controls and `?skill=` selection. It offers
-Rendered/API views and per-version copy controls. Existing standalone console
-detail links remain supported; the list opens the inspector.
-The platform only supplies descriptions on versions (`internal/api/skills.go`),
-so the console keeps descriptions with their versions instead of inventing a
-skill-level description. API view shows the actual skill response. Documentation
-links target this deployment's upstream project; no browser credential is shown.
-Our upload offers a ZIP or directory: the platform requires loose filenames to
-retain their top-level directory, which a normal browser file picker loses.
+Signed-in Chrome showed searchable Files and Skills tables, a serif page title, selection checkboxes, row actions and a resizable right inspector. A failed exact-ID lookup appears in the list. A matching file is a result row. Enter on a matching skill opens its inspector. Both inspectors retain the list, previous/next navigation, Rendered/API and a shareable URL. The search palette opens the same inspectors. Existing standalone skill URLs still work.
+
+Files stage a single file before upload. Ordinary uploads have no downloadable content. The console reads the platform’s metadata by ID and only requests previews for downloadable text up to 1 MiB. Files and custom skills have named single and bulk deletion confirmations. Bulk deletion calls the existing per-ID endpoints and retains refused IDs for retry. Selecting a catalog skill disables bulk deletion.
+
+Create skill and Update share one drag-and-drop form. Creation returns to the list. Directory uploads preserve relative paths. For a loose SKILL.md the form supplies the directory required by the platform, using its frontmatter name when available. The platform validates the bundle and supplies the display name and version description. The hosted form advertises 8 MB; this deployment accepts 30 MiB of uncompressed skill contents. The standalone detail also preserves historical descriptions, version downloads and version deletion.
+
+### Repeat the Files and Skills comparison
+
+1. Build with `pnpm build`, then run `pnpm exec playwright test test/e2e/resource-library.spec.ts test/e2e/skills-inspector.spec.ts test/e2e/resources.spec.ts`. These run in the standard E2E suite against the resettable project fixture.
+2. Exercise staged upload, dismissal, full-ID copy, lookup and clear, drawer tabs and navigation, allowed and unavailable downloads, single deletion, mixed selection and partial bulk retry. Delete the final row on the last page and verify the earlier files are visible. Create a custom skill with another inspector open, update it, download and delete a version, and verify the catalog remains read-only.
+3. Run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (files-list|skills-list|file-inspector|file-upload|file-delete-confirmation|skill-(inspector|detail|upload|update|lookup-miss))'`. Compare the two Chrome themes in `fidelity-shots/` with the signed-in reference at [Files](https://platform.claude.com/workspaces/default/files) and [Skills](https://platform.claude.com/workspaces/default/skills). Use disposable data for write checks.
 
 ## Session resources — checked 2026-09-06
 

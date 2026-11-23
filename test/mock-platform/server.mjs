@@ -5570,6 +5570,9 @@ const server = createServer(async (req, res) => {
       const head = body.toString("latin1");
       const title =
         /name="display_name"\r?\n\r?\n([^\r\n]+)/.exec(head)?.[1] ??
+        // The loose-file fixture follows skills.go:createSkill: without an
+        // explicit display name, the qualified bundle directory names the skill.
+        /filename="([^"/]+)\/SKILL\.md"/.exec(head)?.[1] ??
         `skill-${skillCounter}`;
       const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const skill = {

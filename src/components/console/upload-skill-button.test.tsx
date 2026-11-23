@@ -1,6 +1,6 @@
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -13,237 +13,99 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UploadSkillButton } from "./upload-skill-button";
 
-const pushSpy = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: pushSpy, back: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/skills",
-  useSearchParams: () => new URLSearchParams(),
-}));
-
-function renderButton() {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-  return render(
-    <QueryClientProvider client={client}>
-      <UploadSkillButton />
-    </QueryClientProvider>,
-  );
-}
-
-const skillMd = () =>
-  new File(["# skill"], "SKILL.md", { type: "text/markdown" });
-const script = () => new File(["echo hi"], "run.sh", { type: "text/x-sh" });
-
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  pushSpy.mockReset();
 });
 
-describe("UploadSkillButton", () => {
-  it("preserves folder-relative paths in multipart uploads", async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ id: "skill_folder" }), { status: 200 }),
-    );
-    vi.stubGlobal("fetch", withTestSession(fetchMock));
-    renderButton();
-    await userEvent.click(screen.getByRole("button", { name: "Upload skill" }));
-    const file = skillMd();
-    Object.defineProperty(file, "webkitRelativePath", {
-      value: "deploy/SKILL.md",
-    });
-    fireEvent.change(screen.getByLabelText("Or select a folder"), {
-      target: { files: [file] },
-    });
-    await userEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
-        name: "Upload skill",
-      }),
-    );
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0] as unknown as [
-      string,
-      RequestInit,
-    ];
-    expect(((init.body as FormData).get("files[]") as File).name).toBe(
-      "deploy/SKILL.md",
-    );
+async function setup(
+  response: () => Promise<Response> = async () =>
+    Response.json({ id: "skill_1" }),
+) {
+  const fetch =
+    vi.fn<(url: string, init: RequestInit) => Promise<Response>>(response);
+  vi.stubGlobal("fetch", withTestSession(fetch));
+  const created = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <UploadSkillButton onCreated={created} />
+    </QueryClientProvider>,
+  );
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Create skill" }));
+  const dialog = within(await screen.findByRole("dialog"));
+  const submit = dialog.getByRole("button", { name: "Create skill" });
+  return { fetch, user, dialog, submit, created };
+}
+const manifest = () =>
+  new File(
+    ["---\nname: deploy\ndescription: Test instructions.\n---\nText"],
+    "SKILL.md",
+    { type: "text/markdown" },
+  );
+
+it("checks an empty form inline and stages multipart files without a display-name override", async () => {
+  const { fetch, user, dialog, submit, created } = await setup();
+  await user.click(submit);
+  expect(await dialog.findByRole("alert")).toHaveTextContent(
+    "Choose files or a folder",
+  );
+  await user.upload(dialog.getByLabelText("Skill files"), [
+    manifest(),
+    new File(["Notes"], "notes.txt"),
+  ]);
+  expect(fetch).not.toHaveBeenCalled();
+  await user.click(submit);
+  await waitFor(() => expect(created).toHaveBeenCalledOnce());
+  const form = fetch.mock.calls[0][1].body as FormData;
+  expect(form.getAll("files[]").map((file) => (file as File).name)).toEqual([
+    "deploy/SKILL.md",
+    "deploy/notes.txt",
+  ]);
+  expect(form.get("display_name")).toBeNull();
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("preserves the directory picker's relative paths", async () => {
+  const { fetch, dialog, user, submit } = await setup();
+  const file = manifest();
+  Object.defineProperty(file, "webkitRelativePath", {
+    value: "deploy/SKILL.md",
   });
-  it("posts multipart files[] plus display_name and navigates to the skill", async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ id: "skill_1", type: "skill" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-    );
-    vi.stubGlobal("fetch", withTestSession(fetchMock));
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    const dialog = await screen.findByRole("dialog");
-
-    const submit = within(dialog).getByRole("button", { name: "Upload skill" });
-    expect(submit).toBeDisabled();
-
-    await user.type(screen.getByLabelText("Display name (optional)"), "Deploy");
-    await user.upload(screen.getByLabelText("ZIP archive"), [
-      skillMd(),
-      script(),
-    ]);
-    expect(screen.getByText("2 files selected")).toBeDefined();
-    expect(submit).toBeEnabled();
-    await user.click(submit);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [
-      string,
-      RequestInit,
-    ];
-    expect(url).toBe("/api/organizations/default/proxy/v1/skills");
-    expect(init.method).toBe("POST");
-    const form = init.body as FormData;
-    expect(form).toBeInstanceOf(FormData);
-    expect(form.getAll("files[]").map((f) => (f as File).name)).toEqual([
-      "SKILL.md",
-      "run.sh",
-    ]);
-    expect(form.get("display_name")).toBe("Deploy");
-    await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/skills/skill_1"),
-    );
+  fireEvent.change(dialog.getByLabelText("Skill folder"), {
+    target: { files: [file] },
   });
+  await user.click(submit);
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(
+    ((fetch.mock.calls[0][1].body as FormData).get("files[]") as File).name,
+  ).toBe("deploy/SKILL.md");
+});
 
-  it("omits display_name when blank and pluralizes the file count", async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ id: "skill_2", type: "skill" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-    );
-    vi.stubGlobal("fetch", withTestSession(fetchMock));
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
-    expect(screen.getByText("1 file selected")).toBeDefined();
-    await user.click(
-      within(dialog).getByRole("button", { name: "Upload skill" }),
-    );
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [, init] = fetchMock.mock.calls[0] as unknown as [
-      string,
-      RequestInit,
-    ];
-    expect((init.body as FormData).get("display_name")).toBeNull();
-  });
-
-  it("shows Uploading… while the request is in flight", async () => {
-    let resolveFetch!: (r: Response) => void;
-    vi.stubGlobal(
-      "fetch",
-      withTestSession(
-        vi.fn(() => new Promise<Response>((r) => (resolveFetch = r))),
-      ),
-    );
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
-    await user.click(
-      within(dialog).getByRole("button", { name: "Upload skill" }),
-    );
-
-    const pendingButton = await within(dialog).findByRole("button", {
-      name: "Uploading…",
-    });
-    expect(pendingButton).toBeDisabled();
-
-    resolveFetch(
-      new Response(JSON.stringify({ id: "skill_3", type: "skill" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
-    await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/skills/skill_3"),
-    );
-  });
-
-  it("surfaces the platform error and stays open", async () => {
-    vi.stubGlobal(
-      "fetch",
-      withTestSession(
-        vi.fn(
-          async () =>
-            new Response(
-              JSON.stringify({
-                type: "error",
-                error: {
-                  type: "invalid_request_error",
-                  message: "zip exceeds 32 MiB",
-                },
-              }),
-              { status: 400, headers: { "content-type": "application/json" } },
-            ),
-        ),
-      ),
-    );
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    const dialog = await screen.findByRole("dialog");
-    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
-    await user.click(
-      within(dialog).getByRole("button", { name: "Upload skill" }),
-    );
-
-    expect(await screen.findByText("zip exceeds 32 MiB")).toBeDefined();
-    expect(screen.getByRole("dialog")).toBeDefined();
-    expect(pushSpy).not.toHaveBeenCalled();
-  });
-
-  it("dismissing the dialog clears title and file selection", async () => {
-    vi.stubGlobal("fetch", withTestSession(vi.fn()));
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    await screen.findByRole("dialog");
-    await user.type(screen.getByLabelText("Display name (optional)"), "x");
-    await user.upload(screen.getByLabelText("ZIP archive"), skillMd());
-    await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    await screen.findByRole("dialog");
-    expect(screen.getByLabelText("Display name (optional)")).toHaveValue("");
-    expect(screen.queryByText(/selected/)).toBeNull();
-  });
-
-  it("cancel closes the dialog without uploading", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", withTestSession(fetchMock));
-    const user = userEvent.setup();
-    renderButton();
-
-    await user.click(screen.getByRole("button", { name: /Upload skill/ }));
-    await screen.findByRole("dialog");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+it("retains staged files on refusal, removes them, and discards the form on Escape", async () => {
+  const { dialog, user, submit, created } = await setup(async () =>
+    Response.json(
+      {
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "Invalid skill archive",
+        },
+      },
+      { status: 400 },
+    ),
+  );
+  await user.upload(dialog.getByLabelText("Skill files"), manifest());
+  await user.click(submit);
+  expect(await dialog.findByRole("alert")).toHaveTextContent(
+    "Invalid skill archive",
+  );
+  await user.click(dialog.getByRole("button", { name: "Remove SKILL.md" }));
+  expect(dialog.queryByText("SKILL.md")).toBeNull();
+  await user.upload(dialog.getByLabelText("Skill files"), manifest());
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await user.click(screen.getByRole("button", { name: "Create skill" }));
+  expect(screen.queryByRole("button", { name: "Remove SKILL.md" })).toBeNull();
+  expect(created).not.toHaveBeenCalled();
 });

@@ -1327,11 +1327,8 @@ const mutationCases: MutationCase[] = [
     path: "/api/organizations/default/proxy/v1/skills/skl_1/versions",
     method: "POST",
     formEntries: [["files[]", "SKILL.md"]],
-    meta: { errorTitle: "Upload failed" },
-    invalidates: [
-      ["skill", "skl_1"],
-      ["skill-versions", "skl_1"],
-    ],
+    meta: { errorToast: false },
+    invalidates: [["skills"], ["skill", "skl_1"], ["skill-versions", "skl_1"]],
   },
   {
     name: "useDeleteSkillVersion",
@@ -1340,10 +1337,7 @@ const mutationCases: MutationCase[] = [
     path: "/api/organizations/default/proxy/v1/skills/skl_1/versions/1759178010641556",
     method: "DELETE",
     meta: { errorTitle: "Delete failed" },
-    invalidates: [
-      ["skill", "skl_1"],
-      ["skill-versions", "skl_1"],
-    ],
+    invalidates: [["skills"], ["skill", "skl_1"], ["skill-versions", "skl_1"]],
   },
   {
     name: "useDeleteSkill",

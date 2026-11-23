@@ -170,7 +170,11 @@ async function openEditor(user: ReturnType<typeof userEvent.setup>) {
     await screen.findByRole("button", { name: "More actions for build-bot" }),
   );
   await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
-  return within(await screen.findByRole("dialog", { name: "build-bot" }));
+  return waitFor(() => {
+    const editor = within(screen.getByRole("dialog", { name: "build-bot" }));
+    editor.getByRole("textbox", { name: /Description/ });
+    return editor;
+  });
 }
 
 it.each([

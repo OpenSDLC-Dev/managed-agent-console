@@ -25,6 +25,7 @@ export function useCursorPage(resetKey: string) {
 
   return {
     page: current.page,
+    first: () => setState({ key: resetKey, page: undefined, stack: [] }),
     hasPrev: current.stack.length > 0,
     goNext: (nextToken: string) =>
       setState({
