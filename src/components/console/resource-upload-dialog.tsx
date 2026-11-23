@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,10 +15,12 @@ export function ResourceUploadDialog({
   mode,
   onSubmit,
   onClose,
+  finalFocus,
 }: {
   mode: "file" | "skill" | "version";
   onSubmit: (files: File[]) => Promise<unknown>;
   onClose: () => void;
+  finalFocus?: RefObject<HTMLButtonElement | null>;
 }) {
   const skill = mode !== "file";
   const title =
@@ -96,6 +98,7 @@ export function ResourceUploadDialog({
         data-library-dialog=""
         className="sm:max-w-[520px] max-h-[85dvh] overflow-y-auto"
         initialFocus={choose}
+        finalFocus={finalFocus}
       >
         <DialogTitle>{title}</DialogTitle>
         {skill ? (

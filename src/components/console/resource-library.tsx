@@ -31,6 +31,7 @@ import { DataTable, type Column } from "./data-table";
 import { ErrorState, UnavailableSurface } from "./bits";
 import { Pager } from "./pager";
 import { PlatformError, type Page } from "@/lib/platform/http";
+import { isPermissionDenied } from "@/lib/platform/denied";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
 import type { useCursorPage } from "@/lib/platform/use-cursor-page";
@@ -121,7 +122,10 @@ export function ResourceLibrary<T extends RecordWithID>({
   action: (row: T, remove: () => void) => ReactNode;
   Inspector: ComponentType<InspectorNavigation>;
   canDelete?: (row: T) => boolean;
-  UploadButton: ComponentType<{ onCreated: () => void }>;
+  UploadButton: ComponentType<{
+    onCreated: () => void;
+    onDismissCreateRequest?: () => void;
+  }>;
 }) {
   const path = "/" + kind + "s";
   const params = useSearchParams();
@@ -268,6 +272,7 @@ export function ResourceLibrary<T extends RecordWithID>({
     return (
       <UnavailableSurface surface={kind === "file" ? "files" : "skills"} />
     );
+  if (isPermissionDenied(list.error)) return <ErrorState error={list.error} />;
   const index = rows.findIndex((row) => row.id === active);
   const selectColumn: Column<T> = {
     key: "select",
@@ -327,6 +332,16 @@ export function ResourceLibrary<T extends RecordWithID>({
     page.first();
     if (active) open();
   }
+  function dismissCreateRequest() {
+    const current = new URL(window.location.href);
+    if (
+      current.pathname !== path ||
+      current.searchParams.get("create") !== "true"
+    )
+      return;
+    current.searchParams.delete("create");
+    router.replace(path + current.search, { scroll: false });
+  }
   const count = deletion?.rows.length ?? 0;
   const deleteLabel =
     "Delete " +
@@ -340,7 +355,17 @@ export function ResourceLibrary<T extends RecordWithID>({
           <h1 className="font-serif text-2xl font-medium leading-8">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <UploadButton onCreated={created} />
+        <UploadButton
+          onCreated={created}
+          onDismissCreateRequest={
+            kind === "skill" &&
+            params.get("create") === "true" &&
+            list.data &&
+            !list.isPlaceholderData
+              ? dismissCreateRequest
+              : undefined
+          }
+        />
       </header>
       <form
         className="relative mb-3 w-80 max-w-full"

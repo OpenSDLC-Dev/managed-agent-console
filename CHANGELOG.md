@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Resources opens on the Default workspace overview with file and skill counts, recent records, links to each library and an Add menu.
+
 - Claude Code, Codex and Antigravity CLI now share repository instructions, scoped rules, skills and independent review roles. Look for the startup hook's drift-check receipt in each new session. If it is missing, run the doctor manually and verify the hook in a fresh session.
 
 - Playground can request Bash, desktop, browser, web search and web fetch tools. Inspect the arguments and enter results to continue the conversation. DeepSeek Flash returns web results directly. Each tool has a starter template.

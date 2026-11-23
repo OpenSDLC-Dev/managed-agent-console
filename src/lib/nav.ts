@@ -29,6 +29,7 @@ import {
   MESSAGES_ROUTE,
   MESSAGE_LOGS_ROUTE,
   PLAYGROUND_ROUTE,
+  RESOURCES_ROUTE,
 } from "./routes";
 
 export interface Destination {
@@ -108,6 +109,12 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
         label: "Resources",
         icon: Boxes,
         items: [
+          {
+            key: "nav-resource-overview",
+            label: "Overview",
+            href: RESOURCES_ROUTE,
+            icon: LayoutDashboard,
+          },
           surfaceEntry("files", FileText),
           surfaceEntry("skills", Sparkles),
         ],

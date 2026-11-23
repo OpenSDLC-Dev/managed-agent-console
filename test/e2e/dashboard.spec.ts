@@ -910,7 +910,7 @@ test("submenus return to all sections and mobile navigation resets on resize", a
   await expect(nav).toHaveAttribute("data-nav-view", "root");
   await nav.locator('[data-nav-group="Resources"]').click();
   await expect(nav).toHaveAttribute("data-nav-view", "Resources");
-  await expect(page).toHaveURL(/\/files$/);
+  await expect(page).toHaveURL(/\/resources$/);
   await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
   await expect(
     nav.getByRole("link", { name: "Files", exact: true }),
@@ -922,7 +922,7 @@ test("submenus return to all sections and mobile navigation resets on resize", a
   ).toHaveAttribute("aria-current", "page");
   await page.goBack();
   await expect(
-    nav.getByRole("link", { name: "Files", exact: true }),
+    nav.getByRole("link", { name: "Overview", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await page.goForward();
   await expect(

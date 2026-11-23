@@ -172,7 +172,7 @@ test("confirming a dirty draft's group navigation focuses its submenu", async ({
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await nav.getByRole("button", { name: "Back to all sections" }).click();
   const resources = nav.locator('[data-nav-group="Resources"]');
-  await expect(resources).toHaveAttribute("href", "/files");
+  await expect(resources).toHaveAttribute("href", "/resources");
   const prompt = page.getByRole("dialog", { name: "Unsaved changes" });
   await resources.click();
   await prompt.getByRole("button", { name: "Stay" }).click();
@@ -180,7 +180,7 @@ test("confirming a dirty draft's group navigation focuses its submenu", async ({
   await expect(nav).toHaveAttribute("data-nav-view", "root");
   await resources.click();
   await prompt.getByRole("button", { name: "Leave" }).click();
-  await expect(page).toHaveURL(/\/files$/);
+  await expect(page).toHaveURL(/\/resources$/);
   await expect(
     nav.getByRole("button", { name: "Back to all sections" }),
   ).toBeFocused();
