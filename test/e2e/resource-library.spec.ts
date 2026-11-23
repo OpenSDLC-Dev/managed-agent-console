@@ -387,6 +387,41 @@ test("lookup reaches an off-page skill and a failed read stays distinguishable f
   ).toBeVisible();
 });
 
+test("a slow exact lookup respects Back to a different skill", async ({
+  page,
+}) => {
+  await signIn(page, "/skills?skill=xlsx");
+  const panel = page.getByRole("region", { name: "Skill details" });
+  await panel.getByRole("button", { name: "Close details" }).click();
+  await expect(page).toHaveURL("/skills");
+  let finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**" + skills + "/" + custom, async (route) => {
+    await pending;
+    await route.continue();
+  });
+  const lookup = page.getByRole("textbox", { name: "Find skill by ID" });
+  const requested = page.waitForRequest((req) =>
+    req.url().endsWith(skills + "/" + custom),
+  );
+  try {
+    await lookup.fill(custom);
+    await lookup.press("Enter");
+    await requested;
+    await page.goBack();
+    await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
+  } finally {
+    finish();
+  }
+  await expect(
+    page.getByRole("cell", { name: "Weekly report writer", exact: true }),
+  ).toBeVisible();
+  await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
+  await expect(page).toHaveURL("/skills?skill=xlsx");
+});
+
 test("drop a file and create a skill from a folder with nested files", async ({
   page,
 }, testInfo) => {

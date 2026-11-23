@@ -169,11 +169,12 @@ export function ResourceLibrary<T extends RecordWithID>({
   const remove = useDeleteLibraryResources(kind);
   const cancel = useRef<HTMLButtonElement>(null);
   const searchIntent = useRef(0);
+  const locationQuery = params.toString();
   useEffect(
     () => () => {
       searchIntent.current++;
     },
-    [],
+    [locationQuery],
   );
 
   function open(id?: string) {
@@ -196,10 +197,12 @@ export function ResourceLibrary<T extends RecordWithID>({
     setID(trimmed);
     if (kind === "skill") {
       const intent = ++searchIntent.current;
+      const sourceURL = window.location.href;
       try {
         const record = await client.fetchQuery(options(trimmed));
         if (
           intent === searchIntent.current &&
+          window.location.href === sourceURL &&
           input.current?.value.trim() === trimmed
         ) {
           trigger.current = input.current;
