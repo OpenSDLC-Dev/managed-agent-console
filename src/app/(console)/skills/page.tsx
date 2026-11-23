@@ -32,7 +32,7 @@ const columns: Column<Skill>[] = [
     cell: (skill) => (
       <Badge
         variant="secondary"
-        className="font-normal capitalize"
+        className="font-normal capitalize data-[source=anthropic]:bg-blue-500/10 data-[source=anthropic]:text-blue-700 dark:data-[source=anthropic]:text-blue-300"
         data-source={skill.source.type}
       >
         {skill.source.type}

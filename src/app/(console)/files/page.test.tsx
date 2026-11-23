@@ -131,6 +131,33 @@ describe("FilesPage", () => {
     expect(await screen.findByText("No files yet")).toBeInTheDocument();
   });
 
+  it("surfaces a proxy 404 on the collection", async () => {
+    stubFetch(() => new Response("Proxy route missing", { status: 404 }));
+    renderPage();
+    expect(await screen.findByTestId("error-state")).toHaveTextContent(
+      "HTTP 404",
+    );
+    expect(screen.queryByText("No files yet")).toBeNull();
+  });
+
+  it("surfaces a proxy 404 during exact lookup", async () => {
+    stubFetch((url) =>
+      url.pathname.endsWith("/files")
+        ? json(filePage([]))
+        : new Response("Proxy route missing", { status: 404 }),
+    );
+    renderPage();
+    await screen.findByText("No files yet");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Find file by ID" }),
+      "missing{Enter}",
+    );
+    expect(await screen.findByTestId("error-state")).toHaveTextContent(
+      "HTTP 404",
+    );
+    expect(screen.queryByText("File not found")).toBeNull();
+  });
+
   it("renders file rows with size and downloadable flags", async () => {
     const fetchMock = stubFetch(() =>
       json(

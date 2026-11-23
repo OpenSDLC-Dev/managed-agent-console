@@ -35,9 +35,11 @@ export function UploadSkillButton({ onCreated }: { onCreated?: () => void }) {
 export function UpdateSkillDialog({
   id,
   onClose,
+  onCreated,
 }: {
   id: string;
   onClose: () => void;
+  onCreated?: () => void;
 }) {
   const version = useUploadSkillVersion(id);
   return (
@@ -47,6 +49,7 @@ export function UpdateSkillDialog({
       onSubmit={async (files) => {
         await version.mutateAsync(await skillUploadFiles(files));
         toast.success("Version created");
+        onCreated?.();
       }}
     />
   );

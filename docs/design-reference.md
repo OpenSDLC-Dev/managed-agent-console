@@ -192,7 +192,7 @@ Create skill and Update share one drag-and-drop form. Creation returns to the li
 ### Repeat the Files and Skills comparison
 
 1. Build with `pnpm build`, then run `pnpm exec playwright test test/e2e/resource-library.spec.ts test/e2e/skills-inspector.spec.ts test/e2e/resources.spec.ts`. These run in the standard E2E suite against the resettable project fixture.
-2. Exercise staged upload, dismissal, full-ID copy, lookup and clear, drawer tabs and navigation, allowed and unavailable downloads, single deletion, mixed selection and partial bulk retry. Create a custom skill, update it, download and delete a version, and verify the catalog remains read-only.
+2. Exercise staged upload, dismissal, full-ID copy, lookup and clear, drawer tabs and navigation, allowed and unavailable downloads, single deletion, mixed selection and partial bulk retry. Delete the final row on the last page and verify the earlier files are visible. Create a custom skill with another inspector open, update it, download and delete a version, and verify the catalog remains read-only.
 3. Run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: (files-list|skills-list|file-inspector|file-upload|file-delete-confirmation|skill-(inspector|detail|upload|update|lookup-miss))'`. Compare the two Chrome themes in `fidelity-shots/` with the signed-in reference at [Files](https://platform.claude.com/workspaces/default/files) and [Skills](https://platform.claude.com/workspaces/default/skills). Use disposable data for write checks.
 
 ## Session resources — checked 2026-09-06

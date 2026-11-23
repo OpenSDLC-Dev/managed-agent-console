@@ -32,7 +32,10 @@ import { Pager } from "./pager";
 import { PlatformError, type Page } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
 import type { useCursorPage } from "@/lib/platform/use-cursor-page";
-import { useDeleteLibraryResources } from "@/lib/platform/queries";
+import {
+  InvalidLibraryID,
+  useDeleteLibraryResources,
+} from "@/lib/platform/queries";
 
 export function LibraryRowMenu({
   name,
@@ -147,7 +150,12 @@ export function ResourceLibrary<T extends RecordWithID>({
     ? id !== trimmed || matched.isPending
     : list.isPending;
   const error = trimmed ? id === trimmed && matched.error : list.error;
-  const missing = error instanceof PlatformError && error.status === 404;
+  const missing =
+    !!trimmed &&
+    (error instanceof InvalidLibraryID ||
+      (error instanceof PlatformError &&
+        error.status === 404 &&
+        error.errorType === "not_found_error"));
   const scope = [page.page ?? "", trimmed].join("|");
   const [selection, setSelection] = useState({ scope, ids: [] as string[] });
   if (selection.scope !== scope) setSelection({ scope, ids: [] });
@@ -221,6 +229,13 @@ export function ResourceLibrary<T extends RecordWithID>({
       }));
       if (active && succeeded.includes(active)) open();
       if (succeeded.includes(trimmed)) clear();
+      if (
+        !trimmed &&
+        page.hasPrev &&
+        rows.every((row) => succeeded.includes(row.id))
+      ) {
+        page.goPrev();
+      }
     }
     if (failed.length) {
       setDeletion({
@@ -297,6 +312,7 @@ export function ResourceLibrary<T extends RecordWithID>({
   function created() {
     clear();
     page.first();
+    if (active) open();
   }
   const count = deletion?.rows.length ?? 0;
   const deleteLabel =
@@ -372,6 +388,10 @@ export function ResourceLibrary<T extends RecordWithID>({
       </div>
       {error && !missing ? (
         <ErrorState error={error as Error} />
+      ) : !loading && !rows.length && !trimmed && page.hasPrev ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No {kind}s on this page.
+        </p>
       ) : !loading && !rows.length ? (
         <div className="flex min-h-64 flex-col items-center justify-center gap-2 rounded-xl border border-border/60 px-4 text-center">
           <FileStack className="mb-1 size-8 text-muted-foreground" />

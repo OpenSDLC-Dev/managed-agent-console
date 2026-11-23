@@ -1,6 +1,24 @@
 import { expect, it } from "vitest";
 import { droppedSkillFiles, skillUploadFiles } from "./skill-upload-files";
 
+it.each([
+  ["name: 00125", "00125"],
+  ["name: true", "true"],
+  ["slug: &id 314\nname: *id", "314"],
+  ["defaults: &props {name: notes}\n<<: *props", "notes"],
+])(
+  "preserves the platform's scalar spelling in a loose manifest: %s",
+  async (yaml, name) => {
+    const manifest = new File(
+      ["---\n" + yaml + "\ndescription: Test.\n---\n"],
+      "SKILL.md",
+    );
+    expect((await skillUploadFiles([manifest]))[0].name).toBe(
+      name + "/SKILL.md",
+    );
+  },
+);
+
 it("sends archives unchanged and preserves the platform fallback for a loose manifest without a name", async () => {
   const archive = new File(["PK"], "demo.skill");
   expect(await skillUploadFiles([archive])).toEqual([archive]);

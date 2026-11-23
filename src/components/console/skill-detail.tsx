@@ -189,7 +189,11 @@ export function SkillDetail({
                       <IdCell id={v.id} />
                       <ResourceDate iso={v.created_at} />
                       {v.id === skill.latest_version_id && (
-                        <Badge data-latest="true" variant="secondary">
+                        <Badge
+                          data-latest="true"
+                          variant="secondary"
+                          className="bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                        >
                           Latest
                         </Badge>
                       )}
@@ -260,10 +264,8 @@ export function SkillDetail({
       {updating && custom && (
         <UpdateSkillDialog
           id={id}
-          onClose={() => {
-            setUpdating(false);
-            page.first();
-          }}
+          onClose={() => setUpdating(false)}
+          onCreated={page.first}
         />
       )}
     </div>

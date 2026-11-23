@@ -157,7 +157,7 @@ describe("SkillDetailPage", () => {
     ).toBeDisabled();
   });
 
-  it("pages version IDs forwards and backwards using platform cursors", async () => {
+  it("keeps the version-history cursor when an update is dismissed", async () => {
     stubFetch((url) => {
       if (url.pathname.endsWith("/versions"))
         return json(
@@ -172,6 +172,13 @@ describe("SkillDetailPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next page" }));
     await screen.findByLabelText("Download version skver_older");
     expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Update" }));
+    await screen.findByRole("dialog", { name: "Update skill" });
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      screen.getByLabelText("Download version skver_older"),
+    ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", { name: "Previous page" }),
     );

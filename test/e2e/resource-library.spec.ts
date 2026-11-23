@@ -118,6 +118,11 @@ test("file lookup, copy, drawer tabs, neighbor navigation, history and downloads
   await expect(
     page.getByRole("heading", { name: "File not found" }),
   ).toBeVisible();
+  await lookup.fill(".");
+  await lookup.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "File not found" }),
+  ).toBeVisible();
   // The generated output is outside the unscoped list, even on its first page.
   await lookup.fill("file_output000000000001");
   await lookup.press("Enter");
@@ -191,8 +196,12 @@ test("bulk file deletion retries only refused IDs and restores the empty upload 
 test("skill creation stays on the list, Update stages a new version, version actions and skill deletion work", async ({
   page,
 }) => {
-  await signIn(page, "/skills");
-  await page.getByRole("button", { name: "Create skill", exact: true }).click();
+  await signIn(page, "/skills?skill=xlsx");
+  const panel = page.getByRole("region", { name: "Skill details" });
+  await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
+  await page
+    .getByRole("button", { name: "Create skill", exact: true })
+    .press("Enter");
   const create = page.getByRole("dialog", { name: "Create skill" });
   await create.getByRole("button", { name: "Create skill" }).click();
   await expect(create.getByRole("alert")).toBeVisible();
@@ -212,6 +221,7 @@ test("skill creation stays on the list, Update stages a new version, version act
   expect((await response.json()).display_name).toBe("release-notes");
   const skill = await response.json();
   await expect(page).toHaveURL("/skills");
+  await expect(panel).toBeHidden();
   const row = page.getByRole("row").filter({
     has: page.getByRole("button", { name: "Copy " + skill.id, exact: true }),
   });
@@ -228,7 +238,6 @@ test("skill creation stays on the list, Update stages a new version, version act
   await row
     .getByRole("cell", { name: skill.display_name, exact: true })
     .click();
-  const panel = page.getByRole("region", { name: "Skill details" });
   await panel.getByRole("button", { name: "Update" }).click();
   await expect(
     update.getByRole("button", { name: "Remove SKILL.md" }),
@@ -267,6 +276,38 @@ test("skill creation stays on the list, Update stages a new version, version act
     .getByRole("button", { name: "Delete skill" })
     .click();
   await expect(row).toHaveCount(0);
+});
+
+test("deleting the last row on the final cursor page returns to the remaining files", async ({
+  page,
+}) => {
+  await signIn(page, "/files");
+  const seed = await browserPost(page, files, {
+    multipart: { file: text("first-page.txt") },
+  });
+  expect(seed.ok()).toBeTruthy();
+  await page.route("**" + files + "?*", async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set("limit", "1");
+    await route.continue({ url: url.href });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(
+    page.getByRole("cell", { name: "research-notes.md", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select all rows" }).check();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete 1 file" })
+    .click();
+  await expect(
+    page.getByRole("cell", { name: "first-page.txt", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No files yet" })).toHaveCount(
+    0,
+  );
 });
 
 test("skill selection protects catalog skills and allows confirmed deletion of custom skills", async ({

@@ -556,8 +556,18 @@ export function useSkillOptions() {
   });
 }
 
+export class InvalidLibraryID extends Error {}
+
+function libraryPath(collection: "files" | "skills", id: string) {
+  // URL parsing resolves dot segments before sending a request. Neither is
+  // an addressable file ID or catalog skill name on the platform.
+  if (id === "." || id === "..")
+    throw new InvalidLibraryID("Invalid resource ID.");
+  return `v1/${collection}/${encodeURIComponent(id)}`;
+}
+
 export function getSkill(id: string) {
-  return platformGet<Skill>(`v1/skills/${encodeURIComponent(id)}`);
+  return platformGet<Skill>(libraryPath("skills", id));
 }
 
 export function useSkill(id: string) {
@@ -571,20 +581,17 @@ export function useSkillVersions(id: string, page?: string) {
   return useQuery({
     queryKey: ["skill-versions", id, page],
     queryFn: () =>
-      platformGet<Page<SkillVersion>>(
-        `v1/skills/${encodeURIComponent(id)}/versions`,
-        {
-          limit: 20,
-          page,
-        },
-      ),
+      platformGet<Page<SkillVersion>>(libraryPath("skills", id) + "/versions", {
+        limit: 20,
+        page,
+      }),
     placeholderData: keepPreviousData,
   });
 }
 
 // internal/api/files.go:getFile, downloadFile. The latter enforces downloadable and expiry.
 export function getFile(id: string) {
-  return platformGet<PlatformFile>(`v1/files/${encodeURIComponent(id)}`);
+  return platformGet<PlatformFile>(libraryPath("files", id));
 }
 
 export function useFile(id: string) {

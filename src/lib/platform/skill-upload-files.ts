@@ -1,4 +1,27 @@
-import { parseDocument } from "yaml";
+import { parse } from "yaml";
+
+function manifestDirectory(text: string): string {
+  const block = /^\uFEFF?---\r?\n([\s\S]*?)^---\r?$/m.exec(text);
+  if (block) {
+    try {
+      // Platform decodes name into a Go string. Preserve scalar spelling for
+      // valid names such as 00125 and true, including through YAML aliases.
+      const metadata = parse(block[1], {
+        schema: "failsafe",
+        merge: true,
+        logLevel: "silent",
+      });
+      if (
+        typeof metadata?.name === "string" &&
+        /^[a-z0-9-]+$/.test(metadata.name)
+      )
+        return metadata.name;
+    } catch {
+      // The platform returns bundle validation errors to the upload dialog.
+    }
+  }
+  return "skill";
+}
 
 // Directory pickers supply webkitRelativePath. A loose SKILL.md needs the same
 // top-level directory on the wire (internal/skills/skills.go:FromFiles).
@@ -7,16 +30,9 @@ export async function skillUploadFiles(files: File[]): Promise<File[]> {
     (file) => file.name === "SKILL.md" && !file.webkitRelativePath,
   );
   if (!manifest) return files;
-  const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)^---\r?$/m.exec(
-    await manifest.text(),
-  );
-  const parsed =
-    frontmatter && parseDocument(frontmatter[1], { logLevel: "silent" });
-  const name = parsed?.get("name");
   // The platform derives a missing name from the directory. Keep validation
   // there, including any error for malformed frontmatter or an invalid name.
-  const directory =
-    typeof name === "string" && /^[a-z0-9-]+$/.test(name) ? name : "skill";
+  const directory = manifestDirectory(await manifest.text());
   return files.map((file) =>
     file.webkitRelativePath || file.name.includes("/")
       ? file
