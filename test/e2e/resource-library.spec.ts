@@ -247,6 +247,21 @@ test("skill creation stays on the list, Update stages a new version, version act
     .setInputFiles(manifest("release-notes"));
   await update.getByRole("button", { name: "Create version" }).click();
   await expect(panel.locator("[data-version-id]")).toHaveCount(2);
+  const toast = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "Version created" });
+  await expect(toast).toBeVisible();
+  const rendered = panel.getByText("Rendered", { exact: true });
+  const controlBounds = await rendered.boundingBox();
+  await expect
+    .poll(async () => {
+      const bounds = await toast.boundingBox();
+      return bounds && bounds.y + bounds.height <= controlBounds!.y;
+    })
+    .toBe(true);
+  await panel.getByText("API", { exact: true }).click();
+  await expect(panel.locator("pre")).toContainText(skill.id);
+  await rendered.click();
   const latest = panel
     .locator("[data-version-id]")
     .filter({ has: page.locator("[data-latest=true]") });

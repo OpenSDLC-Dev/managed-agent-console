@@ -209,6 +209,11 @@ body:has([data-library-dialog]) [data-slot="dialog-overlay"] {
   background-color: rgb(0 0 0 / 50%);
   backdrop-filter: none;
 }
+/* Leave the Rendered/API controls clickable while an upload toast is visible. */
+body:has([data-library-inspector])
+  [data-sonner-toaster][data-y-position="bottom"] {
+  bottom: max(4.5rem, var(--offset-bottom, 0px), env(safe-area-inset-bottom));
+}
 @media (prefers-color-scheme: dark) {
   main:has([data-resource-library]) {
     background-color: #191919;
