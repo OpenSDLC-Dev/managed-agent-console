@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { IdCell } from "@/components/console/copy-id";
 import type { Column } from "@/components/console/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +12,6 @@ import {
 } from "@/components/console/resource-library";
 import {
   UploadSkillButton,
-  CreateSkillDialog,
   UpdateSkillDialog,
 } from "@/components/console/upload-skill-button";
 import { getSkill, useSkills } from "@/lib/platform/queries";
@@ -55,8 +53,6 @@ const columns: Column<Skill>[] = [
 ];
 
 function SkillsList() {
-  const params = useSearchParams();
-  const router = useRouter();
   const page = useCursorPage("skills");
   const list = useSkills({ page: page.page });
   const [update, setUpdate] = useState<Skill | null>(null);
@@ -86,19 +82,6 @@ function SkillsList() {
       />
       {update && (
         <UpdateSkillDialog id={update.id} onClose={() => setUpdate(null)} />
-      )}
-      {params.get("create") === "true" && (
-        <CreateSkillDialog
-          onCreated={page.first}
-          onClose={() => {
-            const next = new URLSearchParams(params);
-            next.delete("create");
-            router.replace(
-              "/skills" + (next.size ? "?" + next.toString() : ""),
-              { scroll: false },
-            );
-          }}
-        />
       )}
     </>
   );

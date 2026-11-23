@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,42 +8,38 @@ import { ResourceUploadDialog } from "./resource-upload-dialog";
 import { useUploadSkill, useUploadSkillVersion } from "@/lib/platform/queries";
 import { skillUploadFiles } from "@/lib/platform/skill-upload-files";
 
-export function UploadSkillButton({ onCreated }: { onCreated?: () => void }) {
+export function UploadSkillButton({
+  onCreated,
+  onDismissCreateRequest,
+}: {
+  onCreated?: () => void;
+  onDismissCreateRequest?: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const upload = useUploadSkill();
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button ref={trigger} size="sm" onClick={() => setOpen(true)}>
         <Plus />
         Create skill
       </Button>
-      {open && (
-        <CreateSkillDialog
-          onClose={() => setOpen(false)}
-          onCreated={onCreated}
+      {(open || onDismissCreateRequest) && (
+        <ResourceUploadDialog
+          mode="skill"
+          finalFocus={trigger}
+          onClose={() => {
+            setOpen(false);
+            if (trigger.current?.isConnected) onDismissCreateRequest?.();
+          }}
+          onSubmit={async (files) => {
+            await upload.mutateAsync({ files: await skillUploadFiles(files) });
+            toast.success("Skill created");
+            if (trigger.current?.isConnected) onCreated?.();
+          }}
         />
       )}
     </>
-  );
-}
-
-export function CreateSkillDialog({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated?: () => void;
-}) {
-  const upload = useUploadSkill();
-  return (
-    <ResourceUploadDialog
-      mode="skill"
-      onClose={onClose}
-      onSubmit={async (files) => {
-        await upload.mutateAsync({ files: await skillUploadFiles(files) });
-        toast.success("Skill created");
-        onCreated?.();
-      }}
-    />
   );
 }
 

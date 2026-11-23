@@ -4,6 +4,13 @@ import { signIn } from "./sign-in";
 
 const mock = "http://127.0.0.1:18080";
 const fileCollection = "/api/organizations/default/proxy/v1/files";
+const sampleSkill = {
+  name: "SKILL.md",
+  mimeType: "text/markdown",
+  buffer: Buffer.from(
+    "---\nname: overview-skill\ndescription: Overview fixture.\n---\nWrite a summary.",
+  ),
+};
 test.beforeEach(async ({ request }) => {
   expect((await request.post(mock + "/__reset")).ok()).toBeTruthy();
 });
@@ -149,22 +156,20 @@ test("Add opens the file list or the skill creation dialog, and supports cancel 
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/skills$/);
+  const create = page.getByRole("button", {
+    name: "Create skill",
+    exact: true,
+  });
+  await expect(create).toBeFocused();
   await page.goBack();
   await add.click();
   await page.getByRole("menuitem", { name: "Skill", exact: true }).click();
-  await dialog
-    .getByLabel("Skill files")
-    .setInputFiles({
-      name: "SKILL.md",
-      mimeType: "text/markdown",
-      buffer: Buffer.from(
-        "---\nname: overview-skill\ndescription: Overview fixture.\n---\nWrite a summary.",
-      ),
-    });
+  await dialog.getByLabel("Skill files").setInputFiles(sampleSkill);
   await dialog
     .getByRole("button", { name: "Create skill", exact: true })
     .click();
   await expect(page).toHaveURL(/\/skills$/);
+  await expect(create).toBeFocused();
   await page.goBack();
   const skills = page.getByRole("region", { name: "Skills" });
   await expect(skills.locator("[data-count]")).toHaveAttribute(
@@ -174,6 +179,115 @@ test("Add opens the file list or the skill creation dialog, and supports cancel 
   await expect(
     skills.getByRole("link", { name: /overview-skill/ }),
   ).toBeVisible();
+});
+
+test("a skill upload that finishes after Back leaves the user on Overview", async ({
+  page,
+}) => {
+  await signIn(page, "/resources");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Skill", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create skill" });
+  await dialog.getByLabel("Skill files").setInputFiles(sampleSkill);
+  let finish!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/proxy/v1/skills", async (route) => {
+    if (route.request().method() === "POST") await waiting;
+    await route.continue();
+  });
+  const requested = page.waitForRequest(
+    (request) =>
+      request.method() === "POST" && request.url().endsWith("/proxy/v1/skills"),
+  );
+  try {
+    await dialog
+      .getByRole("button", { name: "Create skill", exact: true })
+      .click();
+    await requested;
+    await page.goBack();
+    await expect(page.getByRole("region", { name: "Skills" })).toBeVisible();
+  } finally {
+    finish();
+  }
+  await expect(
+    page
+      .getByRole("region", { name: "Skills" })
+      .getByRole("link", { name: /overview-skill/ }),
+  ).toBeVisible();
+  await expect(page).toHaveURL("/resources");
+});
+
+test("an inconclusive probe keeps the collection visible and its read determines Add", async ({
+  page,
+}) => {
+  let listFails = false;
+  await page.route("**/proxy/v1/skills?*", (route) => {
+    if (
+      !listFails &&
+      new URL(route.request().url()).searchParams.get("limit") !== "1"
+    )
+      return route.continue();
+    return route.fulfill({
+      status: 503,
+      json: {
+        type: "error",
+        error: { type: "api_error", message: "Skills temporarily unavailable" },
+      },
+    });
+  });
+  await signIn(page, "/resources");
+  const skills = page.getByRole("region", { name: "Skills" });
+  await expect(skills.locator("[data-count]")).toHaveAttribute(
+    "data-count",
+    "2",
+  );
+  const add = page.getByRole("button", { name: "Add", exact: true });
+  await add.click();
+  await expect(page.getByRole("menuitem")).toHaveText(["File", "Skill"]);
+  listFails = true;
+  await page.reload();
+  await expect(skills.getByTestId("error-state")).toHaveAttribute(
+    "data-error-status",
+    "503",
+  );
+  await add.click();
+  await expect(page.getByRole("menuitem")).toHaveText(["File"]);
+});
+
+test("a refused skill list keeps the bookmarked create dialog closed while probes are pending", async ({
+  page,
+}) => {
+  await signIn(page);
+  let finish!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/proxy/v1/skills?*", async (route) => {
+    if (new URL(route.request().url()).searchParams.get("limit") === "1")
+      await waiting;
+    await route.fulfill({
+      status: 403,
+      json: {
+        type: "error",
+        error: { type: "permission_error", message: "Access denied" },
+      },
+    });
+  });
+  try {
+    await page.goto("/skills?create=true");
+    await expect(page.getByTestId("error-state")).toHaveAttribute(
+      "data-denied",
+      "true",
+    );
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Create skill" }),
+    ).toHaveCount(0);
+  } finally {
+    finish();
+  }
 });
 
 test("cards follow the content width and an empty collection keeps both list and Add actions", async ({

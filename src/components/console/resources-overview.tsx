@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Page } from "@/lib/platform/http";
 import { useFiles, useSkills, useLibraryCount } from "@/lib/platform/queries";
-import { useSurfaces } from "@/lib/platform/surfaces";
+import { isSurfaceVisible, useSurfaces } from "@/lib/platform/surfaces";
 import { ageLabel } from "@/lib/session-trace/timing";
 import { useNow } from "@/lib/session-trace/use-now";
 import { ErrorState, ListSkeleton } from "./bits";
@@ -115,49 +115,15 @@ function ResourceCard<T extends { id: string }>({
   );
 }
 
-function FileCard() {
-  const files = useFiles();
-  const now = useNow();
-  return (
-    <ResourceCard
-      kind="files"
-      data={files.data}
-      error={files.error}
-      name={(file) => file.filename}
-      detail={(file) => (
-        <time
-          dateTime={file.created_at}
-          data-timestamp={file.created_at}
-          title={file.created_at}
-        >
-          Added {ageLabel(file.created_at, now)}
-        </time>
-      )}
-    />
-  );
-}
-
-function SkillCard() {
-  const skills = useSkills({});
-  return (
-    <ResourceCard
-      kind="skills"
-      data={skills.data}
-      error={skills.error}
-      name={(skill) => skill.display_name}
-      detail={(skill) => (
-        <span className="capitalize" data-source={skill.source.type}>
-          {skill.source.type}
-        </span>
-      )}
-    />
-  );
-}
-
 export function ResourcesOverview() {
   const surfaces = useSurfaces();
-  const files = surfaces?.files.status === "available";
-  const skills = surfaces?.skills.status === "available";
+  const showFiles = isSurfaceVisible(surfaces?.files, "files");
+  const showSkills = isSurfaceVisible(surfaces?.skills, "skills");
+  const files = useFiles(undefined, showFiles);
+  const skills = useSkills({}, showSkills);
+  const addFile = showFiles && files.isSuccess;
+  const addSkill = showSkills && skills.isSuccess;
+  const now = useNow();
   return (
     <div data-resource-overview="" className="-mx-4 sm:-mx-8">
       <div className="mx-auto w-full max-w-[1600px] px-6">
@@ -168,40 +134,74 @@ export function ResourcesOverview() {
           <p className="text-sm leading-5 text-muted-foreground md:col-span-2 md:row-start-2">
             The files, skills, and other resources set up in this workspace.
           </p>
-          <div className="md:col-start-2 md:row-start-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    size="sm"
-                    className="h-7 min-w-[82px] gap-1 rounded-lg px-2 text-sm font-normal"
-                  />
-                }
-              >
-                <Plus aria-hidden className="size-4" /> Add{" "}
-                <ChevronDown aria-hidden className="size-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={6} className="w-40">
-                {files && (
-                  <DropdownMenuItem render={<Link href="/files" />}>
-                    File
-                  </DropdownMenuItem>
-                )}
-                {skills && (
-                  <DropdownMenuItem
-                    render={<Link href="/skills?create=true" />}
-                  >
-                    Skill
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {(addFile || addSkill) && (
+            <div className="md:col-start-2 md:row-start-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      size="sm"
+                      className="h-7 min-w-[82px] gap-1 rounded-lg px-2 text-sm font-normal"
+                    />
+                  }
+                >
+                  <Plus aria-hidden className="size-4" /> Add{" "}
+                  <ChevronDown aria-hidden className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={6}
+                  className="w-40"
+                >
+                  {addFile && (
+                    <DropdownMenuItem render={<Link href="/files" />}>
+                      File
+                    </DropdownMenuItem>
+                  )}
+                  {addSkill && (
+                    <DropdownMenuItem
+                      render={<Link href="/skills?create=true" />}
+                    >
+                      Skill
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </header>
         <div className="@container">
           <div className="grid grid-cols-1 gap-4 @min-[40rem]:grid-cols-2">
-            {files && <FileCard />}
-            {skills && <SkillCard />}
+            {showFiles && (
+              <ResourceCard
+                kind="files"
+                data={files.data}
+                error={files.error}
+                name={(file) => file.filename}
+                detail={(file) => (
+                  <time
+                    dateTime={file.created_at}
+                    data-timestamp={file.created_at}
+                    title={file.created_at}
+                  >
+                    Added {ageLabel(file.created_at, now)}
+                  </time>
+                )}
+              />
+            )}
+            {showSkills && (
+              <ResourceCard
+                kind="skills"
+                data={skills.data}
+                error={skills.error}
+                name={(skill) => skill.display_name}
+                detail={(skill) => (
+                  <span className="capitalize" data-source={skill.source.type}>
+                    {skill.source.type}
+                  </span>
+                )}
+              />
+            )}
           </div>
         </div>
       </div>

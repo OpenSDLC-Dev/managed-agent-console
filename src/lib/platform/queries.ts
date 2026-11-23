@@ -568,13 +568,17 @@ export function useLibraryCount(
       : first.data.length + rest.data;
 }
 
-export function useSkills(params: {
-  page?: string;
-  source?: "custom" | "anthropic";
-  limit?: number;
-}) {
+export function useSkills(
+  params: {
+    page?: string;
+    source?: "custom" | "anthropic";
+    limit?: number;
+  },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["skills", params],
+    enabled,
     queryFn: () =>
       platformGet<Page<Skill>>("v1/skills", { limit: 20, ...params }),
     placeholderData: keepPreviousData,
@@ -651,9 +655,10 @@ export function useFileText(id: string, enabled: boolean) {
  * session-scoped row, as the reference does (files.go listFiles), so a
  * session's copies and outputs are read through `useSessionFiles`.
  */
-export function useFiles(page?: string) {
+export function useFiles(page?: string, enabled = true) {
   return useQuery({
     queryKey: ["files", page],
+    enabled,
     queryFn: () =>
       platformGet<Page<PlatformFile>>("v1/files", {
         limit: 20,
