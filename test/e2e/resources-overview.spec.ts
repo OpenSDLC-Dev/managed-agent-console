@@ -219,6 +219,45 @@ test("a skill upload that finishes after Back leaves the user on Overview", asyn
   await expect(page).toHaveURL("/resources");
 });
 
+test("the selected upload survives a failed background list refresh and recovery", async ({
+  page,
+}) => {
+  await signIn(page, "/resources");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Skill", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Create skill" });
+  await dialog.getByLabel("Skill files").setInputFiles(sampleSkill);
+  const staged = dialog.getByRole("button", { name: "Remove SKILL.md" });
+  await expect(staged).toBeVisible();
+
+  const list = "**/proxy/v1/skills?limit=20";
+  await page.route(list, (route) =>
+    route.fulfill({
+      status: 503,
+      json: {
+        type: "error",
+        error: { type: "api_error", message: "Temporary skill list failure" },
+      },
+    }),
+  );
+  await page.clock.setFixedTime(Date.now() + 60_000);
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(page.getByTestId("error-state")).toHaveAttribute(
+    "data-error-status",
+    "503",
+  );
+  await expect(staged).toBeVisible();
+  await page.unroute(list);
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(page.getByTestId("error-state")).toHaveCount(0);
+  await expect(staged).toBeVisible();
+  await expect(page).toHaveURL("/skills?create=true");
+});
+
 test("an inconclusive probe keeps the collection visible and its read determines Add", async ({
   page,
 }) => {

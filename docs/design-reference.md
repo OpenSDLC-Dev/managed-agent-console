@@ -187,7 +187,7 @@ In signed-in Chrome, Resources opens the workspace overview. The Default workspa
 
 The local route is `/resources`. Platform serves the reserved Default tenancy and has no workspace-management or webhook endpoint. The two collection reads use Platform sessions. Counts include later cursor pages. A trailing plus is the confirmed lower bound while those pages load or if the count cannot finish.
 
-Run `pnpm exec playwright test test/e2e/resources-overview.spec.ts` to exercise navigation, workspace selection, list and drawer links, skill creation, pagination, empty collections and the responsive layout. The same suite checks focus after dismissing or submitting the dialog, Back during an upload, an inconclusive probe and a refused creation link. For visual comparison, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: resources-(overview|workspace-list)'`. Compare the light and dark captures with [Claude Resources Overview](https://platform.claude.com/workspaces/default/resources-overview).
+Run `pnpm exec playwright test test/e2e/resources-overview.spec.ts` to exercise navigation, workspace selection, list and drawer links, skill creation, pagination, empty collections and the responsive layout. The same suite checks focus after dismissing or submitting the dialog, Back during upload, staged files across a failed background refresh, an inconclusive probe and a refused creation link. For visual comparison, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: resources-(overview|workspace-list)'`. Compare the light and dark captures with [Claude Resources Overview](https://platform.claude.com/workspaces/default/resources-overview).
 
 ## Files and Skills — checked 2026-11-23
 

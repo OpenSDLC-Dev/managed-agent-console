@@ -361,7 +361,6 @@ export function ResourceLibrary<T extends RecordWithID>({
             kind === "skill" &&
             params.get("create") === "true" &&
             list.data &&
-            !list.error &&
             !list.isPlaceholderData
               ? dismissCreateRequest
               : undefined
