@@ -181,28 +181,29 @@ test("vaults list and detail render secret-free credentials", async ({
   ).toBeVisible();
 });
 
-test("skills list filters by source; detail shows versions", async ({
+test("skills list shows catalog and custom sources and the current version description", async ({
   page,
 }) => {
   await signIn(page);
   await page.locator('[data-nav-group="Resources"]').click();
   await page.getByRole("link", { name: "Skills", exact: true }).click();
   await expect(
-    page.getByRole("cell", { name: "Excel spreadsheets" }),
+    page.getByRole("cell", { name: "Excel spreadsheets", exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("combobox").click();
-  await page.getByRole("option", { name: "custom" }).click();
-  await expect(page.getByText("Excel spreadsheets")).toBeHidden();
-  await expect(
-    page.getByRole("cell", { name: "Weekly report writer" }),
-  ).toBeVisible();
+  await expect(page.locator('[data-source="anthropic"]')).toBeVisible();
+  await expect(page.locator('[data-source="custom"]')).toBeVisible();
 
-  await page.getByRole("cell", { name: "Weekly report writer" }).click();
+  await page
+    .getByRole("cell", { name: "Weekly report writer", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Weekly report writer" }),
   ).toBeVisible();
-  await expect(page.getByText("Initial version.")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Description" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-latest=true]")).toBeVisible();
 });
 
 test("files list renders uploads, and no session's own files", async ({

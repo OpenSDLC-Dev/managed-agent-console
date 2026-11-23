@@ -556,10 +556,14 @@ export function useSkillOptions() {
   });
 }
 
+export function getSkill(id: string) {
+  return platformGet<Skill>(`v1/skills/${encodeURIComponent(id)}`);
+}
+
 export function useSkill(id: string) {
   return useQuery({
     queryKey: ["skill", id],
-    queryFn: () => platformGet<Skill>(`v1/skills/${encodeURIComponent(id)}`),
+    queryFn: () => getSkill(id),
   });
 }
 
@@ -579,10 +583,14 @@ export function useSkillVersions(id: string, page?: string) {
 }
 
 // internal/api/files.go:getFile, downloadFile. The latter enforces downloadable and expiry.
+export function getFile(id: string) {
+  return platformGet<PlatformFile>(`v1/files/${encodeURIComponent(id)}`);
+}
+
 export function useFile(id: string) {
   return useQuery({
     queryKey: ["file", id],
-    queryFn: () => platformGet<PlatformFile>(`v1/files/${id}`),
+    queryFn: () => getFile(id),
   });
 }
 
@@ -590,7 +598,8 @@ export function useFileText(id: string, enabled: boolean) {
   return useQuery({
     queryKey: ["file-content", id],
     enabled,
-    queryFn: () => platformGetText(`v1/files/${id}/content`),
+    queryFn: () =>
+      platformGetText(`v1/files/${encodeURIComponent(id)}/content`),
   });
 }
 
@@ -1551,7 +1560,7 @@ export function useUploadSkill() {
 export function useUploadSkillVersion(skillId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    meta: { errorTitle: "Upload failed" },
+    meta: { errorToast: false },
     mutationFn: (skillFiles: File[]) => {
       const form = new FormData();
       for (const file of skillFiles)
@@ -1562,6 +1571,7 @@ export function useUploadSkillVersion(skillId: string) {
       );
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
       void queryClient.invalidateQueries({ queryKey: ["skill", skillId] });
       void queryClient.invalidateQueries({
         queryKey: ["skill-versions", skillId],
@@ -1579,6 +1589,7 @@ export function useDeleteSkillVersion(skillId: string) {
         `v1/skills/${encodeURIComponent(skillId)}/versions/${encodeURIComponent(version)}`,
       ),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
       void queryClient.invalidateQueries({ queryKey: ["skill", skillId] });
       void queryClient.invalidateQueries({
         queryKey: ["skill-versions", skillId],
@@ -1598,6 +1609,42 @@ export function useDeleteSkill(skillId: string) {
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: ["skill", skillId] });
       void queryClient.invalidateQueries({ queryKey: ["skills"] });
+    },
+  });
+}
+
+/** The platform deletes one ID per request. Reconcile successful IDs even
+ * when another selected row is refused, and keep failures available to retry. */
+export function useDeleteLibraryResources(kind: "file" | "skill") {
+  const client = useQueryClient();
+  return useMutation({
+    meta: { errorToast: false },
+    mutationFn: async (ids: string[]) => {
+      const succeeded: string[] = [];
+      const failed: { id: string; error: unknown }[] = [];
+      for (const id of ids) {
+        try {
+          await platformDelete("v1/" + kind + "s/" + encodeURIComponent(id));
+          succeeded.push(id);
+          client.removeQueries({ queryKey: [kind, id] });
+          client.removeQueries({
+            queryKey: [kind === "file" ? "file-content" : "skill-versions", id],
+          });
+        } catch (error) {
+          failed.push({ id, error });
+        }
+      }
+      if (succeeded.length) {
+        await client.invalidateQueries({ queryKey: [kind + "s"] });
+        if (kind === "file") {
+          await Promise.all(
+            ["file-options", "session-files"].map((key) =>
+              client.invalidateQueries({ queryKey: [key] }),
+            ),
+          );
+        }
+      }
+      return { succeeded, failed };
     },
   });
 }

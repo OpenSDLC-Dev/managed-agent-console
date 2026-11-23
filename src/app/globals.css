@@ -184,3 +184,45 @@
     overflow: hidden;
   }
 }
+
+/* Files and Skills, sampled from the signed-in Resources pages. Dialogs use
+   a dimmed, sharp backdrop so the invoking table remains recognizable. */
+[data-resource-library] [data-copy-feedback],
+[data-library-inspector] [data-copy-feedback] {
+  position: relative;
+}
+[data-resource-library] [data-copy-feedback]::after,
+[data-library-inspector] [data-copy-feedback]::after {
+  content: attr(data-copy-feedback);
+  position: absolute;
+  z-index: 1;
+  top: 100%;
+  right: 0;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: var(--secondary);
+  color: var(--foreground);
+  font: 12px var(--font-sans);
+  pointer-events: none;
+}
+body:has([data-library-dialog]) [data-slot="dialog-overlay"] {
+  background-color: rgb(0 0 0 / 50%);
+  backdrop-filter: none;
+}
+@media (prefers-color-scheme: dark) {
+  main:has([data-resource-library]) {
+    background-color: #191919;
+    --muted: #252525;
+    --border: rgb(255 255 255 / 8%);
+    --muted-foreground: #a9a9a9;
+  }
+  [data-library-inspector] {
+    background-color: #1f1f1f;
+    --muted: #292929;
+  }
+  [data-library-dialog] {
+    --popover: #303030;
+    --muted: #3b3b3b;
+    --secondary: #4a4a4a;
+  }
+}

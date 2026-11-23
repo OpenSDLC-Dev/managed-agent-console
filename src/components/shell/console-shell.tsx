@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BookOpen, Menu, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
@@ -62,9 +63,17 @@ export function ConsoleShell({
   };
 
   const ToggleIcon = mobileMenuOpen ? X : Menu;
+  const pathname = usePathname();
+  const platformDocs = "https://github.com/OpenSDLC-Dev/managed-agent-platform";
   const documentation = (
     <a
-      href="https://github.com/OpenSDLC-Dev/managed-agent-platform"
+      href={
+        pathname?.startsWith("/skills")
+          ? platformDocs + "/blob/main/docs/plan/06_skills.md#multipart-upload"
+          : pathname === "/files"
+            ? platformDocs + "/blob/main/docs/plan/08_files.md"
+            : platformDocs
+      }
       target="_blank"
       rel="noreferrer"
       aria-label="Platform documentation"

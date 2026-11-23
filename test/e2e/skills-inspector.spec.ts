@@ -11,7 +11,9 @@ test("skill inspector preserves the list, history and focus", async ({
 }) => {
   await signIn(page, "/skills");
   const row = page.getByRole("row").filter({ hasText: "Weekly report writer" });
-  await row.getByRole("cell", { name: "Weekly report writer" }).click();
+  await row
+    .getByRole("cell", { name: "Weekly report writer", exact: true })
+    .click();
   const panel = page.getByRole("region", { name: "Skill details" });
   await expect(panel).toHaveAttribute("data-skill-id", SKILL);
   await expect(page).toHaveURL(`/skills?skill=${SKILL}`);
@@ -36,26 +38,28 @@ test("skill inspector preserves the list, history and focus", async ({
   await expect(panel).toBeHidden();
 });
 
-test("exact lookup opens missing IDs without changing the list", async ({
+test("exact lookup shows a missing ID inline and Enter opens a matching skill", async ({
   page,
 }) => {
   await signIn(page, "/skills");
-  await page
-    .getByRole("textbox", { name: "Find skill by ID" })
-    .fill("missing-skill");
-  await page.getByRole("textbox", { name: "Find skill by ID" }).press("Enter");
-  const panel = page.getByRole("region", { name: "Skill details" });
-  await expect(panel.getByTestId("error-state")).toBeVisible();
+  const lookup = page.getByRole("textbox", { name: "Find skill by ID" });
+  await lookup.fill("missing-skill");
+  await lookup.press("Enter");
   await expect(
-    panel.getByRole("button", { name: "Previous skill" }),
-  ).toBeDisabled();
-  await expect(
-    panel.getByRole("button", { name: "Next skill" }),
-  ).toBeDisabled();
-  await panel.getByRole("button", { name: "Close details" }).click();
-  await expect(
-    page.getByRole("cell", { name: "Weekly report writer" }),
+    page.getByRole("heading", { name: "Skill not found" }),
   ).toBeVisible();
+  const panel = page.getByRole("region", { name: "Skill details" });
+  await expect(panel).toBeHidden();
+  await page.getByRole("button", { name: "Clear search" }).last().click();
+  await expect(
+    page.getByRole("cell", { name: "Weekly report writer", exact: true }),
+  ).toBeVisible();
+  await lookup.fill("xlsx");
+  await lookup.press("Enter");
+  await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
+  await expect(panel.getByRole("button", { name: "Update" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(lookup).toBeFocused();
 });
 
 test("inspector navigation and resizing work with mouse and keyboard", async ({

@@ -211,16 +211,13 @@ describe("SkillDetailPage", () => {
       await screen.findByRole("heading", { name: "PDF tools" }),
     ).toBeInTheDocument();
     expect(screen.getByText("custom")).toBeInTheDocument();
-    expect(screen.getAllByText("sklv_1")).toHaveLength(2);
-    expect(screen.getByText("pdf-tools")).toBeInTheDocument();
+    expect(screen.getByText("sklv_1")).toBeVisible();
     expect(screen.getByText("Split and merge PDFs")).toBeInTheDocument();
     expect(screen.getByLabelText("Download version sklv_1")).toHaveAttribute(
       "href",
       "/api/organizations/default/proxy/v1/skills/skl_1/versions/sklv_1/content",
     );
-    expect(
-      screen.getByRole("button", { name: /New version/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update" })).toBeInTheDocument();
   });
 
   it("uploads picked files as a new version", async () => {
@@ -238,8 +235,8 @@ describe("SkillDetailPage", () => {
     await screen.findByRole("heading", { name: "PDF tools" });
 
     // The visible button forwards the click to the hidden file input.
-    await userEvent.click(screen.getByRole("button", { name: /New version/ }));
-    fireEvent.change(screen.getByLabelText("New version files"), {
+    await userEvent.click(screen.getByRole("button", { name: "Update" }));
+    fireEvent.change(screen.getByLabelText("Skill files"), {
       target: {
         files: [
           new File(["# skill"], "SKILL.md", { type: "text/markdown" }),
@@ -248,14 +245,18 @@ describe("SkillDetailPage", () => {
       },
     });
 
+    expect(posts).toHaveLength(0);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create version" }),
+    );
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0][0].pathname).toBe(
       "/api/organizations/default/proxy/v1/skills/skl_1/versions",
     );
     const form = posts[0][1].body as FormData;
     expect(form.getAll("files[]").map((f) => (f as File).name)).toEqual([
-      "SKILL.md",
-      "run.py",
+      "skill/SKILL.md",
+      "skill/run.py",
     ]);
   });
 
@@ -331,9 +332,8 @@ describe("SkillDetailPage", () => {
       await screen.findByRole("heading", { name: "Excel" }),
     ).toBeInTheDocument();
     expect(screen.getByText("anthropic")).toBeInTheDocument();
-    expect(screen.getByText("none")).toBeInTheDocument();
     expect(screen.getByText("No versions")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /New version/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Update" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
   });
 

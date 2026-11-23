@@ -42,6 +42,7 @@ export function ResourceInspector({
 }: {
   kind:
     | "skill"
+    | "file"
     | "environment"
     | "memory-store"
     | "agent"
@@ -67,6 +68,7 @@ export function ResourceInspector({
 }) {
   const label = {
     skill: "Skill",
+    file: "File",
     environment: "Environment",
     "memory-store": "Memory store",
     agent: "Agent",
@@ -78,9 +80,10 @@ export function ResourceInspector({
     model: "Model",
   }[kind];
   const request = kind === "request";
-  const PreviousIcon = request ? ChevronUp : ChevronLeft;
-  const NextIcon = request ? ChevronDown : ChevronRight;
-  const actionSize = request ? "icon-xs" : "icon";
+  const library = kind === "file" || kind === "skill";
+  const PreviousIcon = request || library ? ChevronUp : ChevronLeft;
+  const NextIcon = request || library ? ChevronDown : ChevronRight;
+  const actionSize = request || library ? "icon-xs" : "icon";
   const panel = useRef<HTMLElement>(null);
   const outsideClose = useRef(false);
   const drag = useRef<{ x: number; width: number } | null>(null);
@@ -118,6 +121,15 @@ export function ResourceInspector({
     };
   }, [fallbackFocus, restoreToFallback, returnFocus]);
 
+  // Changing neighbors (including through browser history) can disable the
+  // focused arrow. Keep keyboard dismissal working after the browser blurs it.
+  useEffect(() => {
+    if (!library || !panel.current) return;
+    const active = document.activeElement;
+    if (!panel.current.contains(active) || active?.matches(":disabled"))
+      panel.current.focus({ preventScroll: true });
+  }, [id, library]);
+
   useEffect(() => {
     if (!dismissOnOutsidePress) return;
     function outside(event: MouseEvent) {
@@ -139,14 +151,17 @@ export function ResourceInspector({
   return (
     <aside
       ref={panel}
+      data-library-inspector={library || undefined}
       role={dialogLabel ? "dialog" : "region"}
       aria-label={dialogLabel ?? label + " details"}
       tabIndex={-1}
       {...{ ["data-" + kind + "-id"]: id }}
       className={cn(
         "fixed right-2 bottom-2 flex max-w-[calc(100vw-64px)] flex-col rounded-xl border bg-background shadow-lg outline-none",
-        request
-          ? "top-2 z-40"
+        request || library
+          ? library
+            ? "top-2 z-40 max-sm:top-[calc(var(--console-header-height,0px)+0.5rem)]"
+            : "top-2 z-40"
           : "top-[calc(var(--console-header-height,0px)+0.5rem)] z-30",
       )}
       style={{ width: visibleWidth }}
@@ -213,12 +228,12 @@ export function ResourceInspector({
             kind !== "skill"
               ? "text-sm text-muted-foreground max-[480px]:sr-only"
               : "text-sm text-muted-foreground",
-            request && "text-xs",
+            (request || library) && "text-xs",
           )}
         >
           {label}
         </span>
-        {request ? (
+        {request || library ? (
           <CopyIdButton key={id} id={id} showValue />
         ) : (
           <IdCell key={id} id={id} />

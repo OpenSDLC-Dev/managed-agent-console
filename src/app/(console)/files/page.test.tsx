@@ -155,11 +155,15 @@ describe("FilesPage", () => {
     renderPage();
 
     expect(await screen.findByText("notes.txt")).toBeInTheDocument();
-    expect(screen.getByText("512 B")).toBeInTheDocument();
+    expect(screen.getByText("512 bytes")).toBeInTheDocument();
     expect(screen.getByText("10.0 KB")).toBeInTheDocument();
     expect(screen.getByText("2.5 MB")).toBeInTheDocument();
-    expect(screen.getByText("yes")).toBeInTheDocument();
-    expect(screen.getAllByText("no")).toHaveLength(2);
+    expect(
+      screen.getByRole("link", { name: "Download big.bin" }),
+    ).toHaveAttribute("download", "big.bin");
+    expect(
+      screen.getByRole("button", { name: "Download notes.txt" }),
+    ).toBeDisabled();
     // The unfiltered list carries uploads only (platform #578): no scope is
     // asked for and none is shown.
     expect(
@@ -186,13 +190,18 @@ describe("FilesPage", () => {
     renderPage();
     await screen.findByText("No files yet");
 
-    // The visible button forwards the click to the hidden file input.
-    await userEvent.click(screen.getByRole("button", { name: "Upload file" }));
-    const input = screen.getByLabelText("Upload file");
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Upload file" })[0],
+    );
+    const input = screen.getByLabelText("File to upload");
     fireEvent.change(input, {
       target: { files: [new File(["hi"], "new.txt", { type: "text/plain" })] },
     });
 
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+    ).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
     await waitFor(() => {
       const post = fetchMock.mock.calls.find(([, init]) => init?.method);
       expect(post).toBeDefined();
@@ -218,12 +227,14 @@ describe("FilesPage", () => {
     renderPage();
     await screen.findByText("No files yet");
 
-    fireEvent.change(screen.getByLabelText("Upload file"), {
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Upload file" })[0],
+    );
+    fireEvent.change(screen.getByLabelText("File to upload"), {
       target: { files: [new File(["x"], "big.bin")] },
     });
-    expect(
-      await screen.findByText("Upload failed: too large"),
-    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Upload" }));
+    expect(await screen.findByText("too large")).toBeInTheDocument();
   });
 
   it("deletes a file from its row action", async () => {
@@ -236,7 +247,16 @@ describe("FilesPage", () => {
     await screen.findByText("notes.txt");
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Delete notes.txt" }),
+      screen.getByRole("button", { name: "Actions for notes.txt" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Delete" }),
+    );
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
+    ).toBe(false);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Delete file" }),
     );
     await waitFor(() => {
       const del = fetchMock.mock.calls.find(

@@ -19,7 +19,14 @@ export function CopyIdButton({
     <button
       type="button"
       aria-label={`Copy ${id}`}
-      title="Copy id"
+      title={
+        copied === "ok"
+          ? "Copied"
+          : copied === "fail"
+            ? "Copy failed"
+            : "Copy id"
+      }
+      data-copy-feedback={copied === "ok" ? "Copied" : undefined}
       className={cn(
         "rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground",
         showValue &&
@@ -52,14 +59,20 @@ export function CopyIdButton({
 }
 
 /** List-cell id: shortened display plus a copy control. */
-export function IdCell({ id }: { id: string }) {
+export function IdCell({ id, full = false }: { id: string; full?: boolean }) {
   return (
     <span
       className="inline-flex items-center gap-0.5"
       data-testid="id-cell"
       data-id={id}
     >
-      <IdCode id={id} />
+      {full ? (
+        <code className="font-mono text-xs" title={id}>
+          {id}
+        </code>
+      ) : (
+        <IdCode id={id} />
+      )}
       <CopyIdButton id={id} />
     </span>
   );
