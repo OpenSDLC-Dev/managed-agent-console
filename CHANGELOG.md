@@ -18,7 +18,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
-- Files and Skills support exact-ID lookup, shareable detail drawers, staged uploads and confirmed single or bulk deletion. Custom skills can be updated from the list or drawer.
+- Files and Skills support exact-ID lookup, shareable detail drawers, staged uploads and confirmed single or bulk deletion. Selecting rows shows the count, clear control and Delete in a floating bar at the bottom of the list pane. Custom skills can be updated from the list or drawer.
 
 - Playground puts model settings in a drawer and separates adding tools from adding messages. The two client-tool templates fill the request, keep the selected model and allow inspection of streamed tool arguments.
 - Messages Logs distinguishes the originally requested model from the gateway alias that handled it.

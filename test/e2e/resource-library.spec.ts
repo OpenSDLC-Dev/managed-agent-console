@@ -37,9 +37,100 @@ async function openFileUpload(page: Page) {
   return page.getByRole("dialog", { name: "Upload file" });
 }
 
+async function expectBottomSelection(page: Page, title: string) {
+  const bar = page.getByRole("toolbar", { name: title + " selection" });
+  await expect(bar).toBeVisible();
+  const rect = await bar.evaluate((element) => {
+    const main = element.closest("main")!.getBoundingClientRect();
+    const bar = element.getBoundingClientRect();
+    return {
+      bottomGap: window.innerHeight - bar.bottom,
+      centerOffset: bar.left + bar.width / 2 - (main.left + main.width / 2),
+    };
+  });
+  expect(rect.bottomGap).toBeCloseTo(24, 0);
+  expect(Math.abs(rect.centerOffset)).toBeLessThanOrEqual(1);
+  return bar;
+}
+
+for (const [title, first] of [
+  ["Files", "research-notes.md"],
+  ["Skills", "Weekly report writer"],
+] as const) {
+  test(
+    title + " selection stays at the bottom of the content pane",
+    async ({ page }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await signIn(page, "/" + title.toLowerCase());
+      const checkbox = page.getByRole("checkbox", {
+        name: "Select " + first,
+        exact: true,
+      });
+      await expect(checkbox).toBeVisible();
+      const before = await checkbox.boundingBox();
+      await checkbox.check();
+      const bar = await expectBottomSelection(page, title);
+      expect((await checkbox.boundingBox())!.y).toBe(before!.y);
+      const clear = bar.getByRole("button", { name: "Clear selection" });
+      const remove = bar.getByRole("button", { name: "Delete" });
+      await clear.focus();
+      await clear.press("ArrowRight");
+      await expect(remove).toBeFocused();
+      await remove.press("Enter");
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(checkbox).toBeChecked();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expectBottomSelection(page, title);
+      await clear.click();
+      await expect(bar).toHaveCount(0);
+      await expect(checkbox).not.toBeChecked();
+    },
+  );
+}
+
+test.describe("touch resource selection", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 540 } });
+  test("keeps the actions reachable while scrolling and clears the last row", async ({
+    page,
+  }) => {
+    await signIn(page, "/files");
+    for (let i = 0; i < 12; i++) {
+      const seed = await browserPost(page, files, {
+        multipart: { file: text("scroll-" + i + ".txt") },
+      });
+      expect(seed.ok()).toBeTruthy();
+    }
+    await page.reload();
+    await page.getByRole("checkbox", { name: "Select all rows" }).check();
+    const bar = await expectBottomSelection(page, "Files");
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(0);
+    await expectBottomSelection(page, "Files");
+    const last = await page.getByRole("row").last().boundingBox();
+    expect(last!.y + last!.height).toBeLessThanOrEqual(
+      (await bar.boundingBox())!.y,
+    );
+    for (const name of ["Clear selection", "Delete"]) {
+      const rect = await bar
+        .getByRole("button", { name, exact: true })
+        .boundingBox();
+      expect(rect!.width).toBeGreaterThanOrEqual(44);
+      expect(rect!.height).toBeGreaterThanOrEqual(44);
+    }
+    await bar.getByRole("button", { name: "Clear selection" }).tap();
+    await expect(bar).toBeHidden();
+  });
+});
+
 test("file staging, cancel, submit, row menu and named delete confirmation", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
   await signIn(page, "/files");
   const dialog = await openFileUpload(page);
   await dialog.getByLabel("File to upload").setInputFiles(text("review.txt"));
@@ -60,6 +151,20 @@ test("file staging, cancel, submit, row menu and named delete confirmation", asy
   await dialog.getByLabel("File to upload").setInputFiles(text("review.txt"));
   await dialog.getByRole("button", { name: "Upload", exact: true }).click();
   await expect(row).toBeVisible();
+  await row.getByRole("checkbox").check();
+  const bar = await expectBottomSelection(page, "Files");
+  const toast = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "File uploaded" });
+  await expect(toast).toBeVisible();
+  const barBounds = await bar.boundingBox();
+  await expect
+    .poll(async () => {
+      const bounds = await toast.boundingBox();
+      return bounds && bounds.y + bounds.height <= barBounds!.y;
+    })
+    .toBe(true);
+  await bar.getByRole("button", { name: "Clear selection" }).click();
   await expect(
     row.getByRole("button", { name: "Download review.txt" }),
   ).toBeDisabled();

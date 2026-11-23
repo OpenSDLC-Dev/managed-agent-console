@@ -214,6 +214,18 @@ body:has([data-library-inspector])
   [data-sonner-toaster][data-y-position="bottom"] {
   bottom: max(4.5rem, var(--offset-bottom, 0px), env(safe-area-inset-bottom));
 }
+html:has([data-resource-library] [data-selected-count]) {
+  --resource-selection-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  --resource-selection-space: calc(var(--resource-selection-bottom) + 3.5rem);
+  scroll-padding-bottom: var(--resource-selection-space);
+}
+html:has([data-resource-library] [data-selected-count])
+  [data-sonner-toaster][data-y-position="bottom"] {
+  bottom: max(
+    var(--offset-bottom, 0px),
+    calc(var(--resource-selection-space) + 0.5rem)
+  );
+}
 @media (prefers-color-scheme: dark) {
   main:has([data-resource-library]) {
     background-color: #191919;
