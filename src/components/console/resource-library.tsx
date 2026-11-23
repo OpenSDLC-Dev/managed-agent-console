@@ -32,6 +32,7 @@ import { ErrorState, UnavailableSurface } from "./bits";
 import { Pager } from "./pager";
 import { PlatformError, type Page } from "@/lib/platform/http";
 import { isUnimplemented } from "@/lib/platform/surfaces";
+import { cn } from "@/lib/utils";
 import type { useCursorPage } from "@/lib/platform/use-cursor-page";
 import {
   InvalidLibraryID,
@@ -127,6 +128,7 @@ export function ResourceLibrary<T extends RecordWithID>({
   const router = useRouter();
   const active = params.get(kind);
   const input = useRef<HTMLInputElement>(null);
+  const lastCheckbox = useRef<HTMLInputElement>(null);
   const trigger = useRef<HTMLElement>(null);
   const client = useQueryClient();
   const [draft, setDraft] = useState("");
@@ -161,7 +163,10 @@ export function ResourceLibrary<T extends RecordWithID>({
   const [selection, setSelection] = useState({ scope, ids: [] as string[] });
   if (selection.scope !== scope) setSelection({ scope, ids: [] });
   const selected = rows.filter((row) => selection.ids.includes(row.id));
-  const select = (ids: string[]) => setSelection({ scope, ids });
+  function select(ids: string[], checkbox: HTMLInputElement) {
+    lastCheckbox.current = checkbox;
+    setSelection({ scope, ids });
+  }
   const [deletion, setDeletion] = useState<{
     rows: T[];
     bulk: boolean;
@@ -280,7 +285,10 @@ export function ResourceLibrary<T extends RecordWithID>({
               selected.length > 0 && selected.length < rows.length;
         }}
         onChange={(event) =>
-          select(event.target.checked ? rows.map((row) => row.id) : [])
+          select(
+            event.target.checked ? rows.map((row) => row.id) : [],
+            event.currentTarget,
+          )
         }
       />
     ),
@@ -297,6 +305,7 @@ export function ResourceLibrary<T extends RecordWithID>({
             event.target.checked
               ? [...selection.ids, row.id]
               : selection.ids.filter((id) => id !== row.id),
+            event.currentTarget,
           )
         }
       />
@@ -429,7 +438,7 @@ export function ResourceLibrary<T extends RecordWithID>({
           <Toolbar.Root
             aria-label={title + " selection"}
             data-selected-count={selected.length}
-            className="fixed bottom-(--resource-selection-bottom) z-10 flex items-center gap-2 rounded-xl bg-popover p-1.5 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:bg-[#303030] forced-colors:border"
+            className="fixed bottom-(--resource-selection-bottom) z-41 flex items-center gap-2 rounded-xl bg-popover p-1.5 text-sm text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:bg-[#303030] forced-colors:border"
           >
             <span className="px-1.5 font-medium whitespace-nowrap text-muted-foreground">
               {selected.length} selected
@@ -437,23 +446,26 @@ export function ResourceLibrary<T extends RecordWithID>({
             <Toolbar.Button
               aria-label="Clear selection"
               title="Clear selection"
-              className={buttonVariants({
-                variant: "ghost",
-                size: "icon-sm",
-                className: "rounded-lg pointer-coarse:size-11",
-              })}
-              onClick={() => select([])}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "rounded-lg pointer-coarse:size-11",
+              )}
+              onClick={(event) => {
+                setSelection({ scope, ids: [] });
+                if (event.detail === 0) {
+                  const checkbox = lastCheckbox.current;
+                  (checkbox?.isConnected ? checkbox : input.current)?.focus();
+                }
+              }}
             >
               <X aria-hidden className="size-4" />
             </Toolbar.Button>
             <Toolbar.Separator className="mx-2 my-1 self-stretch border-l" />
             <Toolbar.Button
-              className={buttonVariants({
-                variant: "ghost",
-                size: "sm",
-                className:
-                  "gap-1.5 rounded-lg px-2 text-sm font-normal pointer-coarse:min-h-11",
-              })}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "gap-1.5 rounded-lg px-2 text-sm font-normal pointer-coarse:min-h-11",
+              )}
               focusableWhenDisabled={false}
               disabled={selected.some((row) => canDelete && !canDelete(row))}
               onClick={() => setDeletion({ rows: selected, bulk: true })}

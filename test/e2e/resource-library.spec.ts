@@ -80,11 +80,24 @@ for (const [title, first] of [
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(checkbox).toBeChecked();
+      await page.setViewportSize({ width: 1024, height: 768 });
+      await page.getByRole("cell", { name: first, exact: true }).click();
+      const inspector = page.getByRole("region", {
+        name: title === "Files" ? "File details" : "Skill details",
+      });
+      await expect(inspector).toBeVisible();
+      await expectBottomSelection(page, title);
+      await remove.click();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(inspector).toBeVisible();
+      await inspector.getByRole("button", { name: "Close details" }).click();
+      await expect(inspector).toBeHidden();
       await page.setViewportSize({ width: 390, height: 844 });
       await expectBottomSelection(page, title);
-      await clear.click();
+      await clear.press("Space");
       await expect(bar).toHaveCount(0);
       await expect(checkbox).not.toBeChecked();
+      await expect(checkbox).toBeFocused();
     },
   );
 }

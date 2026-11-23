@@ -187,7 +187,7 @@ Signed-in Chrome showed searchable Files and Skills tables, a serif page title, 
 
 Files stage a single file before upload. Ordinary uploads have no downloadable content. The console reads the platform’s metadata by ID and only requests previews for downloadable text up to 1 MiB. Files and custom skills have named single and bulk deletion confirmations. Bulk deletion calls the existing per-ID endpoints and retains refused IDs for retry. Selecting a catalog skill disables bulk deletion.
 
-Selecting a row shows a floating bar with the count, an × to clear, a divider and Delete. In signed-in Chrome the 40 px desktop bar sits 24 px above the viewport bottom, centered in the list pane. It stays put when the table scrolls. On a narrow screen the pane occupies the viewport width.
+Selecting a row shows a floating bar with the count, an × to clear, a divider and Delete. In signed-in Chrome the 40 px desktop bar sits 24 px above the viewport bottom, centered in the list pane. It stays there when the table scrolls or a detail drawer opens. The delete confirmation opens above the bar. Clearing with the keyboard returns focus to the last selection checkbox. On a narrow screen the pane occupies the viewport width.
 
 Create skill and Update share one drag-and-drop form. Creation returns to the list. Directory uploads preserve relative paths. For a loose SKILL.md the form supplies the directory required by the platform, using its frontmatter name when available. The platform validates the bundle and supplies the display name and version description. The hosted form advertises 8 MB; this deployment accepts 30 MiB of uncompressed skill contents. The standalone detail also preserves historical descriptions, version downloads and version deletion.
 
