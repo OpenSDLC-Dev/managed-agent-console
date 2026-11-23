@@ -9,6 +9,7 @@ import {
 } from "@/components/console/bits";
 import { PageHeader } from "./page-header";
 import {
+  canOpenReport,
   hasDeveloperSession,
   reportSurfaceState,
   SURFACES,
@@ -157,7 +158,7 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       ) : (
         <UnavailableSurface surface="usage" />
       );
-    if (access?.status !== "available")
+    if (!canOpenReport(pathname, surfaces))
       return <UnconfirmedNativeSurface label={label} pending={!access} />;
   }
   if (!surface) return <>{children}</>;

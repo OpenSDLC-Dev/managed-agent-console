@@ -48,7 +48,7 @@ import {
 import {
   hasDeveloperSession,
   isSurfaceVisible,
-  reportSurfaceState,
+  canOpenReport,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
@@ -121,8 +121,7 @@ function useSearchItems(query: string): Item[] {
       (s) =>
         visible(s) &&
         (!isReportPage(s.href) ||
-          (hasDeveloperSession(session) &&
-            reportSurfaceState(s.href, surfaces)?.status === "available")) &&
+          (hasDeveloperSession(session) && canOpenReport(s.href, surfaces))) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
         (!q || s.label.toLowerCase().includes(q)),
     );

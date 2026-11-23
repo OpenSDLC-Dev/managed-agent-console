@@ -8,7 +8,7 @@ import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
   hasDeveloperSession,
   isSurfaceVisible,
-  reportSurfaceState,
+  canOpenReport,
   surfaceOfPath,
   surfaceRoute,
   useSurfaces,
@@ -152,8 +152,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
         ...group,
         items: group.items.filter(({ surface, href }) =>
           isReportPage(href)
-            ? hasDeveloperSession(session) &&
-              reportSurfaceState(href, surfaces)?.status === "available"
+            ? hasDeveloperSession(session) && canOpenReport(href, surfaces)
             : surface
               ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
               : limited || session?.playground_access === true,

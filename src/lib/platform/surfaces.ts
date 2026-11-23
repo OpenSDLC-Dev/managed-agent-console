@@ -184,6 +184,18 @@ export function reportSurfaceState(
   );
 }
 
+/** A failed Resources probe leaves the real collection read to decide access. */
+export function canOpenReport(
+  pathname: string,
+  surfaces: Record<Surface, SurfaceState> | undefined,
+) {
+  const status = reportSurfaceState(pathname, surfaces)?.status;
+  return (
+    status === "available" ||
+    (pathname === RESOURCES_ROUTE && status === "unknown")
+  );
+}
+
 export function hasDeveloperSession(session?: Partial<NativeSession> | null) {
   return (
     session?.signed_in === true &&

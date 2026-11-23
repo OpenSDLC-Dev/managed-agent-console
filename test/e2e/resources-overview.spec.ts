@@ -329,6 +329,62 @@ test("a refused skill list keeps the bookmarked create dialog closed while probe
   }
 });
 
+test("Overview and its navigation use the actual collections when every usable probe is inconclusive", async ({
+  page,
+  request,
+}) => {
+  const failedProbe = {
+    status: 503,
+    json: {
+      type: "error",
+      error: { type: "api_error", message: "Probe temporarily unavailable" },
+    },
+  };
+  await page.route("**/proxy/v1/skills?limit=1", (route) =>
+    route.fulfill(failedProbe),
+  );
+  await page.route("**/proxy/v1/files?limit=1", (route) =>
+    route.fulfill(failedProbe),
+  );
+  await signIn(page);
+  const resources = page.locator('nav [data-nav-group="Resources"]');
+  await expect(resources).toHaveAttribute("href", "/resources");
+  await resources.click();
+  const files = page.getByRole("region", { name: "Files" });
+  const skills = page.getByRole("region", { name: "Skills" });
+  await expect(files.locator("[data-count]")).toHaveAttribute(
+    "data-count",
+    "1",
+  );
+  await expect(skills.locator("[data-count]")).toHaveAttribute(
+    "data-count",
+    "2",
+  );
+  const overview = page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Overview" });
+  await expect(overview).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: /Search Console/ }).click();
+  await page
+    .getByRole("combobox", { name: /Search/ })
+    .fill("resources overview");
+  await expect(
+    page.getByRole("option", { name: /Resources overview/i }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.unroute("**/proxy/v1/files?limit=1");
+  await request.post(mock + "/__forbid", { data: { paths: ["v1/files"] } });
+  await page.reload();
+  await expect(overview).toHaveAttribute("aria-current", "page");
+  await expect(skills.locator("[data-count]")).toHaveAttribute(
+    "data-count",
+    "2",
+  );
+  await expect(files).toHaveCount(0);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Skill"]);
+});
+
 test("cards follow the content width and an empty collection keeps both list and Add actions", async ({
   page,
 }) => {
