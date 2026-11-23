@@ -53,10 +53,12 @@ async function expectBottomSelection(page: Page, title: string) {
   return bar;
 }
 
-for (const [title, first] of [
+const libraries = [
   ["Files", "research-notes.md"],
   ["Skills", "Weekly report writer"],
-] as const) {
+] as const;
+
+for (const [title, first] of libraries) {
   test(
     title + " selection stays at the bottom of the content pane",
     async ({ page }) => {
@@ -104,6 +106,32 @@ for (const [title, first] of [
 
 test.describe("touch resource selection", () => {
   test.use({ hasTouch: true, viewport: { width: 390, height: 540 } });
+  for (const [title, first] of libraries) {
+    test(
+      title + " drawer view controls stay clear of Delete",
+      async ({ page }) => {
+        await signIn(page, "/" + title.toLowerCase());
+        await page.getByRole("checkbox", { name: "Select " + first }).check();
+        await page.getByRole("cell", { name: first, exact: true }).tap();
+        const panel = page.getByRole("region", {
+          name: title === "Files" ? "File details" : "Skill details",
+        });
+        for (const view of ["API", "Rendered"]) {
+          await panel.getByText(view, { exact: true }).tap();
+          await expect(panel.getByRole("radio", { name: view })).toBeChecked();
+        }
+        const bar = await expectBottomSelection(page, title);
+        await bar.getByRole("button", { name: "Delete" }).tap();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Cancel" })
+          .tap();
+        await expect(
+          panel.getByRole("radio", { name: "Rendered" }),
+        ).toBeChecked();
+      },
+    );
+  }
   test("keeps the actions reachable while scrolling and clears the last row", async ({
     page,
   }) => {
