@@ -27,7 +27,12 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
-import { isMessageReport, PLAYGROUND_ROUTE } from "@/lib/routes";
+import {
+  isReportPage,
+  MESSAGES_ROUTE,
+  PLAYGROUND_ROUTE,
+  RESOURCES_ROUTE,
+} from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import {
   useAgents,
@@ -41,9 +46,9 @@ import {
   useVaults,
 } from "@/lib/platform/queries";
 import {
-  canReadMessageReports,
+  hasDeveloperSession,
   isSurfaceVisible,
-  messageReportState,
+  reportSurfaceState,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
@@ -69,7 +74,12 @@ interface Item {
 const SECTIONS: (Item & { surface?: Surface })[] = NAV_DESTINATIONS.map(
   ({ key, label, href, icon, surface }) => ({
     key,
-    label,
+    label:
+      href === RESOURCES_ROUTE
+        ? "Resources overview"
+        : href === MESSAGES_ROUTE
+          ? "Messages overview"
+          : label,
     href,
     group: "Go to",
     icon,
@@ -110,9 +120,9 @@ function useSearchItems(query: string): Item[] {
     const items: Item[] = SECTIONS.filter(
       (s) =>
         visible(s) &&
-        (!isMessageReport(s.href) ||
-          (canReadMessageReports(session) &&
-            messageReportState(s.href, surfaces)?.status === "available")) &&
+        (!isReportPage(s.href) ||
+          (hasDeveloperSession(session) &&
+            reportSurfaceState(s.href, surfaces)?.status === "available")) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
         (!q || s.label.toLowerCase().includes(q)),
     );

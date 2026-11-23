@@ -10,6 +10,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandPalette } from "./command-palette";
 import { NAV_DESTINATIONS } from "@/lib/nav";
+import { isReportPage } from "@/lib/routes";
 import { SURFACES } from "@/lib/platform/surfaces";
 
 const ALL_SURFACES = Object.values(SURFACES);
@@ -413,7 +414,7 @@ describe("CommandPalette", () => {
       NAV_DESTINATIONS.filter(
         (item) =>
           item.href !== "/playground" &&
-          !item.href.startsWith("/messages") &&
+          !isReportPage(item.href) &&
           !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,
     );

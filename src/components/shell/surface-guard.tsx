@@ -9,8 +9,8 @@ import {
 } from "@/components/console/bits";
 import { PageHeader } from "./page-header";
 import {
-  canReadMessageReports,
-  messageReportState,
+  hasDeveloperSession,
+  reportSurfaceState,
   SURFACES,
   useSurfaces,
   surfaceOfPath,
@@ -18,9 +18,10 @@ import {
 import { PlatformError } from "@/lib/platform/http";
 import {
   isDashboardPath,
-  isMessageReport,
+  isReportPage,
   MESSAGE_LOGS_ROUTE,
   PLAYGROUND_ROUTE,
+  RESOURCES_ROUTE,
   playgroundOnly,
 } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
@@ -97,7 +98,7 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
   const session = account?.data;
   const surface = surfaceOfPath(pathname);
   if (playgroundOnly(session)) {
-    if (isDashboardPath(pathname) || isMessageReport(pathname))
+    if (isDashboardPath(pathname) || isReportPage(pathname))
       redirect(PLAYGROUND_ROUTE);
     if (surface)
       return (
@@ -117,8 +118,13 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
         </div>
       );
   }
-  if (isMessageReport(pathname)) {
-    const label = pathname === MESSAGE_LOGS_ROUTE ? "Logs" : "Messages";
+  if (isReportPage(pathname)) {
+    const label =
+      pathname === RESOURCES_ROUTE
+        ? "Resources"
+        : pathname === MESSAGE_LOGS_ROUTE
+          ? "Logs"
+          : "Messages";
     if (account?.error)
       return (
         <>
@@ -126,8 +132,8 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           <ErrorState error={account.error} />
         </>
       );
-    const access = messageReportState(pathname, surfaces);
-    if (!canReadMessageReports(session) || access?.status === "denied")
+    const access = reportSurfaceState(pathname, surfaces);
+    if (!hasDeveloperSession(session) || access?.status === "denied")
       return (
         <>
           <PageHeader title={label} />
@@ -143,7 +149,14 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
         </>
       );
     if (access?.status === "unimplemented")
-      return <UnavailableSurface surface="usage" />;
+      return pathname === RESOURCES_ROUTE ? (
+        <PageHeader
+          title={label}
+          subtitle="Files and skills are unavailable on this deployment."
+        />
+      ) : (
+        <UnavailableSurface surface="usage" />
+      );
     if (access?.status !== "available")
       return <UnconfirmedNativeSurface label={label} pending={!access} />;
   }

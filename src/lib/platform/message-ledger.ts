@@ -2,16 +2,14 @@
 
 import { useContext } from "react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
-import { canReadMessageReports } from "./surfaces";
+import { hasDeveloperSession } from "./surfaces";
 import { gatewayGet, PlatformError } from "./http";
 import type { GatewayUsagePage, GatewayUsageRow } from "./types";
 
 export function useMessageReportSession() {
   const account = useContext(ConsoleSessionContext);
   const session = account?.data;
-  return !account?.error && canReadMessageReports(session)
-    ? session
-    : undefined;
+  return !account?.error && hasDeveloperSession(session) ? session : undefined;
 }
 
 export function messageReadRefused(error: unknown) {

@@ -10,7 +10,6 @@ import { skillUploadFiles } from "@/lib/platform/skill-upload-files";
 
 export function UploadSkillButton({ onCreated }: { onCreated?: () => void }) {
   const [open, setOpen] = useState(false);
-  const upload = useUploadSkill();
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
@@ -18,17 +17,33 @@ export function UploadSkillButton({ onCreated }: { onCreated?: () => void }) {
         Create skill
       </Button>
       {open && (
-        <ResourceUploadDialog
-          mode="skill"
+        <CreateSkillDialog
           onClose={() => setOpen(false)}
-          onSubmit={async (files) => {
-            await upload.mutateAsync({ files: await skillUploadFiles(files) });
-            toast.success("Skill created");
-            onCreated?.();
-          }}
+          onCreated={onCreated}
         />
       )}
     </>
+  );
+}
+
+export function CreateSkillDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated?: () => void;
+}) {
+  const upload = useUploadSkill();
+  return (
+    <ResourceUploadDialog
+      mode="skill"
+      onClose={onClose}
+      onSubmit={async (files) => {
+        await upload.mutateAsync({ files: await skillUploadFiles(files) });
+        toast.success("Skill created");
+        onCreated?.();
+      }}
+    />
   );
 }
 

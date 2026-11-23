@@ -239,7 +239,7 @@ html:has([data-resource-library] [data-selected-count])
   }
 }
 @media (prefers-color-scheme: dark) {
-  main:has([data-resource-library]) {
+  main:has([data-resource-library], [data-resource-overview]) {
     background-color: #191919;
     --muted: #252525;
     --border: rgb(255 255 255 / 8%);

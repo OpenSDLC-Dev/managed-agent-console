@@ -1185,6 +1185,50 @@ export const SURFACES: Surface[] = [
     description: "Resource list with the archived-scoping filter.",
   },
   {
+    id: "resources-overview",
+    route: "/resources",
+    fixture: "one uploaded file and two skills",
+    description:
+      "Workspace navigation, counts, recent rows and links to both libraries.",
+    setup: async (page) => {
+      await page
+        .locator('[data-resource-overview] [data-source="custom"]')
+        .waitFor();
+    },
+  },
+  {
+    id: "resources-overview-add",
+    route: "/resources",
+    fixture: "available Files and Skills",
+    description: "Add destinations next to the workspace summary.",
+    setup: async (page) => {
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Skill" }).waitFor();
+    },
+  },
+  {
+    id: "resources-workspace-list",
+    route: "/resources",
+    fixture: "reserved Default workspace",
+    description: "Selected workspace and the Resources submenu.",
+    setup: async (page) => {
+      await page.getByRole("combobox", { name: "Workspace" }).click();
+      await page.getByRole("option", { name: "Default" }).waitFor();
+    },
+  },
+  {
+    id: "resources-overview-narrow",
+    route: "/resources",
+    fixture: "one uploaded file and two skills at 390 px",
+    description: "Single-column workspace summary and Add action.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .locator('[data-resource-overview] [data-source="custom"]')
+        .waitFor();
+    },
+  },
+  {
     id: "skills-list",
     route: "/skills",
     fixture: "one custom and one catalog skill",

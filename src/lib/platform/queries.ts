@@ -532,6 +532,42 @@ export function useVaultCredential(vaultId: string, credentialId: string) {
   });
 }
 
+// The collections return a cursor but no total. Show the preview immediately
+// and discard later pages after counting them. Leaving the page aborts the read.
+export function useLibraryCount(
+  kind: "files" | "skills",
+  first: Page<unknown>,
+) {
+  const cursor = first.next_page;
+  const rest = useQuery({
+    queryKey: [kind, "overview-count", cursor],
+    enabled: !!cursor,
+    queryFn: async ({ signal }) => {
+      let next = cursor;
+      let count = 0;
+      const visited = new Set<string>();
+      while (next) {
+        if (visited.has(next))
+          throw new Error("The resource list returned a repeated cursor.");
+        visited.add(next);
+        const page: Page<unknown> = await platformGet(
+          "v1/" + kind,
+          { page: next, limit: 100 },
+          signal,
+        );
+        count += page.data.length;
+        next = page.next_page;
+      }
+      return count;
+    },
+  });
+  return !cursor
+    ? first.data.length
+    : rest.data === undefined || rest.error
+      ? null
+      : first.data.length + rest.data;
+}
+
 export function useSkills(params: {
   page?: string;
   source?: "custom" | "anthropic";

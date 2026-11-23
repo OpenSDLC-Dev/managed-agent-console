@@ -181,6 +181,14 @@ A test-owned upload scoped as an output through SQL survived archive and returne
 checks deletion against stored output bytes without claiming a model-harvest run.
 Re-shot and inspected `files-list` and `session-delete` in both Chrome themes.
 
+## Resources Overview — checked 2026-11-24
+
+In signed-in Chrome, Resources opens the workspace overview. The Default workspace selector sits above Overview, Files and Skills. A 16 px gap separates two equal cards when the content is at least 640 px wide. Narrower panes stack the cards. Each card links to its full list and previews up to three entries. File rows show the relative time added. Skill rows show the source. A preview opens its record in the list drawer. Add → File opens the list. Add → Skill opens the creation dialog.
+
+The local route is `/resources`. Platform serves the reserved Default tenancy and has no workspace-management or webhook endpoint. The two collection reads use Platform sessions. Counts include later cursor pages. A trailing plus is the confirmed lower bound while those pages load or if the count cannot finish.
+
+Run `pnpm exec playwright test test/e2e/resources-overview.spec.ts` to exercise navigation, workspace selection, keyboard dismissal, list and drawer links, skill creation, pagination, empty and denied collections, and the responsive layout. For visual comparison, run `pnpm exec playwright test --config playwright.fidelity.config.ts --grep 'shot: resources-(overview|workspace-list)'`. Compare the light and dark captures with [Claude Resources Overview](https://platform.claude.com/workspaces/default/resources-overview).
+
 ## Files and Skills — checked 2026-11-23
 
 Signed-in Chrome showed searchable Files and Skills tables, a serif page title, selection checkboxes, row actions and a resizable right inspector. A failed exact-ID lookup appears in the list. A matching file is a result row. Enter on a matching skill opens its inspector. Both inspectors retain the list, previous/next navigation, Rendered/API and a shareable URL. The search palette opens the same inspectors. Existing standalone skill URLs still work.

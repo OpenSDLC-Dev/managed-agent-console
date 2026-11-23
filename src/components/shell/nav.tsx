@@ -6,16 +6,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
-  canReadMessageReports,
+  hasDeveloperSession,
   isSurfaceVisible,
-  messageReportState,
+  reportSurfaceState,
   surfaceOfPath,
   surfaceRoute,
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
-import { isDashboardPath, isMessageReport, playgroundOnly } from "@/lib/routes";
+import { isDashboardPath, isReportPage, playgroundOnly } from "@/lib/routes";
 import {
   Select,
   SelectContent,
@@ -151,9 +151,9 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
       .map((group) => ({
         ...group,
         items: group.items.filter(({ surface, href }) =>
-          isMessageReport(href)
-            ? canReadMessageReports(session) &&
-              messageReportState(href, surfaces)?.status === "available"
+          isReportPage(href)
+            ? hasDeveloperSession(session) &&
+              reportSurfaceState(href, surfaces)?.status === "available"
             : surface
               ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
               : limited || session?.playground_access === true,
@@ -169,7 +169,8 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
   const panel = groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
-  const messagesPanel = panelLabel === "Messages";
+  const workspacePanel =
+    panelLabel === "Messages" || panelLabel === "Resources";
 
   useEffect(() => {
     const restoreRoutePanel = () => {
@@ -232,12 +233,12 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
         <div
           className={cn(
             "flex flex-col",
-            messagesPanel ? "[&>a]:px-2" : "gap-1",
+            workspacePanel ? "[&>a]:px-2" : "gap-1",
           )}
         >
           <h2
             aria-label={panel.label}
-            className={messagesPanel ? "mb-3" : "mb-2"}
+            className={workspacePanel ? "mb-3" : "mb-2"}
           >
             <button
               type="button"
@@ -247,7 +248,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               onClick={back}
               className={cn(
                 "grid w-full grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-2 rounded-lg",
-                messagesPanel ? "h-7 px-1.5" : "h-9 px-2.5",
+                workspacePanel ? "h-7 px-1.5" : "h-9 px-2.5",
                 HOVER,
               )}
             >
@@ -261,7 +262,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               </span>
             </button>
           </h2>
-          {messagesPanel && (
+          {workspacePanel && (
             <Select value={CONSOLE_WORKSPACE}>
               <SelectTrigger
                 size="sm"
@@ -271,13 +272,24 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                 <span className="flex items-center gap-3">
                   <span
                     aria-hidden
-                    className="size-3 rounded-sm bg-indigo-500"
+                    className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
                   />
                   <SelectValue>Default</SelectValue>
                 </span>
               </SelectTrigger>
-              <SelectContent align="start">
-                <SelectItem value={CONSOLE_WORKSPACE}>Default</SelectItem>
+              <SelectContent
+                align="start"
+                alignItemWithTrigger={false}
+                sideOffset={6}
+                className="w-64 p-1.5"
+              >
+                <SelectItem value={CONSOLE_WORKSPACE} className="h-7 px-2">
+                  <span
+                    aria-hidden
+                    className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
+                  />
+                  Default
+                </SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -312,8 +324,8 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                 )?.label;
                 const first = group.items[0];
                 const waitingForOverview =
-                  group.label === "Messages" &&
-                  canReadMessageReports(session) &&
+                  (group.label === "Messages" || group.label === "Resources") &&
+                  hasDeveloperSession(session) &&
                   !surfaces;
                 const destination =
                   !mobile &&

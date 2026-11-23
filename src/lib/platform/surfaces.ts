@@ -7,7 +7,7 @@ import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { nativeGet, ORGANIZATION, type NativeSession } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
-import { MESSAGES_ROUTE, playgroundOnly } from "@/lib/routes";
+import { MESSAGES_ROUTE, RESOURCES_ROUTE, playgroundOnly } from "@/lib/routes";
 
 /**
  * Feature detection follows harness/rules/platform-contract.md for surfaces
@@ -164,16 +164,18 @@ export type SurfaceState =
   | { status: "available" | "unimplemented" | "unknown" }
   | { status: "denied"; error: PlatformError };
 
-/** Overview can still show owned keys when the gateway ledger is unavailable. */
-export function messageReportState(
+/** Each overview is available if at least one of its collections can be read. */
+export function reportSurfaceState(
   pathname: string,
   surfaces: Record<Surface, SurfaceState> | undefined,
 ): SurfaceState | undefined {
   if (!surfaces) return undefined;
   const reads =
-    pathname === MESSAGES_ROUTE
-      ? [surfaces.usage, surfaces["api-keys"]]
-      : [surfaces.usage];
+    pathname === RESOURCES_ROUTE
+      ? [surfaces.files, surfaces.skills]
+      : pathname === MESSAGES_ROUTE
+        ? [surfaces.usage, surfaces["api-keys"]]
+        : [surfaces.usage];
   return (
     reads.find((read) => read.status === "available") ??
     reads.find((read) => read.status === "unknown") ??
@@ -182,7 +184,7 @@ export function messageReportState(
   );
 }
 
-export function canReadMessageReports(session?: Partial<NativeSession> | null) {
+export function hasDeveloperSession(session?: Partial<NativeSession> | null) {
   return (
     session?.signed_in === true &&
     Boolean(session.id) &&
