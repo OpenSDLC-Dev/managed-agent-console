@@ -16,6 +16,12 @@ test("skill inspector preserves the list, history and focus", async ({
     .click();
   const panel = page.getByRole("region", { name: "Skill details" });
   await expect(panel).toHaveAttribute("data-skill-id", SKILL);
+  for (const version of [
+    "skillver_rw2000000000001",
+    "skillver_rw1000000000001",
+  ]) {
+    await expect(panel.getByText(version, { exact: true })).toBeVisible();
+  }
   await expect(page).toHaveURL(`/skills?skill=${SKILL}`);
   await expect(row).toBeVisible();
   await panel.getByText("API", { exact: true }).click();

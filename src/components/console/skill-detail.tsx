@@ -184,9 +184,9 @@ export function SkillDetail({
                     <li
                       key={v.id}
                       data-version-id={v.id}
-                      className="group/version flex flex-wrap items-center gap-2 py-2 text-xs"
+                      className="group/version flex flex-wrap items-center gap-2 py-2 text-xs [&>[data-id]]:max-w-full [&_code]:break-all"
                     >
-                      <IdCell id={v.id} />
+                      <IdCell id={v.id} full />
                       <ResourceDate iso={v.created_at} />
                       {v.id === skill.latest_version_id && (
                         <Badge
