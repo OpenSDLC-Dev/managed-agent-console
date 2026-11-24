@@ -182,6 +182,20 @@ export const SURFACES: Surface[] = [
       "Workspace selector, 30-day metrics, charts and ranked agents.",
   },
   {
+    id: "agents-workspace-overview-create-menu",
+    route: "/agents/overview",
+    fixture: "workspace report with all five creation destinations",
+    viewportOnly: true,
+    setup: async (page) => {
+      await page
+        .getByRole("main")
+        .getByRole("button", { name: "Create", exact: true })
+        .click();
+      await page.getByRole("menuitem", { name: "Memory store" }).waitFor();
+    },
+    description: "Right-aligned Create menu with five single-line actions.",
+  },
+  {
     id: "agents-quickstart",
     route: "/agents/create",
     fixture: "starter catalog",

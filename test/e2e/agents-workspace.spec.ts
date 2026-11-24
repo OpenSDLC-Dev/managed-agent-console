@@ -105,6 +105,48 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
   ).toHaveAttribute("href", /\/sessions\?agent=agent_/);
 });
 
+test("Overview Create fits all five actions on one line each on desktop and mobile", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/overview");
+  const create = page
+    .getByRole("main")
+    .getByRole("button", { name: "Create", exact: true });
+  const menu = page.getByRole("menu");
+  const items = menu.getByRole("menuitem");
+  const memory = menu.getByRole("menuitem", { name: "Memory store" });
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 800 });
+    await create.click();
+    await expect(items).toHaveCount(5);
+    await expect
+      .poll(() =>
+        items.evaluateAll((rows) => rows.map((row) => row.clientHeight)),
+      )
+      .toEqual([28, 28, 28, 28, 28]);
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    const anchor = (await create.boundingBox())!;
+    await expect
+      .poll(async () => {
+        const box = (await menu.boundingBox())!;
+        return Math.abs(box.x + box.width - (anchor.x + anchor.width));
+      })
+      .toBeLessThanOrEqual(1);
+    // The reference measures 153 CSS px. System fonts vary across CI runners.
+    expect(
+      Math.abs((await menu.boundingBox())!.width - 153),
+    ).toBeLessThanOrEqual(10);
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("End");
+    await expect(memory).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(create).toBeFocused();
+  }
+  await create.click();
+  await memory.click();
+  await expect(page).toHaveURL(/\/memory-stores$/);
+});
+
 test("a populated overview sorts every activity measure and Show more opens the directory", async ({
   page,
 }) => {
