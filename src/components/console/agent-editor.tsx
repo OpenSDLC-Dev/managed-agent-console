@@ -38,7 +38,7 @@ import {
 import { SchemaTextarea } from "./schema-textarea";
 import { AgentStartingPoint } from "./agent-starting-point";
 import { AgentModelMenu } from "./agent-model-menu";
-import { effortLevels, type ModelEffort } from "@/lib/platform/schemas";
+import { effortLevels, type ModelEffort } from "@/lib/platform/model-effort";
 import {
   DropdownMenu,
   DropdownMenuContent,

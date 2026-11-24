@@ -6,7 +6,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type ModelChoices } from "./model-field";
-import { effortLevels, type ModelEffort } from "@/lib/platform/schemas";
+import { effortLevels, type ModelEffort } from "@/lib/platform/model-effort";
 
 export function AgentModelMenu({
   model,
