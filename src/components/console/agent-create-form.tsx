@@ -1,65 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import {
-  AgentEditor,
-  formFromConfig,
-  newAgentForm,
-} from "@/components/console/agent-editor";
-import { AGENT_TEMPLATES } from "@/lib/agent-config/templates";
-import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
-import { cn } from "@/lib/utils";
+import { AgentEditorFields, formFromConfig } from "./agent-editor";
+import { useModelChoices } from "./model-field";
+import { manualStarterConfig } from "@/lib/agent-config/templates";
 
-export function AgentCreateForm({
-  onCancel,
-  initialModel,
-}: {
-  onCancel?: () => void;
-  initialModel?: string;
-}) {
-  const leave = useLeaveConfirmation();
-  const [template, setTemplate] = useState("blank");
-  const chosen = AGENT_TEMPLATES.find((t) => t.key === template);
-  const initial = chosen ? formFromConfig(chosen.config) : newAgentForm();
-  if (initialModel) initial.modelId = initialModel;
-
+export function AgentCreateForm({ initialModel }: { initialModel?: string }) {
+  const models = useModelChoices();
+  if (models.pending)
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        Loading agent configuration…
+      </p>
+    );
+  const preferred = models.names?.includes("deepseek-flash")
+    ? "deepseek-flash"
+    : models.names?.[0];
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 pb-6">
-        {[
-          {
-            key: "blank",
-            title: "Blank",
-            description: "All tools enabled, no starter instructions.",
-          },
-          ...AGENT_TEMPLATES,
-        ].map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            aria-pressed={template === t.key}
-            onClick={() => {
-              if (template !== t.key)
-                leave.requestLeave(() => setTemplate(t.key));
-            }}
-            className={cn(
-              "w-56 rounded-lg border p-3 text-left hover:bg-secondary/40",
-              template === t.key && "border-foreground",
-            )}
-          >
-            <span className="block text-sm font-medium">{t.title}</span>
-            <span className="block pt-0.5 text-[13px] text-muted-foreground">
-              {t.description}
-            </span>
-          </button>
-        ))}
-      </div>
-      <AgentEditor
-        key={template}
-        mode="create"
-        initial={initial}
-        onCancel={onCancel}
-      />
-    </div>
+    <AgentEditorFields
+      models={models}
+      mode="create"
+      creationPage
+      initial={formFromConfig(
+        manualStarterConfig(initialModel ?? preferred ?? ""),
+      )}
+    />
   );
 }

@@ -226,7 +226,7 @@ test("the first credential returns to the populated vault after creation", async
   await signIn(page);
   await page.locator('[data-nav-group="Agents"]').click();
   await page
-    .getByRole("link", { name: "Credential Vaults", exact: true })
+    .getByRole("link", { name: "Credential vaults", exact: true })
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
   await page.getByLabel("Name", { exact: true }).fill("First credential vault");
@@ -262,7 +262,7 @@ test("vault lifecycle: create, add credentials, validate, archive", async ({
   await signIn(page);
   await page.locator('[data-nav-group="Agents"]').click();
   await page
-    .getByRole("link", { name: "Credential Vaults", exact: true })
+    .getByRole("link", { name: "Credential vaults", exact: true })
     .click();
   await page.getByRole("button", { name: "Create vault" }).click();
   await page.getByLabel("Name", { exact: true }).fill("CI secrets");

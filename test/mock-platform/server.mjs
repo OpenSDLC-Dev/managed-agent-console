@@ -474,8 +474,13 @@ function validateAgentBody(body, { requireCore, self }) {
   return null;
 }
 
+// domain.ModelEffort.MarshalJSON renders the object form, including for string input.
 const normalizeModel = (model) =>
-  typeof model === "string" ? { id: model } : model;
+  typeof model === "string"
+    ? { id: model }
+    : typeof model?.effort === "string"
+      ? { ...model, effort: { type: model.effort } }
+      : model;
 
 function createAgent(body) {
   const timestamp = now();

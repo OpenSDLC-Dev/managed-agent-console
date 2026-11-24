@@ -12,11 +12,20 @@ import {
   ModelField,
   modelChosen,
   useModelChoices,
+  type ModelChoices,
 } from "@/components/console/model-field";
-import { useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
-import { Check, Copy, Plus, Trash2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +36,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SchemaTextarea } from "./schema-textarea";
+import { AgentStartingPoint } from "./agent-starting-point";
+import { AgentModelMenu } from "./agent-model-menu";
+import { effortLevels, type ModelEffort } from "@/lib/platform/model-effort";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
@@ -66,6 +86,8 @@ interface FormState {
   name: string;
   modelId: string;
   speed: "standard" | "fast" | "";
+  effort?: ModelEffort;
+  inferenceGeo?: "us" | "global";
   system: string;
   description: string;
   toolset: ToolsetForm | null;
@@ -87,7 +109,16 @@ export function formFromConfig(
   const modelObj =
     typeof model === "string"
       ? { id: model }
-      : ((model ?? {}) as { id?: string; speed?: string });
+      : ((model ?? {}) as {
+          id?: string;
+          speed?: string;
+          effort?: ModelEffort | { type: ModelEffort };
+          inference_geo?: "us" | "global";
+        });
+  const effort =
+    typeof modelObj.effort === "string"
+      ? modelObj.effort
+      : modelObj.effort?.type;
   const { toolset, others } = parseTools(
     Array.isArray(config.tools) ? config.tools : [],
   );
@@ -124,6 +155,8 @@ export function formFromConfig(
   return {
     name: typeof config.name === "string" ? config.name : "",
     modelId: modelObj.id ?? "",
+    ...(effort && effortLevels.includes(effort) && { effort }),
+    ...(modelObj.inference_geo && { inferenceGeo: modelObj.inference_geo }),
     speed:
       modelObj.speed === "fast" || modelObj.speed === "standard"
         ? modelObj.speed
@@ -153,9 +186,12 @@ function configFromForm(
   ];
   return {
     name: form.name,
-    model: form.speed
-      ? { id: form.modelId, speed: form.speed }
-      : { id: form.modelId },
+    model: {
+      id: form.modelId,
+      ...(form.speed && { speed: form.speed }),
+      ...(form.effort && { effort: form.effort }),
+      ...(form.inferenceGeo && { inference_geo: form.inferenceGeo }),
+    },
     system: form.system,
     description: form.description,
     tools,
@@ -194,26 +230,66 @@ export function formFromAgent(agent: Agent): FormState {
   return formFromConfig(agent as unknown as Record<string, unknown>, agent.id);
 }
 
-/** Two-column section: explainer left, controls right (reference layout). */
+/** Optional groups in the creation page reveal the same editable fields as the inspector. */
 function Section({
   title,
   hint,
   children,
   level = 3,
+  summary,
 }: {
   title: string;
   hint: string;
   children: ReactNode;
   level?: 2 | 3;
+  summary?: string;
 }) {
   const Heading = level === 2 ? "h2" : "h3";
+  const [expanded, setExpanded] = useState(false);
+  const id = useId();
+  const optional = summary !== undefined;
   return (
-    <section className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[220px_minmax(0,1fr)]">
+    <section className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-x-7 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 md:grid-cols-[minmax(0,224px)_minmax(0,1fr)]">
       <div>
-        <Heading className="text-[15px] font-medium">{title}</Heading>
-        <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
+        <Heading className="text-[15px] font-medium">
+          {optional ? (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={id}
+              onClick={() => setExpanded(!expanded)}
+              className="inline-flex items-center gap-1.5 rounded-sm text-left"
+            >
+              <ChevronRight
+                aria-hidden
+                className={cn("size-3.5", expanded && "rotate-90")}
+              />
+              {title}{" "}
+              <span
+                aria-hidden
+                className="text-[13px] font-normal text-muted-foreground"
+              >
+                (optional)
+              </span>
+            </button>
+          ) : (
+            title
+          )}
+        </Heading>
+        {(!optional || expanded) && (
+          <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
+        )}
       </div>
-      <div className="space-y-6">{children}</div>
+      <div
+        id={id}
+        className={cn("min-w-0 space-y-6", level === 2 && "space-y-4")}
+      >
+        {optional && !expanded ? (
+          <p className="text-sm text-muted-foreground">{summary}</p>
+        ) : (
+          children
+        )}
+      </div>
     </section>
   );
 }
@@ -320,18 +396,7 @@ function PolicySelect({
   );
 }
 
-export function AgentEditor({
-  mode,
-  initial,
-  agentId,
-  version,
-  onCancel,
-  onReload,
-  onSaved,
-  inline = false,
-  readOnly = false,
-  toolbar,
-}: {
+interface EditorProps {
   mode: "create" | "edit";
   initial: FormState;
   agentId?: string;
@@ -342,20 +407,49 @@ export function AgentEditor({
   inline?: boolean;
   readOnly?: boolean;
   toolbar?: ReactNode;
-}) {
+}
+
+export function AgentEditor(props: EditorProps) {
+  const models = useModelChoices();
+  return <AgentEditorFields {...props} models={models} />;
+}
+
+export function AgentEditorFields({
+  mode,
+  initial,
+  agentId,
+  version,
+  onCancel,
+  onReload,
+  onSaved,
+  inline = false,
+  readOnly = false,
+  toolbar,
+  creationPage = false,
+  models,
+}: EditorProps & { models: ModelChoices; creationPage?: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<"rendered" | "raw">("rendered");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [form, setForm] = useState<FormState>(initial);
   const [raw, setRaw] = useState<{ format: RawFormat; text: string }>({
-    format: "json",
+    format: creationPage ? "yaml" : "json",
     text: "",
   });
+  const gutter = useRef<HTMLPreElement>(null);
   const [rawBaseline, setRawBaseline] = useState("");
+  const [original] = useState(initial);
+  const [startingConfig, setStartingConfig] = useState(initial);
+  const [promptDirty, setPromptDirty] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const changedRaw = tab === "raw" && raw.text !== rawBaseline;
+  const edited =
+    JSON.stringify(form) !== JSON.stringify(startingConfig) || changedRaw;
   const dirty =
     !readOnly &&
-    (JSON.stringify(form) !== JSON.stringify(initial) ||
-      (tab === "raw" && raw.text !== rawBaseline));
+    (promptDirty ||
+      changedRaw ||
+      JSON.stringify(form) !== JSON.stringify(original));
   const leave = useUnsavedChanges(dirty);
   const [rawError, setRawError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -367,7 +461,6 @@ export function AgentEditor({
   const skillOptions =
     skillsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const agentsQuery = useAgentOptions();
-  const models = useModelChoices();
   // The raw tab writes the config as the API takes it, so only the form
   // waits for a listed model.
   const modelMissing =
@@ -421,7 +514,12 @@ export function AgentEditor({
   };
 
   const save = () => {
-    if (readOnly || mutation.isPending || (tab === "rendered" && schemaError))
+    if (
+      readOnly ||
+      generating ||
+      mutation.isPending ||
+      (tab === "rendered" && schemaError)
+    )
       return;
     // Save stays enabled, as for every other field the platform requires,
     // and says on the field why it sent nothing.
@@ -467,8 +565,11 @@ export function AgentEditor({
   const saveButton = (
     <Button
       onClick={save}
+      size={creationPage ? "sm" : "default"}
       disabled={
-        mutation.isPending || (tab === "rendered" && Boolean(schemaError))
+        generating ||
+        mutation.isPending ||
+        (tab === "rendered" && Boolean(schemaError))
       }
     >
       {mode === "create"
@@ -481,6 +582,7 @@ export function AgentEditor({
   const cancelButton = (
     <Button
       variant="ghost"
+      size={creationPage ? "sm" : "default"}
       disabled={mutation.isPending}
       onClick={() => {
         if (inline) {
@@ -496,6 +598,7 @@ export function AgentEditor({
           leave.requestLeave(() => {
             leave.setDirty(false);
             if (onCancel) onCancel();
+            else if (creationPage) router.push("/agents");
             else router.back();
           });
       }}
@@ -506,20 +609,68 @@ export function AgentEditor({
 
   return (
     <div
-      className={inline ? "flex h-full min-h-0 w-full flex-col" : "max-w-4xl"}
+      className={
+        inline
+          ? "flex h-full min-h-0 w-full flex-col"
+          : creationPage
+            ? "flex min-w-0 flex-1 flex-col"
+            : "max-w-4xl"
+      }
     >
+      {creationPage && (
+        <AgentStartingPoint
+          getConfig={(fields) => {
+            if (tab === "rendered")
+              return fields === "model"
+                ? { model: form.modelId }
+                : configFromForm(form);
+            const parsed = fromRaw(raw.text, raw.format);
+            setRawError(parsed.error ?? null);
+            return parsed.config ?? null;
+          }}
+          confirmReplace={(action, source) =>
+            edited || (source === "template" && promptDirty)
+              ? leave.requestLeave(action)
+              : action()
+          }
+          apply={(config, source) => {
+            const next = formFromConfig(config as Record<string, unknown>);
+            setForm(next);
+            if (source === "template") setStartingConfig(next);
+            if (tab === "raw") {
+              const text = toRaw(config, raw.format);
+              setRaw({ format: raw.format, text });
+              setRawBaseline(text);
+            }
+            setToolsOpen(false);
+            setRawError(null);
+            setModelAsked(false);
+            mutation.reset();
+          }}
+          setPromptDirty={setPromptDirty}
+          busy={generating}
+          setBusy={setGenerating}
+          saving={mutation.isPending}
+        />
+      )}
       <div
         className={cn(
           "flex shrink-0 flex-wrap items-center gap-1.5 pb-4",
+          creationPage && "pb-3",
           inline && "w-full max-w-3xl",
         )}
       >
+        {creationPage && (
+          <h2 className="mr-auto text-[15px] font-medium">Agent config</h2>
+        )}
         {toolbar && <div className="mr-auto">{toolbar}</div>}
         <div
           role="radiogroup"
           aria-label="Agent config view"
           className={
-            inline ? "flex rounded-lg bg-secondary p-0.5" : "flex gap-1.5"
+            inline || creationPage
+              ? "flex rounded-lg bg-secondary p-0.5"
+              : "flex gap-1.5"
           }
         >
           {(["rendered", "raw"] as const).map((key) => (
@@ -530,7 +681,7 @@ export function AgentEditor({
               aria-checked={tab === key}
               tabIndex={tab === key ? 0 : -1}
               data-view={key}
-              disabled={key === "raw" && Boolean(schemaError)}
+              disabled={generating || (key === "raw" && Boolean(schemaError))}
               onClick={() => switchTab(key)}
               onKeyDown={(event) => {
                 const next =
@@ -553,7 +704,8 @@ export function AgentEditor({
               }}
               className={cn(
                 "h-[30px] rounded-md border px-3 text-sm capitalize",
-                inline
+                creationPage && "h-[26px]",
+                inline || creationPage
                   ? tab === key
                     ? "border-border bg-background text-foreground shadow-sm"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -566,7 +718,7 @@ export function AgentEditor({
             </button>
           ))}
         </div>
-        {tab === "raw" && (
+        {tab === "raw" && !creationPage && (
           <div className="ml-3 flex items-center gap-1 text-[12px]">
             {(["json", "yaml"] as const).map((format) => (
               <button
@@ -603,93 +755,174 @@ export function AgentEditor({
           </p>
         )}
         {tab === "rendered" ? (
-          <fieldset disabled={readOnly} className="min-w-0">
+          <fieldset disabled={readOnly || generating} className="min-w-0">
             <Section
-              level={inline ? 2 : 3}
+              level={inline || creationPage ? 2 : 3}
               title="General"
-              hint="Name, model, and the instructions the agent runs with."
+              hint={
+                creationPage
+                  ? "What this agent is and how it’s prompted."
+                  : "Name, model, and the instructions the agent runs with."
+              }
             >
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="agent-name">Name</Label>
                   <Input
                     id="agent-name"
+                    placeholder={
+                      creationPage
+                        ? "Descriptive name for this agent"
+                        : undefined
+                    }
+                    className={creationPage ? "h-7" : undefined}
                     value={form.name}
                     onChange={(e) => set("name", e.target.value)}
                   />
                 </div>
-                <div className="grid grid-cols-[1fr_130px] gap-2">
-                  {/* min-w-0: the select's trigger does not wrap. */}
-                  <div className="min-w-0 space-y-1.5">
+                {creationPage ? (
+                  <div className="space-y-1.5">
                     <Label htmlFor="agent-model">Model</Label>
-                    <ModelField
-                      id="agent-model"
-                      className="font-mono"
-                      value={form.modelId}
-                      onChange={(value) => set("modelId", value)}
+                    <AgentModelMenu
+                      model={form.modelId}
+                      effort={form.effort ?? ""}
+                      speed={form.speed}
                       choices={models}
-                      readOnly={readOnly}
                       error={
-                        !modelAsked || !modelMissing
-                          ? undefined
-                          : models.pending
-                            ? "The gateway's models are still loading."
-                            : "A model is required: choose one of the gateway's models."
+                        modelAsked && modelMissing
+                          ? "Choose one of the gateway's models."
+                          : undefined
                       }
+                      onModel={(value) => set("modelId", value)}
+                      onEffort={(value) => set("effort", value || undefined)}
+                      onSpeed={(value) => set("speed", value)}
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Speed</Label>
-                    <Select
-                      value={form.speed || "default"}
-                      onValueChange={(v) =>
-                        set(
-                          "speed",
-                          v === "default" ? "" : (v as "standard" | "fast"),
-                        )
-                      }
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="h-8 w-full rounded-lg"
-                        aria-label="Model speed"
+                ) : (
+                  <div className="grid grid-cols-[1fr_130px] gap-2">
+                    {/* min-w-0: the select's trigger does not wrap. */}
+                    <div className="min-w-0 space-y-1.5">
+                      <Label htmlFor="agent-model">Model</Label>
+                      <ModelField
+                        id="agent-model"
+                        className="font-mono"
+                        value={form.modelId}
+                        onChange={(value) =>
+                          setForm((current) => ({
+                            ...current,
+                            modelId: value,
+                            effort:
+                              value === current.modelId
+                                ? current.effort
+                                : undefined,
+                          }))
+                        }
+                        choices={models}
+                        readOnly={readOnly}
+                        error={
+                          !modelAsked || !modelMissing
+                            ? undefined
+                            : models.pending
+                              ? "The gateway's models are still loading."
+                              : "A model is required: choose one of the gateway's models."
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Speed</Label>
+                      <Select
+                        value={form.speed || "default"}
+                        onValueChange={(v) =>
+                          set(
+                            "speed",
+                            v === "default" ? "" : (v as "standard" | "fast"),
+                          )
+                        }
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">default</SelectItem>
-                        <SelectItem value="standard">standard</SelectItem>
-                        <SelectItem value="fast">fast</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger
+                          size="sm"
+                          className="h-8 w-full rounded-lg"
+                          aria-label="Model speed"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">default</SelectItem>
+                          <SelectItem value="standard">standard</SelectItem>
+                          <SelectItem value="fast">fast</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="agent-description">Description</Label>
+                <Label htmlFor="agent-description">
+                  Description{" "}
+                  {creationPage && (
+                    <span
+                      aria-hidden
+                      className="font-normal text-muted-foreground"
+                    >
+                      (optional)
+                    </span>
+                  )}
+                </Label>
                 <textarea
                   rows={2}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                  className="block w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                   id="agent-description"
+                  placeholder={
+                    creationPage
+                      ? "What this agent does, for humans and other agents"
+                      : undefined
+                  }
                   value={form.description}
                   onChange={(e) => set("description", e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="agent-system">System prompt</Label>
+                <Label htmlFor="agent-system">
+                  System prompt{" "}
+                  {creationPage && (
+                    <span
+                      aria-hidden
+                      className="font-normal text-muted-foreground"
+                    >
+                      (optional)
+                    </span>
+                  )}
+                </Label>
                 <textarea
                   id="agent-system"
+                  placeholder={
+                    creationPage ? "System prompt for the agent" : undefined
+                  }
                   value={form.system}
                   onChange={(e) => set("system", e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                  className="block w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                 />
               </div>
             </Section>
 
             <Section
-              level={inline ? 2 : 3}
+              level={inline || creationPage ? 2 : 3}
               title="Tools"
+              summary={
+                creationPage
+                  ? [
+                      form.toolset && "Built-in tools",
+                      form.mcpServers.length > 0 &&
+                        `${form.mcpServers.length} MCP servers`,
+                      form.otherTools.some(
+                        (t) => (t as { type?: string })?.type === "custom",
+                      ) && "Custom tools",
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "None"
+                  : undefined
+              }
               hint="What the agent may do. The default row covers every tool; per-tool rows override it. “always ask” holds the call for approval in the session view."
             >
               <div>
@@ -832,8 +1065,19 @@ export function AgentEditor({
             </Section>
 
             <Section
-              level={inline ? 2 : 3}
+              level={inline || creationPage ? 2 : 3}
               title="Skills"
+              summary={
+                creationPage
+                  ? form.skills
+                      .map(
+                        (ref) =>
+                          skillOptions.find((s) => s.id === ref.skill_id)
+                            ?.display_name ?? ref.skill_id,
+                      )
+                      .join(", ") || "None"
+                  : undefined
+              }
               hint="Skill bundles uploaded to this platform, attached by reference."
             >
               <div className="space-y-3">
@@ -947,8 +1191,15 @@ export function AgentEditor({
             </Section>
 
             <Section
-              level={inline ? 2 : 3}
+              level={inline || creationPage ? 2 : 3}
               title="Multiagent"
+              summary={
+                creationPage
+                  ? form.multiagent?.length
+                    ? "Subagents"
+                    : "None"
+                  : undefined
+              }
               hint="Choose the agents this coordinator can delegate to. Pin specific versions in Raw."
             >
               <div className="space-y-3" data-testid="agent-multiagent">
@@ -1069,7 +1320,7 @@ export function AgentEditor({
               </div>
             </Section>
 
-            {!schemaError && !readOnly && (
+            {!creationPage && !schemaError && !readOnly && (
               <CurlBlock
                 getBody={() =>
                   mode === "edit"
@@ -1082,25 +1333,101 @@ export function AgentEditor({
           </fieldset>
         ) : (
           <div>
-            <textarea
-              aria-label="Raw agent config"
-              readOnly={readOnly}
-              value={raw.text}
-              onChange={(e) => {
-                setRaw((r) => ({ ...r, text: e.target.value }));
-                // The parse error describes the text that was there a keystroke
-                // ago; keeping it would leave the field announced invalid while
-                // it is being fixed.
-                setRawError(null);
-              }}
-              rows={22}
-              spellCheck={false}
-              aria-invalid={rawError !== null}
-              aria-describedby={rawError ? "raw-config-error" : undefined}
-              // Hand-rolled rather than the <Input> primitive, so it carries its
-              // own copy of the one invalid rule (issue #104). Opaque, no halo.
-              className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
-            />
+            {creationPage && (
+              <div className="flex items-center justify-end gap-1 rounded-t-lg border border-b-0 bg-muted/40 p-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Config format: ${raw.format.toUpperCase()}`}
+                      />
+                    }
+                  >
+                    {raw.format.toUpperCase()}
+                    <ChevronDown className="size-3" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {(["yaml", "json"] as const).map((f) => (
+                      <DropdownMenuItem key={f} onClick={() => switchFormat(f)}>
+                        {f.toUpperCase()}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Copy configuration"
+                  onClick={async () => {
+                    if (await copyText(raw.text))
+                      toast.success("Configuration copied");
+                    else toast.error("Could not copy configuration");
+                  }}
+                >
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
+            )}
+            <div className={creationPage ? "relative" : undefined}>
+              {creationPage && (
+                <pre
+                  ref={gutter}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-px left-px w-9 overflow-hidden border-r bg-muted/40 py-3 pr-2 text-right font-mono text-[12px] leading-relaxed text-muted-foreground"
+                >
+                  {raw.text
+                    .split("\n")
+                    .map((_, i) => i + 1)
+                    .join("\n")}
+                </pre>
+              )}
+              <SchemaTextarea
+                wrap={creationPage ? "off" : undefined}
+                onScroll={(event) => {
+                  if (gutter.current)
+                    gutter.current.scrollTop = event.currentTarget.scrollTop;
+                }}
+                indentWithTab={creationPage}
+                disabled={generating}
+                aria-label="Raw agent config"
+                readOnly={readOnly}
+                value={raw.text}
+                onValueChange={(text) => {
+                  setRaw((r) => ({ ...r, text }));
+                  // The parse error describes the text that was there a keystroke
+                  // ago; keeping it would leave the field announced invalid while
+                  // it is being fixed.
+                  setRawError(null);
+                }}
+                rows={22}
+                spellCheck={false}
+                aria-invalid={rawError !== null}
+                aria-describedby={
+                  [
+                    creationPage && "agent-raw-help",
+                    rawError && "raw-config-error",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+                // Hand-rolled rather than the <Input> primitive, so it carries its
+                // own copy of the one invalid rule (issue #104). Opaque, no halo.
+                className={cn(
+                  "w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface",
+                  creationPage && "block rounded-t-none pl-12",
+                )}
+              />
+            </div>
+            {creationPage && (
+              <p id="agent-raw-help" className="text-xs text-muted-foreground">
+                Tab inserts indentation. Press Escape then Tab to move focus out
+                of the editor.
+              </p>
+            )}
             {rawError && (
               <p
                 id="raw-config-error"
@@ -1118,7 +1445,9 @@ export function AgentEditor({
           className={
             inline
               ? "mt-3 flex w-fit max-w-full shrink-0 flex-wrap items-center gap-3 self-center rounded-xl border bg-background p-2 shadow-md"
-              : "flex items-center gap-3 pt-6"
+              : creationPage
+                ? "sticky bottom-0 z-10 mt-auto flex flex-wrap items-center justify-end gap-2 border-t bg-background py-3"
+                : "flex items-center gap-3 pt-6"
           }
         >
           {inline && dirty && (
@@ -1126,9 +1455,9 @@ export function AgentEditor({
               Unsaved changes
             </span>
           )}
-          {inline && cancelButton}
+          {(inline || creationPage) && cancelButton}
           {saveButton}
-          {!inline && cancelButton}
+          {!inline && !creationPage && cancelButton}
           {conflict ? (
             <span role="alert" className="text-sm text-destructive">
               Someone else updated this agent (409).{" "}

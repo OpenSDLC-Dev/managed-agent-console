@@ -229,6 +229,7 @@ it("preserves the draft and optimistic version until an explicit reload", async 
     "Keep my draft",
   );
   expect(screen.getByText(/Editing v3/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByLabelText("Model")).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   const reload = await screen.findByRole("button", {
     name: "Reload the latest version",

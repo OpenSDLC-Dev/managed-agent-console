@@ -264,7 +264,11 @@ describe("Nav", () => {
           ]),
       ).toEqual(
         surfaces.map((surface) => [
-          SURFACES[surface].label,
+          surface === "memory-stores"
+            ? "Memory"
+            : surface === "vaults"
+              ? "Credential vaults"
+              : SURFACES[surface].label,
           `/${surface}`,
           surface,
         ]),

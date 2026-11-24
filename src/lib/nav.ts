@@ -49,9 +49,13 @@ export interface GroupEntry {
   items: Destination[];
 }
 
-const surfaceEntry = (surface: Surface, icon: LucideIcon): Destination => ({
+const surfaceEntry = (
+  surface: Surface,
+  icon: LucideIcon,
+  label: string = SURFACES[surface].label,
+): Destination => ({
   key: `nav-${surface}`,
-  label: SURFACES[surface].label,
+  label,
   href: surfaceRoute(surface),
   surface,
   icon,
@@ -115,8 +119,8 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
           surfaceEntry("sessions", MessagesSquare),
           surfaceEntry("deployments", Rocket),
           surfaceEntry("environments", Boxes),
-          surfaceEntry("memory-stores", Database),
-          surfaceEntry("vaults", KeyRound),
+          surfaceEntry("memory-stores", Database, "Memory"),
+          surfaceEntry("vaults", KeyRound, "Credential vaults"),
           surfaceEntry("dreams", Moon),
         ],
       },

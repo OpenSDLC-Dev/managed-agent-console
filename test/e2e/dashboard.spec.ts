@@ -465,11 +465,14 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
   );
   await createAgent.click();
   await expect(page).toHaveURL(/\/agents\/new\?model=minimax-m3$/);
-  await expect(model).toHaveAttribute("data-model", "minimax-m3");
-  await expect(model.getByText("minimax-m3", { exact: true })).toBeVisible();
+  const agentModel = main.getByRole("button", { name: "Model", exact: true });
+  await expect(agentModel).toHaveAttribute("data-model", "minimax-m3");
+  await expect(
+    agentModel.getByText("minimax-m3", { exact: true }),
+  ).toBeVisible();
   await expect(
     main.getByRole("textbox", { name: "Name", exact: true }),
-  ).toHaveValue("");
+  ).toHaveValue("Untitled agent");
   await page.goto("/dashboard/models/minimax");
   const deployment = main.getByRole("region", { name: "Current deployment" });
   const alias = deployment.getByRole("link", {

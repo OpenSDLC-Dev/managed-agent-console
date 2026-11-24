@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import YAML from "yaml";
 import { signIn } from "./sign-in";
 import { chooseModel } from "./choose-model";
 
@@ -13,9 +14,11 @@ test("create an agent through the rendered form", async ({ page }) => {
 
   await page.getByLabel("Name").fill("Deploy helper");
   await chooseModel(page, "minimax-m3");
+  await page.getByRole("button", { name: "Tools", exact: true }).click();
   await page.getByRole("button", { name: /Tool permissions/ }).click();
   await page.getByLabel("bash policy").click();
   await page.getByRole("option", { name: "always ask" }).click();
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("combobox", { name: "Add skill" }).click();
   await page.getByRole("option", { name: /Excel spreadsheets/ }).click();
 
@@ -32,35 +35,44 @@ test("create an agent through the rendered form", async ({ page }) => {
   );
 });
 
-test("create an agent from a starter template", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/agents/new");
-
-  // The template seeds the whole form through the wire parse path.
-  await page.getByRole("button", { name: /Code task runner/ }).click();
-  await expect(page.getByLabel("Name")).toHaveValue("Code task runner");
-  await page.getByRole("button", { name: /Tool permissions/ }).click();
-  // The trigger renders the wire value verbatim.
-  await expect(page.getByLabel("bash policy")).toContainText("always_ask");
-
-  // The equivalent-curl block teaches the wire shape with placeholders only.
-  await page.getByText("Equivalent API request").click();
-  await expect(page.getByTestId("curl-block")).toContainText(
-    'curl -X POST "$PLATFORM_BASE_URL/v1/agents"',
+test("a manual template saves the displayed model, effort, speed and tool exclusions", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new");
+  await page.getByRole("radio", { name: "Template" }).check();
+  await page.getByRole("button", { name: /Structured extractor/ }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Structured extractor",
   );
-  await expect(page.getByTestId("curl-block")).toContainText(
-    "x-api-key: $ISSUED_API_KEY",
+  await page.getByRole("button", { name: "Model", exact: true }).click();
+  const menu = page.getByRole("dialog", { name: "Model settings" });
+  await menu.getByRole("radio", { name: "minimax-m3" }).check();
+  await menu.getByLabel("Effort", { exact: true }).selectOption("high");
+  await menu.getByRole("switch", { name: "Fast speed" }).check();
+  await page.keyboard.press("Escape");
+  await page.getByRole("radio", { name: "raw" }).click();
+  const draft = YAML.parse(
+    await page.getByLabel("Raw agent config").inputValue(),
   );
-
-  // The template names a model the gateway lacks, so the select starts empty.
-  await chooseModel(page);
+  expect(draft.model).toEqual({
+    id: "minimax-m3",
+    effort: "high",
+    speed: "fast",
+  });
+  expect(draft.tools[0].configs.map((t: { name: string }) => t.name)).toEqual([
+    "web_fetch",
+    "web_search",
+  ]);
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
-  await expect(page).toHaveURL(/\/agents\/agent_mock/);
   await expect(
-    page.getByRole("heading", { name: "Code task runner" }),
+    page.getByRole("heading", { name: "Structured extractor", exact: true }),
   ).toBeVisible();
   await page.getByRole("radio", { name: "raw" }).click();
-  await expect(page.getByLabel("Raw agent config")).toHaveValue(/always_ask/);
+  const saved = JSON.parse(
+    await page.getByLabel("Raw agent config").inputValue(),
+  );
+  expect(saved.model).toEqual(draft.model);
+  expect(saved.tools).toEqual(draft.tools);
 });
 
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
@@ -186,6 +198,7 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
   await signIn(page, "/agents/new");
   await page.getByLabel("Name", { exact: true }).fill("Support");
   await chooseModel(page);
+  await page.getByRole("button", { name: "Tools", exact: true }).click();
   await page.getByRole("button", { name: "Add custom tool" }).click();
   const tool = page.locator('[data-tool-type="custom"]');
   await tool.getByText("Definition", { exact: true }).click();
@@ -213,7 +226,7 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
     .click();
   await page.getByRole("option", { name: "Always ask" }).click();
   await page.getByRole("radio", { name: "raw" }).click();
-  const config = JSON.parse(
+  const config = YAML.parse(
     await page.getByLabel("Raw agent config").inputValue(),
   );
   expect(config.tools).toContainEqual({
@@ -238,6 +251,7 @@ test("schema indentation stays in the editor and Escape then Tab releases focus"
   await signIn(page, "/agents");
   await page.getByRole("link", { name: "Create agent", exact: true }).click();
   const editor = page.getByRole("main");
+  await editor.getByRole("button", { name: "Tools", exact: true }).click();
   await editor.getByRole("button", { name: "Add custom tool" }).click();
   const tool = editor.locator('[data-tool-type="custom"]');
   await tool.getByText("Definition", { exact: true }).click();
@@ -262,7 +276,7 @@ test("schema indentation stays in the editor and Escape then Tab releases focus"
   await schema.press("Tab");
   await expect(schema).toHaveValue("{  }  ");
   await editor.getByRole("radio", { name: "raw" }).click();
-  const raw = JSON.parse(
+  const raw = YAML.parse(
     await editor.getByLabel("Raw agent config").inputValue(),
   );
   expect(raw.tools).toContainEqual({

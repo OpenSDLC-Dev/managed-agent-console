@@ -48,6 +48,7 @@ import {
   useVaults,
 } from "@/lib/platform/queries";
 import {
+  SURFACES,
   hasDeveloperSession,
   isSurfaceVisible,
   canOpenReport,
@@ -129,7 +130,7 @@ function useSearchItems(query: string): Item[] {
         (!isReportPage(s.href) ||
           (hasDeveloperSession(session) && canOpenReport(s.href, surfaces))) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
-        (!q || s.label.toLowerCase().includes(q)),
+        matches(q, s.label, s.surface && SURFACES[s.surface].label),
     );
     if (!q) return items;
     for (const a of agents.data?.data ?? []) {

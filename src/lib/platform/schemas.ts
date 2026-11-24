@@ -24,14 +24,16 @@
  * strings; nullable timestamps are string|null; collections render [] and maps
  * render {} — never null.
  */
+import { effortLevels } from "./model-effort";
 import { z } from "zod";
 
 // ---- agents (internal/api/agents.go:18-30, internal/domain/agent.go:59-67)
 
-/** internal/domain/agent.go:11-14 — `effort` is a reference-only field. */
 export const ModelRefSchema = z.object({
   id: z.string(),
   speed: z.enum(["standard", "fast"]).optional(), // omitted when unset
+  effort: z.object({ type: z.enum(effortLevels) }).optional(),
+  inference_geo: z.enum(["us", "global"]).optional(),
 });
 
 /** internal/api/wire.go:506-538 — normalized to exactly these three keys. */

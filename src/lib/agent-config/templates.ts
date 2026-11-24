@@ -1,62 +1,53 @@
-/**
- * Starter templates for /agents/new (plan 03 slice 4): static wire-shaped
- * configs that seed the editor form through the same parse path a fetched
- * agent uses. Deliberately few and opinionated — a starting point, not a
- * gallery.
- */
+import { starterConfig, starters, type Starter } from "./quickstart";
 
-export interface AgentTemplate {
-  key: string;
-  title: string;
-  description: string;
-  config: Record<string, unknown>;
+const manualKeys = new Set([
+  "deep-researcher",
+  "structured-extractor",
+  "field-monitor",
+  "support-agent",
+  "incident-commander",
+]);
+export const manualStarters = starters.filter((starter) =>
+  manualKeys.has(starter.key),
+);
+
+/** The directory offers a smaller set of configurations than guided Create. */
+export function manualStarterConfig(model: string, starter?: Starter) {
+  const base = starterConfig(model, starter);
+  const offline = [
+    "structured-extractor",
+    "support-agent",
+    "incident-commander",
+  ].includes(starter?.key ?? "");
+  const tools = [
+    {
+      type: "agent_toolset_20260401",
+      ...(offline && {
+        configs: ["web_search", "web_fetch"].map((name) => ({
+          name,
+          enabled: false,
+        })),
+      }),
+    },
+    ...(starter?.servers ?? []).map((name) => ({
+      type: "mcp_toolset",
+      mcp_server_name: name,
+      // Platform requires each declared server to have a toolset. The reference
+      // declares four incident connectors and activates only Sentry and Linear.
+      ...(starter?.key === "incident-commander" &&
+        (name === "slack" || name === "github") && {
+          default_config: { enabled: false },
+        }),
+    })),
+  ];
+  return {
+    ...base,
+    model: { id: model, effort: "low" },
+    tools,
+    description:
+      starter?.description ?? "A blank starting point with the core toolset.",
+    system:
+      starter?.instructions ??
+      "Help the user complete their task using the available workspace, tools and sources. Check your work and explain the result.",
+  };
 }
-
-export const AGENT_TEMPLATES: AgentTemplate[] = [
-  {
-    key: "code-runner",
-    title: "Code task runner",
-    description: "Full workspace access; bash gated behind approval.",
-    config: {
-      name: "Code task runner",
-      model: { id: "claude-sonnet-4-8" },
-      description: "Runs scoped engineering tasks in its environment.",
-      system:
-        "You are a careful engineer. Work inside the workspace, run the tests before declaring success, and prefer minimal diffs.",
-      tools: [
-        {
-          type: "agent_toolset_20260401",
-          configs: [
-            { name: "bash", permission_policy: { type: "always_ask" } },
-          ],
-        },
-      ],
-      mcp_servers: [],
-      skills: [],
-    },
-  },
-  {
-    key: "researcher",
-    title: "Web researcher",
-    description: "Reads the workspace and the web; cannot change files.",
-    config: {
-      name: "Web researcher",
-      model: { id: "claude-sonnet-4-8" },
-      description: "Gathers sources and reports findings in its messages.",
-      system:
-        "You are a thorough researcher. Cite the sources you fetched and keep facts separate from inference.",
-      tools: [
-        {
-          type: "agent_toolset_20260401",
-          configs: [
-            { name: "bash", enabled: false },
-            { name: "write", enabled: false },
-            { name: "edit", enabled: false },
-          ],
-        },
-      ],
-      mcp_servers: [],
-      skills: [],
-    },
-  },
-];

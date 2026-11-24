@@ -1,5 +1,6 @@
-import { PageHeader } from "@/components/shell/page-header";
 import { AgentCreateForm } from "@/components/console/agent-create-form";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function NewAgentPage({
   searchParams,
@@ -9,12 +10,21 @@ export default async function NewAgentPage({
   const { model } = await searchParams;
   const selected = Array.isArray(model) ? model[0] : model;
   return (
-    <div>
-      <PageHeader
-        title="Create agent"
-        subtitle="Configure a new autonomous agent."
-      />
-      <AgentCreateForm key={selected} initialModel={selected} />
+    <div className="-my-6 flex min-h-[calc(100dvh-var(--console-header-height))] flex-col">
+      <div className="-mx-1 pt-4 sm:-mx-5">
+        <Breadcrumb
+          parent={{ href: "/agents", label: "Agents" }}
+          current="New agent"
+        />
+      </div>
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-3">
+        <PageHeader
+          title="Create agent"
+          subtitle="Start from a template or describe what you need."
+          className="pb-11 [&>div]:w-full"
+        />
+        <AgentCreateForm key={selected} initialModel={selected} />
+      </div>
     </div>
   );
 }
