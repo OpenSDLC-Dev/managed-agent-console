@@ -153,11 +153,18 @@ describe("manual starters", () => {
       const names = others.map(
         (t) => (t as { mcp_server_name: string }).mcp_server_name,
       );
+      expect(names).toEqual(starter?.servers ?? []);
       expect(names).toEqual(
-        starter?.key === "incident-commander"
-          ? ["sentry", "linear"]
-          : (starter?.servers ?? []),
+        (draft.mcp_servers ?? []).map((s) => (s as { name: string }).name),
       );
+      if (starter?.key === "incident-commander")
+        expect(others.slice(-2)).toEqual(
+          ["slack", "github"].map((name) => ({
+            type: "mcp_toolset",
+            mcp_server_name: name,
+            default_config: { enabled: false },
+          })),
+        );
     }
   });
 });

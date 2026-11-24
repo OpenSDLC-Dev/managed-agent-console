@@ -1,6 +1,6 @@
 "use client";
 
-import { AgentEditor, formFromConfig } from "./agent-editor";
+import { AgentEditorFields, formFromConfig } from "./agent-editor";
 import { useModelChoices } from "./model-field";
 import { manualStarterConfig } from "@/lib/agent-config/templates";
 
@@ -16,7 +16,8 @@ export function AgentCreateForm({ initialModel }: { initialModel?: string }) {
     ? "deepseek-flash"
     : models.names?.[0];
   return (
-    <AgentEditor
+    <AgentEditorFields
+      models={models}
       mode="create"
       creationPage
       initial={formFromConfig(

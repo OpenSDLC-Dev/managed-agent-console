@@ -17,11 +17,11 @@ export default async function NewAgentPage({
           current="New agent"
         />
       </div>
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-2">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col pt-3">
         <PageHeader
           title="Create agent"
           subtitle="Start from a template or describe what you need."
-          className="pb-9"
+          className="pb-11 [&>div]:w-full"
         />
         <AgentCreateForm key={selected} initialModel={selected} />
       </div>

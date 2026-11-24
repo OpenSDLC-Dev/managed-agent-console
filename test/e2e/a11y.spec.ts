@@ -287,7 +287,10 @@ test("an unparseable raw agent config marks and names its textarea", async ({
   await page.getByRole("radio", { name: "rendered" }).click();
 
   await expect(field).toHaveAttribute("aria-invalid", "true");
-  await expect(field).toHaveAttribute("aria-describedby", "raw-config-error");
+  await expect(field).toHaveAttribute(
+    "aria-describedby",
+    "agent-raw-help raw-config-error",
+  );
   await expectNoViolations(page);
 });
 

@@ -12,6 +12,7 @@ import {
   ModelField,
   modelChosen,
   useModelChoices,
+  type ModelChoices,
 } from "@/components/console/model-field";
 import { useId, useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
@@ -279,7 +280,10 @@ function Section({
           <p className="pt-1 text-[13px] text-muted-foreground">{hint}</p>
         )}
       </div>
-      <div id={id} className="min-w-0 space-y-6">
+      <div
+        id={id}
+        className={cn("min-w-0 space-y-6", level === 2 && "space-y-4")}
+      >
         {optional && !expanded ? (
           <p className="text-sm text-muted-foreground">{summary}</p>
         ) : (
@@ -392,7 +396,25 @@ function PolicySelect({
   );
 }
 
-export function AgentEditor({
+interface EditorProps {
+  mode: "create" | "edit";
+  initial: FormState;
+  agentId?: string;
+  version?: number;
+  onCancel?: () => void;
+  onReload?: () => void;
+  onSaved?: (agent: Agent) => void;
+  inline?: boolean;
+  readOnly?: boolean;
+  toolbar?: ReactNode;
+}
+
+export function AgentEditor(props: EditorProps) {
+  const models = useModelChoices();
+  return <AgentEditorFields {...props} models={models} />;
+}
+
+export function AgentEditorFields({
   mode,
   initial,
   agentId,
@@ -404,19 +426,8 @@ export function AgentEditor({
   readOnly = false,
   toolbar,
   creationPage = false,
-}: {
-  mode: "create" | "edit";
-  initial: FormState;
-  agentId?: string;
-  version?: number;
-  onCancel?: () => void;
-  onReload?: () => void;
-  onSaved?: (agent: Agent) => void;
-  inline?: boolean;
-  readOnly?: boolean;
-  toolbar?: ReactNode;
-  creationPage?: boolean;
-}) {
+  models,
+}: EditorProps & { models: ModelChoices; creationPage?: boolean }) {
   const router = useRouter();
   const [tab, setTab] = useState<"rendered" | "raw">("rendered");
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -449,7 +460,6 @@ export function AgentEditor({
   const skillOptions =
     skillsQuery.data?.pages.flatMap((page) => page.data) ?? [];
   const agentsQuery = useAgentOptions();
-  const models = useModelChoices();
   // The raw tab writes the config as the API takes it, so only the form
   // waits for a listed model.
   const modelMissing =
@@ -609,20 +619,23 @@ export function AgentEditor({
       {creationPage && (
         <AgentStartingPoint
           model={form.modelId}
-          getConfig={() =>
-            tab === "raw"
-              ? (fromRaw(raw.text, raw.format).config ?? configFromForm(form))
-              : configFromForm(form)
+          getConfig={() => {
+            if (tab === "rendered") return configFromForm(form);
+            const parsed = fromRaw(raw.text, raw.format);
+            if (!parsed.config) throw new Error(parsed.error);
+            return parsed.config;
+          }}
+          confirmReplace={(action, source) =>
+            edited || (source === "template" && promptDirty)
+              ? leave.requestLeave(action)
+              : action()
           }
-          confirmReplace={(action) =>
-            edited ? leave.requestLeave(action) : action()
-          }
-          apply={(config) => {
+          apply={(config, source) => {
             const next = formFromConfig(config as Record<string, unknown>);
             setForm(next);
-            setStartingConfig(next);
+            if (source === "template") setStartingConfig(next);
             if (tab === "raw") {
-              const text = toRaw(configFromForm(next), raw.format);
+              const text = toRaw(config, raw.format);
               setRaw({ format: raw.format, text });
               setRawBaseline(text);
             }
@@ -640,6 +653,7 @@ export function AgentEditor({
       <div
         className={cn(
           "flex shrink-0 flex-wrap items-center gap-1.5 pb-4",
+          creationPage && "pb-3",
           inline && "w-full max-w-3xl",
         )}
       >
@@ -687,6 +701,7 @@ export function AgentEditor({
               }}
               className={cn(
                 "h-[30px] rounded-md border px-3 text-sm capitalize",
+                creationPage && "h-[26px]",
                 inline || creationPage
                   ? tab === key
                     ? "border-border bg-background text-foreground shadow-sm"
@@ -789,7 +804,16 @@ export function AgentEditor({
                         id="agent-model"
                         className="font-mono"
                         value={form.modelId}
-                        onChange={(value) => set("modelId", value)}
+                        onChange={(value) =>
+                          setForm((current) => ({
+                            ...current,
+                            modelId: value,
+                            effort:
+                              value === current.modelId
+                                ? current.effort
+                                : undefined,
+                          }))
+                        }
                         choices={models}
                         readOnly={readOnly}
                         error={
@@ -843,7 +867,7 @@ export function AgentEditor({
                 </Label>
                 <textarea
                   rows={2}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                  className="block w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                   id="agent-description"
                   placeholder={
                     creationPage
@@ -874,7 +898,7 @@ export function AgentEditor({
                   value={form.system}
                   onChange={(e) => set("system", e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
+                  className="block w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
                 />
               </div>
             </Section>

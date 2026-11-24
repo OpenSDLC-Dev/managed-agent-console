@@ -34,6 +34,8 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
 export interface ToolSetting {
   enabled: boolean;
   policy: Policy;
+  /** Per-tool fields edited in Raw, including search and fetch restrictions. */
+  parameters?: Record<string, unknown>;
 }
 
 export type ToolsetSettings = Record<ToolName, ToolSetting>;
@@ -58,6 +60,7 @@ interface ToolsetEntry {
   };
   configs?: {
     name: string;
+    [field: string]: unknown;
     enabled?: boolean;
     permission_policy?: { type: Policy };
   }[];
@@ -98,9 +101,15 @@ export function parseTools(tools: unknown[]): {
   const tools_ = Object.fromEntries(
     TOOL_NAMES.map((name) => {
       const config = entry.configs?.find((c) => c.name === name);
+      const parameters = Object.fromEntries(
+        Object.entries(config ?? {}).filter(
+          ([key]) => !["name", "enabled", "permission_policy"].includes(key),
+        ),
+      );
       return [
         name,
         {
+          ...(Object.keys(parameters).length > 0 && { parameters }),
           enabled: config?.enabled ?? fallback.enabled,
           policy: config?.permission_policy?.type ?? fallback.policy,
         },
@@ -129,7 +138,10 @@ export function buildToolset(form: ToolsetForm): ToolsetEntry {
 
   const configs = TOOL_NAMES.flatMap((name) => {
     const setting = form.tools[name];
-    const config: NonNullable<ToolsetEntry["configs"]>[number] = { name };
+    const config: NonNullable<ToolsetEntry["configs"]>[number] = {
+      name,
+      ...setting.parameters,
+    };
     if (setting.enabled !== form.default.enabled)
       config.enabled = setting.enabled;
     if (setting.policy !== form.default.policy)
@@ -155,6 +167,7 @@ export function withDefault(form: ToolsetForm, next: ToolSetting): ToolsetForm {
       return [
         name,
         {
+          ...setting,
           enabled:
             setting.enabled === form.default.enabled
               ? next.enabled

@@ -1230,3 +1230,32 @@ describe("AgentEditor", () => {
     expect(backSpy).toHaveBeenCalled();
   });
 });
+
+it.each([true, false])(
+  "preserves stored effort on the same model and uses a replacement model's default (change=%s)",
+  async (change) => {
+    const user = userEvent.setup();
+    const mock = stubFetch();
+    const initial = formFromAgent(
+      agentResponse({
+        model: {
+          id: "first",
+          effort: { type: "max" },
+          inference_geo: "global",
+        },
+      }),
+    );
+    renderEditor({ mode: "edit", initial, agentId: "agent_new", version: 7 });
+    const model = await screen.findByLabelText("Model");
+    await waitFor(() => expect(model).toBeEnabled());
+    if (change) fireEvent.change(model, { target: { value: "second" } });
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(postCalls(mock)).toHaveLength(1));
+    const body = JSON.parse(String(postCalls(mock)[0][1]?.body));
+    expect(body.model).toEqual(
+      change
+        ? { id: "second", inference_geo: "global" }
+        : { id: "first", effort: "max", inference_geo: "global" },
+    );
+  },
+);

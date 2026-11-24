@@ -38,7 +38,7 @@ export function useModelChoices(): ModelChoices {
       : aliases.data?.data
           .filter((a) => a.kind === "chat" && a.name !== "*")
           .map((a) => a.name),
-    pending: aliases.isPending,
+    pending: aliases.isPending && !aliases.isFetched,
     failed:
       aliases.error && !isUnimplemented(aliases.error)
         ? aliases.error

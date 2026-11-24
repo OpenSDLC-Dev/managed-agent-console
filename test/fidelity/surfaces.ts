@@ -656,7 +656,7 @@ export const SURFACES: Surface[] = [
           await page.getByTestId("session-memory-preview").waitFor();
           if (view === "raw")
             await page
-              .getByRole("button", { name: "Raw", exact: true })
+              .getByRole("button", { name: "raw", exact: true })
               .click();
         }
       }
@@ -2032,7 +2032,7 @@ export const SURFACES: Surface[] = [
           .getByRole("button", { name: "Memory actions", exact: true })
           .click();
       if (view === "raw")
-        await page.getByRole("button", { name: "Raw", exact: true }).click();
+        await page.getByRole("button", { name: "raw", exact: true }).click();
       if (view === "edit")
         await page
           .getByRole("button", { name: "Edit memory", exact: true })
@@ -2404,7 +2404,7 @@ export const SURFACES: Surface[] = [
           await page.getByRole("dialog", { name: "Model settings" }).waitFor();
         }
         if (view === "raw")
-          await page.getByRole("radio", { name: "Raw", exact: true }).click();
+          await page.getByRole("radio", { name: "raw", exact: true }).click();
       },
     }),
   ),

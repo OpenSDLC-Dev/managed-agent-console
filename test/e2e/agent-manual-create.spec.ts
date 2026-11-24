@@ -44,6 +44,21 @@ test("directory creation has the workspace navigation, six starters, collapsible
     await expect(section).toHaveAttribute("aria-expanded", "true");
     await section.click();
   }
+  const description = page.getByRole("textbox", {
+    name: "Describe your agent",
+  });
+  await description.fill("Keep this unsent description");
+  await page.getByRole("radio", { name: "Template" }).check();
+  await page
+    .getByRole("button", { name: "Field monitor", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Stay" })
+    .click();
+  await page.getByRole("radio", { name: "Describe your agent" }).check();
+  await expect(description).toHaveValue("Keep this unsent description");
+  await description.fill("");
   await point.click();
   await expect(
     page.getByRole("textbox", { name: "Describe your agent" }),
@@ -109,6 +124,7 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
     "**/api/organizations/default/proxy/v1/messages*",
     async (route) => {
       generations++;
+      expect(route.request().postDataJSON().model).toBe("minimax-m3");
       if (generations === 1) {
         await route.fulfill({
           status: 503,
@@ -137,21 +153,63 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
     if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
   });
   await signIn(page, "/agents/new");
+  await page.getByRole("radio", { name: "raw", exact: true }).click();
+  const original = page.getByLabel("Raw agent config");
+  const base = YAML.parse(await original.inputValue());
+  const restrictions = {
+    name: "web_fetch",
+    allowed_domains: ["docs.example.org"],
+    max_content_tokens: 1000,
+  };
+  await original.fill(
+    YAML.stringify({
+      ...base,
+      model: { id: "minimax-m3", effort: "low" },
+      tools: [{ type: "agent_toolset_20260401", configs: [restrictions] }],
+    }),
+  );
   await page
     .getByRole("textbox", { name: "Describe your agent" })
     .fill("Summarize this week's changes.");
   const generate = page.getByRole("button", { name: "Generate", exact: true });
   await generate.click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Leave" })
+    .click();
   await expect(
     page.getByRole("alert").filter({ hasText: "Draft unavailable" }),
   ).toBeVisible();
   await generate.click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Leave" })
+    .click();
+  await expect(original).toHaveValue(/Weekly summary/);
+  expect(
+    YAML.parse(await original.inputValue()).tools[0].configs,
+  ).toContainEqual(restrictions);
+  await page.getByRole("radio", { name: "rendered" }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Weekly summary",
+  );
+  const point = page.getByRole("button", { name: /Starting point/ });
+  await point.click();
+  await page.getByRole("radio", { name: "Template" }).check();
+  await page
+    .getByRole("button", { name: "Field monitor", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Stay" })
+    .click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Weekly summary",
   );
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   const editor = page.getByLabel("Raw agent config");
   const yaml = await editor.inputValue();
+  expect(YAML.parse(yaml).tools[0].configs).toContainEqual(restrictions);
   await page.getByRole("button", { name: "Copy configuration" }).click();
   await expect
     .poll(() =>

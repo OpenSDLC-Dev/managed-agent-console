@@ -26,8 +26,11 @@ export function AgentStartingPoint({
 }: {
   model: string;
   getConfig: () => AgentWriteBody;
-  apply: (config: AgentWriteBody) => void;
-  confirmReplace: (action: () => void) => void;
+  apply: (config: AgentWriteBody, source: "template" | "description") => void;
+  confirmReplace: (
+    action: () => void,
+    source: "template" | "description",
+  ) => void;
   setPromptDirty: (dirty: boolean) => void;
   busy: boolean;
   setBusy: (busy: boolean) => void;
@@ -44,12 +47,15 @@ export function AgentStartingPoint({
   const session = useContext(ConsoleSessionContext)?.data;
   const identity = session?.playground_access ? session.id : undefined;
   const models = usePlaygroundModels(identity);
-  const generator =
-    models.data?.find((item) => item.id === model) ?? models.data?.[0];
+  const available = models.isError ? undefined : models.data;
   useEffect(() => () => running.current?.abort(), []);
 
-  function finish(config: AgentWriteBody, label: string) {
-    apply(config);
+  function finish(
+    config: AgentWriteBody,
+    label: string,
+    source: "template" | "description",
+  ) {
+    apply(config, source);
     setTitle(label);
     setError("");
     setPromptDirty(false);
@@ -62,17 +68,29 @@ export function AgentStartingPoint({
       finish(
         manualStarterConfig(model, starter),
         starter?.title ?? "Blank agent",
+        "template",
       );
-    });
+    }, "template");
   }
   async function generate() {
-    if (!identity || !generator || !prompt.trim() || running.current) return;
+    if (!identity || !available?.length || !prompt.trim() || running.current)
+      return;
     const controller = new AbortController();
     running.current = controller;
     setBusy(true);
     setError("");
     try {
       const base = getConfig();
+      const requested =
+        typeof base.model === "string"
+          ? base.model
+          : (base.model as { id?: string } | undefined)?.id;
+      const generator = requested
+        ? available.find((item) => item.id === requested)
+        : available[0];
+      if (!generator)
+        throw new Error("The selected model is unavailable in Playground.");
+
       const fields = await generateAgentDraft(
         prompt.trim(),
         base,
@@ -81,7 +99,7 @@ export function AgentStartingPoint({
         controller.signal,
       );
       if (!controller.signal.aborted)
-        finish({ ...base, ...fields }, fields.name);
+        finish({ ...base, ...fields }, fields.name, "description");
     } catch (error) {
       if (!controller.signal.aborted)
         setError(
@@ -109,7 +127,7 @@ export function AgentStartingPoint({
           className={cn("size-4", open && "rotate-90")}
         />
         Starting point{" "}
-        <span className="ml-auto truncate font-normal text-muted-foreground">
+        <span className="ml-1 truncate font-normal text-muted-foreground">
           {title}
         </span>
       </button>
@@ -197,7 +215,7 @@ export function AgentStartingPoint({
                   </span>
                 )}
                 {prompt.trim() &&
-                  !generator &&
+                  !available?.length &&
                   (!identity || !models.isPending) && (
                     <span className="mr-auto text-sm text-muted-foreground">
                       {identity
@@ -208,8 +226,10 @@ export function AgentStartingPoint({
                 <Button
                   type="button"
                   size="sm"
-                  disabled={!prompt.trim() || !generator || busy}
-                  onClick={() => confirmReplace(() => void generate())}
+                  disabled={!prompt.trim() || !available?.length || busy}
+                  onClick={() =>
+                    confirmReplace(() => void generate(), "description")
+                  }
                 >
                   {busy ? "Generating…" : "Generate"}
                 </Button>

@@ -29,14 +29,16 @@ export function manualStarterConfig(model: string, starter?: Starter) {
         })),
       }),
     },
-    ...(starter?.servers ?? [])
-      .filter(
-        (name) =>
-          starter?.key !== "incident-commander" ||
-          name === "sentry" ||
-          name === "linear",
-      )
-      .map((name) => ({ type: "mcp_toolset", mcp_server_name: name })),
+    ...(starter?.servers ?? []).map((name) => ({
+      type: "mcp_toolset",
+      mcp_server_name: name,
+      // Platform requires each declared server to have a toolset. The reference
+      // declares four incident connectors and activates only Sentry and Linear.
+      ...(starter?.key === "incident-commander" &&
+        (name === "slack" || name === "github") && {
+          default_config: { enabled: false },
+        }),
+    })),
   ];
   return {
     ...base,
