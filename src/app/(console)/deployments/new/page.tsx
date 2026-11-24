@@ -10,6 +10,7 @@ import {
 export default function NewDeploymentPage() {
   const params = useSearchParams();
   const agent = params.get("agent") ?? "";
+  const version = Number(params.get("version"));
   const environment = params.get("environment") ?? "";
   return (
     <div>
@@ -18,11 +19,15 @@ export default function NewDeploymentPage() {
         subtitle="Pin an agent and configure how it starts."
       />
       <DeploymentEditor
-        key={JSON.stringify([agent, environment])}
+        key={JSON.stringify([agent, version, environment])}
         mode="create"
         initial={{
           ...newDeploymentForm(),
           agentId: agent,
+          agentVersion:
+            agent && Number.isSafeInteger(version) && version > 0
+              ? version
+              : undefined,
           environmentId: environment,
         }}
       />

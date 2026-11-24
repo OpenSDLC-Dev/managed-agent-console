@@ -19,6 +19,7 @@ import { ErrorState, ListSkeleton } from "./bits";
 import { AgentConfigView } from "./agent-config-view";
 import { EnvironmentEditor, newEnvForm } from "./environment-editor";
 import { SessionCreateForm } from "./session-create-form";
+import { useListFilters } from "@/lib/use-list-filters";
 
 const stages = [
   "Create agent",
@@ -29,11 +30,15 @@ const stages = [
 export function CreatedAgent({ id }: { id: string }) {
   const agent = useAgent(id);
   const envs = useEnvironments({ limit: 100 });
-  const [stage, setStage] = useState(1);
+  const guide = useListFilters();
+  const step = guide.params.get("stage");
+  const stage = step !== null && /^[0-3]$/.test(step) ? Number(step) : 1;
+  const setStage = (next: number) =>
+    guide.update({ stage: String(next) }, "replace");
   const [panel, setPanel] = useState(false);
   const [dialog, setDialog] = useState<"environment" | "session" | null>(null);
-  const [environment, setEnvironment] = useState("");
-  const [session, setSession] = useState("");
+  const environment = guide.params.get("environment") ?? "";
+  const session = guide.params.get("session") ?? "";
   if (agent.error) return <ErrorState error={agent.error} />;
   if (!agent.data) return <ListSkeleton />;
   const a = agent.data;
@@ -45,7 +50,12 @@ export function CreatedAgent({ id }: { id: string }) {
     tools: a.tools,
     mcp_servers: a.mcp_servers,
     skills: a.skills,
-    multiagent: a.multiagent,
+    multiagent: a.multiagent && {
+      ...a.multiagent,
+      agents: a.multiagent.agents.map((member) =>
+        member.id === a.id ? { type: "self" } : member,
+      ),
+    },
     metadata: a.metadata,
   };
   const row = "flex items-center gap-2 rounded-lg border p-3 text-sm";
@@ -91,7 +101,12 @@ export function CreatedAgent({ id }: { id: string }) {
                   <select
                     className="mt-1 block w-full rounded-lg border bg-background p-2"
                     value={environment}
-                    onChange={(e) => setEnvironment(e.target.value)}
+                    onChange={(e) =>
+                      guide.update(
+                        { environment: e.target.value || null },
+                        "replace",
+                      )
+                    }
                   >
                     <option value="">Select environment</option>
                     {envs.data?.data.map((e) => (
@@ -126,7 +141,7 @@ export function CreatedAgent({ id }: { id: string }) {
                 {session && (
                   <Link
                     className="text-sm underline"
-                    href={"/sessions/" + session}
+                    href={"/sessions/" + encodeURIComponent(session)}
                   >
                     Open session
                   </Link>
@@ -144,6 +159,7 @@ export function CreatedAgent({ id }: { id: string }) {
                     "/deployments/new?" +
                     new URLSearchParams({
                       agent: id,
+                      version: String(a.version),
                       ...(environment && { environment }),
                     })
                   }
@@ -201,14 +217,17 @@ export function CreatedAgent({ id }: { id: string }) {
               {environment && (
                 <Link
                   className="underline"
-                  href={"/environments/" + environment}
+                  href={"/environments/" + encodeURIComponent(environment)}
                 >
                   {envs.data?.data.find((e) => e.id === environment)?.name ??
                     environment}
                 </Link>
               )}
               {session && (
-                <Link className="underline" href={"/sessions/" + session}>
+                <Link
+                  className="underline"
+                  href={"/sessions/" + encodeURIComponent(session)}
+                >
                   Open session
                 </Link>
               )}
@@ -245,8 +264,7 @@ export function CreatedAgent({ id }: { id: string }) {
               onDone={(env) => {
                 setDialog(null);
                 if (env) {
-                  setEnvironment(env.id);
-                  setStage(2);
+                  guide.update({ environment: env.id, stage: "2" }, "replace");
                 }
               }}
             />
@@ -257,9 +275,10 @@ export function CreatedAgent({ id }: { id: string }) {
               onCancel={() => setDialog(null)}
               onCreated={(s) => {
                 setDialog(null);
-                setEnvironment(s.environment_id);
-                setSession(s.id);
-                setStage(3);
+                guide.update(
+                  { environment: s.environment_id, session: s.id, stage: "3" },
+                  "replace",
+                );
               }}
             />
           ) : null}

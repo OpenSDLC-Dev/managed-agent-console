@@ -1,5 +1,6 @@
 "use client";
 import { AgentsOverview } from "@/components/console/agents-overview";
+import { useSurfaces } from "@/lib/platform/surfaces";
 import { Suspense, use, useState, type ReactNode } from "react";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
@@ -49,6 +50,10 @@ export default function AgentDetailPage({
   );
 }
 function AgentWorkspace({ id }: { id: string }) {
+  const reportAccess = useSurfaces()?.agentsOverview;
+  const observability =
+    reportAccess?.status !== "unimplemented" &&
+    reportAccess?.status !== "denied";
   const filters = useListFilters();
   const version = filters.params.get("version") || null;
   const tab = filters.params.get("tab");
@@ -119,29 +124,38 @@ function AgentWorkspace({ id }: { id: string }) {
         aria-label="Agent sections"
         className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
       >
-        {["configuration", "sessions", "deployments", "observability"].map(
-          (value) => (
-            <button
-              key={value}
-              onClick={() => changeTab(value)}
-              aria-current={
-                tab === value ||
-                (value === "configuration" &&
-                  tab !== "sessions" &&
-                  tab !== "deployments" &&
-                  tab !== "observability")
-                  ? "page"
-                  : undefined
-              }
-              className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
-            >
-              {value}
-            </button>
-          ),
-        )}
+        {[
+          "configuration",
+          "sessions",
+          "deployments",
+          ...(observability ? ["observability"] : []),
+        ].map((value) => (
+          <button
+            key={value}
+            onClick={() => changeTab(value)}
+            aria-current={
+              tab === value ||
+              (value === "configuration" &&
+                tab !== "sessions" &&
+                tab !== "deployments" &&
+                tab !== "observability")
+                ? "page"
+                : undefined
+            }
+            className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+          >
+            {value}
+          </button>
+        ))}
       </nav>
       <div className="min-h-0 flex-1">
-        {tab === "observability" ? (
+        {tab === "observability" && !observability ? (
+          <p className="text-sm text-muted-foreground">
+            {reportAccess?.status === "denied"
+              ? "Your account does not have access to agent activity."
+              : "Agent activity reporting is unavailable on this Platform."}
+          </p>
+        ) : tab === "observability" ? (
           <div className="h-full overflow-y-auto">
             <AgentsOverview agentId={id} />
           </div>

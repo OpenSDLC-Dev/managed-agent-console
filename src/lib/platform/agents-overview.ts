@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useContext } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
+import { agentsReportAccessKey, isUnimplemented } from "./surfaces";
+import { isPermissionDenied } from "./denied";
+import { PlatformError } from "./http";
 import { nativeGet, ORGANIZATION } from "./native";
 import { CONSOLE_WORKSPACE } from "./tenancy";
 
@@ -35,16 +40,45 @@ export function useAgentsOverview(
   direction: OverviewDirection,
   agentId?: string,
 ) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const client = useQueryClient();
+  const accessKey = agentsReportAccessKey(session);
   return useQuery({
-    queryKey: ["agents-overview", sort, direction, agentId],
-    queryFn: ({ signal }) =>
-      nativeGet<AgentsOverviewReport>(
-        ORGANIZATION + "/workspaces/" + CONSOLE_WORKSPACE + "/agents/overview",
-        { sort, direction, agent_id: agentId },
-        signal,
-      ),
+    queryKey: [
+      "agents-overview",
+      sort,
+      direction,
+      agentId,
+      ...accessKey.slice(1),
+    ],
+    queryFn: async ({ signal }) => {
+      try {
+        const report = await nativeGet<AgentsOverviewReport>(
+          ORGANIZATION +
+            "/workspaces/" +
+            CONSOLE_WORKSPACE +
+            "/agents/overview",
+          { sort, direction, agent_id: agentId },
+          signal,
+        );
+        client.setQueryData(accessKey, { status: "available" });
+        return report;
+      } catch (error) {
+        if (isUnimplemented(error))
+          client.setQueryData(accessKey, { status: "unimplemented" });
+        else if (error instanceof PlatformError && isPermissionDenied(error))
+          client.setQueryData(accessKey, { status: "denied", error });
+        throw error;
+      }
+    },
     placeholderData: (previous, query) =>
-      query?.queryKey[3] === agentId ? previous : undefined,
+      query &&
+      query.queryKey[3] === agentId &&
+      query.queryKey[4] === session?.id &&
+      query.queryKey[5] === session?.role &&
+      query.queryKey[6] === session?.platform_version
+        ? previous
+        : undefined,
     retry: false,
   });
 }

@@ -109,6 +109,8 @@ export function AgentOverviewCharts({
                   {report.days.map((d, i) => (
                     <div
                       key={d}
+                      data-day={d}
+                      data-sessions={sums[i]}
                       className="flex min-w-0 flex-1 flex-col-reverse justify-start"
                       onPointerEnter={() => setDay(i)}
                       onClick={() => setDay(i)}
@@ -205,6 +207,8 @@ export function AgentOverviewCharts({
             {report.active_time.map((a, i) => (
               <div
                 key={a.id}
+                data-agent-id={a.id}
+                data-median-seconds={a.median_seconds}
                 onPointerEnter={() => setBar(i)}
                 onClick={() => setBar(i)}
                 className="grid min-w-0 grid-cols-[minmax(65px,32%)_minmax(0,1fr)] items-center gap-2 text-xs"

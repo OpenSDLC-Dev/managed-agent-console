@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
@@ -24,6 +24,7 @@ import AgentCreatePage from "@/app/(console)/agents/create/page";
 import AgentsOverviewPage from "@/app/(console)/agents/overview/page";
 import { AgentsOverview } from "./agents-overview";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
+import type { Agent } from "@/lib/platform/types";
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
@@ -39,15 +40,26 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/use-list-filters", () => ({
   useListFilters: () => {
     const [key, setKey] = useState(search);
+    useEffect(() => {
+      const onPop = () => {
+        search = window.location.search.slice(1);
+        setKey(search);
+      };
+      window.addEventListener("popstate", onPop);
+      return () => window.removeEventListener("popstate", onPop);
+    }, []);
     return {
       params: new URLSearchParams(key),
-      update: (changes: Record<string, string | null>) => {
+      update: (changes: Record<string, string | null>, mode = "push") => {
         const p = new URLSearchParams(key);
         for (const [name, value] of Object.entries(changes)) {
           if (value === null) p.delete(name);
           else p.set(name, value);
         }
         search = p.toString();
+        const url = window.location.pathname + (search ? "?" + search : "");
+        if (mode === "replace") window.history.replaceState(null, "", url);
+        else window.history.pushState(null, "", url);
         setKey(search);
       },
     };
@@ -117,6 +129,7 @@ const agent = {
   archived_at: null,
 };
 let summary = report;
+let savedRoster: Agent["multiagent"] = null;
 let grant = true;
 let errorRead = false,
   errorWrite = false,
@@ -126,6 +139,8 @@ let writes: Record<string, unknown>[] = [];
 const calls: string[] = [];
 beforeEach(() => {
   search = "";
+  savedRoster = null;
+  window.history.replaceState(null, "", "/agents/create");
   grant = true;
   errorRead = false;
   errorWrite = false;
@@ -150,12 +165,16 @@ beforeEach(() => {
           : Response.json(summary);
       if (url.pathname.endsWith("/models"))
         return Response.json({
-          data: [{ id: "deepseek-flash", display_name: "Flash" }],
+          data: [
+            { id: "deepseek-flash", display_name: "Flash", max_tokens: 512 },
+          ],
           has_more: false,
           last_id: null,
         });
-      if (url.pathname.endsWith("/messages"))
+      if (url.pathname.endsWith("/messages")) {
+        expect(JSON.parse(String(init?.body)).max_tokens).toBe(512);
         return Response.json({ content: [{ type: "text", text: modelReply }] });
+      }
       if (url.pathname.endsWith("/agents") && init?.method === "POST") {
         if (errorWrite)
           return Response.json(
@@ -171,7 +190,7 @@ beforeEach(() => {
         return Response.json(agent);
       }
       if (url.pathname.endsWith("/agents/agent_saved"))
-        return Response.json(agent);
+        return Response.json({ ...agent, multiagent: savedRoster });
       if (url.pathname.endsWith("/environments"))
         return Response.json({
           data: [
@@ -310,6 +329,7 @@ it("selects reviewable Platform templates and exports the same configuration in 
       );
     }
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   }
   expect(writes).toEqual([]);
   expect(
@@ -366,8 +386,32 @@ it("does not write or run a template before confirmation; keeps write errors edi
     screen.getByRole("link", { name: "Create deployment" }),
   ).toHaveAttribute(
     "href",
-    "/deployments/new?agent=agent_saved&environment=env_a",
+    "/deployments/new?agent=agent_saved&version=1&environment=env_a",
   );
+});
+it("exports the original coordinator as self while preserving external member versions", async () => {
+  search = "agent=agent_saved";
+  savedRoster = {
+    type: "coordinator",
+    agents: [
+      { type: "agent", id: "agent_saved", version: 1 },
+      { type: "agent", id: "agent_sibling", version: 3 },
+    ],
+  };
+  mount(<AgentCreatePage />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Export as code" }),
+  );
+  const code = screen
+    .getByRole("region", { name: "Agent config" })
+    .querySelector("pre")!;
+  expect(fromRaw(code.textContent, "yaml").config?.multiagent).toEqual({
+    type: "coordinator",
+    agents: [
+      { type: "self" },
+      { type: "agent", id: "agent_sibling", version: 3 },
+    ],
+  });
 });
 it("builds and refines a draft through Messages and preserves valid YAML after a model failure", async () => {
   const user = userEvent.setup();
@@ -392,6 +436,15 @@ it("builds and refines a draft through Messages and preserves valid YAML after a
   await screen.findByText(
     "The model did not return a usable agent configuration.",
   );
+  errorWrite = true;
+  await user.click(screen.getByRole("button", { name: "Create agent" }));
+  await screen.findByText("model rejected");
+  expect(
+    screen.queryByText(
+      "The model did not return a usable agent configuration.",
+    ),
+  ).toBeNull();
+  errorWrite = false;
   expect(
     (screen.getByLabelText("Agent configuration") as HTMLTextAreaElement).value,
   ).toContain("Count words.");

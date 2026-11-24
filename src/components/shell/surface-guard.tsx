@@ -1,7 +1,7 @@
 "use client";
 
-import { useContext, useRef, useState, type ReactNode } from "react";
-import { redirect, usePathname } from "next/navigation";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { redirect, usePathname, useRouter } from "next/navigation";
 import {
   ErrorState,
   ListSkeleton,
@@ -24,6 +24,7 @@ import {
   PLAYGROUND_ROUTE,
   RESOURCES_ROUTE,
   isAgentsWorkspacePage,
+  AGENTS_OVERVIEW_ROUTE,
   playgroundOnly,
 } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
@@ -48,6 +49,14 @@ function UnconfirmedNativeSurface({
       )}
     </div>
   );
+}
+
+function AgentsDirectoryFallback() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/agents");
+  }, [router]);
+  return <ListSkeleton />;
 }
 
 function ServiceAccountAdmission({
@@ -151,6 +160,12 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           />
         </>
       );
+    if (
+      pathname === AGENTS_OVERVIEW_ROUTE &&
+      access?.status === "unimplemented" &&
+      surfaces?.agents.status === "available"
+    )
+      return <AgentsDirectoryFallback />;
     if (access?.status === "unimplemented")
       return pathname === RESOURCES_ROUTE ? (
         <PageHeader

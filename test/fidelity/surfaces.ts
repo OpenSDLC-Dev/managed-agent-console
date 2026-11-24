@@ -201,6 +201,24 @@ export const SURFACES: Surface[] = [
     description:
       "Editable agent configuration before the first resource write.",
   },
+  {
+    id: "agents-quickstart-created",
+    route: "/agents/create?agent=" + AGENT,
+    fixture: AGENT,
+    description: "Saved agent, environment selection and progress steps.",
+    setup: async (page) => {
+      await page.getByRole("heading", { name: "Agent created" }).waitFor();
+    },
+  },
+  {
+    id: "agents-detail-observability",
+    route: "/agents/" + AGENT + "?tab=observability",
+    fixture: AGENT,
+    description: "Agent-scoped activity, charts and filtered sessions link.",
+    setup: async (page) => {
+      await page.getByRole("link", { name: "View sessions" }).waitFor();
+    },
+  },
 
   ...NATIVE_SURFACES,
   ...["thinking", "growing", "final", "reconnecting", "narrow"].map(

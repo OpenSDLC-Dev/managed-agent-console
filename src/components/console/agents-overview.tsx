@@ -115,7 +115,7 @@ function Metric({
   caption,
 }: {
   title: string;
-  value: string;
+  value: number | null;
   change?: number | null;
   help?: string;
   caption: string;
@@ -153,6 +153,7 @@ function Metric({
         {typeof change === "number" && (
           <span
             aria-label={pct(change) + " change"}
+            data-change-percent={change}
             className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
           >
             {change < 0 ? (
@@ -164,8 +165,16 @@ function Metric({
           </span>
         )}
       </div>
-      <p className="text-[28px] leading-8 font-medium tracking-tight tabular-nums">
-        {value}
+      <p
+        data-metric={title}
+        data-value={value}
+        className="text-[28px] leading-8 font-medium tracking-tight tabular-nums"
+      >
+        {value === null
+          ? "—"
+          : title === "Error rate"
+            ? pct(value)
+            : value.toLocaleString()}
       </p>
       <p className="text-[13px] text-muted-foreground">{caption}</p>
     </section>
@@ -176,21 +185,21 @@ function Metrics({ summary }: { summary: AgentsOverviewReport["summary"] }) {
     <div className="grid gap-4 sm:grid-cols-3">
       <Metric
         title="Sessions"
-        value={summary.sessions.toLocaleString()}
+        value={summary.sessions}
         change={summary.session_change}
         caption="vs previous 30 days"
         help="Sessions started in the last 30 days across this workspace’s agents, compared with the 30 days before."
       />
       <Metric
         title="Error rate"
-        value={summary.sessions ? pct(summary.error_rate) : "—"}
+        value={summary.sessions ? summary.error_rate : null}
         change={summary.error_change}
         caption="vs previous 30 days"
         help="Share of sessions in the last 30 days that ended in an error, compared with the 30 days before."
       />
       <Metric
         title="Agents"
-        value={summary.agents.toLocaleString()}
+        value={summary.agents}
         caption="With sessions in the last 30 days"
       />
     </div>
@@ -303,6 +312,7 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                       {data.agents.map((a) => (
                         <tr
                           key={a.id}
+                          data-agent-id={a.id}
                           className="relative border-b hover:bg-muted/55"
                         >
                           <td className="px-2 py-2">
@@ -330,11 +340,22 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                               </span>
                             )}
                           </td>
-                          <td className="px-2 tabular-nums">{a.sessions}</td>
-                          <td className="px-2 tabular-nums">
+                          <td
+                            data-sessions={a.sessions}
+                            className="px-2 tabular-nums"
+                          >
+                            {a.sessions}
+                          </td>
+                          <td
+                            data-error-rate={a.sessions ? a.error_rate : null}
+                            className="px-2 tabular-nums"
+                          >
                             {a.sessions ? pct(a.error_rate) : "—"}
                           </td>
-                          <td className="px-2 whitespace-nowrap">
+                          <td
+                            data-last-active={a.last_active}
+                            className="px-2 whitespace-nowrap"
+                          >
                             {a.last_active ? shortDay(a.last_active) : "—"}
                           </td>
                         </tr>

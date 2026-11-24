@@ -167,6 +167,7 @@ export function AgentQuickstart() {
   const model = names.includes("deepseek-flash")
     ? "deepseek-flash"
     : (names[0] ?? "");
+  const generationModel = availableModels.data?.find((m) => m.id === model);
   const [description, setDescription] = useState("");
   const [reply, setReply] = useState("");
   const [draft, setDraft] = useState<string | null>(null);
@@ -176,10 +177,18 @@ export function AgentQuickstart() {
   const [panel, setPanel] = useState(true);
   const [refining, setRefining] = useState(false);
   const running = useRef<AbortController | null>(null);
+  // A confirmed write can finish after the operator has left this draft.
+  const submission = useRef<object | null>(null);
   const replyField = useRef<HTMLTextAreaElement>(null);
   const previewTrigger = useRef<HTMLButtonElement | null>(null);
   const create = useCreateAgent();
   const leave = useUnsavedChanges(!saved && building && draft !== null);
+  useEffect(
+    () => () => {
+      submission.current = null;
+    },
+    [building, selected?.key],
+  );
   useEffect(() => () => running.current?.abort(), []);
   useEffect(() => {
     if (!building) {
@@ -209,12 +218,7 @@ export function AgentQuickstart() {
     setDraft(toRaw(base, "yaml"));
     setMessages([{ role: "user", text: prompt }]);
     nav.update({ step: "draft", template: starter?.key ?? null, agent: null });
-    if (
-      !starter &&
-      identity &&
-      availableModels.data?.some((m) => m.id === model)
-    )
-      void generate(prompt, base);
+    if (!starter && identity && generationModel) void generate(prompt, base);
   }
   async function generate(prompt: string, base: AgentWriteBody) {
     if (!identity || running.current) return;
@@ -222,12 +226,16 @@ export function AgentQuickstart() {
     running.current = controller;
     setBusy(true);
     setFailure("");
+    create.reset();
     try {
       const text: string[] = [];
       await runPlayground(
         {
           model,
-          max_tokens: 1500,
+          max_tokens:
+            generationModel?.max_tokens && generationModel.max_tokens > 0
+              ? Math.min(1500, generationModel.max_tokens)
+              : 1500,
           stream: false,
           system: generatorInstructions,
           messages: [
@@ -393,8 +401,7 @@ export function AgentQuickstart() {
         )}
       </div>
     );
-  const canGenerate =
-    !!identity && !!availableModels.data?.some((m) => m.id === model);
+  const canGenerate = !!identity && !!generationModel;
   function refine() {
     const text = reply.trim();
     if (!text || busy || create.isPending || parsed.error || !canGenerate)
@@ -404,9 +411,13 @@ export function AgentQuickstart() {
     void generate(text, config);
   }
   async function confirm() {
-    if (parsed.error || create.isPending || busy) return;
+    if (parsed.error || create.isPending || busy || submission.current) return;
+    const current = {};
+    submission.current = current;
+    setFailure("");
     try {
       const agent = await create.mutateAsync(config);
+      if (submission.current !== current) return;
       leave.setDirty(false);
       setDraft(null);
       setDescription("");
@@ -414,6 +425,8 @@ export function AgentQuickstart() {
       nav.update({ step: null, template: null, agent: agent.id }, "replace");
     } catch {
       /* The mutation error stays visible with the editable draft. */
+    } finally {
+      if (submission.current === current) submission.current = null;
     }
   }
   return (
@@ -423,6 +436,7 @@ export function AgentQuickstart() {
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline"
           onClick={() =>
             leave.requestLeave(() => {
+              submission.current = null;
               leave.setDirty(false);
               running.current?.abort();
               setDraft(null);

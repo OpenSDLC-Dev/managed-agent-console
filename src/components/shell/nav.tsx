@@ -335,7 +335,12 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                 const current = group.items.find(
                   ({ href }) => href === activeHref,
                 )?.label;
-                const first = group.items[0];
+                const first =
+                  group.label === "Agents" &&
+                  group.items[0]?.href === AGENTS_CREATE_ROUTE
+                    ? (group.items.find((item) => item.surface === "agents") ??
+                      group.items[0])
+                    : group.items[0];
                 const waitingForOverview =
                   ["Agents", "Messages", "Resources"].includes(group.label) &&
                   hasDeveloperSession(session) &&

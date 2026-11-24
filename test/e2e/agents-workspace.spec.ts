@@ -26,6 +26,31 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
     nav.getByRole("link", { name: "Overview", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   const main = page.getByRole("main");
+  await expect(main.locator('[data-metric="Sessions"]')).toHaveAttribute(
+    "data-value",
+    "6",
+  );
+  await expect(main.locator("[data-change-percent]").first()).toHaveAttribute(
+    "data-change-percent",
+    "50",
+  );
+  await expect(main.locator('[data-day="2026-11-29"]')).toHaveAttribute(
+    "data-sessions",
+    "2",
+  );
+  await expect(main.locator("[data-median-seconds]").first()).toHaveAttribute(
+    "data-median-seconds",
+    "12",
+  );
+  const firstRow = main.locator("tbody tr").first();
+  await expect(firstRow.locator("[data-error-rate]")).toHaveAttribute(
+    "data-error-rate",
+    "25",
+  );
+  await expect(firstRow.locator("[data-last-active]")).toHaveAttribute(
+    "data-last-active",
+    "2026-11-30T12:00:00Z",
+  );
   const help = main.getByRole("button", {
     name: "About sessions",
     exact: true,
@@ -128,8 +153,12 @@ test("a populated overview sorts every activity measure and Show more opens the 
 
 test("all twelve starters preview without a write; formats, cancel, blank editor and responsive layout", async ({
   page,
+  context,
 }) => {
   await grantDashboardModelDiscovery(page);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: "http://127.0.0.1:3100",
+  });
   await signIn(page, "/agents/create");
   const main = page.getByRole("main");
   let writes = 0;
@@ -155,9 +184,11 @@ test("all twelve starters preview without a write; formats, cancel, blank editor
           preview.getByRole("button", { name: "Config format: " + format }),
         ).toBeVisible();
       }
-      await expect(
-        preview.getByRole("button", { name: "Copy code" }),
-      ).toBeEnabled();
+      const displayed = await preview.locator("pre").innerText();
+      await preview.getByRole("button", { name: "Copy code" }).click();
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe(displayed);
     }
     await preview.getByRole("button", { name: "Cancel" }).click();
     await expect(preview).toBeHidden();
@@ -254,6 +285,52 @@ test("description, refinement and editable YAML use a replay; only confirmation 
   ).toBeVisible();
 });
 
+test("a late create response cannot navigate away from a different unsaved agent", async ({
+  page,
+}) => {
+  await grantDashboardModelDiscovery(page);
+  await signIn(page, "/agents/create?template=structured-extractor");
+  await page.getByRole("button", { name: "Use this template" }).click();
+  let release!: () => void;
+  const delayed = new Promise<void>((done) => {
+    release = done;
+  });
+  const post = "**/proxy/v1/agents";
+  await page.route(post, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const response = await route.fetch();
+    await delayed;
+    await route.fulfill({ response });
+  });
+  const pending = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/proxy/v1/agents"),
+  );
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Create agent", exact: true })
+    .click();
+  await pending;
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await nav.getByRole("link", { name: "Agents", exact: true }).click();
+  const prompt = page.getByRole("dialog", { name: "Unsaved changes" });
+  await prompt.getByRole("button", { name: "Leave" }).click();
+  await page.getByRole("link", { name: "Create agent", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("My second draft");
+  const finished = page.waitForResponse(
+    (r) =>
+      r.request().method() === "POST" && r.url().endsWith("/proxy/v1/agents"),
+  );
+  release();
+  await finished;
+  await nav.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole("button", { name: "Stay" }).click();
+  await expect(page).toHaveURL(/\/agents\/new$/);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "My second draft",
+  );
+});
+
 test("a starter can create an agent, configure its environment and start a fixture session", async ({
   page,
 }) => {
@@ -275,6 +352,12 @@ test("a starter can create an agent, configure its environment and start a fixtu
     .getByLabel("Choose an environment")
     .selectOption({ label: "cloud-limited" });
   await main.getByRole("button", { name: "Continue", exact: true }).click();
+  await main.getByRole("link", { name: /Structured extractor/ }).click();
+  await expect(page).toHaveURL(/\/agents\/agent_/);
+  await page.goBack();
+  await expect(main.locator('button[aria-current="step"]')).toContainText(
+    "Start session",
+  );
   await main
     .getByRole("button", { name: "Start session", exact: true })
     .first()
@@ -287,11 +370,48 @@ test("a starter can create an agent, configure its environment and start a fixtu
   await expect(
     main.getByRole("link", { name: "Open session" }),
   ).toHaveAttribute("href", /\/sessions\/sesn_/);
+  await main.getByRole("link", { name: "Open session" }).click();
+  await expect(page).toHaveURL(/\/sessions\/sesn_/);
+  await page.goBack();
+  await expect(
+    main.getByRole("link", { name: "Open session" }),
+  ).toHaveAttribute("href", /\/sessions\/sesn_/);
   const deploy = main.getByRole("link", { name: "Create deployment" });
   await expect(deploy).toHaveAttribute(
     "href",
-    /agent=agent_mock.*environment=env_/,
+    /agent=agent_mock.*version=1&environment=env_/,
   );
+  await deploy.click();
+  const agent = page.getByRole("combobox", { name: "Agent", exact: true });
+  await expect(agent).toContainText("Structured extractor · v1");
+  await agent.click();
+  await expect(
+    page.getByRole("option", { name: /Structured extractor · v1/ }),
+  ).toHaveAttribute("aria-selected", "true");
+});
+
+test("an older Platform keeps its directory and Create when the workspace report is absent", async ({
+  page,
+}) => {
+  await page.route("**/workspaces/default/agents/overview?*", (route) =>
+    route.fulfill({
+      status: 404,
+      json: {
+        type: "error",
+        error: { type: "not_found_error", message: "Not Found" },
+      },
+    }),
+  );
+  await signIn(page, "/agents/overview");
+  await expect(page).toHaveURL(/\/agents$/);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(
+    nav.getByRole("link", { name: "Overview", exact: true }),
+  ).toHaveCount(0);
+  await nav.getByRole("link", { name: "Create", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "What do you want to build?" }),
+  ).toBeVisible();
 });
 
 test("an empty or failed report remains distinct from zero activity", async ({
