@@ -66,7 +66,10 @@ vi.mock("@/lib/use-list-filters", () => ({
   },
 }));
 vi.mock("./model-field", () => ({
-  useModelChoices: () => ({ names: ["a-model", "deepseek-flash"] }),
+  useModelChoices: () => ({
+    names: aliasPending ? undefined : ["a-model", "deepseek-flash"],
+    pending: aliasPending,
+  }),
 }));
 vi.mock("@/lib/platform/surfaces", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform/surfaces")>()),
@@ -129,6 +132,8 @@ const agent = {
   archived_at: null,
 };
 let summary = report;
+let aliasPending = false;
+let discoveryFailed = false;
 let savedRoster: Agent["multiagent"] = null;
 let grant = true;
 let errorRead = false,
@@ -142,6 +147,8 @@ beforeEach(() => {
   savedRoster = null;
   window.history.replaceState(null, "", "/agents/create");
   grant = true;
+  aliasPending = false;
+  discoveryFailed = false;
   errorRead = false;
   errorWrite = false;
   modelReply =
@@ -163,6 +170,11 @@ beforeEach(() => {
               { status: 503 },
             )
           : Response.json(summary);
+      if (url.pathname.endsWith("/models") && discoveryFailed)
+        return Response.json(
+          { error: { type: "api_error", message: "model discovery failed" } },
+          { status: 503 },
+        );
       if (url.pathname.endsWith("/models"))
         return Response.json({
           data: [
@@ -231,6 +243,14 @@ function mount(element: React.ReactNode) {
 }
 it("renders the Platform report and keeps chart ranks independent of directory sorting", async () => {
   const user = userEvent.setup();
+  summary = {
+    ...report,
+    active_time: [
+      alice,
+      bob,
+      { ...alice, id: "agent_zero", name: "Zero", median_seconds: 0 },
+    ],
+  };
   mount(<AgentsOverviewPage />);
   await screen.findByText("2", { selector: "p" });
   await user.click(screen.getByRole("button", { name: "About sessions" }));
@@ -253,6 +273,10 @@ it("renders the Platform report and keeps chart ranks independent of directory s
   fireEvent.keyDown(active, { key: "ArrowDown" });
   fireEvent.keyDown(active, { key: "ArrowUp" });
   expect(within(active).getByRole("status")).toHaveTextContent("2m");
+  fireEvent.keyDown(active, { key: "ArrowDown" });
+  expect(within(active).getByRole("status")).toHaveTextContent("Unavailable");
+  fireEvent.keyDown(active, { key: "ArrowDown" });
+  expect(within(active).getByRole("status")).toHaveTextContent("0s");
   fireEvent.click(within(active).getByText("Alpha"));
   fireEvent.keyDown(active, { key: "Escape" });
   fireEvent.mouseLeave(active);
@@ -413,6 +437,26 @@ it("exports the original coordinator as self while preserving external member ve
     ],
   });
 });
+it("waits for fallback aliases when model discovery fails before seeding a draft", async () => {
+  discoveryFailed = aliasPending = true;
+  const user = userEvent.setup();
+  mount(<AgentCreatePage />);
+  const description = screen.getByRole("textbox", {
+    name: "Describe your agent",
+  });
+  await user.type(description, "Summarize these paragraphs");
+  const submit = screen.getByRole("button", { name: "Create agent" });
+  expect(submit).toBeDisabled();
+  aliasPending = false;
+  await user.type(description, ".");
+  await user.click(submit);
+  const yaml = await screen.findByRole("textbox", {
+    name: "Agent configuration",
+  });
+  expect((yaml as HTMLTextAreaElement).value).toContain("deepseek-flash");
+  expect(calls.some((call) => call.includes("/messages"))).toBe(false);
+});
+
 it("builds and refines a draft through Messages and preserves valid YAML after a model failure", async () => {
   const user = userEvent.setup();
   mount(<AgentCreatePage />);

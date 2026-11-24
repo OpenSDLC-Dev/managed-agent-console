@@ -21,7 +21,8 @@ const dayFormatter = new Intl.DateTimeFormat(undefined, {
   timeZone: "UTC",
 });
 export const shortDay = (iso: string) => dayFormatter.format(new Date(iso));
-function duration(seconds: number) {
+function duration(seconds: number | null) {
+  if (seconds === null) return "Unavailable";
   if (seconds < 60) return Math.round(seconds) + "s";
   if (seconds < 3600) return Math.round(seconds / 60) + "m";
   return (
@@ -223,7 +224,7 @@ export function AgentOverviewCharts({
                       width: ((a.median_seconds ?? 0) / longest) * 100 + "%",
                     }}
                   />
-                  <span>{duration(a.median_seconds ?? 0)}</span>
+                  <span>{duration(a.median_seconds)}</span>
                 </span>
               </div>
             ))}
@@ -233,7 +234,7 @@ export function AgentOverviewCharts({
                 className="pointer-events-none absolute right-0 bottom-0 rounded-md border bg-popover px-2 py-1 text-xs"
               >
                 {report.active_time[bar].name} ·{" "}
-                {duration(report.active_time[bar].median_seconds ?? 0)}
+                {duration(report.active_time[bar].median_seconds)}
               </div>
             )}
           </div>

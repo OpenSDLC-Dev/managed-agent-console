@@ -76,7 +76,9 @@ export function CreatedAgent({ id }: { id: string }) {
         >
           <Check className="size-4" />
           {a.name}
-          <span className="ml-auto">v{a.version}</span>
+          <span className="ml-auto" data-agent-version={a.version}>
+            v{a.version}
+          </span>
         </Link>
         {a.archived_at ? (
           <p className="text-sm">This agent is archived.</p>
@@ -203,7 +205,9 @@ export function CreatedAgent({ id }: { id: string }) {
           >
             <Bot className="size-4" />
             {a.name}
-            <span className="ml-auto">v{a.version}</span>
+            <span className="ml-auto" data-agent-version={a.version}>
+              v{a.version}
+            </span>
           </button>
         </section>
         <section>

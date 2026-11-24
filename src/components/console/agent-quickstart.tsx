@@ -213,9 +213,10 @@ export function AgentQuickstart() {
   const yaml = draft ?? toRaw(starterConfig(model, selected), "yaml");
   const parsed = fromRaw(yaml, "yaml");
   const config = (parsed.config ?? {}) as AgentWriteBody;
-  const waitingForModel = identity
-    ? availableModels.isPending
-    : choices.pending;
+  const waitingForModel =
+    identity && !availableModels.isError
+      ? availableModels.isPending
+      : choices.pending;
   function start(starter?: Starter) {
     if (create.isPending || busy || waitingForModel) return;
     create.reset();

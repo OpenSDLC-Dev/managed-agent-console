@@ -283,6 +283,10 @@ test("description, refinement and editable YAML use a replay; only confirmation 
   ).toBeVisible();
   expect(calls).toBe(2);
   expect(writes).toBe(1);
+  const versions = main.locator("[data-agent-version]");
+  await expect(versions).toHaveCount(2);
+  for (const v of await versions.all())
+    await expect(v).toHaveAttribute("data-agent-version", "1");
   await main
     .getByRole("button", { name: "Export as code", exact: true })
     .click();
