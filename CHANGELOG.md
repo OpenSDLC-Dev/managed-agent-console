@@ -23,6 +23,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 ### Changed
 
 - The Agents directory opens a centered creation form with six starting templates, description generation, model settings, editable YAML and JSON, collapsed optional sections and a persistent action bar. The Agents sidebar now reads Memory and Credential vaults.
+- The Agents overview Create menu fits all five destinations on one line each at desktop and mobile widths.
 
 - Files and Skills support exact-ID lookup, shareable detail drawers, staged uploads and confirmed single or bulk deletion. Selecting rows shows the count, clear control and Delete in a floating bar at the bottom of the list pane. Custom skills can be updated from the list or drawer.
 

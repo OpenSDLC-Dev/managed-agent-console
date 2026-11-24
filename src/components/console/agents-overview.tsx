@@ -96,10 +96,18 @@ function OverviewCreateMenu() {
         Create
         <ChevronDown />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={6}
+        className="w-max min-w-[min(8rem,var(--available-width))] max-w-[min(20rem,var(--available-width))] rounded-[14px] p-1.5"
+      >
         {visible.map((x) => (
-          <DropdownMenuItem key={x.href} render={<Link href={x.href} />}>
-            <x.icon className="size-4" />
+          <DropdownMenuItem
+            key={x.href}
+            className="gap-2 px-3"
+            render={<Link href={x.href} />}
+          >
+            <x.icon className="size-5" />
             {x.label}
           </DropdownMenuItem>
         ))}
