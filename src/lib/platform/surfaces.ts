@@ -1,13 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useContext } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useContext, useSyncExternalStore } from "react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { nativeGet, ORGANIZATION, type NativeSession } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
-import { MESSAGES_ROUTE, RESOURCES_ROUTE, playgroundOnly } from "@/lib/routes";
+import {
+  AGENTS_OVERVIEW_ROUTE,
+  isAgentsWorkspacePage,
+  MESSAGES_ROUTE,
+  RESOURCES_ROUTE,
+  playgroundOnly,
+} from "@/lib/routes";
 
 /**
  * Feature detection follows harness/rules/platform-contract.md for surfaces
@@ -164,12 +170,33 @@ export type SurfaceState =
   | { status: "available" | "unimplemented" | "unknown" }
   | { status: "denied"; error: PlatformError };
 
+type SurfaceStates = Record<Surface, SurfaceState> & {
+  agentsOverview?: SurfaceState;
+};
+export const agentsReportAccessKey = (
+  session?: Partial<NativeSession> | null,
+) =>
+  [
+    "agents-report-access",
+    session?.id,
+    session?.role,
+    session?.platform_version,
+  ] as const;
+
 /** Each overview is available if at least one of its collections can be read. */
 export function reportSurfaceState(
   pathname: string,
-  surfaces: Record<Surface, SurfaceState> | undefined,
+  surfaces: SurfaceStates | undefined,
 ): SurfaceState | undefined {
   if (!surfaces) return undefined;
+  if (isAgentsWorkspacePage(pathname)) {
+    if (
+      pathname === AGENTS_OVERVIEW_ROUTE &&
+      surfaces.agents.status === "available"
+    )
+      return surfaces.agentsOverview ?? surfaces.agents;
+    return surfaces.agents;
+  }
   const reads =
     pathname === RESOURCES_ROUTE
       ? [surfaces.files, surfaces.skills]
@@ -187,12 +214,13 @@ export function reportSurfaceState(
 /** A failed Resources probe leaves the real collection read to decide access. */
 export function canOpenReport(
   pathname: string,
-  surfaces: Record<Surface, SurfaceState> | undefined,
+  surfaces: SurfaceStates | undefined,
 ) {
   const status = reportSurfaceState(pathname, surfaces)?.status;
   return (
     status === "available" ||
-    (pathname === RESOURCES_ROUTE && status === "unknown")
+    ((pathname === RESOURCES_ROUTE || isAgentsWorkspacePage(pathname)) &&
+      status === "unknown")
   );
 }
 
@@ -230,9 +258,21 @@ export function isSurfaceVisible(
  * Native admin directories additionally use the current platform session role.
  * Network, intermediary and 5xx failures stay visible and error on the page.
  */
-export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
+export function useSurfaces(): SurfaceStates | undefined {
   const session = useContext(ConsoleSessionContext)?.data;
-  return useQuery({
+  // The aggregate report can be expensive. Discover it on use, independently
+  // of the lightweight collection probes, and forget the result on upgrades.
+  const client = useQueryClient();
+  const subscribe = useCallback(
+    (notify: () => void) => client.getQueryCache().subscribe(notify),
+    [client],
+  );
+  const report = useSyncExternalStore(
+    subscribe,
+    () => client.getQueryData<SurfaceState>(agentsReportAccessKey(session)),
+    () => undefined,
+  );
+  const collections = useQuery({
     queryKey: ["surfaces", session?.id, session?.role],
     enabled: !playgroundOnly(session),
     queryFn: async () => {
@@ -298,4 +338,7 @@ export function useSurfaces(): Record<Surface, SurfaceState> | undefined {
     retry: false,
     refetchOnWindowFocus: true,
   }).data;
+  return collections && report
+    ? { ...collections, agentsOverview: report }
+    : collections;
 }

@@ -493,7 +493,11 @@ export function AgentEditor({
           mutation.reset();
           leave.setDirty(false);
         } else
-          leave.requestLeave(() => (onCancel ? onCancel() : router.back()));
+          leave.requestLeave(() => {
+            leave.setDirty(false);
+            if (onCancel) onCancel();
+            else router.back();
+          });
       }}
     >
       {inline ? "Discard" : "Cancel"}

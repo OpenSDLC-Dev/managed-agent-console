@@ -4,6 +4,9 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
+The Agents workspace Overview and Create flows are ready for owner verification.
+See the [Claude comparison and acceptance steps](./docs/agents-console-comparison.md).
+
 ### Owner verification
 
 Owner verification of the live Session / child SSE alignment from

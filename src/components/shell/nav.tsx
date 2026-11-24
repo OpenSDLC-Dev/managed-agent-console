@@ -15,7 +15,14 @@ import {
   type Surface,
 } from "@/lib/platform/surfaces";
 import { cn } from "@/lib/utils";
-import { isDashboardPath, isReportPage, playgroundOnly } from "@/lib/routes";
+import {
+  AGENTS_CREATE_ROUTE,
+  AGENTS_OVERVIEW_ROUTE,
+  isAgentsWorkspacePage,
+  isDashboardPath,
+  isReportPage,
+  playgroundOnly,
+} from "@/lib/routes";
 import {
   Select,
   SelectContent,
@@ -134,7 +141,13 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
   const router = useRouter();
   const { requestLeave } = useLeaveConfirmation();
   const activeSurface = surfaceOfPath(pathname);
-  const activeHref = activeSurface ? surfaceRoute(activeSurface) : pathname;
+  const activeHref = isAgentsWorkspacePage(pathname)
+    ? pathname === AGENTS_OVERVIEW_ROUTE
+      ? pathname
+      : AGENTS_CREATE_ROUTE
+    : activeSurface
+      ? surfaceRoute(activeSurface)
+      : pathname;
   const nav = useRef<HTMLElement>(null);
   const pendingFocus = useRef<{ pathname: string; label: string } | null>(null);
   const [selection, setSelection] = useState<{
@@ -168,8 +181,9 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
     selection?.pathname === pathname ? selection.label : routeGroup?.label;
   const panel = groups.find(({ label }) => label === selectedLabel);
   const panelLabel = panel?.label;
-  const workspacePanel =
-    panelLabel === "Messages" || panelLabel === "Resources";
+  const workspacePanel = ["Agents", "Messages", "Resources"].includes(
+    panelLabel ?? "",
+  );
 
   useEffect(() => {
     const restoreRoutePanel = () => {
@@ -321,9 +335,14 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                 const current = group.items.find(
                   ({ href }) => href === activeHref,
                 )?.label;
-                const first = group.items[0];
+                const first =
+                  group.label === "Agents" &&
+                  group.items[0]?.href === AGENTS_CREATE_ROUTE
+                    ? (group.items.find((item) => item.surface === "agents") ??
+                      group.items[0])
+                    : group.items[0];
                 const waitingForOverview =
-                  (group.label === "Messages" || group.label === "Resources") &&
+                  ["Agents", "Messages", "Resources"].includes(group.label) &&
                   hasDeveloperSession(session) &&
                   !surfaces;
                 const destination =

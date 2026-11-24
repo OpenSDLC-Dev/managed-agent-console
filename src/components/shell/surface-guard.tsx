@@ -1,7 +1,7 @@
 "use client";
 
-import { useContext, useRef, useState, type ReactNode } from "react";
-import { redirect, usePathname } from "next/navigation";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { redirect, usePathname, useRouter } from "next/navigation";
 import {
   ErrorState,
   ListSkeleton,
@@ -23,6 +23,8 @@ import {
   MESSAGE_LOGS_ROUTE,
   PLAYGROUND_ROUTE,
   RESOURCES_ROUTE,
+  isAgentsWorkspacePage,
+  AGENTS_OVERVIEW_ROUTE,
   playgroundOnly,
 } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
@@ -47,6 +49,14 @@ function UnconfirmedNativeSurface({
       )}
     </div>
   );
+}
+
+function AgentsDirectoryFallback() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/agents");
+  }, [router]);
+  return <ListSkeleton />;
 }
 
 function ServiceAccountAdmission({
@@ -120,8 +130,9 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       );
   }
   if (isReportPage(pathname)) {
-    const label =
-      pathname === RESOURCES_ROUTE
+    const label = isAgentsWorkspacePage(pathname)
+      ? "Agents"
+      : pathname === RESOURCES_ROUTE
         ? "Resources"
         : pathname === MESSAGE_LOGS_ROUTE
           ? "Logs"
@@ -149,6 +160,12 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           />
         </>
       );
+    if (
+      pathname === AGENTS_OVERVIEW_ROUTE &&
+      access?.status === "unimplemented" &&
+      surfaces?.agents.status === "available"
+    )
+      return <AgentsDirectoryFallback />;
     if (access?.status === "unimplemented")
       return pathname === RESOURCES_ROUTE ? (
         <PageHeader
@@ -156,7 +173,9 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           subtitle="Files and skills are unavailable on this deployment."
         />
       ) : (
-        <UnavailableSurface surface="usage" />
+        <UnavailableSurface
+          surface={isAgentsWorkspacePage(pathname) ? "agents" : "usage"}
+        />
       );
     if (!canOpenReport(pathname, surfaces))
       return <UnconfirmedNativeSurface label={label} pending={!access} />;

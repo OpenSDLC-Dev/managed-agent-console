@@ -5,6 +5,8 @@ file holds the facts extracted from the live reference, so UI work has a stable 
 detectable, and the divergences from it. Re-extract when the reference visibly changes; note the
 date. What ships from these facts is `src/app/globals.css`.
 
+The [Agents workspace comparison](./agents-console-comparison.md) records the current Chrome walkthrough, capability differences and regression flow.
+
 ## Dashboard — checked 2026-11-22
 
 In signed-in Chrome, the [reference Dashboard](https://platform.claude.com/dashboard) opens with a time-of-day greeting, Get API key and Build an agent. At 1800 × 945, three 136 px summary cards sit above a full-width Token volume card. Models and Resources each have four columns with 12 px gutters. A primary click anywhere on a model card opens one model in a centered dialog and keeps the Dashboard URL. Its underlying link points to the first-party [Models overview](https://platform.claude.com/docs/en/models/overview). Chrome measured the Fable dialog at 720 × 544 px. Close receives focus. The dialog shows a copyable ID, costs and features. More options beside Try in playground offers Build an agent. Compare models opens its own three-column dialog.

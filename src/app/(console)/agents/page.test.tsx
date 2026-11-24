@@ -187,13 +187,11 @@ describe("AgentsPage", () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
     expect(await screen.findByText("No agents yet")).toBeInTheDocument();
-    await userEvent.click(
-      screen.getAllByRole("button", { name: /Create agent/ })[1],
+    expect(screen.getAllByRole("link", { name: "Create agent" })).toHaveLength(
+      2,
     );
-    expect(
-      await screen.findByRole("heading", { name: "Create agent" }),
-    ).toBeInTheDocument();
-    expect(pushSpy).not.toHaveBeenCalled();
+    for (const link of screen.getAllByRole("link", { name: "Create agent" }))
+      expect(link).toHaveAttribute("href", "/agents/new");
   });
 
   it("renders agent rows and retains list context when inspecting a row", async () => {
@@ -237,14 +235,13 @@ describe("AgentsPage", () => {
     expect(pushSpy).not.toHaveBeenCalled();
   });
 
-  it("opens the create dialog from the header action", async () => {
+  it("links the header action to the standalone configuration page", () => {
     stubFetch(() => json({ data: [] }));
     renderPage();
-    await userEvent.click(screen.getByRole("button", { name: /Create agent/ }));
-    expect(
-      await screen.findByRole("heading", { name: "Create agent" }),
-    ).toBeInTheDocument();
-    expect(pushSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Create agent" })).toHaveAttribute(
+      "href",
+      "/agents/new",
+    );
   });
 
   it("refetches with include_archived when the filter flips to All", async () => {

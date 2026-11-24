@@ -129,7 +129,10 @@ test("the shell shows all resources and a live platform connection", async ({
 
   // Client-side navigation works.
   await nav.getByRole("link", { name: "Sessions", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+  await expect(page).toHaveURL(/\/sessions$/);
+  await expect(
+    page.getByRole("heading", { name: "Sessions", exact: true }),
+  ).toBeVisible();
 });
 
 test("the expanded sidebar offers both versions and a keyboard-accessible account menu", async ({

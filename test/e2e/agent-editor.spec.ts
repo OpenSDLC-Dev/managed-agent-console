@@ -8,8 +8,8 @@ test.beforeEach(async ({ request }) => {
 
 test("create an agent through the rendered form", async ({ page }) => {
   await signIn(page, "/agents");
-  await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("link", { name: "Create agent" }).click();
+  await expect(page).toHaveURL(/\/agents\/new$/);
 
   await page.getByLabel("Name").fill("Deploy helper");
   await chooseModel(page, "minimax-m3");
@@ -19,10 +19,7 @@ test("create an agent through the rendered form", async ({ page }) => {
   await page.getByRole("combobox", { name: "Add skill" }).click();
   await page.getByRole("option", { name: /Excel spreadsheets/ }).click();
 
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Create agent", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/agent_mock/);
   await expect(
     page.getByRole("heading", { name: "Deploy helper" }),
@@ -235,14 +232,14 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
   await expect(page).toHaveURL(new RegExp("agents/agent_mock"));
 });
 
-test("schema indentation keeps the modal open and Escape then Tab releases focus", async ({
+test("schema indentation stays in the editor and Escape then Tab releases focus", async ({
   page,
 }) => {
   await signIn(page, "/agents");
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create agent" });
-  await dialog.getByRole("button", { name: "Add custom tool" }).click();
-  const tool = dialog.locator('[data-tool-type="custom"]');
+  await page.getByRole("link", { name: "Create agent", exact: true }).click();
+  const editor = page.getByRole("main");
+  await editor.getByRole("button", { name: "Add custom tool" }).click();
+  const tool = editor.locator('[data-tool-type="custom"]');
   await tool.getByText("Definition", { exact: true }).click();
   const schema = tool.getByLabel("Input schema");
   await schema.fill("{}");
@@ -255,18 +252,18 @@ test("schema indentation keeps the modal open and Escape then Tab releases focus
   await expect(schema).toHaveValue("{  }");
   await expect(schema).toBeFocused();
   await schema.press("Escape");
-  await expect(dialog).toBeVisible();
+  await expect(editor).toBeVisible();
   await schema.press("Tab");
   await expect(schema).not.toBeFocused();
-  await expect(dialog).toBeVisible();
+  await expect(editor).toBeVisible();
   await schema.focus();
   await schema.press("ControlOrMeta+A");
   await schema.press("ArrowRight");
   await schema.press("Tab");
   await expect(schema).toHaveValue("{  }  ");
-  await dialog.getByRole("radio", { name: "raw" }).click();
+  await editor.getByRole("radio", { name: "raw" }).click();
   const raw = JSON.parse(
-    await dialog.getByLabel("Raw agent config").inputValue(),
+    await editor.getByLabel("Raw agent config").inputValue(),
   );
   expect(raw.tools).toContainEqual({
     type: "custom",
@@ -275,5 +272,5 @@ test("schema indentation keeps the modal open and Escape then Tab releases focus
     input_schema: {},
   });
   await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/agents\/new$/);
 });

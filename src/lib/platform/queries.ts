@@ -756,6 +756,7 @@ export function useCreateAgent() {
       platformPost<Agent>("v1/agents", body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents-overview"] });
     },
   });
 }
@@ -769,6 +770,7 @@ export function useUpdateAgent(id: string) {
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents-overview"] });
       void queryClient.invalidateQueries({ queryKey: ["agent-versions", id] });
     },
   });
@@ -783,6 +785,7 @@ export function useArchiveAgent(id: string) {
     onSuccess: (agent) => {
       queryClient.setQueryData(["agent", id], agent);
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: ["agents-overview"] });
     },
   });
 }

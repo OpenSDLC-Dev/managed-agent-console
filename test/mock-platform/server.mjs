@@ -17,6 +17,7 @@ import {
   replayToolReply,
   replayToolStream,
 } from "./playground-tools.mjs";
+import { overviewFixture } from "./agents-overview.mjs";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -2748,6 +2749,19 @@ const server = createServer(async (req, res) => {
     res.end(
       envelope("permission_error", `this route requires the ${role} role`),
     );
+    return;
+  }
+
+  if (
+    url.pathname ===
+      "/api/console/organizations/default/workspaces/default/agents/overview" &&
+    req.method === "GET"
+  ) {
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify(overviewFixture(agentsStore, url.searchParams)));
     return;
   }
 

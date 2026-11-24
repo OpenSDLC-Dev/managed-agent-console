@@ -5,9 +5,21 @@ export const MESSAGES_ROUTE = "/messages";
 export const MESSAGE_LOGS_ROUTE = "/messages/logs";
 export const RESOURCES_ROUTE = "/resources";
 
+export const AGENTS_OVERVIEW_ROUTE = "/agents/overview";
+export const AGENTS_CREATE_ROUTE = "/agents/create";
+
+export function isAgentsWorkspacePage(pathname: string) {
+  return (
+    pathname === AGENTS_OVERVIEW_ROUTE ||
+    pathname === AGENTS_CREATE_ROUTE ||
+    pathname.startsWith(AGENTS_CREATE_ROUTE + "/")
+  );
+}
+
 export function isReportPage(pathname: string) {
-  return [MESSAGES_ROUTE, MESSAGE_LOGS_ROUTE, RESOURCES_ROUTE].includes(
-    pathname,
+  return (
+    isAgentsWorkspacePage(pathname) ||
+    [MESSAGES_ROUTE, MESSAGE_LOGS_ROUTE, RESOURCES_ROUTE].includes(pathname)
   );
 }
 

@@ -26,13 +26,13 @@ test("reopening the active group preserves a draft and the raw page query", asyn
   ).toBeHidden();
 });
 
-test("agent modal retains drafts on Stay and discards only on Leave", async ({
+test("agent create page retains drafts on Stay and discards only on Leave", async ({
   page,
 }) => {
   await signIn(page, "/agents");
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await page.getByRole("link", { name: "Create agent", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Unsaved draft");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   const prompt = page.getByRole("dialog", {
     name: "Unsaved changes",
     exact: true,
@@ -51,7 +51,7 @@ test("agent modal retains drafts on Stay and discards only on Leave", async ({
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Unsaved draft",
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   // Visibility includes the entry fade; axe must measure the settled palette.
   await expect
@@ -64,7 +64,7 @@ test("agent modal retains drafts on Stay and discards only on Leave", async ({
     .toBeLessThanOrEqual(390);
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await page.getByRole("link", { name: "Create agent", exact: true }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
 });
 
