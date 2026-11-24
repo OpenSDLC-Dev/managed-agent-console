@@ -2,6 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeft,
   ArrowUp,
@@ -36,6 +37,19 @@ import { useModelChoices } from "./model-field";
 import { AgentConfigView } from "./agent-config-view";
 import { CreatedAgent } from "./agent-quickstart-created";
 
+function ConnectorMark({ name }: { name: string }) {
+  return (
+    <Image
+      src={`/brands/connectors/${name}.png`}
+      alt=""
+      width={14}
+      height={14}
+      unoptimized
+      className="size-3.5 object-contain"
+    />
+  );
+}
+
 function StarterBadges({ starter }: { starter: Starter }) {
   const Icon =
     starter.badge === "Recurring"
@@ -50,9 +64,9 @@ function StarterBadges({ starter }: { starter: Starter }) {
           key={s}
           title={s}
           aria-label={s}
-          className="grid size-[19px] place-items-center rounded border bg-muted text-[10px] font-semibold uppercase"
+          className="grid size-[19px] place-items-center rounded border bg-muted"
         >
-          {s[0]}
+          <ConnectorMark name={s} />
         </span>
       ))}
       {starter.skill && (
@@ -104,9 +118,10 @@ function TemplatePreview({
               <div className="mt-1 flex flex-wrap gap-2">
                 {starter.servers.map((x) => (
                   <span
-                    className="rounded-md bg-muted px-2 py-1 text-xs"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs"
                     key={x}
                   >
+                    <ConnectorMark name={x} />
                     {x}
                   </span>
                 ))}

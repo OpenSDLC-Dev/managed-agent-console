@@ -163,6 +163,17 @@ test("all twelve starters preview without a write; formats, cancel, blank editor
   const main = page.getByRole("main");
   let writes = 0;
   const startHistory = await page.evaluate(() => history.length);
+  const icons = main.locator('img[src^="/brands/connectors/"]');
+  await expect(icons).toHaveCount(
+    starters.flatMap((s) => s.servers ?? []).length,
+  );
+  await expect
+    .poll(() =>
+      icons.evaluateAll((images) =>
+        images.every((img) => (img as HTMLImageElement).naturalWidth > 0),
+      ),
+    )
+    .toBe(true);
   page.on("request", (r) => {
     if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
   });
