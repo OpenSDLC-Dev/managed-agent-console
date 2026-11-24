@@ -33,7 +33,7 @@ export function AgentStartingPoint({
   setBusy,
   saving,
 }: {
-  getConfig: () => AgentWriteBody | null;
+  getConfig: (fields: "model" | "all") => AgentWriteBody | null;
   apply: (config: AgentWriteBody, source: "template" | "description") => void;
   confirmReplace: (
     action: () => void,
@@ -71,7 +71,7 @@ export function AgentStartingPoint({
     trigger.current?.focus();
   }
   function select(starter?: Starter) {
-    const base = getConfig();
+    const base = getConfig("model");
     if (!base) return;
     confirmReplace(() => {
       setPrompt("");
@@ -90,7 +90,7 @@ export function AgentStartingPoint({
     setBusy(true);
     setError("");
     try {
-      const base = getConfig();
+      const base = getConfig("all");
       if (!base) return;
       const requested = draftModelId(base.model);
       const generator = requested

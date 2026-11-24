@@ -143,6 +143,35 @@ test("a starter uses the current Raw model and preserves invalid input for corre
   ).toHaveAttribute("data-model", "minimax-m3");
 });
 
+test("a template can replace a rendered draft with an unfinished custom tool after confirmation", async ({
+  page,
+}) => {
+  await signIn(page, "/agents/new?model=deepseek-flash");
+  await page.getByRole("button", { name: "Tools", exact: true }).click();
+  await page.getByRole("button", { name: "Add custom tool" }).click();
+  const tool = page.locator('[data-tool-type="custom"]');
+  await tool.getByText("Definition", { exact: true }).click();
+  const schema = tool.getByLabel("Input schema");
+  await schema.fill("{");
+  await page.getByRole("radio", { name: "Template" }).check();
+  const card = page.getByRole("button", { name: "Support agent", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Unsaved changes" });
+  await card.click();
+  await dialog.getByRole("button", { name: "Stay" }).click();
+  await expect(schema).toHaveValue("{");
+  await card.click();
+  await dialog.getByRole("button", { name: "Leave" }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Support agent",
+  );
+  await expect(
+    page.getByRole("button", { name: "Model", exact: true }),
+  ).toHaveAttribute("data-model", "deepseek-flash");
+  await expect(
+    page.getByRole("button", { name: "Create agent", exact: true }),
+  ).toBeEnabled();
+});
+
 test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only explicit creation writes", async ({
   page,
   context,

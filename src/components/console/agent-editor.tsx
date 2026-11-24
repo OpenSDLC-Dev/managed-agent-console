@@ -619,8 +619,11 @@ export function AgentEditorFields({
     >
       {creationPage && (
         <AgentStartingPoint
-          getConfig={() => {
-            if (tab === "rendered") return configFromForm(form);
+          getConfig={(fields) => {
+            if (tab === "rendered")
+              return fields === "model"
+                ? { model: form.modelId }
+                : configFromForm(form);
             const parsed = fromRaw(raw.text, raw.format);
             setRawError(parsed.error ?? null);
             return parsed.config ?? null;
