@@ -105,7 +105,15 @@ export function parseTools(tools: unknown[]): {
   const overrides = new Map<string, Override>();
   for (const config of Array.isArray(entry.configs) ? entry.configs : []) {
     if (config && typeof config.name === "string") {
-      overrides.set(config.name, { ...overrides.get(config.name), ...config });
+      const previous = overrides.get(config.name);
+      overrides.set(config.name, {
+        ...previous,
+        ...config,
+        // A null policy or enabled flag is absent on the wire.
+        enabled: config.enabled ?? previous?.enabled,
+        permission_policy:
+          config.permission_policy ?? previous?.permission_policy,
+      });
     }
   }
   const tools_ = Object.fromEntries(

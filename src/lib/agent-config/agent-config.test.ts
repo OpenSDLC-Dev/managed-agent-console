@@ -145,6 +145,7 @@ it("preserves disjoint toolsets and merges repeated overrides without losing app
       configs: [
         { name: "read", type: "read", enabled: true },
         { name: "read", permission_policy: { type: "always_ask" } },
+        { name: "read", permission_policy: null, enabled: null },
       ],
     },
     extra,

@@ -14,7 +14,7 @@ import {
   useModelChoices,
   type ModelChoices,
 } from "@/components/console/model-field";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { useRouter } from "next/navigation";
 import {
@@ -436,6 +436,7 @@ export function AgentEditorFields({
     format: creationPage ? "yaml" : "json",
     text: "",
   });
+  const gutter = useRef<HTMLPreElement>(null);
   const [rawBaseline, setRawBaseline] = useState("");
   const [original] = useState(initial);
   const [startingConfig, setStartingConfig] = useState(initial);
@@ -1369,34 +1370,56 @@ export function AgentEditorFields({
                 </Button>
               </div>
             )}
-            <SchemaTextarea
-              indentWithTab={creationPage}
-              disabled={generating}
-              aria-label="Raw agent config"
-              readOnly={readOnly}
-              value={raw.text}
-              onValueChange={(text) => {
-                setRaw((r) => ({ ...r, text }));
-                // The parse error describes the text that was there a keystroke
-                // ago; keeping it would leave the field announced invalid while
-                // it is being fixed.
-                setRawError(null);
-              }}
-              rows={22}
-              spellCheck={false}
-              aria-invalid={rawError !== null}
-              aria-describedby={
-                [
-                  creationPage && "agent-raw-help",
-                  rawError && "raw-config-error",
-                ]
-                  .filter(Boolean)
-                  .join(" ") || undefined
-              }
-              // Hand-rolled rather than the <Input> primitive, so it carries its
-              // own copy of the one invalid rule (issue #104). Opaque, no halo.
-              className="w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface"
-            />
+            <div className={creationPage ? "relative" : undefined}>
+              {creationPage && (
+                <pre
+                  ref={gutter}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-px left-px w-9 overflow-hidden border-r bg-muted/40 py-3 pr-2 text-right font-mono text-[12px] leading-relaxed text-muted-foreground"
+                >
+                  {raw.text
+                    .split("\n")
+                    .map((_, i) => i + 1)
+                    .join("\n")}
+                </pre>
+              )}
+              <SchemaTextarea
+                wrap={creationPage ? "off" : undefined}
+                onScroll={(event) => {
+                  if (gutter.current)
+                    gutter.current.scrollTop = event.currentTarget.scrollTop;
+                }}
+                indentWithTab={creationPage}
+                disabled={generating}
+                aria-label="Raw agent config"
+                readOnly={readOnly}
+                value={raw.text}
+                onValueChange={(text) => {
+                  setRaw((r) => ({ ...r, text }));
+                  // The parse error describes the text that was there a keystroke
+                  // ago; keeping it would leave the field announced invalid while
+                  // it is being fixed.
+                  setRawError(null);
+                }}
+                rows={22}
+                spellCheck={false}
+                aria-invalid={rawError !== null}
+                aria-describedby={
+                  [
+                    creationPage && "agent-raw-help",
+                    rawError && "raw-config-error",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
+                // Hand-rolled rather than the <Input> primitive, so it carries its
+                // own copy of the one invalid rule (issue #104). Opaque, no halo.
+                className={cn(
+                  "w-full rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed outline-none focus-visible:border-ring aria-invalid:border-destructive-surface",
+                  creationPage && "block rounded-t-none pl-12",
+                )}
+              />
+            </div>
             {creationPage && (
               <p id="agent-raw-help" className="text-xs text-muted-foreground">
                 Tab inserts indentation. Press Escape then Tab to move focus out
