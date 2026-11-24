@@ -90,9 +90,9 @@ test("a model made through the gateway native edge reaches the console's screens
 
   // The agent editor offers it by name.
   await page.goto("/agents/new");
-  await page.getByRole("combobox", { name: "Model", exact: true }).click();
+  await page.getByRole("button", { name: "Model", exact: true }).click();
   await expect(
-    page.getByRole("option", { name: RUN, exact: true }),
+    page.getByRole("radio", { name: RUN, exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
 

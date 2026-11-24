@@ -1,0 +1,194 @@
+import { expect, test } from "@playwright/test";
+import YAML from "yaml";
+import { signIn } from "./sign-in";
+import { grantDashboardModelDiscovery } from "./dashboard-fixture";
+
+test.beforeEach(async ({ request }) => {
+  await request.post("http://127.0.0.1:18080/__reset");
+});
+
+test("directory creation has the workspace navigation, six starters, collapsible configuration and sticky actions", async ({
+  page,
+}) => {
+  await signIn(page, "/agents");
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  for (const [name, href] of [
+    ["Memory", "/memory-stores"],
+    ["Credential vaults", "/vaults"],
+  ]) {
+    const link = nav.getByRole("link", { name, exact: true });
+    await expect(link).toHaveAttribute("href", href);
+    await link.click();
+    await expect(page).toHaveURL(new RegExp(href + "$"));
+  }
+  await nav.getByRole("link", { name: "Agents", exact: true }).click();
+  await page.getByRole("link", { name: "Create agent", exact: true }).click();
+  await expect(page).toHaveURL(/\/agents\/new$/);
+  await expect(
+    page.getByRole("navigation", { name: "Breadcrumb" }),
+  ).toContainText("New agent");
+  const point = page.getByRole("button", { name: /Starting point/ });
+  const save = page.getByRole("button", { name: "Create agent", exact: true });
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Untitled agent",
+  );
+  await expect(page.getByRole("button", { name: "Generate" })).toBeDisabled();
+  await expect(
+    page.getByRole("radio", { name: "Describe your agent" }),
+  ).toBeChecked();
+  const sections = ["Tools", "Skills", "Multiagent"];
+  for (const title of sections) {
+    const section = page.getByRole("button", { name: title, exact: true });
+    await expect(section).toHaveAttribute("aria-expanded", "false");
+    await section.click();
+    await expect(section).toHaveAttribute("aria-expanded", "true");
+    await section.click();
+  }
+  await point.click();
+  await expect(
+    page.getByRole("textbox", { name: "Describe your agent" }),
+  ).toBeHidden();
+  await point.click();
+  await page.getByRole("radio", { name: "Describe your agent" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("radio", { name: "Template" })).toBeChecked();
+  let writes = 0;
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
+  });
+  for (const title of [
+    "Blank agent",
+    "Deep researcher",
+    "Structured extractor",
+    "Field monitor",
+    "Support agent",
+    "Incident commander",
+  ]) {
+    const card = page.getByRole("button", { name: title, exact: true });
+    await card.click();
+    await expect(point).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+      title === "Blank agent" ? "Untitled agent" : title,
+    );
+    await point.click();
+    await expect(card).toHaveAttribute("aria-pressed", "true");
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const first = await save.boundingBox();
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  await expect
+    .poll(async () => Math.abs((await save.boundingBox())!.y - first!.y))
+    .toBeLessThan(2);
+  await expect(save).toBeInViewport();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Leave" })
+    .click();
+  await expect(page).toHaveURL(/\/agents$/);
+  expect(writes).toBe(0);
+});
+
+test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only explicit creation writes", async ({
+  page,
+  context,
+}) => {
+  await grantDashboardModelDiscovery(page);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: "http://127.0.0.1:3100",
+  });
+  let generations = 0,
+    writes = 0;
+  await page.route(
+    "**/api/organizations/default/proxy/v1/messages*",
+    async (route) => {
+      generations++;
+      if (generations === 1) {
+        await route.fulfill({
+          status: 503,
+          json: { error: { type: "api_error", message: "Draft unavailable" } },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                name: "Weekly summary",
+                description: "Summarize weekly changes.",
+                system: "List changes with their sources.",
+              }),
+            },
+          ],
+          usage: { input_tokens: 8, output_tokens: 12 },
+        },
+      });
+    },
+  );
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
+  });
+  await signIn(page, "/agents/new");
+  await page
+    .getByRole("textbox", { name: "Describe your agent" })
+    .fill("Summarize this week's changes.");
+  const generate = page.getByRole("button", { name: "Generate", exact: true });
+  await generate.click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Draft unavailable" }),
+  ).toBeVisible();
+  await generate.click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Weekly summary",
+  );
+  await page.getByRole("radio", { name: "raw", exact: true }).click();
+  const editor = page.getByLabel("Raw agent config");
+  const yaml = await editor.inputValue();
+  await page.getByRole("button", { name: "Copy configuration" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        navigator.clipboard.readText().then((t) => t.replaceAll("\r\n", "\n")),
+      ),
+    )
+    .toBe(yaml.replaceAll("\r\n", "\n"));
+  await page.getByRole("button", { name: "Config format: YAML" }).click();
+  await page.getByRole("menuitem", { name: "JSON" }).click();
+  expect(JSON.parse(await editor.inputValue())).toEqual(YAML.parse(yaml));
+  await editor.fill("{");
+  await page.getByRole("radio", { name: "rendered" }).click();
+  await expect(editor).toHaveAttribute("aria-invalid", "true");
+  await editor.fill(
+    JSON.stringify({
+      ...YAML.parse(yaml),
+      name: "Edited weekly summary",
+      model: {
+        id: "minimax-m3",
+        effort: { type: "medium" },
+        inference_geo: "global",
+      },
+    }),
+  );
+  await page.getByRole("radio", { name: "rendered" }).click();
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Edited weekly summary",
+  );
+  expect(writes).toBe(0);
+  await page.getByRole("button", { name: "Create agent", exact: true }).click();
+  await expect(page).toHaveURL(/\/agents\/agent_mock/);
+  await page.getByRole("radio", { name: "raw" }).click();
+  expect(JSON.parse(await editor.inputValue()).model).toEqual({
+    id: "minimax-m3",
+    effort: "medium",
+    inference_geo: "global",
+  });
+  expect({ generations, writes }).toEqual({ generations: 2, writes: 1 });
+});

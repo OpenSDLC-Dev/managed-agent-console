@@ -103,9 +103,9 @@ test("the shell shows all resources and a live platform connection", async ({
         "Agents",
         "Sessions",
         "Deployments",
-        "Memory Stores",
+        "Memory",
         "Environments",
-        "Credential Vaults",
+        "Credential vaults",
       ],
     ],
   ] as const) {

@@ -2383,6 +2383,31 @@ export const SURFACES: Surface[] = [
     fixture: "empty form",
     description: "The agent editor: the console's largest form.",
   },
+  ...(["templates", "model", "raw", "narrow"] as const).map(
+    (view): Surface => ({
+      id: "agent-new-" + view,
+      route: "/agents/new",
+      fixture: "Manual creation in the Default workspace",
+      description: "Directory creation with its " + view + " view.",
+      setup: async (page) => {
+        if (view === "narrow")
+          await page.setViewportSize({ width: 390, height: 844 });
+        await page
+          .getByRole("button", { name: "Model", exact: true })
+          .waitFor();
+        if (view === "templates")
+          await page.getByRole("radio", { name: "Template" }).check();
+        if (view === "model") {
+          await page
+            .getByRole("button", { name: "Model", exact: true })
+            .click();
+          await page.getByRole("dialog", { name: "Model settings" }).waitFor();
+        }
+        if (view === "raw")
+          await page.getByRole("radio", { name: "Raw", exact: true }).click();
+      },
+    }),
+  ),
   {
     id: "agent-edit",
     route: `/agents/${AGENT}/edit`,
@@ -3223,6 +3248,7 @@ export const SURFACES: Surface[] = [
       if (narrow) await page.setViewportSize({ width: 390, height: 844 });
       await page.getByRole("link", { name: "Create agent" }).first().click();
       await page.getByRole("heading", { name: "Create agent" }).waitFor();
+      await page.getByRole("button", { name: "Tools", exact: true }).click();
       await page.getByRole("button", { name: "Add custom tool" }).click();
       const tool = page.locator('[data-tool-type="custom"]');
       await tool.getByText("Definition", { exact: true }).click();
@@ -3239,6 +3265,7 @@ export const SURFACES: Surface[] = [
         .locator('[data-tool-type="mcp"]')
         .getByText("Tool permissions", { exact: true })
         .click();
+      await page.getByRole("button", { name: "Skills", exact: true }).click();
       await page
         .getByRole("combobox", { name: "Add skill", exact: true })
         .click();
@@ -3256,6 +3283,7 @@ export const SURFACES: Surface[] = [
       await page
         .getByRole("link", { name: "Create agent", exact: true })
         .click();
+      await page.getByRole("button", { name: "Tools", exact: true }).click();
       await page.getByRole("button", { name: "Add custom tool" }).click();
       const tool = page.locator('[data-tool-type="custom"]');
       await tool.getByText("Definition", { exact: true }).click();

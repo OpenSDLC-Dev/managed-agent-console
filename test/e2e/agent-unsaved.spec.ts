@@ -46,7 +46,8 @@ test("agent create page retains drafts on Stay and discards only on Leave", asyn
   );
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await prompt.getByRole("button", { name: "Stay" }).click();
-  await page.getByRole("button", { name: /Code task runner/ }).click();
+  await page.getByRole("radio", { name: "Template" }).check();
+  await page.getByRole("button", { name: /Deep researcher/ }).click();
   await prompt.getByRole("button", { name: "Stay" }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Unsaved draft",
@@ -65,7 +66,9 @@ test("agent create page retains drafts on Stay and discards only on Leave", asyn
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("link", { name: "Create agent", exact: true }).click();
-  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Untitled agent",
+  );
 });
 
 test("agent drafts survive sidebar, back and reload cancellation, then save without prompting", async ({
@@ -83,7 +86,7 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
   await name.fill("Kept draft");
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Memory Stores", exact: true })
+    .getByRole("link", { name: "Memory", exact: true })
     .click();
   const prompt = page.getByRole("dialog", {
     name: "Unsaved changes",
@@ -157,7 +160,7 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
   await page.getByLabel("Name", { exact: true }).fill("Sidebar draft");
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Memory Stores", exact: true })
+    .getByRole("link", { name: "Memory", exact: true })
     .click();
   await prompt.getByRole("button", { name: "Leave" }).click();
   await expect(page).toHaveURL(/\/memory-stores$/);

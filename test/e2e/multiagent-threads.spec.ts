@@ -12,6 +12,7 @@ test("creates a coordinator with an ordered roster", async ({ page }) => {
   await page.goto("/agents/new");
   await page.getByLabel("Name").fill("Coordinator");
   await chooseModel(page);
+  await page.getByRole("button", { name: "Multiagent", exact: true }).click();
   await page.getByRole("combobox", { name: "Add subagent" }).click();
   await page
     .getByRole("option", { name: "General task agent", exact: true })

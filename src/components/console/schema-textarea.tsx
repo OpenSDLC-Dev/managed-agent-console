@@ -8,10 +8,16 @@ type Props = Omit<
 > & {
   value: string;
   onValueChange: (value: string) => void;
+  indentWithTab?: boolean;
 };
 
 /** A JSON draft editor that lets keyboard users indent without trapping focus. */
-export function SchemaTextarea({ value, onValueChange, ...props }: Props) {
+export function SchemaTextarea({
+  value,
+  onValueChange,
+  indentWithTab = true,
+  ...props
+}: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   const exitOnTab = useRef(false);
   const caret = useRef<number | null>(null);
@@ -31,7 +37,13 @@ export function SchemaTextarea({ value, onValueChange, ...props }: Props) {
       }}
       onChange={(event) => onValueChange(event.target.value)}
       onKeyDown={(event) => {
-        if (event.nativeEvent.isComposing) return;
+        if (
+          !indentWithTab ||
+          props.readOnly ||
+          props.disabled ||
+          event.nativeEvent.isComposing
+        )
+          return;
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();

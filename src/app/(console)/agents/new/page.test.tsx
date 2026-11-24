@@ -126,47 +126,31 @@ describe("NewAgentPage", () => {
     expect(
       screen.getByRole("heading", { name: "Create agent" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Configure a new autonomous agent."),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Name")).toHaveValue("");
-    expect(screen.getByLabelText("Model")).toHaveValue("claude-sonnet-4-8");
-    expect(
-      screen.getByRole("button", { name: "Create agent" }),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText("No skills on the platform yet."),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("Name")).toHaveValue("Untitled agent");
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Tools" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeEnabled();
   });
 
-  it("seeds the editor from a starter template and back to blank", async () => {
+  it("fills an editable draft from the directory templates, then restores the blank starter", async () => {
     const user = userEvent.setup();
     await renderPage();
-
-    const runnerCard = screen.getByRole("button", { name: /Code task runner/ });
-    await user.click(runnerCard);
-    expect(runnerCard).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByLabelText("Name")).toHaveValue("Code task runner");
-    expect(
-      (screen.getByLabelText("System prompt") as HTMLTextAreaElement).value,
-    ).toContain("careful engineer");
-
-    await user.click(screen.getByRole("button", { name: /Web researcher/ }));
-    expect(screen.getByLabelText("Name")).toHaveValue("Web researcher");
-    await user.click(screen.getByRole("button", { name: /Tool permissions/ }));
-    expect(
-      screen.getByRole("checkbox", { name: "bash enabled" }),
-    ).not.toBeChecked();
-
-    await user.click(screen.getByRole("button", { name: /Blank/ }));
-    expect(screen.getByLabelText("Name")).toHaveValue("");
-    await user.click(screen.getByRole("button", { name: /Tool permissions/ }));
-    expect(
-      screen.getByRole("checkbox", { name: "bash enabled" }),
-    ).toBeChecked();
+    await user.click(await screen.findByRole("radio", { name: "Template" }));
+    await user.click(
+      screen.getByRole("button", { name: /Structured extractor/ }),
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue("Structured extractor");
+    const point = screen.getByRole("button", { name: /Starting point/ });
+    expect(point).toHaveAttribute("aria-expanded", "false");
+    await user.click(point);
+    await user.click(screen.getByRole("button", { name: "Blank agent" }));
+    expect(screen.getByLabelText("Name")).toHaveValue("Untitled agent");
   });
 
-  it("passes the requested gateway model to blank and template drafts", async () => {
+  it("carries the requested gateway alias through template selection without a write", async () => {
     const user = userEvent.setup();
     await renderPage(["team/model+A", "unused"]);
     await waitFor(() =>
@@ -175,7 +159,8 @@ describe("NewAgentPage", () => {
         "team/model+A",
       ),
     );
-    await user.click(screen.getByRole("button", { name: /Code task runner/ }));
+    await user.click(screen.getByRole("radio", { name: "Template" }));
+    await user.click(screen.getByRole("button", { name: /Deep researcher/ }));
     expect(screen.getByLabelText("Model")).toHaveAttribute(
       "data-model",
       "team/model+A",

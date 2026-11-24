@@ -384,16 +384,19 @@ test("sessions filter by agent server-side; created presets bound real lists", a
   }
 });
 
-test("a starter template creates a real gated agent", async ({ page }) => {
+test("a blank starter creates a real agent with an explicit Bash approval policy", async ({
+  page,
+}) => {
   await signIn(page);
-  await page.goto("/agents/new");
-  await page.getByRole("button", { name: /Code task runner/ }).click();
-  await expect(page.getByLabel("Name")).toHaveValue("Code task runner");
-
-  // The template's model id is a placeholder; the real stack serves modelId.
-  await page.getByLabel("Name").fill(`live-e2e-runner-${RUN}`);
-  const model = page.getByLabel("Model", { exact: true });
-  await model.fill(modelId);
+  await page.goto("/agents/new?model=" + encodeURIComponent(modelId));
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
+    "Untitled agent",
+  );
+  await page.getByLabel("Name", { exact: true }).fill(`live-e2e-runner-${RUN}`);
+  await page.getByRole("button", { name: "Tools", exact: true }).click();
+  await page.getByRole("button", { name: /Tool permissions/ }).click();
+  await page.getByLabel("bash policy").click();
+  await page.getByRole("option", { name: "always ask" }).click();
 
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/agent_/);
@@ -405,17 +408,7 @@ test("a starter template creates a real gated agent", async ({ page }) => {
   await page.getByRole("button", { name: /Tool permissions/ }).click();
   await expect(page.getByLabel("bash policy")).toContainText("always_ask");
 
-  // What the template promises on the wire, and it is **both halves** of
-  // "Full workspace access; bash gated behind approval"
-  // (src/lib/agent-config/templates.ts). Asserting only bash's policy would
-  // pass an agent that gated bash and disabled everything else — a different
-  // template, silently — so the access half is asserted too.
-  //
-  // As `not.toBe(false)` rather than `toBe(true)`, deliberately: the template
-  // omits `default_config` entirely and lets every tool inherit, so what this
-  // must catch is something being turned *off*, not whether the platform
-  // spelled the default out. That keeps the check on the agent's behaviour
-  // instead of back on the render this test stopped pinning.
+  // Verify the selected gate and the enabled tools used by the live session.
   const agent = await platformGet(`v1/agents/${runnerAgentId}`);
   const tools = toolsetsOf(agent);
   expect(tools).toHaveLength(1);

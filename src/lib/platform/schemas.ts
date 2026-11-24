@@ -28,10 +28,14 @@ import { z } from "zod";
 
 // ---- agents (internal/api/agents.go:18-30, internal/domain/agent.go:59-67)
 
-/** internal/domain/agent.go:11-14 — `effort` is a reference-only field. */
+/** internal/domain/agent.go Model and ModelEffort.MarshalJSON. */
+export const effortLevels = ["low", "medium", "high", "xhigh", "max"] as const;
+export type ModelEffort = (typeof effortLevels)[number];
 export const ModelRefSchema = z.object({
   id: z.string(),
   speed: z.enum(["standard", "fast"]).optional(), // omitted when unset
+  effort: z.object({ type: z.enum(effortLevels) }).optional(),
+  inference_geo: z.enum(["us", "global"]).optional(),
 });
 
 /** internal/api/wire.go:506-538 — normalized to exactly these three keys. */

@@ -7,7 +7,7 @@ import {
   TOOL_DESCRIPTIONS,
   TOOL_NAMES,
 } from "./toolset";
-import { AGENT_TEMPLATES } from "./templates";
+import { manualStarters, manualStarterConfig } from "./templates";
 import { fromRaw, toRaw } from "./raw";
 
 describe("toolset mapping", () => {
@@ -130,34 +130,35 @@ describe("toolset mapping", () => {
   });
 });
 
-describe("starter templates", () => {
-  it("carry wire-shaped toolsets that parse through the editor path", () => {
-    for (const template of AGENT_TEMPLATES) {
-      const { toolset, others } = parseTools(
-        template.config.tools as unknown[],
+describe("manual starters", () => {
+  it("seeds the five named templates and preserves local model aliases", () => {
+    expect(manualStarters.map((s) => s.title)).toEqual([
+      "Deep researcher",
+      "Structured extractor",
+      "Field monitor",
+      "Support agent",
+      "Incident commander",
+    ]);
+    for (const starter of [undefined, ...manualStarters]) {
+      const draft = manualStarterConfig("team/agent", starter);
+      const { toolset, others } = parseTools(draft.tools);
+      expect(draft.model).toEqual({ id: "team/agent", effort: "low" });
+      expect(toolset?.tools.web_fetch.enabled).toBe(
+        ![
+          "structured-extractor",
+          "support-agent",
+          "incident-commander",
+        ].includes(starter?.key ?? ""),
       );
-      expect(toolset, template.key).not.toBeNull();
-      expect(others, template.key).toHaveLength(0);
-      expect(template.config.name, template.key).toBeTruthy();
+      const names = others.map(
+        (t) => (t as { mcp_server_name: string }).mcp_server_name,
+      );
+      expect(names).toEqual(
+        starter?.key === "incident-commander"
+          ? ["sentry", "linear"]
+          : (starter?.servers ?? []),
+      );
     }
-  });
-
-  it("code runner gates bash; researcher cannot change files", () => {
-    const runner = parseTools(
-      AGENT_TEMPLATES.find((t) => t.key === "code-runner")!.config
-        .tools as unknown[],
-    ).toolset!;
-    expect(runner.tools.bash.policy).toBe("always_ask");
-    expect(runner.tools.read.enabled).toBe(true);
-
-    const researcher = parseTools(
-      AGENT_TEMPLATES.find((t) => t.key === "researcher")!.config
-        .tools as unknown[],
-    ).toolset!;
-    expect(researcher.tools.bash.enabled).toBe(false);
-    expect(researcher.tools.write.enabled).toBe(false);
-    expect(researcher.tools.edit.enabled).toBe(false);
-    expect(researcher.tools.web_search.enabled).toBe(true);
   });
 });
 

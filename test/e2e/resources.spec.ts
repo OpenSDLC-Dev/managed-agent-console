@@ -163,7 +163,7 @@ test("vaults list and detail render secret-free credentials", async ({
   await signIn(page);
   await page.locator('[data-nav-group="Agents"]').click();
   await page
-    .getByRole("link", { name: "Credential Vaults", exact: true })
+    .getByRole("link", { name: "Credential vaults", exact: true })
     .click();
   await expect(page.getByRole("cell", { name: /GitHub access/ })).toBeVisible();
   await expect(page.getByText("Old Jira vault")).toBeHidden();

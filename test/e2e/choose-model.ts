@@ -6,6 +6,12 @@ import type { Page } from "@playwright/test";
  * decision 6), and a form waits for a listed choice before it saves.
  */
 export async function chooseModel(page: Page, name = "agent-default") {
+  if (new URL(page.url()).pathname === "/agents/new") {
+    await page.getByRole("button", { name: "Model", exact: true }).click();
+    await page.getByRole("radio", { name, exact: true }).check();
+    await page.keyboard.press("Escape");
+    return;
+  }
   // The field is a text box until the gateway's list arrives.
   await page.getByRole("combobox", { name: "Model", exact: true }).click();
   await page.getByRole("option", { name, exact: true }).click();

@@ -508,6 +508,12 @@ the 2026-09-11 follow-up below supersedes that behavior.
 Re-shot: the full manifest, including `dashboard`, `dashboard-compact`,
 `dashboard-mobile` and `dashboard-api-key-create`, in both themes.
 
+## Manual agent creation — checked 2026-11-24
+
+In authenticated Chrome the Agents directory opens a 768 px centered editor with a separate breadcrumb, a collapsible Starting point, Rendered/Raw controls and a bottom action bar. Template selection fills the draft and collapses Starting point. The model picker combines model, effort and speed. The initial draft includes a name, description, system instructions and the built-in toolset. The sidebar labels are Memory and Credential vaults. The guided Create gallery remains a separate entry.
+
+The self-hosted menu reads gateway aliases. Generate uses the signed-in operator’s Playground grant and a discoverable model. Platform accepts the five effort levels, fast speed and coordinator subagent rosters. Its tool policies are always allow and always ask. MCP servers are configured by URL. The hosted advisor, dynamic-workflow and connector catalog controls have no corresponding Platform contract. The [comparison and regression walkthrough](./agents-console-comparison.md#directory-creation-regression) records the checks.
+
 ## Agent editor — checked 2026-09-11
 
 Authenticated Chrome showed a multiline General description, Rendered/Raw radio

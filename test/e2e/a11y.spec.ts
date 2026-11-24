@@ -233,6 +233,7 @@ for (const theme of ["light", "dark"] as const) {
     // Bare `text-destructive` error copy — 36 sites share this colour, and in
     // dark mode it failed on the plain page background, nowhere near a tint.
     await page.goto("/agents/new");
+    await page.getByLabel("Name", { exact: true }).fill("");
     await page.getByRole("button", { name: /Create agent/ }).click();
     await expect(page.getByText(/required/i).first()).toBeVisible();
     await expectNoViolations(page);
