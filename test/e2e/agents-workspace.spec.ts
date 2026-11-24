@@ -197,9 +197,14 @@ test("all twelve starters preview without a write; formats, cancel, blank editor
       }
       const displayed = await preview.locator("pre").innerText();
       await preview.getByRole("button", { name: "Copy code" }).click();
+      // Windows clipboard text uses CRLF. Preserve indentation and trailing lines.
       await expect
-        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-        .toBe(displayed);
+        .poll(async () =>
+          (
+            await page.evaluate(() => navigator.clipboard.readText())
+          ).replaceAll("\r\n", "\n"),
+        )
+        .toBe(displayed.replaceAll("\r\n", "\n"));
     }
     await preview.getByRole("button", { name: "Cancel" }).click();
     await expect(preview).toBeHidden();
