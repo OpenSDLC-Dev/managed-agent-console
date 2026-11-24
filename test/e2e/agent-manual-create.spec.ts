@@ -110,6 +110,39 @@ test("directory creation has the workspace navigation, six starters, collapsible
   expect(writes).toBe(0);
 });
 
+test("a starter uses the current Raw model and preserves invalid input for correction", async ({
+  page,
+}) => {
+  await grantDashboardModelDiscovery(page);
+  await signIn(page, "/agents/new?model=deepseek-flash");
+  await page.getByRole("radio", { name: "raw", exact: true }).click();
+  const editor = page.getByLabel("Raw agent config");
+  const draft = YAML.parse(await editor.inputValue());
+  expect(draft.model.id).toBe("deepseek-flash");
+  await page.getByRole("radio", { name: "Template" }).check();
+  const card = page.getByRole("button", { name: "Support agent", exact: true });
+  await editor.fill("model: [");
+  await card.click();
+  await expect(editor).toHaveAttribute("aria-invalid", "true");
+  await expect(editor).toHaveValue("model: [");
+  await expect(
+    page.getByRole("dialog", { name: "Unsaved changes" }),
+  ).toBeHidden();
+  await editor.fill(YAML.stringify({ ...draft, model: "minimax-m3" }));
+  await card.click();
+  await page
+    .getByRole("dialog", { name: "Unsaved changes" })
+    .getByRole("button", { name: "Leave" })
+    .click();
+  const template = YAML.parse(await editor.inputValue());
+  expect(template.name).toBe("Support agent");
+  expect(template.model.id).toBe("minimax-m3");
+  await page.getByRole("radio", { name: "rendered" }).click();
+  await expect(
+    page.getByRole("button", { name: "Model", exact: true }),
+  ).toHaveAttribute("data-model", "minimax-m3");
+});
+
 test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only explicit creation writes", async ({
   page,
   context,

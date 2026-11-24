@@ -216,6 +216,15 @@ describe("CommandPalette", () => {
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   });
 
+  it("finds the Memory shortcut by its full resource name", async () => {
+    renderPalette();
+    const input = await openPalette();
+    setQuery(input, "memory stores");
+    const memory = await screen.findByRole("option", { name: "Memory" });
+    fireEvent.click(memory);
+    expect(routerState.push).toHaveBeenCalledWith("/memory-stores");
+  });
+
   it("opens from the sidebar Search button", async () => {
     renderPalette();
     fireEvent.click(screen.getByRole("button", { name: /search/i }));

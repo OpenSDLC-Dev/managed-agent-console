@@ -619,12 +619,11 @@ export function AgentEditorFields({
     >
       {creationPage && (
         <AgentStartingPoint
-          model={form.modelId}
           getConfig={() => {
             if (tab === "rendered") return configFromForm(form);
             const parsed = fromRaw(raw.text, raw.format);
-            if (!parsed.config) throw new Error(parsed.error);
-            return parsed.config;
+            setRawError(parsed.error ?? null);
+            return parsed.config ?? null;
           }}
           confirmReplace={(action, source) =>
             edited || (source === "template" && promptDirty)

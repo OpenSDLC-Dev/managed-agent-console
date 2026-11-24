@@ -26,6 +26,6 @@ The hosted acceptance run created one uniquely named plain-text summarizer, veri
 
 ### Directory creation regression
 
-1. From **Agents → Agents**, follow **Create agent**. Check the breadcrumb, starter defaults, model menu, collapsed optional groups and footer on desktop and at 390 px. Follow **Memory** and **Credential vaults** back to their original destinations.
-2. Select all six starting templates. Verify their summaries and fields. Change the model, effort and speed, configure tools and skills, then inspect and copy the same draft in YAML and JSON. Try invalid Raw input, return to Rendered, and test both choices on the unsaved-changes dialog.
+1. From **Agents → Agents**, follow **Create agent**. Check the breadcrumb, starter defaults, model menu, collapsed optional groups and footer on desktop and at 390 px. Follow **Memory** and **Credential vaults** back to their original destinations. Search for the full resource name **Memory Stores** and open the **Memory** shortcut.
+2. Select all six starting templates. Verify their summaries and fields. Change the model, effort and speed, configure tools and skills, then inspect and copy the same draft in YAML and JSON. Change the model directly in Raw and apply another template. Confirm it keeps the selected model and reports invalid Raw input without replacing the draft. Return to Rendered and test both choices on the unsaved-changes dialog.
 3. Replay a failed and a successful Generate response. Confirm that previewing and generating send no agent write. Create once and reopen the saved configuration. The directory scenarios run in `test/e2e/agent-manual-create.spec.ts`, `agent-editor.spec.ts` and `agent-unsaved.spec.ts`.

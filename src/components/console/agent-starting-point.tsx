@@ -14,8 +14,17 @@ import { usePlaygroundModels } from "@/lib/platform/playground-queries";
 import type { AgentWriteBody } from "@/lib/platform/queries";
 import { cn } from "@/lib/utils";
 
+function draftModelId(model: unknown): string {
+  if (typeof model === "string") return model;
+  return model &&
+    typeof model === "object" &&
+    "id" in model &&
+    typeof model.id === "string"
+    ? model.id
+    : "";
+}
+
 export function AgentStartingPoint({
-  model,
   getConfig,
   apply,
   confirmReplace,
@@ -24,8 +33,7 @@ export function AgentStartingPoint({
   setBusy,
   saving,
 }: {
-  model: string;
-  getConfig: () => AgentWriteBody;
+  getConfig: () => AgentWriteBody | null;
   apply: (config: AgentWriteBody, source: "template" | "description") => void;
   confirmReplace: (
     action: () => void,
@@ -63,10 +71,12 @@ export function AgentStartingPoint({
     trigger.current?.focus();
   }
   function select(starter?: Starter) {
+    const base = getConfig();
+    if (!base) return;
     confirmReplace(() => {
       setPrompt("");
       finish(
-        manualStarterConfig(model, starter),
+        manualStarterConfig(draftModelId(base.model), starter),
         starter?.title ?? "Blank agent",
         "template",
       );
@@ -81,10 +91,8 @@ export function AgentStartingPoint({
     setError("");
     try {
       const base = getConfig();
-      const requested =
-        typeof base.model === "string"
-          ? base.model
-          : (base.model as { id?: string } | undefined)?.id;
+      if (!base) return;
+      const requested = draftModelId(base.model);
       const generator = requested
         ? available.find((item) => item.id === requested)
         : available[0];
