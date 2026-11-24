@@ -178,11 +178,12 @@ export function AgentQuickstart() {
   const identity = account?.playground_access === true ? account.id : undefined;
   const availableModels = usePlaygroundModels(identity);
   const choices = useModelChoices();
-  const names = availableModels.data?.map((m) => m.id) ?? choices.names ?? [];
+  const discovered = availableModels.isError ? undefined : availableModels.data;
+  const names = discovered?.map((m) => m.id) ?? choices.names ?? [];
   const model = names.includes("deepseek-flash")
     ? "deepseek-flash"
     : (names[0] ?? "");
-  const generationModel = availableModels.data?.find((m) => m.id === model);
+  const generationModel = discovered?.find((m) => m.id === model);
   const [description, setDescription] = useState("");
   const [reply, setReply] = useState("");
   const [draft, setDraft] = useState<string | null>(null);

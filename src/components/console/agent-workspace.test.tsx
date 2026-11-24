@@ -25,6 +25,7 @@ import AgentsOverviewPage from "@/app/(console)/agents/overview/page";
 import { AgentsOverview } from "./agents-overview";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
 import type { Agent } from "@/lib/platform/types";
+import type { PlaygroundModel } from "@/lib/platform/playground";
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
@@ -223,10 +224,12 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-function mount(element: React.ReactNode) {
+function mount(element: React.ReactNode, cachedModels?: PlaygroundModel[]) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  if (cachedModels)
+    client.setQueryData(["playground-models", TEST_SESSION.id], cachedModels);
   return render(
     <QueryClientProvider client={client}>
       <ConsoleSessionContext.Provider
@@ -437,25 +440,33 @@ it("exports the original coordinator as self while preserving external member ve
     ],
   });
 });
-it("waits for fallback aliases when model discovery fails before seeding a draft", async () => {
-  discoveryFailed = aliasPending = true;
-  const user = userEvent.setup();
-  mount(<AgentCreatePage />);
-  const description = screen.getByRole("textbox", {
-    name: "Describe your agent",
-  });
-  await user.type(description, "Summarize these paragraphs");
-  const submit = screen.getByRole("button", { name: "Create agent" });
-  expect(submit).toBeDisabled();
-  aliasPending = false;
-  await user.type(description, ".");
-  await user.click(submit);
-  const yaml = await screen.findByRole("textbox", {
-    name: "Agent configuration",
-  });
-  expect((yaml as HTMLTextAreaElement).value).toContain("deepseek-flash");
-  expect(calls.some((call) => call.includes("/messages"))).toBe(false);
-});
+it.each([false, true])(
+  "waits for fallback aliases on discovery failure (cached discovery: %s)",
+  async (cached) => {
+    discoveryFailed = aliasPending = true;
+    const user = userEvent.setup();
+    mount(
+      <AgentCreatePage />,
+      cached
+        ? [{ id: "previous-alias", display_name: "Previous model" }]
+        : undefined,
+    );
+    const description = screen.getByRole("textbox", {
+      name: "Describe your agent",
+    });
+    await user.type(description, "Summarize these paragraphs");
+    const submit = screen.getByRole("button", { name: "Create agent" });
+    expect(submit).toBeDisabled();
+    aliasPending = false;
+    await user.type(description, ".");
+    await user.click(submit);
+    const yaml = await screen.findByRole("textbox", {
+      name: "Agent configuration",
+    });
+    expect((yaml as HTMLTextAreaElement).value).toContain("deepseek-flash");
+    expect(calls.some((call) => call.includes("/messages"))).toBe(false);
+  },
+);
 
 it("builds and refines a draft through Messages and preserves valid YAML after a model failure", async () => {
   const user = userEvent.setup();
