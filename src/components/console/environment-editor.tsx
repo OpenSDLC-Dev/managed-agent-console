@@ -184,7 +184,7 @@ export function EnvironmentEditor({
   mode: "create" | "edit";
   initial: EnvForm;
   environmentId?: string;
-  onDone?: () => void;
+  onDone?: (environment?: Environment) => void;
 }) {
   const router = useRouter();
   const [form, setForm] = useState(initial);
@@ -223,7 +223,7 @@ export function EnvironmentEditor({
     mutation.mutate(body, {
       onSuccess: (environment) =>
         onDone
-          ? onDone()
+          ? onDone(environment)
           : router.push(`/environments/${encodeURIComponent(environment.id)}`),
     });
   };

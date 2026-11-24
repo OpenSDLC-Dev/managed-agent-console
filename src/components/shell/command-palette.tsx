@@ -28,6 +28,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
 import {
+  AGENTS_CREATE_ROUTE,
+  AGENTS_OVERVIEW_ROUTE,
   isReportPage,
   MESSAGES_ROUTE,
   PLAYGROUND_ROUTE,
@@ -75,11 +77,15 @@ const SECTIONS: (Item & { surface?: Surface })[] = NAV_DESTINATIONS.map(
   ({ key, label, href, icon, surface }) => ({
     key,
     label:
-      href === RESOURCES_ROUTE
-        ? "Resources overview"
-        : href === MESSAGES_ROUTE
-          ? "Messages overview"
-          : label,
+      href === AGENTS_OVERVIEW_ROUTE
+        ? "Agents overview"
+        : href === AGENTS_CREATE_ROUTE
+          ? "Create agent"
+          : href === RESOURCES_ROUTE
+            ? "Resources overview"
+            : href === MESSAGES_ROUTE
+              ? "Messages overview"
+              : label,
     href,
     group: "Go to",
     icon,

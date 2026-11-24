@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { PlatformError } from "@/lib/platform/http";
 import { InitialResources } from "./initial-resources";
-import type { Agent } from "@/lib/platform/types";
+import type { Agent, Session } from "@/lib/platform/types";
 import type { ResourceInput } from "@/lib/platform/session-resources";
 import {
   useAgents,
@@ -49,9 +49,13 @@ function ManageLink({ href, children }: { href: string; children: string }) {
 export function SessionCreateForm({
   onCancel,
   initialAgent,
+  initialEnvironmentId,
+  onCreated,
 }: {
   onCancel?: () => void;
   initialAgent?: Agent;
+  initialEnvironmentId?: string;
+  onCreated?: (session: Session) => void;
 }) {
   const router = useRouter();
   const leave = useLeaveConfirmation();
@@ -62,7 +66,9 @@ export function SessionCreateForm({
   const create = useCreateSession();
 
   const [agentId, setAgentId] = useState(initialAgent?.id ?? "");
-  const [environmentId, setEnvironmentId] = useState("");
+  const [environmentId, setEnvironmentId] = useState(
+    initialEnvironmentId ?? "",
+  );
   const [title, setTitle] = useState("");
   const [vaultIds, setVaultIds] = useState<string[]>([]);
   const [vaultOpen, setVaultOpen] = useState(false);
@@ -107,7 +113,8 @@ export function SessionCreateForm({
             setInitialResources([]);
             create.reset();
             leave.setDirty(false);
-            router.push(`/sessions/${session.id}`);
+            if (onCreated) onCreated(session);
+            else router.push(`/sessions/${session.id}`);
           },
         },
       ),

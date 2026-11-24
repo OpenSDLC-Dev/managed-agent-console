@@ -7,7 +7,12 @@ import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { nativeGet, ORGANIZATION, type NativeSession } from "./native";
 import { isPermissionDenied } from "./denied";
 import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
-import { MESSAGES_ROUTE, RESOURCES_ROUTE, playgroundOnly } from "@/lib/routes";
+import {
+  isAgentsWorkspacePage,
+  MESSAGES_ROUTE,
+  RESOURCES_ROUTE,
+  playgroundOnly,
+} from "@/lib/routes";
 
 /**
  * Feature detection follows harness/rules/platform-contract.md for surfaces
@@ -170,6 +175,7 @@ export function reportSurfaceState(
   surfaces: Record<Surface, SurfaceState> | undefined,
 ): SurfaceState | undefined {
   if (!surfaces) return undefined;
+  if (isAgentsWorkspacePage(pathname)) return surfaces.agents;
   const reads =
     pathname === RESOURCES_ROUTE
       ? [surfaces.files, surfaces.skills]
@@ -192,7 +198,8 @@ export function canOpenReport(
   const status = reportSurfaceState(pathname, surfaces)?.status;
   return (
     status === "available" ||
-    (pathname === RESOURCES_ROUTE && status === "unknown")
+    ((pathname === RESOURCES_ROUTE || isAgentsWorkspacePage(pathname)) &&
+      status === "unknown")
   );
 }
 

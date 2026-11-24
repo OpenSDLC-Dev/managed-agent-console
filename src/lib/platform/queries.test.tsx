@@ -1076,7 +1076,7 @@ const mutationCases: MutationCase[] = [
     method: "POST",
     jsonBody: { name: "Support agent" },
     meta: { errorToast: false },
-    invalidates: [["agents"]],
+    invalidates: [["agents"], ["agents-overview"]],
   },
   {
     name: "useUpdateAgent",
@@ -1086,7 +1086,7 @@ const mutationCases: MutationCase[] = [
     method: "POST",
     jsonBody: { name: "Renamed", version: 3 },
     meta: { errorToast: false },
-    invalidates: [["agents"], ["agent-versions", "agt_1"]],
+    invalidates: [["agents"], ["agents-overview"], ["agent-versions", "agt_1"]],
     setsData: ["agent", "agt_1"],
   },
   {
@@ -1096,7 +1096,7 @@ const mutationCases: MutationCase[] = [
     method: "POST",
     jsonBody: {},
     meta: { errorTitle: "Archive failed" },
-    invalidates: [["agents"]],
+    invalidates: [["agents"], ["agents-overview"]],
     setsData: ["agent", "agt_1"],
   },
   {

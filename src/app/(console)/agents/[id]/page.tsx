@@ -1,4 +1,5 @@
 "use client";
+import { AgentsOverview } from "@/components/console/agents-overview";
 import { Suspense, use, useState, type ReactNode } from "react";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
@@ -118,26 +119,33 @@ function AgentWorkspace({ id }: { id: string }) {
         aria-label="Agent sections"
         className="mb-4 flex shrink-0 gap-1 overflow-x-auto border-b"
       >
-        {["configuration", "sessions", "deployments"].map((value) => (
-          <button
-            key={value}
-            onClick={() => changeTab(value)}
-            aria-current={
-              tab === value ||
-              (value === "configuration" &&
-                tab !== "sessions" &&
-                tab !== "deployments")
-                ? "page"
-                : undefined
-            }
-            className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
-          >
-            {value}
-          </button>
-        ))}
+        {["configuration", "sessions", "deployments", "observability"].map(
+          (value) => (
+            <button
+              key={value}
+              onClick={() => changeTab(value)}
+              aria-current={
+                tab === value ||
+                (value === "configuration" &&
+                  tab !== "sessions" &&
+                  tab !== "deployments" &&
+                  tab !== "observability")
+                  ? "page"
+                  : undefined
+              }
+              className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm capitalize text-muted-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground"
+            >
+              {value}
+            </button>
+          ),
+        )}
       </nav>
       <div className="min-h-0 flex-1">
-        {tab === "sessions" ? (
+        {tab === "observability" ? (
+          <div className="h-full overflow-y-auto">
+            <AgentsOverview agentId={id} />
+          </div>
+        ) : tab === "sessions" ? (
           <div className="h-full overflow-y-auto">
             <div className="mb-4">{selector}</div>
             <AgentSessions id={id} version={version} />

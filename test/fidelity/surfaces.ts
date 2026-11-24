@@ -171,6 +171,37 @@ async function settledDashboardModel(
 }
 
 export const SURFACES: Surface[] = [
+  {
+    id: "agents-workspace-overview",
+    route: "/agents/overview",
+    fixture: "workspace report",
+    setup: async (page) => {
+      await page.getByRole("region", { name: "Agents activity" }).waitFor();
+    },
+    description:
+      "Workspace selector, 30-day metrics, charts and ranked agents.",
+  },
+  {
+    id: "agents-quickstart",
+    route: "/agents/create",
+    fixture: "starter catalog",
+    description: "Description composer and twelve template cards.",
+  },
+  {
+    id: "agents-quickstart-preview",
+    route: "/agents/create?template=data-analyst",
+    fixture: "Data analyst",
+    description:
+      "Template preview, MCP servers, source formats and confirmation.",
+  },
+  {
+    id: "agents-quickstart-draft",
+    route: "/agents/create?template=structured-extractor&step=draft",
+    fixture: "Structured extractor",
+    description:
+      "Editable agent configuration before the first resource write.",
+  },
+
   ...NATIVE_SURFACES,
   ...["thinking", "growing", "final", "reconnecting", "narrow"].map(
     (view): Surface => ({
@@ -3138,12 +3169,11 @@ export const SURFACES: Surface[] = [
   {
     id: "agent-create",
     route: "/agents",
-    fixture: "empty dialog form",
-    description:
-      "Create agent as a list modal: templates plus the full editor.",
+    fixture: "blank configuration form",
+    description: "The list opens the standalone configuration editor.",
     setup: async (page) => {
-      await page.getByRole("button", { name: "Create agent" }).first().click();
-      await page.getByRole("dialog", { name: "Create agent" }).waitFor();
+      await page.getByRole("link", { name: "Create agent" }).first().click();
+      await page.getByRole("heading", { name: "Create agent" }).waitFor();
     },
   },
   ...[false, true].map((narrow): Surface => ({
@@ -3154,12 +3184,12 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       if (narrow) await page.setViewportSize({ width: 390, height: 844 });
       await page
-        .getByRole("button", { name: "Create agent", exact: true })
+        .getByRole("link", { name: "Create agent", exact: true })
         .click();
       await page
         .getByLabel("Name", { exact: true })
         .fill("Unsaved agent draft");
-      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
       await page
         .getByRole("dialog", { name: "Unsaved changes", exact: true })
         .waitFor();
@@ -3173,8 +3203,8 @@ export const SURFACES: Surface[] = [
       "Structured tool definitions and MCP configuration with progressive skill selection.",
     setup: async (page) => {
       if (narrow) await page.setViewportSize({ width: 390, height: 844 });
-      await page.getByRole("button", { name: "Create agent" }).first().click();
-      await page.getByRole("dialog", { name: "Create agent" }).waitFor();
+      await page.getByRole("link", { name: "Create agent" }).first().click();
+      await page.getByRole("heading", { name: "Create agent" }).waitFor();
       await page.getByRole("button", { name: "Add custom tool" }).click();
       const tool = page.locator('[data-tool-type="custom"]');
       await tool.getByText("Definition", { exact: true }).click();
@@ -3206,7 +3236,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       if (narrow) await page.setViewportSize({ width: 390, height: 844 });
       await page
-        .getByRole("button", { name: "Create agent", exact: true })
+        .getByRole("link", { name: "Create agent", exact: true })
         .click();
       await page.getByRole("button", { name: "Add custom tool" }).click();
       const tool = page.locator('[data-tool-type="custom"]');

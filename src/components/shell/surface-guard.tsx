@@ -23,6 +23,7 @@ import {
   MESSAGE_LOGS_ROUTE,
   PLAYGROUND_ROUTE,
   RESOURCES_ROUTE,
+  isAgentsWorkspacePage,
   playgroundOnly,
 } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
@@ -120,8 +121,9 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
       );
   }
   if (isReportPage(pathname)) {
-    const label =
-      pathname === RESOURCES_ROUTE
+    const label = isAgentsWorkspacePage(pathname)
+      ? "Agents"
+      : pathname === RESOURCES_ROUTE
         ? "Resources"
         : pathname === MESSAGE_LOGS_ROUTE
           ? "Logs"
@@ -156,7 +158,9 @@ export function SurfaceGuard({ children }: { children: React.ReactNode }) {
           subtitle="Files and skills are unavailable on this deployment."
         />
       ) : (
-        <UnavailableSurface surface="usage" />
+        <UnavailableSurface
+          surface={isAgentsWorkspacePage(pathname) ? "agents" : "usage"}
+        />
       );
     if (!canOpenReport(pathname, surfaces))
       return <UnconfirmedNativeSurface label={label} pending={!access} />;

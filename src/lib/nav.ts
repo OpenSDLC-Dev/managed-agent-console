@@ -15,6 +15,7 @@ import {
   Moon,
   Network,
   Plug,
+  Plus,
   Rocket,
   Settings,
   Sparkles,
@@ -25,6 +26,8 @@ import {
 } from "lucide-react";
 import { SURFACES, surfaceRoute, type Surface } from "./platform/surfaces";
 import {
+  AGENTS_CREATE_ROUTE,
+  AGENTS_OVERVIEW_ROUTE,
   LANDING_ROUTE,
   MESSAGES_ROUTE,
   MESSAGE_LOGS_ROUTE,
@@ -96,6 +99,18 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
         label: "Agents",
         icon: Waypoints,
         items: [
+          {
+            key: "nav-agents-overview",
+            label: "Overview",
+            href: AGENTS_OVERVIEW_ROUTE,
+            icon: LayoutDashboard,
+          },
+          {
+            key: "nav-agents-create",
+            label: "Create",
+            href: AGENTS_CREATE_ROUTE,
+            icon: Plus,
+          },
           surfaceEntry("agents", Bot),
           surfaceEntry("sessions", MessagesSquare),
           surfaceEntry("deployments", Rocket),

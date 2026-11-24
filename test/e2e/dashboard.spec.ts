@@ -73,7 +73,7 @@ test("dashboard and search stay centered beside the expanded navigation", async 
     .getByRole("navigation")
     .locator('[data-nav-group="Agents"]');
   await agents.click();
-  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page).toHaveURL(/\/agents\/overview$/);
   const back = page.getByRole("button", {
     name: /Agents, back to all sections/i,
   });

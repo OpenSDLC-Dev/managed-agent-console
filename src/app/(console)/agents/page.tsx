@@ -23,7 +23,7 @@ import {
   AgentInspector,
   AgentActions,
 } from "@/components/console/agent-inspector";
-import { CreateAgentButton } from "@/components/console/create-agent-dialog";
+import { CreateAgentLink } from "@/components/console/create-agent-link";
 import { StatusFilter } from "@/components/console/status-filter";
 import { CreatedFilter } from "@/components/console/created-filter";
 import { useAgents } from "@/lib/platform/queries";
@@ -107,7 +107,7 @@ function AgentsList() {
       <PageHeader
         title="Agents"
         subtitle={SURFACES.agents.blurb}
-        actions={<CreateAgentButton />}
+        actions={<CreateAgentLink />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4">
         <form
@@ -181,7 +181,7 @@ function AgentsList() {
                 <EmptyState
                   title="No agents yet"
                   hint="Create your first agent to get started."
-                  action={<CreateAgentButton variant="outline" />}
+                  action={<CreateAgentLink variant="outline" />}
                 />
               )
             }
