@@ -130,6 +130,37 @@ describe("toolset mapping", () => {
   });
 });
 
+it("preserves disjoint toolsets and merges repeated overrides without losing approval", () => {
+  const type = "agent_toolset_20260401";
+  const blocked = { enabled: false };
+  const extra = {
+    type,
+    default_config: blocked,
+    configs: [{ name: "glob", enabled: true }],
+  };
+  const input = [
+    {
+      type,
+      default_config: blocked,
+      configs: [
+        { name: "read", type: "read", enabled: true },
+        { name: "read", permission_policy: { type: "always_ask" } },
+      ],
+    },
+    extra,
+  ];
+  const { toolset, others } = parseTools(input);
+  expect(others).toEqual([extra]);
+  expect(buildToolset(toolset!).configs).toEqual([
+    {
+      name: "read",
+      type: "read",
+      enabled: true,
+      permission_policy: { type: "always_ask" },
+    },
+  ]);
+});
+
 describe("manual starters", () => {
   it("seeds the five named templates and preserves local model aliases", () => {
     expect(manualStarters.map((s) => s.title)).toEqual([

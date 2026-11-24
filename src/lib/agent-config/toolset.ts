@@ -34,7 +34,7 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
 export interface ToolSetting {
   enabled: boolean;
   policy: Policy;
-  /** Per-tool fields edited in Raw, including search and fetch restrictions. */
+  /** Raw per-tool fields, including the optional wire discriminator. */
   parameters?: Record<string, unknown>;
 }
 
@@ -90,17 +90,27 @@ export function parseTools(tools: unknown[]): {
   others: unknown[];
 } {
   const entry = tools.find(isToolset);
-  const others = tools.filter((t) => !isToolset(t));
-  if (!entry) return { toolset: null, others };
+  if (!entry) return { toolset: null, others: tools };
+  // The form edits one built-in toolset. Disjoint additional sets remain in Raw.
+  const first = tools.indexOf(entry);
+  const others = tools.filter((_, index) => index !== first);
 
   const fallback: ToolSetting = {
     enabled: entry.default_config?.enabled ?? WIRE_DEFAULT.enabled,
     policy:
       entry.default_config?.permission_policy?.type ?? WIRE_DEFAULT.policy,
   };
+  // Platform materializes repeated configs for a name field by field, in input order.
+  type Override = NonNullable<ToolsetEntry["configs"]>[number];
+  const overrides = new Map<string, Override>();
+  for (const config of Array.isArray(entry.configs) ? entry.configs : []) {
+    if (config && typeof config.name === "string") {
+      overrides.set(config.name, { ...overrides.get(config.name), ...config });
+    }
+  }
   const tools_ = Object.fromEntries(
     TOOL_NAMES.map((name) => {
-      const config = entry.configs?.find((c) => c.name === name);
+      const config = overrides.get(name);
       const parameters = Object.fromEntries(
         Object.entries(config ?? {}).filter(
           ([key]) => !["name", "enabled", "permission_policy"].includes(key),

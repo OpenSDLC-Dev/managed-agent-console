@@ -156,16 +156,12 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   const original = page.getByLabel("Raw agent config");
   const base = YAML.parse(await original.inputValue());
-  const restrictions = {
-    name: "web_fetch",
-    allowed_domains: ["docs.example.org"],
-    max_content_tokens: 1000,
-  };
+  const fetchConfig = { name: "web_fetch", type: "web_fetch", enabled: false };
   await original.fill(
     YAML.stringify({
       ...base,
       model: { id: "minimax-m3", effort: "low" },
-      tools: [{ type: "agent_toolset_20260401", configs: [restrictions] }],
+      tools: [{ type: "agent_toolset_20260401", configs: [fetchConfig] }],
     }),
   );
   await page
@@ -188,7 +184,7 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
   await expect(original).toHaveValue(/Weekly summary/);
   expect(
     YAML.parse(await original.inputValue()).tools[0].configs,
-  ).toContainEqual(restrictions);
+  ).toContainEqual(fetchConfig);
   await page.getByRole("radio", { name: "rendered" }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Weekly summary",
@@ -209,7 +205,7 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   const editor = page.getByLabel("Raw agent config");
   const yaml = await editor.inputValue();
-  expect(YAML.parse(yaml).tools[0].configs).toContainEqual(restrictions);
+  expect(YAML.parse(yaml).tools[0].configs).toContainEqual(fetchConfig);
   await page.getByRole("button", { name: "Copy configuration" }).click();
   await expect
     .poll(() =>
