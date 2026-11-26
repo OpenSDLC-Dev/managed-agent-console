@@ -47,7 +47,7 @@ test("follow a request to its session, and filter the ledger by one", async ({
   await expect(rows).toHaveCount(4);
   await expect(
     page.getByRole("link", { name: /sesn_/ }).first(),
-  ).toHaveAttribute("href", /^\/sessions\/sesn_/);
+  ).toHaveAttribute("href", /^\/workspaces\/default\/sessions\/sesn_/);
 
   await page.getByLabel("Session ID").fill("sesn_01JA6MOCKGATEWAY000002");
   await page.getByLabel("Session ID").press("Enter");
