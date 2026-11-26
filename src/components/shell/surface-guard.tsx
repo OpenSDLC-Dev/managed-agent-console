@@ -96,7 +96,7 @@ function ServiceAccountAdmission({
 /**
  * Stops an absent or denied surface across its whole route tree, not just its
  * list page: a deployment that does not serve `/v1/skills` serves none of
- * `/skills/[id]` either, and a bookmark into the subtree would otherwise open
+ * `/workspaces/default/skills/[id]` either, and a bookmark into the subtree would otherwise open
  * an editor over an endpoint that is not there (review finding, PR #60).
  *
  * The list pages keep their own check on their own query's error — it lands a

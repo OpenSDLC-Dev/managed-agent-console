@@ -1042,7 +1042,7 @@ test("reserved characters in agent lookup cannot select a different upstream rou
     await page.getByRole("textbox", { name: "Find agent by ID" }).fill(id);
     const rejected = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(
-        `/workspaces/default/agents/${encodeURIComponent(id)}`,
+        `/api/organizations/default/proxy/v1/agents/${encodeURIComponent(id)}`,
       ),
     );
     await page.getByRole("button", { name: "Open", exact: true }).click();

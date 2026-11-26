@@ -40,6 +40,19 @@ describe("the fidelity surface manifest", () => {
     expect([...new Set(ids)].sort()).toEqual([...ids].sort());
   });
 
+  it("opens a registered page for every capture", () => {
+    const pages = appRoutes().map(
+      (path) => new RegExp(`^${path.replace(/\[[^/]+?\]/g, "[^/]+")}$`),
+    );
+    for (const { id, route } of SURFACES) {
+      const { pathname } = new URL(route, "http://console.test");
+      expect(
+        pages.some((page) => page.test(pathname)),
+        `${id}: ${pathname}`,
+      ).toBe(true);
+    }
+  });
+
   it("gives every surface a route, a fixture, and a description", () => {
     // The fixture and description are the manifest's whole value over a list
     // of URLs: why the surface looks like that, and what it alone shows.

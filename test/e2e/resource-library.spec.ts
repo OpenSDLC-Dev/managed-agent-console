@@ -63,7 +63,7 @@ for (const [title, first] of libraries) {
     title + " selection stays at the bottom of the content pane",
     async ({ page }) => {
       await page.setViewportSize({ width: 1440, height: 900 });
-      await signIn(page, "/" + title.toLowerCase());
+      await signIn(page, `/workspaces/default/${title.toLowerCase()}`);
       const checkbox = page.getByRole("checkbox", {
         name: "Select " + first,
         exact: true,
@@ -110,7 +110,7 @@ test.describe("touch resource selection", () => {
     test(
       title + " drawer view controls stay clear of Delete",
       async ({ page }) => {
-        await signIn(page, "/" + title.toLowerCase());
+        await signIn(page, `/workspaces/default/${title.toLowerCase()}`);
         await page.getByRole("checkbox", { name: "Select " + first }).check();
         await page.getByRole("cell", { name: first, exact: true }).tap();
         const panel = page.getByRole("region", {

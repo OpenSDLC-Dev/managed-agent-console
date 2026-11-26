@@ -983,7 +983,7 @@ export const SURFACES: Surface[] = [
   ),
   ...["agents", "memory-stores"].map((route): Surface => ({
     id: route + "-created-range",
-    route: "/" + route + "?created=2026-08-01~2026-08-02",
+    route: `/workspaces/default/${route}?created=2026-08-01~2026-08-02`,
     fixture: "custom inclusive date range",
     description: "Created custom range input and explicit Apply/Cancel.",
     setup: async (page) => {
@@ -2481,7 +2481,7 @@ export const SURFACES: Surface[] = [
     [false, true].flatMap((narrow) =>
       ["menu", "memory"].map((state): Surface => ({
         id: owner + "-resource-" + state + (narrow ? "-narrow" : ""),
-        route: "/" + owner + "s",
+        route: `/workspaces/default/${owner}s`,
         fixture: "creation resources",
         description:
           "Resource menu and multiline memory attachment in the creation dialog.",
@@ -2514,7 +2514,7 @@ export const SURFACES: Surface[] = [
 
   ...["memory-stores", "deployments"].map((kind): Surface => ({
     id: kind + "-filters-narrow",
-    route: "/" + kind,
+    route: `/workspaces/default/${kind}`,
     fixture: "390px list controls",
     description: "Exact lookup and filters at a phone viewport.",
     setup: async (page) => {
