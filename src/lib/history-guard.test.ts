@@ -8,16 +8,28 @@ afterEach(() => {
 });
 
 it("keeps router fields and URL replacements on the same traversal index", () => {
-  history.replaceState({ __NA: true, tree: "initial" }, "", "/agents");
+  history.replaceState(
+    { __NA: true, tree: "initial" },
+    "",
+    "/workspaces/default/agents",
+  );
   remove = installHistoryGuard(() => false, vi.fn());
   const start = history.state.__consoleHistoryIndex;
-  history.pushState({ __NA: true, tree: "detail" }, "", "/agents/a");
+  history.pushState(
+    { __NA: true, tree: "detail" },
+    "",
+    "/workspaces/default/agents/a",
+  );
   expect(history.state).toEqual({
     __NA: true,
     tree: "detail",
     __consoleHistoryIndex: start + 1,
   });
-  history.replaceState({ __NA: true, tree: "query" }, "", "/agents/a?view=raw");
+  history.replaceState(
+    { __NA: true, tree: "query" },
+    "",
+    "/workspaces/default/agents/a?view=raw",
+  );
   expect(history.state).toEqual({
     __NA: true,
     tree: "query",

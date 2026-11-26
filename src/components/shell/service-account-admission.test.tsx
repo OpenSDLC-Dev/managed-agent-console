@@ -17,7 +17,7 @@ import { ConsoleSessionBoundary } from "./console-session";
 import { SurfaceGuard } from "./surface-guard";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/service-accounts/svac_release",
+  usePathname: () => "/settings/service-accounts/svac_release",
 }));
 
 const account: ServiceAccount = {
@@ -84,7 +84,10 @@ it("delivers and then discards a key issued while the service account access che
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
         <SurfaceGuard>
-          <ServiceAccountDetail id={account.id} listHref="/service-accounts" />
+          <ServiceAccountDetail
+            id={account.id}
+            listHref="/settings/service-accounts"
+          />
         </SurfaceGuard>
       </ConsoleSessionBoundary>
     </QueryClientProvider>,

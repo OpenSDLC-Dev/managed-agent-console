@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,9 @@ export function MemoryStoreEditor({
     }
     mutation.mutate(body, {
       onSuccess: (store) =>
-        router.push(`/memory-stores/${encodeURIComponent(store.id)}`),
+        router.push(
+          `${surfacePaths["memory-stores"]}/${encodeURIComponent(store.id)}`,
+        ),
     });
   };
   const error =

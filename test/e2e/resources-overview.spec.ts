@@ -21,9 +21,12 @@ test("Resources lands on Overview, keeps the workspace selected and restores sid
   await signIn(page);
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   const group = nav.locator('[data-nav-group="Resources"]');
-  await expect(group).toHaveAttribute("href", "/resources");
+  await expect(group).toHaveAttribute(
+    "href",
+    "/workspaces/default/resources-overview",
+  );
   await group.click();
-  await expect(page).toHaveURL(/\/resources$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/resources-overview$/);
   const overview = nav.getByRole("link", { name: "Overview" });
   await expect(overview).toHaveAttribute("aria-current", "page");
   await expect(nav.getByRole("link")).toHaveText([
@@ -64,7 +67,7 @@ test("Resources lands on Overview, keeps the workspace selected and restores sid
     .getByRole("combobox", { name: /Search/ })
     .fill("resources overview");
   await page.getByRole("option", { name: /Resources overview/i }).click();
-  await expect(page).toHaveURL(/\/resources$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/resources-overview$/);
 });
 
 test("preview rows keep Platform order, count later pages and open the matching list drawer", async ({
@@ -86,7 +89,7 @@ test("preview rows keep Platform order, count later pages and open the matching 
   const first = await (
     await page.request.get(fileCollection + "?limit=3")
   ).json();
-  await page.goto("/resources");
+  await page.goto("/workspaces/default/resources-overview");
   const files = page.getByRole("region", { name: "Files" });
   const skills = page.getByRole("region", { name: "Skills" });
   await expect(files.locator("[data-count]")).toHaveAttribute(
@@ -108,6 +111,17 @@ test("preview rows keep Platform order, count later pages and open the matching 
     "datetime",
     first.data[0].created_at,
   );
+  const fileLink = await rows
+    .first()
+    .evaluate((link: HTMLAnchorElement) => link.href);
+  const filePath = "/workspaces/default/files?file=" + first.data[0].id;
+  const tab = await page.context().newPage();
+  await tab.goto(fileLink);
+  await expect(tab).toHaveURL(filePath);
+  await expect(
+    tab.getByRole("region", { name: "File details" }),
+  ).toHaveAttribute("data-file-id", first.data[0].id);
+  await tab.close();
   await rows.first().click();
   await expect(
     page.getByRole("region", { name: "File details" }),
@@ -129,7 +143,7 @@ test("preview rows keep Platform order, count later pages and open the matching 
 test("Add opens the file list or the skill creation dialog, and supports cancel and submit", async ({
   page,
 }) => {
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   const add = page.getByRole("button", { name: "Add", exact: true });
   await add.focus();
   await page.keyboard.press("ArrowDown");
@@ -184,7 +198,7 @@ test("Add opens the file list or the skill creation dialog, and supports cancel 
 test("a skill upload that finishes after Back leaves the user on Overview", async ({
   page,
 }) => {
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("menuitem", { name: "Skill", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Create skill" });
@@ -216,13 +230,13 @@ test("a skill upload that finishes after Back leaves the user on Overview", asyn
       .getByRole("region", { name: "Skills" })
       .getByRole("link", { name: /overview-skill/ }),
   ).toBeVisible();
-  await expect(page).toHaveURL("/resources");
+  await expect(page).toHaveURL("/workspaces/default/resources-overview");
 });
 
 test("the selected upload survives a failed background list refresh and recovery", async ({
   page,
 }) => {
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("menuitem", { name: "Skill", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Create skill" });
@@ -255,7 +269,7 @@ test("the selected upload survives a failed background list refresh and recovery
   );
   await expect(page.getByTestId("error-state")).toHaveCount(0);
   await expect(staged).toBeVisible();
-  await expect(page).toHaveURL("/skills?create=true");
+  await expect(page).toHaveURL("/workspaces/default/skills?create=true");
 });
 
 test("an inconclusive probe keeps the collection visible and its read determines Add", async ({
@@ -276,7 +290,7 @@ test("an inconclusive probe keeps the collection visible and its read determines
       },
     });
   });
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   const skills = page.getByRole("region", { name: "Skills" });
   await expect(skills.locator("[data-count]")).toHaveAttribute(
     "data-count",
@@ -315,7 +329,7 @@ test("a refused skill list keeps the bookmarked create dialog closed while probe
     });
   });
   try {
-    await page.goto("/skills?create=true");
+    await page.goto("/workspaces/default/skills?create=true");
     await expect(page.getByTestId("error-state")).toHaveAttribute(
       "data-denied",
       "true",
@@ -348,7 +362,10 @@ test("Overview and its navigation use the actual collections when every usable p
   );
   await signIn(page);
   const resources = page.locator('nav [data-nav-group="Resources"]');
-  await expect(resources).toHaveAttribute("href", "/resources");
+  await expect(resources).toHaveAttribute(
+    "href",
+    "/workspaces/default/resources-overview",
+  );
   await resources.click();
   const files = page.getByRole("region", { name: "Files" });
   const skills = page.getByRole("region", { name: "Skills" });
@@ -399,7 +416,7 @@ test("cards follow the content width and an empty collection keeps both list and
       },
     }),
   );
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   const files = page.getByRole("region", { name: "Files" });
   const skills = page.getByRole("region", { name: "Skills" });
   await expect(files.getByText("No files yet")).toBeVisible();
@@ -435,7 +452,7 @@ test("Overview only offers readable collections and hides its entry when both ar
   request,
 }) => {
   await request.post(mock + "/__forbid", { data: { paths: ["v1/skills"] } });
-  await signIn(page, "/resources");
+  await signIn(page, "/workspaces/default/resources-overview");
   await expect(page.getByRole("region", { name: "Files" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Skills" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add", exact: true }).click();

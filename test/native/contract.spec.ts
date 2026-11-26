@@ -379,7 +379,7 @@ test("real native password/setup, current authority, management, private bytes/S
     name: "another-admin-bot",
     organization_role: "admin",
   });
-  await page.goto("/members");
+  await page.goto("/settings/members");
   await page.getByLabel("Role for first-admin").selectOption("user");
   await expect(page.locator("p[role=alert]")).toContainText("last");
   await page.getByRole("button", { name: "Remove first-admin" }).click();
@@ -537,7 +537,7 @@ test("real native password/setup, current authority, management, private bytes/S
   page.on("request", (r) => {
     if (r.url().includes("/stream?")) urls.push(r.url());
   });
-  await page.goto(`/sessions/${sid}?inspector=thread`);
+  await page.goto(`/workspaces/default/sessions/${sid}?inspector=thread`);
   await expect(page.getByTestId("stream-state")).toHaveAttribute(
     "data-state",
     "live",
@@ -693,7 +693,7 @@ test("real native password/setup, current authority, management, private bytes/S
       // application confirmation or a native beforeunload prompt retaining it.
       page.off("request", navigation);
       await login(page, "first-admin");
-      await page.goto(`/agents/${agent.body.id}`);
+      await page.goto(`/workspaces/default/agents/${agent.body.id}`);
       await page
         .getByLabel("Name", { exact: true })
         .fill("Old actor unsaved draft");
@@ -828,7 +828,7 @@ test("real native password/setup, current authority, management, private bytes/S
       }
     });
     try {
-      await firstPage.goto("/members");
+      await firstPage.goto("/settings/members");
       await arrived;
       expect(heldStatus).toBe(200);
       expect(heldPrincipal).toBe(session.id);
@@ -887,7 +887,7 @@ test("real native password/setup, current authority, management, private bytes/S
         "data-denied",
         "true",
       );
-      await expect(firstPage).toHaveURL(/\/members$/);
+      await expect(firstPage).toHaveURL(/\/settings\/members$/);
       await expect(
         firstPage.getByRole("button", { name: "Create local member" }),
       ).toHaveCount(0);
@@ -955,7 +955,7 @@ test("real native password/setup, current authority, management, private bytes/S
   });
   await login(page, "first-admin");
   await test.step("pending deliberate logout never rebinds a replacement cookie over private member cache", async () => {
-    await page.goto("/members");
+    await page.goto("/settings/members");
     await expect(page.getByLabel("Role for first-admin")).toBeVisible();
     const before = await privateCache(page, sid, true);
     expect(before.oldPrivate).toBe(true);
@@ -1167,7 +1167,7 @@ test("real native password/setup, current authority, management, private bytes/S
   expect((await (await page.request.get("/api/auth/session")).json()).id).toBe(
     session.id,
   );
-  await page.goto(`/sessions/${sid}?inspector=thread`);
+  await page.goto(`/workspaces/default/sessions/${sid}?inspector=thread`);
   await page
     .getByRole("button", { name: "Child thread worker", exact: true })
     .click();
@@ -1226,7 +1226,7 @@ test("real native password/setup, current authority, management, private bytes/S
     (await write(userPage, `${org}/members/${session.id}`, { role: "admin" }))
       .status,
   ).toBe(200);
-  await page.goto(`/sessions/${sid}?inspector=resources`);
+  await page.goto(`/workspaces/default/sessions/${sid}?inspector=resources`);
   const downloadLink = page.getByRole("link", {
     name: `Download native-bytes.bin (${uploaded.body.id})`,
     exact: true,
@@ -1244,12 +1244,12 @@ test("real native password/setup, current authority, management, private bytes/S
   expect([...readFileSync(saved)]).toEqual([0, 1, 255, 10]);
   expect(offered).toEqual([]);
   // Self-demotion refreshes authority with a full document boundary, not logout.
-  await page.goto("/members");
+  await page.goto("/settings/members");
   await page.getByLabel("Role for first-admin").selectOption("developer");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.locator("[data-role=developer]")).toBeVisible();
   await expect(page.locator('[data-nav-group="Settings"]')).toHaveCount(0);
-  await userPage.goto("/members");
+  await userPage.goto("/settings/members");
   await userPage.getByRole("button", { name: "Remove first-admin" }).click();
   await userPage.getByRole("button", { name: "Confirm removal" }).click();
   await page.reload();
@@ -1274,7 +1274,7 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
   });
   expect([200, 409]).toContain(setup.status());
   if (setup.status() === 409) await login(page, "new-person");
-  await page.goto("/members");
+  await page.goto("/settings/members");
   const member = await write(page, `${org}/members`, {
     login_name: "playground-user",
     name: "Playground user",
@@ -1308,7 +1308,7 @@ test("real Playground approval, Messages streaming, stop and withdrawal", async 
         .getByRole("link"),
     ).toHaveCount(1);
 
-    await page.goto("/members");
+    await page.goto("/settings/members");
     const approval = page.getByRole("checkbox", {
       name: "Playground access for Playground user",
     });
@@ -1512,7 +1512,7 @@ test("native deployment initiator changes persist without unpausing or changing 
       ...credentialHeaders("http://127.0.0.1:38200", r.url(), r.headers()),
     ),
   );
-  await page.goto(`/deployments/${deployment.id}`);
+  await page.goto(`/workspaces/default/deployments/${deployment.id}`);
   await expect(page.locator("[data-initiator-id]")).toHaveAttribute(
     "data-initiator-id",
     session.id,
@@ -1663,7 +1663,7 @@ test("native environment keys cover cloud and self-hosted lifecycles with cookie
           })
         ).status(),
       ).toBe(403);
-      await page.goto(`/environments/${id}`);
+      await page.goto(`/workspaces/default/environments/${id}`);
       await expect(page.getByTestId("environment-keys")).toBeVisible();
       await expect(page.getByTestId("environment-key-setup")).toHaveCount(
         kind === "self_hosted" ? 1 : 0,
@@ -1773,7 +1773,7 @@ test("native key page creates and deletes an active key while its archived recor
   request,
 }) => {
   await signInKeyAdmin(page);
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
   const name = "native-key-page-lifecycle";
   const search = page.getByRole("searchbox", { name: "Search keys" });
   const count = page.locator("[data-visible-count]");
@@ -1868,7 +1868,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
   ).json();
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
-  await page.goto("/service-accounts");
+  await page.goto("/settings/service-accounts");
   const search = page.getByLabel("Search service accounts", { exact: true });
   await search.fill(service.id);
   await expect(
@@ -1879,7 +1879,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
   await expect(
     page.getByRole("button", { name: retired.body.name, exact: true }),
   ).toBeVisible();
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
   await openApiKeyForm(page);
   await page.getByLabel("Name", { exact: true }).fill("native-owned-service");
   await expect(
@@ -2004,7 +2004,11 @@ test("native owned keys preserve owner creator permissions and credential isolat
     const developer = await developerContext.newPage();
     const directory: string[] = [];
     developer.on("request", (request) => {
-      if (/\/members|\/service_accounts/.test(new URL(request.url()).pathname))
+      if (
+        /\/settings\/members|\/service_accounts/.test(
+          new URL(request.url()).pathname,
+        )
+      )
         directory.push(request.method());
     });
     await login(developer, "owned-developer");
@@ -2025,7 +2029,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
       developer.getByRole("heading", { name: "Save your API key" }),
     ).toBeVisible();
     await developer.getByTestId("close-revealed-api-key").click();
-    await developer.goto("/api-keys");
+    await developer.goto("/settings/keys");
     await expect(
       developer.getByText("native-owned-developer", { exact: true }),
     ).toBeVisible();
@@ -2047,7 +2051,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
     await developerContext.close();
   }
   // The service account's key list uses owner identity and preserves disabled keys.
-  await page.goto(`/service-accounts/${service.id}`);
+  await page.goto(`/settings/service-accounts/${service.id}`);
   const associated = page.getByRole("region", {
     name: "API keys",
     exact: true,
@@ -2057,7 +2061,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
   });
   await expect(serviceKey).toHaveAttribute(
     "href",
-    "/api-keys?key=" + issued.id,
+    "/settings/keys?key=" + issued.id,
   );
   await expect(
     associated.getByText("native-owned-self", { exact: true }),

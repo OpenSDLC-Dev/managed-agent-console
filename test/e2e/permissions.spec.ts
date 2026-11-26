@@ -16,7 +16,7 @@ test("a denied collection read hides its entry and explains a detail bookmark", 
 }) => {
   await request.post(`${MOCK}/__forbid`, { data: { paths: ["v1/skills"] } });
   await signIn(page);
-  await page.goto("/skills/skill_reportwriter0000001");
+  await page.goto("/workspaces/default/skills/skill_reportwriter0000001");
 
   const state = page.getByTestId("error-state");
   await expect(state).toBeVisible();

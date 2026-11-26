@@ -52,7 +52,7 @@ test("its page says so instead of rendering the platform's error", async ({
   });
   await signIn(page);
 
-  await page.goto("/skills");
+  await page.goto("/workspaces/default/skills");
   const standIn = page.getByTestId("unavailable-surface");
   await expect(standIn).toBeVisible();
   await expect(standIn).toHaveAttribute("data-surface", "skills");
@@ -72,7 +72,7 @@ test("its nested routes stand down too, not just its list page", async ({
 
   // A bookmark into the subtree would otherwise open a detail page over an
   // endpoint that is not there.
-  await page.goto("/skills/skill_reportwriter0000001");
+  await page.goto("/workspaces/default/skills/skill_reportwriter0000001");
   await expect(page.getByTestId("unavailable-surface")).toHaveAttribute(
     "data-surface",
     "skills",
@@ -111,7 +111,7 @@ test("a genuine not-found is still an error, not a hidden surface", async ({
   await signIn(page);
   // Same status and error type as an absent endpoint — only the route differs,
   // and an item route's 404 means the resource is gone.
-  await page.goto("/agents/agt_doesnotexist000000000000");
+  await page.goto("/workspaces/default/agents/agt_doesnotexist000000000000");
   await expect(page.getByTestId("error-state")).toBeVisible();
   await expect(page.getByTestId("unavailable-surface")).toHaveCount(0);
 });
@@ -132,7 +132,7 @@ test("the environment-keys section hides on a platform that predates it", async 
     data: { surfaces: ["environment-keys"] },
   });
   await signIn(page);
-  await page.goto("/environments/env_byoc0000000000000001");
+  await page.goto("/workspaces/default/environments/env_byoc0000000000000001");
 
   // The rest of the page is untouched — this hides a section, not the page.
   await expect(

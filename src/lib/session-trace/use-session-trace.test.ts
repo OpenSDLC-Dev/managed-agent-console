@@ -790,7 +790,7 @@ it.each([
       Object.create(window, {
         location: {
           value: {
-            pathname: "/sessions/sesn_native_marked",
+            pathname: "/workspaces/default/sessions/sesn_native_marked",
             search: "",
             assign,
           },
@@ -816,7 +816,7 @@ it.each([
     expect(result.current.connection).toBe("closed");
     expect(hasBouncedToLogin()).toBe(true);
     expect(assign).toHaveBeenCalledExactlyOnceWith(
-      "/login?return_to=%2Fsessions%2Fsesn_native_marked",
+      "/login?return_to=%2Fworkspaces%2Fdefault%2Fsessions%2Fsesn_native_marked",
     );
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain(
       thread ? "/threads/sthr_child/stream?" : "/events/stream?",
@@ -840,7 +840,11 @@ it.each([undefined, "sthr_child"])(
       "window",
       Object.create(window, {
         location: {
-          value: { pathname: "/sessions/sesn_denied", search: "", assign },
+          value: {
+            pathname: "/workspaces/default/sessions/sesn_denied",
+            search: "",
+            assign,
+          },
         },
       }),
     );

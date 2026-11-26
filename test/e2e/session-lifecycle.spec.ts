@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 test("edit metadata, archive and delete a session", async ({ page }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_gatedbash00000000001");
+  await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
   await page.getByRole("button", { name: "Edit session" }).click();
   await page.getByLabel("Title", { exact: true }).fill("Renamed session");
   await page
@@ -36,7 +36,7 @@ test("edit metadata, archive and delete a session", async ({ page }) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/sessions$/);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/sessions/sesn_gatedbash00000000001");
+  await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Message to the session")).toBeDisabled();
   await expect(
@@ -52,7 +52,7 @@ test("edit metadata, archive and delete a session", async ({ page }) => {
 
 test("a running session's deletion refusal is visible", async ({ page }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto("/workspaces/default/sessions/sesn_research0000000000001");
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete session" }).click();
@@ -68,7 +68,7 @@ test("direct archive preserves an inspector's filters and prevents duplicate pen
   page,
 }) => {
   const id = "sesn_gatedbash00000000001";
-  const url = `/sessions?order=asc&session=${id}`;
+  const url = `/workspaces/default/sessions?order=asc&session=${id}`;
   await signIn(page, url);
   const panel = page.getByRole("region", { name: "Session details" });
   await expect(
@@ -112,7 +112,7 @@ test("archive refusal stays on the Session and never interrupts it implicitly", 
   page,
 }) => {
   const id = "sesn_research0000000000001";
-  await signIn(page, `/sessions/${id}`);
+  await signIn(page, `/workspaces/default/sessions/${id}`);
   const writes: string[] = [];
   page.on("request", (request) => {
     if (request.method() === "POST")
@@ -126,7 +126,7 @@ test("archive refusal stays on the Session and never interrupts it implicitly", 
       `Session ${id} cannot be archived while its status is "running". Only pending or idle sessions may be archived.`,
     ),
   ).toBeVisible();
-  await expect(page).toHaveURL(`/sessions/${id}`);
+  await expect(page).toHaveURL(`/workspaces/default/sessions/${id}`);
   expect(writes).toEqual([
     `/api/organizations/default/proxy/v1/sessions/${id}/archive`,
   ]);
@@ -146,7 +146,7 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
       await page.request.get(`/api/organizations/default/proxy/v1/${path}`)
     ).status();
   await signIn(page);
-  await page.goto(`/sessions/${id}`);
+  await page.goto(`/workspaces/default/sessions/${id}`);
   await page.getByRole("button", { name: "Interrupt", exact: true }).click();
   await expect(
     page.locator('[data-testid="session-effective-status"]'),
@@ -154,7 +154,7 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await expect(page).toHaveURL(/\/sessions$/);
-  await page.goto(`/sessions/${id}?inspector=resources`);
+  await page.goto(`/workspaces/default/sessions/${id}?inspector=resources`);
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
   // Archiving preserves the copy and the deliverable, still downloadable.
   const panel = page.getByTestId("session-resources");
@@ -196,7 +196,7 @@ test("archiving keeps a session's own files; deleting takes them and keeps the u
   ).toBeVisible();
 
   // A link to the deleted session answers with its 404, not a broken page.
-  await page.goto(`/sessions/${id}?inspector=resources`);
+  await page.goto(`/workspaces/default/sessions/${id}?inspector=resources`);
   await expect(page.getByTestId("error-state")).toHaveAttribute(
     "data-error-status",
     "404",

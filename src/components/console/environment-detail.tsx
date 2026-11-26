@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -43,7 +44,7 @@ export function EnvironmentDetail({
   const remove = useDeleteEnvironment(id);
   const breadcrumb = !inspector && (
     <Breadcrumb
-      parent={{ href: "/environments", label: "Environments" }}
+      parent={{ href: surfacePaths.environments, label: "Environments" }}
       current={environment?.name ?? id}
     />
   );
@@ -94,7 +95,7 @@ export function EnvironmentDetail({
         <span className="flex items-center gap-2">
           {inspector ? (
             <Link
-              href={"/environments/" + encodeURIComponent(id)}
+              href={`${surfacePaths.environments}/${encodeURIComponent(id)}`}
               className="flex h-6 items-center gap-1 rounded-md border px-2 text-[13px]"
             >
               Open <ArrowRight className="size-3.5" />
@@ -130,7 +131,9 @@ export function EnvironmentDetail({
               onDelete={() =>
                 remove.mutate(undefined, {
                   onSuccess: () =>
-                    onDeleted ? onDeleted() : router.push("/environments"),
+                    onDeleted
+                      ? onDeleted()
+                      : router.push(surfacePaths.environments),
                 })
               }
               archivePending={archive.isPending}

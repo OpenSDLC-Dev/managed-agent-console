@@ -25,7 +25,7 @@ const state = vi.hoisted(() => ({
   client: undefined as QueryClient | undefined,
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/members",
+  usePathname: () => "/settings/members",
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("./providers", async (original) => {
@@ -115,7 +115,7 @@ beforeEach(() => {
       location: {
         value: {
           origin: "http://localhost",
-          pathname: "/members",
+          pathname: "/settings/members",
           search: "",
           assign,
         },

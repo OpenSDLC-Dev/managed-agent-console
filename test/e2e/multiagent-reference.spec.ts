@@ -8,7 +8,7 @@ const alpha = "sthr_membera0000000000001";
 const beta = "sthr_memberb0000000000001";
 // Each child's ask-gated tool use, named by its thread's token (fixtures.mjs).
 const ask = (thread: string) => `sevt_${thread.slice("sthr_".length)}ask`;
-const route = `/sessions/${session}?inspector=thread`;
+const route = `/workspaces/default/sessions/${session}?inspector=thread`;
 test.beforeEach(async ({ request }) => {
   expect((await request.post("http://127.0.0.1:18080/__reset")).ok()).toBe(
     true,
@@ -77,7 +77,10 @@ test("child selection survives reload and browser history while approval stays i
   ).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Thread details" }).getByRole("link"),
-  ).toHaveAttribute("href", "/agents/agent_membera000000000001?version=1");
+  ).toHaveAttribute(
+    "href",
+    "/workspaces/default/agents/agent_membera000000000001?version=1",
+  );
   await page.reload();
   await expect(page.locator("[data-viewing-thread-id]")).toHaveAttribute(
     "data-viewing-thread-id",

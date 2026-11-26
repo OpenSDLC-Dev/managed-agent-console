@@ -20,8 +20,8 @@ import {
 } from "@/lib/agent-config/quickstart";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { TEST_SESSION } from "@/../test/session-fixture";
-import AgentCreatePage from "@/app/(console)/agents/create/page";
-import AgentsOverviewPage from "@/app/(console)/agents/overview/page";
+import AgentCreatePage from "@/app/(console)/workspaces/default/agent-quickstart/page";
+import AgentsOverviewPage from "@/app/(console)/workspaces/default/agents-overview/page";
 import { AgentsOverview } from "./agents-overview";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
 import type { Agent } from "@/lib/platform/types";
@@ -35,7 +35,7 @@ const router = vi.hoisted(() => ({
 let search = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
-  usePathname: () => "/agents/create",
+  usePathname: () => "/workspaces/default/agent-quickstart",
   useSearchParams: () => new URLSearchParams(search),
 }));
 vi.mock("@/lib/use-list-filters", () => ({
@@ -146,7 +146,7 @@ const calls: string[] = [];
 beforeEach(() => {
   search = "";
   savedRoster = null;
-  window.history.replaceState(null, "", "/agents/create");
+  window.history.replaceState(null, "", "/workspaces/default/agent-quickstart");
   grant = true;
   aliasPending = false;
   discoveryFailed = false;
@@ -294,18 +294,18 @@ it("renders the Platform report and keeps chart ranks independent of directory s
   );
   expect(screen.getByRole("link", { name: "Alpha" })).toHaveAttribute(
     "href",
-    "/agents/agent_one?tab=observability",
+    "/workspaces/default/agents/agent_one?tab=observability",
   );
   expect(screen.getByRole("link", { name: "Show more" })).toHaveAttribute(
     "href",
-    "/agents",
+    "/workspaces/default/agents",
   );
   expect(screen.getByText("Archived")).toBeVisible();
   screen.getByRole("button", { name: "Create" }).focus();
   await user.keyboard("{ArrowDown}");
   expect(
     await screen.findByRole("menuitem", { name: "Environment" }),
-  ).toHaveAttribute("href", "/environments/new");
+  ).toHaveAttribute("href", "/workspaces/default/environments/new");
 });
 it("distinguishes an empty per-agent report and a failed workspace read", async () => {
   summary = {
@@ -361,7 +361,7 @@ it("selects reviewable Platform templates and exports the same configuration in 
   expect(writes).toEqual([]);
   expect(
     screen.getByRole("link", { name: "start from a blank agent" }),
-  ).toHaveAttribute("href", "/agents/new");
+  ).toHaveAttribute("href", "/workspaces/default/agents/new");
 });
 it("does not write or run a template before confirmation; keeps write errors editable", async () => {
   grant = false;
@@ -413,7 +413,7 @@ it("does not write or run a template before confirmation; keeps write errors edi
     screen.getByRole("link", { name: "Create deployment" }),
   ).toHaveAttribute(
     "href",
-    "/deployments/new?agent=agent_saved&version=1&environment=env_a",
+    "/workspaces/default/deployments/new?agent=agent_saved&version=1&environment=env_a",
   );
 });
 it("exports the original coordinator as self while preserving external member versions", async () => {

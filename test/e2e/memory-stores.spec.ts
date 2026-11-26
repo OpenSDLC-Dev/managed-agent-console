@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 test("create, edit, archive and delete a memory store", async ({ page }) => {
   await signIn(page);
-  await page.goto("/memory-stores/new");
+  await page.goto("/workspaces/default/memory-stores/new");
   await page.getByLabel("Name").fill("Release notes");
   await page.getByLabel("Description").fill("Durable release context");
   await page
@@ -39,12 +39,12 @@ test("create, edit, archive and delete a memory store", async ({ page }) => {
   await expect(page.getByText("Archived · read only")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add memory" })).toBeHidden();
 
-  await page.goto(`/memory-stores/${storeId}/edit`);
+  await page.goto(`/workspaces/default/memory-stores/${storeId}/edit`);
   await expect(
     page.getByText("Archived memory stores are read only."),
   ).toBeVisible();
 
-  await page.goto(`/memory-stores/${storeId}`);
+  await page.goto(`/workspaces/default/memory-stores/${storeId}`);
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete memory store" }).click();
@@ -57,7 +57,7 @@ test("memory writes keep history, enforce preconditions and redact old versions"
 }) => {
   await signIn(page);
   const storeId = "memstore_projectnotes000001";
-  await page.goto(`/memory-stores/${storeId}/memories/new`);
+  await page.goto(`/workspaces/default/memory-stores/${storeId}/memories/new`);
   await page.getByLabel("Path").fill("/release/notes.md");
   await page.getByLabel("Content").fill("First draft");
   await page.getByRole("button", { name: "Create memory" }).click();
@@ -87,7 +87,9 @@ test("memory writes keep history, enforce preconditions and redact old versions"
     error: { type: "memory_precondition_failed_error" },
   });
 
-  await page.goto(`/memory-stores/${storeId}/versions/memver_mock00000001`);
+  await page.goto(
+    `/workspaces/default/memory-stores/${storeId}/versions/memver_mock00000001`,
+  );
   await page.getByRole("button", { name: "Redact", exact: true }).click();
   await page.getByRole("button", { name: "Redact version" }).click();
   await expect(page.getByText("redacted", { exact: true })).toBeVisible();
@@ -95,11 +97,15 @@ test("memory writes keep history, enforce preconditions and redact old versions"
     "Redacted",
   );
 
-  await page.goto(`/memory-stores/${storeId}/memories/${memoryId}`);
+  await page.goto(
+    `/workspaces/default/memory-stores/${storeId}/memories/${memoryId}`,
+  );
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete memory" }).click();
-  await expect(page).toHaveURL(new RegExp(`/memory-stores/${storeId}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/workspaces/default/memory-stores/${storeId}$`),
+  );
   await page
     .getByText("Store details and version history", { exact: true })
     .click();

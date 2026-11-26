@@ -165,7 +165,7 @@ test("a console-issued environment key drives the real worker lane, and revoking
 
   // Authored through the console's own form, not seeded over the API: the
   // claim under test starts at the operator's first click.
-  await page.goto("/environments/new");
+  await page.goto("/workspaces/default/environments/new");
   await page.getByLabel("Name").fill(`live-e2e-byoc-${RUN}`);
   await page.getByLabel("Environment type").click();
   await page.getByRole("option", { name: "Self-hosted" }).click();
@@ -173,7 +173,9 @@ test("a console-issued environment key drives the real worker lane, and revoking
     .getByRole("button", { name: "Create environment", exact: true })
     .click();
   await expect(page).toHaveURL(/\/environments\/env_/);
-  const environmentId = page.url().split("/environments/")[1];
+  const environmentId = page
+    .url()
+    .split("/workspaces/default/environments/")[1];
   createdEnvironmentId = environmentId;
 
   await page
@@ -256,7 +258,7 @@ test("a console-issued key loses wire access when disabled or deleted, and the a
   page,
 }) => {
   await signIn(page);
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
 
   await openApiKeyForm(page);
   await page.getByLabel("Name").fill(`live-e2e-mgmt-${RUN}`);

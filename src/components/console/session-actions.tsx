@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ export function SessionActions({
         onArchive={() =>
           archive.mutate(undefined, {
             onSuccess: () => {
-              if (!compact) router.push("/sessions");
+              if (!compact) router.push(surfacePaths.sessions);
             },
           })
         }
@@ -97,7 +98,7 @@ export function SessionActions({
         onDelete={() =>
           remove.mutate(undefined, {
             onSuccess: () =>
-              onDeleted ? onDeleted() : router.push("/sessions"),
+              onDeleted ? onDeleted() : router.push(surfacePaths.sessions),
           })
         }
         deletePending={remove.isPending}

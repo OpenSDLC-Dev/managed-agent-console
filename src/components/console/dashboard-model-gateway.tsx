@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAYGROUND_ROUTE, surfacePaths } from "@/lib/routes";
 import { Bot, BookOpen, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import {
@@ -109,7 +110,7 @@ function PopupActions({
       <div className="inline-flex shrink-0 items-center">
         {canTry && (
           <Link
-            href={`/playground?${query}`}
+            href={`${PLAYGROUND_ROUTE}?${query}`}
             data-playground-popup-try=""
             title={`Try ${selected.name} in Playground`}
             className={cn(buttonVariants({ size: "sm" }), "rounded-r-none")}
@@ -142,7 +143,7 @@ function PopupActions({
               )}
               {agentsAllowed && selected && (
                 <DropdownMenuItem
-                  render={<Link href={`/agents/new?${query}`} />}
+                  render={<Link href={`${surfacePaths.agents}/new?${query}`} />}
                   title={`Build with ${selected.name}`}
                 >
                   <Bot aria-hidden /> Build an agent
@@ -343,7 +344,7 @@ function AliasList({
               </div>
               {listed.has(alias.name) && (
                 <Link
-                  href={`/playground?${modelQuery}`}
+                  href={`${PLAYGROUND_ROUTE}?${modelQuery}`}
                   aria-label={`Open in Playground for ${alias.name}`}
                   className={`${linkStyle} text-sm`}
                 >

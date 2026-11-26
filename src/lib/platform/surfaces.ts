@@ -13,6 +13,7 @@ import {
   MESSAGES_ROUTE,
   RESOURCES_ROUTE,
   playgroundOnly,
+  surfacePaths,
 } from "@/lib/routes";
 
 /**
@@ -140,12 +141,14 @@ export type Surface = keyof typeof SURFACES;
 export const SURFACE_NAMES = Object.keys(SURFACES) as Surface[];
 
 /** The console route a surface owns, list page and everything under it. */
-export const surfaceRoute = (surface: Surface) => `/${surface}`;
+export const surfaceRoute = (surface: Surface) => surfacePaths[surface];
 
-/** The surface a console path belongs to, if any: `/skills/skill_1` → skills. */
+/** Match registered page roots and their children on segment boundaries. */
 export function surfaceOfPath(pathname: string): Surface | undefined {
-  const segment = pathname.split("/")[1];
-  return SURFACE_NAMES.find((name) => name === segment);
+  return SURFACE_NAMES.find((name) => {
+    const root = surfaceRoute(name);
+    return pathname === root || pathname.startsWith(root + "/");
+  });
 }
 
 /**

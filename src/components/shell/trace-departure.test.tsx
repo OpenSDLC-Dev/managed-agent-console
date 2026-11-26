@@ -10,7 +10,9 @@ import {
   resetSignedOutBounceForTests,
 } from "@/lib/identity/signed-out";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/sessions/sesn_a" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/workspaces/default/sessions/sesn_a",
+}));
 
 const accountA = {
   signed_in: true as const,
@@ -105,7 +107,7 @@ async function fixture() {
       location: {
         value: {
           origin: "http://localhost",
-          pathname: "/sessions/sesn_a",
+          pathname: "/workspaces/default/sessions/sesn_a",
           search: "",
           assign,
         },

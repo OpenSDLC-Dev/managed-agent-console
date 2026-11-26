@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -95,7 +96,7 @@ export function SkillDetail({
     <div className={inspector ? "flex h-full flex-col" : "max-w-4xl"}>
       {!inspector && (
         <Breadcrumb
-          parent={{ href: "/skills", label: "Skills" }}
+          parent={{ href: surfacePaths.skills, label: "Skills" }}
           current={skill.display_name}
         />
       )}
@@ -131,7 +132,7 @@ export function SkillDetail({
               onDelete={() =>
                 remove.mutate(undefined, {
                   onSuccess: () =>
-                    onDeleted ? onDeleted() : router.push("/skills"),
+                    onDeleted ? onDeleted() : router.push(surfacePaths.skills),
                 })
               }
             />

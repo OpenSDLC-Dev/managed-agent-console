@@ -96,7 +96,7 @@ it("inspects the run's Session and retains run context in Open and API views", a
   await within(pane).findByRole("heading", { name: session.title });
   expect(within(pane).getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
-    `/sessions/${session.id}?from_deployment=${run.deployment_id}&from_run=${run.id}`,
+    `/workspaces/default/sessions/${session.id}?from_deployment=${run.deployment_id}&from_run=${run.id}`,
   );
   expect(pane.querySelector("[data-run-result]")).toHaveAttribute(
     "data-run-result",
@@ -161,6 +161,6 @@ it("links a fired session's mounted copy to that session's Resources, run contex
   await within(pane).findByRole("heading", { name: session.title });
   expect(pane.querySelector('a[href*="inspector=resources"]')).toHaveAttribute(
     "href",
-    `/sessions/${session.id}?from_deployment=${run.deployment_id}&from_run=${run.id}&inspector=resources`,
+    `/workspaces/default/sessions/${session.id}?from_deployment=${run.deployment_id}&from_run=${run.id}&inspector=resources`,
   );
 });

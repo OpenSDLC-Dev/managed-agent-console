@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { Plus, X } from "lucide-react";
 import { EnvironmentSection } from "./environment-section";
 import { RequestId } from "@/components/console/bits";
@@ -224,7 +225,9 @@ export function EnvironmentEditor({
       onSuccess: (environment) =>
         onDone
           ? onDone(environment)
-          : router.push(`/environments/${encodeURIComponent(environment.id)}`),
+          : router.push(
+              `${surfacePaths.environments}/${encodeURIComponent(environment.id)}`,
+            ),
     });
   };
   const error = mutation.error instanceof Error ? mutation.error : null;

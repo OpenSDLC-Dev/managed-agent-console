@@ -73,7 +73,7 @@ for (const owner of ["session", "deployment"] as const) {
         .fill("First line\nSecond line");
       await expect(
         dialog.getByRole("link", { name: /Manage memory stores/ }),
-      ).toHaveAttribute("href", "/memory-stores");
+      ).toHaveAttribute("href", "/workspaces/default/memory-stores");
       let releaseUpload!: () => void;
       const uploadGate = new Promise<void>((resolve) => {
         releaseUpload = resolve;

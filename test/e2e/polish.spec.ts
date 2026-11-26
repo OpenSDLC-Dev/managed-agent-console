@@ -11,7 +11,7 @@ test("the console follows the system at first paint, on change and after reload"
 }) => {
   await page.addInitScript(() => localStorage.setItem("theme", "light"));
   await page.emulateMedia({ colorScheme: "dark" });
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   const body = page.locator("body");
   await expect(body).toHaveCSS("background-color", "rgb(38, 38, 36)");
   await expect(
@@ -81,7 +81,7 @@ test("a failed archive surfaces the standardized envelope toast", async ({
       }),
   );
 
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })

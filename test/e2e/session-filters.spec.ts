@@ -31,7 +31,7 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
       data: {},
     },
   );
-  await signIn(page, "/sessions");
+  await signIn(page, "/workspaces/default/sessions");
   await page.getByRole("combobox", { name: "Deployment filter" }).click();
   const filtered = page.waitForRequest(
     (r) =>
@@ -61,7 +61,7 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
 test("status multi-select defaults to active and Created sorts on the server", async ({
   page,
 }) => {
-  await signIn(page, "/sessions");
+  await signIn(page, "/workspaces/default/sessions");
   await expect(
     page.getByRole("combobox", { name: "Status filter" }),
   ).toHaveAttribute("data-value", "running,idle,rescheduling");

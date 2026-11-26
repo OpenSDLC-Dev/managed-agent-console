@@ -75,10 +75,10 @@ describe("the fidelity surface manifest", () => {
     );
     const nativeOnly = new Set([
       "/setup",
-      "/members",
-      "/service-accounts",
-      "/service-accounts/[id]",
-      "/playground",
+      "/settings/members",
+      "/settings/service-accounts",
+      "/settings/service-accounts/[id]",
+      "/workspaces/default/playground",
     ]);
     const nativeCovered = new Set(
       SURFACES.filter((s) => s.mode === "platform").map((s) => s.route),

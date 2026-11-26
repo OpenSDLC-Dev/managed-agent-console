@@ -83,7 +83,9 @@ describe("DreamEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create dream" }));
 
     await waitFor(() =>
-      expect(router.push).toHaveBeenCalledWith(`/dreams/${dreams[1].id}`),
+      expect(router.push).toHaveBeenCalledWith(
+        `/workspaces/default/dreams/${dreams[1].id}`,
+      ),
     );
     const createCall = fetchMock.mock.calls.find(
       ([, init]) => init?.method === "POST",

@@ -1,3 +1,4 @@
+import { surfacePaths } from "@/lib/routes";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -181,7 +182,11 @@ describe("Nav", () => {
   it("opens Messages on Overview, includes approved Playground and restores focus on return", async () => {
     renderNav([], {}, 404, true);
     const group = groupRow("Messages");
-    await waitFor(() => expect(group.getAttribute("href")).toBe("/messages"));
+    await waitFor(() =>
+      expect(group.getAttribute("href")).toBe(
+        "/workspaces/default/messages-overview",
+      ),
+    );
     expect(group.previousElementSibling?.textContent).toBe("Build");
     expect(group.nextElementSibling?.textContent).toBe("Agents");
     expect(
@@ -199,7 +204,7 @@ describe("Nav", () => {
     await userEvent.click(within(back()).getByText("Messages"));
     expect(document.activeElement).toBe(groupRow("Messages"));
     expect(groupRow("Messages").textContent).toBe("Messages Overview");
-    expect(navState.pathname).toBe("/messages");
+    expect(navState.pathname).toBe("/workspaces/default/messages-overview");
   });
 
   it("starts with the ordered top-level categories and no submenu links", async () => {
@@ -227,12 +232,12 @@ describe("Nav", () => {
         .map((link) => link.getAttribute("href")),
     ).toEqual([
       "/dashboard",
-      "/agents",
-      "/files",
-      "/api-keys",
+      "/workspaces/default/agents",
+      "/workspaces/default/files",
+      "/settings/keys",
       "/models",
       "/usage",
-      "/members",
+      "/settings/members",
     ]);
     expect(
       within(navigation())
@@ -252,7 +257,7 @@ describe("Nav", () => {
       await userEvent.click(groupRow(name));
 
       expect(navigation().getAttribute("data-nav-view")).toBe(name);
-      expect(navState.pathname).toBe(`/${surfaces[0]}`);
+      expect(navState.pathname).toBe(surfacePaths[surfaces[0]]);
       expect(within(navigation()).getByRole("heading", { name })).toBeDefined();
       expect(
         within(navigation())
@@ -269,7 +274,7 @@ describe("Nav", () => {
             : surface === "vaults"
               ? "Credential vaults"
               : SURFACES[surface].label,
-          `/${surface}`,
+          surfacePaths[surface],
           surface,
         ]),
       );
@@ -282,7 +287,7 @@ describe("Nav", () => {
   );
 
   it("opens the current route's panel and returns to the root without changing the route", async () => {
-    navState.pathname = "/sessions/sess_01/trace";
+    navState.pathname = "/workspaces/default/sessions/sess_01/trace";
     navState.search = "?name=two%20words";
     const view = renderNav();
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
@@ -305,7 +310,7 @@ describe("Nav", () => {
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
     expect(navState.search).toBe("?name=two%20words");
 
-    navState.pathname = "/files";
+    navState.pathname = "/workspaces/default/files";
     view.rerender(<Nav />);
     expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
     expect(
@@ -322,10 +327,10 @@ describe("Nav", () => {
     await screen.findByRole("link", { name: "Settings" });
     navState.deferNavigation = true;
     await userEvent.click(groupRow("Resources"));
-    navState.pathname = "/sessions";
+    navState.pathname = "/workspaces/default/sessions";
     view.rerender(<Nav />);
     expect(navigation().getAttribute("data-nav-view")).toBe("Agents");
-    navState.pathname = "/files";
+    navState.pathname = "/workspaces/default/files";
     view.rerender(<Nav />);
     expect(navigation().getAttribute("data-nav-view")).toBe("Resources");
     expect(document.activeElement).not.toBe(back());
@@ -351,7 +356,7 @@ describe("Nav", () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
     try {
-      navState.pathname = "/sessions";
+      navState.pathname = "/workspaces/default/sessions";
       renderNav();
       await userEvent.click(back());
       await userEvent.click(groupRow("Model Gateway"));
@@ -371,7 +376,9 @@ describe("Nav", () => {
       await waitFor(() => expect(groupRow("Resources")).toBeNull());
       expect(groupRow("Agents")).not.toBeNull();
       if (!mobile)
-        expect(groupRow("Keys").getAttribute("href")).toBe("/service-accounts");
+        expect(groupRow("Keys").getAttribute("href")).toBe(
+          "/settings/service-accounts",
+        );
       await userEvent.click(groupRow("Keys"));
       const scope = navigation();
       expect(
@@ -381,7 +388,7 @@ describe("Nav", () => {
         within(scope)
           .getByRole("link", { name: "Service accounts" })
           .getAttribute("href"),
-      ).toBe("/service-accounts");
+      ).toBe("/settings/service-accounts");
     },
   );
 
@@ -406,14 +413,14 @@ describe("Nav", () => {
   );
 
   it("drops an absent link and keeps its available sibling", async () => {
-    navState.pathname = "/files";
+    navState.pathname = "/workspaces/default/files";
     renderNav(["skills"]);
     await waitFor(() =>
       expect(screen.queryByRole("link", { name: "Skills" })).toBeNull(),
     );
     expect(
       screen.getByRole("link", { name: "Files" }).getAttribute("href"),
-    ).toBe("/files");
+    ).toBe("/workspaces/default/files");
   });
 
   it("probe: keeps reachable categories when the network fails", async () => {

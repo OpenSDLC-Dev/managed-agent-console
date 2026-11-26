@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -212,7 +213,7 @@ export function InitialResources({
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor={`memory-id-${index}`}>Memory store ID</Label>
                   <Link
-                    href="/memory-stores"
+                    href={surfacePaths["memory-stores"]}
                     target="_blank"
                     className="text-xs text-muted-foreground underline"
                   >

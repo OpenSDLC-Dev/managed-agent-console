@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -46,7 +47,7 @@ function EnvironmentLink({ id }: { id: string }) {
   return (
     <Link
       className="hover:underline"
-      href={"/environments/" + encodeURIComponent(id)}
+      href={`${surfacePaths.environments}/${encodeURIComponent(id)}`}
     >
       {query.data?.name ?? <IdCode id={id} />}
     </Link>
@@ -58,7 +59,7 @@ function VaultLink({ id }: { id: string }) {
   return (
     <Link
       className="block hover:underline"
-      href={"/vaults/" + encodeURIComponent(id)}
+      href={`${surfacePaths.vaults}/${encodeURIComponent(id)}`}
     >
       {query.data?.display_name ?? <IdCode id={id} />}
     </Link>
@@ -106,7 +107,7 @@ export function SessionSummary({
   const session = query.data;
   const href = run
     ? deploymentRunSessionHref(run)
-    : "/sessions/" + encodeURIComponent(session.id);
+    : `${surfacePaths.sessions}/${encodeURIComponent(session.id)}`;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 pb-4">
@@ -159,8 +160,7 @@ export function SessionSummary({
                 <Link
                   className="hover:underline"
                   href={
-                    "/agents/" +
-                    encodeURIComponent(session.agent.id) +
+                    `${surfacePaths.agents}/${encodeURIComponent(session.agent.id)}` +
                     "?version=" +
                     session.agent.version
                   }
@@ -205,10 +205,7 @@ export function SessionSummary({
                         {resource.type === "memory_store" ? (
                           <Link
                             className="hover:underline"
-                            href={
-                              "/memory-stores/" +
-                              encodeURIComponent(resource.memory_store_id)
-                            }
+                            href={`${surfacePaths["memory-stores"]}/${encodeURIComponent(resource.memory_store_id)}`}
                           >
                             {resource.name}
                           </Link>
@@ -238,10 +235,7 @@ export function SessionSummary({
                 <Field label="Deployment">
                   <Link
                     className="hover:underline"
-                    href={
-                      "/deployments/" +
-                      encodeURIComponent(session.deployment_id)
-                    }
+                    href={`${surfacePaths.deployments}/${encodeURIComponent(session.deployment_id)}`}
                   >
                     <IdCode id={session.deployment_id} />
                   </Link>

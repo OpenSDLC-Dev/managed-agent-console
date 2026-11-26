@@ -127,7 +127,7 @@ test("deleting an environment a deployment and its sessions hold surfaces each r
   // platform's own 400, naming it and counting the sessions beside it. Moved
   // off, the sessions alone hold the environment: the reference's 409.
   await signIn(page);
-  await page.goto("/environments/env_egress000000000000001");
+  await page.goto("/workspaces/default/environments/env_egress000000000000001");
   const remove = async () => {
     await page.getByRole("button", { name: "More actions" }).click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
@@ -358,7 +358,7 @@ for (const [kind, id] of [
     page,
   }) => {
     await signIn(page);
-    await page.goto(`/environments/${id}`);
+    await page.goto(`/workspaces/default/environments/${id}`);
 
     await page
       .getByRole("button", { name: "Generate environment key", exact: true })
@@ -400,7 +400,7 @@ test("a cloud environment offers keys without a worker setup guide", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments/env_egress000000000000001");
+  await page.goto("/workspaces/default/environments/env_egress000000000000001");
   await expect(page.getByTestId("environment-keys")).toBeVisible();
   await expect(page.getByTestId("environment-key-setup")).toHaveCount(0);
 });

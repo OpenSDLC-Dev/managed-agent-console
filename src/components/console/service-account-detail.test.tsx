@@ -94,7 +94,7 @@ it("matches keys by typed owner across both detail views and preserves the filte
       principal: { type: "user_actor", user_id: account.id },
     },
   ]);
-  const listHref = "/service-accounts?q=release";
+  const listHref = "/settings/service-accounts?q=release";
   const { rerender } = renderView(
     <ServiceAccountPanel
       account={account}
@@ -108,7 +108,7 @@ it("matches keys by typed owner across both detail views and preserves the filte
   const panel = await screen.findByRole("dialog", { name: account.name });
   expect(
     await within(panel).findByRole("link", { name: /Build secret/ }),
-  ).toHaveAttribute("href", "/api-keys?key=apikey_build%2Fone");
+  ).toHaveAttribute("href", "/settings/keys?key=apikey_build%2Fone");
   expect(
     within(panel).getByRole("link", { name: /Disabled job/ }),
   ).toHaveTextContent("Disabled");
@@ -117,7 +117,7 @@ it("matches keys by typed owner across both detail views and preserves the filte
   ).toBeVisible();
   expect(within(panel).getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
-    "/service-accounts/svac_runner?q=release",
+    "/settings/service-accounts/svac_runner?q=release",
   );
   expect(
     within(panel).getByRole("button", { name: "Previous service account" }),
@@ -151,7 +151,10 @@ it("refuses to show a cached record or key count when its refetch is denied", as
     },
   });
   const { client } = renderView(
-    <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+    <ServiceAccountDetail
+      id={account.id}
+      listHref="/settings/service-accounts"
+    />,
   );
   expect(
     await screen.findByRole("link", { name: /Build secret/ }),
@@ -180,7 +183,10 @@ it("retains a description draft through a failed background refresh and the next
   const get = vi.spyOn(native, "nativeGet").mockResolvedValue(account);
   vi.spyOn(http, "consoleKeysGet").mockResolvedValue([]);
   const { client } = renderView(
-    <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+    <ServiceAccountDetail
+      id={account.id}
+      listHref="/settings/service-accounts"
+    />,
   );
   const field = await screen.findByRole("textbox", { name: "Description" });
   fireEvent.change(field, { target: { value: "My unsaved description" } });
@@ -220,7 +226,7 @@ it("keeps the fixed-account key form, pending submission and one-time reveal thr
     >
       <ServiceAccountPanel
         account={account}
-        listHref="/service-accounts"
+        listHref="/settings/service-accounts"
         onClose={vi.fn()}
         onEdit={vi.fn()}
         onSelect={vi.fn()}
@@ -277,7 +283,10 @@ it.each([401, 403, 404])(
     const get = vi.spyOn(native, "nativeGet").mockResolvedValue(account);
     vi.spyOn(http, "consoleKeysGet").mockResolvedValue([owned]);
     const { client } = renderView(
-      <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+      <ServiceAccountDetail
+        id={account.id}
+        listHref="/settings/service-accounts"
+      />,
     );
     const field = await screen.findByRole("textbox", { name: "Description" });
     fireEvent.change(field, { target: { value: "Private draft" } });
@@ -313,7 +322,7 @@ it("shows an archived deep link as read-only and reports an unknown ID", async (
   const { rerender } = renderView(
     <ServiceAccountDetail
       id={account.id}
-      listHref="/service-accounts?status=archived"
+      listHref="/settings/service-accounts?status=archived"
     />,
   );
   expect(
@@ -332,12 +341,15 @@ it("shows an archived deep link as read-only and reports an unknown ID", async (
     }),
   );
   rerender(
-    <ServiceAccountDetail id="svac_missing" listHref="/service-accounts" />,
+    <ServiceAccountDetail
+      id="svac_missing"
+      listHref="/settings/service-accounts"
+    />,
   );
   expect(await screen.findByText("Service account not found")).toBeVisible();
   expect(
     screen.getByRole("link", { name: "Service accounts" }),
-  ).toHaveAttribute("href", "/service-accounts");
+  ).toHaveAttribute("href", "/settings/service-accounts");
 });
 
 it("keeps the selected account and its owned keys when a previous detail request finishes late", async () => {
@@ -354,7 +366,7 @@ it("keeps the selected account and its owned keys when a previous detail request
   });
   vi.spyOn(http, "consoleKeysGet").mockResolvedValue([owned]);
   const common = {
-    listHref: "/service-accounts",
+    listHref: "/settings/service-accounts",
     onClose: vi.fn(),
     onEdit: vi.fn(),
     onSelect: vi.fn(),
@@ -447,7 +459,10 @@ it("updates the full page from the platform's role and archive responses", async
       return { ...current };
     });
   renderView(
-    <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+    <ServiceAccountDetail
+      id={account.id}
+      listHref="/settings/service-accounts"
+    />,
   );
   const description = await screen.findByRole("textbox", {
     name: "Description",
@@ -509,7 +524,10 @@ it("retains the server role and a separate description draft when a role change 
   });
   const write = vi.spyOn(native, "nativeWrite").mockRejectedValue(denied);
   renderView(
-    <ServiceAccountDetail id={account.id} listHref="/service-accounts" />,
+    <ServiceAccountDetail
+      id={account.id}
+      listHref="/settings/service-accounts"
+    />,
   );
   const description = await screen.findByRole("textbox", {
     name: "Description",

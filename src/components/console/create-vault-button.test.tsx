@@ -15,7 +15,7 @@ import { CreateVaultButton } from "./create-vault-button";
 const pushSpy = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushSpy, back: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/vaults",
+  usePathname: () => "/workspaces/default/vaults",
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -83,7 +83,9 @@ describe("CreateVaultButton", () => {
       "MCP OAuth",
     );
     await user.click(screen.getByRole("button", { name: "Skip for now" }));
-    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_1"));
+    await waitFor(() =>
+      expect(pushSpy).toHaveBeenCalledWith("/workspaces/default/vaults/vlt_1"),
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -192,7 +194,9 @@ it("retries a failed first credential against the same vault and then opens the 
   await user.click(
     within(dialog).getByRole("button", { name: "Add credential" }),
   );
-  await waitFor(() => expect(pushSpy).toHaveBeenCalledWith("/vaults/vlt_new"));
+  await waitFor(() =>
+    expect(pushSpy).toHaveBeenCalledWith("/workspaces/default/vaults/vlt_new"),
+  );
   expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
     "/api/organizations/default/proxy/v1/vaults",
     "/api/organizations/default/proxy/v1/vaults/vlt_new/credentials",

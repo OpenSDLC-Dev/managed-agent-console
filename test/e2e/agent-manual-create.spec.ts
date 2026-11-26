@@ -10,11 +10,11 @@ test.beforeEach(async ({ request }) => {
 test("directory creation has the workspace navigation, six starters, collapsible configuration and sticky actions", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   for (const [name, href] of [
-    ["Memory", "/memory-stores"],
-    ["Credential vaults", "/vaults"],
+    ["Memory", "/workspaces/default/memory-stores"],
+    ["Credential vaults", "/workspaces/default/vaults"],
   ]) {
     const link = nav.getByRole("link", { name, exact: true });
     await expect(link).toHaveAttribute("href", href);
@@ -114,7 +114,7 @@ test("a starter uses the current Raw model and preserves invalid input for corre
   page,
 }) => {
   await grantDashboardModelDiscovery(page);
-  await signIn(page, "/agents/new?model=deepseek-flash");
+  await signIn(page, "/workspaces/default/agents/new?model=deepseek-flash");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   const editor = page.getByLabel("Raw agent config");
   const draft = YAML.parse(await editor.inputValue());
@@ -146,7 +146,7 @@ test("a starter uses the current Raw model and preserves invalid input for corre
 test("a template can replace a rendered draft with an unfinished custom tool after confirmation", async ({
   page,
 }) => {
-  await signIn(page, "/agents/new?model=deepseek-flash");
+  await signIn(page, "/workspaces/default/agents/new?model=deepseek-flash");
   await page.getByRole("button", { name: "Tools", exact: true }).click();
   await page.getByRole("button", { name: "Add custom tool" }).click();
   const tool = page.locator('[data-tool-type="custom"]');
@@ -214,7 +214,7 @@ test("Generate retries a failed draft, Raw round-trips YAML and JSON, and only e
   page.on("request", (r) => {
     if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
   });
-  await signIn(page, "/agents/new");
+  await signIn(page, "/workspaces/default/agents/new");
   await page.getByRole("radio", { name: "raw", exact: true }).click();
   const original = page.getByLabel("Raw agent config");
   const base = YAML.parse(await original.inputValue());

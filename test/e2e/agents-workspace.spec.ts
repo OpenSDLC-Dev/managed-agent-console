@@ -13,7 +13,7 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
   await signIn(page);
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await nav.locator('[data-nav-group="Agents"]').click();
-  await expect(page).toHaveURL(/\/agents\/overview$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/agents-overview$/);
   const workspace = nav.getByRole("combobox", { name: "Workspace" });
   await workspace.click();
   await expect(page.getByRole("option", { name: "Default" })).toHaveAttribute(
@@ -71,11 +71,11 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
   await expect(bars.getByRole("status")).toBeVisible();
   await main.getByRole("button", { name: "Create", exact: true }).click();
   for (const [name, href] of [
-    ["Agent", "/agents/create"],
-    ["Session", "/sessions"],
-    ["Deployment", "/deployments/new"],
-    ["Environment", "/environments/new"],
-    ["Memory store", "/memory-stores"],
+    ["Agent", "/workspaces/default/agent-quickstart"],
+    ["Session", "/workspaces/default/sessions"],
+    ["Deployment", "/workspaces/default/deployments/new"],
+    ["Environment", "/workspaces/default/environments/new"],
+    ["Memory store", "/workspaces/default/memory-stores"],
   ])
     await expect(
       page.getByRole("menuitem", { name, exact: true }),
@@ -108,7 +108,7 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
 test("Overview Create fits all five actions on one line each on desktop and mobile", async ({
   page,
 }) => {
-  await signIn(page, "/agents/overview");
+  await signIn(page, "/workspaces/default/agents-overview");
   const create = page
     .getByRole("main")
     .getByRole("button", { name: "Create", exact: true });
@@ -165,7 +165,7 @@ test("a populated overview sorts every activity measure and Show more opens the 
     }));
     await route.fulfill({ json: { ...data, agents: rows, total: 11 } });
   });
-  await signIn(page, "/agents/overview");
+  await signIn(page, "/workspaces/default/agents-overview");
   const activity = page.getByRole("region", { name: "Agents activity" });
   await expect(activity).toContainText("10 of 11");
   for (const [label, sort] of [
@@ -190,7 +190,7 @@ test("a populated overview sorts every activity measure and Show more opens the 
   await expect(page).toHaveURL(/\/agents$/);
   await expect(
     page.getByRole("link", { name: "Create agent", exact: true }),
-  ).toHaveAttribute("href", "/agents/new");
+  ).toHaveAttribute("href", "/workspaces/default/agents/new");
 });
 
 test("all twelve starters preview without a write; formats, cancel, blank editor and responsive layout", async ({
@@ -201,7 +201,7 @@ test("all twelve starters preview without a write; formats, cancel, blank editor
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
     origin: "http://127.0.0.1:3100",
   });
-  await signIn(page, "/agents/create");
+  await signIn(page, "/workspaces/default/agent-quickstart");
   const main = page.getByRole("main");
   let writes = 0;
   const startHistory = await page.evaluate(() => history.length);
@@ -295,7 +295,7 @@ test("description, refinement and editable YAML use a replay; only confirmation 
   page.on("request", (r) => {
     if (r.method() === "POST" && r.url().endsWith("/proxy/v1/agents")) writes++;
   });
-  await signIn(page, "/agents/create");
+  await signIn(page, "/workspaces/default/agent-quickstart");
   const main = page.getByRole("main");
   await main
     .getByRole("textbox", { name: "Describe your agent" })
@@ -351,7 +351,10 @@ test("a late create response cannot navigate away from a different unsaved agent
   page,
 }) => {
   await grantDashboardModelDiscovery(page);
-  await signIn(page, "/agents/create?template=structured-extractor");
+  await signIn(
+    page,
+    "/workspaces/default/agent-quickstart?template=structured-extractor",
+  );
   await page.getByRole("button", { name: "Use this template" }).click();
   let release!: () => void;
   const delayed = new Promise<void>((done) => {
@@ -397,7 +400,10 @@ test("a starter can create an agent, configure its environment and start a fixtu
   page,
 }) => {
   await grantDashboardModelDiscovery(page);
-  await signIn(page, "/agents/create?template=structured-extractor");
+  await signIn(
+    page,
+    "/workspaces/default/agent-quickstart?template=structured-extractor",
+  );
   await page
     .getByRole("dialog", { name: "Structured extractor" })
     .getByRole("button", { name: "Use this template" })
@@ -464,7 +470,7 @@ test("an older Platform keeps its directory and Create when the workspace report
       },
     }),
   );
-  await signIn(page, "/agents/overview");
+  await signIn(page, "/workspaces/default/agents-overview");
   await expect(page).toHaveURL(/\/agents$/);
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await expect(
@@ -499,7 +505,7 @@ test("an empty or failed report remains distinct from zero activity", async ({
       },
     }),
   );
-  await signIn(page, "/agents/overview");
+  await signIn(page, "/workspaces/default/agents-overview");
   await expect(
     page.getByText("No agents in this workspace yet."),
   ).toBeVisible();

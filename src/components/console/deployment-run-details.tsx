@@ -1,3 +1,4 @@
+import { surfacePaths } from "@/lib/routes";
 import Link from "next/link";
 import type { DeploymentRun } from "@/lib/platform/types";
 import { Field, JsonBlock } from "./detail";
@@ -5,7 +6,7 @@ import { IdCell } from "./copy-id";
 import { Time } from "./bits";
 
 export function deploymentRunSessionHref(run: DeploymentRun) {
-  return `/sessions/${encodeURIComponent(run.session_id!)}?${new URLSearchParams({ from_deployment: run.deployment_id, from_run: run.id })}`;
+  return `${surfacePaths.sessions}/${encodeURIComponent(run.session_id!)}?${new URLSearchParams({ from_deployment: run.deployment_id, from_run: run.id })}`;
 }
 
 export function DeploymentRunDetails({
@@ -39,7 +40,7 @@ export function DeploymentRunDetails({
         <Field label="Agent version">
           <Link
             className="break-all hover:underline"
-            href={`/agents/${encodeURIComponent(run.agent.id)}?version=${run.agent.version}`}
+            href={`${surfacePaths.agents}/${encodeURIComponent(run.agent.id)}?version=${run.agent.version}`}
           >
             v{run.agent.version}
           </Link>

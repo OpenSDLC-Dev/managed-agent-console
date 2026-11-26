@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useContext, useEffect, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
@@ -521,7 +522,7 @@ export function KeyCreation({
                         !pending && (
                           <Link
                             className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                            href="/service-accounts"
+                            href={surfacePaths["service-accounts"]}
                             target="_blank"
                             rel="noopener noreferrer"
                             prefetch={false}

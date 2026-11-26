@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, request }) => {
     true,
   );
   await grantToolModels(page);
-  await signIn(page, "/playground");
+  await signIn(page, "/workspaces/default/playground");
 });
 
 async function selectAlias(page: Page, name: string) {

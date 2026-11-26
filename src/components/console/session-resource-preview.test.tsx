@@ -146,7 +146,7 @@ it("opens a bound store and its memory inline without leaving the Session", asyn
     within(preview).getByRole("link", { name: /Open in Memory Stores/ }),
   ).toHaveAttribute(
     "href",
-    `/memory-stores/${memoryResources[0].memory_store_id}?memory=${memories[0].id}`,
+    `/workspaces/default/memory-stores/${memoryResources[0].memory_store_id}?memory=${memories[0].id}`,
   );
   expect(preview.querySelector("[data-size-bytes]")).toHaveAttribute(
     "data-size-bytes",

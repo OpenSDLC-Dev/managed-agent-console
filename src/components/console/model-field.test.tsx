@@ -15,7 +15,7 @@ import type { GatewayAlias } from "@/lib/platform/types";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
-  usePathname: () => "/agents",
+  usePathname: () => "/workspaces/default/agents",
   useSearchParams: () => new URLSearchParams(),
 }));
 

@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
-const SESSION = "/sessions/sesn_gatedbash00000000001";
+const SESSION = "/workspaces/default/sessions/sesn_gatedbash00000000001";
 test.beforeEach(async ({ request }) => {
   expect((await request.post("http://127.0.0.1:18080/__reset")).ok()).toBe(
     true,

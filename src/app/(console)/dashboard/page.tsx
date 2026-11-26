@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import Link from "next/link";
 import { useContext } from "react";
 import {
@@ -164,7 +165,10 @@ export default function DashboardPage() {
             <CreateKeyButton shortcut />
           )}
           {isSurfaceVisible(surfaces?.agents) && (
-            <Link href="/agents/new" className={buttonVariants({ size: "sm" })}>
+            <Link
+              href={`${surfacePaths.agents}/new`}
+              className={buttonVariants({ size: "sm" })}
+            >
               <Waypoints aria-hidden />
               Build an agent
             </Link>

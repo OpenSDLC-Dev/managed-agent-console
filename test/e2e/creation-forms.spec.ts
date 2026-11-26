@@ -11,7 +11,7 @@ test("memory creation cancels without navigation and retains drafts after a plat
   page,
 }) => {
   await signIn(page);
-  await page.goto("/memory-stores");
+  await page.goto("/workspaces/default/memory-stores");
   const trigger = page.getByRole("button", {
     name: "Create memory store",
     exact: true,
@@ -20,7 +20,7 @@ test("memory creation cancels without navigation and retains drafts after a plat
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Name", { exact: true }).fill("Discard");
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page).toHaveURL("/memory-stores");
+  await expect(page).toHaveURL("/workspaces/default/memory-stores");
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await trigger.click();
@@ -73,7 +73,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   page,
 }) => {
   await signIn(page);
-  await page.goto("/deployments");
+  await page.goto("/workspaces/default/deployments");
   const trigger = page.getByRole("button", {
     name: "Create deployment",
     exact: true,
@@ -84,7 +84,7 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
-  await expect(page).toHaveURL("/deployments");
+  await expect(page).toHaveURL("/workspaces/default/deployments");
   await trigger.click();
   await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue("");
   await dialog.getByLabel("Name", { exact: true }).fill("Morning triage");
@@ -178,7 +178,10 @@ test("deployment dialog preserves message and schedule drafts and submits the pl
 test("timezone search can cancel, select by keyboard and preserve aliases on edit", async ({
   page,
 }) => {
-  await signIn(page, "/deployments/depl_weekresearch00000001/edit");
+  await signIn(
+    page,
+    "/workspaces/default/deployments/depl_weekresearch00000001/edit",
+  );
   const trigger = page.getByRole("combobox", {
     name: "IANA timezone",
     exact: true,
@@ -209,7 +212,10 @@ test("timezone search can cancel, select by keyboard and preserve aliases on edi
 test("schedule clock supports AM/PM keyboard changes and preserves midnight on edit", async ({
   page,
 }) => {
-  await signIn(page, "/deployments/depl_weekresearch00000001/edit");
+  await signIn(
+    page,
+    "/workspaces/default/deployments/depl_weekresearch00000001/edit",
+  );
   await page.getByLabel("Frequency", { exact: true }).selectOption("Daily");
   const time = page.getByLabel("At", { exact: true });
   await time.fill("12:00");

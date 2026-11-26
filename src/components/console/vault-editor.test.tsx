@@ -73,7 +73,9 @@ describe("VaultEditor", () => {
       display_name: "Shared",
       metadata: { owner: "platform", remove: null },
     });
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/vaults/vlt_1"));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/workspaces/default/vaults/vlt_1"),
+    );
   });
 
   it("reports invalid metadata without sending", async () => {

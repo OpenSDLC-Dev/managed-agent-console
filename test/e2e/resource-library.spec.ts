@@ -135,7 +135,7 @@ test.describe("touch resource selection", () => {
   test("keeps the actions reachable while scrolling and clears the last row", async ({
     page,
   }) => {
-    await signIn(page, "/files");
+    await signIn(page, "/workspaces/default/files");
     for (let i = 0; i < 12; i++) {
       const seed = await browserPost(page, files, {
         multipart: { file: text("scroll-" + i + ".txt") },
@@ -172,7 +172,7 @@ test("file staging, cancel, submit, row menu and named delete confirmation", asy
   page,
 }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
-  await signIn(page, "/files");
+  await signIn(page, "/workspaces/default/files");
   const dialog = await openFileUpload(page);
   await dialog.getByLabel("File to upload").setInputFiles(text("review.txt"));
   await dialog.getByRole("button", { name: "Remove review.txt" }).click();
@@ -231,7 +231,7 @@ test("file lookup, copy, drawer tabs, neighbor navigation, history and downloads
   context,
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await signIn(page, "/files");
+  await signIn(page, "/workspaces/default/files");
   const seed = await browserPost(page, files, {
     multipart: { file: text("neighbor.txt") },
   });
@@ -247,7 +247,7 @@ test("file lookup, copy, drawer tabs, neighbor navigation, history and downloads
   await row
     .getByRole("cell", { name: "research-notes.md", exact: true })
     .click();
-  await expect(page).toHaveURL("/files?file=" + notes);
+  await expect(page).toHaveURL("/workspaces/default/files?file=" + notes);
   await expect(
     panel.getByText("Only agent-generated files can be downloaded."),
   ).toBeVisible();
@@ -287,7 +287,7 @@ test("file lookup, copy, drawer tabs, neighbor navigation, history and downloads
 test("bulk file deletion retries only refused IDs and restores the empty upload entry", async ({
   page,
 }) => {
-  await signIn(page, "/files");
+  await signIn(page, "/workspaces/default/files");
   const seeded = await browserPost(page, files, {
     multipart: { file: text("retry.txt") },
   });
@@ -342,7 +342,7 @@ test("bulk file deletion retries only refused IDs and restores the empty upload 
 test("skill creation stays on the list, Update stages a new version, version actions and skill deletion work", async ({
   page,
 }) => {
-  await signIn(page, "/skills?skill=xlsx");
+  await signIn(page, "/workspaces/default/skills?skill=xlsx");
   const panel = page.getByRole("region", { name: "Skill details" });
   await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
   await page
@@ -366,7 +366,7 @@ test("skill creation stays on the list, Update stages a new version, version act
   expect(response.ok()).toBeTruthy();
   expect((await response.json()).display_name).toBe("release-notes");
   const skill = await response.json();
-  await expect(page).toHaveURL("/skills");
+  await expect(page).toHaveURL("/workspaces/default/skills");
   await expect(panel).toBeHidden();
   const row = page.getByRole("row").filter({
     has: page.getByRole("button", { name: "Copy " + skill.id, exact: true }),
@@ -442,7 +442,7 @@ test("skill creation stays on the list, Update stages a new version, version act
 test("deleting the last row on the final cursor page returns to the remaining files", async ({
   page,
 }) => {
-  await signIn(page, "/files");
+  await signIn(page, "/workspaces/default/files");
   const seed = await browserPost(page, files, {
     multipart: { file: text("first-page.txt") },
   });
@@ -474,7 +474,7 @@ test("deleting the last row on the final cursor page returns to the remaining fi
 test("skill selection protects catalog skills and allows confirmed deletion of custom skills", async ({
   page,
 }) => {
-  await signIn(page, "/skills");
+  await signIn(page, "/workspaces/default/skills");
   await page.getByRole("checkbox", { name: "Select all rows" }).check();
   await expect(
     page.getByRole("button", { name: "Delete", exact: true }),
@@ -515,7 +515,7 @@ test("lookup reaches an off-page skill and a failed read stays distinguishable f
       },
     });
   });
-  await signIn(page, "/skills");
+  await signIn(page, "/workspaces/default/skills");
   await expect(page.getByRole("button", { name: "Next page" })).toBeEnabled();
   await expect(
     page.getByRole("cell", { name: "Weekly report writer", exact: true }),
@@ -551,10 +551,10 @@ test("lookup reaches an off-page skill and a failed read stays distinguishable f
 test("a slow exact lookup respects Back to a different skill", async ({
   page,
 }) => {
-  await signIn(page, "/skills?skill=xlsx");
+  await signIn(page, "/workspaces/default/skills?skill=xlsx");
   const panel = page.getByRole("region", { name: "Skill details" });
   await panel.getByRole("button", { name: "Close details" }).click();
-  await expect(page).toHaveURL("/skills");
+  await expect(page).toHaveURL("/workspaces/default/skills");
   let finish!: () => void;
   const pending = new Promise<void>((resolve) => {
     finish = resolve;
@@ -580,13 +580,13 @@ test("a slow exact lookup respects Back to a different skill", async ({
     page.getByRole("cell", { name: "Weekly report writer", exact: true }),
   ).toBeVisible();
   await expect(panel).toHaveAttribute("data-skill-id", "xlsx");
-  await expect(page).toHaveURL("/skills?skill=xlsx");
+  await expect(page).toHaveURL("/workspaces/default/skills?skill=xlsx");
 });
 
 test("drop a file and create a skill from a folder with nested files", async ({
   page,
 }, testInfo) => {
-  await signIn(page, "/files");
+  await signIn(page, "/workspaces/default/files");
   const upload = await openFileUpload(page);
   const transfer = await page.evaluateHandle(() => {
     const transfer = new DataTransfer();
@@ -603,7 +603,7 @@ test("drop a file and create a skill from a folder with nested files", async ({
   await expect(
     page.getByRole("cell", { name: "drop.txt", exact: true }),
   ).toBeVisible();
-  await page.goto("/skills");
+  await page.goto("/workspaces/default/skills");
   const folder = testInfo.outputPath("folder-skill");
   await mkdir(join(folder, "notes"), { recursive: true });
   await writeFile(join(folder, "SKILL.md"), manifest("folder-skill").buffer);

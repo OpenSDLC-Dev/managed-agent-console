@@ -2,7 +2,7 @@ import { browserPost } from "./browser-write";
 import { expect, test, type Page } from "@playwright/test";
 import { signIn } from "./sign-in";
 
-const GATED = "/sessions/sesn_gatedbash00000000001";
+const GATED = "/workspaces/default/sessions/sesn_gatedbash00000000001";
 
 test.beforeEach(async ({ request }) => {
   // Restore the mock platform's fixtures — these tests mutate session state.
@@ -147,7 +147,7 @@ test("outcome evaluations and their trace events have dedicated rendering", asyn
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto("/workspaces/default/sessions/sesn_research0000000000001");
   const outcomes = page.getByTestId("session-outcomes");
   await expect(outcomes).toHaveAttribute("data-outcome-count", "1");
   await expect(outcomes).toHaveAttribute("data-active-outcome", "false");
@@ -195,7 +195,7 @@ async function idleSession(page: Page) {
 
 test("defines an outcome on an idle session", async ({ page }) => {
   await signIn(page);
-  await page.goto(`/sessions/${await idleSession(page)}`);
+  await page.goto(`/workspaces/default/sessions/${await idleSession(page)}`);
   await expect(page.getByTestId("session-outcomes")).toHaveAttribute(
     "data-active-outcome",
     "false",

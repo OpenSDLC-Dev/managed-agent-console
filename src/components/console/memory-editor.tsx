@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,9 @@ export function MemoryEditor({
       : { path, content };
     mutation.mutate(body, {
       onSuccess: (saved) =>
-        router.push(`/memory-stores/${storeId}/memories/${saved.id}`),
+        router.push(
+          `${surfacePaths["memory-stores"]}/${storeId}/memories/${saved.id}`,
+        ),
     });
   };
   const error = mutation.error instanceof Error ? mutation.error.message : null;

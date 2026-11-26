@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequestId } from "@/components/console/bits";
@@ -175,7 +176,7 @@ export function CredentialEditor({
         onSuccess: () => {
           update.reset();
           router.push(
-            `/vaults/${credential.vault_id}/credentials/${credential.id}`,
+            `${surfacePaths.vaults}/${credential.vault_id}/credentials/${credential.id}`,
           );
         },
       });

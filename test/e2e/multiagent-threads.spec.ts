@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 test("creates a coordinator with an ordered roster", async ({ page }) => {
   await signIn(page);
-  await page.goto("/agents/new");
+  await page.goto("/workspaces/default/agents/new");
   await page.getByLabel("Name").fill("Coordinator");
   await chooseModel(page);
   await page.getByRole("button", { name: "Multiagent", exact: true }).click();
@@ -36,7 +36,9 @@ test("switches to a child trace and archives the idle child", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001?inspector=thread");
+  await page.goto(
+    "/workspaces/default/sessions/sesn_research0000000000001?inspector=thread",
+  );
 
   const child = page.locator('[data-thread-id="sthr_taskrunnerresearch0001"]');
   await expect(child).toHaveAttribute("data-thread-status", "idle");

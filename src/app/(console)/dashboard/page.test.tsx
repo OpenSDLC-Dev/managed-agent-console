@@ -111,7 +111,9 @@ describe("DashboardPage", () => {
         name: /^(open )?playground$/i,
       });
       expect(links.map((link) => link.getAttribute("href"))).toEqual(
-        access ? ["/playground", "/playground"] : [],
+        access
+          ? ["/workspaces/default/playground", "/workspaces/default/playground"]
+          : [],
       );
     },
   );
@@ -155,12 +157,17 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("button", { name: "Get API key" })).toBeVisible();
     expect(
       screen.getByRole("link", { name: "Build an agent" }),
-    ).toHaveAttribute("href", "/agents/new");
+    ).toHaveAttribute("href", "/workspaces/default/agents/new");
     expect(
       [...document.querySelectorAll("[data-dashboard-card]")].map((a) =>
         a.getAttribute("href"),
       ),
-    ).toEqual(["/playground", "/models", "/skills", "/files"]);
+    ).toEqual([
+      "/workspaces/default/playground",
+      "/models",
+      "/workspaces/default/skills",
+      "/workspaces/default/files",
+    ]);
     expect(screen.queryByRole("region", { name: "Usage overview" })).toBeNull();
   });
 

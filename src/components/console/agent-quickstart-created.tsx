@@ -14,7 +14,7 @@ import {
   useEnvironments,
   type AgentWriteBody,
 } from "@/lib/platform/queries";
-import { AGENTS_CREATE_ROUTE } from "@/lib/routes";
+import { surfacePaths, AGENTS_CREATE_ROUTE } from "@/lib/routes";
 import { ErrorState, ListSkeleton } from "./bits";
 import { AgentConfigView } from "./agent-config-view";
 import { EnvironmentEditor, newEnvForm } from "./environment-editor";
@@ -72,7 +72,7 @@ export function CreatedAgent({ id }: { id: string }) {
         <h1 className="font-serif text-xl">Agent created</h1>
         <Link
           className={row + " w-full"}
-          href={"/agents/" + encodeURIComponent(id)}
+          href={`${surfacePaths.agents}/${encodeURIComponent(id)}`}
         >
           <Check className="size-4" />
           {a.name}
@@ -143,7 +143,7 @@ export function CreatedAgent({ id }: { id: string }) {
                 {session && (
                   <Link
                     className="text-sm underline"
-                    href={"/sessions/" + encodeURIComponent(session)}
+                    href={`${surfacePaths.sessions}/${encodeURIComponent(session)}`}
                   >
                     Open session
                   </Link>
@@ -157,14 +157,11 @@ export function CreatedAgent({ id }: { id: string }) {
                 </Button>
                 <Link
                   className="text-sm underline"
-                  href={
-                    "/deployments/new?" +
-                    new URLSearchParams({
-                      agent: id,
-                      version: String(a.version),
-                      ...(environment && { environment }),
-                    })
-                  }
+                  href={`${surfacePaths.deployments}/new?${new URLSearchParams({
+                    agent: id,
+                    version: String(a.version),
+                    ...(environment && { environment }),
+                  })}`}
                 >
                   Create deployment
                 </Link>
@@ -221,7 +218,7 @@ export function CreatedAgent({ id }: { id: string }) {
               {environment && (
                 <Link
                   className="underline"
-                  href={"/environments/" + encodeURIComponent(environment)}
+                  href={`${surfacePaths.environments}/${encodeURIComponent(environment)}`}
                 >
                   {envs.data?.data.find((e) => e.id === environment)?.name ??
                     environment}
@@ -230,7 +227,7 @@ export function CreatedAgent({ id }: { id: string }) {
               {session && (
                 <Link
                   className="underline"
-                  href={"/sessions/" + encodeURIComponent(session)}
+                  href={`${surfacePaths.sessions}/${encodeURIComponent(session)}`}
                 >
                   Open session
                 </Link>

@@ -10,8 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ModelsPage from "./page";
-import { stubGatewayFetch } from "../../../../test/mock-platform/gateway-fetch";
-import { emptyGateway } from "../../../../test/mock-platform/gateway.mjs";
+import { stubGatewayFetch } from "@/../test/mock-platform/gateway-fetch";
+import { emptyGateway } from "@/../test/mock-platform/gateway.mjs";
 
 const pushSpy = vi.fn();
 vi.mock("next/navigation", () => ({

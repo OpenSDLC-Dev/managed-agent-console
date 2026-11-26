@@ -28,11 +28,11 @@ test.afterEach(async ({ request }) => {
 test("issue a key, see it once, then disable and delete it", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("button", { name: "Back to all sections" }).click();
   await page.locator('[data-nav-group="Keys"]').click();
   await page.getByRole("link", { name: "API Keys", exact: true }).click();
-  await expect(page).toHaveURL(/\/api-keys$/);
+  await expect(page).toHaveURL(/\/settings\/keys$/);
 
   // The fixture includes an owned key and an unowned historical key.
   await expect(page.getByText("ci-deploy")).toBeVisible();
@@ -140,7 +140,7 @@ test("a refused deletion keeps the key and reports the platform error", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
   const row = page.getByRole("row").filter({ hasText: "ci-deploy" });
   await page.route(
     "**/api/console/organizations/default/workspaces/default/api_keys/*",
@@ -179,7 +179,7 @@ test("an unowned historical key is listed without mutation controls", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
   const row = page.locator("tr", { hasText: "historical-unowned" });
   await expect(row).toBeVisible();
   await expect(row.locator("[data-owner-id]")).toHaveAttribute(
@@ -196,7 +196,7 @@ test("an unowned historical key is listed without mutation controls", async ({
 test("find keys, reset the list and inspect the sorted results by keyboard", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   const count = page.locator("[data-visible-count]");
   const search = page.getByRole("searchbox", { name: "Search keys" });
   await expect(count).toHaveAttribute("data-visible-count", "2");
@@ -262,7 +262,7 @@ test("find keys, reset the list and inspect the sorted results by keyboard", asy
 test("linked account filters by actor type and the empty search can be reset in place", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   const count = page.locator("[data-visible-count]");
   const search = page.getByRole("searchbox", { name: "Search keys" });
   await search.fill("missing-fixture-key");
@@ -306,7 +306,7 @@ test("linked account filters by actor type and the empty search can be reset in 
 test("View cost opens the actual key's UTC month-to-date query and survives reload", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   const actions = await openApiKeyMenu(page, "ci-deploy");
   const costRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -327,13 +327,13 @@ test("View cost opens the actual key's UTC month-to-date query and survives relo
   await page.reload();
   await expect(key).toHaveValue("apikey_ci01");
   await page.goBack();
-  await expect(page).toHaveURL(/\/api-keys$/);
+  await expect(page).toHaveURL(/\/settings\/keys$/);
 });
 
 test("expired keys remain inspectable and billable while only deletion is offered", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   const form = await openApiKeyForm(page);
   await form.getByLabel("Name").fill("expired-fixture");
   await form.getByLabel("Expires").selectOption("custom");
@@ -376,7 +376,7 @@ test("key issuance still works on an edge without CLI authorization", async ({
   await page.route("**/oauth/authorize", (route) =>
     route.fulfill({ status: 404, body: "Not found" }),
   );
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   await Promise.all([
     page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/oauth/authorize",
@@ -393,7 +393,7 @@ test("key issuance still works on an edge without CLI authorization", async ({
 test("the local-machine path opens CLI instructions and the API-key path resets a cancelled draft", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   const trigger = page.getByRole("button", { name: "Create key", exact: true });
   await trigger.click();
   await page
@@ -440,7 +440,7 @@ test("a platform without the console namespace loses the Keys group", async ({
   await expect(page.locator('nav [data-nav-group="Keys"]')).toHaveCount(0);
   await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
 
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
   const standIn = page.getByTestId("unavailable-surface");
   await expect(standIn).toBeVisible();
   await expect(standIn).toHaveAttribute("data-surface", "api-keys");
@@ -457,7 +457,7 @@ test("a forbidden key list hides only its entry and explains itself", async ({
     data: { paths: ["api/console/organizations/default/workspaces"] },
   });
   await signIn(page);
-  await page.goto("/api-keys");
+  await page.goto("/settings/keys");
 
   const state = page.getByTestId("error-state");
   await expect(state).toBeVisible();
@@ -469,7 +469,7 @@ test("a forbidden key list hides only its entry and explains itself", async ({
   ).toBeVisible();
   await expect(page.locator('nav [data-nav-group="Agents"]')).toBeVisible();
   await page.locator('[data-nav-group="Keys"]').click();
-  await expect(page).toHaveURL(/\/service-accounts$/);
+  await expect(page).toHaveURL(/\/settings\/service-accounts$/);
   await expect(page.locator("nav [data-surface=api-keys]")).toHaveCount(0);
   await expect(
     page.locator("nav [data-surface=service-accounts]"),
@@ -504,7 +504,7 @@ test("Dashboard key shortcut assigns the current user", async ({ page }) => {
 test("Messages Overview creates a key, opens it after disabling it, and hides it after deletion", async ({
   page,
 }) => {
-  await signIn(page, "/messages");
+  await signIn(page, "/workspaces/default/messages-overview");
   const name = "Messages regression key";
   const form = await openApiKeyForm(page);
   await form.getByLabel("Name").fill(name);
@@ -525,7 +525,7 @@ test("Messages Overview creates a key, opens it after disabling it, and hides it
     "data-key-status",
     "inactive",
   );
-  await page.goto("/messages");
+  await page.goto("/workspaces/default/messages-overview");
   await expect(shortcut).toContainText("Disabled");
   await shortcut.click();
   await expect(details).toContainText("Disabled");
@@ -541,7 +541,7 @@ test("Messages Overview creates a key, opens it after disabling it, and hides it
     .click();
   await expect(row).toHaveCount(0);
   await expectListedKeyStatus(page, keyId, "archived");
-  await page.goto("/messages");
+  await page.goto("/workspaces/default/messages-overview");
   await expect(page.getByRole("link", { name: /ci-deploy/ })).toBeVisible();
   await expect(shortcut).toHaveCount(0);
 });

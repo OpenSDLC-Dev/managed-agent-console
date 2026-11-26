@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { ArrowRight, Play } from "lucide-react";
@@ -34,7 +35,7 @@ function AgentLink({ agent }: { agent: Deployment["agent"] }) {
   return (
     <Link
       className="break-words hover:underline"
-      href={`/agents/${encodeURIComponent(agent.id)}?version=${agent.version}`}
+      href={`${surfacePaths.agents}/${encodeURIComponent(agent.id)}?version=${agent.version}`}
     >
       {query.data?.name ?? <IdCode id={agent.id} />} · v{agent.version}
     </Link>
@@ -46,7 +47,7 @@ function EnvironmentLink({ id }: { id: string }) {
   return (
     <Link
       className="break-words hover:underline"
-      href={`/environments/${encodeURIComponent(id)}`}
+      href={`${surfacePaths.environments}/${encodeURIComponent(id)}`}
     >
       {query.data?.name ?? <IdCode id={id} />}
     </Link>
@@ -58,7 +59,7 @@ function VaultLink({ id }: { id: string }) {
   return (
     <Link
       className="block break-words hover:underline"
-      href={`/vaults/${encodeURIComponent(id)}`}
+      href={`${surfacePaths.vaults}/${encodeURIComponent(id)}`}
     >
       {query.data?.display_name ?? <IdCode id={id} />}
     </Link>
@@ -69,7 +70,7 @@ function FileReference({ id }: { id: string }) {
   const query = useFile(id);
   return (
     <div className="space-y-1">
-      <Link className="break-all hover:underline" href="/files">
+      <Link className="break-all hover:underline" href={surfacePaths.files}>
         {query.data?.filename ?? id}
       </Link>
       <span className="flex min-w-0 items-center gap-1 text-xs">
@@ -90,7 +91,7 @@ function MemoryReference({
     <div className="space-y-2">
       <Link
         className="break-words hover:underline"
-        href={`/memory-stores/${encodeURIComponent(resource.memory_store_id)}`}
+        href={`${surfacePaths["memory-stores"]}/${encodeURIComponent(resource.memory_store_id)}`}
       >
         {query.data?.name ?? <IdCode id={resource.memory_store_id} />}
       </Link>
@@ -136,7 +137,11 @@ function DeploymentSummary({ id }: { id: string }) {
         <Button
           size="sm"
           variant="outline"
-          render={<Link href={`/deployments/${encodeURIComponent(id)}`} />}
+          render={
+            <Link
+              href={`${surfacePaths.deployments}/${encodeURIComponent(id)}`}
+            />
+          }
         >
           Open <ArrowRight className="size-3.5" />
         </Button>

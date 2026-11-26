@@ -217,7 +217,7 @@ test("the console connects to the real platform and lists real agents", async ({
   createdAgentIds.push(created.id as string);
 
   await signIn(page);
-  await page.goto("/agents");
+  await page.goto("/workspaces/default/agents");
   await expect(page.getByTestId("connection-dot")).toHaveAttribute(
     "data-state",
     "up",
@@ -243,7 +243,7 @@ test("an externally-authored compact default_config survives a console save", as
   createdAgentIds.push(id);
 
   await signIn(page);
-  await page.goto(`/agents/${id}/edit`);
+  await page.goto(`/workspaces/default/agents/${id}/edit`);
   await page.getByRole("button", { name: /Tool permissions/ }).click();
   // The editor resolves the compact shape: default row unchecked, tools follow.
   await expect(
@@ -256,7 +256,7 @@ test("an externally-authored compact default_config survives a console save", as
   // Save untouched — before plan 03 slice 4 this exploded the shape into
   // eight per-tool entries. The real platform must get the compact form back.
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page).toHaveURL(new RegExp(`/agents/${id}$`));
+  await expect(page).toHaveURL(new RegExp(`/workspaces/default/agents/${id}$`));
 
   const after = await platformGet(`v1/agents/${id}`);
   expect(after.version).toBe(2);
@@ -388,7 +388,9 @@ test("a blank starter creates a real agent with an explicit Bash approval policy
   page,
 }) => {
   await signIn(page);
-  await page.goto("/agents/new?model=" + encodeURIComponent(modelId));
+  await page.goto(
+    "/workspaces/default/agents/new?model=" + encodeURIComponent(modelId),
+  );
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Untitled agent",
   );
@@ -400,7 +402,7 @@ test("a blank starter creates a real agent with an explicit Bash approval policy
 
   await page.getByRole("button", { name: "Create agent", exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/agent_/);
-  runnerAgentId = page.url().split("/agents/")[1];
+  runnerAgentId = page.url().split("/workspaces/default/agents/")[1];
   createdAgentIds.push(runnerAgentId);
   await expect(
     page.getByRole("heading", { name: `live-e2e-runner-${RUN}` }),
@@ -435,7 +437,7 @@ test("HITL against the real model: approve, deny, and the trace reads", async ({
   });
 
   await signIn(page);
-  await page.goto(`/sessions/${session.id as string}`);
+  await page.goto(`/workspaces/default/sessions/${session.id as string}`);
   await expect(page.getByTestId("stream-state")).toHaveAttribute(
     "data-state",
     "live",

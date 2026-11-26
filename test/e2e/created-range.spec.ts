@@ -24,7 +24,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
   test(`${route}: custom bounds apply only on Apply, support one side and reset pagination`, async ({
     page,
   }) => {
-    await signIn(page, `/${route}`);
+    await signIn(page, `/workspaces/default/${route}`);
     await openCreatedFilter(page);
     await page.getByRole("button", { name: "Custom range" }).click();
     await page

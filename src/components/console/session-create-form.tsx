@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -114,7 +115,7 @@ export function SessionCreateForm({
             create.reset();
             leave.setDirty(false);
             if (onCreated) onCreated(session);
-            else router.push(`/sessions/${session.id}`);
+            else router.push(`${surfacePaths.sessions}/${session.id}`);
           },
         },
       ),
@@ -151,7 +152,7 @@ export function SessionCreateForm({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label>Agent</Label>
-            <ManageLink href="/agents">Manage agents</ManageLink>
+            <ManageLink href={surfacePaths.agents}>Manage agents</ManageLink>
           </div>
           <Select value={agentId} onValueChange={(v) => setAgentId(v ?? "")}>
             <SelectTrigger
@@ -179,7 +180,9 @@ export function SessionCreateForm({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label>Environment</Label>
-          <ManageLink href="/environments">Manage environments</ManageLink>
+          <ManageLink href={surfacePaths.environments}>
+            Manage environments
+          </ManageLink>
         </div>
         <Select
           value={environmentId}
@@ -210,7 +213,9 @@ export function SessionCreateForm({
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label id={vaultLabelId}>Credential vaults (optional)</Label>
-            <ManageLink href="/vaults">Manage credential vaults</ManageLink>
+            <ManageLink href={surfacePaths.vaults}>
+              Manage credential vaults
+            </ManageLink>
           </div>
           <div className="relative">
             <button

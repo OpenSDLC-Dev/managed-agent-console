@@ -14,7 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Nav } from "./nav";
 import { CommandPalette } from "./command-palette";
 import { cn } from "@/lib/utils";
-import { LANDING_ROUTE, PLAYGROUND_ROUTE, playgroundOnly } from "@/lib/routes";
+import {
+  surfacePaths,
+  LANDING_ROUTE,
+  PLAYGROUND_ROUTE,
+  playgroundOnly,
+} from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 
 // The menu button and the sidebar must switch at the same Tailwind md breakpoint.
@@ -68,9 +73,9 @@ export function ConsoleShell({
   const documentation = (
     <a
       href={
-        pathname?.startsWith("/skills")
+        pathname?.startsWith(surfacePaths.skills)
           ? platformDocs + "/blob/main/docs/plan/06_skills.md#multipart-upload"
-          : pathname === "/files"
+          : pathname === surfacePaths.files
             ? platformDocs + "/blob/main/docs/plan/08_files.md"
             : platformDocs
       }

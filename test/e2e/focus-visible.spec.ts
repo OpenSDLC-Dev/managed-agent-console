@@ -48,7 +48,7 @@ test("keyboard focus stays visible across composite controls", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_research0000000000001");
+  await page.goto("/workspaces/default/sessions/sesn_research0000000000001");
   const composer = page.getByRole("textbox", {
     name: "Message to the session",
   });
@@ -63,7 +63,7 @@ test("keyboard focus stays visible across composite controls", async ({
   );
   await page.keyboard.press("Escape");
 
-  await page.goto("/deployments");
+  await page.goto("/workspaces/default/deployments");
   await expect(page.getByText("Weekly research digest")).toBeVisible();
   const status = page.getByRole("combobox", { name: "Deployment status" });
   await status.focus();

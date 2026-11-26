@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
     replace: vi.fn(),
     refresh: refreshSpy,
   }),
-  usePathname: () => "/agents",
+  usePathname: () => "/workspaces/default/agents",
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -477,7 +477,9 @@ describe("AgentEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "Create agent" }));
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/agents/agent_new"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/agents/agent_new",
+      ),
     );
 
     const [url, init] = postCalls(mock)[0];
@@ -1125,7 +1127,9 @@ describe("AgentEditor", () => {
     await user.click(screen.getByRole("button", { name: "Create agent" }));
 
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/agents/agent_new"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/agents/agent_new",
+      ),
     );
     const [, init] = postCalls(mock)[0];
     expect(JSON.parse(init?.body as string)).toEqual(config);

@@ -18,6 +18,7 @@ import {
 } from "@/lib/platform/surfaces";
 import { PlatformError } from "@/lib/platform/http";
 import {
+  surfacePaths,
   isDashboardPath,
   isReportPage,
   MESSAGE_LOGS_ROUTE,
@@ -54,7 +55,7 @@ function UnconfirmedNativeSurface({
 function AgentsDirectoryFallback() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/agents");
+    router.replace(surfacePaths.agents);
   }, [router]);
   return <ListSkeleton />;
 }

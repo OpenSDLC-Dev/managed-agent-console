@@ -47,17 +47,17 @@ describe("bounceToLogin", () => {
     expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fsetup");
   });
   it("remembers where the operator was, query and all", () => {
-    at("/sessions/sess_1", "?tab=trace");
+    at("/workspaces/default/sessions/sess_1", "?tab=trace");
     bounceToLogin();
     expect(assign).toHaveBeenCalledWith(
-      "/login?return_to=%2Fsessions%2Fsess_1%3Ftab%3Dtrace",
+      "/login?return_to=%2Fworkspaces%2Fdefault%2Fsessions%2Fsess_1%3Ftab%3Dtrace",
     );
   });
 
   // A page holds several queries and they fail together. Without the guard one
   // expired session fires a navigation per in-flight request.
   it("probe: navigates once however many callers ask", () => {
-    at("/agents");
+    at("/workspaces/default/agents");
     bounceToLogin();
     bounceToLogin();
     bounceToLogin();
@@ -81,7 +81,7 @@ describe("bounceToLogin", () => {
 
 describe("leaveAfterSignOut", () => {
   it("leaves for the login page without remembering the page", () => {
-    at("/sessions/sess_1", "?tab=trace");
+    at("/workspaces/default/sessions/sess_1", "?tab=trace");
     leaveAfterSignOut();
     expect(assign).toHaveBeenCalledWith("/login");
   });
@@ -91,7 +91,7 @@ describe("leaveAfterSignOut", () => {
   // recorded intent the first one home wins, and the operator who deliberately
   // left is sent back to that page by the next sign-in.
   it("probe: an automatic bounce cannot preempt a deliberate sign-out", () => {
-    at("/agents");
+    at("/workspaces/default/agents");
     beginSignOut();
     bounceToLogin();
     expect(assign).not.toHaveBeenCalled();
@@ -105,9 +105,11 @@ describe("leaveAfterSignOut", () => {
   // way when the operator hits Sign out. They still get the destination they
   // asked for, since the bounce was an inference about a session now ended.
   it("probe: leaves even when a bounce has already started", () => {
-    at("/agents");
+    at("/workspaces/default/agents");
     bounceToLogin();
-    expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fagents");
+    expect(assign).toHaveBeenCalledWith(
+      "/login?return_to=%2Fworkspaces%2Fdefault%2Fagents",
+    );
 
     beginSignOut();
     leaveAfterSignOut();

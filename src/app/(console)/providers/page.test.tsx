@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ProvidersPage from "./page";
-import { stubGatewayFetch } from "../../../../test/mock-platform/gateway-fetch";
+import { stubGatewayFetch } from "@/../test/mock-platform/gateway-fetch";
 
 const pushSpy = vi.fn();
 vi.mock("next/navigation", () => ({

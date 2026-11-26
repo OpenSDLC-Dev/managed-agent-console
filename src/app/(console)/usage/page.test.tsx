@@ -12,13 +12,13 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import UsagePage from "./page";
 import UsageRequestsPage from "./requests/page";
-import { stubGatewayFetch } from "../../../../test/mock-platform/gateway-fetch";
+import { stubGatewayFetch } from "@/../test/mock-platform/gateway-fetch";
 import {
   gatewayFixtures,
   resetGateway,
-} from "../../../../test/mock-platform/gateway.mjs";
+} from "@/../test/mock-platform/gateway.mjs";
 import type { GatewayDailyUsage, GatewayUsageRow } from "@/lib/platform/types";
-import { useTestSearchParams } from "../../../../test/search-params";
+import { useTestSearchParams } from "@/../test/search-params";
 
 const navigation = { pathname: "/usage" };
 vi.mock("next/navigation", () => ({
@@ -446,7 +446,7 @@ describe("Usage requests", () => {
       await screen.findAllByText(first.alias, { selector: "span" })
     )[0].closest("tr")!;
     expect(within(row).getByRole("link").getAttribute("href")).toBe(
-      `/sessions/${first.session_id}`,
+      `/workspaces/default/sessions/${first.session_id}`,
     );
     const statuses = [...document.querySelectorAll("[data-status]")].map((s) =>
       s.getAttribute("data-status"),

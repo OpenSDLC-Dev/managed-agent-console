@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
@@ -76,7 +77,9 @@ function AgentSummary({ id }: { id: string }) {
         <Button
           size="sm"
           variant="outline"
-          render={<Link href={"/agents/" + encodeURIComponent(id)} />}
+          render={
+            <Link href={`${surfacePaths.agents}/${encodeURIComponent(id)}`} />
+          }
         >
           Open <ArrowRight className="size-3.5" />
         </Button>
@@ -132,7 +135,7 @@ function AgentSummary({ id }: { id: string }) {
                     >
                       {skill.type === "custom" ? (
                         <Link
-                          href={"/skills/" + encodeURIComponent(skill.skill_id)}
+                          href={`${surfacePaths.skills}/${encodeURIComponent(skill.skill_id)}`}
                           className="break-all hover:underline"
                         >
                           {skill.skill_id}
@@ -168,7 +171,7 @@ function AgentSummary({ id }: { id: string }) {
                       ) : (
                         <Link
                           className="break-all hover:underline"
-                          href={"/agents/" + encodeURIComponent(member.id)}
+                          href={`${surfacePaths.agents}/${encodeURIComponent(member.id)}`}
                         >
                           {member.id}
                         </Link>

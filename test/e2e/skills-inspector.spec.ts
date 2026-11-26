@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 test("skill inspector preserves the list, history and focus", async ({
   page,
 }) => {
-  await signIn(page, "/skills");
+  await signIn(page, "/workspaces/default/skills");
   const row = page.getByRole("row").filter({ hasText: "Weekly report writer" });
   await row
     .getByRole("cell", { name: "Weekly report writer", exact: true })
@@ -22,7 +22,7 @@ test("skill inspector preserves the list, history and focus", async ({
   ]) {
     await expect(panel.getByText(version, { exact: true })).toBeVisible();
   }
-  await expect(page).toHaveURL(`/skills?skill=${SKILL}`);
+  await expect(page).toHaveURL(`/workspaces/default/skills?skill=${SKILL}`);
   await expect(row).toBeVisible();
   await panel.getByText("API", { exact: true }).click();
   await expect(
@@ -47,7 +47,7 @@ test("skill inspector preserves the list, history and focus", async ({
 test("exact lookup shows a missing ID inline and Enter opens a matching skill", async ({
   page,
 }) => {
-  await signIn(page, "/skills");
+  await signIn(page, "/workspaces/default/skills");
   const lookup = page.getByRole("textbox", { name: "Find skill by ID" });
   await lookup.fill("missing-skill");
   await lookup.press("Enter");
@@ -71,7 +71,7 @@ test("exact lookup shows a missing ID inline and Enter opens a matching skill", 
 test("inspector navigation and resizing work with mouse and keyboard", async ({
   page,
 }) => {
-  await signIn(page, `/skills?skill=${SKILL}`);
+  await signIn(page, `/workspaces/default/skills?skill=${SKILL}`);
   const panel = page.getByRole("region", { name: "Skill details" });
   await expect(
     panel.getByRole("heading", { name: "Weekly report writer" }),

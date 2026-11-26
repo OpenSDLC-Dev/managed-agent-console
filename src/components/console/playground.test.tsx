@@ -13,7 +13,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TEST_SESSION } from "@/../test/session-fixture";
-import PlaygroundPage from "@/app/(console)/playground/page";
+import PlaygroundPage from "@/app/(console)/workspaces/default/playground/page";
 import {
   ConsoleSessionContext,
   type useConsoleSession,

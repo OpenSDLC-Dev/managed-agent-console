@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, Plus } from "lucide-react";
@@ -70,7 +71,7 @@ function ResourceCard<T extends { id: string }>({
           {data && !error && <ResourceCount kind={kind} first={data} />}
         </h2>
         <Link
-          href={"/" + kind}
+          href={surfacePaths[kind]}
           className="rounded-sm text-sm text-[#345477] underline decoration-current/40 underline-offset-2 hover:decoration-current dark:text-[#a4bfdb]"
         >
           View all {kind}
@@ -86,7 +87,11 @@ function ResourceCard<T extends { id: string }>({
             <li key={record.id}>
               <Link
                 href={
-                  "/" + kind + "?" + param + "=" + encodeURIComponent(record.id)
+                  surfacePaths[kind] +
+                  "?" +
+                  param +
+                  "=" +
+                  encodeURIComponent(record.id)
                 }
                 data-resource-id={record.id}
                 className="flex min-w-0 flex-col rounded-lg px-3 py-2 hover:bg-foreground/5 focus-visible:outline-ring"
@@ -154,13 +159,17 @@ export function ResourcesOverview() {
                   className="w-40"
                 >
                   {addFile && (
-                    <DropdownMenuItem render={<Link href="/files" />}>
+                    <DropdownMenuItem
+                      render={<Link href={surfacePaths.files} />}
+                    >
                       File
                     </DropdownMenuItem>
                   )}
                   {addSkill && (
                     <DropdownMenuItem
-                      render={<Link href="/skills?create=true" />}
+                      render={
+                        <Link href={`${surfacePaths.skills}?create=true`} />
+                      }
                     >
                       Skill
                     </DropdownMenuItem>

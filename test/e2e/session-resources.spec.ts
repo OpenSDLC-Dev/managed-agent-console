@@ -10,7 +10,9 @@ test("attach a file to an existing session and remove its reference", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_gatedbash00000000001?inspector=resources");
+  await page.goto(
+    "/workspaces/default/sessions/sesn_gatedbash00000000001?inspector=resources",
+  );
   await page.getByRole("button", { name: "Attach file" }).click();
   await page
     .getByLabel("File ID", { exact: true })
@@ -118,7 +120,9 @@ test("repository tokens stay write-only and a memory store offers no Remove", as
   expect(created.status()).toBe(200);
   const session = await created.json();
   expect(JSON.stringify(session)).not.toContain("test-only-original");
-  await page.goto(`/sessions/${session.id}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${session.id}?inspector=resources`,
+  );
   await expect(page.getByText("Project notes", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Rotate token" }).click();
   await page.getByLabel("Authorization token").fill("test-only-rotated");

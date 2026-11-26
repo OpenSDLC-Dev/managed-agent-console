@@ -12,13 +12,13 @@ test("lists dreams and renders inputs, outputs, usage and links", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/dreams");
+  await page.goto("/workspaces/default/dreams");
 
   await expect(page.locator('[data-status="pending"]')).toBeVisible();
   await expect(page.locator('[data-status="completed"]')).toBeVisible();
   await page.locator(`[data-testid="id-cell"][data-id="${COMPLETED}"]`).click();
 
-  await expect(page).toHaveURL(`/dreams/${COMPLETED}`);
+  await expect(page).toHaveURL(`/workspaces/default/dreams/${COMPLETED}`);
   await expect(page.getByTestId("dream-inputs")).toHaveAttribute(
     "data-testid",
     "dream-inputs",
@@ -38,7 +38,7 @@ test("lists dreams and renders inputs, outputs, usage and links", async ({
 
 test("creates, cancels and archives a pending dream", async ({ page }) => {
   await signIn(page);
-  await page.goto("/dreams/new");
+  await page.goto("/workspaces/default/dreams/new");
   await page.getByLabel("Memory store").fill("memstore_projectnotes000001");
   await page
     .getByLabel("Session IDs")

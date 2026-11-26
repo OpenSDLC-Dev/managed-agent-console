@@ -85,7 +85,7 @@ it("shows model/version and resolves the displayed tool rows through the existin
   await userEvent.click(screen.getByRole("button", { name: "Rendered" }));
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
-    "/agents/" + agent.id,
+    "/workspaces/default/agents/" + agent.id,
   );
 });
 
@@ -117,12 +117,12 @@ it("keeps server/unknown tool data readable and links custom skills and the pinn
   expect(screen.getByText(/https:\/\/mcp.example/)).toBeVisible();
   expect(screen.getByRole("link", { name: "skill_internal" })).toHaveAttribute(
     "href",
-    "/skills/skill_internal",
+    "/workspaces/default/skills/skill_internal",
   );
   expect(screen.getByText("This coordinator (self)")).toBeVisible();
   expect(screen.getByRole("link", { name: agents[1].id })).toHaveAttribute(
     "href",
-    "/agents/" + agents[1].id,
+    "/workspaces/default/agents/" + agents[1].id,
   );
   await userEvent.click(screen.getByText("Metadata"));
   expect(screen.getByText(/"team": "research"/)).toBeVisible();

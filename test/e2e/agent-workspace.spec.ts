@@ -11,7 +11,7 @@ test.beforeEach(async ({ request }) => {
 test("inline configuration discards, saves a new version and opens read-only history", async ({
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   const description = page.getByLabel("Description", { exact: true });
   await expect(description).toHaveValue(
     "Multi-step web research with citations.",
@@ -66,7 +66,7 @@ test("inline configuration discards, saves a new version and opens read-only his
 test("version and section navigation protect drafts and related lists use the agent filter", async ({
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   const description = page.getByLabel("Description", { exact: true });
   await description.fill("Unsaved");
   await page.getByRole("combobox", { name: "Agent version" }).click();
@@ -112,12 +112,12 @@ test("two inline editors retain the stale draft until the operator reloads the l
   context,
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
     "Deep researcher",
   );
   const other = await context.newPage();
-  await other.goto("/agents/" + AGENT);
+  await other.goto("/workspaces/default/agents/" + AGENT);
   await expect(other.getByLabel("Name", { exact: true })).toHaveValue(
     "Deep researcher",
   );
@@ -154,7 +154,7 @@ test("two inline editors retain the stale draft until the operator reloads the l
 test("Start session pins the selected version and navigation remains guarded", async ({
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT + "?version=2");
+  await signIn(page, "/workspaces/default/agents/" + AGENT + "?version=2");
   await expect(page.getByLabel("Name", { exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Start session" }).click();
   const dialog = page.getByRole("dialog", { name: "Create session" });
@@ -187,7 +187,7 @@ test("narrow editing keeps the draft actions reachable and exposes invalid histo
   page,
 }) => {
   await page.setViewportSize({ width: 360, height: 844 });
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   await page.getByLabel("Description", { exact: true }).fill("Narrow draft");
   await expect(
     page.getByRole("button", { name: "Discard", exact: true }),
@@ -216,7 +216,7 @@ test("narrow editing keeps the draft actions reachable and exposes invalid histo
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Discard", exact: true }).click();
-  await page.goto("/agents/" + AGENT + "?version=bad");
+  await page.goto("/workspaces/default/agents/" + AGENT + "?version=bad");
   await expect(page.getByTestId("error-state")).toHaveAttribute(
     "data-error-status",
     "400",
@@ -229,7 +229,7 @@ test("narrow editing keeps the draft actions reachable and exposes invalid histo
 test("Start session cancellation retains the Agent draft and creation confirms leaving it", async ({
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   const description = page.getByLabel("Description", { exact: true });
   await description.fill("Preserved agent draft");
   await page
@@ -269,7 +269,7 @@ test("Start session cancellation retains the Agent draft and creation confirms l
 test("failed session creation keeps the Agent draft and its navigation protection", async ({
   page,
 }) => {
-  await signIn(page, "/agents/" + AGENT);
+  await signIn(page, "/workspaces/default/agents/" + AGENT);
   await page
     .getByLabel("Description", { exact: true })
     .fill("Draft survives failure");

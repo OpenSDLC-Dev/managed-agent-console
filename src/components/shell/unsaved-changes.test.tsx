@@ -37,7 +37,7 @@ function Draft({ leave }: { leave: () => void }) {
       />
       <button onClick={() => actions.requestLeave(leave)}>Cancel edit</button>
       <button onClick={() => actions.setDirty(false)}>Saved</button>
-      <Link href="/memory-stores">Memory stores</Link>
+      <Link href="/workspaces/default/memory-stores">Memory stores</Link>
     </>
   );
 }
@@ -77,7 +77,7 @@ it("guards internal links and clears the browser unload guard after saving", asy
   await user.click(screen.getByText("Memory stores"));
   expect(push).not.toHaveBeenCalled();
   await user.click(await screen.findByRole("button", { name: "Leave" }));
-  expect(push).toHaveBeenCalledWith("/memory-stores");
+  expect(push).toHaveBeenCalledWith("/workspaces/default/memory-stores");
   const retained = new Event("beforeunload", { cancelable: true });
   window.dispatchEvent(retained);
   expect(retained.defaultPrevented).toBe(true);

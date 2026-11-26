@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useRouter } from "next/navigation";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { Pause, Play, RotateCw } from "lucide-react";
@@ -43,7 +44,7 @@ export function DeploymentActions({
                   onRun
                     ? onRun(created)
                     : router.push(
-                        `/deployments/${deployment.id}/runs/${created.id}`,
+                        `${surfacePaths.deployments}/${deployment.id}/runs/${created.id}`,
                       ),
               })
             }

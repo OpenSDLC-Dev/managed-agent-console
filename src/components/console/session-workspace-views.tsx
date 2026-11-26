@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
@@ -36,8 +37,7 @@ export function SessionOverview({
           <Link
             className="hover:underline"
             href={
-              "/agents/" +
-              encodeURIComponent(session.agent.id) +
+              `${surfacePaths.agents}/${encodeURIComponent(session.agent.id)}` +
               "?version=" +
               session.agent.version
             }
@@ -47,7 +47,7 @@ export function SessionOverview({
         </Field>
         <Field label="Environment">
           <Link
-            href={"/environments/" + encodeURIComponent(session.environment_id)}
+            href={`${surfacePaths.environments}/${encodeURIComponent(session.environment_id)}`}
           >
             <IdCode id={session.environment_id} />
           </Link>
@@ -69,7 +69,7 @@ export function SessionOverview({
                 <Link
                   className="block hover:underline"
                   key={id}
-                  href={"/vaults/" + encodeURIComponent(id)}
+                  href={`${surfacePaths.vaults}/${encodeURIComponent(id)}`}
                 >
                   <IdCode id={id} />
                 </Link>

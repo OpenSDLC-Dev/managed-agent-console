@@ -6,7 +6,7 @@ import type { Page } from "@playwright/test";
  * decision 6), and a form waits for a listed choice before it saves.
  */
 export async function chooseModel(page: Page, name = "agent-default") {
-  if (new URL(page.url()).pathname === "/agents/new") {
+  if (new URL(page.url()).pathname === "/workspaces/default/agents/new") {
     await page.getByRole("button", { name: "Model", exact: true }).click();
     await page.getByRole("radio", { name, exact: true }).check();
     await page.keyboard.press("Escape");

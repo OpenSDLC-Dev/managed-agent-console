@@ -11,7 +11,7 @@ test.beforeEach(async ({ request }) => {
 test("Deployment selection preserves list history and opens the full page explicitly", async ({
   page,
 }) => {
-  await signIn(page, "/deployments");
+  await signIn(page, "/workspaces/default/deployments");
   await expect(
     page.getByRole("cell", { name: "Weekly research digest", exact: true }),
   ).toBeVisible();
@@ -30,15 +30,18 @@ test("Deployment selection preserves list history and opens the full page explic
   await page.reload();
   await expect(panel.getByRole("heading", { name, exact: true })).toBeVisible();
   await panel.getByRole("button", { name: "Close details" }).click();
-  await expect(page).toHaveURL("/deployments");
+  await expect(page).toHaveURL("/workspaces/default/deployments");
   await expect(page.getByLabel("Find deployment by ID")).toBeFocused();
   await page.getByLabel("Find deployment by ID").fill(DEPLOYMENT);
   await page.getByLabel("Find deployment by ID").press("Enter");
   await expect(
     panel.getByRole("link", { name: /Deep researcher/ }),
-  ).toHaveAttribute("href", "/agents/agent_researcher00000000001?version=3");
+  ).toHaveAttribute(
+    "href",
+    "/workspaces/default/agents/agent_researcher00000000001?version=3",
+  );
   await panel.getByRole("link", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL("/deployments/" + DEPLOYMENT);
+  await expect(page).toHaveURL("/workspaces/default/deployments/" + DEPLOYMENT);
   await page.goBack();
   await panel.getByRole("button", { name: "Close details" }).click();
   const rowOpen = page
@@ -46,18 +49,21 @@ test("Deployment selection preserves list history and opens the full page explic
     .filter({ hasText: "Weekly research digest" })
     .getByRole("link", { name: "Open", exact: true });
   await rowOpen.click();
-  await expect(page).toHaveURL("/deployments/" + DEPLOYMENT);
+  await expect(page).toHaveURL("/workspaces/default/deployments/" + DEPLOYMENT);
   await page.goBack();
   await expect(panel).toHaveCount(0);
   await rowOpen.focus();
   await rowOpen.press("Enter");
-  await expect(page).toHaveURL("/deployments/" + DEPLOYMENT);
+  await expect(page).toHaveURL("/workspaces/default/deployments/" + DEPLOYMENT);
 });
 
 test("lookup errors, resize and narrow resources remain accessible", async ({
   page,
 }) => {
-  await signIn(page, "/deployments?deployment=" + DEPLOYMENT);
+  await signIn(
+    page,
+    "/workspaces/default/deployments?deployment=" + DEPLOYMENT,
+  );
   const panel = page.getByRole("region", { name: "Deployment details" });
   await expect(
     panel.getByRole("heading", { name: "Weekly research digest" }),
@@ -82,7 +88,9 @@ test("lookup errors, resize and narrow resources remain accessible", async ({
   await page.getByLabel("Find deployment by ID").fill("depl_missing");
   await page.getByLabel("Find deployment by ID").press("Enter");
   await expect(panel.getByTestId("error-state")).toBeVisible();
-  await expect(page).toHaveURL("/deployments?deployment=depl_missing");
+  await expect(page).toHaveURL(
+    "/workspaces/default/deployments?deployment=depl_missing",
+  );
 });
 
 test("opening and closing a Deployment on page two retains the server cursor", async ({
@@ -103,7 +111,7 @@ test("opening and closing a Deployment on page two retains the server cursor", a
     });
     expect(created.ok()).toBe(true);
   }
-  await signIn(page, "/deployments");
+  await signIn(page, "/workspaces/default/deployments");
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await expect(page.locator("tbody tr")).toHaveCount(3);
   const rows = await page.locator("tbody tr").allTextContents();

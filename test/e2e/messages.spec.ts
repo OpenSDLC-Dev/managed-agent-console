@@ -32,9 +32,12 @@ test("Messages navigation, Overview links and the selected API key", async ({
   await signIn(page);
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   const group = nav.locator('[data-nav-group="Messages"]');
-  await expect(group).toHaveAttribute("href", "/messages");
+  await expect(group).toHaveAttribute(
+    "href",
+    "/workspaces/default/messages-overview",
+  );
   await group.click();
-  await expect(page).toHaveURL(/\/messages$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/messages-overview$/);
   await expect(nav.getByRole("link")).toHaveText([
     "Overview",
     "Playground",
@@ -68,7 +71,7 @@ test("Messages navigation, Overview links and the selected API key", async ({
   await workspace.click();
   await options.click();
   await expect(workspace).toHaveAttribute("aria-expanded", "false");
-  await expect(page).toHaveURL(/\/messages$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/messages-overview$/);
 
   const main = page.getByRole("main");
   await expect(
@@ -98,11 +101,11 @@ test("Messages navigation, Overview links and the selected API key", async ({
   const resources = main.getByRole("region", { name: "Resources" });
   await expect(resources.getByRole("link", { name: /^Files/ })).toHaveAttribute(
     "href",
-    "/files",
+    "/workspaces/default/files",
   );
   await expect(
     resources.getByRole("link", { name: /^Skills/ }),
-  ).toHaveAttribute("href", "/skills");
+  ).toHaveAttribute("href", "/workspaces/default/skills");
   await expect(
     resources.getByRole("link", { name: /^Rate limits/ }),
   ).toHaveAttribute("href", "/models");
@@ -115,15 +118,15 @@ test("Messages navigation, Overview links and the selected API key", async ({
   await expect(main.locator("#input-tokens")).toBeVisible();
   await page.goBack();
   await main.getByRole("link", { name: "Open logs" }).click();
-  await expect(page).toHaveURL(/\/messages\/logs$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/logs$/);
   await expect(logRow(page, DIRECT_REQUEST)).toBeVisible();
   await page.goBack();
 
   await main.getByRole("link", { name: "View all keys" }).click();
-  await expect(page).toHaveURL(/\/api-keys$/);
+  await expect(page).toHaveURL(/\/settings\/keys$/);
   await page.goBack();
   await main.getByRole("link", { name: /ci-deploy/ }).click();
-  await expect(page).toHaveURL(/\/api-keys\?key=apikey_ci01$/);
+  await expect(page).toHaveURL(/\/settings\/keys\?key=apikey_ci01$/);
   await expect(page.getByRole("dialog", { name: "ci-deploy" })).toBeVisible();
   await page.goBack();
   await main.getByRole("button", { name: "Create key", exact: true }).click();
@@ -133,7 +136,7 @@ test("Messages navigation, Overview links and the selected API key", async ({
   await page.keyboard.press("Escape");
 
   await main.getByRole("link", { name: "Open playground" }).click();
-  await expect(page).toHaveURL(/\/playground$/);
+  await expect(page).toHaveURL("/workspaces/default/playground");
   await expect(nav.getByRole("link", { name: "Playground" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -163,7 +166,7 @@ test("the cache hit rate uses seven days while tokens and requests use 30", asyn
     cache_read_tokens: 32,
   });
   await serveMessagesLedger(page, rows);
-  await signIn(page, "/messages");
+  await signIn(page, "/workspaces/default/messages-overview");
   const main = page.getByRole("main");
   await expect(
     main.getByRole("region", { name: "Tokens", exact: true }),
@@ -206,7 +209,7 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
 }) => {
   const rows = messagesLedger();
   await serveMessagesLedger(page, rows);
-  await signIn(page, "/messages/logs");
+  await signIn(page, "/workspaces/default/logs");
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
     origin: new URL(page.url()).origin,
   });
@@ -238,12 +241,12 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(DIRECT_REQUEST);
-  await expect(page).toHaveURL(/\/messages\/logs$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/logs$/);
 
   await direct.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
-    /\/messages\/logs\?request=req_messages_direct$/,
+    /\/workspaces\/default\/logs\?request=req_messages_direct$/,
   );
   const details = page.getByRole("dialog", { name: "Request details" });
   const directId = details.getByRole("button", {
@@ -292,7 +295,7 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
 
   await logRow(page, PLAYGROUND_REQUEST).click();
   await expect(page).toHaveURL(
-    /\/messages\/logs\?request=req_messages_playground$/,
+    /\/workspaces\/default\/logs\?request=req_messages_playground$/,
   );
   await page.reload();
   await expect(playgroundId).toBeVisible();
@@ -300,7 +303,7 @@ test("Logs page through mixed traffic, copy IDs, inspect with the keyboard and r
     .getByRole("main")
     .getByRole("heading", { name: "Logs", exact: true })
     .click({ position: { x: 8, y: 8 } });
-  await expect(page).toHaveURL(/\/messages\/logs$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/logs$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByText(/As of /)).toBeVisible();
 
@@ -324,9 +327,9 @@ test("Logs preserve the empty state and reject an out-of-window detail bookmark"
       (row) => ![DIRECT_REQUEST, PLAYGROUND_REQUEST].includes(row.request_id),
     ),
   );
-  await signIn(page, "/messages/logs");
+  await signIn(page, "/workspaces/default/logs");
   await expect(page.getByText("No logs in the last 30 days.")).toBeVisible();
-  await page.goto("/messages/logs?request=" + EXPIRED_REQUEST);
+  await page.goto("/workspaces/default/logs?request=" + EXPIRED_REQUEST);
   await expect(
     page.getByText("Request not found in the last 30 days."),
   ).toBeVisible();
@@ -336,7 +339,7 @@ test("a failed refresh hides the old log and a later refresh restores it", async
   page,
 }) => {
   await serveMessagesLedger(page);
-  await signIn(page, "/messages/logs");
+  await signIn(page, "/workspaces/default/logs");
   await expect(logRow(page, DIRECT_REQUEST)).toBeVisible();
   await page.route(
     "**/admin/v1/usage/requests?*",
@@ -373,7 +376,7 @@ test("load older Messages and keep bookmark neighbors when a new request arrives
     created_at: new Date(Date.now() - (index + 1) * 60_000).toISOString(),
   }));
   await serveMessagesLedger(page, rows);
-  await signIn(page, "/messages/logs");
+  await signIn(page, "/workspaces/default/logs");
   const more = page.getByRole("button", { name: "Load more" });
   await expect(logRow(page, "req_page_2")).toBeVisible();
   await expect(logRow(page, "req_page_1")).toHaveCount(0);
@@ -396,7 +399,9 @@ test("load older Messages and keep bookmark neighbors when a new request arrives
   });
   const detail = page.getByRole("dialog", { name: "Request details" });
   await detail.getByRole("button", { name: "Previous request" }).click();
-  await expect(page).toHaveURL(/\/messages\/logs\?request=req_page_2$/);
+  await expect(page).toHaveURL(
+    /\/workspaces\/default\/logs\?request=req_page_2$/,
+  );
   await expect(
     detail.getByRole("button", { name: "Copy req_page_2", exact: true }),
   ).toBeVisible();
@@ -410,7 +415,7 @@ test("Messages pages fit phone width and a log can be inspected and closed", asy
   await page.setViewportSize({ width: 390, height: 844 });
   await grantDashboardModelDiscovery(page);
   await serveMessagesLedger(page);
-  await signIn(page, "/messages");
+  await signIn(page, "/workspaces/default/messages-overview");
   const main = page.getByRole("main");
   const fits = () =>
     page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
@@ -428,7 +433,7 @@ test("Messages pages fit phone width and a log can be inspected and closed", asy
   expect(await fits()).toBe(true);
   await details.getByRole("button", { name: "Close details" }).click();
   await expect(details).toHaveCount(0);
-  await page.goto("/playground");
+  await page.goto("/workspaces/default/playground");
   await expect(main.getByLabel("Prompt", { exact: true })).toBeVisible();
   expect(await fits()).toBe(true);
 });
@@ -448,11 +453,11 @@ test("a Playground-only principal has one Messages destination", async ({
   });
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   for (const bookmark of [
-    "/messages",
-    "/messages/logs?request=" + DIRECT_REQUEST,
+    "/workspaces/default/messages-overview",
+    "/workspaces/default/logs?request=" + DIRECT_REQUEST,
   ]) {
     await page.goto(bookmark);
-    await expect(page).toHaveURL(/\/playground$/);
+    await expect(page).toHaveURL("/workspaces/default/playground");
     await expect(nav.getByRole("link")).toHaveText(["Playground"]);
   }
   expect(adminReads).toEqual([]);
@@ -513,7 +518,7 @@ test("edit, preview, run once and restore the Playground response from History",
       ].join(""),
     });
   });
-  await signIn(page, "/messages");
+  await signIn(page, "/workspaces/default/messages-overview");
   await page.getByRole("link", { name: "Open playground" }).click();
   const main = page.getByRole("main");
   const model = main.getByRole("combobox", { name: "Model", exact: true });
@@ -631,7 +636,7 @@ async function openNonStreamingPlayground(
     calls.push(body);
     return route.fulfill({ json: { ...answer, model: body.model } });
   });
-  await signIn(page, "/playground");
+  await signIn(page, "/workspaces/default/playground");
   return { calls, answer };
 }
 
@@ -918,7 +923,7 @@ test("a tool template streams partial input in Rendered and Raw until the respon
     if (req.method() === "POST" && new URL(req.url()).pathname === nativePath)
       sends.push(req.postDataJSON());
   });
-  await signIn(page, "/playground");
+  await signIn(page, "/workspaces/default/playground");
   await page
     .getByRole("button", { name: "Stream tool arguments live" })
     .click();

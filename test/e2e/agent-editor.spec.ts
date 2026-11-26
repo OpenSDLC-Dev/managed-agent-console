@@ -8,7 +8,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("create an agent through the rendered form", async ({ page }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("link", { name: "Create agent" }).click();
   await expect(page).toHaveURL(/\/agents\/new$/);
 
@@ -38,7 +38,7 @@ test("create an agent through the rendered form", async ({ page }) => {
 test("a manual template saves the displayed model, effort, speed and tool exclusions", async ({
   page,
 }) => {
-  await signIn(page, "/agents/new");
+  await signIn(page, "/workspaces/default/agents/new");
   await page.getByRole("radio", { name: "Template" }).check();
   await page.getByRole("button", { name: /Structured extractor/ }).click();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
@@ -76,7 +76,7 @@ test("a manual template saves the displayed model, effort, speed and tool exclus
 });
 
 test("edit through the raw tab with the YAML toggle", async ({ page }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })
@@ -112,11 +112,15 @@ test("edit through the raw tab with the YAML toggle", async ({ page }) => {
 test("stale-version saves surface the 409 conflict", async ({ context }) => {
   const pageA = await context.newPage();
   await signIn(pageA);
-  await pageA.goto("/agents/agent_researcher00000000001/edit");
+  await pageA.goto(
+    "/workspaces/default/agents/agent_researcher00000000001/edit",
+  );
   await expect(pageA.getByLabel("Name")).toHaveValue("Deep researcher");
 
   const pageB = await context.newPage();
-  await pageB.goto("/agents/agent_researcher00000000001/edit");
+  await pageB.goto(
+    "/workspaces/default/agents/agent_researcher00000000001/edit",
+  );
   await expect(pageB.getByLabel("Name")).toHaveValue("Deep researcher");
 
   // A saves first (v bump), then B saves against the stale version. The
@@ -138,7 +142,7 @@ test("platform validation errors surface inline from the raw tab", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/agents/new");
+  await page.goto("/workspaces/default/agents/new");
   await page.getByRole("radio", { name: "raw" }).click();
   const editor = page.getByLabel("Raw agent config");
   await editor.fill(
@@ -151,7 +155,7 @@ test("platform validation errors surface inline from the raw tab", async ({
 });
 
 test("archive an agent from its detail page", async ({ page }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /General task agent/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })
@@ -195,7 +199,7 @@ test("archive an agent from its detail page", async ({ page }) => {
 test("structured custom tools and MCP settings survive Raw and save", async ({
   page,
 }) => {
-  await signIn(page, "/agents/new");
+  await signIn(page, "/workspaces/default/agents/new");
   await page.getByLabel("Name", { exact: true }).fill("Support");
   await chooseModel(page);
   await page.getByRole("button", { name: "Tools", exact: true }).click();
@@ -248,7 +252,7 @@ test("structured custom tools and MCP settings survive Raw and save", async ({
 test("schema indentation stays in the editor and Escape then Tab releases focus", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("link", { name: "Create agent", exact: true }).click();
   const editor = page.getByRole("main");
   await editor.getByRole("button", { name: "Tools", exact: true }).click();

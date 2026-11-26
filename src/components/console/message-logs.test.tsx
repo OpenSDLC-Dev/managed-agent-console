@@ -58,7 +58,8 @@ function openLogs(rows: GatewayUsageRow[], request?: string) {
   history.replaceState(
     null,
     "",
-    "/messages/logs" + (request ? "?" + new URLSearchParams({ request }) : ""),
+    "/workspaces/default/logs" +
+      (request ? "?" + new URLSearchParams({ request }) : ""),
   );
   const read = vi.fn(async (path: string) => {
     const query = new URL(path, "http://console.test").searchParams;

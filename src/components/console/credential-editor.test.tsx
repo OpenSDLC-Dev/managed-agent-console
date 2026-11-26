@@ -154,7 +154,9 @@ describe("CredentialEditor", () => {
       },
     });
     await waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/vaults/vlt_1/credentials/vcred_1"),
+      expect(push).toHaveBeenCalledWith(
+        "/workspaces/default/vaults/vlt_1/credentials/vcred_1",
+      ),
     );
   });
 

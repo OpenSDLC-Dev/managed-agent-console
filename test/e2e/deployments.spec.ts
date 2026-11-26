@@ -11,7 +11,7 @@ test("inspect, pause, resume, run, edit and archive a deployment", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto(`/deployments/${DEPLOYMENT}`);
+  await page.goto(`/workspaces/default/deployments/${DEPLOYMENT}`);
 
   await expect(page.getByTestId("deployment-schedule")).toHaveAttribute(
     "data-testid",
@@ -30,7 +30,9 @@ test("inspect, pause, resume, run, edit and archive a deployment", async ({
 
   await page.getByRole("button", { name: "Run now" }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/deployments/${DEPLOYMENT}\\?tab=runs&run=drun_mock`),
+    new RegExp(
+      `/workspaces/default/deployments/${DEPLOYMENT}\\?tab=runs&run=drun_mock`,
+    ),
   );
   const inspector = page.getByRole("region", { name: "Session details" });
   await expect(
@@ -64,7 +66,7 @@ test("inspect, pause, resume, run, edit and archive a deployment", async ({
 
 test("create a scheduled deployment with a pinned agent", async ({ page }) => {
   await signIn(page);
-  await page.goto("/deployments/new");
+  await page.goto("/workspaces/default/deployments/new");
   await page.getByLabel("Name").fill("Morning triage");
   await page
     .getByRole("textbox", { name: "Initial message" })
