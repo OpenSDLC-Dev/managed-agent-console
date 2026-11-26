@@ -38,6 +38,11 @@ test("the Agents directory stays on the current page after a refresh", async ({
   expect(secondUrl.searchParams.get("page")).toBeTruthy();
   expect(secondUrl.searchParams.get("status")).toBe("all");
 
+  await page.getByRole("combobox", { name: "Created filter" }).click();
+  await page.getByRole("button", { name: "Custom range" }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page).toHaveURL(secondUrl.href);
+
   await next.click();
   await expect(page.getByRole("cell", { name: "Retired agent" })).toBeVisible();
   await page.reload();

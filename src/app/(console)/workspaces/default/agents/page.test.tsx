@@ -335,6 +335,8 @@ describe("AgentsPage", () => {
       renderPage();
       expect(await screen.findByText("Linked page")).toBeVisible();
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      await userEvent.click(screen.getByRole("button", { name: "All" }));
+      expect(new URLSearchParams(location.search).get("page")).toBe(cursor);
       await userEvent.click(screen.getByRole("button", { name: filter }));
       expect(await screen.findByText("First page")).toBeVisible();
       expect(new URLSearchParams(location.search).has("page")).toBe(false);

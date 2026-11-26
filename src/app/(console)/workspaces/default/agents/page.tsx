@@ -82,8 +82,8 @@ function AgentsList() {
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
   const page = filters.params.get("page") || null;
-  // Agents has forward-only cursors. Keep the return path in this history
-  // entry so refresh and Back restore it without growing the shareable URL.
+  // Platform returns forward-only cursors for agents. Store the return path
+  // in the history entry so refresh and Back can restore it.
   const previousPages: (string | null)[] =
     page && typeof window !== "undefined"
       ? (window.history.state?.agentPreviousPages ?? [])
@@ -107,8 +107,15 @@ function AgentsList() {
   const inspect = (id: string | null) => navigate({ agent: id });
 
   const filtered = includeArchived || created.key !== "all";
-  const changeFilters = (changes: Record<string, string | null>) =>
-    filters.update({ ...changes, page: null });
+  function changeFilters(changes: Record<string, string | null>) {
+    if (
+      Object.entries(changes).some(
+        ([name, value]) => filters.params.get(name) !== value,
+      )
+    ) {
+      filters.update({ ...changes, page: null });
+    }
+  }
   const resetFilters = () => changeFilters({ status: null, created: null });
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="agents" />;
