@@ -312,6 +312,37 @@ describe("AgentsPage", () => {
       expect(last.searchParams.get("page")).toBeNull();
     });
   });
+
+  it.each(["Active", "Last 24 hours"])(
+    "opens a page link and drops its cursor when filtering by %s",
+    async (filter) => {
+      const cursor = "opaque+/=";
+      const params = new URLSearchParams({ status: "all", page: cursor });
+      history.replaceState(null, "", "/workspaces/default/agents?" + params);
+      const fetchMock = stubFetch((url) =>
+        json({
+          data: [
+            agent({
+              id: "agt_1",
+              name:
+                url.searchParams.get("page") === cursor
+                  ? "Linked page"
+                  : "First page",
+            }),
+          ],
+        }),
+      );
+      renderPage();
+      expect(await screen.findByText("Linked page")).toBeVisible();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await userEvent.click(screen.getByRole("button", { name: filter }));
+      expect(await screen.findByText("First page")).toBeVisible();
+      expect(new URLSearchParams(location.search).has("page")).toBe(false);
+      expect(
+        screen.getByRole("button", { name: "Previous page" }),
+      ).toBeDisabled();
+    },
+  );
 });
 
 it("opens an exact ID outside the current list and safely encodes its route segment", async () => {

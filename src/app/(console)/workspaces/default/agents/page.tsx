@@ -28,7 +28,6 @@ import { StatusFilter } from "@/components/console/status-filter";
 import { CreatedFilter } from "@/components/console/created-filter";
 import { useAgents } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
-import { useCursorPage } from "@/lib/platform/use-cursor-page";
 import type { Agent } from "@/lib/platform/types";
 
 const COLUMNS: Column<Agent>[] = [
@@ -82,11 +81,15 @@ function AgentsList() {
   const includeArchived = filters.params.get("status") === "all";
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
-  const pager = useCursorPage(
-    `${includeArchived}|${created.key}|${created.gte}|${created.lte}`,
-  );
-  const { data, error, isPending } = useAgents({
-    page: pager.page,
+  const page = filters.params.get("page") || null;
+  // Agents has forward-only cursors. Keep the return path in this history
+  // entry so refresh and Back restore it without growing the shareable URL.
+  const previousPages: (string | null)[] =
+    page && typeof window !== "undefined"
+      ? (window.history.state?.agentPreviousPages ?? [])
+      : [];
+  const { data, error, isPending, isPlaceholderData } = useAgents({
+    page: page ?? undefined,
     include_archived: includeArchived || undefined,
     "created_at[gte]": created.gte,
     "created_at[lte]": created.lte,
@@ -95,10 +98,18 @@ function AgentsList() {
   const inspected = filters.params.get("agent");
   const rows = data?.data ?? [];
   const index = rows.findIndex((agent) => agent.id === inspected);
-  const inspect = (id: string) => filters.update({ agent: id });
+  function navigate(
+    changes: Record<string, string | null>,
+    trail = previousPages,
+  ) {
+    filters.update(changes, "push", { agentPreviousPages: trail });
+  }
+  const inspect = (id: string | null) => navigate({ agent: id });
 
   const filtered = includeArchived || created.key !== "all";
-  const resetFilters = () => filters.update({ status: null, created: null });
+  const changeFilters = (changes: Record<string, string | null>) =>
+    filters.update({ ...changes, page: null });
+  const resetFilters = () => changeFilters({ status: null, created: null });
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="agents" />;
 
@@ -132,12 +143,12 @@ function AgentsList() {
           value={created.key}
           range={created.range}
           onChange={(key, range) =>
-            filters.update({ created: encodeCreatedFilter(key, range) })
+            changeFilters({ created: encodeCreatedFilter(key, range) })
           }
         />
         <StatusFilter
           includeArchived={includeArchived}
-          onChange={(value) => filters.update({ status: value ? "all" : null })}
+          onChange={(value) => changeFilters({ status: value ? "all" : null })}
         />
         {filtered && (
           <Button size="sm" variant="ghost" onClick={resetFilters}>
@@ -151,7 +162,7 @@ function AgentsList() {
           previous={index > 0 ? rows[index - 1]?.id : undefined}
           next={index >= 0 ? rows[index + 1]?.id : undefined}
           onSelect={inspect}
-          onClose={() => filters.update({ agent: null })}
+          onClose={() => inspect(null)}
           fallbackFocus={lookup}
         />
       )}
@@ -187,10 +198,18 @@ function AgentsList() {
             }
           />
           <Pager
-            hasPrev={pager.hasPrev}
-            hasNext={!!data?.next_page}
-            onPrev={pager.goPrev}
-            onNext={() => data?.next_page && pager.goNext(data.next_page)}
+            hasPrev={previousPages.length > 0}
+            hasNext={!isPlaceholderData && !!data?.next_page}
+            onPrev={() =>
+              navigate(
+                { page: previousPages.at(-1) ?? null },
+                previousPages.slice(0, -1),
+              )
+            }
+            onNext={() =>
+              data?.next_page &&
+              navigate({ page: data.next_page }, [...previousPages, page])
+            }
           />
         </>
       )}

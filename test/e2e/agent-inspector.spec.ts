@@ -9,6 +9,55 @@ test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");
 });
 
+test("the Agents directory stays on the current page after a refresh", async ({
+  page,
+}) => {
+  // Exercise the fixture's forward-only cursors with one existing agent per page.
+  await page.route("**/proxy/v1/agents?*", async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set("limit", "1");
+    await route.fulfill({ response: await route.fetch({ url: url.href }) });
+  });
+  const first = page.getByRole("cell", {
+    name: "Deep researcher",
+    exact: true,
+  });
+  const second = page.getByRole("cell", {
+    name: "General task agent",
+    exact: true,
+  });
+  const next = page.getByRole("button", { name: "Next page" });
+  const previous = page.getByRole("button", { name: "Previous page" });
+  await signIn(page, "/workspaces/default/agents?status=all");
+  await expect(first).toBeVisible();
+  await next.click();
+  await expect(second).toBeVisible();
+  await page.reload();
+  await expect(second).toBeVisible();
+  const secondUrl = new URL(page.url());
+  expect(secondUrl.searchParams.get("page")).toBeTruthy();
+  expect(secondUrl.searchParams.get("status")).toBe("all");
+
+  await next.click();
+  await expect(page.getByRole("cell", { name: "Retired agent" })).toBeVisible();
+  await page.reload();
+  await previous.click();
+  await expect(page).toHaveURL(secondUrl.href);
+  await expect(second).toBeVisible();
+  await second.click();
+  const drawer = page.getByRole("region", { name: "Agent details" });
+  await expect(drawer).toHaveAttribute("data-agent-id", TASK);
+  await drawer.getByRole("button", { name: "Close details" }).click();
+  await previous.click();
+  await expect(first).toBeVisible();
+  await expect(page).toHaveURL("/workspaces/default/agents?status=all");
+  await page.goBack();
+  await expect(second).toBeVisible();
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(page).toHaveURL("/workspaces/default/agents");
+  await expect(first).toBeVisible();
+});
+
 test("agent inspector retains filters, selection and history before opening the full page", async ({
   page,
 }) => {

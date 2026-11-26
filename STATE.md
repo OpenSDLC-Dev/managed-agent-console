@@ -4,7 +4,7 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-The Default workspace page migration accompanies [Platform plan 42](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/42_multi-tenant-activation.md). See the [page addresses](./README.md) and [change for existing bookmarks](./CHANGELOG.md).
+The Default workspace page migration accompanies [Platform plan 42](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/42_multi-tenant-activation.md). See the [page addresses](./README.md), [change for existing bookmarks](./CHANGELOG.md) and [Agents directory reload and history checks](./test/e2e/agent-inspector.spec.ts).
 
 The Agents workspace Overview, guided Create and directory creation flows are ready for owner verification.
 See the [Claude comparison and acceptance steps](./docs/agents-console-comparison.md).

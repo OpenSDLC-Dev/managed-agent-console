@@ -47,6 +47,10 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 - Keep the desktop sidebar expanded and follow system appearance. The account menu shows the running Platform version and updates after an upgrade. The Console version appears on its own line. The status dot turns red when the platform is unreachable.
 - Identify a development build by its base release and eight-character commit in the account menu, for example `v0.9.1-dev-41a8318b`.
 
+### Fixed
+
+- Refreshing the Agents directory or opening its URL now restores the current page and filters.
+
 ## Released
 
 - [0.9.1](docs/changelog/0.9.1.md) — 2026-11-19 · [compare](https://github.com/OpenSDLC-Dev/managed-agent-console/compare/v0.9.0...v0.9.1)
