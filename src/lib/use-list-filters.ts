@@ -10,6 +10,7 @@ export function useListFilters() {
   function update(
     changes: Record<string, string | null>,
     mode: "push" | "replace" = "push",
+    state: Record<string, unknown> | null = null,
   ) {
     const url = new URL(window.location.href);
     for (const [name, value] of Object.entries(changes)) {
@@ -18,8 +19,8 @@ export function useListFilters() {
     }
     if (url.href !== window.location.href) {
       const href = url.pathname + url.search + url.hash;
-      if (mode === "replace") window.history.replaceState(null, "", href);
-      else window.history.pushState(null, "", href);
+      if (mode === "replace") window.history.replaceState(state, "", href);
+      else window.history.pushState(state, "", href);
     }
   }
   return { key, params, update };
