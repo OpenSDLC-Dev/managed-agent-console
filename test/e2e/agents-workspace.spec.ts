@@ -90,13 +90,12 @@ test("Agents opens its workspace overview; help, charts, sorting and detail use 
   await expect(name).toHaveAttribute("aria-sort", "ascending");
   await name.getByRole("button").click();
   await expect(name).toHaveAttribute("aria-sort", "descending");
-  const row = main
-    .getByRole("region", { name: "Agents activity" })
-    .getByRole("link")
-    .first();
-  const target = await row.getAttribute("href");
-  await row.click();
-  await expect(page).toHaveURL(new URL(target!, page.url()).href);
+  const firstDescendingId = "agent_retired000000000001";
+  await expect(firstRow).toHaveAttribute("data-agent-id", firstDescendingId);
+  await firstRow.getByRole("link", { name: "Retired agent" }).click();
+  await expect(page).toHaveURL(
+    `/workspaces/default/agents/${firstDescendingId}?tab=observability`,
+  );
   await expect(
     main.getByRole("button", { name: "Observability" }),
   ).toHaveAttribute("aria-current", "page");
