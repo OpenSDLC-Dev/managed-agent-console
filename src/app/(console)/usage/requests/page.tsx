@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -120,7 +121,7 @@ function Ledger() {
       cell: (r) =>
         r.session_id ? (
           <Link
-            href={`/sessions/${encodeURIComponent(r.session_id)}`}
+            href={`${surfacePaths.sessions}/${encodeURIComponent(r.session_id)}`}
             className="hover:underline"
           >
             <IdCode id={r.session_id} />

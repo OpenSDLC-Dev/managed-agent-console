@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import Link from "next/link";
 import { Archive } from "lucide-react";
 import { ConfirmIconButton } from "./archive-button";
@@ -54,7 +55,7 @@ export function SessionThreadPreview({
         <Field label="Agent">
           <Link
             className="break-words hover:underline"
-            href={`/agents/${encodeURIComponent(thread.agent.id)}?version=${thread.agent.version}`}
+            href={`${surfacePaths.agents}/${encodeURIComponent(thread.agent.id)}?version=${thread.agent.version}`}
           >
             {thread.agent.name} · v{thread.agent.version}
           </Link>

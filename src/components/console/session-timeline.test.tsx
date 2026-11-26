@@ -102,7 +102,7 @@ it("shows the pinned thread Agent and model with server usage and inspectable mo
   const preview = screen.getByRole("region", { name: "Thread details" });
   expect(within(preview).getByRole("link", { name: /v/ })).toHaveAttribute(
     "href",
-    `/agents/${thread.agent.id}?version=${thread.agent.version}`,
+    `/workspaces/default/agents/${thread.agent.id}?version=${thread.agent.version}`,
   );
   expect(preview).toHaveTextContent(thread.agent.model.id);
   expect(preview.querySelector("[data-input-tokens]")).toHaveAttribute(

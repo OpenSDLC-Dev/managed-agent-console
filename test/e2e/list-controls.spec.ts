@@ -17,7 +17,7 @@ test("memory lookup reaches archived records and creation filtering resets pagin
       },
       data: { name: "Page " + i },
     });
-  await signIn(page, "/memory-stores");
+  await signIn(page, "/workspaces/default/memory-stores");
   await expect(
     page.getByRole("columnheader", { name: "Created", exact: true }),
   ).toBeVisible();
@@ -77,7 +77,7 @@ test("memory lookup reaches archived records and creation filtering resets pagin
 test("deployment Agent filter submits the server predicate and lookup encodes path delimiters", async ({
   page,
 }) => {
-  await signIn(page, "/deployments");
+  await signIn(page, "/workspaces/default/deployments");
   await expect(
     page.getByRole("columnheader", { name: "Trigger", exact: true }),
   ).toBeVisible();

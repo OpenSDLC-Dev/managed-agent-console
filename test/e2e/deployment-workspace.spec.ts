@@ -5,7 +5,7 @@ import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
 const ID = "depl_weekresearch00000001";
-const PATH = "/deployments/" + ID;
+const PATH = "/workspaces/default/deployments/" + ID;
 const FAILED = "drun_crashed00000000001";
 test.beforeEach(async ({ request }) => {
   await request.post("http://127.0.0.1:18080/__reset");

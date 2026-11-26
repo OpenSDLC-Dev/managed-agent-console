@@ -11,7 +11,11 @@ import type { NativeSession } from "@/lib/platform/native";
 import { useApiKeys } from "@/lib/platform/queries";
 import { useSurfaces } from "@/lib/platform/surfaces";
 import type { ApiKeyListItem } from "@/lib/platform/types";
-import { MESSAGE_LOGS_ROUTE, PLAYGROUND_ROUTE } from "@/lib/routes";
+import {
+  surfacePaths,
+  MESSAGE_LOGS_ROUTE,
+  PLAYGROUND_ROUTE,
+} from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import {
   apiKeyAccountLabel,
@@ -231,7 +235,7 @@ function KeyAccount({
       detail={self && `${session?.email || label} (you)`}
       href={
         owner.type === "service_account_actor" && canOpenAccount
-          ? `/service-accounts/${encodeURIComponent(owner.service_account_id)}`
+          ? `${surfacePaths["service-accounts"]}/${encodeURIComponent(owner.service_account_id)}`
           : undefined
       }
     />
@@ -251,7 +255,7 @@ function RecentKeys({ canOpenAccount }: { canOpenAccount: boolean }) {
           API keys
         </h2>
         <div className="flex items-center gap-4">
-          <Link href="/api-keys" className={textLink}>
+          <Link href={surfacePaths["api-keys"]} className={textLink}>
             View all keys
           </Link>
           <CreateKeyButton subtle />
@@ -304,7 +308,7 @@ function RecentKeys({ canOpenAccount }: { canOpenAccount: boolean }) {
                 >
                   <td className="py-2 pr-3">
                     <Link
-                      href={`/api-keys?key=${encodeURIComponent(key.id)}`}
+                      href={`${surfacePaths["api-keys"]}?key=${encodeURIComponent(key.id)}`}
                       className="block rounded-sm hover:underline"
                     >
                       <span className="flex items-center gap-2">
@@ -357,14 +361,14 @@ const resources = [
   {
     surface: "files",
     label: "Files",
-    href: "/files",
+    href: surfacePaths.files,
     icon: FileText,
     description: "Upload and manage files for your sessions.",
   },
   {
     surface: "skills",
     label: "Skills",
-    href: "/skills",
+    href: surfacePaths.skills,
     icon: BookOpen,
     description: "Package instructions, tools and files.",
   },

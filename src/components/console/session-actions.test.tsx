@@ -144,7 +144,7 @@ it("archives directly, updates the cache and returns the full page to Sessions",
   expect(fetch.mock.calls[0][0]).toBe(
     `/api/organizations/default/proxy/v1/sessions/${session.id}/archive`,
   );
-  expect(push).toHaveBeenCalledWith("/sessions");
+  expect(push).toHaveBeenCalledWith("/workspaces/default/sessions");
 });
 
 it("keeps compact archive actions in their current list or inspector", async () => {
@@ -179,7 +179,9 @@ it("keeps archived sessions read-only and allows confirmed deletion", async () =
     "Permanently delete this session, its event history, and its own files (outputs and mounted copies). Files uploaded through the Files API are retained.",
   );
   await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
-  await waitFor(() => expect(push).toHaveBeenCalledWith("/sessions"));
+  await waitFor(() =>
+    expect(push).toHaveBeenCalledWith("/workspaces/default/sessions"),
+  );
   expect(fetch.mock.calls[0]).toEqual([
     `/api/organizations/default/proxy/v1/sessions/${session.id}`,
     expect.objectContaining({ method: "DELETE" }),

@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import {
   AdditionalToolsEditor,
   schemaDraftError,
@@ -545,7 +546,7 @@ export function AgentEditorFields({
       onSuccess: (agent) => {
         leave.setDirty(false);
         if (onSaved) onSaved(agent);
-        else router.push(`/agents/${agent.id}`);
+        else router.push(`${surfacePaths.agents}/${agent.id}`);
       },
       onError: (error) => {
         if (error instanceof PlatformError && error.status === 409) {
@@ -598,7 +599,7 @@ export function AgentEditorFields({
           leave.requestLeave(() => {
             leave.setDirty(false);
             if (onCancel) onCancel();
-            else if (creationPage) router.push("/agents");
+            else if (creationPage) router.push(surfacePaths.agents);
             else router.back();
           });
       }}

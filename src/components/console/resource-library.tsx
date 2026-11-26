@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { surfacePaths } from "@/lib/routes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toolbar } from "@base-ui/react/toolbar";
 import { FileStack, MoreHorizontal, Search, Trash2, X } from "lucide-react";
@@ -127,7 +128,7 @@ export function ResourceLibrary<T extends RecordWithID>({
     onDismissCreateRequest?: () => void;
   }>;
 }) {
-  const path = "/" + kind + "s";
+  const path = surfacePaths[`${kind}s`];
   const params = useSearchParams();
   const router = useRouter();
   const active = params.get(kind);

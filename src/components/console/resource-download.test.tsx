@@ -78,7 +78,9 @@ it.each([401, 403])(
     vi.stubGlobal(
       "window",
       Object.create(window, {
-        location: { value: { pathname: "/files", search: "", assign } },
+        location: {
+          value: { pathname: "/workspaces/default/files", search: "", assign },
+        },
       }),
     );
     const save = vi
@@ -100,7 +102,9 @@ it.each([401, 403])(
     );
     fireEvent.click(screen.getByRole("link"));
     await waitFor(() => expect(hasBouncedToLogin()).toBe(true));
-    expect(assign).toHaveBeenCalledExactlyOnceWith("/login?return_to=%2Ffiles");
+    expect(assign).toHaveBeenCalledExactlyOnceWith(
+      "/login?return_to=%2Fworkspaces%2Fdefault%2Ffiles",
+    );
     expect(save).not.toHaveBeenCalled();
   },
 );

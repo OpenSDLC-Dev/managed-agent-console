@@ -173,7 +173,7 @@ async function settledDashboardModel(
 export const SURFACES: Surface[] = [
   {
     id: "agents-workspace-overview",
-    route: "/agents/overview",
+    route: "/workspaces/default/agents-overview",
     fixture: "workspace report",
     setup: async (page) => {
       await page.getByRole("region", { name: "Agents activity" }).waitFor();
@@ -183,7 +183,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agents-workspace-overview-create-menu",
-    route: "/agents/overview",
+    route: "/workspaces/default/agents-overview",
     fixture: "workspace report with all five creation destinations",
     viewportOnly: true,
     setup: async (page) => {
@@ -197,27 +197,28 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agents-quickstart",
-    route: "/agents/create",
+    route: "/workspaces/default/agent-quickstart",
     fixture: "starter catalog",
     description: "Description composer and twelve template cards.",
   },
   {
     id: "agents-quickstart-preview",
-    route: "/agents/create?template=data-analyst",
+    route: "/workspaces/default/agent-quickstart?template=data-analyst",
     fixture: "Data analyst",
     description:
       "Template preview, MCP servers, source formats and confirmation.",
   },
   {
     id: "agents-quickstart-draft",
-    route: "/agents/create?template=structured-extractor&step=draft",
+    route:
+      "/workspaces/default/agent-quickstart?template=structured-extractor&step=draft",
     fixture: "Structured extractor",
     description:
       "Editable agent configuration before the first resource write.",
   },
   {
     id: "agents-quickstart-created",
-    route: "/agents/create?agent=" + AGENT,
+    route: "/workspaces/default/agent-quickstart?agent=" + AGENT,
     fixture: AGENT,
     description: "Saved agent, environment selection and progress steps.",
     setup: async (page) => {
@@ -226,7 +227,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agents-detail-observability",
-    route: "/agents/" + AGENT + "?tab=observability",
+    route: "/workspaces/default/agents/" + AGENT + "?tab=observability",
     fixture: AGENT,
     description: "Agent-scoped activity, charts and filtered sessions link.",
     setup: async (page) => {
@@ -238,7 +239,7 @@ export const SURFACES: Surface[] = [
   ...["thinking", "growing", "final", "reconnecting", "narrow"].map(
     (view): Surface => ({
       id: "session-streaming-" + view,
-      route: "/sessions/" + GATED,
+      route: "/workspaces/default/sessions/" + GATED,
       fixture: "recordings #8 preview-00 raw SSE",
       description:
         "Start-only thinking, partial response, final replacement and dropped stream; same Agent card shell.",
@@ -302,7 +303,7 @@ export const SURFACES: Surface[] = [
   ].map((view): Surface => ({
     id: "deployment-inspector-" + view,
     route:
-      "/deployments?deployment=" +
+      "/workspaces/default/deployments?deployment=" +
       (view === "manual"
         ? "depl_handtask00000000001"
         : view === "missing"
@@ -362,7 +363,7 @@ export const SURFACES: Surface[] = [
   ].map((view): Surface => ({
     id: "deployment-workspace-" + view,
     route:
-      `/deployments/${DEPLOYMENT}` +
+      `/workspaces/default/deployments/${DEPLOYMENT}` +
       (view.startsWith("run")
         ? "?tab=runs" +
           (view === "run-error"
@@ -438,7 +439,9 @@ export const SURFACES: Surface[] = [
         if (!response.ok())
           throw new Error("Could not create deployment run fixture");
         const run = await response.json();
-        await page.goto(`/deployments/${DEPLOYMENT}?tab=runs&run=${run.id}`);
+        await page.goto(
+          `/workspaces/default/deployments/${DEPLOYMENT}?tab=runs&run=${run.id}`,
+        );
         await page
           .getByRole("region", { name: "Session details" })
           .getByRole("heading", { name: "Run", exact: true })
@@ -504,7 +507,7 @@ export const SURFACES: Surface[] = [
     "missing-file",
   ].map((view): Surface => ({
     id: "session-resource-preview-" + view,
-    route: `/sessions/${GATED}?inspector=resources`,
+    route: `/workspaces/default/sessions/${GATED}?inspector=resources`,
     fixture:
       "Session memory/file/repository bindings; synthetic downloadable text for the text view",
     description:
@@ -633,7 +636,9 @@ export const SURFACES: Surface[] = [
         );
       if (view === "narrow")
         await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto(`/sessions/${session.id}?inspector=resources`);
+      await page.goto(
+        `/workspaces/default/sessions/${session.id}?inspector=resources`,
+      );
       if (fileView) {
         await page
           .getByRole("button", {
@@ -691,7 +696,9 @@ export const SURFACES: Surface[] = [
   ].map((view): Surface => ({
     id: "session-timeline-" + view,
     route:
-      "/sessions/" + (view === "child" ? SESSION : GATED) + "?inspector=thread",
+      "/workspaces/default/sessions/" +
+      (view === "child" ? SESSION : GATED) +
+      "?inspector=thread",
     fixture: view === "child" ? SESSION : GATED,
     description:
       "Persisted-event timeline, zoom and thread metadata/usage with explicit platform field boundaries.",
@@ -707,7 +714,9 @@ export const SURFACES: Surface[] = [
         if (!response.ok())
           throw new Error("Could not create empty timeline fixture");
         const session = await response.json();
-        await page.goto("/sessions/" + session.id + "?inspector=thread");
+        await page.goto(
+          "/workspaces/default/sessions/" + session.id + "?inspector=thread",
+        );
       }
       await traceLive(page);
       if (view === "zoom") {
@@ -759,7 +768,7 @@ export const SURFACES: Surface[] = [
   ].map((view): Surface => ({
     id: "session-workspace-" + view,
     route:
-      "/sessions/" +
+      "/workspaces/default/sessions/" +
       GATED +
       (view === "narrow" ? "?inspector=events" : "?inspector=" + view),
     fixture: GATED,
@@ -796,7 +805,7 @@ export const SURFACES: Surface[] = [
   ].map((view): Surface => ({
     id: "agent-configuration-" + view,
     route:
-      "/agents/" +
+      "/workspaces/default/agents/" +
       AGENT +
       (view === "history"
         ? "?version=2"
@@ -854,7 +863,9 @@ export const SURFACES: Surface[] = [
     "missing",
   ].map((view): Surface => ({
     id: "session-inspector-" + view,
-    route: "/sessions?session=" + (view === "missing" ? "sesn_missing" : GATED),
+    route:
+      "/workspaces/default/sessions?session=" +
+      (view === "missing" ? "sesn_missing" : GATED),
     fixture: "bounded persisted session events and resource references",
     description:
       "Session list inspection preserves selection, history and filters.",
@@ -887,7 +898,10 @@ export const SURFACES: Surface[] = [
           );
         const session = await response.json();
         await page.goto(
-          new URL("/sessions?session=" + session.id, page.url()).href,
+          new URL(
+            "/workspaces/default/sessions?session=" + session.id,
+            page.url(),
+          ).href,
         );
       }
       const panel = page.getByRole("region", { name: "Session details" });
@@ -916,7 +930,7 @@ export const SURFACES: Surface[] = [
   ...["rendered", "permissions", "custom", "api", "narrow"].map(
     (view): Surface => ({
       id: "agent-inspector-" + view,
-      route: "/agents?agent=" + AGENT,
+      route: "/workspaces/default/agents?agent=" + AGENT,
       fixture:
         "versioned coordinator with builtin tools, a skill and pinned roster",
       description:
@@ -969,7 +983,7 @@ export const SURFACES: Surface[] = [
   ),
   ...["agents", "memory-stores"].map((route): Surface => ({
     id: route + "-created-range",
-    route: "/" + route + "?created=2026-08-01~2026-08-02",
+    route: `/workspaces/default/${route}?created=2026-08-01~2026-08-02`,
     fixture: "custom inclusive date range",
     description: "Created custom range input and explicit Apply/Cancel.",
     setup: async (page) => {
@@ -979,7 +993,7 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "created-calendar-narrow",
-    route: "/agents?created=2026-08-01~2026-08-02",
+    route: "/workspaces/default/agents?created=2026-08-01~2026-08-02",
     fixture: "selected August range",
     description: "Inline calendar and range form at 390px.",
     setup: async (page) => {
@@ -991,7 +1005,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-created-presets",
-    route: "/sessions",
+    route: "/workspaces/default/sessions",
     fixture: "default",
     description:
       "Session Created presets include Today, Last hour and Last day.",
@@ -1004,7 +1018,8 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-filter-reset",
-    route: "/deployments?agent=agent_researcher00000000001&status=paused",
+    route:
+      "/workspaces/default/deployments?agent=agent_researcher00000000001&status=paused",
     fixture: "empty filtered deployments",
     description: "URL-backed filters and Reset on an empty list.",
     setup: async (page) => {
@@ -1014,7 +1029,7 @@ export const SURFACES: Surface[] = [
 
   ...[false, true].map((narrow): Surface => ({
     id: "session-filters" + (narrow ? "-narrow" : ""),
-    route: "/sessions",
+    route: "/workspaces/default/sessions",
     fixture: "active sessions and deployment options",
     description:
       "Exact session lookup, active multi-status selection and deployment filtering.",
@@ -1068,7 +1083,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agents-lookup-missing",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "unknown exact Agent ID",
     description:
       "Missing resource errors after exact lookup preserve browser history.",
@@ -1204,52 +1219,52 @@ export const SURFACES: Surface[] = [
   // ---- resource lists --------------------------------------------------
   {
     id: "agents-list",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "3 agents, one archived",
     description: "Resource list: table, Created/Status filters, create button.",
   },
   {
     id: "environments-list",
-    route: "/environments",
+    route: "/workspaces/default/environments",
     fixture: "2 environments",
     description: "Resource list without the Created filter.",
   },
   {
     id: "sessions-list",
-    route: "/sessions",
+    route: "/workspaces/default/sessions",
     fixture: "2 sessions, idle + running",
     description:
       "The widest table — status badges, token counts, relative times.",
   },
   {
     id: "deployments-list",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "2 deployments, scheduled active + manual paused",
     description:
       "Deployment status, pinned agent version and schedule summary.",
   },
   {
     id: "memory-stores-list",
-    route: "/memory-stores",
+    route: "/workspaces/default/memory-stores",
     fixture: "3 memory stores, one archived",
     description: "Durable context stores with live and archived filtering.",
   },
   {
     id: "dreams-list",
-    route: "/dreams",
+    route: "/workspaces/default/dreams",
     fixture: "2 live dreams, pending + completed",
     description:
       "Asynchronous consolidation jobs with status, inputs and output behavior.",
   },
   {
     id: "vaults-list",
-    route: "/vaults",
+    route: "/workspaces/default/vaults",
     fixture: "2 vaults, one archived",
     description: "Resource list with the archived-scoping filter.",
   },
   {
     id: "resources-overview",
-    route: "/resources",
+    route: "/workspaces/default/resources-overview",
     fixture: "one uploaded file and two skills",
     description:
       "Workspace navigation, counts, recent rows and links to both libraries.",
@@ -1261,7 +1276,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "resources-overview-add",
-    route: "/resources",
+    route: "/workspaces/default/resources-overview",
     fixture: "available Files and Skills",
     description: "Add destinations next to the workspace summary.",
     setup: async (page) => {
@@ -1271,7 +1286,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "resources-workspace-list",
-    route: "/resources",
+    route: "/workspaces/default/resources-overview",
     fixture: "reserved Default workspace",
     description: "Selected workspace and the Resources submenu.",
     setup: async (page) => {
@@ -1281,7 +1296,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "resources-overview-narrow",
-    route: "/resources",
+    route: "/workspaces/default/resources-overview",
     fixture: "one uploaded file and two skills at 390 px",
     description: "Single-column workspace summary and Add action.",
     setup: async (page) => {
@@ -1293,21 +1308,21 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skills-list",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "one custom and one catalog skill",
     description:
       "GA skill names, source labels, version IDs and upload action.",
   },
   {
     id: "files-list",
-    route: "/files",
+    route: "/workspaces/default/files",
     // The session's output and mount copy list under its scope_id only (#578).
     fixture: "1 upload",
     description: "Resource list with byte sizes and an upload action.",
   },
   {
     id: "files-selection",
-    route: "/files",
+    route: "/workspaces/default/files",
     fixture: "one selected file",
     description:
       "Selected count, clear and Delete at the bottom of the content pane.",
@@ -1320,7 +1335,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skills-selection",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "one selected custom skill",
     description:
       "Bottom selection toolbar with Delete available for the custom skill.",
@@ -1333,7 +1348,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skills-selection-narrow",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "one selected catalog skill",
     description:
       "Selection toolbar in a narrow viewport with catalog deletion disabled.",
@@ -1347,14 +1362,14 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "file-inspector",
-    route: "/files?file=file_notes0000000000001",
+    route: "/workspaces/default/files?file=file_notes0000000000001",
     fixture: "uploaded research notes",
     description:
       "File metadata and preview availability with the list retained.",
   },
   {
     id: "file-inspector-api",
-    route: "/files?file=file_notes0000000000001",
+    route: "/workspaces/default/files?file=file_notes0000000000001",
     fixture: "uploaded research notes",
     description: "The API representation of the inspected file.",
     setup: async (page) => {
@@ -1366,7 +1381,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "file-upload",
-    route: "/files",
+    route: "/workspaces/default/files",
     fixture: "staged file",
     description: "File awaiting explicit upload.",
     setup: async (page) => {
@@ -1380,7 +1395,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "file-delete-confirmation",
-    route: "/files",
+    route: "/workspaces/default/files",
     fixture: "one selected upload",
     description: "Named file deletion requires confirmation.",
     setup: async (page) => {
@@ -1392,7 +1407,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skill-update",
-    route: "/skills?skill=" + SKILL,
+    route: "/workspaces/default/skills?skill=" + SKILL,
     fixture: SKILL,
     description: "Staged custom skill version dialog.",
     setup: async (page) => {
@@ -1404,7 +1419,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skill-lookup-miss",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "unknown skill ID",
     description: "Lookup miss in the list with clear search controls.",
     setup: async (page) => {
@@ -1423,23 +1438,23 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-overview",
-    route: "/messages",
+    route: "/workspaces/default/messages-overview",
     fixture:
       "two direct Messages API calls in the last 30 days and active API keys",
     description:
       "Messages navigation, usage cards, API key shortcuts and resources.",
     setup: async (page) => {
-      await openMessages(page, "/messages");
+      await openMessages(page, "/workspaces/default/messages-overview");
       await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
     },
   },
   {
     id: "messages-workspace-menu",
-    route: "/messages",
+    route: "/workspaces/default/messages-overview",
     fixture: "the platform's default workspace",
     description: "The selected workspace in the Messages sidebar.",
     setup: async (page) => {
-      await openMessages(page, "/messages");
+      await openMessages(page, "/workspaces/default/messages-overview");
       await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
       await page.getByRole("combobox", { name: "Workspace" }).click();
       await page
@@ -1449,36 +1464,36 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-overview-narrow",
-    route: "/messages",
+    route: "/workspaces/default/messages-overview",
     fixture: "Messages Overview at phone width",
     description: "Usage cards, Keys and Resources on a narrow viewport.",
     setup: async (page) => {
       await page.setViewportSize({ width: 390, height: 844 });
-      await openMessages(page, "/messages");
+      await openMessages(page, "/workspaces/default/messages-overview");
       await page.getByRole("link", { name: /ci-deploy/ }).waitFor();
     },
   },
   {
     id: "messages-playground",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "two discovered chat aliases and an empty prompt",
     description: "The request builder, starter templates and Messages sidebar.",
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.getByRole("button", { name: "Run prompt" }).waitFor();
       await page.locator('[data-model="deepseek-flash"]').waitFor();
     },
   },
   {
     id: "messages-playground-settings",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture:
       "a chat alias reporting a 32,000-token limit and supported thinking modes",
     description:
       "The Model panel with its model picker, thinking modes and token controls.",
     viewportOnly: true,
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       await page.getByRole("button", { name: "Model settings" }).click();
       await page.getByRole("radiogroup", { name: "Thinking" }).waitFor();
@@ -1486,7 +1501,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-playground-advanced-narrow",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "a model with no reported output limit on a 390px viewport",
     description:
       "Advanced settings with an editable output budget, a stop sequence and the streaming switch.",
@@ -1511,13 +1526,13 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-playground-add",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "a blank request with its system row and no tool definitions",
     description:
       "The top Add menu with system status, five tool presets and a custom tool.",
     viewportOnly: true,
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       await page.getByRole("button", { name: "Add", exact: true }).click();
       await page.getByRole("menuitem", { name: "Custom tool" }).waitFor();
@@ -1538,12 +1553,12 @@ export const SURFACES: Surface[] = [
     { id: "parallel", title: "Call tools in parallel", tool: "get_time" },
   ].map(({ id, title, tool }): Surface => ({
     id: "messages-playground-template-" + id,
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: title,
     description:
       "The selected template card and its editable system, tool definitions and user prompt.",
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       if (id === "browser")
         await page
@@ -1560,7 +1575,7 @@ export const SURFACES: Surface[] = [
   ...(["client-calls", "client-results", "hosted-results"] as const).map(
     (view): Surface => ({
       id: "messages-playground-" + view,
-      route: "/playground",
+      route: "/workspaces/default/playground",
       fixture:
         view === "hosted-results"
           ? "DeepSeek web search and link-reading blocks"
@@ -1570,7 +1585,7 @@ export const SURFACES: Surface[] = [
           ? "Individual manual results with their call IDs and error state."
           : "The provider response in Rendered view, with arguments and tool output.",
       setup: async (page) => {
-        await openMessages(page, "/playground");
+        await openMessages(page, "/workspaces/default/playground");
         await page.locator('[data-model="deepseek-flash"]').waitFor();
         await serveToolReply(
           page,
@@ -1619,12 +1634,12 @@ export const SURFACES: Surface[] = [
   ),
   {
     id: "messages-playground-full-request",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "editable JSON body for a direct Messages request",
     description:
       "The Form tab's full request view with headers, body and Back.",
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       await page
         .getByRole("textbox", { name: "Prompt", exact: true })
@@ -1636,12 +1651,12 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-playground-snippet-settings",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "the stream option for the current Messages request",
     description:
       "The code editor's snippet settings and selected Streaming option.",
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       await page.getByText("Code", { exact: true }).click();
       await page.getByRole("button", { name: "Code snippet settings" }).click();
@@ -1650,12 +1665,12 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-playground-code-invalid",
-    route: "/playground",
+    route: "/workspaces/default/playground",
     fixture: "user edits an incomplete JSON request",
     description:
       "The editable request retains the operator's draft and shows why it cannot return to Form.",
     setup: async (page) => {
-      await openMessages(page, "/playground");
+      await openMessages(page, "/workspaces/default/playground");
       await page.locator('[data-model="deepseek-flash"]').waitFor();
       await page
         .getByRole("textbox", { name: "Prompt", exact: true })
@@ -1670,12 +1685,12 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-logs",
-    route: "/messages/logs",
+    route: "/workspaces/default/logs",
     fixture: "a direct API key request and a failed Playground request",
     description:
       "Request metadata, copy controls, refresh and the last update time.",
     setup: async (page) => {
-      await openMessages(page, "/messages/logs");
+      await openMessages(page, "/workspaces/default/logs");
       await page
         .getByRole("button", { name: "Copy " + DIRECT_REQUEST })
         .waitFor();
@@ -1683,17 +1698,17 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "messages-logs-empty",
-    route: "/messages/logs",
+    route: "/workspaces/default/logs",
     fixture: "empty gateway ledger",
     description: "No Messages requests in the last 30 days.",
     setup: async (page) => {
-      await openMessages(page, "/messages/logs", []);
+      await openMessages(page, "/workspaces/default/logs", []);
       await page.getByText("No logs in the last 30 days.").waitFor();
     },
   },
   ...["", "-narrow", "-latency"].map((view): Surface => ({
     id: "messages-log-detail" + view,
-    route: "/messages/logs?request=" + DIRECT_REQUEST,
+    route: "/workspaces/default/logs?request=" + DIRECT_REQUEST,
     viewportOnly: true,
     fixture: "direct API key request with reported tokens and timing",
     description:
@@ -1705,7 +1720,10 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       if (view === "-narrow")
         await page.setViewportSize({ width: 390, height: 844 });
-      await openMessages(page, "/messages/logs?request=" + DIRECT_REQUEST);
+      await openMessages(
+        page,
+        "/workspaces/default/logs?request=" + DIRECT_REQUEST,
+      );
       const details = page.getByRole("dialog", { name: "Request details" });
       await details
         .getByRole("button", { name: "Copy " + DIRECT_REQUEST })
@@ -1758,7 +1776,7 @@ export const SURFACES: Surface[] = [
   // ---- detail pages ----------------------------------------------------
   {
     id: "agent-detail",
-    route: `/agents/${AGENT}`,
+    route: `/workspaces/default/agents/${AGENT}`,
     fixture: AGENT,
     description:
       "Detail sections, coordinator roster, config rendering, version history table.",
@@ -1775,13 +1793,15 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-inspector",
-    route: "/environments?environment=env_egress000000000000001",
+    route:
+      "/workspaces/default/environments?environment=env_egress000000000000001",
     fixture: "cloud limited environment",
     description: "Non-modal structured environment inspector.",
   },
   {
     id: "environment-inspector-api",
-    route: "/environments?environment=env_egress000000000000001",
+    route:
+      "/workspaces/default/environments?environment=env_egress000000000000001",
     fixture: "cloud limited environment API",
     description: "Environment response in API view.",
     setup: async (page) => {
@@ -1793,7 +1813,8 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-inspector-narrow",
-    route: "/environments?environment=env_egress000000000000001",
+    route:
+      "/workspaces/default/environments?environment=env_egress000000000000001",
     fixture: "cloud environment at 390px",
     description: "Narrow environment inspector.",
     setup: async (page) => {
@@ -1802,13 +1823,13 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-inspector-missing",
-    route: "/environments?environment=env_missing",
+    route: "/workspaces/default/environments?environment=env_missing",
     fixture: "missing environment ID",
     description: "Recoverable exact-ID error in the inspector.",
   },
   {
     id: "environment-selection",
-    route: "/environments",
+    route: "/workspaces/default/environments",
     fixture: "selected environments",
     description: "Selected-row bulk action toolbar.",
     setup: async (page) => {
@@ -1817,7 +1838,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-selection-confirm",
-    route: "/environments",
+    route: "/workspaces/default/environments",
     fixture: "bulk delete confirmation",
     description: "Confirmation before deleting selected environments.",
     setup: async (page) => {
@@ -1827,14 +1848,14 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-cloud-detail",
-    route: "/environments/env_egress000000000000001",
+    route: "/workspaces/default/environments/env_egress000000000000001",
     fixture: "cloud environment",
     description:
       "Structured networking, packages, metadata and environment keys.",
   },
   {
     id: "environment-edit-inline",
-    route: "/environments/env_egress000000000000001",
+    route: "/workspaces/default/environments/env_egress000000000000001",
     fixture: "cloud environment edit",
     description: "Cancel and save without leaving the environment detail.",
     setup: async (page) => {
@@ -1843,7 +1864,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-edit-rows",
-    route: "/environments/env_egress000000000000001",
+    route: "/workspaces/default/environments/env_egress000000000000001",
     fixture: "cloud environment with package and metadata drafts",
     description: "Structured package manager and metadata row editing.",
     setup: async (page) => {
@@ -1858,7 +1879,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-edit-narrow",
-    route: "/environments/env_egress000000000000001",
+    route: "/workspaces/default/environments/env_egress000000000000001",
     fixture: "cloud environment editor at 390px",
     description: "Narrow structured editor and switches.",
     setup: async (page) => {
@@ -1868,7 +1889,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-detail",
-    route: `/environments/${ENV}`,
+    route: `/workspaces/default/environments/${ENV}`,
     fixture: ENV,
     description:
       "The environment config union rendered as sections, plus the " +
@@ -1876,7 +1897,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "vault-detail",
-    route: `/vaults/${VAULT}`,
+    route: `/workspaces/default/vaults/${VAULT}`,
     fixture: VAULT,
     description: "Credential rows — the surface that must never show a secret.",
   },
@@ -1896,27 +1917,27 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "credential-detail",
-    route: `/vaults/${VAULT}/credentials/${CREDENTIAL}`,
+    route: `/workspaces/default/vaults/${VAULT}/credentials/${CREDENTIAL}`,
     fixture: CREDENTIAL,
     description:
       "Secret-free credential configuration, lifecycle actions and metadata.",
   },
   {
     id: "skill-detail",
-    route: `/skills/${SKILL}`,
+    route: `/workspaces/default/skills/${SKILL}`,
     fixture: SKILL,
     description: "Version list with per-version actions.",
   },
   {
     id: "skill-inspector",
-    route: `/skills?skill=${SKILL}`,
+    route: `/workspaces/default/skills?skill=${SKILL}`,
     fixture: SKILL,
     description:
       "Resizable skill details over the retained list, with version actions.",
   },
   {
     id: "skill-inspector-api",
-    route: `/skills?skill=${SKILL}`,
+    route: `/workspaces/default/skills?skill=${SKILL}`,
     fixture: SKILL,
     description: "The actual skill response in the API view.",
     setup: async (page) => {
@@ -1928,7 +1949,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skill-inspector-narrow",
-    route: `/skills?skill=${SKILL}`,
+    route: `/workspaces/default/skills?skill=${SKILL}`,
     fixture: SKILL,
     description: "Skill inspector and its actions at a 390px viewport.",
     setup: async (page) => {
@@ -1937,34 +1958,34 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "skill-inspector-missing",
-    route: "/skills?skill=missing-skill",
+    route: "/workspaces/default/skills?skill=missing-skill",
     fixture: "none",
     description:
       "A bookmarked missing skill leaves the list and close action available.",
   },
   {
     id: "deployment-detail",
-    route: `/deployments/${DEPLOYMENT}`,
+    route: `/workspaces/default/deployments/${DEPLOYMENT}`,
     fixture: DEPLOYMENT,
     description:
       "Inline deployment configuration, pinned Agent version and saved schedule timestamps.",
   },
   {
     id: "deployment-run-error",
-    route: `/deployments/${DEPLOYMENT}/runs/${DEPLOYMENT_RUN}`,
+    route: `/workspaces/default/deployments/${DEPLOYMENT}/runs/${DEPLOYMENT_RUN}`,
     fixture: DEPLOYMENT_RUN,
     description: "A scheduled run whose session creation failed.",
   },
   {
     id: "memory-store-detail",
-    route: `/memory-stores/${MEMORY_STORE}`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}`,
     fixture: "2 live memories, a folder rollup and 3 attributed versions",
     description:
       "Memory contents tree with no file selected; store actions and status.",
   },
   ...["tree", "list"].map((view): Surface => ({
     id: `memory-${view}-end`,
-    route: `/memory-stores/${MEMORY_STORE}`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}`,
     fixture: "20 memories followed by an empty terminal page (#236)",
     description: `Memory ${view} end-of-walk message and enabled Previous control.`,
     setup: async (page) => {
@@ -2013,7 +2034,7 @@ export const SURFACES: Surface[] = [
   })),
   ...["rendered", "api"].map((view): Surface => ({
     id: "memory-store-inspector-" + view,
-    route: "/memory-stores?store=" + MEMORY_STORE,
+    route: "/workspaces/default/memory-stores?store=" + MEMORY_STORE,
     fixture: "populated memory store with server prefix rollups",
     description: "Memory store side inspector, contents and API views.",
     setup: async (page) => {
@@ -2033,7 +2054,8 @@ export const SURFACES: Surface[] = [
   })),
   ...["rendered", "raw", "edit", "actions"].map((view): Surface => ({
     id: "memory-content-" + view,
-    route: "/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
+    route:
+      "/workspaces/default/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
     fixture: MEMORY,
     description:
       "Selected memory in the contents tree: Markdown, raw bytes and inline editor.",
@@ -2055,7 +2077,8 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "memory-content-image",
-    route: "/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
+    route:
+      "/workspaces/default/memory-stores/" + MEMORY_STORE + "?memory=" + MEMORY,
     fixture: "agent-written Markdown image",
     description:
       "External images require explicit navigation instead of automatic loading.",
@@ -2084,7 +2107,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "memory-store-advanced",
-    route: "/memory-stores/" + MEMORY_STORE,
+    route: "/workspaces/default/memory-stores/" + MEMORY_STORE,
     fixture: "2 memories and 3 attributed versions",
     description: "Optional platform path queries and version history.",
     setup: async (page) => {
@@ -2095,14 +2118,14 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "dream-detail",
-    route: `/dreams/${DREAM}`,
+    route: `/workspaces/default/dreams/${DREAM}`,
     fixture: DREAM,
     description:
       "Completed consolidation inputs, output store, pipeline session and token usage.",
   },
   {
     id: "dream-cancel-confirm",
-    route: `/dreams/${PENDING_DREAM}`,
+    route: `/workspaces/default/dreams/${PENDING_DREAM}`,
     fixture: PENDING_DREAM,
     description: "Confirmation before canceling a pending consolidation job.",
     setup: async (page) => {
@@ -2112,21 +2135,21 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "memory-detail",
-    route: `/memory-stores/${MEMORY_STORE}/memories/${MEMORY}`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}/memories/${MEMORY}`,
     fixture: MEMORY,
     description:
       "Full memory content, digest and optimistic-write head version.",
   },
   {
     id: "memory-version-detail",
-    route: `/memory-stores/${MEMORY_STORE}/versions/${MEMORY_VERSION}`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}/versions/${MEMORY_VERSION}`,
     fixture: MEMORY_VERSION,
     description:
       "Attributed immutable version content with the redaction action.",
   },
   {
     id: "skill-upload",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "skill upload dialog",
     description: "Drop zone for archives, loose files, and a skill directory.",
     setup: async (page) => {
@@ -2138,7 +2161,7 @@ export const SURFACES: Surface[] = [
 
   {
     id: "session-edit",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: "existing session title and metadata",
     description: "Session title and metadata patch dialog.",
     setup: async (page) => {
@@ -2148,7 +2171,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-delete",
-    route: `/sessions/${GATED}`,
+    route: `/workspaces/default/sessions/${GATED}`,
     fixture: GATED,
     description:
       "Deletion confirmation names the session's own files and retained uploads.",
@@ -2163,7 +2186,7 @@ export const SURFACES: Surface[] = [
   },
   ...["menu", "narrow", "return", "error"].map((view): Surface => ({
     id: "session-archive-" + view,
-    route: `/sessions/${view === "error" ? SESSION : GATED}`,
+    route: `/workspaces/default/sessions/${view === "error" ? SESSION : GATED}`,
     fixture: view === "error" ? SESSION : GATED,
     description:
       "Direct Session archive, successful return to the list and visible running-session refusal.",
@@ -2199,7 +2222,7 @@ export const SURFACES: Surface[] = [
   // ---- the session trace, this console's densest surface ----------------
   {
     id: "session-transcript",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: SESSION,
     description:
       "Transcript: message and tool cards, inline approval and the Session inspector.",
@@ -2207,7 +2230,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-outcomes",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: `${SESSION} with one satisfied outcome`,
     description:
       "Outcome projection card and the dedicated outcome-event trace filter.",
@@ -2219,7 +2242,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-outcome-create",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: `${SESSION} with a terminal outcome`,
     description:
       "Define-outcome dialog with text/file rubric choice and iteration budget.",
@@ -2231,7 +2254,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-outcome-file-rubric",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: `${SESSION} with upload and session-file rubric suggestions`,
     description:
       "Define-outcome dialog using a file rubric with ID suggestions from uploads and the session's own files.",
@@ -2246,7 +2269,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-detail-panel",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: SESSION,
     description:
       "Master-detail split with the event panel open beside the log.",
@@ -2258,7 +2281,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-debug",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: SESSION,
     description: "Debug tab: every event verbatim as JSON, filters gone.",
     setup: async (page) => {
@@ -2270,7 +2293,7 @@ export const SURFACES: Surface[] = [
   ...["parent", "child", "child-running", "child-narrow"].map(
     (view): Surface => ({
       id: "session-multiagent-" + view,
-      route: `/sessions/${SESSION}?inspector=thread`,
+      route: `/workspaces/default/sessions/${SESSION}?inspector=thread`,
       fixture: "recordings #7, coordinator and Alpha/Beta child threads",
       description:
         "Named timeline rows, parent-only approvals, child navigation and Session-wide interrupt.",
@@ -2281,7 +2304,7 @@ export const SURFACES: Surface[] = [
         if (view === "child-narrow")
           await page.setViewportSize({ width: 480, height: 900 });
         await page.goto(
-          `/sessions/${SESSION}?inspector=thread${view !== "parent" ? "&thread=sthr_membera0000000000001" : ""}`,
+          `/workspaces/default/sessions/${SESSION}?inspector=thread${view !== "parent" ? "&thread=sthr_membera0000000000001" : ""}`,
         );
         await traceLive(page);
         await page
@@ -2292,7 +2315,7 @@ export const SURFACES: Surface[] = [
   ),
   {
     id: "session-child-thread",
-    route: `/sessions/${SESSION}?inspector=thread`,
+    route: `/workspaces/default/sessions/${SESSION}?inspector=thread`,
     fixture: `${SESSION}, General task agent child thread`,
     description:
       "Thread switcher with the child selected and its thread-scoped trace attached.",
@@ -2306,7 +2329,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-pending-approval",
-    route: `/sessions/${GATED}`,
+    route: `/workspaces/default/sessions/${GATED}`,
     fixture: GATED,
     description:
       "Human-in-the-loop: the approval banner with Approve / Deny controls.",
@@ -2317,7 +2340,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-debug-pending-approval",
-    route: `/sessions/${GATED}`,
+    route: `/workspaces/default/sessions/${GATED}`,
     fixture: GATED,
     description:
       "Debug tab with a standalone approval banner showing the tool and its full input.",
@@ -2332,7 +2355,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-resources",
-    route: `/sessions/${GATED}?inspector=resources`,
+    route: `/workspaces/default/sessions/${GATED}?inspector=resources`,
     fixture: `${GATED} with an attached file`,
     description:
       "Session resources: mounted-file row, its mount path and copy's size, and the attach affordance.",
@@ -2360,7 +2383,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-files",
-    route: `/sessions/${SESSION}?inspector=resources`,
+    route: `/workspaces/default/sessions/${SESSION}?inspector=resources`,
     fixture: `${SESSION}: its mount's copy and a harvested output`,
     description:
       "A session's own files in Resources: the mounted copy's size, then the output with its download.",
@@ -2375,7 +2398,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-file-delete",
-    route: `/sessions/${SESSION}?inspector=resources`,
+    route: `/workspaces/default/sessions/${SESSION}?inspector=resources`,
     fixture: `${SESSION}: its harvested output`,
     description:
       "Confirming a session file's delete: the dialog names what the delete takes.",
@@ -2393,14 +2416,14 @@ export const SURFACES: Surface[] = [
   // ---- create / edit forms ---------------------------------------------
   {
     id: "agent-new",
-    route: "/agents/new",
+    route: "/workspaces/default/agents/new",
     fixture: "empty form",
     description: "The agent editor: the console's largest form.",
   },
   ...(["templates", "model", "raw", "narrow"] as const).map(
     (view): Surface => ({
       id: "agent-new-" + view,
-      route: "/agents/new",
+      route: "/workspaces/default/agents/new",
       fixture: "Manual creation in the Default workspace",
       description: "Directory creation with its " + view + " view.",
       setup: async (page) => {
@@ -2424,13 +2447,13 @@ export const SURFACES: Surface[] = [
   ),
   {
     id: "agent-edit",
-    route: `/agents/${AGENT}/edit`,
+    route: `/workspaces/default/agents/${AGENT}/edit`,
     fixture: AGENT,
     description: "The same editor populated, with the curl block.",
   },
   {
     id: "agent-model-select",
-    route: `/agents/${AGENT}/edit`,
+    route: `/workspaces/default/agents/${AGENT}/edit`,
     fixture: AGENT + " on a gateway that lacks its model",
     description:
       "The model field as a select of the gateway's chat models (plan 10 decision 6).",
@@ -2444,13 +2467,13 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "environment-new",
-    route: "/environments/new",
+    route: "/workspaces/default/environments/new",
     fixture: "empty form",
     description: "Config-type union picker driving conditional fields.",
   },
   {
     id: "environment-edit",
-    route: `/environments/${ENV}/edit`,
+    route: `/workspaces/default/environments/${ENV}/edit`,
     fixture: ENV,
     description: "Populated environment form.",
   },
@@ -2458,7 +2481,7 @@ export const SURFACES: Surface[] = [
     [false, true].flatMap((narrow) =>
       ["menu", "memory"].map((state): Surface => ({
         id: owner + "-resource-" + state + (narrow ? "-narrow" : ""),
-        route: "/" + owner + "s",
+        route: `/workspaces/default/${owner}s`,
         fixture: "creation resources",
         description:
           "Resource menu and multiline memory attachment in the creation dialog.",
@@ -2491,7 +2514,7 @@ export const SURFACES: Surface[] = [
 
   ...["memory-stores", "deployments"].map((kind): Surface => ({
     id: kind + "-filters-narrow",
-    route: "/" + kind,
+    route: `/workspaces/default/${kind}`,
     fixture: "390px list controls",
     description: "Exact lookup and filters at a phone viewport.",
     setup: async (page) => {
@@ -2500,7 +2523,7 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "session-new",
-    route: "/sessions/new",
+    route: "/workspaces/default/sessions/new",
     fixture: "empty form over the agent, environment and vault lists",
     description: "Agent/environment pickers plus the file-mount control.",
     setup: async (page) => {
@@ -2520,7 +2543,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-create-selected",
-    route: "/sessions",
+    route: "/workspaces/default/sessions",
     fixture: GATED,
     description:
       "Session creation retains Agent/version and Environment/hosting labels after selection.",
@@ -2549,7 +2572,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-new-memory-resource",
-    route: "/sessions/new",
+    route: "/workspaces/default/sessions/new",
     fixture: "active memory-store suggestions",
     description: "Expanded creation-time memory-store resource fields.",
     setup: async (page) => {
@@ -2572,7 +2595,10 @@ export const SURFACES: Surface[] = [
   ...["memory-store", "deployment"].flatMap((kind): Surface[] => [
     {
       id: kind + "-create",
-      route: kind === "deployment" ? "/deployments" : "/memory-stores",
+      route:
+        kind === "deployment"
+          ? "/workspaces/default/deployments"
+          : "/workspaces/default/memory-stores",
       fixture: "empty creation form",
       description: "Measured creation dialog over the resource list.",
       setup: async (page) => {
@@ -2589,7 +2615,10 @@ export const SURFACES: Surface[] = [
     },
     {
       id: kind + "-create-narrow",
-      route: kind === "deployment" ? "/deployments" : "/memory-stores",
+      route:
+        kind === "deployment"
+          ? "/workspaces/default/deployments"
+          : "/workspaces/default/memory-stores",
       fixture: "390px creation form",
       description: "Creation dialog at a phone viewport.",
       setup: async (page) => {
@@ -2608,7 +2637,7 @@ export const SURFACES: Surface[] = [
   ]),
   ...[false, true].map((narrow): Surface => ({
     id: "deployment-timezone" + (narrow ? "-narrow" : ""),
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "searchable schedule timezone",
     description: "Timezone popup with filtered IANA suggestions.",
     setup: async (page) => {
@@ -2627,7 +2656,7 @@ export const SURFACES: Surface[] = [
   })),
   ...[false, true].map((narrow): Surface => ({
     id: "deployment-schedule-clock" + (narrow ? "-narrow" : ""),
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "12-hour schedule clock",
     description: "Schedule time with PM selected and a raw cron summary.",
     setup: async (page) => {
@@ -2642,7 +2671,7 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "deployment-create-schedule",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "schedule fields",
     description: "Schedule trigger inside the creation dialog.",
     setup: async (page) => {
@@ -2654,7 +2683,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-create-advanced",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "advanced events",
     description: "Advanced event JSON without dropping platform fields.",
     setup: async (page) => {
@@ -2666,7 +2695,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-create-selected",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "selected Agent and Environment retain their display names",
     description: "Creation choices after their option popups unmount.",
     setup: async (page) => {
@@ -2688,7 +2717,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-new",
-    route: "/deployments/new",
+    route: "/workspaces/default/deployments/new",
     fixture: "empty form over agent, environment and vault lists",
     description:
       "Pinned agent, initial event JSON, schedule and reusable-resource controls.",
@@ -2698,7 +2727,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "dream-new",
-    route: "/dreams/new",
+    route: "/workspaces/default/dreams/new",
     fixture: "active memory-store suggestions",
     description:
       "Memory and session inputs, model speed, instructions and output behavior.",
@@ -2712,7 +2741,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-new-memory-resource",
-    route: "/deployments/new",
+    route: "/workspaces/default/deployments/new",
     fixture: "active memory-store suggestions",
     description: "Expanded reusable memory-store resource fields.",
     setup: async (page) => {
@@ -2730,44 +2759,44 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "memory-store-new",
-    route: "/memory-stores/new",
+    route: "/workspaces/default/memory-stores/new",
     fixture: "empty store form",
     description: "Store identity, description and metadata JSON editor.",
   },
   {
     id: "memory-store-edit",
-    route: `/memory-stores/${MEMORY_STORE}/edit`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}/edit`,
     fixture: MEMORY_STORE,
     description: "Existing store metadata with patch-delete semantics.",
   },
   {
     id: "vault-edit",
-    route: `/vaults/${VAULT}/edit`,
+    route: `/workspaces/default/vaults/${VAULT}/edit`,
     fixture: VAULT,
     description: "Vault display-name and metadata editor.",
   },
   {
     id: "credential-edit",
-    route: `/vaults/${VAULT}/credentials/${CREDENTIAL}/edit`,
+    route: `/workspaces/default/vaults/${VAULT}/credentials/${CREDENTIAL}/edit`,
     fixture: CREDENTIAL,
     description:
       "Credential metadata, policy and write-only secret replacement form.",
   },
   {
     id: "memory-new",
-    route: `/memory-stores/${MEMORY_STORE}/memories/new`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}/memories/new`,
     fixture: "empty memory form",
     description: "Absolute path and durable text content editor.",
   },
   {
     id: "memory-edit",
-    route: `/memory-stores/${MEMORY_STORE}/memories/${MEMORY}/edit`,
+    route: `/workspaces/default/memory-stores/${MEMORY_STORE}/memories/${MEMORY}/edit`,
     fixture: MEMORY,
     description: "Full memory edit backed by the current SHA-256 precondition.",
   },
   {
     id: "deployment-edit",
-    route: `/deployments/${DEPLOYMENT}/edit`,
+    route: `/workspaces/default/deployments/${DEPLOYMENT}/edit`,
     fixture: DEPLOYMENT,
     description:
       "Legacy edit URL redirects to inline configuration, preserving write-only resource credentials.",
@@ -2780,7 +2809,7 @@ export const SURFACES: Surface[] = [
   // stays a faithful platform double with no scenario switch.
   {
     id: "list-empty",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "populated, filtered to nothing",
     description:
       "EmptyState on a list. Fixtures are dated 2026-08-01, so the 24-hour preset always empties it.",
@@ -2792,7 +2821,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "trace-empty",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: `${SESSION}, filtered to a type it has none of`,
     description: "EmptyState inside a populated page, not a bare list.",
     setup: async (page) => {
@@ -2803,7 +2832,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "detail-error",
-    route: "/agents/agent_doesnotexist0000001",
+    route: "/workspaces/default/agents/agent_doesnotexist0000001",
     fixture: "none — a real platform 404",
     description:
       "ErrorState carrying the platform's message and request id. An item route's 404 stays an error; `surface-unavailable` is its twin for the same status on a collection route.",
@@ -2813,7 +2842,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "role-denied",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "a platform that refuses this role — the mock's own 403",
     description:
       "A refused collection read: the existing calm ErrorState quotes the platform, while navigation drops only the denied entry. This is not an absent feature.",
@@ -2830,7 +2859,10 @@ export const SURFACES: Surface[] = [
   ...["dashboard", "palette", "bookmark"].map((view): Surface => ({
     id: "read-denied-" + view,
     mode: "sso",
-    route: view === "bookmark" ? `/skills/${SKILL}` : "/dashboard",
+    route:
+      view === "bookmark"
+        ? `/workspaces/default/skills/${SKILL}`
+        : "/dashboard",
     fixture: "native mock session with injected resource-read permission_error",
     description:
       "No resource entry points after refused reads; direct bookmarks explain the refusal: " +
@@ -2883,7 +2915,7 @@ export const SURFACES: Surface[] = [
   {
     id: "api-keys-denied",
     mode: "sso",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "stub OIDC session; management-key collection alone refuses reads",
     description:
       "Admin-only key refusal leaves readable resource navigation intact.",
@@ -2911,7 +2943,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "surface-unavailable",
-    route: "/skills",
+    route: "/workspaces/default/skills",
     fixture: "a deployment that does not serve /v1/skills",
     description:
       "UnavailableSurface: the calm twin of ErrorState for a surface this deployment does not implement, shot beside a sidebar the Skills item has left.",
@@ -3006,7 +3038,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "command-palette",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "all resources, searched",
     description:
       "Ctrl+K overlay: grouped options over the whole resource space.",
@@ -3020,7 +3052,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-composer-focus",
-    route: `/sessions/${SESSION}`,
+    route: `/workspaces/default/sessions/${SESSION}`,
     fixture: `${SESSION}, focused composer with a draft`,
     description: "Keyboard focus ring around the session message composer.",
     setup: async (page) => {
@@ -3032,7 +3064,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-filter-focus",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "populated deployment list with its status filter open",
     description: "Keyboard focus ring inside a select popup.",
     setup: async (page) => {
@@ -3044,7 +3076,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "deployment-actions-focus",
-    route: "/deployments",
+    route: "/workspaces/default/deployments",
     fixture: "populated deployment list with a row action menu open",
     description: "Keyboard focus ring inside a row action menu.",
     setup: async (page) => {
@@ -3057,7 +3089,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-keys",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture:
       "one owned service-account key and one inactive historical unowned key",
     description:
@@ -3071,7 +3103,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-archived-only",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "workspace containing only archived keys",
     description: "The Keys page shows its empty state and a count of zero.",
     setup: async (page) => {
@@ -3092,7 +3124,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-filtered",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "one disabled historical key",
     description: "A selected status, the matching count and Reset.",
     setup: async (page) => {
@@ -3103,7 +3135,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-empty-search",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "search that matches neither seeded key",
     description: "No matching results while a search is applied.",
     setup: async (page) => {
@@ -3115,7 +3147,7 @@ export const SURFACES: Surface[] = [
   },
   ...[false, true].map((mobile) => ({
     id: mobile ? "api-key-details-mobile" : "api-key-details",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "ci-deploy service-account key",
     description:
       "Key metadata, resource ID, model access and adjacent-key controls.",
@@ -3129,7 +3161,7 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "api-key-delete-menu",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "ci-deploy action menu",
     description: "Cost, disable and delete actions for an active key.",
     setup: async (page) => {
@@ -3139,7 +3171,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-delete-confirm",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "ci-deploy awaiting deletion confirmation",
     description:
       "Deletion names the key and explains immediate, irreversible revocation.",
@@ -3153,7 +3185,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-cost",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "ci-deploy current-month gateway usage",
     description:
       "View cost opens the usage page filtered to this credential and period.",
@@ -3165,7 +3197,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-connect",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "supported self-hosted authentication methods",
     description: "The first step offers CLI sign-in or an API key.",
     setup: async (page) => {
@@ -3175,7 +3207,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-cli",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "interactive CLI sign-in",
     description: "A copyable login command for the current Console origin.",
     setup: async (page) => {
@@ -3190,7 +3222,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "api-key-create",
-    route: "/api-keys",
+    route: "/settings/keys",
     fixture: "empty dialog form",
     description: "Name, expiry, linked account and the platform's fixed scope.",
     setup: async (page) => {
@@ -3200,7 +3232,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "vault-create",
-    route: "/vaults",
+    route: "/workspaces/default/vaults",
     fixture: "empty dialog form",
     description: "The short create-dialog shape (name + confirm).",
     setup: async (page) => {
@@ -3210,7 +3242,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "vault-first-credential",
-    route: "/vaults",
+    route: "/workspaces/default/vaults",
     fixture: "newly created vault awaiting its first credential",
     description:
       "Continue commits the vault and opens the optional credential step with Skip for now.",
@@ -3225,7 +3257,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agent-create",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "blank configuration form",
     description: "The list opens the standalone configuration editor.",
     setup: async (page) => {
@@ -3235,7 +3267,7 @@ export const SURFACES: Surface[] = [
   },
   ...[false, true].map((narrow): Surface => ({
     id: "agent-unsaved" + (narrow ? "-narrow" : ""),
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "edited agent draft awaiting leave confirmation",
     description: "Stay and Leave protect unsaved agent configuration.",
     setup: async (page) => {
@@ -3254,7 +3286,7 @@ export const SURFACES: Surface[] = [
   })),
   ...[false, true].map((narrow): Surface => ({
     id: narrow ? "agent-tools-narrow" : "agent-tools",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "unsaved custom tool, MCP permissions and selected skill",
     description:
       "Structured tool definitions and MCP configuration with progressive skill selection.",
@@ -3289,7 +3321,7 @@ export const SURFACES: Surface[] = [
   })),
   ...[false, true].map((narrow): Surface => ({
     id: narrow ? "agent-schema-narrow" : "agent-schema",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture: "focused custom-tool JSON draft",
     description: "Schema keyboard help and focus ring in the create dialog.",
     setup: async (page) => {
@@ -3307,7 +3339,7 @@ export const SURFACES: Surface[] = [
   })),
   {
     id: "environment-create",
-    route: "/environments",
+    route: "/workspaces/default/environments",
     fixture: "empty stub dialog",
     description:
       "Create environment as a name + hosting stub; the full editor is the detail edit page.",
@@ -3321,7 +3353,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "session-create",
-    route: "/sessions",
+    route: "/workspaces/default/sessions",
     fixture: "empty dialog form over the agent, environment and vault lists",
     description:
       "Create session as a list modal: Manage … links and vault multi-select.",
@@ -3336,7 +3368,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "credential-add",
-    route: `/vaults/${VAULT}`,
+    route: `/workspaces/default/vaults/${VAULT}`,
     fixture: VAULT,
     description:
       "The write-only-secret form with type-specific policy fields; saved secrets must never round-trip a value.",
@@ -3350,7 +3382,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "agent-archive-pending",
-    route: `/agents/${AGENT}`,
+    route: `/workspaces/default/agents/${AGENT}`,
     fixture: AGENT,
     description:
       "An archive-only action menu cannot reopen while its request is pending.",
@@ -3378,7 +3410,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "archive-confirm",
-    route: `/vaults/${VAULT}`,
+    route: `/workspaces/default/vaults/${VAULT}`,
     fixture: VAULT,
     description:
       "Destructive-confirmation dialog — the shared footer every ConfirmButton and ConfirmIconButton ends in, and the console's hardest contrast target: the footer is `bg-muted/50`, a lighter backdrop than the popover (issue #90). Behind it, the Delete trigger carries the same colour as bare text.",
@@ -3393,7 +3425,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "approval-options",
-    route: "/sessions/" + GATED,
+    route: "/workspaces/default/sessions/" + GATED,
     fixture: GATED,
     description:
       "Optional denial reason is offered in a secondary menu; Approve and Deny remain direct actions.",
@@ -3406,7 +3438,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "approval-deny",
-    route: `/sessions/${GATED}`,
+    route: `/workspaces/default/sessions/${GATED}`,
     fixture: GATED,
     description:
       "The second destructive-button layout, and the only one outside a dialog: Deny sits on the amber warning box rather than a console surface, so its wash composites over a Tailwind colour the palette test cannot model (issue #90).",
@@ -3423,7 +3455,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "list-archived",
-    route: "/vaults",
+    route: "/workspaces/default/vaults",
     fixture: "2 vaults, one archived",
     description:
       "A list including archived rows and their badge — the Status filter's other position.",
@@ -3437,7 +3469,7 @@ export const SURFACES: Surface[] = [
   // ---- the one route outside the console shell --------------------------
   {
     id: "sign-out-unconfirmed",
-    route: "/members",
+    route: "/settings/members",
     fixture: "unavailable logout endpoint",
     description:
       "Retry sign-out surface when the platform cannot confirm revocation. Private console content is hidden.",
@@ -3454,7 +3486,7 @@ export const SURFACES: Surface[] = [
   },
   {
     id: "sign-out-account-changed",
-    route: "/members",
+    route: "/settings/members",
     fixture: "replacement account metadata",
     description:
       "Reopen console action after the active account changes during sign-out.",
@@ -3531,7 +3563,7 @@ export const SURFACES: Surface[] = [
   {
     id: "account-block",
     mode: "sso",
-    route: "/agents",
+    route: "/workspaces/default/agents",
     fixture:
       "3 agents, one archived — the list is the backdrop, not the subject",
     description:

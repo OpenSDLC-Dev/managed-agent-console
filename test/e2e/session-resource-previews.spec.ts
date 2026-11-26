@@ -49,7 +49,9 @@ test("nested memory selection keeps the Session open, renders Markdown/raw and r
   page,
 }) => {
   const session = await createSession(page);
-  await page.goto(`/sessions/${session.id}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${session.id}?inspector=resources`,
+  );
   await page
     .getByRole("button", { name: "Inspect resource /mnt/memory/project-notes" })
     .click();
@@ -69,7 +71,7 @@ test("nested memory selection keeps the Session open, renders Markdown/raw and r
     preview.getByRole("link", { name: /Open in Memory Stores/ }),
   ).toHaveAttribute(
     "href",
-    "/memory-stores/memstore_projectnotes000001?memory=mem_projectbrief000000001",
+    "/workspaces/default/memory-stores/memstore_projectnotes000001?memory=mem_projectbrief000000001",
   );
   await preview.getByRole("button", { name: "Raw", exact: true }).click();
   await expect(preview.locator("pre")).toContainText("# Project brief");
@@ -88,7 +90,9 @@ test("nested memory selection keeps the Session open, renders Markdown/raw and r
   await expect(preview).toContainText(
     "Use the platform wire as the source of truth.",
   );
-  await expect(page).toHaveURL(`/sessions/${session.id}?inspector=resources`);
+  await expect(page).toHaveURL(
+    `/workspaces/default/sessions/${session.id}?inspector=resources`,
+  );
 });
 
 test("resource metadata and archived previews stay usable at narrow widths", async ({
@@ -101,7 +105,9 @@ test("resource metadata and archived previews stay usable at narrow widths", asy
   );
   expect(archive.ok()).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`/sessions/${session.id}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${session.id}?inspector=resources`,
+  );
   await page.getByLabel("Filter resources").fill("notes.md");
   await page
     .getByRole("button", {

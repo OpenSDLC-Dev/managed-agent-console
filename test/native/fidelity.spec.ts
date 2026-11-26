@@ -279,7 +279,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             });
           }
           if (surface.id.includes("pending")) {
-            const isMember = surface.route === "/members";
+            const isMember = surface.route === "/settings/members";
             const target = `pending-${surface.id.split("-").at(-1)}-${info.project.name}`;
             const created = await request.post(
               `${org}/${isMember ? "members" : "service_accounts"}`,
@@ -318,11 +318,11 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           }
           await page.goto(
             surface.id.startsWith("native-deployment-initiator")
-              ? `/deployments/${deploymentFixture!.deployment.id}`
+              ? `/workspaces/default/deployments/${deploymentFixture!.deployment.id}`
               : surface.id.startsWith("native-environment-")
-                ? `/environments/${environmentFixtures[surface.id.includes("archived-cloud") ? "archived-cloud" : surface.id.includes("self-hosted") ? "self-hosted" : "cloud"]}`
-                : surface.route === "/service-accounts/[id]"
-                  ? `/service-accounts/${service.id}`
+                ? `/workspaces/default/environments/${environmentFixtures[surface.id.includes("archived-cloud") ? "archived-cloud" : surface.id.includes("self-hosted") ? "self-hosted" : "cloud"]}`
+                : surface.route === "/settings/service-accounts/[id]"
+                  ? `/settings/service-accounts/${service.id}`
                   : surface.route,
           );
           if (surface.route === "/login" || surface.route === "/setup")
@@ -496,7 +496,10 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
               0,
             );
           }
-          if (surface.route === "/members" && surface.id.includes("pending")) {
+          if (
+            surface.route === "/settings/members" &&
+            surface.id.includes("pending")
+          ) {
             const target = `pending-${surface.id.split("-").at(-1)}-${info.project.name}`;
             if (surface.id === "native-members-pending-removal") {
               await page
@@ -1016,7 +1019,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
             (r) =>
               r.request().method() !== "GET" &&
               new URL(r.url()).pathname.startsWith(
-                surface.route === "/members"
+                surface.route === "/settings/members"
                   ? `${org}/members`
                   : serviceAccountsPath,
               ),
@@ -1026,7 +1029,7 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           await expect(
             page.getByRole("button", {
               name:
-                surface.route === "/members"
+                surface.route === "/settings/members"
                   ? "Create local member"
                   : "Create service account",
               exact: true,

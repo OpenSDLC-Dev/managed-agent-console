@@ -7,7 +7,10 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
   test(`${route} restores dates across reload and browser history`, async ({
     page,
   }) => {
-    await signIn(page, `/${route}?created=2026-08-01~2026-08-02`);
+    await signIn(
+      page,
+      `/workspaces/default/${route}?created=2026-08-01~2026-08-02`,
+    );
     const trigger = page.getByLabel("Created filter");
     await expect(trigger).toHaveAttribute("data-value", "custom");
     await trigger.click();
@@ -27,7 +30,7 @@ for (const route of ["agents", "sessions", "memory-stores"]) {
     await page.goForward();
     await expect(trigger).toHaveAttribute("data-value", "7d");
     await page.getByRole("button", { name: "Reset", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    await expect(page).toHaveURL(`/workspaces/default/${route}`);
     await expect(trigger).toHaveAttribute("data-value", "all");
   });
 }
@@ -36,7 +39,7 @@ test("session choices restore after visiting a detail and returning", async ({
 }) => {
   await signIn(
     page,
-    "/sessions?status=idle&agent=agent_absent0000000000001&order=asc",
+    "/workspaces/default/sessions?status=idle&agent=agent_absent0000000000001&order=asc",
   );
   await expect(page.getByLabel("Status filter")).toHaveAttribute(
     "data-value",
@@ -64,7 +67,7 @@ test("deployment status and agent filters survive reload and reset", async ({
 }) => {
   await signIn(
     page,
-    "/deployments?status=paused&agent=agent_researcher00000000001",
+    "/workspaces/default/deployments?status=paused&agent=agent_researcher00000000001",
   );
   await expect(page.getByLabel("Deployment status")).toContainText("Paused");
   await page.reload();

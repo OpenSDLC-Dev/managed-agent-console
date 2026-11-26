@@ -23,7 +23,7 @@ vi.mock("next/navigation", () => ({
     back: vi.fn(),
     replace: vi.fn(),
   }),
-  usePathname: () => "/agents",
+  usePathname: () => "/workspaces/default/agents",
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -222,7 +222,9 @@ describe("CommandPalette", () => {
     setQuery(input, "memory stores");
     const memory = await screen.findByRole("option", { name: "Memory" });
     fireEvent.click(memory);
-    expect(routerState.push).toHaveBeenCalledWith("/memory-stores");
+    expect(routerState.push).toHaveBeenCalledWith(
+      "/workspaces/default/memory-stores",
+    );
   });
 
   it("opens from the sidebar Search button", async () => {
@@ -383,7 +385,9 @@ describe("CommandPalette", () => {
     expect(selectedLabel()).toContain("report.pdf");
 
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(routerState.push).toHaveBeenCalledWith("/files?file=file_01");
+    expect(routerState.push).toHaveBeenCalledWith(
+      "/workspaces/default/files?file=file_01",
+    );
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   });
 
@@ -401,7 +405,9 @@ describe("CommandPalette", () => {
     expect(sessionOption.getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(sessionOption);
-    expect(routerState.push).toHaveBeenCalledWith("/sessions/sess_01");
+    expect(routerState.push).toHaveBeenCalledWith(
+      "/workspaces/default/sessions/sess_01",
+    );
     await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull());
   });
 
@@ -422,7 +428,7 @@ describe("CommandPalette", () => {
     expect(screen.getAllByRole("option")).toHaveLength(
       NAV_DESTINATIONS.filter(
         (item) =>
-          item.href !== "/playground" &&
+          item.href !== "/workspaces/default/playground" &&
           !isReportPage(item.href) &&
           !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,
@@ -458,8 +464,8 @@ it.each(["available", "denied", "unknown"])(
     renderPalette();
     await openPalette();
     for (const [label, href] of [
-      ["Members", "/members"],
-      ["Service accounts", "/service-accounts"],
+      ["Members", "/settings/members"],
+      ["Service accounts", "/settings/service-accounts"],
     ]) {
       if (status === "available") {
         const option = await screen.findByRole("option", { name: label });

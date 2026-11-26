@@ -89,7 +89,7 @@ test("a model made through the gateway native edge reaches the console's screens
   await expect(page.getByText(UPSTREAM).first()).toBeVisible();
 
   // The agent editor offers it by name.
-  await page.goto("/agents/new");
+  await page.goto("/workspaces/default/agents/new");
   await page.getByRole("button", { name: "Model", exact: true }).click();
   await expect(
     page.getByRole("radio", { name: RUN, exact: true }),

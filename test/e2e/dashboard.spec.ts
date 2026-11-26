@@ -73,7 +73,7 @@ test("dashboard and search stay centered beside the expanded navigation", async 
     .getByRole("navigation")
     .locator('[data-nav-group="Agents"]');
   await agents.click();
-  await expect(page).toHaveURL(/\/agents\/overview$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/agents-overview$/);
   const back = page.getByRole("button", {
     name: /Agents, back to all sections/i,
   });
@@ -123,10 +123,10 @@ test("dashboard opens the usage period and each admitted resource shown on its c
     await expect(page).toHaveURL(/\/dashboard$/);
   }
   for (const [action, path] of [
-    ["Open playground", "/playground"],
+    ["Open playground", "/workspaces/default/playground"],
     ["View models", "/models"],
-    ["Browse skills", "/skills"],
-    ["Browse files", "/files"],
+    ["Browse skills", "/workspaces/default/skills"],
+    ["Browse files", "/workspaces/default/files"],
   ]) {
     const link = main.getByRole("link", { name: action, exact: true });
     await expect(link).toHaveAttribute("href", path);
@@ -221,7 +221,7 @@ test("all four model cards open a single-model dialog on Dashboard and return fo
       await picker.selectOption(alias);
       await expect(playground).toHaveAttribute(
         "href",
-        `/playground?model=${alias}`,
+        `/workspaces/default/playground?model=${alias}`,
       );
     } else {
       await expect(
@@ -440,7 +440,7 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
   await more.click();
   await expect(createAgent).toHaveAttribute(
     "href",
-    "/agents/new?model=agent-default",
+    "/workspaces/default/agents/new?model=agent-default",
   );
   await page.keyboard.press("Escape");
   await expect(preview).toBeVisible();
@@ -448,7 +448,7 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
   await picker.selectOption("minimax-m3");
   await expect(tryModel).toHaveAttribute(
     "href",
-    "/playground?model=minimax-m3",
+    "/workspaces/default/playground?model=minimax-m3",
   );
   await tryModel.click();
   await expect(page).toHaveURL(/\/playground\?model=minimax-m3$/);
@@ -461,7 +461,7 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
   await more.click();
   await expect(createAgent).toHaveAttribute(
     "href",
-    "/agents/new?model=minimax-m3",
+    "/workspaces/default/agents/new?model=minimax-m3",
   );
   await createAgent.click();
   await expect(page).toHaveURL(/\/agents\/new\?model=minimax-m3$/);
@@ -493,7 +493,10 @@ test("a discovered gateway alias opens Playground and a new agent draft with the
     name: "Open in Playground for minimax-m3",
     exact: true,
   });
-  await expect(open).toHaveAttribute("href", "/playground?model=minimax-m3");
+  await expect(open).toHaveAttribute(
+    "href",
+    "/workspaces/default/playground?model=minimax-m3",
+  );
   await expect(
     deployment.getByRole("link", {
       name: "Open in Playground for agent-default",
@@ -620,7 +623,7 @@ test("a model with one discovered alias offers Playground when agent creation is
   const dialog = page.getByRole("dialog", { name: "MiniMax M3", exact: true });
   await expect(
     dialog.getByRole("link", { name: "Try in playground", exact: true }),
-  ).toHaveAttribute("href", "/playground?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/playground?model=minimax-m3");
   await expect(
     dialog.getByRole("combobox", { name: "Gateway alias", exact: true }),
   ).toHaveCount(0);
@@ -683,7 +686,9 @@ test("a developer can read the model reference when access to the gateway and Pl
   await expect(main.locator("#pricing [data-pricing-deployment]")).toHaveCount(
     0,
   );
-  await expect(main.locator('a[href^="/playground"]')).toHaveCount(0);
+  await expect(
+    main.locator('a[href^="/workspaces/default/playground"]'),
+  ).toHaveCount(0);
   expect(discovery).toEqual([]);
   await main.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -721,7 +726,10 @@ test("the dark model dialog scrolls independently on a narrow screen and restore
     name: "Try in playground",
     exact: true,
   });
-  await expect(action).toHaveAttribute("href", "/playground?model=minimax-m3");
+  await expect(action).toHaveAttribute(
+    "href",
+    "/workspaces/default/playground?model=minimax-m3",
+  );
   const content = dialog.locator("[data-model-popup-scroll]");
   const bounds = (await dialog.boundingBox())!;
   expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -755,7 +763,7 @@ test("a Playground-only user opening a dashboard model bookmark lands in Playgro
   await signIn(page);
   await setDashboardSession(page, { role: "user", playground_access: true });
   await page.goto("/dashboard/models/minimax");
-  await expect(page).toHaveURL(/\/playground$/);
+  await expect(page).toHaveURL("/workspaces/default/playground");
   await expect(
     page
       .getByRole("main")
@@ -913,7 +921,7 @@ test("submenus return to all sections and mobile navigation resets on resize", a
   await expect(nav).toHaveAttribute("data-nav-view", "root");
   await nav.locator('[data-nav-group="Resources"]').click();
   await expect(nav).toHaveAttribute("data-nav-view", "Resources");
-  await expect(page).toHaveURL(/\/resources$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/resources-overview$/);
   await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
   await expect(
     nav.getByRole("link", { name: "Files", exact: true }),
@@ -987,7 +995,7 @@ test("exact Agent lookup opens archived records, exposes missing IDs and support
   request,
 }) => {
   await request.post("http://127.0.0.1:18080/__reset");
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await expect(
     page.getByRole("cell", { name: "Retired agent", exact: true }),
   ).toHaveCount(0);
@@ -1030,11 +1038,11 @@ test("reserved characters in agent lookup cannot select a different upstream rou
     "agent_id?limit=1",
     "agent_id#versions",
   ]) {
-    await page.goto("/agents");
+    await page.goto("/workspaces/default/agents");
     await page.getByRole("textbox", { name: "Find agent by ID" }).fill(id);
     const rejected = page.waitForResponse((response) =>
       new URL(response.url()).pathname.endsWith(
-        `/agents/${encodeURIComponent(id)}`,
+        `/api/organizations/default/proxy/v1/agents/${encodeURIComponent(id)}`,
       ),
     );
     await page.getByRole("button", { name: "Open", exact: true }).click();

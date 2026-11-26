@@ -18,7 +18,7 @@ import { SURFACES } from "@/lib/platform/surfaces";
 
 const ALL_SURFACES = Object.values(SURFACES);
 
-const navState = vi.hoisted(() => ({ pathname: "/skills" }));
+const navState = vi.hoisted(() => ({ pathname: "/workspaces/default/skills" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navState.pathname,
@@ -92,7 +92,9 @@ it.each(["create", "detail"] as const)(
     };
     let status = 200;
     navState.pathname =
-      kind === "detail" ? "/service-accounts/svac_test" : "/service-accounts";
+      kind === "detail"
+        ? "/settings/service-accounts/svac_test"
+        : "/settings/service-accounts";
     vi.stubGlobal("fetch", async (input: string) => {
       const url = new URL(String(input), "http://console");
       if (
@@ -123,7 +125,7 @@ it.each(["create", "detail"] as const)(
             {kind === "detail" ? (
               <ServiceAccountDetail
                 id={account.id}
-                listHref="/service-accounts"
+                listHref="/settings/service-accounts"
               />
             ) : (
               <ServiceAccounts />
@@ -175,14 +177,15 @@ it.each(["create", "detail"] as const)(
 );
 
 describe("SurfaceGuard", () => {
-  for (const pathname of [
-    "/skills",
-    "/skills/skill_1",
-    "/agents/agent_1/edit",
-    "/sessions/new",
-  ]) {
+  const guardedPages = [
+    ["skills", "/workspaces/default/skills"],
+    ["skills", "/workspaces/default/skills/skill_1"],
+    ["agents", "/workspaces/default/agents/agt_1/edit"],
+    ["sessions", "/workspaces/default/sessions/new"],
+  ] as const;
+  for (const [surface, pathname] of guardedPages) {
     it(`probe: explains a denied collection read at ${pathname}, not absence`, async () => {
-      renderGuard(pathname, [pathname.split("/")[1]], 403);
+      renderGuard(pathname, [surface], 403);
       const state = await screen.findByTestId("error-state");
       expect(state).toHaveAttribute("data-error-status", "403");
       expect(state).toHaveAttribute("data-denied", "true");
@@ -200,7 +203,7 @@ describe("SurfaceGuard", () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    navState.pathname = "/skills";
+    navState.pathname = "/workspaces/default/skills";
     render(
       <QueryClientProvider client={client}>
         <SurfaceGuard>
@@ -212,7 +215,7 @@ describe("SurfaceGuard", () => {
   });
 
   it("renders the page when the deployment serves its surface", async () => {
-    renderGuard("/skills", []);
+    renderGuard("/workspaces/default/skills", []);
     await waitFor(() =>
       expect(vi.mocked(fetch)).toHaveBeenCalledTimes(ALL_SURFACES.length),
     );
@@ -221,14 +224,8 @@ describe("SurfaceGuard", () => {
 
   // The list page guards itself on its own query; these are the routes that
   // had nothing (review finding, PR #60).
-  for (const pathname of [
-    "/skills",
-    "/skills/skill_1",
-    "/agents/agt_1/edit",
-    "/sessions/new",
-  ]) {
+  for (const [surface, pathname] of guardedPages) {
     it(`stands ${pathname} down when its surface is unimplemented`, async () => {
-      const surface = pathname.split("/")[1];
       renderGuard(pathname, [surface]);
       const standIn = await screen.findByTestId("unavailable-surface");
       expect(standIn.getAttribute("data-surface")).toBe(surface);
@@ -245,7 +242,7 @@ describe("SurfaceGuard", () => {
   });
 
   it("probe: keeps the page when the probe fails rather than 404s", async () => {
-    navState.pathname = "/skills";
+    navState.pathname = "/workspaces/default/skills";
     vi.stubGlobal(
       "fetch",
       vi.fn(() => Promise.reject(new Error("console server unreachable"))),
@@ -276,7 +273,7 @@ it.each([
   "probe: native direct route /%s replaces children for collection status %i",
   async (surface, status) => {
     document.documentElement.dataset.consoleAuth = "platform";
-    renderGuard(`/${surface}`, [surface], status);
+    renderGuard(`/settings/${surface}`, [surface], status);
     if (status === 403) {
       const state = await screen.findByTestId("error-state");
       expect(state).toHaveAttribute("data-error-status", "403");
@@ -297,7 +294,7 @@ it.each(["members", "service-accounts"] as const)(
   "probe: native /%s mounts real actions only after admission settles",
   async (surface) => {
     document.documentElement.dataset.consoleAuth = "platform";
-    navState.pathname = `/${surface}`;
+    navState.pathname = `/settings/${surface}`;
     let settle!: () => void;
     const pending = new Promise<void>((r) => {
       settle = r;
@@ -362,7 +359,7 @@ it.each([403, 404, 503] as const)(
   "probe: native pending admission then %i never mounts a private action",
   async (status) => {
     document.documentElement.dataset.consoleAuth = "platform";
-    navState.pathname = "/service-accounts";
+    navState.pathname = "/settings/service-accounts";
     let settle!: () => void;
     const pending = new Promise<void>((r) => {
       settle = r;

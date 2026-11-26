@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
@@ -374,7 +375,10 @@ export function DeploymentEditor({
           setAttached([]);
           leave.setDirty(false);
           onSaved?.(deployment);
-        } else router.push(`/deployments/${encodeURIComponent(deployment.id)}`);
+        } else
+          router.push(
+            `${surfacePaths.deployments}/${encodeURIComponent(deployment.id)}`,
+          );
       },
     });
   };
@@ -436,7 +440,7 @@ export function DeploymentEditor({
                 <div className="flex justify-between gap-3">
                   <Label>Agent</Label>
                   <a
-                    href="/agents"
+                    href={surfacePaths.agents}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-muted-foreground underline"
@@ -501,7 +505,7 @@ export function DeploymentEditor({
               <div className="flex justify-between gap-3">
                 <Label>Environment</Label>
                 <a
-                  href="/environments"
+                  href={surfacePaths.environments}
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-muted-foreground underline"
@@ -656,7 +660,7 @@ export function DeploymentEditor({
                 <div className="flex justify-between gap-3">
                   <Label id={vaultLabelId}>Credential vaults (optional)</Label>
                   <a
-                    href="/vaults"
+                    href={surfacePaths.vaults}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-muted-foreground underline"

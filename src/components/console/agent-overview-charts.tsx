@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import Link from "next/link";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
@@ -64,8 +65,8 @@ export function AgentOverviewCharts({
             className="text-[13px] text-link underline underline-offset-2"
             href={
               agentId
-                ? "/sessions?agent=" + encodeURIComponent(agentId)
-                : "/sessions"
+                ? `${surfacePaths.sessions}?agent=${encodeURIComponent(agentId)}`
+                : surfacePaths.sessions
             }
           >
             View sessions

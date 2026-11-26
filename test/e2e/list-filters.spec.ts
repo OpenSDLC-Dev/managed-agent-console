@@ -68,7 +68,7 @@ test("sessions filter by agent: archived included, options paged beyond 100", as
 test("created presets bound sessions and agents lists serverside", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
 
   // Fixture agents were created before today: a 24h bound empties the list.
   const boundedAgents = page.waitForRequest((req) =>

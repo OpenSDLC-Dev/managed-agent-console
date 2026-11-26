@@ -25,7 +25,9 @@ test("Resources lists the session's own files with the reference's request, offe
         `/api/organizations/default/proxy/v1/files?scope_id=${RESEARCH}`,
       ),
   );
-  await page.goto(`/sessions/${RESEARCH}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${RESEARCH}?inspector=resources`,
+  );
   const request = await listed;
   // console-141 ui-network idx 243: the same query and beta header.
   expect(new URL(request.url()).searchParams.get("limit")).toBe("1000");
@@ -90,7 +92,7 @@ test("the files note is announced through the shell's region, in the document be
       await route.continue();
     },
   );
-  await page.goto(`/sessions/${RESEARCH}`);
+  await page.goto(`/workspaces/default/sessions/${RESEARCH}`);
   const region = page.getByRole("status").and(page.getByTestId("announcer"));
   await expect(region).toBeAttached();
   await expect(region).toBeEmpty();
@@ -123,7 +125,9 @@ test("a deployment fire mints its session's copy, shown in that session's Resour
       { data: {} },
     )
   ).json()) as { session_id: string };
-  await page.goto(`/sessions/${run.session_id}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${run.session_id}?inspector=resources`,
+  );
   const panel = page.getByTestId("session-resources");
   await expect(panel).toHaveAttribute("data-session-file-count", "1");
   // The deployment names the upload; the fired session mounts its own copy
@@ -140,7 +144,7 @@ test("the rubric picker offers uploads and the session's own files, labelled apa
   page,
 }) => {
   await signIn(page);
-  await page.goto(`/sessions/${RESEARCH}`);
+  await page.goto(`/workspaces/default/sessions/${RESEARCH}`);
   await page.getByTestId("outcome-evaluation").waitFor();
   await page.getByRole("button", { name: "Define outcome" }).click();
   const dialog = page.getByRole("dialog", { name: "Define outcome" });
@@ -200,7 +204,9 @@ test("an output is deleted from its session's Resources after confirming", async
   page,
 }) => {
   await signIn(page);
-  await page.goto(`/sessions/${RESEARCH}?inspector=resources`);
+  await page.goto(
+    `/workspaces/default/sessions/${RESEARCH}?inspector=resources`,
+  );
   const panel = page.getByTestId("session-resources");
   await expect(panel).toHaveAttribute("data-session-file-count", "2");
   const output = panel.locator(

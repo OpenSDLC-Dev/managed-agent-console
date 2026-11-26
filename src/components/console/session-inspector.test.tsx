@@ -135,7 +135,7 @@ it("renders pinned resources and bounded activity without inventing runtime or b
     screen.getByRole("link", { name: memoryResources[0].name }),
   ).toHaveAttribute(
     "href",
-    "/memory-stores/" + memoryResources[0].memory_store_id,
+    "/workspaces/default/memory-stores/" + memoryResources[0].memory_store_id,
   );
   expect(
     screen.getByRole("link", {
@@ -143,11 +143,14 @@ it("renders pinned resources and bounded activity without inventing runtime or b
     }),
   ).toHaveAttribute(
     "href",
-    "/agents/" + session.agent.id + "?version=" + session.agent.version,
+    "/workspaces/default/agents/" +
+      session.agent.id +
+      "?version=" +
+      session.agent.version,
   );
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
-    "/sessions/" + session.id,
+    "/workspaces/default/sessions/" + session.id,
   );
   expect(screen.queryByText("Cost", { exact: true })).toBeNull();
   await waitFor(() =>
@@ -216,6 +219,6 @@ it("links a mounted file to the session's Resources, where its copy is listed", 
   const link = await screen.findByRole("link", { name: "rec141-input.txt" });
   expect(link).toHaveAttribute(
     "href",
-    "/sessions/" + session.id + "?inspector=resources",
+    "/workspaces/default/sessions/" + session.id + "?inspector=resources",
   );
 });

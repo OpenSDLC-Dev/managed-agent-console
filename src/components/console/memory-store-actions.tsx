@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useRouter } from "next/navigation";
 import { ResourceActions } from "@/components/console/resource-actions";
 import {
@@ -28,7 +29,9 @@ export function MemoryStoreActions({
       onDelete={() =>
         remove.mutate(undefined, {
           onSuccess: () =>
-            onDeleted ? onDeleted() : router.push("/memory-stores"),
+            onDeleted
+              ? onDeleted()
+              : router.push(surfacePaths["memory-stores"]),
         })
       }
       archivePending={archive.isPending}

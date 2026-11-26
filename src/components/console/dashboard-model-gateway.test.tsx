@@ -252,7 +252,10 @@ it("joins the exact profile, upstream and targets across all priorities, and ope
   ).toHaveAttribute("href", "/providers/gwprov_minimaxcn1");
   expect(within(region).getByText("MiniMax-M3")).toBeVisible();
   const query = new URLSearchParams({ model: name }).toString();
-  expect(launch).toHaveAttribute("href", `/playground?${query}`);
+  expect(launch).toHaveAttribute(
+    "href",
+    `/workspaces/default/playground?${query}`,
+  );
   expect(within(region).getByRole("link", { name })).toHaveAttribute(
     "href",
     `/models?${query}`,
@@ -502,13 +505,13 @@ it("opens Playground and agent creation with the same exact chat alias, and keep
   const query = new URLSearchParams({ model: alias }).toString();
   expect(
     await screen.findByRole("link", { name: "Try in playground" }),
-  ).toHaveAttribute("href", `/playground?${query}`);
+  ).toHaveAttribute("href", `/workspaces/default/playground?${query}`);
   expect(screen.queryByRole("combobox")).toBeNull();
   const user = userEvent.setup();
   await openOptions(user);
   expect(
     screen.getByRole("menuitem", { name: "Build an agent" }),
-  ).toHaveAttribute("href", `/agents/new?${query}`);
+  ).toHaveAttribute("href", `/workspaces/default/agents/new?${query}`);
   expect(
     screen.getByRole("menuitem", { name: "View model guide" }),
   ).toHaveAttribute("href", "/dashboard/models/minimax");
@@ -541,17 +544,20 @@ it("requires an explicit alias when the agent and Playground actions have differ
   await openOptions(user);
   expect(
     screen.getByRole("menuitem", { name: "Build an agent" }),
-  ).toHaveAttribute("href", "/agents/new?model=agent-default");
+  ).toHaveAttribute(
+    "href",
+    "/workspaces/default/agents/new?model=agent-default",
+  );
   await user.keyboard("{Escape}");
   await user.selectOptions(selector, "minimax-m3");
   expect(
     screen.getByRole("link", { name: "Try in playground" }),
-  ).toHaveAttribute("href", "/playground?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/playground?model=minimax-m3");
   expect(screen.queryByText("Also routes to other upstream models")).toBeNull();
   await openOptions(user);
   expect(
     screen.getByRole("menuitem", { name: "Build an agent" }),
-  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/agents/new?model=minimax-m3");
 });
 
 it("requires a choice even when the only available alias routes to more than one model", async () => {
@@ -571,7 +577,10 @@ it("requires a choice even when the only available alias routes to more than one
   await userEvent.setup().selectOptions(selector, shared.name);
   expect(
     await screen.findByRole("link", { name: "Try in playground" }),
-  ).toHaveAttribute("href", "/playground?model=agent-default");
+  ).toHaveAttribute(
+    "href",
+    "/workspaces/default/playground?model=agent-default",
+  );
 });
 
 it("checks agent and Playground access independently and hides cached actions on revoked access", async () => {
@@ -591,7 +600,7 @@ it("checks agent and Playground access independently and hides cached actions on
   await openOptions(user);
   expect(
     screen.getByRole("menuitem", { name: "Build an agent" }),
-  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/agents/new?model=minimax-m3");
   await user.keyboard("{Escape}");
   probes.mockReturnValue({
     providers: available,
@@ -675,11 +684,11 @@ it("removes a stale Playground action after a discovery failure while allowing t
   await openOptions(user);
   expect(
     screen.getByRole("menuitem", { name: "Build an agent" }),
-  ).toHaveAttribute("href", "/agents/new?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/agents/new?model=minimax-m3");
   await user.keyboard("{Escape}");
   failed = false;
   await user.click(screen.getByRole("button", { name: "Retry" }));
   expect(
     await screen.findByRole("link", { name: "Try in playground" }),
-  ).toHaveAttribute("href", "/playground?model=minimax-m3");
+  ).toHaveAttribute("href", "/workspaces/default/playground?model=minimax-m3");
 });

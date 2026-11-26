@@ -13,7 +13,7 @@ test.beforeEach(async ({ request }) => {
 test("store inspector preserves list state and opens nested memories with rendered/raw editing", async ({
   page,
 }, info) => {
-  await signIn(page, "/memory-stores?status=all");
+  await signIn(page, "/workspaces/default/memory-stores?status=all");
   await page.getByRole("cell", { name: "Project notes", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("status=all&store=" + store));
   const panel = page.getByRole("region", { name: "Memory store details" });
@@ -73,7 +73,10 @@ test("store inspector preserves list state and opens nested memories with render
 test("tree supports keyboard traversal and guards dirty selection on a narrow viewport", async ({
   page,
 }) => {
-  await signIn(page, `/memory-stores/${store}?memory=${memory}`);
+  await signIn(
+    page,
+    `/workspaces/default/memory-stores/${store}?memory=${memory}`,
+  );
   const folder = page.getByRole("treeitem", { name: "decisions", exact: true });
   await folder.focus();
   await page.keyboard.press("ArrowRight");
@@ -121,7 +124,10 @@ test("stale inline saves retain the draft and report the platform precondition f
   page,
   request,
 }) => {
-  await signIn(page, `/memory-stores/${store}?memory=${memory}`);
+  await signIn(
+    page,
+    `/workspaces/default/memory-stores/${store}?memory=${memory}`,
+  );
   await page.getByRole("button", { name: "Edit memory", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Memory content", exact: true })
@@ -179,7 +185,10 @@ test("rendering agent-written Markdown does not fetch remote images", async ({
     },
   );
   expect(response.ok()).toBe(true);
-  await signIn(page, "/memory-stores/" + store + "?memory=" + memory);
+  await signIn(
+    page,
+    "/workspaces/default/memory-stores/" + store + "?memory=" + memory,
+  );
   await expect(
     page.getByRole("link", { name: "Open image: diagram" }),
   ).toHaveAttribute("href", "https://memory-assets.example/diagram.png");

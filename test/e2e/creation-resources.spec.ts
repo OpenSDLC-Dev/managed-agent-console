@@ -11,7 +11,7 @@ for (const owner of ["session", "deployment"] as const) {
     owner +
       " resources menu supports keyboard, file upload and multiline memory bindings",
     async ({ page }) => {
-      await signIn(page, "/" + owner + "s");
+      await signIn(page, `/workspaces/default/${owner}s`);
       await page
         .getByRole("button", { name: "Create " + owner, exact: true })
         .click();
@@ -73,7 +73,7 @@ for (const owner of ["session", "deployment"] as const) {
         .fill("First line\nSecond line");
       await expect(
         dialog.getByRole("link", { name: /Manage memory stores/ }),
-      ).toHaveAttribute("href", "/memory-stores");
+      ).toHaveAttribute("href", "/workspaces/default/memory-stores");
       let releaseUpload!: () => void;
       const uploadGate = new Promise<void>((resolve) => {
         releaseUpload = resolve;
@@ -133,7 +133,9 @@ for (const owner of ["session", "deployment"] as const) {
           instructions: "First line\nSecond line",
         },
       ]);
-      await expect(page).toHaveURL(new RegExp("/" + owner + "s/"));
+      await expect(page).toHaveURL(
+        new RegExp(`/workspaces/default/${owner}s/`),
+      );
     },
   );
 }

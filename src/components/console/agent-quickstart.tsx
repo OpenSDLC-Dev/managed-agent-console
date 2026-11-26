@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -365,7 +366,7 @@ export function AgentQuickstart() {
           Or{" "}
           <Link
             className="text-foreground underline underline-offset-2"
-            href="/agents/new"
+            href={`${surfacePaths.agents}/new`}
           >
             start from a blank agent
           </Link>

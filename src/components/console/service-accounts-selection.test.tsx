@@ -54,7 +54,7 @@ function directory(query = "") {
   history.replaceState(
     null,
     "",
-    "/service-accounts" +
+    "/settings/service-accounts" +
       (query ? "?" + new URLSearchParams({ q: query }) : ""),
   );
   const server = {

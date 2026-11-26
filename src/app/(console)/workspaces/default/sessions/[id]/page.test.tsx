@@ -1,0 +1,1301 @@
+import { withTestSession } from "@/../test/session-fixture";
+import { useTestSearchParams } from "@/../test/search-params";
+import "@testing-library/jest-dom/vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, type ComponentProps } from "react";
+import SessionDetailPage from "./page";
+import type { Session, SessionEvent } from "@/lib/platform/types";
+import type { PreviewState, TraceState } from "@/lib/session-trace/store";
+import type { ConnectionState } from "@/lib/session-trace/use-session-trace";
+
+const router = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    back: vi.fn(),
+    replace: router.replace,
+    refresh: vi.fn(),
+  }),
+  usePathname: () => "/workspaces/default/sessions/sess_1",
+  useSearchParams: () => useTestSearchParams(),
+}));
+
+vi.mock("next/link", () => ({
+  default: ({ href, children, ...props }: ComponentProps<"a">) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+// Inject trace states directly — the SSE loop is covered by its own tests.
+// Each session id a trace was asked for is kept: its history and stream are
+// read under that id.
+const traceMock = vi.hoisted(() => ({
+  value: undefined as unknown,
+  sessionIds: new Set<string>(),
+}));
+vi.mock("@/lib/session-trace/use-session-trace", () => ({
+  useSessionTrace: (sessionId: string) => {
+    traceMock.sessionIds.add(sessionId);
+    return traceMock.value;
+  },
+}));
+
+function setTrace(
+  connection: ConnectionState,
+  events: SessionEvent[] = [],
+  previews: PreviewState[] = [],
+  deleted = false,
+) {
+  const trace: TraceState = {
+    events,
+    seen: new Set(events.map((e) => e.id)),
+    previews: new Map(previews.map((p) => [p.id, p])),
+    deleted,
+  };
+  traceMock.value = { trace, connection };
+}
+
+const ev = (id: string, type: string, extra?: object): SessionEvent =>
+  ({
+    id,
+    type,
+    processed_at: "2026-08-01T09:12:00Z",
+    ...extra,
+  }) as SessionEvent;
+
+const session = (over?: Partial<Session>): Session => ({
+  id: "sess_1",
+  type: "session",
+  agent: {
+    type: "agent",
+    id: "agt_1",
+    version: 2,
+    name: "Support bot",
+    model: { id: "claude-sonnet-4-8" },
+    system: "",
+    description: "",
+    tools: [],
+    mcp_servers: [],
+    skills: [],
+    multiagent: null,
+  },
+  environment_id: "env_1",
+  status: "idle",
+  title: "Debug run",
+  metadata: {},
+  usage: {
+    input_tokens: 1234,
+    output_tokens: 567,
+    cache_read_input_tokens: 89,
+    cache_creation: {
+      ephemeral_1h_input_tokens: 0,
+      ephemeral_5m_input_tokens: 0,
+    },
+  },
+  stats: { active_seconds: 0, duration_seconds: 0 },
+  outcome_evaluations: [],
+  resources: [
+    {
+      id: "res_1",
+      type: "file",
+      file_id: "file_1",
+      mount_path: "/mnt/data.csv",
+      created_at: "2026-08-01T09:12:00Z",
+      updated_at: "2026-08-01T09:12:00Z",
+    },
+  ],
+  vault_ids: ["vlt_1"],
+  deployment_id: null,
+  created_at: "2026-08-01T09:12:00Z",
+  updated_at: "2026-08-01T10:00:00Z",
+  archived_at: null,
+  ...over,
+});
+
+const json = (payload: unknown, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+
+function stubFetch(over?: {
+  session?: Session;
+  threadsStatus?: number;
+  onPost?: (
+    url: URL,
+    init: RequestInit,
+  ) => Response | Promise<Response> | undefined;
+}) {
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://console.test");
+      if (init?.method === "POST" && over?.onPost) {
+        const handled = over.onPost(url, init);
+        if (handled) return handled;
+      }
+      if (
+        url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_1"
+      )
+        return json(over?.session ?? session());
+      if (
+        url.pathname ===
+        "/api/organizations/default/proxy/v1/sessions/sess_1/threads"
+      )
+        return over?.threadsStatus
+          ? json(
+              {
+                type: "error",
+                error: {
+                  type: "not_found_error",
+                  message: "Threads unavailable",
+                },
+              },
+              over.threadsStatus,
+            )
+          : json({ data: [], next_page: null });
+      throw new Error(`unmatched fetch: ${url.pathname}`);
+    },
+  );
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
+  return fetchMock;
+}
+
+/** Pre-resolved params thenable: React's `use` reads .status/.value directly. */
+function asParams(id: string): Promise<{ id: string }> {
+  const value = { id };
+  return {
+    status: "fulfilled",
+    value,
+    then: (onFulfilled: (v: { id: string }) => void) => onFulfilled(value),
+  } as unknown as Promise<{ id: string }>;
+}
+
+function renderPage(id = "sess_1") {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const page = (routeId: string) => (
+    <QueryClientProvider client={client}>
+      <Suspense fallback={null}>
+        <SessionDetailPage params={asParams(routeId)} />
+      </Suspense>
+    </QueryClientProvider>
+  );
+  const view = render(page(id));
+  // What a navigation does to the route: new params, the same client.
+  return {
+    ...view,
+    navigate: (routeId: string) => view.rerender(page(routeId)),
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+
+describe("SessionDetailPage", () => {
+  it("shows the detail skeleton while the session loads", async () => {
+    setTrace("connecting");
+    vi.stubGlobal(
+      "fetch",
+      withTestSession(vi.fn(() => new Promise<Response>(() => {}))),
+    );
+    renderPage();
+    await waitFor(() =>
+      expect(document.querySelector('[aria-busy="true"]')).not.toBeNull(),
+    );
+  });
+
+  it("surfaces the platform error envelope", async () => {
+    setTrace("connecting");
+    vi.stubGlobal(
+      "fetch",
+      withTestSession(
+        vi.fn(async () =>
+          json(
+            {
+              type: "error",
+              error: { type: "not_found_error", message: "session not found" },
+            },
+            404,
+          ),
+        ),
+      ),
+    );
+    renderPage();
+    expect(await screen.findByText("session not found")).toBeInTheDocument();
+  });
+
+  it("shows the event-list skeleton while the stream connects", async () => {
+    setTrace("connecting");
+    stubFetch();
+    renderPage();
+
+    const badge = await screen.findByTestId("stream-state");
+    expect(badge).toHaveTextContent("connecting…");
+    expect(badge).toHaveAttribute("data-state", "connecting");
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+
+  it("renders the live trace: overview, events, and streaming preview", async () => {
+    setTrace(
+      "live",
+      [
+        ev("sevt_1", "user.message", {
+          content: [{ type: "text", text: "Hello agent" }],
+        }),
+        ev("sevt_2", "agent.tool_use", {
+          name: "bash",
+          input: { command: "ls" },
+        }),
+        ev("sevt_3", "session.status_idle", {
+          stop_reason: { type: "end_turn" },
+        }),
+        ev("sevt_4", "session.status_running"),
+      ],
+      [{ id: "sevt_p", type: "agent.message", parts: ["Str", "eaming"] }],
+    );
+    stubFetch();
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
+    // Subtitle and the agent chip both carry the agent · version.
+    expect(
+      within(screen.getByTestId("session-chips")).getByRole("link", {
+        name: "Support bot · v2",
+      }),
+    ).toBeInTheDocument();
+    const chips = screen.getByTestId("session-chips");
+    // Counters as raw integers (harness/rules/ui-evidence.md's data-* convention); the rendered
+    // string is owned by `utils.test.ts` and the e2e formatting test.
+    const usage = within(chips).getByTestId("usage-chip");
+    expect(usage).toHaveAttribute("data-input-tokens", "1234");
+    expect(usage).toHaveAttribute("data-output-tokens", "567");
+    expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
+    expect(within(chips).getByText("vlt_1")).toBeInTheDocument();
+    expect(within(chips).getByText("1 resource")).toHaveAttribute(
+      "title",
+      "/mnt/data.csv",
+    );
+    expect(within(chips).getByText(/ago$/)).toHaveAttribute(
+      "title",
+      "2026-08-01T09:12:00Z",
+    );
+    // Offsets are relative to the session's created_at (same instant here).
+    expect(screen.getAllByTitle("since session creation")[0]).toHaveTextContent(
+      "0:00",
+    );
+
+    expect(screen.getByTestId("stream-state")).toHaveTextContent("live");
+    // Derived list state, machine-readable: 4 events + 1 streaming preview
+    // visible under the default "all" filter, out of 4 persisted.
+    const toolbar = screen.getByTestId("events-toolbar");
+    expect(toolbar).toHaveAttribute("data-tab", "transcript");
+    expect(toolbar).toHaveAttribute("data-filter", "all");
+    expect(toolbar).toHaveAttribute("data-visible-events", "5");
+    expect(toolbar).toHaveAttribute("data-total-events", "4");
+    expect(screen.getAllByTestId("event-row")).toHaveLength(4);
+    expect(screen.getByText("Hello agent")).toBeInTheDocument();
+    const preview = screen.getByTestId("preview-row");
+    expect(within(preview).getByText(/Streaming/)).toBeInTheDocument();
+
+    // The latest trace status (running) wins over the fetched session status.
+    expect(
+      within(
+        screen.getByRole("complementary", { name: "Session inspector" }),
+      ).getByText("running"),
+    ).toBeInTheDocument();
+    // The display projection must not rewrite the underlying GET response.
+    expect(screen.getByTestId("session-overview")).toHaveTextContent(
+      '"status": "idle"',
+    );
+    expect(
+      screen.getByRole("button", { name: /Interrupt/ }),
+    ).toBeInTheDocument();
+    // No pending approvals: the last idle stop was end_turn.
+    expect(screen.queryByTestId("approval-banner")).toBeNull();
+  });
+
+  it("filters events by kind and hides previews outside message views", async () => {
+    setTrace(
+      "live",
+      [
+        ev("sevt_1", "user.message", {
+          content: [{ type: "text", text: "Hello agent" }],
+        }),
+        ev("sevt_2", "agent.tool_use", {
+          name: "bash",
+          input: { command: "ls" },
+        }),
+        ev("sevt_4", "session.status_running"),
+      ],
+      [{ id: "sevt_p", type: "agent.message", parts: ["Streaming"] }],
+    );
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+
+    expect(screen.getAllByTestId("event-row")).toHaveLength(3);
+    expect(screen.getAllByTestId("preview-row")).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Tools" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+    expect(screen.queryByTestId("preview-row")).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Messages" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+    expect(screen.getByText("Hello agent")).toBeInTheDocument();
+    expect(screen.getAllByTestId("preview-row")).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole("button", { name: "Model spans" }));
+    expect(screen.queryAllByTestId("event-row")).toHaveLength(0);
+    expect(screen.getByText("No events")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(3);
+  });
+
+  it("renders an idle band for a real gap and pairs span durations", async () => {
+    setTrace("live", [
+      {
+        id: "sp_1",
+        type: "span.model_request_start",
+        processed_at: "2026-08-01T09:12:01Z",
+      } as SessionEvent,
+      {
+        id: "sp_2",
+        type: "span.model_request_end",
+        processed_at: "2026-08-01T09:12:04Z",
+        model_request_start_id: "sp_1",
+      } as SessionEvent,
+      {
+        id: "sevt_idle",
+        type: "session.status_idle",
+        processed_at: "2026-08-01T09:13:00Z",
+        stop_reason: { type: "end_turn" },
+      } as SessionEvent,
+      {
+        id: "sevt_run",
+        type: "session.status_running",
+        processed_at: "2026-08-01T09:13:25Z",
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+
+    expect(screen.getByTestId("idle-band")).toBeInTheDocument();
+    expect(screen.getByTitle("model request duration")).toHaveAttribute(
+      "data-duration-ms",
+      "3000",
+    );
+    // Offset of the idle event: 09:13:00 − created 09:12:00.
+    expect(
+      screen
+        .getAllByTitle("since session creation")
+        .map((el) => el.textContent),
+    ).toContain("1:00");
+    // The transcript folds the paired span into its end row.
+    expect(screen.getAllByTestId("event-row")).toHaveLength(3);
+    expect(screen.queryByText("span.model_request_start")).toBeNull();
+  });
+
+  it("keeps an unpaired span start visible — the request may still be running", async () => {
+    setTrace("live", [
+      {
+        id: "sp_open",
+        type: "span.model_request_start",
+        processed_at: "2026-08-01T09:12:01Z",
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+
+    const row = screen.getByTestId("event-row");
+    expect(row).toHaveAttribute("data-event-type", "span.model_request_start");
+    expect(row).toHaveTextContent("model request started");
+
+    // The Model spans filter shows it too.
+    await userEvent.click(screen.getByRole("button", { name: "Model spans" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+  });
+
+  it("opens the detail panel on row click and closes it again", async () => {
+    const text = `summary line\n${"full body ".repeat(40)}`;
+    setTrace("live", [
+      ev("sevt_1", "agent.message", { content: [{ type: "text", text }] }),
+      ev("sevt_2", "session.status_running"),
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+
+    const row = within(screen.getAllByTestId("event-row")[0]).getByRole(
+      "button",
+    );
+    await userEvent.click(row);
+    expect(row).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByTestId("event-detail");
+    // The card and the inspector both retain the full message.
+    expect(panel.textContent).toContain("full body full body");
+
+    await userEvent.click(
+      within(panel).getByRole("button", { name: "Close event details" }),
+    );
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    // Clicking the selected row again also deselects it.
+    await userEvent.click(row);
+    expect(screen.getByTestId("event-detail")).toBeInTheDocument();
+    await userEvent.click(row);
+    expect(screen.queryByTestId("event-detail")).toBeNull();
+  });
+
+  it("shows every event verbatim on the Debug tab, filters and previews aside", async () => {
+    setTrace(
+      "live",
+      [
+        {
+          id: "sp_1",
+          type: "span.model_request_start",
+          processed_at: "2026-08-01T09:12:01Z",
+        } as SessionEvent,
+        ev("sevt_1", "user.message", {
+          content: [{ type: "text", text: "Hello agent" }],
+        }),
+      ],
+      [{ id: "sevt_p", type: "agent.message", parts: ["Streaming"] }],
+    );
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+
+    // Transcript: the unpaired start stays visible, the preview shows.
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(screen.getByTestId("preview-row")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+    const rows = screen.getAllByTestId("debug-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute(
+      "data-event-type",
+      "span.model_request_start",
+    );
+    expect(rows[0].textContent).toContain('"id": "sp_1"');
+    expect(screen.queryAllByTestId("event-row")).toHaveLength(0);
+    expect(screen.queryByTestId("preview-row")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tools" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(screen.queryAllByTestId("debug-row")).toHaveLength(0);
+  });
+
+  it("reports toolbar state for the tab actually rendered, not the retained filter", async () => {
+    setTrace("live", [
+      ev("sevt_1", "user.message", {
+        content: [{ type: "text", text: "Hello agent" }],
+      }),
+      ev("sevt_2", "agent.tool_use", {
+        name: "bash",
+        input: { command: "ls" },
+      }),
+      ev("sevt_4", "session.status_running"),
+    ]);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+    const toolbar = () => screen.getByTestId("events-toolbar");
+
+    // Narrow the transcript: 1 of 3 events survives the Tools filter.
+    await userEvent.click(screen.getByRole("button", { name: "Tools" }));
+    expect(toolbar()).toHaveAttribute("data-filter", "tools");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "1");
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+
+    // Debug renders the log whole and drops the filter chips. `filter` is
+    // still "tools" in state, but it governs nothing here — so the attributes
+    // must describe the rendered surface, not the stale state (review
+    // finding, PR #36: both attributes previously kept transcript values).
+    await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+    expect(toolbar()).not.toHaveAttribute("data-filter");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "3");
+    expect(toolbar()).toHaveAttribute("data-total-events", "3");
+    expect(screen.getAllByTestId("debug-row")).toHaveLength(3);
+
+    // Going back restores the filter that was never discarded.
+    await userEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(toolbar()).toHaveAttribute("data-filter", "tools");
+    expect(toolbar()).toHaveAttribute("data-visible-events", "1");
+  });
+
+  it("copies the full trace as JSON via Copy all", async () => {
+    const writeText = vi.fn(async () => {});
+    // defineProperty escapes vi.unstubAllGlobals — restore the descriptor
+    // by hand so the mock cannot leak into later tests.
+    const original = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "clipboard",
+    );
+    Object.defineProperty(window.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    onTestFinished(() => {
+      if (original) {
+        Object.defineProperty(window.navigator, "clipboard", original);
+      } else {
+        delete (window.navigator as { clipboard?: unknown }).clipboard;
+      }
+    });
+    const events = [
+      ev("sevt_1", "user.message", {
+        content: [{ type: "text", text: "Hello agent" }],
+      }),
+    ];
+    setTrace("live", events);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Copy all" }));
+    expect(writeText).toHaveBeenCalledWith(JSON.stringify(events, null, 2));
+    expect(
+      await screen.findByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables Copy all while the trace is empty", async () => {
+    setTrace("live", []);
+    stubFetch();
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+    expect(screen.getByRole("button", { name: "Copy all" })).toBeDisabled();
+  });
+
+  it("shows the approval banner for unanswered requires_action tool calls and allows one", async () => {
+    setTrace("live", [
+      ev("tu_1", "agent.tool_use", {
+        name: "bash",
+        input: { command: "rm -rf /" },
+        evaluated_permission: "ask",
+      }),
+      ev("sevt_2", "session.status_idle", {
+        stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+      }),
+    ]);
+    const posts: [URL, RequestInit][] = [];
+    stubFetch({
+      onPost: (url, init) => {
+        posts.push([url, init]);
+        return json({ data: [] });
+      },
+    });
+    renderPage();
+
+    const banner = await screen.findByTestId("approval-banner");
+    expect(banner).toHaveTextContent("Waiting on 1 tool approval");
+
+    await userEvent.click(
+      within(banner).getByRole("button", { name: "Approve" }),
+    );
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0][0].pathname).toBe(
+      "/api/organizations/default/proxy/v1/sessions/sess_1/events",
+    );
+    expect(JSON.parse(posts[0][1].body as string)).toEqual({
+      events: [
+        {
+          type: "user.tool_confirmation",
+          tool_use_id: "tu_1",
+          result: "allow",
+        },
+      ],
+    });
+  });
+
+  it.each(["accepted", "in flight"])(
+    "preserves an %s approval across transcript filters and Debug",
+    async (state) => {
+      setTrace("live", [
+        ev("tu_1", "agent.tool_use", {
+          name: "bash",
+          input: { command: "echo hello" },
+          evaluated_permission: "ask",
+        }),
+        ev("sevt_2", "session.status_idle", {
+          stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+        }),
+      ]);
+      let finish!: (response: Response) => void;
+      const response = new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+      const onPost = vi.fn(() =>
+        state === "accepted" ? json({ data: [] }) : response,
+      );
+      stubFetch({ onPost });
+      renderPage();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Approve" }),
+      );
+      if (state === "accepted") await screen.findByText("Confirmation sent");
+      for (const name of ["Messages", "All", "Debug", "Transcript"]) {
+        await userEvent.click(screen.getByRole("button", { name }));
+        expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled();
+      }
+      expect(onPost).toHaveBeenCalledTimes(1);
+      if (state === "in flight") {
+        // A response may arrive while its original inline controls are gone.
+        await userEvent.click(screen.getByRole("button", { name: "Messages" }));
+        finish(
+          json(
+            {
+              type: "error",
+              error: { type: "api_error", message: "retry confirmation" },
+            },
+            503,
+          ),
+        );
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+          "retry confirmation",
+        );
+        await userEvent.click(screen.getByRole("button", { name: "All" }));
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "retry confirmation",
+        );
+        expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+      }
+    },
+  );
+
+  it.each([
+    {
+      type: "agent.tool_use",
+      fields: {
+        input: { command: "printf hello", restart: true, timeout_ms: 250 },
+      },
+      source: "Platform tool",
+    },
+    {
+      type: "agent.mcp_tool_use",
+      fields: {
+        input: {
+          command: "printf hello",
+          options: { description: "x".repeat(400) },
+        },
+        mcp_server_name: "tool-lab",
+      },
+      source: "MCP server tool-lab",
+    },
+  ])(
+    "shows the complete $type call beside approval controls in every view",
+    async ({ type, fields, source }) => {
+      setTrace("live", [
+        ev("tu_details", type, {
+          name: "bash",
+          ...fields,
+          evaluated_permission: "ask",
+        }),
+        ev("sevt_2", "session.status_idle", {
+          stop_reason: { type: "requires_action", event_ids: ["tu_details"] },
+        }),
+      ]);
+      stubFetch();
+      renderPage();
+      const banner = await screen.findByTestId("approval-banner");
+      const inlineCard = banner.closest('[data-testid="event-row"]');
+      expect(inlineCard).toHaveAttribute("data-event-id", "tu_details");
+      expect(inlineCard).toHaveTextContent(source);
+      expect(inlineCard?.textContent).toContain(
+        JSON.stringify(fields.input, null, 2),
+      );
+      expect(
+        within(banner).getByRole("button", { name: "Approve" }),
+      ).toBeEnabled();
+
+      for (const view of ["Messages", "Debug"]) {
+        await userEvent.click(screen.getByRole("button", { name: view }));
+        const standalone = screen.getByTestId("approval-banner");
+        expect(within(standalone).getByText("bash")).toBeVisible();
+        expect(within(standalone).getByText(source)).toBeVisible();
+        expect(standalone.textContent).toContain(
+          JSON.stringify(fields.input, null, 2),
+        );
+        expect(
+          within(standalone).getByRole("button", { name: "Approve" }),
+        ).toBeEnabled();
+      }
+    },
+  );
+
+  it.each([404, 501])(
+    "hides unavailable Threads and falls back from its deep link (%s)",
+    async (threadsStatus) => {
+      window.history.replaceState(
+        null,
+        "",
+        "/workspaces/default/sessions/sess_1?inspector=thread",
+      );
+      setTrace("live");
+      stubFetch({ threadsStatus });
+      renderPage();
+      await screen.findByRole("heading", { name: "Debug run" });
+      await waitFor(() =>
+        expect(screen.queryByRole("tab", { name: "Threads" })).toBeNull(),
+      );
+      const sessionTab = screen.getByRole("tab", { name: "Session" });
+      expect(sessionTab).toHaveAttribute("aria-selected", "true");
+      sessionTab.focus();
+      await userEvent.keyboard("{End}");
+      expect(screen.getByRole("tab", { name: "Resources" })).toHaveFocus();
+    },
+  );
+
+  it.each(["archived", "deleted"])(
+    "removes pending approval controls when the session is %s",
+    async (state) => {
+      setTrace(
+        "closed",
+        [
+          ev("tu_1", "agent.tool_use", { name: "bash", input: {} }),
+          ev("sevt_2", "session.status_idle", {
+            stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+          }),
+        ],
+        [],
+        state === "deleted",
+      );
+      stubFetch({
+        session: session({
+          archived_at: state === "archived" ? "2026-09-01T00:00:00Z" : null,
+        }),
+      });
+      renderPage();
+      await screen.findByRole("heading", { name: "Debug run" });
+      expect(screen.queryByTestId("approval-banner")).toBeNull();
+      expect(screen.getByLabelText("Message to the session")).toBeDisabled();
+    },
+  );
+
+  it("clears the banner once a confirmation event answers the tool call", async () => {
+    setTrace("reconnecting", [
+      ev("tu_1", "agent.tool_use", { name: "bash", input: {} }),
+      ev("sevt_2", "session.status_idle", {
+        stop_reason: { type: "requires_action", event_ids: ["tu_1"] },
+      }),
+      ev("sevt_3", "user.tool_confirmation", {
+        tool_use_id: "tu_1",
+        result: "allow",
+      }),
+    ]);
+    stubFetch();
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("approval-banner")).toBeNull();
+    expect(screen.getByTestId("stream-state")).toHaveTextContent(
+      "reconnecting…",
+    );
+  });
+
+  it("disables the composer on an archived session with a deleted stream", async () => {
+    setTrace("closed", [], [], true);
+    stubFetch({
+      session: session({ archived_at: "2026-08-02T00:00:00Z", title: "" }),
+    });
+    renderPage();
+
+    // Untitled sessions fall back to the id in the header.
+    expect(
+      await screen.findByRole("heading", { name: "sess_1" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("stream-state")).toHaveTextContent(
+      "stream closed",
+    );
+    expect(screen.getByText("No events")).toBeInTheDocument();
+    expect(screen.getByLabelText("Message to the session")).toBeDisabled();
+    expect(screen.getByText("archived")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Contract violations (plan 04 slice 2, decision 7). The platform renders
+ * `usage` with four non-pointer counters (`internal/domain/session.go:20-31`),
+ * so a session missing one is a broken wire, not a legitimate state. The
+ * console must still say what it knows instead of blanking the page — the
+ * trace is the operator's only view of a running session, and losing all of it
+ * to one absent counter is the worst possible failure mode.
+ */
+describe("SessionDetailPage under a violated wire contract", () => {
+  const brokenUsage = (over: Record<string, unknown>) =>
+    session({
+      usage: {
+        input_tokens: 1234,
+        output_tokens: 567,
+        cache_read_input_tokens: 89,
+        cache_creation: {
+          ephemeral_1h_input_tokens: 0,
+          ephemeral_5m_input_tokens: 0,
+        },
+        ...over,
+      } as Session["usage"],
+    });
+
+  it("probe: renders the session when a usage counter is missing", async () => {
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: brokenUsage({ output_tokens: undefined }),
+    });
+    renderPage();
+
+    // The page still loads and the rest of the header is intact…
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
+    const chips = screen.getByTestId("session-chips");
+    // …and the chip claims only the counters that arrived.
+    const usage = within(chips).getByTestId("usage-chip");
+    expect(usage).toHaveAttribute("data-input-tokens", "1234");
+    expect(usage).not.toHaveAttribute("data-output-tokens");
+    expect(usage).toHaveAttribute("data-cache-read-tokens", "89");
+    // The absent attribute cannot prove what an operator *sees* in that slot,
+    // so the dash marker is asserted too — but only the marker. `tokenCount`'s
+    // populated format is owned by the e2e formatting test, so a separator or
+    // copy edit there leaves this probe green (review finding, PR #36).
+    expect(usage).toHaveTextContent("— out");
+  });
+
+  it("probe: renders the session when usage is absent entirely", async () => {
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: session({ usage: undefined as unknown as Session["usage"] }),
+    });
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Debug run" }),
+    ).toBeInTheDocument();
+    const usage = within(screen.getByTestId("session-chips")).getByTestId(
+      "usage-chip",
+    );
+    for (const attr of [
+      "data-input-tokens",
+      "data-output-tokens",
+      "data-cache-read-tokens",
+    ]) {
+      expect(usage).not.toHaveAttribute(attr);
+    }
+  });
+
+  it("probe: renders a dash for a counter that overflowed to Infinity", async () => {
+    // JSON has no NaN literal, but `1e400` parses to Infinity — which
+    // toLocaleString happily renders as "∞" (review finding, PR #35).
+    setTrace("live", [ev("sevt_1", "user.message")]);
+    stubFetch({
+      session: brokenUsage({
+        input_tokens: JSON.parse('{"n":1e400}').n as number,
+      }),
+    });
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Debug run" });
+    const chip = within(screen.getByTestId("session-chips")).getByTestId(
+      "usage-chip",
+    );
+    // Neither the text nor the attribute may claim the overflowed counter —
+    // `tokenAttr` drops it exactly when `tokenCount` shows a dash, so the two
+    // can never tell different stories.
+    expect(chip).not.toHaveAttribute("data-input-tokens");
+    expect(chip).toHaveAttribute("data-output-tokens", "567");
+    expect(chip.textContent).not.toMatch(/∞|Infinity|NaN/);
+  });
+
+  it("probe: renders a trace whose events carry no processed_at", async () => {
+    // The platform stamps inbound events at settlement, so unstamped events
+    // are normal mid-turn — the offsets must simply be absent, not "NaN".
+    setTrace("live", [
+      {
+        id: "sevt_1",
+        type: "user.message",
+        processed_at: null,
+      } as SessionEvent,
+      {
+        id: "sevt_2",
+        type: "span.model_request_end",
+        processed_at: null,
+      } as SessionEvent,
+    ]);
+    stubFetch();
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Debug run" });
+    expect(screen.getAllByTestId("event-row")).toHaveLength(2);
+    expect(document.body.textContent).not.toMatch(/NaN|Invalid Date|undefined/);
+  });
+});
+
+it("restores the inspector URL and filters/selects exact persisted event types", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/workspaces/default/sessions/sess_1?inspector=events&event=missing",
+  );
+  setTrace("live", [
+    ev("m1", "user.message", {
+      content: [{ type: "text", text: "Full message" }],
+    }),
+    ev("c1", "user.tool_confirmation", { result: "deny", tool_use_id: "tool" }),
+  ]);
+  stubFetch();
+  renderPage();
+  await screen.findByText("No loaded event matches this ID.");
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "Event type" }),
+    "user.tool_confirmation",
+  );
+  expect(screen.getAllByTestId("inspector-event-row")).toHaveLength(1);
+  await userEvent.click(screen.getByTestId("inspector-event-row"));
+  expect(new URLSearchParams(window.location.search).get("event")).toBe("c1");
+  expect(screen.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-type",
+    "user.tool_confirmation",
+  );
+  await userEvent.type(screen.getByLabelText("Filter events"), "no-match");
+  expect(screen.getByText("No matching events.")).toBeVisible();
+  expect(screen.getByTestId("event-detail")).toBeVisible();
+});
+
+it("searches full transcript content and previews without dropping the persisted API trace", async () => {
+  setTrace(
+    "live",
+    [
+      ev("m1", "user.message", {
+        content: [
+          {
+            type: "text",
+            text: "First line\n" + "x".repeat(260) + " A persisted sentence",
+          },
+        ],
+      }),
+      ev("m2", "agent.message", {
+        content: [{ type: "text", text: "A response" }],
+      }),
+      ev("t1", "agent.tool_result", {
+        content: [
+          { type: "text", text: "First block\n" },
+          { type: "text", text: "x".repeat(260) + " deep-result" },
+        ],
+      }),
+      ev("t2", "agent.tool_use", {
+        name: "bash",
+        input: { command: "echo " + "x".repeat(260) + " deep-input" },
+      }),
+    ],
+    [{ id: "preview", type: "agent.message", parts: ["Live response"] }],
+  );
+  stubFetch();
+  renderPage();
+  await screen.findByTestId("stream-state");
+  await userEvent.type(
+    screen.getByLabelText("Find in transcript"),
+    "persisted",
+  );
+  expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+  expect(screen.queryByTestId("preview-row")).toBeNull();
+  expect(screen.getByTestId("events-toolbar")).toHaveAttribute(
+    "data-total-events",
+    "4",
+  );
+  for (const term of ["deep-result", "deep-input"]) {
+    await userEvent.clear(screen.getByLabelText("Find in transcript"));
+    await userEvent.type(screen.getByLabelText("Find in transcript"), term);
+    expect(screen.getAllByTestId("event-row")).toHaveLength(1);
+    expect(screen.getByTestId("event-row")).toHaveTextContent(term);
+  }
+  await userEvent.click(screen.getByRole("tab", { name: "Events" }));
+  await userEvent.type(screen.getByLabelText("Filter events"), "deep-result");
+  expect(screen.getAllByTestId("inspector-event-row")).toHaveLength(1);
+  expect(screen.getByTestId("inspector-event-row")).toHaveAttribute(
+    "data-event-id",
+    "t1",
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Debug" }));
+  expect(screen.getAllByTestId("debug-row")).toHaveLength(4);
+});
+
+it("moves resources into the inspector and restores focus when it closes", async () => {
+  setTrace("live");
+  stubFetch();
+  renderPage();
+  await screen.findByTestId("stream-state");
+  expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+  await userEvent.click(screen.getByRole("tab", { name: "Resources" }));
+  expect(screen.getByRole("button", { name: "Attach file" })).toBeVisible();
+  expect(new URLSearchParams(window.location.search).get("inspector")).toBe(
+    "resources",
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Close session inspector" }),
+  );
+  expect(
+    screen.queryByRole("tablist", { name: "Session inspector views" }),
+  ).toBeNull();
+  const open = screen.getByRole("button", { name: "Open session inspector" });
+  await userEvent.click(open);
+  await userEvent.keyboard("{Escape}");
+  expect(open).toHaveFocus();
+});
+
+it("shows pinned tool permissions and links calls from the loaded trace", async () => {
+  const current = session();
+  current.agent.tools = [
+    {
+      type: "agent_toolset_20260401",
+      default_config: { enabled: false },
+      configs: [
+        {
+          name: "bash",
+          enabled: true,
+          permission_policy: { type: "always_ask" },
+        },
+      ],
+    },
+  ];
+  setTrace("live", [
+    ev("tool1", "agent.tool_use", { name: "bash", input: { command: "pwd" } }),
+  ]);
+  stubFetch({ session: current });
+  renderPage();
+  await screen.findByTestId("stream-state");
+  await userEvent.click(screen.getByRole("tab", { name: "Tools" }));
+  const bash = document.querySelector('[data-tool-name="bash"]')!;
+  expect(bash).toHaveAttribute("data-permission", "Ask");
+  expect(bash).toHaveAttribute("data-call-count", "1");
+  await userEvent.click(bash);
+  await userEvent.click(
+    within(screen.getByRole("tabpanel")).getByRole("button", { name: /pwd/ }),
+  );
+  expect(screen.getByRole("tab", { name: "Events" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(screen.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-type",
+    "agent.tool_use",
+  );
+});
+
+it("moves a legacy-addressed session to its canonical id, query kept, so a defined outcome shows at once", async () => {
+  // sessions.go normalizeSessionID: `session_` addresses the `sesn_` row,
+  // which answers with its own id.
+  setTrace("live");
+  window.history.replaceState(
+    null,
+    "",
+    "/workspaces/default/sessions/session_1?inspector=session#outcomes",
+  );
+  let outcomes: Session["outcome_evaluations"] = [];
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://console.test");
+      if (
+        url.pathname ===
+          "/api/organizations/default/proxy/v1/sessions/sesn_1/events" &&
+        init?.method === "POST"
+      ) {
+        outcomes = [
+          {
+            type: "outcome_evaluation",
+            outcome_id: "outc_1",
+            description: "Ship it",
+            explanation: "",
+            iteration: 0,
+            result: "pending",
+            completed_at: null,
+          },
+        ];
+        return json({ data: [] });
+      }
+      if (
+        ["session_1", "sesn_1"].some(
+          (id) =>
+            url.pathname ===
+            `/api/organizations/default/proxy/v1/sessions/${id}`,
+        )
+      )
+        return json(session({ id: "sesn_1", outcome_evaluations: outcomes }));
+      if (url.pathname.endsWith("/threads"))
+        return json({ data: [], next_page: null });
+      throw new Error(`unmatched fetch: ${url.pathname}`);
+    },
+  );
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
+  traceMock.sessionIds.clear();
+  const view = renderPage("session_1");
+  // The router navigates after the effect that asked, as Next's does.
+  router.replace.mockImplementation((href: string) => {
+    const routeId = decodeURIComponent(
+      new URL(href, "http://console.test").pathname.split("/").at(-1)!,
+    );
+    setTimeout(() => view.navigate(routeId));
+  });
+  onTestFinished(() => {
+    router.replace.mockReset();
+  });
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+      "/workspaces/default/sessions/sesn_1?inspector=session#outcomes",
+    ),
+  );
+  // The canonical page opens on the session already read, and every
+  // write and refresh keys its id.
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Define outcome" }),
+  );
+  const dialog = screen.getByRole("dialog");
+  await userEvent.type(within(dialog).getByLabelText("Description"), "Ship it");
+  await userEvent.type(within(dialog).getByLabelText("Rubric"), "Done.");
+  await userEvent.click(
+    within(dialog).getByRole("button", { name: "Define outcome" }),
+  );
+  // At once: the send's refresh, not the 15-second poll.
+  await waitFor(() =>
+    expect(screen.getByTestId("session-outcomes")).toHaveAttribute(
+      "data-outcome-count",
+      "1",
+    ),
+  );
+  // The legacy address was read once, to learn its id; nothing else keyed
+  // it, in its path or its query.
+  expect(
+    fetchMock.mock.calls
+      .map(([input]) => {
+        const url = new URL(String(input), "http://console.test");
+        return url.pathname + url.search;
+      })
+      .filter((request) => request.includes("session_1")),
+  ).toEqual(["/api/organizations/default/proxy/v1/sessions/session_1"]);
+  // Its event history and stream were never asked for.
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
+});
+
+it("reads any address without the sesn_ prefix before the workspace, and moves to the id it answers with", async () => {
+  // An alias some endpoint answers with another session's row: only the read
+  // keys it, and nothing else starts until the page has moved.
+  setTrace("live");
+  window.history.replaceState(
+    null,
+    "",
+    "/workspaces/default/sessions/sess_alias",
+  );
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (
+      url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_alias"
+    )
+      return json(session({ id: "sesn_1" }));
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
+  traceMock.sessionIds.clear();
+  renderPage("sess_alias");
+
+  await waitFor(() =>
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+      "/workspaces/default/sessions/sesn_1",
+    ),
+  );
+  expect(
+    fetchMock.mock.calls.map(
+      ([input]) => new URL(String(input), "http://console.test").pathname,
+    ),
+  ).toEqual(["/api/organizations/default/proxy/v1/sessions/sess_alias"]);
+  expect([...traceMock.sessionIds]).toEqual([]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+});
+
+it("mounts the workspace where it stands when an alias answers with an id that is not sesn_", async () => {
+  // Only a sesn_ id is moved to, so aliases answering each other cannot
+  // bounce the page between them.
+  setTrace("live");
+  window.history.replaceState(null, "", "/workspaces/default/sessions/sess_a");
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_a")
+      return json(session({ id: "sess_b" }));
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sess_b")
+      return json(session({ id: "sess_a" }));
+    if (url.pathname.endsWith("/threads"))
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
+  traceMock.sessionIds.clear();
+  renderPage("sess_a");
+
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
+  expect(router.replace).not.toHaveBeenCalled();
+  expect([...traceMock.sessionIds]).toEqual(["sess_b"]);
+});
+
+it("starts a canonical session's trace and threads beside its read, not after it", async () => {
+  setTrace("connecting");
+  const read = Promise.withResolvers<Response>();
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://console.test");
+    if (url.pathname === "/api/organizations/default/proxy/v1/sessions/sesn_1")
+      return read.promise;
+    if (
+      url.pathname ===
+      "/api/organizations/default/proxy/v1/sessions/sesn_1/threads"
+    )
+      return json({ data: [], next_page: null });
+    throw new Error(`unmatched fetch: ${url.pathname}`);
+  });
+  vi.stubGlobal("fetch", withTestSession(fetchMock));
+  traceMock.sessionIds.clear();
+  renderPage("sesn_1");
+
+  // The session is still being read, and the rest is already under way.
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.map(
+        ([input]) => new URL(String(input), "http://console.test").pathname,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "/api/organizations/default/proxy/v1/sessions/sesn_1",
+        "/api/organizations/default/proxy/v1/sessions/sesn_1/threads",
+      ]),
+    ),
+  );
+  expect([...traceMock.sessionIds]).toEqual(["sesn_1"]);
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  expect(router.replace).not.toHaveBeenCalled();
+
+  read.resolve(json(session({ id: "sesn_1" })));
+  expect(await screen.findAllByText("Debug run")).not.toHaveLength(0);
+});

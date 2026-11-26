@@ -19,7 +19,7 @@ import {
 } from "@/components/shell/console-session";
 import { useApiKeys } from "@/lib/platform/queries";
 import type { NativeSession, ServiceAccount } from "@/lib/platform/native";
-import ApiKeysPage from "@/app/(console)/api-keys/page";
+import ApiKeysPage from "@/app/(console)/settings/keys/page";
 import { ServiceAccountKeyIssuer } from "./service-account-key-issuer";
 import DashboardPage from "@/app/(console)/dashboard/page";
 import type { ReactNode } from "react";
@@ -579,7 +579,7 @@ describe("creating a key", () => {
     expect(form.getByRole("combobox", { name: "Scope" })).toBeDisabled();
     expect(
       await form.findByRole("link", { name: /Manage service accounts/ }),
-    ).toHaveAttribute("href", "/service-accounts");
+    ).toHaveAttribute("href", "/settings/service-accounts");
     expect(submitKeyButton()).toBeDisabled();
   });
 

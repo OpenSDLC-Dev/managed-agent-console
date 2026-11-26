@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import {
   useEffect,
   useRef,
@@ -193,7 +194,7 @@ function AccountKeys({
             {keys.map((key) => (
               <li key={key.id}>
                 <Link
-                  href={"/api-keys?key=" + encodeURIComponent(key.id)}
+                  href={`${surfacePaths["api-keys"]}?key=${encodeURIComponent(key.id)}`}
                   prefetch={false}
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded py-2 text-[13px] hover:bg-muted/50"
                 >
@@ -485,8 +486,7 @@ function AccountOverview({
           )}
           <Link
             href={
-              "/service-accounts/" +
-              encodeURIComponent(account.id) +
+              `${surfacePaths["service-accounts"]}/${encodeURIComponent(account.id)}` +
               (suffix < 0 ? "" : listHref.slice(suffix))
             }
             className="inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[13px] hover:bg-muted"

@@ -471,7 +471,7 @@ describe("a session that ended", () => {
     assign.mockReset();
     resetSignedOutBounceForTests();
     vi.stubGlobal("window", {
-      location: { pathname: "/agents", search: "", assign },
+      location: { pathname: "/workspaces/default/agents", search: "", assign },
     });
   });
 
@@ -480,7 +480,9 @@ describe("a session that ended", () => {
     await expect(platformGet("v1/agents")).rejects.toBeInstanceOf(
       PlatformError,
     );
-    expect(assign).toHaveBeenCalledWith("/login?return_to=%2Fagents");
+    expect(assign).toHaveBeenCalledWith(
+      "/login?return_to=%2Fworkspaces%2Fdefault%2Fagents",
+    );
   });
 
   // The navigation is asynchronous. A caller left on a promise that never

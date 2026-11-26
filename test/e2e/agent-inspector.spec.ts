@@ -12,7 +12,10 @@ test.beforeEach(async ({ request }) => {
 test("agent inspector retains filters, selection and history before opening the full page", async ({
   page,
 }) => {
-  await signIn(page, "/agents?created=2026-08-01~2026-08-02");
+  await signIn(
+    page,
+    "/workspaces/default/agents?created=2026-08-01~2026-08-02",
+  );
   const row = page.getByRole("row").filter({ hasText: "Deep researcher" });
   await row.getByRole("cell", { name: "Deep researcher" }).click();
   const panel = page.getByRole("region", { name: "Agent details" });
@@ -43,7 +46,7 @@ test("agent inspector retains filters, selection and history before opening the 
     panel.getByRole("heading", { name: "Deep researcher" }),
   ).toBeVisible();
   await panel.getByRole("link", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL("/agents/" + AGENT);
+  await expect(page).toHaveURL("/workspaces/default/agents/" + AGENT);
   await page.goBack();
   await expect(panel).toHaveAttribute("data-agent-id", AGENT);
   await expect(page).toHaveURL(/created=2026-08-01%7E2026-08-02/);
@@ -52,7 +55,7 @@ test("agent inspector retains filters, selection and history before opening the 
 test("agent permissions follow the selected resource and remain usable at narrow widths", async ({
   page,
 }) => {
-  await signIn(page, "/agents?agent=" + TASK);
+  await signIn(page, "/workspaces/default/agents?agent=" + TASK);
   const panel = page.getByRole("region", { name: "Agent details" });
   await expect(
     panel.getByRole("heading", { name: "General task agent" }),

@@ -13,7 +13,7 @@ test("environment inspector preserves the list, history, keyboard focus and API 
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments");
+  await page.goto("/workspaces/default/environments");
   const row = page.getByRole("row").filter({ hasText: "cloud-limited" });
   await row.focus();
   await page.keyboard.press("Enter");
@@ -59,21 +59,21 @@ test("environment inspector preserves the list, history, keyboard focus and API 
       .analyze(),
   ).toMatchObject({ violations: [] });
   await panel.getByRole("link", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL("/environments/" + CLOUD);
+  await expect(page).toHaveURL("/workspaces/default/environments/" + CLOUD);
 });
 
 test("environment edits cancel in place and save multiline descriptions", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments/" + CLOUD);
+  await page.goto("/workspaces/default/environments/" + CLOUD);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Discarded change");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "cloud-limited" }),
   ).toBeVisible();
-  await expect(page).toHaveURL("/environments/" + CLOUD);
+  await expect(page).toHaveURL("/workspaces/default/environments/" + CLOUD);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page
     .getByLabel("Description", { exact: true })
@@ -95,7 +95,7 @@ test("environment batch archive confirms, skips archived rows and clears success
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments");
+  await page.goto("/workspaces/default/environments");
   await page.getByRole("checkbox", { name: "Select all rows" }).check();
   await expect(page.locator("[data-selected-count]")).toHaveAttribute(
     "data-selected-count",
@@ -145,7 +145,7 @@ test("environment batch deletion keeps only failures selected and allows retry",
   expect((await create("Delete target")).ok()).toBe(true);
   const target = await created.json();
   await signIn(page);
-  await page.goto("/environments");
+  await page.goto("/workspaces/default/environments");
   const pattern =
     "**/api/organizations/default/proxy/v1/environments/" + target.id;
   // The platform's answer to a delete its sessions refuse (environments.go
@@ -213,7 +213,7 @@ test("deleting an inspected environment restores focus before a delayed list ref
   });
   expect(created.ok()).toBe(true);
   await signIn(page);
-  await page.goto("/environments");
+  await page.goto("/workspaces/default/environments");
   const row = page.getByRole("row").filter({ hasText: "Focus target" });
   await row.focus();
   await page.keyboard.press("Enter");
@@ -269,7 +269,7 @@ test("environment editor preserves package arguments and metadata through retry,
       },
     })
   ).json();
-  await page.goto("/environments/" + created.id);
+  await page.goto("/workspaces/default/environments/" + created.id);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Package manager 1").selectOption("pip");
   await page.getByLabel("Package 1", { exact: true }).fill("pkg[a,b]>=1");
@@ -369,7 +369,7 @@ test("unrelated environment edits retain stored empty metadata until its row is 
     })
   ).json();
   const endpoint = "http://127.0.0.1:18080/v1/environments/" + created.id;
-  await signIn(page, "/environments/" + created.id);
+  await signIn(page, "/workspaces/default/environments/" + created.id);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Renamed environment");
   await page.getByRole("button", { name: "Save changes" }).click();

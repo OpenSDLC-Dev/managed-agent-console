@@ -15,7 +15,7 @@ import ProviderDetailPage from "./page";
 import {
   sentBody,
   stubGatewayFetch,
-} from "../../../../../test/mock-platform/gateway-fetch";
+} from "@/../test/mock-platform/gateway-fetch";
 
 const pushSpy = vi.fn();
 vi.mock("next/navigation", () => ({

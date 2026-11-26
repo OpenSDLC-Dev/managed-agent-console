@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -147,7 +148,9 @@ export function CreateEnvironmentButton({
                 };
                 create.mutate(bodyFromForm(form, "create"), {
                   onSuccess: (environment) =>
-                    router.push(`/environments/${environment.id}`),
+                    router.push(
+                      `${surfacePaths.environments}/${environment.id}`,
+                    ),
                 });
               }}
             >

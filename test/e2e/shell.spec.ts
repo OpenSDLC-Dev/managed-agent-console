@@ -10,8 +10,10 @@ async function openLogin(page: Page) {
 }
 
 test("unauthenticated visits redirect to the login gate", async ({ page }) => {
-  await page.goto("/agents");
-  await expect(page).toHaveURL(/\/login\?return_to=%2Fagents$/);
+  await page.goto("/workspaces/default/agents");
+  await expect(page).toHaveURL(
+    /\/login\?return_to=%2Fworkspaces%2Fdefault%2Fagents$/,
+  );
 });
 
 test("the private API refuses unauthenticated API calls with the platform envelope shape", async ({

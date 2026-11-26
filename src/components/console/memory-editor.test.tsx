@@ -71,7 +71,7 @@ it("updates full content with the loaded digest as its precondition", async () =
   });
   await waitFor(() =>
     expect(router.push).toHaveBeenCalledWith(
-      "/memory-stores/memstore_1/memories/mem_1",
+      "/workspaces/default/memory-stores/memstore_1/memories/mem_1",
     ),
   );
 });

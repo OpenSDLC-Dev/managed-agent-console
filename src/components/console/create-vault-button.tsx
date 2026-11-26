@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -131,7 +132,7 @@ export function CreateVaultButton() {
           open
           onOpenChange={(next) => {
             if (!next) {
-              router.push("/vaults/" + created.id);
+              router.push(`${surfacePaths.vaults}/${created.id}`);
               setCreated(null);
               setName("");
               setMetadata("{}");

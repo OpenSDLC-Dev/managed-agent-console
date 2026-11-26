@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { signIn } from "./sign-in";
 
-const ROUTE = "/sessions/sesn_gatedbash00000000001";
+const ROUTE = "/workspaces/default/sessions/sesn_gatedbash00000000001";
 const ID = "sevt_01HmTd92anY6GDkWZ1qMCiEM";
 const step = async (request: APIRequestContext, name: string) => {
   expect(

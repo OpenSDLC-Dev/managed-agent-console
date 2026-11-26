@@ -199,11 +199,16 @@ it("probe: visibility hides only confirmed absence and denied reads", () => {
 
 describe("surfaceOfPath", () => {
   it("names the surface a console path belongs to, list page or deeper", () => {
-    expect(surfaceOfPath("/skills")).toBe("skills");
-    expect(surfaceOfPath("/skills/skill_1")).toBe("skills");
-    expect(surfaceOfPath("/agents/agt_1/edit")).toBe("agents");
-    expect(surfaceOfPath("/vaults")).toBe("vaults");
-    expect(surfaceOfPath("/memory-stores/memstore_1")).toBe("memory-stores");
+    expect(surfaceOfPath("/workspaces/default/skills")).toBe("skills");
+    expect(surfaceOfPath("/workspaces/default/skills/skill_1")).toBe("skills");
+    expect(surfaceOfPath("/workspaces/default/agents/agt_1/edit")).toBe(
+      "agents",
+    );
+    expect(surfaceOfPath("/settings/keys")).toBe("api-keys");
+    expect(surfaceOfPath("/settings/service-accounts/svc_1")).toBe(
+      "service-accounts",
+    );
+    expect(surfaceOfPath("/usage/requests")).toBe("usage");
   });
 
   it("probe: is undefined for a path that belongs to no surface", () => {
@@ -213,6 +218,8 @@ describe("surfaceOfPath", () => {
     expect(surfaceOfPath("/")).toBeUndefined();
     expect(surfaceOfPath("/agentsomething")).toBeUndefined();
     expect(surfaceOfPath("/settings/agents")).toBeUndefined();
+    expect(surfaceOfPath("/workspaces/unknown/agents")).toBeUndefined();
+    expect(surfaceOfPath("/agents")).toBeUndefined();
   });
 });
 

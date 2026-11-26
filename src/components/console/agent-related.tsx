@@ -1,4 +1,5 @@
 "use client";
+import { surfacePaths } from "@/lib/routes";
 import { useRouter } from "next/navigation";
 import { DataTable, type Column } from "./data-table";
 import { IdCell } from "./copy-id";
@@ -88,7 +89,9 @@ export function AgentSessions({
             rows={query.data?.data ?? []}
             loading={query.isPending}
             rowKey={(row) => row.id}
-            onRowClick={(row) => router.push("/sessions/" + row.id)}
+            onRowClick={(row) =>
+              router.push(`${surfacePaths.sessions}/${row.id}`)
+            }
             empty={<EmptyState title="No sessions" />}
           />
           <Pager
@@ -122,7 +125,9 @@ export function AgentDeployments({ id }: { id: string }) {
             rows={query.data?.data ?? []}
             loading={query.isPending}
             rowKey={(row) => row.id}
-            onRowClick={(row) => router.push("/deployments/" + row.id)}
+            onRowClick={(row) =>
+              router.push(`${surfacePaths.deployments}/${row.id}`)
+            }
             empty={<EmptyState title="No deployments" />}
           />
           <Pager

@@ -23,7 +23,7 @@ test.afterEach(async ({ request }) => {
 test("create validates the name and description, keeps dismissed drafts and displays duplicate-name refusals", async ({
   page,
 }) => {
-  await signIn(page, "/service-accounts");
+  await signIn(page, "/settings/service-accounts");
   const form = await openServiceAccountForm(page);
   const name = form.getByRole("textbox", { name: "Name", exact: true });
   const description = form.getByRole("textbox", { name: /Description/ });
@@ -131,7 +131,7 @@ test("search follows opaque pages and preserves the selected status through Open
     if (url.pathname === serviceAccountsPath && url.searchParams.has("page"))
       requestedCursors.push(url.searchParams.get("page")!);
   });
-  await page.goto("/service-accounts");
+  await page.goto("/settings/service-accounts");
   const search = page.getByLabel("Search service accounts", { exact: true });
   const retiredButton = page.getByRole("button", {
     name: retired.name,
@@ -172,7 +172,7 @@ test("search follows opaque pages and preserves the selected status through Open
   });
   await inspector.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(
-    (url) => url.pathname === "/service-accounts/" + retired.id,
+    (url) => url.pathname === "/settings/service-accounts/" + retired.id,
   );
   await page.reload();
   await expect(
@@ -233,7 +233,7 @@ test("copy ID, navigate the inspector and open only visible keys belonging to th
       })
     ).status(),
   ).toBe(200);
-  await page.goto("/service-accounts");
+  await page.goto("/settings/service-accounts");
   const table = page.getByRole("table", { name: "Service accounts" });
   await expect(table.getByRole("columnheader")).toHaveText([
     "ID",
@@ -280,14 +280,17 @@ test("copy ID, navigate the inspector and open only visible keys belonging to th
     await expect(inspector.getByText(absent, { exact: true })).toHaveCount(0);
   }
   const activeKey = inspector.getByRole("link", { name: /^ci-deploy\b/ });
-  await expect(activeKey).toHaveAttribute("href", "/api-keys?key=apikey_ci01");
+  await expect(activeKey).toHaveAttribute(
+    "href",
+    "/settings/keys?key=apikey_ci01",
+  );
   await expect(
     inspector.getByRole("link", { name: /^disabled-release-key\b/ }),
-  ).toHaveAttribute("href", "/api-keys?key=" + disabled);
+  ).toHaveAttribute("href", "/settings/keys?key=" + disabled);
   await activeKey.click();
   await expect(page).toHaveURL(
     (url) =>
-      url.pathname === "/api-keys" &&
+      url.pathname === "/settings/keys" &&
       url.searchParams.get("key") === "apikey_ci01",
   );
   const keyDetails = page.getByRole("dialog");
@@ -318,7 +321,7 @@ test("copy ID, navigate the inspector and open only visible keys belonging to th
 test("Create API key assigns the selected account and the new key appears in its details", async ({
   page,
 }) => {
-  await signIn(page, "/service-accounts");
+  await signIn(page, "/settings/service-accounts");
   const menu = await openServiceAccountMenu(page, "ci-deploy");
   await menu.getByRole("menuitem", { name: "Create API key" }).click();
   const form = page.getByRole("dialog", {

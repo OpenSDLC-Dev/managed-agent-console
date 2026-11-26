@@ -37,7 +37,7 @@ import {
   useSurfaces,
   type Surface,
 } from "@/lib/platform/surfaces";
-import { AGENTS_CREATE_ROUTE } from "@/lib/routes";
+import { surfacePaths, AGENTS_CREATE_ROUTE } from "@/lib/routes";
 import {
   AgentOverviewCharts,
   chartCard,
@@ -57,25 +57,25 @@ const destinations = [
   { label: "Agent", href: AGENTS_CREATE_ROUTE, surface: "agents", icon: Bot },
   {
     label: "Session",
-    href: "/sessions",
+    href: surfacePaths.sessions,
     surface: "sessions",
     icon: MessagesSquare,
   },
   {
     label: "Deployment",
-    href: "/deployments/new",
+    href: `${surfacePaths.deployments}/new`,
     surface: "deployments",
     icon: Rocket,
   },
   {
     label: "Environment",
-    href: "/environments/new",
+    href: `${surfacePaths.environments}/new`,
     surface: "environments",
     icon: Box,
   },
   {
     label: "Memory store",
-    href: "/memory-stores",
+    href: surfacePaths["memory-stores"],
     surface: "memory-stores",
     icon: Database,
   },
@@ -327,8 +327,7 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                             <Link
                               className="rounded-sm font-medium after:absolute after:inset-0"
                               href={
-                                "/agents/" +
-                                encodeURIComponent(a.id) +
+                                `${surfacePaths.agents}/${encodeURIComponent(a.id)}` +
                                 "?tab=observability"
                               }
                             >
@@ -379,7 +378,7 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                 {data.total > data.agents.length && (
                   <Link
                     className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted"
-                    href="/agents"
+                    href={surfacePaths.agents}
                   >
                     Show more
                     <ChevronRight className="size-3" />

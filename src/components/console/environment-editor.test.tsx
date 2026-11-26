@@ -32,7 +32,7 @@ vi.mock("next/navigation", () => ({
     replace: vi.fn(),
     refresh: vi.fn(),
   }),
-  usePathname: () => "/environments",
+  usePathname: () => "/workspaces/default/environments",
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -303,7 +303,9 @@ describe("EnvironmentEditor", () => {
       screen.getByRole("button", { name: "Create environment" }),
     );
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/environments/env_new"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/environments/env_new",
+      ),
     );
 
     const [url, init] = postCalls(mock)[0];
@@ -354,7 +356,9 @@ describe("EnvironmentEditor", () => {
       screen.getByRole("button", { name: "Create environment" }),
     );
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/environments/env_new"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/environments/env_new",
+      ),
     );
 
     const [, init] = postCalls(mock)[0];
@@ -386,7 +390,9 @@ describe("EnvironmentEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/environments/env_1"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/environments/env_1",
+      ),
     );
 
     const [url, init] = postCalls(mock)[0];
@@ -427,7 +433,9 @@ describe("EnvironmentEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
-      expect(pushSpy).toHaveBeenCalledWith("/environments/env_2"),
+      expect(pushSpy).toHaveBeenCalledWith(
+        "/workspaces/default/environments/env_2",
+      ),
     );
 
     const [url, init] = postCalls(mock)[0];

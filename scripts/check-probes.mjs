@@ -72,7 +72,7 @@ const SEAMS = [
     modules: ["schemas", "surfaces"],
   },
   {
-    dir: "src/app/(console)/sessions/[id]",
+    dir: "src/app/(console)/workspaces/default/sessions/[id]",
     why: "the trace surface — renders whatever the two seams above produce",
     modules: ["page"],
   },

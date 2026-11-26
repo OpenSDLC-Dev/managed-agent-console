@@ -113,7 +113,9 @@ describe("memory store editor", () => {
       metadata: { owner: "api", remove: null },
     });
     await waitFor(() =>
-      expect(router.push).toHaveBeenCalledWith("/memory-stores/memstore_1"),
+      expect(router.push).toHaveBeenCalledWith(
+        "/workspaces/default/memory-stores/memstore_1",
+      ),
     );
   });
 });

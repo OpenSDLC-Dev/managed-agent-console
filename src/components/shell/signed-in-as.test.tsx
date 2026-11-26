@@ -67,7 +67,7 @@ function nativeBlock() {
       location: {
         value: {
           origin: "http://localhost",
-          pathname: "/sessions/sesn_old",
+          pathname: "/workspaces/default/sessions/sesn_old",
           search: "",
           assign,
         },

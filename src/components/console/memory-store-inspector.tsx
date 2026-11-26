@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Database } from "lucide-react";
@@ -46,7 +47,7 @@ function MemorySummary({
         <Button
           size="sm"
           variant="outline"
-          onClick={() => router.push("/memory-stores/" + id)}
+          onClick={() => router.push(`${surfacePaths["memory-stores"]}/${id}`)}
         >
           Open <ArrowRight className="size-3.5" />
         </Button>
@@ -82,8 +83,7 @@ function MemorySummary({
                 storeId={id}
                 onSelect={(memoryId) =>
                   router.push(
-                    "/memory-stores/" +
-                      id +
+                    `${surfacePaths["memory-stores"]}/${id}` +
                       "?memory=" +
                       encodeURIComponent(memoryId),
                   )

@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function VaultEditor({ vault }: { vault: Vault }) {
           display_name: name,
           metadata: metadataPatch(metadata, vault.metadata),
         },
-        { onSuccess: () => router.push(`/vaults/${vault.id}`) },
+        { onSuccess: () => router.push(`${surfacePaths.vaults}/${vault.id}`) },
       );
     } catch (error) {
       setParseError(

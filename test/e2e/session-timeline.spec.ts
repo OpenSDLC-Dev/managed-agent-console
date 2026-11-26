@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { settleMotion } from "./settle-motion";
 import { signIn } from "./sign-in";
 
-const SESSION = "/sessions/sesn_gatedbash00000000001";
+const SESSION = "/workspaces/default/sessions/sesn_gatedbash00000000001";
 test.beforeEach(async ({ request }) => {
   expect((await request.post("http://127.0.0.1:18080/__reset")).ok()).toBe(
     true,
@@ -69,7 +69,7 @@ test("Thread details expose pinned metadata, server usage and an inspectable req
   );
   await expect(preview.getByRole("link")).toHaveAttribute(
     "href",
-    "/agents/agent_taskrunner0000000001?version=1",
+    "/workspaces/default/agents/agent_taskrunner0000000001?version=1",
   );
   await expect(
     preview.getByRole("img", { name: "Input tokens at each model request" }),
@@ -106,7 +106,7 @@ test("a never-run thread renders pending usage instead of failing the Threads vi
   });
   expect(created.ok()).toBe(true);
   const { id } = await created.json();
-  await signIn(page, `/sessions/${id}?inspector=thread`);
+  await signIn(page, `/workspaces/default/sessions/${id}?inspector=thread`);
 
   const tokens = page
     .getByTestId("session-threads")

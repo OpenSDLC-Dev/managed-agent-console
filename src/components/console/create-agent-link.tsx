@@ -1,3 +1,4 @@
+import { surfacePaths } from "@/lib/routes";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -9,7 +10,10 @@ export function CreateAgentLink({
   variant?: "default" | "outline";
 }) {
   return (
-    <Link className={cn(buttonVariants({ variant }), "h-8")} href="/agents/new">
+    <Link
+      className={cn(buttonVariants({ variant }), "h-8")}
+      href={`${surfacePaths.agents}/new`}
+    >
       {variant === "default" && <Plus className="size-4" />}Create agent
     </Link>
   );

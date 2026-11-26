@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 test("agents list renders fixtures and the archived filter", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await expect(
     page.getByRole("cell", { name: /Deep researcher/ }),
   ).toBeVisible();
@@ -26,7 +26,7 @@ test("agents list renders fixtures and the archived filter", async ({
 test("agent detail shows overview, system prompt, and versions", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })
@@ -68,7 +68,7 @@ test("a self-hosted environment lists its keys, live and expired", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments/env_byoc0000000000000001");
+  await page.goto("/workspaces/default/environments/env_byoc0000000000000001");
   await expect(page.getByTestId("environment-keys")).toBeVisible();
 
   // Expired keys stay listed on purpose (envkeys.go:102-106): the operator
@@ -134,7 +134,7 @@ test("session detail shows the trace and the pending-approval banner", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_gatedbash00000000001");
+  await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
 
   await expect(page.getByTestId("approval-banner")).toBeVisible();
   await expect(page.getByText("Waiting on 1 tool approval")).toBeVisible();

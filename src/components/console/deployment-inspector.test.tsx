@@ -82,7 +82,7 @@ it("renders resolved resources, pinned Agent metadata and server-provided upcomi
     await within(panel).findByRole("link", { name: /Deep researcher/ }),
   ).toHaveAttribute(
     "href",
-    `/agents/${deployments[0].agent.id}?version=${deployments[0].agent.version}`,
+    `/workspaces/default/agents/${deployments[0].agent.id}?version=${deployments[0].agent.version}`,
   );
   expect(
     await within(panel).findByRole("link", { name: files[0].filename }),
@@ -151,7 +151,7 @@ it("keeps archived details readable when related metadata is forbidden", async (
   ).toBeVisible();
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
-    `/deployments/${deployments[0].id}`,
+    `/workspaces/default/deployments/${deployments[0].id}`,
   );
   expect(screen.getByText("No upcoming runs.")).toBeVisible();
   expect(document.querySelector("[data-status]")).toHaveAttribute(

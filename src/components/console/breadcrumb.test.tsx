@@ -9,14 +9,17 @@ describe("Breadcrumb", () => {
   it("links the parent and names the current page", () => {
     render(
       <Breadcrumb
-        parent={{ href: "/environments", label: "Environments" }}
+        parent={{
+          href: "/workspaces/default/environments",
+          label: "Environments",
+        }}
         current="self-hosted-test-env"
       />,
     );
     const nav = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(nav).toBeInTheDocument();
     const parent = screen.getByRole("link", { name: "Environments" });
-    expect(parent).toHaveAttribute("href", "/environments");
+    expect(parent).toHaveAttribute("href", "/workspaces/default/environments");
     expect(screen.getByText("self-hosted-test-env")).toBeInTheDocument();
   });
 });

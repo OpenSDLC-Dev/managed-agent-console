@@ -38,7 +38,7 @@ function setup({
   history.replaceState(
     null,
     "",
-    "/memory-stores/" +
+    "/workspaces/default/memory-stores/" +
       memories[0].memory_store_id +
       (selected ? "?memory=" + selected : ""),
   );

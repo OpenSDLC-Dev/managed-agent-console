@@ -612,7 +612,9 @@ describe("deployment editor wire mapping", () => {
         ],
       },
     });
-    expect(push).toHaveBeenCalledWith("/deployments/depl_created");
+    expect(push).toHaveBeenCalledWith(
+      "/workspaces/default/deployments/depl_created",
+    );
   });
 
   it("keeps malformed JSON for correction without calling the platform", async () => {

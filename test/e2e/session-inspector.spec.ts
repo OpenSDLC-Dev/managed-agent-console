@@ -12,7 +12,7 @@ test.beforeEach(async ({ request }) => {
 test("Session selection restores filters and history, supports API and opens the full page explicitly", async ({
   page,
 }) => {
-  await signIn(page, "/sessions?order=asc");
+  await signIn(page, "/workspaces/default/sessions?order=asc");
   await page
     .getByRole("cell", { name: "Install deps and run tests", exact: true })
     .click();
@@ -35,13 +35,13 @@ test("Session selection restores filters and history, supports API and opens the
     panel.getByRole("heading", { name: "Install deps and run tests" }),
   ).toBeVisible();
   await panel.getByRole("button", { name: "Close details" }).click();
-  await expect(page).toHaveURL("/sessions?order=asc");
+  await expect(page).toHaveURL("/workspaces/default/sessions?order=asc");
   await expect(page.getByLabel("Find session by ID")).toBeFocused();
   await page.getByLabel("Find session by ID").fill(RESEARCH);
   await page.getByLabel("Find session by ID").press("Enter");
   await expect(panel).toHaveAttribute("data-session-id", RESEARCH);
   await panel.getByRole("link", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL("/sessions/" + RESEARCH);
+  await expect(page).toHaveURL("/workspaces/default/sessions/" + RESEARCH);
 });
 
 test("inspecting a row on page two retains its cursor when selecting and closing", async ({
@@ -61,7 +61,7 @@ test("inspecting a row on page two retains its cursor when selecting and closing
     });
     expect(created.ok()).toBe(true);
   }
-  await signIn(page, "/sessions");
+  await signIn(page, "/workspaces/default/sessions");
   const nextPage = page.waitForRequest(
     (req) =>
       new URL(req.url()).pathname.endsWith("/v1/sessions") &&
@@ -92,7 +92,7 @@ test("inspecting a row on page two retains its cursor when selecting and closing
 test("deep links, missing sessions, resizing and narrow inspector accessibility remain usable", async ({
   page,
 }) => {
-  await signIn(page, "/sessions?session=" + GATED);
+  await signIn(page, "/workspaces/default/sessions?session=" + GATED);
   const panel = page.getByRole("region", { name: "Session details" });
   await expect(
     panel.getByRole("heading", { name: "Install deps and run tests" }),
@@ -136,7 +136,7 @@ test("deep links, missing sessions, resizing and narrow inspector accessibility 
 test("row Open enters the full session without inserting an inspector history entry", async ({
   page,
 }) => {
-  await signIn(page, "/sessions?order=asc");
+  await signIn(page, "/workspaces/default/sessions?order=asc");
   for (const activation of ["click", "keyboard"]) {
     const row = page.getByRole("row").filter({
       has: page.getByRole("cell", {
@@ -147,9 +147,9 @@ test("row Open enters the full session without inserting an inspector history en
     const open = row.getByRole("link", { name: "Open", exact: true });
     if (activation === "click") await open.click();
     else await open.press("Enter");
-    await expect(page).toHaveURL("/sessions/" + GATED);
+    await expect(page).toHaveURL("/workspaces/default/sessions/" + GATED);
     await page.goBack();
-    await expect(page).toHaveURL("/sessions?order=asc");
+    await expect(page).toHaveURL("/workspaces/default/sessions?order=asc");
     await expect(
       page.getByRole("region", { name: "Session details" }),
     ).toHaveCount(0);

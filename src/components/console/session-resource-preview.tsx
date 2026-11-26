@@ -1,4 +1,5 @@
 "use client";
+import { surfacePaths } from "@/lib/routes";
 import { ResourceDownload } from "./resource-download";
 
 import { useState } from "react";
@@ -39,7 +40,7 @@ function MemoryPreview({
         </span>
         <Link
           className="hover:underline"
-          href={`/memory-stores/${storeId}?memory=${memory.id}`}
+          href={`${surfacePaths["memory-stores"]}/${storeId}?memory=${memory.id}`}
         >
           Open in Memory Stores ↗
         </Link>
@@ -249,7 +250,7 @@ export function SessionResourcePreview({
           <Field label="Store">
             <Link
               className="hover:underline"
-              href={`/memory-stores/${resource.memory_store_id}`}
+              href={`${surfacePaths["memory-stores"]}/${resource.memory_store_id}`}
             >
               {resource.name} ↗
             </Link>

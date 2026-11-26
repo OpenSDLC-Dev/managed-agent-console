@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useContext, useRef, useState } from "react";
 import { useIsMutating, useQuery } from "@tanstack/react-query";
 import {
@@ -209,7 +210,7 @@ function Directory() {
   }
   const editing = selection?.mode === "edit" || selection?.mode === "load-edit";
   const busy = pending || editing || !!modal || denied;
-  const listHref = `/service-accounts${filters.key ? `?${filters.key}` : ""}`;
+  const listHref = `${surfacePaths["service-accounts"]}${filters.key ? `?${filters.key}` : ""}`;
   const select = (account: ServiceAccount, mode: Selection["mode"] = "view") =>
     setSelection({
       account,

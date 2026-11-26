@@ -34,7 +34,7 @@ export async function showArchivedServiceAccounts(page: Page) {
 
 /** Walk both implementations through the UI and check the actual private API writes. */
 export async function serviceAccountLifecycle(page: Page, name: string) {
-  await page.goto("/service-accounts");
+  await page.goto("/settings/service-accounts");
   const form = await openServiceAccountForm(page);
   await form.getByLabel("Name", { exact: true }).fill(name);
   await form.getByRole("combobox", { name: "Organization role" }).click();
@@ -150,7 +150,9 @@ export async function serviceAccountLifecycle(page: Page, name: string) {
   ).toHaveCount(0);
   await rowButton.click();
   await inspector.getByRole("link", { name: "Open", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp("/service-accounts/" + account.id));
+  await expect(page).toHaveURL(
+    new RegExp("/settings/service-accounts/" + account.id),
+  );
   await page.reload();
   await expect(
     page.getByRole("heading", { level: 1, name, exact: true }),

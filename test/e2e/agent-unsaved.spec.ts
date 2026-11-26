@@ -11,7 +11,7 @@ test.beforeEach(async ({ request }) => {
 test("reopening the active group preserves a draft and the raw page query", async ({
   page,
 }) => {
-  await signIn(page, "/agents/new?filter=two%20words");
+  await signIn(page, "/workspaces/default/agents/new?filter=two%20words");
   const url = page.url();
   const name = page.getByLabel("Name", { exact: true });
   await name.fill("In progress");
@@ -29,7 +29,7 @@ test("reopening the active group preserves a draft and the raw page query", asyn
 test("agent create page retains drafts on Stay and discards only on Leave", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("link", { name: "Create agent", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Unsaved draft");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -74,7 +74,7 @@ test("agent create page retains drafts on Stay and discards only on Leave", asyn
 test("agent drafts survive sidebar, back and reload cancellation, then save without prompting", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })
@@ -122,7 +122,7 @@ test("agent drafts survive sidebar, back and reload cancellation, then save with
 test("clean view changes leave freely; invalid raw drafts guard history Leave and sidebar navigation", async ({
   page,
 }) => {
-  await signIn(page, "/agents");
+  await signIn(page, "/workspaces/default/agents");
   await page.getByRole("cell", { name: /Deep researcher/ }).click();
   await page
     .getByRole("region", { name: "Agent details" })
@@ -169,13 +169,16 @@ test("clean view changes leave freely; invalid raw drafts guard history Leave an
 test("confirming a dirty draft's group navigation focuses its submenu", async ({
   page,
 }) => {
-  await signIn(page, "/agents/new");
+  await signIn(page, "/workspaces/default/agents/new");
   const name = page.getByLabel("Name", { exact: true });
   await name.fill("Keep or leave");
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   await nav.getByRole("button", { name: "Back to all sections" }).click();
   const resources = nav.locator('[data-nav-group="Resources"]');
-  await expect(resources).toHaveAttribute("href", "/resources");
+  await expect(resources).toHaveAttribute(
+    "href",
+    "/workspaces/default/resources-overview",
+  );
   const prompt = page.getByRole("dialog", { name: "Unsaved changes" });
   await resources.click();
   await prompt.getByRole("button", { name: "Stay" }).click();
@@ -183,7 +186,7 @@ test("confirming a dirty draft's group navigation focuses its submenu", async ({
   await expect(nav).toHaveAttribute("data-nav-view", "root");
   await resources.click();
   await prompt.getByRole("button", { name: "Leave" }).click();
-  await expect(page).toHaveURL(/\/resources$/);
+  await expect(page).toHaveURL(/\/workspaces\/default\/resources-overview$/);
   await expect(
     nav.getByRole("button", { name: "Back to all sections" }),
   ).toBeFocused();

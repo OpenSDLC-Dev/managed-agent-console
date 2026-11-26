@@ -1,5 +1,6 @@
 "use client";
 
+import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ export function DreamEditor() {
           : { type: "update_existing", memory_store_id: memoryStoreId },
     };
     create.mutate(body, {
-      onSuccess: (dream) => router.push(`/dreams/${dream.id}`),
+      onSuccess: (dream) => router.push(`${surfacePaths.dreams}/${dream.id}`),
     });
   };
 

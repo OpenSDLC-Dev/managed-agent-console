@@ -45,13 +45,13 @@ test("deployment list, detail, run error and create form pass axe", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/deployments");
+  await page.goto("/workspaces/default/deployments");
   await expect(
     page.getByRole("heading", { name: "Deployments" }),
   ).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/deployments/depl_weekresearch00000001");
+  await page.goto("/workspaces/default/deployments/depl_weekresearch00000001");
   await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
   await expectNoViolations(page);
   await page.getByRole("button", { name: "Runs", exact: true }).click();
@@ -59,12 +59,12 @@ test("deployment list, detail, run error and create form pass axe", async ({
   await expectNoViolations(page);
 
   await page.goto(
-    "/deployments/depl_weekresearch00000001/runs/drun_crashed00000000001",
+    "/workspaces/default/deployments/depl_weekresearch00000001/runs/drun_crashed00000000001",
   );
   await expect(page.getByTestId("deployment-run-error")).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/deployments/new");
+  await page.goto("/workspaces/default/deployments/new");
   await expect(page.getByLabel("Name")).toBeVisible();
   await expectNoViolations(page);
 });
@@ -77,14 +77,26 @@ test("memory store list, detail, memory, version and forms pass axe", async ({
   const memory = "mem_projectbrief000000001";
   const version = "memver_briefmodified000001";
   for (const [route, ready] of [
-    ["/memory-stores", "Memory Stores"],
-    [`/memory-stores/${store}`, "Project notes"],
-    [`/memory-stores/${store}/memories/${memory}`, "/brief.md"],
-    [`/memory-stores/${store}/versions/${version}`, "Memory version"],
-    ["/memory-stores/new", "Create memory store"],
-    [`/memory-stores/${store}/edit`, "Edit Project notes"],
-    [`/memory-stores/${store}/memories/new`, "Create memory"],
-    [`/memory-stores/${store}/memories/${memory}/edit`, "Edit /brief.md"],
+    ["/workspaces/default/memory-stores", "Memory Stores"],
+    [`/workspaces/default/memory-stores/${store}`, "Project notes"],
+    [
+      `/workspaces/default/memory-stores/${store}/memories/${memory}`,
+      "/brief.md",
+    ],
+    [
+      `/workspaces/default/memory-stores/${store}/versions/${version}`,
+      "Memory version",
+    ],
+    ["/workspaces/default/memory-stores/new", "Create memory store"],
+    [`/workspaces/default/memory-stores/${store}/edit`, "Edit Project notes"],
+    [
+      `/workspaces/default/memory-stores/${store}/memories/new`,
+      "Create memory",
+    ],
+    [
+      `/workspaces/default/memory-stores/${store}/memories/${memory}/edit`,
+      "Edit /brief.md",
+    ],
   ] as const) {
     await page.goto(route);
     await expect(page.getByRole("heading", { name: ready })).toBeVisible();
@@ -96,19 +108,19 @@ test("dream list, detail, creation and cancellation dialog pass axe", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/dreams");
+  await page.goto("/workspaces/default/dreams");
   await expect(page.getByRole("heading", { name: "Dreams" })).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/dreams/drm_endedresearch0000000001");
+  await page.goto("/workspaces/default/dreams/drm_endedresearch0000000001");
   await expect(page.getByTestId("dream-usage")).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/dreams/new");
+  await page.goto("/workspaces/default/dreams/new");
   await expect(page.getByLabel("Session IDs")).toBeVisible();
   await expectNoViolations(page);
 
-  await page.goto("/dreams/drm_pendingresearch0000001");
+  await page.goto("/workspaces/default/dreams/drm_pendingresearch0000001");
   await page.getByRole("button", { name: "Cancel dream" }).click();
   await dialogSettled(page);
   await expectNoViolations(page);
@@ -132,7 +144,7 @@ async function dialogSettled(page: Page) {
 test("API key filters, details and creation form pass axe in light and dark", async ({
   page,
 }) => {
-  await signIn(page, "/api-keys");
+  await signIn(page, "/settings/keys");
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
     const row = page.getByRole("button", { name: "ci-deploy", exact: true });
@@ -153,7 +165,7 @@ test("the environment-key surface and its dialogs pass axe", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/environments/env_byoc0000000000000001");
+  await page.goto("/workspaces/default/environments/env_byoc0000000000000001");
   await expect(page.getByTestId("environment-keys")).toBeVisible();
   // The table, the setup guide and its code blocks.
   await expectNoViolations(page);
@@ -207,7 +219,7 @@ for (const theme of ["light", "dark"] as const) {
     // The confirm dialog every ConfirmButton and ConfirmIconButton ends in.
     // Its footer is `bg-muted/50`, a lighter backdrop than the popover and so
     // the console's hardest destructive contrast target.
-    await page.goto("/vaults/vlt_github00000000000001");
+    await page.goto("/workspaces/default/vaults/vlt_github00000000000001");
     await page
       .getByRole("main")
       .getByRole("button", { name: "More actions" })
@@ -232,7 +244,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // Bare `text-destructive` error copy — 36 sites share this colour, and in
     // dark mode it failed on the plain page background, nowhere near a tint.
-    await page.goto("/agents/new");
+    await page.goto("/workspaces/default/agents/new");
     await page.getByLabel("Name", { exact: true }).fill("");
     await page.getByRole("button", { name: /Create agent/ }).click();
     await expect(page.getByText(/required/i).first()).toBeVisible();
@@ -240,7 +252,7 @@ for (const theme of ["light", "dark"] as const) {
 
     // The one destructive wash that is not on a console-defined surface: the
     // approval banner's amber. `globals.test.ts` cannot reach this one.
-    await page.goto("/sessions/sesn_gatedbash00000000001");
+    await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
     await expect(page.getByTestId("approval-banner")).toBeVisible();
     await page
       .getByRole("button", { name: "Approval options" })
@@ -280,7 +292,7 @@ test("an unparseable raw agent config marks and names its textarea", async ({
   page,
 }) => {
   await signIn(page);
-  await page.goto("/agents/new");
+  await page.goto("/workspaces/default/agents/new");
   await page.getByRole("radio", { name: "raw" }).click();
   const field = page.getByLabel("Raw agent config");
   await field.fill("not json");
@@ -296,7 +308,7 @@ test("an unparseable raw agent config marks and names its textarea", async ({
 
 test("session detail with a pending approval passes axe", async ({ page }) => {
   await signIn(page);
-  await page.goto("/sessions/sesn_gatedbash00000000001");
+  await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
   await expect(page.getByText("Waiting on 1 tool approval")).toBeVisible();
   await expectNoViolations(page);
 
