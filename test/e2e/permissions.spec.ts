@@ -68,7 +68,12 @@ test("refused resource reads leave only local entry points", async ({
     page.getByRole("button", { name: "Compare models" }),
   ).toBeVisible();
   await page.keyboard.press("Control+k");
-  await expect(page.getByRole("option")).toHaveCount(1);
+  await expect(
+    page.getByRole("group", { name: "Pages" }).getByRole("option"),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("group", { name: "Popular docs" }).getByRole("option"),
+  ).toHaveCount(3);
   await expect(page.getByRole("option", { name: "Dashboard" })).toBeVisible();
 });
 

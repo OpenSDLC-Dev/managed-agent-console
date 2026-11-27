@@ -233,7 +233,7 @@ test("files list renders uploads, and no session's own files", async ({
   // Nor does the palette, which searches the same list.
   await page.keyboard.press("Control+k");
   const input = page.getByRole("combobox", {
-    name: "Search pages and resources",
+    name: "Command palette",
   });
   await input.fill("research-notes");
   await expect(

@@ -10,13 +10,20 @@ import {
 } from "react";
 import { useLeaveConfirmation } from "./unsaved-changes";
 import {
+  switchDestination,
+  useWorkspaceIndex,
   useWorkspaceSettingsAccess,
   workspaceSettings,
+  workspaceSettingsHref,
 } from "@/lib/platform/workspaces";
-import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
+import { useRouter } from "next/navigation";
+import { WorkspaceContext } from "./workspace-navigation";
+import { workspaceHref } from "@/lib/platform/tenancy";
 import {
+  BookOpen,
   Bot,
   Boxes,
+  CornerDownLeft,
   Database,
   FileText,
   KeyRound,
@@ -25,21 +32,15 @@ import {
   Rocket,
   Search,
   Sparkles,
+  SquareStack,
   type LucideIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { NAV_DESTINATIONS } from "@/lib/nav";
-import {
-  surfacePaths,
-  AGENTS_CREATE_ROUTE,
-  AGENTS_OVERVIEW_ROUTE,
-  isReportPage,
-  MESSAGES_ROUTE,
-  PLAYGROUND_ROUTE,
-  RESOURCES_ROUTE,
-} from "@/lib/routes";
+import { PALETTE_DOCS } from "@/lib/palette-docs";
+import { surfacePaths, isReportPage, PLAYGROUND_ROUTE } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import {
   useAgents,
@@ -65,6 +66,7 @@ interface Item {
   key: string;
   label: string;
   detail?: string;
+  external?: boolean;
   href: string;
   group: string;
   icon: LucideIcon;
@@ -72,35 +74,11 @@ interface Item {
   surface?: Surface;
 }
 
-// Order, labels and icons all come from `lib/nav.ts` — the sidebar's own
-// source. The palette used to keep its own copy of the list, which meant the
-// two could list the same destinations in different orders and neither was
-// wrong. A group contributes its children, so this is flat where the nav nests.
-//
-// `surface` is absent for a console-local destination like Dashboard, which no
-// probe can take away.
-const SECTIONS: (Item & { surface?: Surface })[] = NAV_DESTINATIONS.map(
-  ({ key, label, href, icon, surface }) => ({
-    key,
-    label:
-      href === AGENTS_OVERVIEW_ROUTE
-        ? "Agents overview"
-        : href === AGENTS_CREATE_ROUTE
-          ? "Create agent"
-          : href === RESOURCES_ROUTE
-            ? "Resources overview"
-            : href === MESSAGES_ROUTE
-              ? "Messages overview"
-              : label,
-    href,
-    group: "Go to",
-    icon,
-    surface,
-  }),
-);
-
 const matches = (query: string, ...fields: (string | null | undefined)[]) =>
   fields.some((f) => f?.toLowerCase().includes(query));
+
+const matchesWords = (query: string, ...fields: (string | undefined)[]) =>
+  query.split(/\s+/).every((word) => matches(word, ...fields));
 
 /**
  * Search across the first page of every resource list (the wire has no
@@ -108,6 +86,9 @@ const matches = (query: string, ...fields: (string | null | undefined)[]) =>
  */
 function useSearchItems(query: string): Item[] {
   const session = useContext(ConsoleSessionContext)?.data;
+  const space = useContext(WorkspaceContext);
+  const signedIn = Boolean(session?.signed_in && session.id);
+  const workspaces = useWorkspaceIndex(signedIn && !!query.trim());
   const canViewWorkspaces = useWorkspaceSettingsAccess(session);
   const limit = 50;
   const agents = useAgents({ limit });
@@ -122,24 +103,54 @@ function useSearchItems(query: string): Item[] {
   // list leaves out a session's copies and outputs, found from their session.
   const files = useFiles();
   // A failed list may retain cached rows. Apply the collection's read refusal
-  // to resource hits too, not only to the "Go to" shortcuts.
+  // to both resource hits and page shortcuts.
   const surfaces = useSurfaces();
 
   return useMemo(() => {
     const q = query.trim().toLowerCase();
-    const visible = (item: Item) =>
+    const visible = (item: { surface?: Surface }) =>
       item.surface === undefined ||
       isSurfaceVisible(surfaces?.[item.surface], item.surface);
-    const items: Item[] = SECTIONS.filter(
+    const pages: Item[] = NAV_DESTINATIONS.filter(
       (s) =>
         visible(s) &&
         (s.href !== workspaceSettings || canViewWorkspaces) &&
         (!isReportPage(s.href) ||
           (hasDeveloperSession(session) && canOpenReport(s.href, surfaces))) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
-        matches(q, s.label, s.surface && SURFACES[s.surface].label),
-    );
-    if (!q) return items;
+        matchesWords(q, s.label, s.surface && SURFACES[s.surface].label),
+    ).map((s) => ({
+      ...s,
+      group: "Pages",
+      href: workspaceHref(s.href, space),
+    }));
+    const docs: Item[] = PALETTE_DOCS.filter((doc) =>
+      q ? matchesWords(q, doc.label, doc.section, doc.topics) : doc.popular,
+    ).map((doc) => ({
+      key: doc.path,
+      label: doc.label,
+      detail: doc.section,
+      group: q ? "Documentation" : "Popular docs",
+      href: "https://platform.claude.com/docs/en/" + doc.path,
+      icon: BookOpen,
+      external: true,
+    }));
+    if (!q) return [...pages, ...docs];
+    const spaces: Item[] = (
+      signedIn && workspaces.isSuccess ? workspaces.data : []
+    )
+      .filter((w) => matches(q, w.name, w.id, w.public_id))
+      .map((w) => ({
+        key: w.id,
+        label: w.name,
+        group: "Workspaces",
+        href:
+          canViewWorkspaces && w.role === "admin"
+            ? workspaceSettingsHref(w.id)
+            : switchDestination(surfacePaths.agents, w),
+        icon: SquareStack,
+      }));
+    const items: Item[] = [];
     for (const a of agents.data?.data ?? []) {
       if (matches(q, a.name, a.id))
         items.push({
@@ -247,10 +258,18 @@ function useSearchItems(query: string): Item[] {
           icon: FileText,
         });
     }
-    return items.filter(visible);
+    const resources = items.filter(visible).map((item) => ({
+      ...item,
+      href: workspaceHref(item.href, space),
+    }));
+    return [...pages, ...spaces, ...resources, ...docs];
   }, [
     query,
     session,
+    signedIn,
+    space,
+    workspaces.data,
+    workspaces.isSuccess,
     canViewWorkspaces,
     surfaces,
     agents.data,
@@ -265,86 +284,172 @@ function useSearchItems(query: string): Item[] {
   ]);
 }
 
-function PaletteResults({
-  query,
-  onNavigate,
-  active,
-  setActive,
-  listId,
-}: {
-  query: string;
-  onNavigate: (href: string) => void;
-  active: number;
-  setActive: (i: number) => void;
-  listId: string;
-}) {
-  const items = useSearchItems(query);
-  const clamped = Math.min(active, Math.max(0, items.length - 1));
-  const activeRef = useRef<HTMLButtonElement | null>(null);
+const listId = "command-palette-results";
 
-  // Keep the parent's index (and aria-activedescendant) on a real item.
-  useEffect(() => {
-    if (active !== clamped) setActive(clamped);
-  }, [active, clamped, setActive]);
+function SearchDialog({
+  shortcutModifier,
+  onChoose,
+}: {
+  shortcutModifier: string;
+  onChoose: () => void;
+}) {
+  const router = useRouter();
+  const { requestLeave } = useLeaveConfirmation();
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const items = useSearchItems(query);
+  const activeIndex = Math.min(active, items.length - 1);
+  const activeRef = useRef<HTMLAnchorElement>(null);
+  const selected = items[activeIndex];
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
-  }, [clamped]);
+  }, [activeIndex, selected?.key]);
+
+  const groups = new Map<string, { item: Item; index: number }[]>();
+  for (const [index, item] of items.entries()) {
+    const rows = groups.get(item.group);
+    if (rows) rows.push({ item, index });
+    else groups.set(item.group, [{ item, index }]);
+  }
 
   return (
-    <div
-      id={listId}
-      role="listbox"
-      className="max-h-[min(28rem,60dvh)] overflow-y-auto pb-1"
-    >
+    <>
+      <DialogTitle className="sr-only">Command palette</DialogTitle>
+      <div className="flex items-center gap-2 border-b py-2 pr-11 pl-3">
+        <Search
+          className="size-4 shrink-0 text-muted-foreground"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <Input
+          autoFocus
+          role="combobox"
+          aria-label="Command palette"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={
+            selected ? `${listId}-${activeIndex}` : undefined
+          }
+          placeholder="Search docs, pages, workspaces, agents"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const next = activeIndex + (e.key === "ArrowDown" ? 1 : -1);
+              setActive(Math.max(0, Math.min(next, items.length - 1)));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              activeRef.current?.click();
+            }
+          }}
+          className="border-none shadow-none"
+        />
+      </div>
+      <div
+        id={listId}
+        role="listbox"
+        aria-label="Suggestions"
+        className="max-h-[min(28rem,60dvh)] overflow-y-auto px-2 pb-2"
+      >
+        {[...groups].map(([group, rows]) => (
+          <div key={group} role="group" aria-label={group}>
+            <div
+              aria-hidden
+              className="px-2 pb-1 pt-3 text-xs font-medium text-muted-foreground"
+            >
+              {group}
+            </div>
+            {rows.map(({ item, index }) => (
+              <a
+                key={item.key}
+                id={`${listId}-${index}`}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noreferrer" : undefined}
+                data-managed-leave
+                data-surface={item.surface}
+                role="option"
+                tabIndex={-1}
+                aria-selected={index === activeIndex}
+                ref={index === activeIndex ? activeRef : undefined}
+                onMouseEnter={() => setActive(index)}
+                onClick={(event) => {
+                  if (
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.altKey ||
+                    event.shiftKey
+                  )
+                    return;
+                  if (!item.external) {
+                    event.preventDefault();
+                    requestLeave(() => router.push(item.href));
+                  }
+                  onChoose();
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm",
+                  index === activeIndex && "bg-secondary",
+                )}
+              >
+                <item.icon
+                  aria-hidden
+                  className="size-4 shrink-0 text-muted-foreground"
+                  strokeWidth={1.75}
+                />
+                <span className="truncate">{item.label}</span>
+                {item.detail && (
+                  <span
+                    className={cn(
+                      "ml-auto truncate text-xs text-muted-foreground",
+                      !item.external && "font-mono text-[11px]",
+                    )}
+                  >
+                    {item.detail}
+                  </span>
+                )}
+                {index === activeIndex && (
+                  <CornerDownLeft
+                    aria-hidden
+                    className={cn(
+                      "size-3.5 shrink-0 text-muted-foreground",
+                      !item.detail && "ml-auto",
+                    )}
+                  />
+                )}
+              </a>
+            ))}
+          </div>
+        ))}
+      </div>
       {items.length === 0 && (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-          No matches in the loaded lists.
+        <p
+          role="status"
+          className="px-3 py-4 text-center text-sm text-muted-foreground"
+        >
+          No matches found.
         </p>
       )}
-      {items.map((item, i) => {
-        const header =
-          i === 0 || items[i - 1].group !== item.group ? item.group : null;
-        return (
-          <div key={`${item.group}:${item.key}`}>
-            {header && (
-              <div className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                {header}
-              </div>
-            )}
-            <button
-              type="button"
-              role="option"
-              aria-selected={i === clamped}
-              id={`${listId}-${i}`}
-              data-surface={item.surface}
-              ref={i === clamped ? activeRef : undefined}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => onNavigate(item.href)}
-              className={cn(
-                "flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm",
-                i === clamped && "bg-secondary",
-              )}
-            >
-              <item.icon
-                className="size-4 shrink-0 text-muted-foreground"
-                strokeWidth={1.75}
-              />
-              <span className="truncate">{item.label}</span>
-              {item.detail && (
-                <span className="ml-auto truncate font-mono text-[11px] text-muted-foreground">
-                  {item.detail}
-                </span>
-              )}
-            </button>
-          </div>
-        );
-      })}
-    </div>
+      <div className="flex items-center justify-end gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
+        <span>
+          Select <kbd>↑ ↓</kbd>
+        </span>
+        <span>
+          Open menu <kbd>{shortcutModifier} K</kbd>
+        </span>
+      </div>
+    </>
   );
 }
 
-/** Header trigger and keyboard access to pages and resource lists. */
+/** Header trigger and keyboard access to Console search. */
 export function CommandPalette({
   compact = false,
   onNavigate,
@@ -352,8 +457,6 @@ export function CommandPalette({
   compact?: boolean;
   onNavigate?: () => void;
 }) {
-  const router = useRouter();
-  const leave = useLeaveConfirmation();
   const isMac = useSyncExternalStore(
     () => () => {},
     () => navigator.platform.startsWith("Mac"),
@@ -361,11 +464,6 @@ export function CommandPalette({
   );
   const shortcutModifier = isMac ? "⌘" : "Ctrl";
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
-  // Item count lives in PaletteResults; track the pressed key here and let
-  // the results clamp. Arrow handling just moves within a generous bound.
-  const listId = "command-palette-results";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -377,20 +475,6 @@ export function CommandPalette({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
-
-  const navigate = (href: string) => {
-    setOpen(false);
-    onNavigate?.();
-    leave.requestLeave(() => router.push(href));
-  };
-
-  const reset = (next: boolean) => {
-    setOpen(next);
-    if (!next) {
-      setQuery("");
-      setActive(0);
-    }
-  };
 
   return (
     <>
@@ -423,57 +507,18 @@ export function CommandPalette({
           </>
         )}
       </button>
-      <Dialog open={open} onOpenChange={reset}>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="top-[max(1rem,15dvh)] translate-y-0 gap-0 p-0 sm:max-w-[42rem]"
           aria-describedby={undefined}
         >
-          <DialogTitle className="sr-only">Command palette</DialogTitle>
-          <div className="flex items-center gap-2 border-b py-2 pr-11 pl-3">
-            <Search
-              className="size-4 shrink-0 text-muted-foreground"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            <Input
-              autoFocus
-              role="combobox"
-              aria-label="Search pages and resources"
-              aria-expanded="true"
-              aria-controls={listId}
-              aria-activedescendant={`${listId}-${active}`}
-              placeholder="Search pages and resources…"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setActive(0);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setActive((i) => i + 1);
-                } else if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setActive((i) => Math.max(0, i - 1));
-                } else if (e.key === "Enter") {
-                  e.preventDefault();
-                  document
-                    .querySelector<HTMLButtonElement>(
-                      `#${listId} [aria-selected="true"]`,
-                    )
-                    ?.click();
-                }
-              }}
-              className="border-none shadow-none"
-            />
-          </div>
           {open && (
-            <PaletteResults
-              query={query}
-              onNavigate={navigate}
-              active={active}
-              setActive={setActive}
-              listId={listId}
+            <SearchDialog
+              shortcutModifier={shortcutModifier}
+              onChoose={() => {
+                setOpen(false);
+                onNavigate?.();
+              }}
             />
           )}
         </DialogContent>

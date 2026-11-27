@@ -180,5 +180,17 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
 
 export const NAV_DESTINATIONS: Destination[] = [
   DASHBOARD_LINK,
-  ...NAV_SECTIONS.flatMap(({ groups }) => groups.flatMap(({ items }) => items)),
+  ...NAV_SECTIONS.flatMap(({ groups }) =>
+    groups.flatMap((group) =>
+      group.items.map((item) => {
+        const pageLabel =
+          item.surface === "usage"
+            ? "Overview"
+            : item.surface === "api-keys"
+              ? "API keys"
+              : item.label;
+        return { ...item, label: `${group.label} › ${pageLabel}` };
+      }),
+    ),
+  ),
 ];

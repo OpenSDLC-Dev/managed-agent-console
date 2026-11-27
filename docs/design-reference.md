@@ -35,9 +35,11 @@ The reference uses a single-line wordmark and puts Documentation on the right of
 
 The reference ends the sidebar with an inset account button and opens its menu upward. The console shows the signed-in user, current platform role and a connection indicator on that button. The menu follows system appearance. Self-hosted operators see separate Platform and Console versions and details of connection failures above Sign out. Arrow keys move focus through available actions and Escape returns focus to the button.
 
-## Global search — checked 2026-11-20
+## Global search — checked 2026-11-27
 
-Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The console shows Command on macOS and Ctrl elsewhere. The visible and accessible labels separate the key names. Search offers existing pages and platform resources.
+Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The empty palette showed **Pages** with names such as **Messages › Playground**, then **Popular docs**. Searching for `playground` showed Pages and Documentation. Selecting the Default workspace opened its settings. [Claude Console](https://platform.claude.com/dashboard)
+
+Self-hosted search lists the pages this deployment exposes, the caller's workspaces and matches from the current workspace's loaded resource lists. An administrator can open a workspace's settings. Other members land on a page for their role. Documentation links use a small local index of Claude guides so typing a workspace or resource name sends no search request to Anthropic.
 
 ## Messages — checked 2026-11-22
 
