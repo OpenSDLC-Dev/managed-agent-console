@@ -17,6 +17,6 @@ reconnect reconciliation, preview lifecycle and transcript cards on platform
 0.4.0 with console 0.7.0, after [release #121](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/121)
 and local Docker delivery. Preserve the #7 acceptance fixture.
 
-Reference facts and capability boundaries: [docs/design-reference.md](./docs/design-reference.md).
+The [header search browser tests](./test/e2e/command-palette.spec.ts) cover page and documentation groups, keyboard activation and workspace destinations. Reference observations and capability boundaries are in the [design reference](./docs/design-reference.md).
 
 Stop after delivery. Scheduled execution #9 and OAuth #10 remain deferred.

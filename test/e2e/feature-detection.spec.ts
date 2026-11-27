@@ -31,7 +31,7 @@ test("a surface the deployment does not implement leaves the nav and the palette
 
   await page.keyboard.press("Control+k");
   const input = page.getByRole("combobox", {
-    name: "Search pages and resources",
+    name: "Command palette",
   });
   await expect(input).toBeVisible();
   // An empty query lists exactly the section shortcuts, read by surface id

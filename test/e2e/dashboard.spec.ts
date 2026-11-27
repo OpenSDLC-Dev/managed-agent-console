@@ -66,7 +66,7 @@ test("dashboard and search stay centered beside the expanded navigation", async 
   await expect(palette).toHaveCSS("max-width", "672px");
   await expect(palette).toHaveCSS("top", "135px");
   await expect(
-    palette.getByRole("combobox", { name: "Search pages and resources" }),
+    palette.getByRole("combobox", { name: "Command palette" }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
   const agents = page

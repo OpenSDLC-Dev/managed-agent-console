@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandPalette } from "./command-palette";
@@ -118,6 +119,39 @@ const setQuery = (input: HTMLElement, value: string) =>
   fireEvent.change(input, { target: { value } });
 
 describe("CommandPalette", () => {
+  it("opens with breadcrumb pages and three popular docs, then groups matching documentation", async () => {
+    renderPalette();
+    const input = await openPalette();
+    expect(input.getAttribute("aria-label")).toBe("Command palette");
+    expect(input.getAttribute("placeholder")).toBe(
+      "Search docs, pages, workspaces, agents",
+    );
+    const list = within(screen.getByRole("listbox", { name: "Suggestions" }));
+    const pages = within(list.getByRole("group", { name: "Pages" }));
+    expect(pages.getAllByRole("option")[0].textContent).toBe("Dashboard");
+    expect(
+      pages.getByRole("option", { name: "Agents › Sessions" }),
+    ).toBeDefined();
+    const docs = within(list.getByRole("group", { name: "Popular docs" }));
+    expect(
+      docs.getAllByRole("option").map((option) => option.getAttribute("href")),
+    ).toEqual([
+      "https://platform.claude.com/docs/en/get-started",
+      "https://platform.claude.com/docs/en/models/overview",
+      "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
+    ]);
+    setQuery(input, "playground");
+    expect(list.queryByRole("group", { name: "Popular docs" })).toBeNull();
+    expect(list.queryByRole("group", { name: "Pages" })).toBeNull();
+    const results = within(list.getByRole("group", { name: "Documentation" }));
+    expect(
+      results.getByRole("option", { name: /Workspaces/ }).getAttribute("href"),
+    ).toBe("https://platform.claude.com/docs/en/manage-claude/workspaces");
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    expect(((await openPalette()) as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole("group", { name: "Popular docs" })).toBeDefined();
+  });
+
   it("probe: removes denied shortcuts and resource hits even if a prior list still has data", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://console");
@@ -146,10 +180,16 @@ describe("CommandPalette", () => {
     renderPalette();
     const input = await openPalette();
     await waitFor(() =>
-      expect(screen.queryByRole("option", { name: "API Keys" })).toBeNull(),
+      expect(
+        screen.queryByRole("option", { name: "Keys › API keys" }),
+      ).toBeNull(),
     );
-    expect(screen.queryByRole("option", { name: "Skills" })).toBeNull();
-    expect(screen.getByRole("option", { name: "Agents" })).toBeDefined();
+    expect(
+      screen.queryByRole("option", { name: "Resources › Skills" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("option", { name: "Agents › Agents" }),
+    ).toBeDefined();
     setQuery(input, "01");
     await waitFor(() =>
       expect(screen.getByText("Support triage")).toBeDefined(),
@@ -157,31 +197,29 @@ describe("CommandPalette", () => {
     expect(screen.queryByText("PDF filler")).toBeNull();
   });
 
-  it("opens with Ctrl+K, lists the Go to sections, and fetches every list", async () => {
+  it("opens with Ctrl+K, lists the visible Pages, and fetches every list", async () => {
     renderPalette();
     expect(screen.queryByRole("combobox")).toBeNull();
     await openPalette();
 
-    expect(screen.getAllByText("Go to")).toHaveLength(1);
-    const options = screen.getAllByRole("option");
-    // Nav order, flattened: the palette and the sidebar read the same list
-    // (`lib/nav.ts`), so this is the sidebar's order with its group headers
-    // dropped. Dashboard leads and is not a platform surface.
+    const options = within(
+      screen.getByRole("group", { name: "Pages" }),
+    ).getAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual([
       "Dashboard",
-      "Agents",
-      "Sessions",
-      "Deployments",
-      "Environments",
-      "Memory",
-      "Credential vaults",
-      "Dreams",
-      "Files",
-      "Skills",
-      "API Keys",
-      "Models",
-      "Providers",
-      "Usage",
+      "Agents › Agents",
+      "Agents › Sessions",
+      "Agents › Deployments",
+      "Agents › Environments",
+      "Agents › Memory",
+      "Agents › Credential vaults",
+      "Agents › Dreams",
+      "Resources › Files",
+      "Resources › Skills",
+      "Keys › API keys",
+      "Model Gateway › Models",
+      "Model Gateway › Providers",
+      "Spending & usage › API usage",
     ]);
 
     // The searchable list queries, plus one surface probe per registered
@@ -220,11 +258,25 @@ describe("CommandPalette", () => {
     renderPalette();
     const input = await openPalette();
     setQuery(input, "memory stores");
-    const memory = await screen.findByRole("option", { name: "Memory" });
+    const memory = await screen.findByRole("option", {
+      name: "Agents › Memory",
+    });
     fireEvent.click(memory);
     expect(routerState.push).toHaveBeenCalledWith(
       "/workspaces/default/memory-stores",
     );
+  });
+
+  it("opens the API usage page when searching by its Claude Console name", async () => {
+    renderPalette();
+    const input = await openPalette();
+    setQuery(input, "api usage");
+    const usage = screen.getByRole("option", {
+      name: "Spending & usage › API usage",
+    });
+    expect(usage.getAttribute("href")).toBe("/usage");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(routerState.push).toHaveBeenCalledWith("/usage");
   });
 
   it("opens from the sidebar Search button", async () => {
@@ -240,7 +292,7 @@ describe("CommandPalette", () => {
 
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(9));
     // Sections no longer match, resource groups do.
-    expect(screen.queryByText("Go to")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Pages" })).toBeNull();
     for (const header of [
       "Agents",
       "Sessions",
@@ -271,7 +323,7 @@ describe("CommandPalette", () => {
 
     // "Sessions" section + both sessions (sess_02 matched and labeled by id).
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
-    expect(screen.getByText("Go to")).toBeDefined();
+    expect(screen.getByRole("group", { name: "Pages" })).toBeDefined();
     // The untitled session renders its id as both label and detail.
     expect(screen.getAllByText("sess_02")).toHaveLength(2);
   });
@@ -341,9 +393,8 @@ describe("CommandPalette", () => {
     const input = await openPalette();
     setQuery(input, "zzz");
 
-    expect(
-      await screen.findByText("No matches in the loaded lists."),
-    ).toBeDefined();
+    expect(await screen.findByText("No matches found.")).toBeDefined();
+    expect(input.getAttribute("aria-activedescendant")).toBeNull();
     fireEvent.keyDown(input, { key: "Enter" });
     expect(routerState.push).not.toHaveBeenCalled();
     expect(screen.getByRole("combobox")).toBeDefined();
@@ -425,7 +476,11 @@ describe("CommandPalette", () => {
     // Back to the destinations — not the resource search hits above. Derived from
     // the nav itself: one per surface plus the console-local Dashboard, and a
     // hardcoded count here has been wrong once already.
-    expect(screen.getAllByRole("option")).toHaveLength(
+    expect(
+      within(screen.getByRole("group", { name: "Pages" })).getAllByRole(
+        "option",
+      ),
+    ).toHaveLength(
       NAV_DESTINATIONS.filter(
         (item) =>
           item.href !== "/workspaces/default/playground" &&
@@ -434,7 +489,7 @@ describe("CommandPalette", () => {
           !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,
     );
-    expect(screen.getByText("Go to")).toBeDefined();
+    expect(screen.getByRole("group", { name: "Pages" })).toBeDefined();
   });
 });
 
@@ -465,8 +520,8 @@ it.each(["available", "denied", "unknown"])(
     renderPalette();
     await openPalette();
     for (const [label, href] of [
-      ["Members", "/settings/members"],
-      ["Service accounts", "/settings/service-accounts"],
+      ["Settings › Members", "/settings/members"],
+      ["Keys › Service accounts", "/settings/service-accounts"],
     ]) {
       if (status === "available") {
         const option = await screen.findByRole("option", { name: label });

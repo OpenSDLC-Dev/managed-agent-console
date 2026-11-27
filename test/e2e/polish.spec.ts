@@ -41,7 +41,7 @@ test("Ctrl+K searches resources and navigates on Enter", async ({ page }) => {
 
   await page.keyboard.press("Control+k");
   const input = page.getByRole("combobox", {
-    name: "Search pages and resources",
+    name: "Command palette",
   });
   await expect(input).toBeVisible();
 

@@ -53,6 +53,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- Header search now shows page breadcrumbs and popular Claude guides. Search results group documentation, accessible workspaces and resources, and opening a result takes you to the selected workspace.
+
 - Refreshing the Agents directory or opening its URL now restores the current page and filters.
 
 ## Released

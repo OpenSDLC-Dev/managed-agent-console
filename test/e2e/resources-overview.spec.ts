@@ -64,9 +64,11 @@ test("Resources lands on Overview, keeps the workspace selected and restores sid
   await expect(overview).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: /Search Console/ }).click();
   await page
-    .getByRole("combobox", { name: /Search/ })
+    .getByRole("combobox", { name: "Command palette" })
     .fill("resources overview");
-  await page.getByRole("option", { name: /Resources overview/i }).click();
+  await page
+    .getByRole("option", { name: "Resources › Overview", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/workspaces\/default\/resources-overview$/);
 });
 
@@ -383,10 +385,10 @@ test("Overview and its navigation use the actual collections when every usable p
   await expect(overview).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: /Search Console/ }).click();
   await page
-    .getByRole("combobox", { name: /Search/ })
+    .getByRole("combobox", { name: "Command palette" })
     .fill("resources overview");
   await expect(
-    page.getByRole("option", { name: /Resources overview/i }),
+    page.getByRole("option", { name: "Resources › Overview", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.unroute("**/proxy/v1/files?limit=1");

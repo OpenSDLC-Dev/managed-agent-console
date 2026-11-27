@@ -2,6 +2,7 @@ import { browserPost } from "../e2e/browser-write";
 import {
   dashboardModelCases,
   grantDashboardModelDiscovery,
+  setDashboardSession,
 } from "../e2e/dashboard-fixture";
 import {
   DIRECT_REQUEST,
@@ -2913,7 +2914,12 @@ export const SURFACES: Surface[] = [
           await page
             .getByRole("option", { name: "Dashboard", exact: true })
             .waitFor();
-          if ((await page.getByRole("option").count()) !== 1)
+          if (
+            (await page
+              .getByRole("group", { name: "Pages" })
+              .getByRole("option")
+              .count()) !== 1
+          )
             throw new Error("Denied resource in palette");
         }
       }
@@ -3057,6 +3063,39 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "command-palette-empty",
+    route: "/dashboard",
+    fixture: "administrator with Playground access",
+    description:
+      "Empty search with hierarchical page names and popular documentation.",
+    setup: async (page) => {
+      await setDashboardSession(page, { playground_access: true });
+      await page.reload();
+      await page.getByRole("button", { name: /^Search Console/ }).click();
+      await page
+        .getByRole("option", { name: "Messages › Playground" })
+        .waitFor();
+    },
+  },
+  {
+    id: "command-palette-playground",
+    route: "/dashboard",
+    fixture: "administrator searching for Playground",
+    description:
+      "The matching page and documentation in separate result groups.",
+    setup: async (page) => {
+      await setDashboardSession(page, { playground_access: true });
+      await page.reload();
+      await page.getByRole("button", { name: /^Search Console/ }).click();
+      await page
+        .getByRole("combobox", { name: "Command palette" })
+        .fill("playground");
+      await page
+        .getByRole("option", { name: "Messages › Playground" })
+        .waitFor();
+    },
+  },
+  {
     id: "command-palette",
     route: "/workspaces/default/agents",
     fixture: "all resources, searched",
@@ -3065,7 +3104,7 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       await page.keyboard.press("Control+k");
       await page
-        .getByRole("combobox", { name: "Search pages and resources" })
+        .getByRole("combobox", { name: "Command palette" })
         .fill("deep resea");
       await page.getByRole("option", { name: /Deep researcher/ }).waitFor();
     },

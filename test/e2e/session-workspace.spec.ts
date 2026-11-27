@@ -107,7 +107,7 @@ test("narrow transcript and inspector remain accessible, resizable and keyboard 
     .getByRole("button", { name: /^Search Console/ })
     .click();
   await expect(
-    page.getByRole("combobox", { name: "Search pages and resources" }),
+    page.getByRole("combobox", { name: "Command palette" }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Session", exact: true }).focus();
