@@ -38,6 +38,7 @@ import {
   workspaceAPI,
   workspaceSettings,
   workspaceSettingsHref,
+  type WorkspaceEntry,
   type WorkspaceMember,
   type WorkspaceRecord,
 } from "@/lib/platform/workspaces";
@@ -248,8 +249,32 @@ export function WorkspaceDetails({ id }: { id: string }) {
     },
   });
   const retire = useMutation({
-    mutationFn: () => nativeWrite(base + "/archive", {}),
-    onSuccess: () => {
+    mutationFn: () => nativeWrite<WorkspaceRecord>(base + "/archive", {}),
+    onSuccess: async (archived) => {
+      const indexKey = ["workspace-index"];
+      const directoryKey = ["workspace-settings"];
+      await Promise.all([
+        cache.cancelQueries({ queryKey: indexKey }),
+        cache.cancelQueries({ queryKey: directoryKey }),
+      ]);
+      cache.setQueriesData<WorkspaceEntry[]>({ queryKey: indexKey }, (rows) =>
+        rows?.filter((w) => w.id !== id),
+      );
+      cache.setQueriesData<WorkspaceRecord[]>(
+        { queryKey: [...directoryKey, false] },
+        (rows) => rows?.filter((w) => w.id !== id),
+      );
+      cache.setQueriesData<WorkspaceRecord[]>(
+        { queryKey: [...directoryKey, true] },
+        (rows) => rows?.map((w) => (w.id === id ? archived : w)),
+      );
+      await Promise.all([
+        cache.invalidateQueries({ queryKey: indexKey, refetchType: "none" }),
+        cache.invalidateQueries({
+          queryKey: directoryKey,
+          refetchType: "none",
+        }),
+      ]);
       router.replace(workspaceSettings);
     },
   });

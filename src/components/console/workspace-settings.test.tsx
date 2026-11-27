@@ -45,10 +45,13 @@ const inherited: WorkspaceMember = {
   inherited: true,
 };
 
-function mount(children: ReactNode, role: native.Role = "admin") {
-  const client = new QueryClient({
+function mount(
+  children: ReactNode,
+  role: native.Role = "admin",
+  client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  }),
+) {
   const session = {
     data: { id: "user_me", signed_in: true, role },
   } as ReturnType<typeof useConsoleSession>;
@@ -274,6 +277,51 @@ it("edits the workspace, grants and withdraws membership, and confirms archive",
     expect(navigation.replace).toHaveBeenCalledWith(workspaceSettings),
   );
   expect(write).toHaveBeenCalledWith(base + "/archive", {});
+});
+
+it("removes an archived workspace from cached destinations and retains its history", async () => {
+  const user = userEvent.setup();
+  const client = new QueryClient();
+  const active = [
+    "workspace-settings",
+    false,
+    "user_me",
+    "admin",
+    "default",
+    "admin",
+  ];
+  const history = [
+    "workspace-settings",
+    true,
+    "user_me",
+    "admin",
+    "default",
+    "admin",
+  ];
+  const keep = { ...research, id: "default", name: "Default" };
+  const archived = { ...research, archived_at: "2026-11-27T05:00:00Z" };
+  client.setQueryData(["workspace-index"], [keep, research]);
+  client.setQueryData(active, [research]);
+  client.setQueryData(history, [research]);
+  vi.spyOn(native, "nativeGet").mockImplementation(async (path) =>
+    path === base ? research : [],
+  );
+  vi.spyOn(native, "nativeWrite").mockResolvedValue(archived);
+  mount(<WorkspaceDetails id={id} />, "admin", client);
+  await user.click(
+    await screen.findByRole("button", { name: "Archive workspace" }),
+  );
+  await user.click(
+    within(screen.getByRole("dialog")).getByRole("button", {
+      name: "Archive workspace",
+    }),
+  );
+  await waitFor(() =>
+    expect(navigation.replace).toHaveBeenCalledWith(workspaceSettings),
+  );
+  expect(client.getQueryData(["workspace-index"])).toEqual([keep]);
+  expect(client.getQueryData(active)).toEqual([]);
+  expect(client.getQueryData(history)).toEqual([archived]);
 });
 
 it("keeps Default permanent and reserves lifecycle controls for the organization administrator", async () => {
