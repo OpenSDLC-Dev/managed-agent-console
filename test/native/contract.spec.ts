@@ -136,9 +136,6 @@ async function privateCache(page: Page, sid: string, seed = false) {
         });
       }
       return {
-        memberCache: JSON.stringify(
-          client.getQueriesData({ queryKey: ["members"] }),
-        ).includes("first-admin"),
         oldWindow: "__nativePrincipalDocument" in window,
         oldPrivate:
           client.getQueryData(["members", "principal-boundary"]) !== undefined,
@@ -1005,7 +1002,16 @@ test("real native password/setup, current authority, management, private bytes/S
     await expect(page.getByLabel("Role for first-admin")).toBeVisible();
     const before = await privateCache(page, sid, true);
     expect(before.oldPrivate).toBe(true);
-    expect(before.memberCache).toBe(true);
+    expect(
+      await page.evaluate(() => {
+        const client = (
+          window as unknown as { __nativePrincipalDocument: QueryClient }
+        ).__nativePrincipalDocument;
+        return JSON.stringify(
+          client.getQueriesData({ queryKey: ["members"] }),
+        ).includes("first-admin");
+      }),
+    ).toBe(true);
     const oldCookie = (await context.cookies()).find(
       (cookie) => cookie.name === "map_session",
     )!;
