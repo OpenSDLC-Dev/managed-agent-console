@@ -9,6 +9,10 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useLeaveConfirmation } from "./unsaved-changes";
+import {
+  useWorkspaceSettingsAccess,
+  workspaceSettings,
+} from "@/lib/platform/workspaces";
 import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import {
   Bot,
@@ -104,6 +108,7 @@ const matches = (query: string, ...fields: (string | null | undefined)[]) =>
  */
 function useSearchItems(query: string): Item[] {
   const session = useContext(ConsoleSessionContext)?.data;
+  const canViewWorkspaces = useWorkspaceSettingsAccess(session);
   const limit = 50;
   const agents = useAgents({ limit });
   const deployments = useDeployments({ limit });
@@ -128,9 +133,7 @@ function useSearchItems(query: string): Item[] {
     const items: Item[] = SECTIONS.filter(
       (s) =>
         visible(s) &&
-        (s.href !== "/settings/workspaces" ||
-          session?.role === "admin" ||
-          session?.workspace_role === "admin") &&
+        (s.href !== workspaceSettings || canViewWorkspaces) &&
         (!isReportPage(s.href) ||
           (hasDeveloperSession(session) && canOpenReport(s.href, surfaces))) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&
@@ -248,6 +251,7 @@ function useSearchItems(query: string): Item[] {
   }, [
     query,
     session,
+    canViewWorkspaces,
     surfaces,
     agents.data,
     sessions.data,

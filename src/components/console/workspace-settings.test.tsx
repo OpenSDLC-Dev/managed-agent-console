@@ -2,9 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -17,6 +19,7 @@ import {
 } from "@/components/shell/console-session";
 import * as native from "@/lib/platform/native";
 import {
+  useWorkspaceSettingsAccess,
   workspaceAPI,
   workspaceSettings,
   type WorkspaceMember,
@@ -63,6 +66,51 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   navigation.replace.mockClear();
+});
+
+it("checks the live management directory for an administrator of another workspace", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const manager = {
+    id: "user_me",
+    signed_in: true,
+    role: "developer",
+    workspace_id: "default",
+    workspace_role: "developer",
+  } as const;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ data: [{ id, role: "admin" }] })),
+  );
+  const list = vi.spyOn(native, "nativeGet").mockResolvedValue([research]);
+  const { result } = renderHook(() => useWorkspaceSettingsAccess(manager), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  await waitFor(() => expect(result.current).toBe(true));
+  expect(list).toHaveBeenCalledWith(
+    workspaceAPI,
+    { include_archived: false },
+    expect.any(AbortSignal),
+  );
+
+  list.mockRejectedValue(new Error("directory refused"));
+  await act(() =>
+    client.invalidateQueries({ queryKey: ["workspace-settings"] }),
+  );
+  await waitFor(() => expect(result.current).toBe(false));
+
+  list.mockResolvedValue([research]);
+  await act(() =>
+    client.invalidateQueries({ queryKey: ["workspace-settings"] }),
+  );
+  await waitFor(() => expect(result.current).toBe(true));
+  act(() =>
+    client.setQueryData(["workspace-index"], [{ id, role: "developer" }]),
+  );
+  await waitFor(() => expect(result.current).toBe(false));
 });
 
 it("creates and filters workspace rows, preserving history outside the active links", async () => {

@@ -26,7 +26,10 @@ import {
   playgroundOnly,
 } from "@/lib/routes";
 import { WorkspacePicker } from "./workspace-picker";
-import { workspaceSettings } from "@/lib/platform/workspaces";
+import {
+  useWorkspaceSettingsAccess,
+  workspaceSettings,
+} from "@/lib/platform/workspaces";
 import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
@@ -132,6 +135,7 @@ function GroupControl({
 export function Nav({ mobile = false }: { mobile?: boolean }) {
   const surfaces = useSurfaces();
   const session = useContext(ConsoleSessionContext)?.data;
+  const canViewWorkspaces = useWorkspaceSettingsAccess(session);
   const limited = playgroundOnly(session);
   const pathname = canonicalWorkspacePath(usePathname());
   const router = useRouter();
@@ -161,7 +165,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
         ...group,
         items: group.items.filter(({ surface, href }) =>
           href === workspaceSettings
-            ? session?.role === "admin" || session?.workspace_role === "admin"
+            ? canViewWorkspaces
             : isReportPage(href)
               ? hasDeveloperSession(session) && canOpenReport(href, surfaces)
               : surface

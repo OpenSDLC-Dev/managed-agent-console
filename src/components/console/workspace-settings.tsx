@@ -33,6 +33,7 @@ import {
 } from "@/lib/platform/native";
 import {
   roleLabels,
+  useWorkspaceDirectory,
   useWorkspaceIndex,
   workspaceAPI,
   workspaceSettings,
@@ -49,15 +50,7 @@ export function WorkspaceSettings() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const cache = useQueryClient();
-  const list = useQuery({
-    queryKey: ["workspace-settings", archived],
-    queryFn: ({ signal }) =>
-      nativeGet<WorkspaceRecord[]>(
-        workspaceAPI,
-        { include_archived: archived },
-        signal,
-      ),
-  });
+  const list = useWorkspaceDirectory(archived, account);
   const create = useMutation({
     mutationFn: () => nativeWrite<WorkspaceRecord>(workspaceAPI, { name }),
     onSuccess: async () => {

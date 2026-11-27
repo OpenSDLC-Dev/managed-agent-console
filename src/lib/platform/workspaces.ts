@@ -1,7 +1,12 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { assertOk } from "./http";
-import { ORGANIZATION, type WorkspaceRole } from "./native";
+import {
+  nativeGet,
+  ORGANIZATION,
+  type NativeSession,
+  type WorkspaceRole,
+} from "./native";
 import { canonicalWorkspacePath, pathWorkspace } from "./tenancy";
 
 export const workspaceAPI = ORGANIZATION + "/workspaces";
@@ -49,6 +54,45 @@ export function useWorkspaceIndex(enabled = true) {
     },
   });
 }
+export function useWorkspaceDirectory(
+  archived: boolean,
+  session?: Partial<NativeSession> | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [
+      "workspace-settings",
+      archived,
+      session?.id,
+      session?.role,
+      session?.workspace_id,
+      session?.workspace_role,
+    ],
+    queryFn: ({ signal }) =>
+      nativeGet<WorkspaceRecord[]>(
+        workspaceAPI,
+        { include_archived: archived },
+        signal,
+      ),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useWorkspaceSettingsAccess(
+  session?: Partial<NativeSession> | null,
+) {
+  const signedIn = !!(session?.signed_in && session.id);
+  const isAdmin =
+    session?.role === "admin" || session?.workspace_role === "admin";
+  const index = useWorkspaceIndex(signedIn && !isAdmin);
+  const canManage =
+    signedIn &&
+    (isAdmin || index.data?.some((w) => w.role === "admin") === true);
+  const directory = useWorkspaceDirectory(false, session, canManage);
+  return canManage && directory.isSuccess;
+}
+
 export function workspaceSettingsHref(space: string) {
   return (
     workspaceSettings +
