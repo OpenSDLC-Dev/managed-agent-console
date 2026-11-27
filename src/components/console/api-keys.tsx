@@ -6,10 +6,8 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import {
   nativeGet,
-  ORGANIZATION,
   type NativeSession,
   type ServiceAccount,
-  type ServiceAccountPage,
 } from "@/lib/platform/native";
 import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
 import Link from "@/components/shell/workspace-navigation";
@@ -30,6 +28,8 @@ import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey } from "@/lib/platform/queries";
 import { tabWorkspace } from "@/lib/platform/tenancy";
+import { workspaceAPI } from "@/lib/platform/workspaces";
+import { hasDeveloperSession } from "@/lib/platform/surfaces";
 
 /**
  * How long a new key lives, offered as the reference offers it.
@@ -208,6 +208,10 @@ function RevealKeyDialog({
 /**
  * The Dashboard and Keys page enter the same connection flow.
  */
+function canAssignServiceKey(session?: Partial<NativeSession> | null) {
+  return session?.role === "admin" || session?.workspace_role === "admin";
+}
+
 export function CreateKeyButton({
   shortcut = false,
   subtle = false,
@@ -216,17 +220,17 @@ export function CreateKeyButton({
   subtle?: boolean;
 }) {
   const session = useContext(ConsoleSessionContext)?.data;
-  if (
-    !session?.signed_in ||
-    !session.id ||
-    !["admin", "developer"].includes(session.role ?? "")
-  )
-    return null;
+  if (!session || !hasDeveloperSession(session)) return null;
   // A replaced principal (or changed role) cannot retain a draft, picker,
   // mutation observer or one-time reveal from the previous authority.
   return (
     <KeyCreation
-      key={`${session.id}:${session.role}`}
+      key={JSON.stringify([
+        session.id,
+        session.role,
+        session.workspace_id,
+        session.workspace_role,
+      ])}
       shortcut={shortcut}
       subtle={subtle}
     />
@@ -272,25 +276,31 @@ export function KeyCreation({
   const submitting = useRef(false);
   const [sessionError, setSessionError] = useState<unknown>(null);
   const accounts = useInfiniteQuery({
-    queryKey: ["key-owner-service-accounts", session?.id, session?.role],
+    queryKey: [
+      "key-owner-service-accounts",
+      session?.id,
+      session?.role,
+      tabWorkspace(),
+      session?.workspace_role,
+    ],
     queryFn: ({ pageParam }) =>
-      nativeGet<ServiceAccountPage>(`${ORGANIZATION}/service_accounts`, {
+      nativeGet<{
+        data: Pick<ServiceAccount, "id" | "name">[];
+        next_page: string | null;
+      }>(`${workspaceAPI}/${tabWorkspace()}/service_accounts`, {
         page: pageParam,
         limit: 100,
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.next_page ?? undefined,
-    enabled: !target && session?.role === "admin" && step === "key",
+    enabled: !target && canAssignServiceKey(session) && step === "key",
     gcTime: 0,
     // This observer stays mounted while closed. Re-enable must read the directory
     // again: an account can be created or archived without leaving this page.
     staleTime: 0,
     retry: false,
   });
-  const services =
-    accounts.data?.pages
-      .flatMap((page) => page.data)
-      .filter((account) => !account.archived_at) ?? [];
+  const services = accounts.data?.pages.flatMap((page) => page.data) ?? [];
   const pending = create.isPending || checking;
 
   const discardSecret = () => {
@@ -327,7 +337,9 @@ export function KeyCreation({
       if (
         !current.signed_in ||
         current.id !== session?.id ||
-        current.role !== session?.role
+        current.role !== session?.role ||
+        current.workspace_id !== session?.workspace_id ||
+        current.workspace_role !== session?.workspace_role
       ) {
         setStep(null);
         resetDraft();
@@ -337,8 +349,9 @@ export function KeyCreation({
         return;
       }
       if (
-        current.role === "user" ||
-        (owner !== current.id && current.role !== "admin")
+        !hasDeveloperSession(current) ||
+        ((target?.account.id ?? owner) !== current.id &&
+          !canAssignServiceKey(current))
       )
         throw new Error(
           "Your role changed. Reopen the form to select an owner.",
@@ -541,7 +554,7 @@ export function KeyCreation({
                       className={SELECT_CLASS}
                       value={owner}
                       onChange={(event) => setOwner(event.target.value)}
-                      disabled={pending || session?.role !== "admin"}
+                      disabled={pending || !canAssignServiceKey(session)}
                     >
                       <option value={session?.id}>
                         You ·{" "}

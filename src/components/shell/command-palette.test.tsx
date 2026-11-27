@@ -429,6 +429,7 @@ describe("CommandPalette", () => {
       NAV_DESTINATIONS.filter(
         (item) =>
           item.href !== "/workspaces/default/playground" &&
+          item.href !== "/settings/workspaces" &&
           !isReportPage(item.href) &&
           !["members", "service-accounts"].includes(item.surface ?? ""),
       ).length,

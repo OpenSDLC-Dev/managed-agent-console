@@ -7,7 +7,11 @@ import { CreateKeyButton } from "@/components/console/api-keys";
 import { ApiKeysTable } from "@/components/console/api-key-list";
 import { useListFilters } from "@/lib/use-list-filters";
 import { useApiKeys } from "@/lib/platform/queries";
-import { isUnimplemented, useSurfaces } from "@/lib/platform/surfaces";
+import {
+  hasDeveloperSession,
+  isUnimplemented,
+  useSurfaces,
+} from "@/lib/platform/surfaces";
 
 /**
  * Owned API keys for a CLI, SDK or CI job. Browser calls use the session cookie.
@@ -34,9 +38,7 @@ export default function ApiKeysPage() {
       error={keys.error}
       action={<CreateKeyButton />}
       canViewCost={
-        session?.signed_in === true &&
-        (session.role === "admin" || session.role === "developer") &&
-        usage?.status === "available"
+        hasDeveloperSession(session) && usage?.status === "available"
       }
     />
   );

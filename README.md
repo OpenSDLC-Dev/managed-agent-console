@@ -27,7 +27,7 @@ flowchart LR
 ```
 
 Password accounts are for development and test. OIDC and trusted-proxy sign-in use the platform's configured provider.
-`/setup` offers code redemption; the platform decides eligibility. Administrators manage members and service accounts.
+`/setup` offers code redemption; the platform decides eligibility. Administrators manage workspaces, members and service accounts in Settings. The workspace menu switches the current tab.
 An administrator can enable Playground for a `user` in Members. The member keeps account, setup and sign-out controls.
 Developers issue and manage their own API keys. Administrators can also issue keys for active service accounts.
 Each key uses its owner's current role; deactivating the owner revokes access.

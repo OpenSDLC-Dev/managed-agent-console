@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Manage workspaces in Settings, assign user and service-account roles, and switch workspaces from the sidebar. Workspace administrators can issue keys for eligible service accounts in their workspace.
+
 - Workspace links preserve the selected workspace through navigation, reload and sharing. Independent browser tabs and resource caches follow their own workspace grants.
 
 - Agents opens on a workspace activity report. The Create page supports template previews, model-assisted draft refinement and explicit creation, with environment and session setup. The directory opens its standalone configuration page.

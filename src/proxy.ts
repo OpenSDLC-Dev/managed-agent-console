@@ -5,7 +5,7 @@ const privateHeaders = { "Cache-Control": "private, no-store" };
 
 function missing() {
   return new NextResponse(
-    "<!doctype html><html lang=en><title>Workspace not found</title><main><h1>404</h1><p>Workspace not found.</p></main></html>",
+    "<!doctype html><html lang=en><title>Workspace not found</title><main><h1>404</h1><p>Workspace not found.</p><a href=/dashboard>Return to dashboard</a></main></html>",
     {
       status: 404,
       headers: {

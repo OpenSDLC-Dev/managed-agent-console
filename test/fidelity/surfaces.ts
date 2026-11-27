@@ -172,6 +172,26 @@ async function settledDashboardModel(
 
 export const SURFACES: Surface[] = [
   {
+    id: "workspace-settings-list",
+    route: "/settings/workspaces",
+    fixture: "Default and Research",
+    description: "Active workspaces, public identifiers and archive filter.",
+    setup: async (page) => {
+      await page.getByRole("link", { name: "Research", exact: true }).waitFor();
+    },
+  },
+  {
+    id: "workspace-settings-members",
+    route: "/settings/workspaces/wrkspc_00000000000000000000000002",
+    fixture: "Research with an inherited administrator",
+    description: "Workspace settings and independently assigned roles.",
+    setup: async (page) => {
+      await page
+        .getByRole("cell", { name: "Organization", exact: true })
+        .waitFor();
+    },
+  },
+  {
     id: "agents-workspace-overview",
     route: "/workspaces/default/agents-overview",
     fixture: "workspace report",

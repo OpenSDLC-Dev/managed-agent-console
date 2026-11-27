@@ -2757,6 +2757,64 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  const workspaceDirectory = "/api/console/organizations/default/workspaces";
+  const keyOwners = url.pathname.match(
+    /^\/api\/console\/organizations\/default\/workspaces\/(default|wrkspc_[a-zA-Z0-9]+)\/service_accounts$/,
+  );
+  if (req.method === "GET" && keyOwners) {
+    const eligible =
+      keyOwners[1] === "default" ? serviceAccounts.filter(notArchived) : [];
+    const page = keysetPage(
+      eligible.map(({ id, name }) => ({ id, name })),
+      url,
+    );
+    const refusal = page[REFUSED];
+    res.writeHead(refusal?.status ?? 200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    res.end(
+      refusal
+        ? envelope("invalid_request_error", refusal.message)
+        : JSON.stringify(page),
+    );
+    return;
+  }
+  const researchSettings = {
+    id: "wrkspc_00000000000000000000000002",
+    name: "Research",
+    display_color: "#93D3B3",
+    archived_at: null,
+  };
+  if (
+    req.method === "GET" &&
+    [
+      workspaceDirectory,
+      workspaceDirectory + "/" + researchSettings.id,
+      workspaceDirectory + "/" + researchSettings.id + "/members",
+    ].includes(url.pathname)
+  ) {
+    const body =
+      url.pathname === workspaceDirectory
+        ? [researchSettings]
+        : url.pathname.endsWith("/members")
+          ? [
+              {
+                id: "user_000000000000000000000001",
+                type: "user",
+                name: "Operator",
+                role: "admin",
+                inherited: true,
+              },
+            ]
+          : researchSettings;
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify(body));
+    return;
+  }
   if (
     url.pathname ===
       "/api/console/organizations/default/workspaces/default/agents/overview" &&
