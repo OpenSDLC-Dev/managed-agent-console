@@ -69,6 +69,9 @@ test("refused resource reads leave only local entry points", async ({
   ).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(
+    page.getByRole("listbox", { name: "Suggestions" }).getByRole("option"),
+  ).toHaveCount(4);
+  await expect(
     page.getByRole("group", { name: "Pages" }).getByRole("option"),
   ).toHaveCount(1);
   await expect(

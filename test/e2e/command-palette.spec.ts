@@ -113,9 +113,13 @@ test("workspace results open the chosen workspace with its own role", async ({
   await page.route("**/api/auth/workspaces", (route) =>
     route.fulfill({ json: { data: entries } }),
   );
+  const directory = Promise.withResolvers<void>();
   await page.route(
     /\/api\/console\/organizations\/default\/workspaces(?:\?|$)/,
-    (route) => route.fulfill({ json: [] }),
+    async (route) => {
+      await directory.promise;
+      await route.fulfill({ json: [] });
+    },
   );
   await signIn(page, `/workspaces/${research}/agents`);
   const input = page.getByRole("combobox", { name: "Command palette" });
@@ -127,11 +131,10 @@ test("workspace results open the chosen workspace with its own role", async ({
   await trigger.click();
   await input.fill("default");
   const home = workspaces.getByRole("option", { name: "Default", exact: true });
-  await expect(home).toHaveAttribute(
-    "href",
-    "/settings/workspaces/default?workspace=default",
-  );
+  // Activate as soon as the target's role is visible, while the directory is pending.
+  await expect(home).toBeVisible();
   await input.press("Enter");
+  directory.resolve();
   await expect(page).toHaveURL(
     /\/settings\/workspaces\/default\?workspace=default$/,
   );

@@ -144,8 +144,9 @@ function useSearchItems(query: string): Item[] {
         key: w.id,
         label: w.name,
         group: "Workspaces",
+        // The index reports the caller's effective role in this specific workspace.
         href:
-          canViewWorkspaces && w.role === "admin"
+          w.role === "admin"
             ? workspaceSettingsHref(w.id)
             : switchDestination(surfacePaths.agents, w),
         icon: SquareStack,
