@@ -8,7 +8,7 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
-- Manage workspaces in Settings, assign user and service-account roles, and switch workspaces from the sidebar.
+- Manage workspaces in Settings, assign user and service-account roles, and switch workspaces from the sidebar. Workspace administrators can issue keys for eligible service accounts in their workspace.
 
 - Workspace links preserve the selected workspace through navigation, reload and sharing. Independent browser tabs and resource caches follow their own workspace grants.
 

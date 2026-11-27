@@ -2758,6 +2758,28 @@ const server = createServer(async (req, res) => {
   }
 
   const workspaceDirectory = "/api/console/organizations/default/workspaces";
+  const keyOwners = url.pathname.match(
+    /^\/api\/console\/organizations\/default\/workspaces\/(default|wrkspc_[a-zA-Z0-9]+)\/service_accounts$/,
+  );
+  if (req.method === "GET" && keyOwners) {
+    const eligible =
+      keyOwners[1] === "default" ? serviceAccounts.filter(notArchived) : [];
+    const page = keysetPage(
+      eligible.map(({ id, name }) => ({ id, name })),
+      url,
+    );
+    const refusal = page[REFUSED];
+    res.writeHead(refusal?.status ?? 200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    res.end(
+      refusal
+        ? envelope("invalid_request_error", refusal.message)
+        : JSON.stringify(page),
+    );
+    return;
+  }
   const researchSettings = {
     id: "wrkspc_00000000000000000000000002",
     name: "Research",

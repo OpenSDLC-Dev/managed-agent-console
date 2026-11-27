@@ -1878,15 +1878,18 @@ test("native owned keys preserve owner creator permissions and credential isolat
       ),
     ),
   );
-  // The picker must follow the server's real cursor, not a partial directory.
+  const eligibleOwners = `${org}/workspaces/default/service_accounts`;
+  // Exercise both pages of the workspace-scoped owner picker.
   for (let n = 0; n < 101; n++) {
     const created = await write(page, `${org}/service_accounts`, {
       name: `owned-picker-${n}`,
+      default_workspace_role: "developer",
     });
     expect(created.status).toBe(200);
   }
   const retired = await write(page, `${org}/service_accounts`, {
     name: "owned-picker-retired",
+    default_workspace_role: "developer",
   });
   expect(retired.status).toBe(200);
   expect(
@@ -1894,20 +1897,16 @@ test("native owned keys preserve owner creator permissions and credential isolat
       .status,
   ).toBe(200);
   const first = await (
-    await page.request.get(`${org}/service_accounts?limit=100`)
+    await page.request.get(`${eligibleOwners}?limit=100`)
   ).json();
   expect(Boolean(first.next_page)).toBe(true);
   const second = await (
     await page.request.get(
-      `${org}/service_accounts?limit=100&page=${encodeURIComponent(first.next_page)}`,
+      `${eligibleOwners}?limit=100&page=${encodeURIComponent(first.next_page)}`,
     )
   ).json();
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
-  const grant = await write(page, `${org}/service_accounts/${service.id}`, {
-    default_workspace_role: "developer",
-  });
-  expect(grant.status).toBe(200);
   await page.goto("/settings/service-accounts");
   const search = page.getByLabel("Search service accounts", { exact: true });
   await search.fill(service.id);
@@ -2118,6 +2117,80 @@ test("native owned keys preserve owner creator permissions and credential isolat
     associated.getByText("No API keys for this service account yet."),
   ).toBeVisible();
   await expect(serviceKey).toHaveCount(0);
+});
+
+test("workspace Admin issues a key for an eligible local service account", async ({
+  page,
+  browser,
+}) => {
+  await signInKeyAdmin(page);
+  const directory = `${org}/workspaces`;
+  const space = await write(page, directory, { name: "Key delegation" });
+  expect(space.status).toBe(200);
+  const selected = `${directory}/${space.body.id}`;
+  const manager = await write(page, `${org}/members`, {
+    login_name: "scoped-key-manager",
+    password,
+    role: "developer",
+    default_workspace_role: "developer",
+  });
+  const local = await write(page, serviceAccountsPath, {
+    name: "scoped-key-worker",
+  });
+  const outside = await write(page, serviceAccountsPath, {
+    name: "default-key-worker",
+    default_workspace_role: "developer",
+  });
+  for (const created of [manager, local, outside])
+    expect(created.status).toBe(200);
+  for (const [principal_id, role] of [
+    [manager.body.id, "admin"],
+    [local.body.id, "developer"],
+  ]) {
+    expect(
+      (await write(page, `${selected}/members`, { principal_id, role })).status,
+    ).toBe(200);
+  }
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:38200",
+  });
+  try {
+    const managerPage = await context.newPage();
+    await login(managerPage, "scoped-key-manager");
+    await managerPage.goto(`/settings/keys?workspace=${space.body.id}`);
+    const owners = managerPage.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === `${selected}/service_accounts` &&
+        r.request().method() === "GET",
+    );
+    const form = await openApiKeyForm(managerPage);
+    expect((await owners).status()).toBe(200);
+    const linked = form.getByLabel("Linked account", { exact: true });
+    await expect(
+      linked.locator(`option[value="${outside.body.id}"]`),
+    ).toHaveCount(0);
+    await linked.selectOption(local.body.id);
+    await form.getByLabel("Name", { exact: true }).fill("scoped-worker-key");
+    const issued = managerPage.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === `${selected}/api_keys` &&
+        r.request().method() === "POST",
+    );
+    await form.getByRole("button", { name: "Create key", exact: true }).click();
+    const response = await issued;
+    expect(response.status()).toBe(200);
+    const { principal, workspace_id } = await response.json();
+    expect(principal).toEqual({
+      type: "service_account_actor",
+      service_account_id: local.body.id,
+    });
+    expect(workspace_id).toBe(space.body.id);
+    expect((await managerPage.request.get(serviceAccountsPath)).status()).toBe(
+      403,
+    );
+  } finally {
+    await context.close();
+  }
 });
 
 // A key-owner shortcut in memoryActor, cached mint-time authority, or an unowned

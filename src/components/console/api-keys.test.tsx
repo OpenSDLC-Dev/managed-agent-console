@@ -826,6 +826,26 @@ function nativeView(initial = session, shortcut = false, page?: ReactNode) {
     replace: (data: NativeSession) => result.rerender(view(data)),
   };
 }
+it.each([
+  ["user", "developer", true],
+  ["user", "limited_developer", true],
+  ["user", "admin", true],
+  ["developer", "user", false],
+  ["developer", "billing", false],
+] as const)(
+  "uses the workspace grant for personal key creation (%s, %s)",
+  (role, workspace_role, allowed) => {
+    nativeView(
+      { ...session, role, workspace_role },
+      false,
+      <CreateKeyButton />,
+    );
+    expect(Boolean(screen.queryByRole("button", { name: "Create key" }))).toBe(
+      allowed,
+    );
+  },
+);
+
 function serviceAccount(
   id: string,
   name: string,
@@ -901,7 +921,9 @@ function nativeFetch(
               next_page: null,
             }
           : {
-              data: firstPage,
+              data: firstPage
+                .filter((entry) => !entry.archived_at)
+                .map(({ id, name }) => ({ id, name })),
               next_page: options.singlePage ? null : "page-two",
             },
       );
@@ -1389,6 +1411,8 @@ it.each(
         "key-owner-service-accounts",
         session.id,
         session.role,
+        "default",
+        session.workspace_role,
       ]),
     ).toBeDefined();
     expect(
@@ -1416,13 +1440,20 @@ it("native owner pagination failure remains visible and page two can retry", asy
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it.each(["developer", "user"] as const)(
-  "native %s never requests an owner directory",
-  async (role) => {
+it.each([
+  ["developer", "developer", true],
+  ["user", "developer", true],
+  ["user", "limited_developer", true],
+  ["user", "admin", true],
+  ["developer", "user", false],
+] as const)(
+  "personal issuance uses the workspace role and skips the organization directory (%s, %s)",
+  async (role, workspace_role, allowed) => {
     const mock = nativeFetch();
-    mock.replace({ ...session, role });
-    nativeView({ ...session, role });
-    if (role === "developer") {
+    const current = { ...session, role, workspace_role };
+    mock.replace(current);
+    nativeView(current);
+    if (allowed) {
       await openKeyForm();
       await userEvent.type(screen.getByLabelText("Name"), "developer-key");
       await userEvent.click(submitKeyButton());
@@ -1434,12 +1465,71 @@ it.each(["developer", "user"] as const)(
     } else
       expect(screen.queryByRole("button", { name: "Create key" })).toBeNull();
     expect(
-      mock.fetcher.mock.calls.some(([url]) =>
-        /service_accounts|members/.test(String(url)),
+      mock.fetcher.mock.calls.some(
+        ([url]) =>
+          new URL(String(url), "http://console.test").pathname ===
+            "/api/console/organizations/default/service_accounts" ||
+          (workspace_role !== "admin" &&
+            /service_accounts|members/.test(String(url))),
       ),
     ).toBe(false);
   },
 );
+
+it("lets a workspace administrator issue for a scoped service account without opening the organization directory", async () => {
+  const mock = nativeFetch();
+  const manager = {
+    ...session,
+    role: "user" as const,
+    workspace_role: "admin" as const,
+  };
+  mock.replace(manager);
+  nativeView(manager);
+  await openKeyForm();
+  await screen.findByRole("option", { name: /First service/ });
+  await userEvent.selectOptions(
+    keyForm().getByLabelText("Linked account"),
+    "svac_first",
+  );
+  await userEvent.type(screen.getByLabelText("Name"), "workspace-service");
+  await userEvent.click(submitKeyButton());
+  await screen.findByTestId("revealed-api-key");
+  expect(JSON.parse(String(postOf(mock.fetcher)![1].body)).principal_id).toBe(
+    "svac_first",
+  );
+  const reads = mock.fetcher.mock.calls.map(
+    ([u]) => new URL(String(u), "http://console.test").pathname,
+  );
+  expect(reads).toContain(
+    "/api/console/organizations/default/workspaces/default/service_accounts",
+  );
+  expect(reads).not.toContain(
+    "/api/console/organizations/default/service_accounts",
+  );
+});
+
+it("discards a personal key draft if the workspace grant changes before submission", async () => {
+  const mock = nativeFetch();
+  const initial = {
+    ...session,
+    role: "user" as const,
+    workspace_role: "developer" as const,
+  };
+  mock.replace(initial);
+  const view = nativeView(initial);
+  await openKeyForm();
+  await userEvent.type(screen.getByLabelText("Name"), "revoked-draft");
+  mock.replace({ ...initial, workspace_role: "user" });
+  await userEvent.click(submitKeyButton());
+  await waitFor(() =>
+    expect(
+      view.client.getQueryData<NativeSession>(["console-session"])
+        ?.workspace_role,
+    ).toBe("user"),
+  );
+  expect(postOf(mock.fetcher)).toBeUndefined();
+  expect(screen.queryByDisplayValue("revoked-draft")).toBeNull();
+});
 
 it("probe: key controls obey row permission and lifecycle", async () => {
   renderTable(
@@ -1570,7 +1660,7 @@ it.each([
     );
     await userEvent.type(screen.getByLabelText("Name"), "stale-admin-draft");
     // Only the next HTTP session answer changes. No poll or provider update.
-    mock.replace({ ...session, role });
+    mock.replace({ ...session, role, workspace_role: role });
     await userEvent.click(submitKeyButton());
     await waitFor(() =>
       expect(
@@ -1606,7 +1696,11 @@ it("native same-principal demotion discards service selection and rejects withou
     keyForm().getByLabelText("Linked account"),
     "svac_first",
   );
-  const developer = { ...session, role: "developer" as const };
+  const developer = {
+    ...session,
+    role: "developer" as const,
+    workspace_role: "developer" as const,
+  };
   mock.replace(developer);
   view.replace(developer);
   expect(screen.queryByRole("option", { name: /First service/ })).toBeNull();
