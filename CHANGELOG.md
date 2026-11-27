@@ -8,6 +8,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Added
 
+- Workspace links preserve the selected workspace through navigation, reload and sharing. Independent browser tabs and resource caches follow their own workspace grants.
+
 - Agents opens on a workspace activity report. The Create page supports template previews, model-assisted draft refinement and explicit creation, with environment and session setup. The directory opens its standalone configuration page.
 
 - Resources opens on the Default workspace overview with file and skill counts, recent records, links to each library and an Add menu.

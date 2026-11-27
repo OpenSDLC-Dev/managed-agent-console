@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import Link from "next/link";
+import { useContext, useMemo } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
+import Link from "@/components/shell/workspace-navigation";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -77,23 +78,27 @@ const VIEWS = [
 
 export function UsageViews() {
   const pathname = usePathname();
+  const summaryOnly =
+    useContext(ConsoleSessionContext)?.data?.workspace_role === "billing";
   return (
     <nav aria-label="Usage views" className="mb-4 flex gap-5 border-b">
-      {VIEWS.map(([href, label]) => (
-        <Link
-          key={href}
-          href={href}
-          aria-current={pathname === href ? "page" : undefined}
-          className={cn(
-            "-mb-px border-b-2 py-1.5 text-sm",
-            pathname === href
-              ? "border-foreground text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {label}
-        </Link>
-      ))}
+      {VIEWS.filter(([href]) => !summaryOnly || href === "/usage").map(
+        ([href, label]) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={pathname === href ? "page" : undefined}
+            className={cn(
+              "-mb-px border-b-2 py-1.5 text-sm",
+              pathname === href
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </Link>
+        ),
+      )}
     </nav>
   );
 }

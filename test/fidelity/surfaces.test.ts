@@ -99,7 +99,11 @@ describe("the fidelity surface manifest", () => {
     for (const route of nativeOnly)
       expect(nativeCovered.has(route), route).toBe(true);
     const unshot = appRoutes()
-      .map((route) => route.replace(/\[[^\]]+\]/g, "[id]"))
+      .map((route) =>
+        route
+          .replace("/workspaces/[workspace]/", "/workspaces/default/")
+          .replace(/\[[^\]]+\]/g, "[id]"),
+      )
       .filter((route) => !(route in NO_SURFACE) && !nativeOnly.has(route))
       .filter((route) => !covered.has(route));
     expect(unshot).toEqual([]);

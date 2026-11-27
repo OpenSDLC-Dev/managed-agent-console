@@ -116,7 +116,24 @@ async function privateCache(page: Page, sid: string, seed = false) {
         client.setQueryData(["members", "principal-boundary"], {
           email: "old-private@example.test",
         });
-        Object.assign(window, { __nativePrincipalDocument: client });
+        // The resource provider is nested inside the document identity observer.
+        let identityFiber = fiber?.return;
+        while (
+          identityFiber &&
+          !identityFiber.memoizedProps?.client?.getQueryData([
+            "console-session",
+          ])
+        )
+          identityFiber = identityFiber.return;
+        const identityClient = identityFiber?.memoizedProps?.client;
+        if (!identityClient || identityClient === client)
+          throw new Error(
+            "The identity and resource providers must be distinct",
+          );
+        Object.assign(window, {
+          __nativePrincipalDocument: client,
+          __nativeIdentityDocument: identityClient,
+        });
       }
       return {
         oldWindow: "__nativePrincipalDocument" in window,
@@ -329,8 +346,16 @@ test("real native password/setup, current authority, management, private bytes/S
       "role",
       "role_source",
       "signed_in",
+      "workspace_id",
+      "workspace_name",
+      "workspace_role",
     ].sort(),
   );
+  expect(identity).toMatchObject({
+    workspace_id: "default",
+    workspace_name: "Default",
+    workspace_role: "admin",
+  });
   if (platformVersion !== undefined) {
     expect(typeof platformVersion).toBe("string");
     expect(platformVersion.length).toBeGreaterThan(0);
@@ -977,6 +1002,16 @@ test("real native password/setup, current authority, management, private bytes/S
     await expect(page.getByLabel("Role for first-admin")).toBeVisible();
     const before = await privateCache(page, sid, true);
     expect(before.oldPrivate).toBe(true);
+    expect(
+      await page.evaluate(() => {
+        const client = (
+          window as unknown as { __nativePrincipalDocument: QueryClient }
+        ).__nativePrincipalDocument;
+        return JSON.stringify(
+          client.getQueriesData({ queryKey: ["members"] }),
+        ).includes("first-admin");
+      }),
+    ).toBe(true);
     const oldCookie = (await context.cookies()).find(
       (cookie) => cookie.name === "map_session",
     )!;
@@ -1021,6 +1056,9 @@ test("real native password/setup, current authority, management, private bytes/S
         ).__nativePrincipalDocument;
         const proof = {
           client,
+          identityClient: (
+            window as unknown as { __nativeIdentityDocument: QueryClient }
+          ).__nativeIdentityDocument,
           metadata: [] as {
             id: string;
             role: string;
@@ -1089,12 +1127,12 @@ test("real native password/setup, current authority, management, private bytes/S
       expect(replacement.id).not.toBe(oldSession.id);
       expect(replacement.role).toBe("user");
       await page.evaluate(async () => {
-        const { client } = (
+        const { identityClient } = (
           window as unknown as {
-            __pendingSignoutProof: { client: QueryClient };
+            __pendingSignoutProof: { identityClient: QueryClient };
           }
         ).__pendingSignoutProof;
-        await client.refetchQueries({ queryKey: ["console-session"] });
+        await identityClient.refetchQueries({ queryKey: ["console-session"] });
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         );
@@ -1104,6 +1142,7 @@ test("real native password/setup, current authority, management, private bytes/S
           window as unknown as {
             __pendingSignoutProof: {
               client: QueryClient;
+              identityClient: QueryClient;
               metadata: unknown[];
               renders: {
                 account: string | null;
@@ -1115,8 +1154,9 @@ test("real native password/setup, current authority, management, private bytes/S
           }
         ).__pendingSignoutProof;
         return {
-          id: proof.client.getQueryData<{ id: string }>(["console-session"])
-            ?.id,
+          id: proof.identityClient.getQueryData<{ id: string }>([
+            "console-session",
+          ])?.id,
           memberCacheRetained: JSON.stringify(
             proof.client.getQueriesData({ queryKey: ["members"] }),
           ).includes("first-admin"),
@@ -1136,8 +1176,8 @@ test("real native password/setup, current authority, management, private bytes/S
         status: 200,
         marked: false,
       });
-      expect(pending.memberCacheRetained).toBe(true);
-      expect(pending.oldPrivateCacheRetained).toBe(true);
+      expect(pending.memberCacheRetained).toBe(false);
+      expect(pending.oldPrivateCacheRetained).toBe(false);
       expect(pending.replacementRenders).toEqual([]);
       await expect(
         page.locator('[data-native-identity="signing-out"]'),

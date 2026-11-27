@@ -8,6 +8,9 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useContext } from "react";
+import { ConsoleSessionContext } from "@/components/shell/console-session";
+import { pathWorkspace } from "./tenancy";
 import { gatewayDelete, gatewayGet, gatewayPost } from "./http";
 import type {
   GatewayAlias,
@@ -392,12 +395,26 @@ export function useGatewayDailyUsage(
   range: { from: string; to: string },
   filter: GatewayUsageFilter,
 ) {
+  const session = useContext(ConsoleSessionContext)?.data;
+  const organizationSummary =
+    (session?.role === "admin" || session?.role === "billing") &&
+    typeof window !== "undefined" &&
+    !pathWorkspace(window.location.pathname);
   return useQuery({
-    queryKey: ["gateway", "usage", "daily", range, present(filter)],
+    queryKey: [
+      "gateway",
+      "usage",
+      "daily",
+      range,
+      present(filter),
+      organizationSummary,
+    ],
     queryFn: () =>
       gatewayGet<List<GatewayDailyUsage>>(
         "usage/daily",
         present({ ...range, ...filter }),
+        undefined,
+        organizationSummary,
       ),
   });
 }

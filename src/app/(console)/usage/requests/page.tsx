@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { Suspense, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";

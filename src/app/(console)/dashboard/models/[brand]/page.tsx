@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { notFound } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 import { Breadcrumb } from "@/components/console/breadcrumb";

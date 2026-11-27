@@ -50,9 +50,12 @@ export function playgroundOnly(
   session?: {
     role?: string;
     playground_access?: boolean;
+    workspace_role?: string;
   } | null,
 ) {
   return (
-    session?.role === "user" && typeof session.playground_access === "boolean"
+    (session?.workspace_role === "user" ||
+      (!session?.workspace_role && session?.role === "user")) &&
+    typeof session?.playground_access === "boolean"
   );
 }

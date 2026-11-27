@@ -1,8 +1,10 @@
 "use client";
 
+import { canonicalWorkspacePath } from "@/lib/platform/tenancy";
 import { useContext, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "@/components/shell/workspace-navigation";
+import { usePathname } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { ArrowLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { DASHBOARD_LINK, NAV_SECTIONS, type GroupEntry } from "@/lib/nav";
 import {
@@ -137,7 +139,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
   const surfaces = useSurfaces();
   const session = useContext(ConsoleSessionContext)?.data;
   const limited = playgroundOnly(session);
-  const pathname = usePathname();
+  const pathname = canonicalWorkspacePath(usePathname());
   const router = useRouter();
   const { requestLeave } = useLeaveConfirmation();
   const activeSurface = surfaceOfPath(pathname);
@@ -276,7 +278,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
             </button>
           </h2>
           {workspacePanel && (
-            <Select value={CONSOLE_WORKSPACE}>
+            <Select value={session?.workspace_id ?? CONSOLE_WORKSPACE}>
               <SelectTrigger
                 size="sm"
                 aria-label="Workspace"
@@ -287,7 +289,9 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                     aria-hidden
                     className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
                   />
-                  <SelectValue>Default</SelectValue>
+                  <SelectValue>
+                    {session?.workspace_name ?? "Default"}
+                  </SelectValue>
                 </span>
               </SelectTrigger>
               <SelectContent
@@ -296,12 +300,15 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
                 sideOffset={6}
                 className="w-64 p-1.5"
               >
-                <SelectItem value={CONSOLE_WORKSPACE} className="h-7 px-2">
+                <SelectItem
+                  value={session?.workspace_id ?? CONSOLE_WORKSPACE}
+                  className="h-7 px-2"
+                >
                   <span
                     aria-hidden
                     className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
                   />
-                  Default
+                  {session?.workspace_name ?? "Default"}
                 </SelectItem>
               </SelectContent>
             </Select>

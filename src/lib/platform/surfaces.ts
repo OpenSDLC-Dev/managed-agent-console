@@ -6,7 +6,7 @@ import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { PlatformError, consoleKeysGet, gatewayGet, platformGet } from "./http";
 import { nativeGet, ORGANIZATION, type NativeSession } from "./native";
 import { isPermissionDenied } from "./denied";
-import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
+import { CONSOLE_ORG, tabWorkspace } from "./tenancy";
 import {
   AGENTS_OVERVIEW_ROUTE,
   isAgentsWorkspacePage,
@@ -101,7 +101,9 @@ export const SURFACES = {
   // Developers can read their owned keys. A user's 403 hides navigation;
   // direct routes still explain the platform's refusal.
   "api-keys": {
-    path: `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`,
+    get path() {
+      return `organizations/${CONSOLE_ORG}/workspaces/${tabWorkspace()}/api_keys`;
+    },
     label: "API Keys",
     api: "console",
     blurb: "Management credentials for this deployment.",
@@ -230,8 +232,11 @@ export function canOpenReport(
 export function hasDeveloperSession(session?: Partial<NativeSession> | null) {
   return (
     session?.signed_in === true &&
-    Boolean(session.id) &&
-    (session.role === "admin" || session.role === "developer")
+    Boolean(session.id && session.role) &&
+    (session.role === "admin" ||
+      ["developer", "limited_developer", "admin"].includes(
+        session.workspace_role ?? "",
+      ))
   );
 }
 
@@ -304,6 +309,12 @@ export function useSurfaces(): SurfaceStates | undefined {
                   },
                 ];
               await nativeGet(entry.path, { limit: 1 });
+            } else if (
+              surface === "usage" &&
+              session?.workspace_role === "billing"
+            ) {
+              const day = new Date().toISOString().slice(0, 10);
+              await gatewayGet("usage/daily", { from: day, to: day });
             } else if (!("api" in entry))
               await platformGet<unknown>(entry.path, { limit: 1 });
             else if (entry.api === "gateway")

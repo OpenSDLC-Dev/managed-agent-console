@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useLeaveConfirmation } from "./unsaved-changes";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import {
   Bot,
   Boxes,

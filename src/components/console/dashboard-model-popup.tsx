@@ -2,7 +2,7 @@
 
 import { Copy } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useRef, type RefObject } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

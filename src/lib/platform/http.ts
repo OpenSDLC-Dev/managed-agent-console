@@ -1,4 +1,10 @@
 import {
+  selectedWorkspace,
+  selectedOptions,
+  workspaceGet,
+  workspaceHeaders,
+} from "./tenancy";
+import {
   bounceToLogin,
   getDocumentPrincipalId,
   getSignOutState,
@@ -118,7 +124,9 @@ export async function platformGet<T>(
 ): Promise<T> {
   const response = await fetch(
     `${resourceURL(path)}${queryString(params)}`,
-    signal || headers ? { signal, headers } : undefined,
+    signal || headers || selectedWorkspace()
+      ? { signal, headers: { ...headers, ...workspaceHeaders() } }
+      : undefined,
   );
   await assertOk(response);
   return (await response.json()) as T;
@@ -136,7 +144,7 @@ export async function platformPost<T>(path: string, body: unknown): Promise<T> {
 
 /** File content is bytes, not a JSON envelope (internal/api/files.go:downloadFile). */
 export async function platformGetText(path: string): Promise<string> {
-  const response = await fetch(resourceURL(path));
+  const response = await workspaceGet(resourceURL(path));
   await assertOk(response);
   return response.text();
 }
@@ -177,7 +185,9 @@ export async function consoleGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
 ): Promise<T> {
-  const response = await fetch(`/api/oauth/${path}${queryString(params)}`);
+  const response = await workspaceGet(
+    `/api/oauth/${path}${queryString(params)}`,
+  );
   await assertOk(response);
   return (await response.json()) as T;
 }
@@ -212,7 +222,7 @@ export async function consolePost<T>(path: string, body: unknown): Promise<T> {
 // `consoleApiGet` would be one typo apart and land a body on the wrong surface.
 
 export async function consoleKeysGet<T>(path: string): Promise<T> {
-  const response = await fetch(`/api/console/${path}`);
+  const response = await workspaceGet(`/api/console/${path}`);
   await assertOk(response);
   return (await response.json()) as T;
 }
@@ -266,9 +276,14 @@ export async function gatewayGet<T>(
   path: string,
   params?: Record<string, string | number | boolean | string[] | undefined>,
   signal?: AbortSignal,
+  organizationSummary = false,
 ): Promise<T> {
   const url = `${gatewayUrl(path)}${queryString(params)}`;
-  const response = signal ? await fetch(url, { signal }) : await fetch(url);
+  const response = organizationSummary
+    ? signal
+      ? await fetch(url, { signal })
+      : await fetch(url)
+    : await workspaceGet(url, signal);
   await assertOk(response);
   return (await response.json()) as T;
 }
@@ -352,7 +367,9 @@ export async function csrfHeaders(
     }
   };
   ensureActive();
+  const space = selectedWorkspace();
   const response = await fetch("/api/auth/session", {
+    ...(!logoutSignal && selectedOptions()),
     cache: "no-store",
     ...(signal ? { signal } : {}),
   });
@@ -379,7 +396,12 @@ export async function csrfHeaders(
     (expectedPrincipalId && session.id !== expectedPrincipalId)
   )
     throw new SessionPrincipalChangedError();
-  return { "X-CSRF-Token": session.csrf_token };
+  if (!logoutSignal && space !== selectedWorkspace())
+    throw new Error("The workspace changed. Reopen this page to continue.");
+  return {
+    "X-CSRF-Token": session.csrf_token,
+    ...(!logoutSignal && workspaceHeaders()),
+  };
 }
 
 /** Downloads must observe sign-out markers too; anchors cannot inspect headers. */
@@ -387,7 +409,7 @@ export async function downloadResource(
   path: string,
   filename: string,
 ): Promise<void> {
-  const response = await fetch(resourceURL(path));
+  const response = await workspaceGet(resourceURL(path));
   await assertOk(response);
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");

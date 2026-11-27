@@ -5,7 +5,7 @@ import { Plus, X } from "lucide-react";
 import { EnvironmentSection } from "./environment-section";
 import { RequestId } from "@/components/console/bits";
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

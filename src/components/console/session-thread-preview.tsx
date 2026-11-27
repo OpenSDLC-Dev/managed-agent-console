@@ -1,7 +1,7 @@
 "use client";
 
 import { surfacePaths } from "@/lib/routes";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Archive } from "lucide-react";
 import { ConfirmIconButton } from "./archive-button";
 import { useArchiveSessionThread } from "@/lib/platform/queries";

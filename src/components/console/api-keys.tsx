@@ -12,7 +12,7 @@ import {
   type ServiceAccountPage,
 } from "@/lib/platform/native";
 import { Check, Copy, KeyRound, Plus, X } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { RequestId } from "@/components/console/bits";
 import { KeyCliLogin, KeyConnectionMethods } from "./api-key-connection";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ import {
 import { copyText } from "@/lib/copy-text";
 import { PlatformError } from "@/lib/platform/http";
 import { useCreateApiKey } from "@/lib/platform/queries";
-import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
+import { tabWorkspace } from "@/lib/platform/tenancy";
 
 /**
  * How long a new key lives, offered as the reference offers it.
@@ -610,17 +610,19 @@ export function KeyCreation({
                   <select
                     id="api-key-scope"
                     className={SELECT_CLASS}
-                    value={CONSOLE_WORKSPACE}
+                    value={tabWorkspace()}
                     disabled
                     aria-describedby="key-scope-description"
                   >
-                    <option value={CONSOLE_WORKSPACE}>Default workspace</option>
+                    <option value={tabWorkspace()}>
+                      {session?.workspace_name ?? tabWorkspace()}
+                    </option>
                   </select>
                   <p
                     id="key-scope-description"
                     className="text-[13px] text-muted-foreground"
                   >
-                    This installation uses the default workspace.
+                    This key belongs to the selected workspace.
                   </p>
                 </div>
                 {error && (

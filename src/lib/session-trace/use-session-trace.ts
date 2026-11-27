@@ -1,4 +1,5 @@
 "use client";
+import { workspaceHeaders } from "@/lib/platform/tenancy";
 import { assertOk, resourceURL } from "@/lib/platform/http";
 
 import { useEffect, useRef, useState } from "react";
@@ -104,7 +105,7 @@ export function useSessionTrace(
             `${streamPath}?event_deltas[]=agent.message&event_deltas[]=agent.thinking`,
             {
               signal: controller.signal,
-              headers: { accept: "text/event-stream" },
+              headers: { ...workspaceHeaders(), accept: "text/event-stream" },
             },
           );
           if (cancelled) return;

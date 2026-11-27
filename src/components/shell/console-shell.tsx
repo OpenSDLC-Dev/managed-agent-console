@@ -1,5 +1,6 @@
 "use client";
 
+import { canonicalWorkspacePath } from "@/lib/platform/tenancy";
 import {
   useContext,
   useRef,
@@ -7,7 +8,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
 } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { usePathname } from "next/navigation";
 import { BookOpen, Menu, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,7 @@ export function ConsoleShell({
   };
 
   const ToggleIcon = mobileMenuOpen ? X : Menu;
-  const pathname = usePathname();
+  const pathname = canonicalWorkspacePath(usePathname());
   const platformDocs = "https://github.com/OpenSDLC-Dev/managed-agent-platform";
   const documentation = (
     <a

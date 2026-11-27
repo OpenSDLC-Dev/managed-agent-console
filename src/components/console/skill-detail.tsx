@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";

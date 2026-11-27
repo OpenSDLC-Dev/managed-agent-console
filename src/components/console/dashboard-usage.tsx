@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useId, useMemo, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import {

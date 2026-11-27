@@ -2,8 +2,7 @@
 
 The web console for [managed-agent-platform](https://github.com/OpenSDLC-Dev/managed-agent-platform) — an open-source, self-hostable platform for long-horizon AI agents, wire-compatible with Anthropic's Claude Managed Agents API.
 
-Open `/dashboard` to enter the Console. Workspace pages start at `/workspaces/default/`,
-including `agents-overview`, `messages-overview` and `resources-overview`. Organization
+Open `/dashboard` to enter the Console. Workspace pages start at `/workspaces/{workspace}/`. The Default workspace uses `default` in its address. They include `agents-overview`, `messages-overview` and `resources-overview`. Organization
 keys, members and service accounts live under `/settings/`. Organization usage is at `/usage`.
 
 This console is the operator-facing frontend for a platform deployment you run yourself: create and manage **agents** (rendered form or raw JSON↔YAML editor), **environments**, and **sessions** — including live event traces over SSE and human-in-the-loop tool approval — plus **vaults**, **skills**, **files**, and the credentials that let a self-hosted worker connect. Its UI is modeled on the Managed Agents section of Anthropic's Claude Console; its feature scope follows what the platform actually implements.
@@ -13,7 +12,7 @@ This console is the operator-facing frontend for a platform deployment you run y
 ## Platform login
 
 The platform owns login, the HttpOnly session cookie, current roles and CSRF checks.
-Serve this Console behind the platform's one-origin application edge. Next.js serves pages, assets and shallow health only.
+Serve this Console behind the platform's one-origin application edge. Next.js serves pages, assets and shallow health. Set `CONSOLE_CONTROLPLANE_URL` to the trusted internal Platform origin so Next can validate membership before rendering a non-Default workspace URL.
 It holds no management key, login password or OIDC client secret.
 
 ```mermaid
@@ -22,6 +21,7 @@ flowchart LR
   Edge -->|auth, setup and private resources| Controlplane[Platform control plane]
   Edge -->|model administration and Playground| Gateway[Model gateway]
   Edge -->|pages, assets and health| Console[Console server]
+  Console -->|selected workspace membership| Controlplane
   Client[SDK or CLI] -->|issued owned API key| Edge
   Edge -->|public API| Controlplane
 ```

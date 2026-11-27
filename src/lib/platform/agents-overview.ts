@@ -7,7 +7,7 @@ import { agentsReportAccessKey, isUnimplemented } from "./surfaces";
 import { isPermissionDenied } from "./denied";
 import { PlatformError } from "./http";
 import { nativeGet, ORGANIZATION } from "./native";
-import { CONSOLE_WORKSPACE } from "./tenancy";
+import { tabWorkspace } from "./tenancy";
 
 // Private DTO and sort contract: managed-agent-platform/internal/api/agentsoverview.sql.
 export type OverviewSort = "name" | "sessions" | "error_rate" | "last_active";
@@ -54,10 +54,7 @@ export function useAgentsOverview(
     queryFn: async ({ signal }) => {
       try {
         const report = await nativeGet<AgentsOverviewReport>(
-          ORGANIZATION +
-            "/workspaces/" +
-            CONSOLE_WORKSPACE +
-            "/agents/overview",
+          ORGANIZATION + "/workspaces/" + tabWorkspace() + "/agents/overview",
           { sort, direction, agent_id: agentId },
           signal,
         );

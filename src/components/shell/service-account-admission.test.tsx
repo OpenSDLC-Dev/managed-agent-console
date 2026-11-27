@@ -1,5 +1,9 @@
 import "@testing-library/jest-dom/vitest";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -80,9 +84,15 @@ it("delivers and then discards a key issued while the service account access che
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  let resourceClient: QueryClient;
+  function CaptureResourceClient() {
+    resourceClient = useQueryClient();
+    return null;
+  }
   render(
     <QueryClientProvider client={client}>
       <ConsoleSessionBoundary>
+        <CaptureResourceClient />
         <SurfaceGuard>
           <ServiceAccountDetail
             id={account.id}
@@ -95,7 +105,7 @@ it("delivers and then discards a key issued while the service account access che
   async function probe(next: number) {
     status = next;
     await act(async () => {
-      await client.invalidateQueries({ queryKey: ["surfaces"] });
+      await resourceClient.invalidateQueries({ queryKey: ["surfaces"] });
     });
   }
   const user = userEvent.setup();
@@ -137,7 +147,7 @@ it("delivers and then discards a key issued while the service account access che
       }),
     );
   });
-  await vi.waitFor(() => expect(client.isMutating()).toBe(0));
+  await vi.waitFor(() => expect(resourceClient.isMutating()).toBe(0));
   expect(reveals().length).toBe(0);
   await probe(200);
   await vi.waitFor(() => {

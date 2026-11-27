@@ -2,8 +2,8 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
+import Link from "@/components/shell/workspace-navigation";
 import { ArrowRight, Pencil } from "lucide-react";
 import { DetailSection, Field, JsonBlock } from "./detail";
 import {

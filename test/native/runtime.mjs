@@ -324,7 +324,9 @@ async function edge(port, upstream) {
           path.startsWith("/api/organizations/") ||
           path.startsWith("/v1/")
         ? upstream
-        : 38100;
+        : upstream === 38110
+          ? 38100
+          : 38101;
     if (path.endsWith("/stream")) {
       // Keep the original response handle as evidence. Chromium can discard an
       // old document's SSE requests without emitting Playwright finish events.
@@ -667,13 +669,18 @@ startupDone = (async () => {
     });
     await wait("http://127.0.0.1:38110/api/auth/config");
     await wait("http://127.0.0.1:38111/api/auth/config");
-    start(
-      process.execPath,
-      ["node_modules/next/dist/bin/next", "start", "--port", "38100"],
-      "console",
-      {},
-    );
-    await wait("http://127.0.0.1:38100/api/health");
+    for (const [port, authority] of [
+      [38100, 38110],
+      [38101, 38111],
+    ]) {
+      start(
+        process.execPath,
+        ["node_modules/next/dist/bin/next", "start", "--port", String(port)],
+        "console-" + port,
+        { CONSOLE_CONTROLPLANE_URL: `http://127.0.0.1:${authority}` },
+      );
+      await wait(`http://127.0.0.1:${port}/api/health`);
+    }
     await edge(38200, 38110);
     await edge(38201, 38111);
     checkStarting();

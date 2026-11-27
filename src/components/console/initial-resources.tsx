@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useRef, type ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Plus } from "lucide-react";
 import {
   DropdownMenu,

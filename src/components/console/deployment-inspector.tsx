@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { ArrowRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {

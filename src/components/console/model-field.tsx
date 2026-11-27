@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,

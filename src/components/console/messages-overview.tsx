@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, type ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Popover } from "@base-ui/react/popover";
 import { ArrowUpRight, BookOpen, FileText, Gauge, Info } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";

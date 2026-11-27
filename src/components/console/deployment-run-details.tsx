@@ -1,5 +1,5 @@
 import { surfacePaths } from "@/lib/routes";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import type { DeploymentRun } from "@/lib/platform/types";
 import { Field, JsonBlock } from "./detail";
 import { IdCell } from "./copy-id";

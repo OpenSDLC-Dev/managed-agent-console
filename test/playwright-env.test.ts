@@ -664,7 +664,9 @@ it("probe: browser fixtures give Next no authority and route private calls throu
       server?.command.includes("next start"),
     );
     expect(consoles).toHaveLength(1);
-    expect(consoles[0]?.env ?? {}).toEqual({});
+    expect(consoles[0]?.env).toEqual({
+      CONSOLE_CONTROLPLANE_URL: expect.stringMatching(/^https?:\/\//),
+    });
   }
 });
 

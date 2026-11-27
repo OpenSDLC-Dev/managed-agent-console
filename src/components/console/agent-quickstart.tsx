@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useContext, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import Image from "next/image";
 import {
   ArrowLeft,

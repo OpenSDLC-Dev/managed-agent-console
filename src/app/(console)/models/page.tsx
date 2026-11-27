@@ -2,7 +2,8 @@
 
 import { Suspense, useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { DataTable, type Column } from "@/components/console/data-table";
 import {

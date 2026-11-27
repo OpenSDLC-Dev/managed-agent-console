@@ -8,7 +8,8 @@ import {
   type ComponentType,
   type RefObject,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { surfacePaths } from "@/lib/routes";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toolbar } from "@base-ui/react/toolbar";

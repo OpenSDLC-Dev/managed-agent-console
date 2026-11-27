@@ -17,7 +17,7 @@ import {
 } from "@/components/console/model-field";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import {
   Check,
   ChevronDown,

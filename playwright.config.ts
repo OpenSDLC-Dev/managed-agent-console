@@ -48,6 +48,7 @@ export default defineConfig({
       // machines that hydration outruns the test timeout, and prod is what
       // ships anyway. The build runs in the test:e2e script, before this.
       command: `pnpm exec next start --port ${NEXT_PORT}`,
+      env: { CONSOLE_CONTROLPLANE_URL: `http://127.0.0.1:${MOCK_PORT}` },
       url: `http://127.0.0.1:${NEXT_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
