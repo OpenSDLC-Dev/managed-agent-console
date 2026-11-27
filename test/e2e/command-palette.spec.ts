@@ -19,6 +19,10 @@ test("header search groups pages and docs and opens the selected result with Ent
   const input = page.getByRole("combobox", { name: "Command palette" });
   const list = page.getByRole("listbox", { name: "Suggestions" });
   const pages = list.getByRole("group", { name: "Pages" });
+  const pageLabel = pages.getByText("Pages", { exact: true });
+  await expect(pageLabel).toBeVisible();
+  await expect(pageLabel).toHaveCSS("text-transform", "none");
+  await expect(list.getByText("Go to", { exact: true })).toHaveCount(0);
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute(
     "placeholder",
