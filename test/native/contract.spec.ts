@@ -52,13 +52,25 @@ function receipt() {
 function code(mode = "password") {
   return readFileSync(join(receipt().dir, `${mode}-setup-code`), "utf8");
 }
-async function write(page: Page, url: string, body?: unknown, method = "POST") {
+async function write(
+  page: Page,
+  url: string,
+  body?: unknown,
+  method = "POST",
+  workspace?: string,
+) {
   return page.evaluate(
-    async ({ url, body, method }) => {
-      const session = await (await fetch("/api/auth/session")).json();
+    async ({ url, body, method, workspace }) => {
+      const scope: Record<string, string> = workspace
+        ? { "x-workspace-id": workspace }
+        : {};
+      const session = await (
+        await fetch("/api/auth/session", { headers: scope })
+      ).json();
       const response = await fetch(url, {
         method,
         headers: {
+          ...scope,
           "content-type": "application/json",
           "X-CSRF-Token": session.csrf_token,
         },
@@ -66,7 +78,7 @@ async function write(page: Page, url: string, body?: unknown, method = "POST") {
       });
       return { status: response.status, body: await response.json() };
     },
-    { url, body, method },
+    { url, body, method, workspace },
   );
 }
 // These independent scenarios share one loopback login bucket in the disposable database.
@@ -2188,8 +2200,16 @@ test("workspace Admin issues a key for an eligible local service account", async
     expect((await managerPage.request.get(serviceAccountsPath)).status()).toBe(
       403,
     );
+    const agentsPath = "/api/organizations/default/proxy/v1/agents";
+    expect((await managerPage.request.get(agentsPath)).status()).toBe(400);
+    const scoped = await managerPage.request.get(agentsPath, {
+      headers: { "x-workspace-id": space.body.id },
+    });
+    expect(scoped.status()).toBe(200);
+    expect((await scoped.json()).data).toEqual([]);
   } finally {
     await context.close();
+    expect((await write(page, `${selected}/archive`, {})).status).toBe(200);
   }
 });
 
@@ -2286,7 +2306,9 @@ test("native-issued human and service keys preserve SDK actors and current autho
     return { status: response.status, body: await response.json() };
   }
   async function read(path: string) {
-    const response = await page.request.get(`${resource}${path}`);
+    const response = await page.request.get(`${resource}${path}`, {
+      headers: { "x-workspace-id": "default" },
+    });
     expect(response.status()).toBe(200);
     return response.json();
   }
@@ -2425,10 +2447,16 @@ test("native-issued human and service keys preserve SDK actors and current autho
         expect(Object.hasOwn(basic, "content")).toBe(true);
         expect(basic.content).toBeNull();
         expect(basic.content_size_bytes).toBe(0);
-        const cookieWrite = await write(page, `${resource}${base}/memories`, {
-          path: "/cookie.md",
-          content: "browser",
-        });
+        const cookieWrite = await write(
+          page,
+          `${resource}${base}/memories`,
+          {
+            path: "/cookie.md",
+            content: "browser",
+          },
+          "POST",
+          "default",
+        );
         expect(cookieWrite.status).toBe(200);
         const cookieVersion = await read(
           `${base}/memory_versions/${cookieWrite.body.memory_version_id}`,
