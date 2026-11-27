@@ -285,7 +285,7 @@ export function WorkspaceDetails({ id }: { id: string }) {
     <>
       <Link
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"
-        href={workspaceSettings}
+        href={workspaceSettings + "?" + new URLSearchParams({ workspace: id })}
       >
         Workspaces
       </Link>

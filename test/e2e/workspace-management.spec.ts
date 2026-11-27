@@ -103,6 +103,9 @@ test("a workspace can be created, assigned, selected and archived", async ({
   await dialog.getByRole("button", { name: "Create workspace" }).click();
   await page.getByRole("link", { name: "Research", exact: true }).click();
   await expect(page).toHaveURL(new RegExp("/settings/workspaces/" + id));
+  await expect(
+    page.getByRole("link", { name: "Workspaces", exact: true }).last(),
+  ).toHaveAttribute("href", "/settings/workspaces?workspace=" + id);
   await page.getByLabel("Member or service account ID").fill(member);
   await page.getByLabel("Workspace role").selectOption("limited_developer");
   await page.getByRole("button", { name: "Save grant" }).click();

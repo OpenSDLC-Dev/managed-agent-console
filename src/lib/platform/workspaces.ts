@@ -63,6 +63,8 @@ export function switchDestination(path: string, entry: WorkspaceEntry) {
   if (entry.role === "user") return "/workspaces/" + entry.id + "/playground";
   if (entry.role === "billing")
     return "/usage?" + new URLSearchParams({ workspace: entry.id });
+  if (path.startsWith("/settings/") && entry.role !== "admin")
+    return "/workspaces/" + entry.id + "/agents";
   if (path.startsWith(workspaceSettings + "/"))
     return workspaceSettingsHref(entry.id);
   if (pathWorkspace(path)) {
