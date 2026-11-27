@@ -164,7 +164,15 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
       {
         label: "Settings",
         icon: Settings,
-        items: [surfaceEntry("members", Users)],
+        items: [
+          surfaceEntry("members", Users),
+          {
+            key: "nav-workspaces",
+            label: "Workspaces",
+            href: "/settings/workspaces",
+            icon: Settings,
+          },
+        ],
       },
     ],
   },

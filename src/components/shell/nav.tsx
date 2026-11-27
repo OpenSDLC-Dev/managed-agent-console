@@ -25,14 +25,8 @@ import {
   isReportPage,
   playgroundOnly,
 } from "@/lib/routes";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CONSOLE_WORKSPACE } from "@/lib/platform/tenancy";
+import { WorkspacePicker } from "./workspace-picker";
+import { workspaceSettings } from "@/lib/platform/workspaces";
 import { ConsoleSessionContext } from "./console-session";
 import { useLeaveConfirmation } from "./unsaved-changes";
 
@@ -166,11 +160,13 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
       .map((group) => ({
         ...group,
         items: group.items.filter(({ surface, href }) =>
-          isReportPage(href)
-            ? hasDeveloperSession(session) && canOpenReport(href, surfaces)
-            : surface
-              ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
-              : limited || session?.playground_access === true,
+          href === workspaceSettings
+            ? session?.role === "admin" || session?.workspace_role === "admin"
+            : isReportPage(href)
+              ? hasDeveloperSession(session) && canOpenReport(href, surfaces)
+              : surface
+                ? !limited && isSurfaceVisible(surfaces?.[surface], surface)
+                : limited || session?.playground_access === true,
         ),
       }))
       .filter(({ items }) => items.length > 0),
@@ -244,6 +240,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
       }}
       className="flex flex-col gap-4 px-2 pt-2"
     >
+      {!workspacePanel && <WorkspacePicker multipleOnly />}
       {panel ? (
         <div
           className={cn(
@@ -277,42 +274,7 @@ export function Nav({ mobile = false }: { mobile?: boolean }) {
               </span>
             </button>
           </h2>
-          {workspacePanel && (
-            <Select value={session?.workspace_id ?? CONSOLE_WORKSPACE}>
-              <SelectTrigger
-                size="sm"
-                aria-label="Workspace"
-                className="mb-3 w-full border-0 bg-muted px-3 shadow-none"
-              >
-                <span className="flex items-center gap-3">
-                  <span
-                    aria-hidden
-                    className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
-                  />
-                  <SelectValue>
-                    {session?.workspace_name ?? "Default"}
-                  </SelectValue>
-                </span>
-              </SelectTrigger>
-              <SelectContent
-                align="start"
-                alignItemWithTrigger={false}
-                sideOffset={6}
-                className="w-64 p-1.5"
-              >
-                <SelectItem
-                  value={session?.workspace_id ?? CONSOLE_WORKSPACE}
-                  className="h-7 px-2"
-                >
-                  <span
-                    aria-hidden
-                    className="size-3 shrink-0 rounded-[3px] bg-[#9b89f5]"
-                  />
-                  {session?.workspace_name ?? "Default"}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          )}
+          {workspacePanel && <WorkspacePicker />}
           {panel.items.map(({ href, label, surface }) => (
             <NavLink
               key={href}

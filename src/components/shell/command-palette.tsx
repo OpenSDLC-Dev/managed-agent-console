@@ -128,6 +128,9 @@ function useSearchItems(query: string): Item[] {
     const items: Item[] = SECTIONS.filter(
       (s) =>
         visible(s) &&
+        (s.href !== "/settings/workspaces" ||
+          session?.role === "admin" ||
+          session?.workspace_role === "admin") &&
         (!isReportPage(s.href) ||
           (hasDeveloperSession(session) && canOpenReport(s.href, surfaces))) &&
         (s.href !== PLAYGROUND_ROUTE || session?.playground_access === true) &&

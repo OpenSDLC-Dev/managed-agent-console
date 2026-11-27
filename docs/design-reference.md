@@ -9,6 +9,10 @@ The [Agents workspace comparison](./agents-console-comparison.md) records the cu
 
 The page URLs follow the saved signed-in [Agents navigation](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/9180e22cd9eb24598f976d1d030f41128b29ba8d/2026-11-07-empty-tools-followup/console-session-archived.ax.txt) and the Messages, Resources and Settings observations below. Default uses the `default` path segment. Other workspaces use their public workspace ID. Dreams uses the same workspace prefix as the other agent resources. The self-hosted Model Gateway pages use `/models` and `/providers`.
 
+## Workspace settings — checked 2026-11-27
+
+The signed-in Claude Settings page lists workspaces with a search field, an archived filter and a Create workspace action. The self-hosted page shows the permanent Default row and identifies inherited organization roles in the member list. The sidebar picker switches the current tab. Resource details open on their collection when changing workspace.
+
 ## Dashboard — checked 2026-11-22
 
 In signed-in Chrome, the [reference Dashboard](https://platform.claude.com/dashboard) opens with a time-of-day greeting, Get API key and Build an agent. At 1800 × 945, three 136 px summary cards sit above a full-width Token volume card. Models and Resources each have four columns with 12 px gutters. A primary click anywhere on a model card opens one model in a centered dialog and keeps the Dashboard URL. Its underlying link points to the first-party [Models overview](https://platform.claude.com/docs/en/models/overview). Chrome measured the Fable dialog at 720 × 544 px. Close receives focus. The dialog shows a copyable ID, costs and features. More options beside Try in playground offers Build an agent. Compare models opens its own three-column dialog.
@@ -488,6 +492,10 @@ inside popup items. Row action menus also focus their first item, support arrow
 navigation and return focus to the trigger on Escape. Re-shot:
 `command-palette`, `session-composer-focus`, `deployment-filter-focus` and
 `deployment-actions-focus`, both themes.
+
+## Workspace settings — checked 2026-11-27
+
+The signed-in Claude Settings page lists workspaces with a search field, an archived filter and a Create workspace action. The self-hosted page shows the permanent Default row and identifies inherited organization roles in the member list. The sidebar picker switches the current tab. Resource details open on their collection when changing workspace.
 
 ## Dashboard — checked 2026-09-10
 

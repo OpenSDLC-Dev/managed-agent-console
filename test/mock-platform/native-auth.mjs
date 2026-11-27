@@ -176,6 +176,22 @@ export async function nativeAuthRoute(req, res, url, readBody) {
     });
     return true;
   }
+  if (url.pathname === "/api/auth/workspaces" && req.method === "GET") {
+    const session = authenticateBrowser(req, res);
+    if (session)
+      reply(res, 200, {
+        data: [
+          {
+            id: "default",
+            public_id: "wrkspc_00000000000000000000000001",
+            name: "Default",
+            display_color: "#6C5BB9",
+            role: session.workspace_role,
+          },
+        ],
+      });
+    return true;
+  }
   if (url.pathname === "/api/auth/session" && req.method === "GET") {
     const session = authenticateBrowser(req, res);
     if (session) {
