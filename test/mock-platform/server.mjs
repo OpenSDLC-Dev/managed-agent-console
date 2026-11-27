@@ -2757,6 +2757,42 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  const workspaceDirectory = "/api/console/organizations/default/workspaces";
+  const researchSettings = {
+    id: "wrkspc_00000000000000000000000002",
+    name: "Research",
+    display_color: "#93D3B3",
+    archived_at: null,
+  };
+  if (
+    req.method === "GET" &&
+    [
+      workspaceDirectory,
+      workspaceDirectory + "/" + researchSettings.id,
+      workspaceDirectory + "/" + researchSettings.id + "/members",
+    ].includes(url.pathname)
+  ) {
+    const body =
+      url.pathname === workspaceDirectory
+        ? [researchSettings]
+        : url.pathname.endsWith("/members")
+          ? [
+              {
+                id: "user_000000000000000000000001",
+                type: "user",
+                name: "Operator",
+                role: "admin",
+                inherited: true,
+              },
+            ]
+          : researchSettings;
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify(body));
+    return;
+  }
   if (
     url.pathname ===
       "/api/console/organizations/default/workspaces/default/agents/overview" &&
