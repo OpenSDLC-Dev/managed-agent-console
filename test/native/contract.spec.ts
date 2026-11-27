@@ -1727,14 +1727,17 @@ test("native environment keys cover cloud and self-hosted lifecycles with cookie
 });
 
 async function signInKeyAdmin(page: Page) {
-  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "new-person", password },
   });
   expect([200, 409]).toContain(setup.status());
-  if (setup.status() === 409) await login(page, "new-person");
-  else await page.goto("/dashboard");
+  if (setup.status() === 409) {
+    resetNativeLoginThrottle();
+    await login(page, "new-person");
+  } else {
+    await page.goto("/dashboard");
+  }
   const session = await (await page.request.get("/api/auth/session")).json();
   expect(session.role).toBe("admin");
   return session;
