@@ -69,6 +69,24 @@ async function write(page: Page, url: string, body?: unknown, method = "POST") {
     { url, body, method },
   );
 }
+// These independent scenarios share one loopback login bucket in the disposable database.
+function resetNativeLoginThrottle() {
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
+}
+
 async function login(page: Page, name: string) {
   await page.goto("/login");
   await page.getByLabel("Login name").fill(name);
@@ -1457,20 +1475,7 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
 test("native deployment initiator changes persist without unpausing or changing manual authority", async ({
   page,
 }) => {
-  const reset = nativeDocker([
-    "exec",
-    receipt().container,
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "native_password",
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    "DELETE FROM login_throttle",
-  ]);
-  expect(reset.status, reset.stderr).toBe(0);
+  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "deployment-admin", password },
@@ -1557,20 +1562,7 @@ test("native model limits persist and principal usage keeps credential attributi
 }) => {
   // This scenario has its own login window. Earlier login/throttle scenarios
   // consume the shared account's five attempts; keep their assertions intact.
-  const reset = nativeDocker([
-    "exec",
-    receipt().container,
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "native_password",
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    "DELETE FROM login_throttle",
-  ]);
-  expect(reset.status, reset.stderr).toBe(0);
+  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "limits-admin", password },
@@ -1735,6 +1727,7 @@ test("native environment keys cover cloud and self-hosted lifecycles with cookie
 });
 
 async function signInKeyAdmin(page: Page) {
+  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "new-person", password },
