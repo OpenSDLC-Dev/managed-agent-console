@@ -37,7 +37,7 @@ The reference ends the sidebar with an inset account button and opens its menu u
 
 ## Global search — checked 2026-11-27
 
-Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The empty palette showed **Pages** with names such as **Messages › Playground**, then **Popular docs**. Searching for `playground` showed Pages and Documentation. Selecting the Default workspace opened its settings. [Claude Console](https://platform.claude.com/dashboard)
+Signed-in Chrome showed a 448px search trigger centered in the 48px header. Opening it placed the focused search field in a 672px panel 15% down the viewport. The empty palette showed **Pages** with names such as **Messages › Playground**, then **Popular docs**. Searching for `playground` showed Pages and Documentation. Selecting the Default workspace opened its settings. **Spending & usage › API usage** opens `/usage`. [Claude Console](https://platform.claude.com/dashboard)
 
 Self-hosted search lists the pages this deployment exposes, the caller's workspaces and matches from the current workspace's loaded resource lists. An administrator can open a workspace's settings. Other members land on a page for their role. Documentation links use a small local index of Claude guides so typing a workspace or resource name sends no search request to Anthropic.
 

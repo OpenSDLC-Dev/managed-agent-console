@@ -185,7 +185,7 @@ export const NAV_DESTINATIONS: Destination[] = [
       group.items.map((item) => {
         const pageLabel =
           item.surface === "usage"
-            ? "Overview"
+            ? "API usage"
             : item.surface === "api-keys"
               ? "API keys"
               : item.label;

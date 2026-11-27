@@ -219,7 +219,7 @@ describe("CommandPalette", () => {
       "Keys › API keys",
       "Model Gateway › Models",
       "Model Gateway › Providers",
-      "Spending & usage › Overview",
+      "Spending & usage › API usage",
     ]);
 
     // The searchable list queries, plus one surface probe per registered
@@ -265,6 +265,18 @@ describe("CommandPalette", () => {
     expect(routerState.push).toHaveBeenCalledWith(
       "/workspaces/default/memory-stores",
     );
+  });
+
+  it("opens the API usage page when searching by its Claude Console name", async () => {
+    renderPalette();
+    const input = await openPalette();
+    setQuery(input, "api usage");
+    const usage = screen.getByRole("option", {
+      name: "Spending & usage › API usage",
+    });
+    expect(usage.getAttribute("href")).toBe("/usage");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(routerState.push).toHaveBeenCalledWith("/usage");
   });
 
   it("opens from the sidebar Search button", async () => {
