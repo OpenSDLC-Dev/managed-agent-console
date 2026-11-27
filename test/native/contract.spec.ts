@@ -69,6 +69,24 @@ async function write(page: Page, url: string, body?: unknown, method = "POST") {
     { url, body, method },
   );
 }
+// These independent scenarios share one loopback login bucket in the disposable database.
+function resetNativeLoginThrottle() {
+  const reset = nativeDocker([
+    "exec",
+    receipt().container,
+    "psql",
+    "-U",
+    "postgres",
+    "-d",
+    "native_password",
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    "DELETE FROM login_throttle",
+  ]);
+  expect(reset.status, reset.stderr).toBe(0);
+}
+
 async function login(page: Page, name: string) {
   await page.goto("/login");
   await page.getByLabel("Login name").fill(name);
@@ -1457,20 +1475,7 @@ test("real native login accepts a twelve-byte Unicode password and displays serv
 test("native deployment initiator changes persist without unpausing or changing manual authority", async ({
   page,
 }) => {
-  const reset = nativeDocker([
-    "exec",
-    receipt().container,
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "native_password",
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    "DELETE FROM login_throttle",
-  ]);
-  expect(reset.status, reset.stderr).toBe(0);
+  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "deployment-admin", password },
@@ -1557,20 +1562,7 @@ test("native model limits persist and principal usage keeps credential attributi
 }) => {
   // This scenario has its own login window. Earlier login/throttle scenarios
   // consume the shared account's five attempts; keep their assertions intact.
-  const reset = nativeDocker([
-    "exec",
-    receipt().container,
-    "psql",
-    "-U",
-    "postgres",
-    "-d",
-    "native_password",
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-c",
-    "DELETE FROM login_throttle",
-  ]);
-  expect(reset.status, reset.stderr).toBe(0);
+  resetNativeLoginThrottle();
   const setup = await page.request.post(`${org}/setup_code/redeem`, {
     headers: { origin: "http://127.0.0.1:38200" },
     data: { code: code(), login_name: "limits-admin", password },
@@ -1740,8 +1732,12 @@ async function signInKeyAdmin(page: Page) {
     data: { code: code(), login_name: "new-person", password },
   });
   expect([200, 409]).toContain(setup.status());
-  if (setup.status() === 409) await login(page, "new-person");
-  else await page.goto("/dashboard");
+  if (setup.status() === 409) {
+    resetNativeLoginThrottle();
+    await login(page, "new-person");
+  } else {
+    await page.goto("/dashboard");
+  }
   const session = await (await page.request.get("/api/auth/session")).json();
   expect(session.role).toBe("admin");
   return session;
@@ -1868,6 +1864,10 @@ test("native owned keys preserve owner creator permissions and credential isolat
   ).json();
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
+  const grant = await write(page, `${org}/service_accounts/${service.id}`, {
+    default_workspace_role: "developer",
+  });
+  expect(grant.status).toBe(200);
   await page.goto("/settings/service-accounts");
   const search = page.getByLabel("Search service accounts", { exact: true });
   await search.fill(service.id);
@@ -1995,6 +1995,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
     login_name: "owned-developer",
     password,
     role: "developer",
+    default_workspace_role: "developer",
   });
   expect(member.status).toBe(200);
   const developerContext = await browser.newContext({
@@ -2367,9 +2368,11 @@ test("native-issued human and service keys preserve SDK actors and current autho
           : `${org}/service_accounts/${owner}`;
       const roleBody = (role: string) =>
         kind === "human" ? { role } : { organization_role: role };
-      expect((await write(page, ownerPath, roleBody("developer"))).status).toBe(
-        200,
-      );
+      const developer = await write(page, ownerPath, {
+        ...roleBody("developer"),
+        default_workspace_role: "developer",
+      });
+      expect(developer.status).toBe(200);
       for (const header of ["x-api-key", "bearer"] as const) {
         const denied = sdk(key, header);
         expect(denied.status).toEqual({
@@ -2394,9 +2397,11 @@ test("native-issued human and service keys preserve SDK actors and current autho
       }
       // Only humans have the user role; an SA's role range is admin/developer.
       if (kind === "human") {
-        expect((await write(page, ownerPath, { role: "user" })).status).toBe(
-          200,
-        );
+        const user = await write(page, ownerPath, {
+          role: "user",
+          default_workspace_role: null,
+        });
+        expect(user.status).toBe(200);
         for (const header of ["x-api-key", "bearer"] as const)
           expect(sdk(key, header).status).toEqual({ agents: 403 });
       }

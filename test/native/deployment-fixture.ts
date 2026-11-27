@@ -38,6 +38,7 @@ export async function seedDeployment(request: APIRequestContext) {
   const account = await post(
     "/api/console/organizations/default/service_accounts",
     {
+      default_workspace_role: "developer",
       name: `schedule-bot-${deployment.id.replaceAll("_", "-").toLowerCase()}`,
     },
   );
