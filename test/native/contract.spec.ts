@@ -1868,6 +1868,10 @@ test("native owned keys preserve owner creator permissions and credential isolat
   ).json();
   const service = second.data[0];
   expect(Boolean(service?.id)).toBe(true);
+  const grant = await write(page, `${org}/service_accounts/${service.id}`, {
+    default_workspace_role: "developer",
+  });
+  expect(grant.status).toBe(200);
   await page.goto("/settings/service-accounts");
   const search = page.getByLabel("Search service accounts", { exact: true });
   await search.fill(service.id);
@@ -1995,6 +1999,7 @@ test("native owned keys preserve owner creator permissions and credential isolat
     login_name: "owned-developer",
     password,
     role: "developer",
+    default_workspace_role: "developer",
   });
   expect(member.status).toBe(200);
   const developerContext = await browser.newContext({
@@ -2367,9 +2372,11 @@ test("native-issued human and service keys preserve SDK actors and current autho
           : `${org}/service_accounts/${owner}`;
       const roleBody = (role: string) =>
         kind === "human" ? { role } : { organization_role: role };
-      expect((await write(page, ownerPath, roleBody("developer"))).status).toBe(
-        200,
-      );
+      const developer = await write(page, ownerPath, {
+        ...roleBody("developer"),
+        default_workspace_role: "developer",
+      });
+      expect(developer.status).toBe(200);
       for (const header of ["x-api-key", "bearer"] as const) {
         const denied = sdk(key, header);
         expect(denied.status).toEqual({
@@ -2394,9 +2401,11 @@ test("native-issued human and service keys preserve SDK actors and current autho
       }
       // Only humans have the user role; an SA's role range is admin/developer.
       if (kind === "human") {
-        expect((await write(page, ownerPath, { role: "user" })).status).toBe(
-          200,
-        );
+        const user = await write(page, ownerPath, {
+          role: "user",
+          default_workspace_role: null,
+        });
+        expect(user.status).toBe(200);
         for (const header of ["x-api-key", "bearer"] as const)
           expect(sdk(key, header).status).toEqual({ agents: 403 });
       }
