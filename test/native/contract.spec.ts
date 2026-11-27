@@ -329,8 +329,16 @@ test("real native password/setup, current authority, management, private bytes/S
       "role",
       "role_source",
       "signed_in",
+      "workspace_id",
+      "workspace_name",
+      "workspace_role",
     ].sort(),
   );
+  expect(identity).toMatchObject({
+    workspace_id: "default",
+    workspace_name: "Default",
+    workspace_role: "admin",
+  });
   if (platformVersion !== undefined) {
     expect(typeof platformVersion).toBe("string");
     expect(platformVersion.length).toBeGreaterThan(0);
