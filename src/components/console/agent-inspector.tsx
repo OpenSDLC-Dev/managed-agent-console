@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import {
   ArrowRight,

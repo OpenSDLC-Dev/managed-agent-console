@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Input } from "@/components/ui/input";
 import { Field, JsonBlock } from "./detail";
 import { IdCode, StatusBadge, Time } from "./bits";

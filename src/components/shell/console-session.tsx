@@ -1,8 +1,12 @@
 "use client";
 
 import { createContext, useEffect, useState } from "react";
+import { redirect } from "next/navigation";
+import { selectedWorkspace, validWorkspace } from "@/lib/platform/tenancy";
 import { useQuery } from "@tanstack/react-query";
 import { DetailSkeleton, ErrorState } from "@/components/console/bits";
+import { QueryScope } from "./providers";
+import { PlatformError } from "@/lib/platform/http";
 import { readAccount } from "@/lib/platform/native";
 import {
   hasBouncedToLogin,
@@ -69,6 +73,9 @@ function NativeSessionBoundary({ children }: { children: React.ReactNode }) {
     return <SignOutStatus state={signOutState} />;
   }
   if (
+    (session.isError &&
+      session.error instanceof PlatformError &&
+      [401, 403, 404].includes(session.error.status)) ||
     !boundId ||
     data?.signed_in !== true ||
     boundId !== data.id ||
@@ -87,9 +94,30 @@ function NativeSessionBoundary({ children }: { children: React.ReactNode }) {
       </main>
     );
   }
+  // Give ambiguous organization-page reads a reproducible scope before mounting private queries.
+  if (
+    typeof window !== "undefined" &&
+    !selectedWorkspace() &&
+    data.workspace_id &&
+    validWorkspace(data.workspace_id) &&
+    (data.workspace_selection_required || data.workspace_id !== "default")
+  ) {
+    const next = new URL(window.location.href);
+    next.searchParams.set("workspace", data.workspace_id);
+    redirect(next.pathname + next.search + next.hash);
+  }
   return (
     <ConsoleSessionContext.Provider value={session}>
-      {children}
+      <QueryScope
+        key={JSON.stringify([
+          boundId,
+          data.workspace_id,
+          data.workspace_role,
+          data.role,
+        ])}
+      >
+        {children}
+      </QueryScope>
     </ConsoleSessionContext.Provider>
   );
 }

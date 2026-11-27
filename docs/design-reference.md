@@ -7,7 +7,7 @@ date. What ships from these facts is `src/app/globals.css`.
 
 The [Agents workspace comparison](./agents-console-comparison.md) records the current Chrome walkthrough, capability differences and regression flow.
 
-The page URLs follow the saved signed-in [Agents navigation](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/9180e22cd9eb24598f976d1d030f41128b29ba8d/2026-11-07-empty-tools-followup/console-session-archived.ax.txt) and the Messages, Resources and Settings observations below. The workspace segment is currently `default`. Dreams uses the same workspace prefix as the other agent resources. The self-hosted Model Gateway pages use `/models` and `/providers`.
+The page URLs follow the saved signed-in [Agents navigation](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/9180e22cd9eb24598f976d1d030f41128b29ba8d/2026-11-07-empty-tools-followup/console-session-archived.ax.txt) and the Messages, Resources and Settings observations below. Default uses the `default` path segment. Other workspaces use their public workspace ID. Dreams uses the same workspace prefix as the other agent resources. The self-hosted Model Gateway pages use `/models` and `/providers`.
 
 ## Dashboard — checked 2026-11-22
 

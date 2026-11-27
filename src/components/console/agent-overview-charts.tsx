@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
 import { niceScale } from "./cost-chart";
 

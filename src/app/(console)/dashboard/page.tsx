@@ -1,7 +1,7 @@
 "use client";
 
 import { surfacePaths } from "@/lib/routes";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useContext } from "react";
 import {
   Boxes,

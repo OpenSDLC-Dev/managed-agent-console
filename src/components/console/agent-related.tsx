@@ -1,6 +1,6 @@
 "use client";
 import { surfacePaths } from "@/lib/routes";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { DataTable, type Column } from "./data-table";
 import { IdCell } from "./copy-id";
 import { Pager } from "./pager";

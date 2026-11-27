@@ -23,7 +23,7 @@ import {
   platformPostForm,
   type Page,
 } from "./http";
-import { CONSOLE_ORG, CONSOLE_WORKSPACE } from "./tenancy";
+import { CONSOLE_ORG, tabWorkspace } from "./tenancy";
 import { isUnimplemented } from "./surfaces";
 import type { ResourceInput } from "./session-resources";
 import type {
@@ -1421,14 +1421,15 @@ export function useRevokeEnvironmentKey(environmentId: string) {
 
 // ---- management keys (the other console namespace, plan 07 slice 4)
 
-const KEYS_PATH = `organizations/${CONSOLE_ORG}/workspaces/${CONSOLE_WORKSPACE}/api_keys`;
+const keysPath = () =>
+  `organizations/${CONSOLE_ORG}/workspaces/${tabWorkspace()}/api_keys`;
 
 /** The listing is a bare array: no envelope, no paging (consoleapikeys.go). */
 export function useApiKeys() {
   const session = useContext(ConsoleSessionContext)?.data;
   return useQuery({
     queryKey: ["api-keys", session?.id, session?.role],
-    queryFn: () => consoleKeysGet<ApiKeyListItem[]>(KEYS_PATH),
+    queryFn: () => consoleKeysGet<ApiKeyListItem[]>(keysPath()),
     gcTime: 0,
   });
 }
@@ -1457,7 +1458,7 @@ export function useCreateApiKey() {
       name: string;
       expires_at?: string;
       principal_id?: string;
-    }) => consoleKeysPost<ApiKeyIssued>(KEYS_PATH, body),
+    }) => consoleKeysPost<ApiKeyIssued>(keysPath(), body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     },
@@ -1480,7 +1481,7 @@ export function useUpdateApiKey() {
       id: string;
       status?: string;
       name?: string;
-    }) => consoleKeysPost<ApiKey>(`${KEYS_PATH}/${id}`, body),
+    }) => consoleKeysPost<ApiKey>(`${keysPath()}/${id}`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     },

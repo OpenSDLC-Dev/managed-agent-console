@@ -2,7 +2,7 @@
 
 import { PLAYGROUND_ROUTE, surfacePaths } from "@/lib/routes";
 import { Bot, BookOpen, ChevronDown } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import {
   createContext,
   Fragment,

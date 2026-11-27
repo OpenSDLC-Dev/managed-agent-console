@@ -54,17 +54,19 @@ export function PlaygroundCode({
           <section>
             <h3 className="mb-2 text-sm font-semibold">Headers</h3>
             <dl className="space-y-1 rounded-lg bg-muted/40 p-3 text-xs">
-              {Object.entries(playgroundMessageHeaders).map(([name, value]) => (
-                <div
-                  key={name}
-                  className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 py-0.5"
-                >
-                  <dt className="font-mono break-all">{name}</dt>
-                  <dd className="font-mono break-all text-muted-foreground">
-                    {value}
-                  </dd>
-                </div>
-              ))}
+              {Object.entries(playgroundMessageHeaders()).map(
+                ([name, value]) => (
+                  <div
+                    key={name}
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 py-0.5"
+                  >
+                    <dt className="font-mono break-all">{name}</dt>
+                    <dd className="font-mono break-all text-muted-foreground">
+                      {value}
+                    </dd>
+                  </div>
+                ),
+              )}
             </dl>
           </section>
           <h3 className="text-sm font-semibold">Body</h3>

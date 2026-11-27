@@ -1,6 +1,6 @@
 "use client";
 import { useRef, type RefObject } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 

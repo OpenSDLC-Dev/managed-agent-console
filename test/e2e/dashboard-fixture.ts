@@ -46,7 +46,11 @@ export async function setDashboardSession(
     if (session.signed_in !== true) return route.fulfill({ response });
     return route.fulfill({
       response,
-      json: { ...session, ...claims },
+      json: {
+        ...session,
+        ...(claims.role && { workspace_role: claims.role }),
+        ...claims,
+      },
     });
   });
 }

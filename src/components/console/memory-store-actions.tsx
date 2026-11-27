@@ -1,7 +1,7 @@
 "use client";
 
 import { surfacePaths } from "@/lib/routes";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { ResourceActions } from "@/components/console/resource-actions";
 import {
   useArchiveMemoryStore,

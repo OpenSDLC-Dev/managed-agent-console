@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { ArrowRight, Database } from "lucide-react";
 import { ResourceInspector } from "./resource-inspector";
 import { DetailSkeleton, ErrorState, Time } from "./bits";

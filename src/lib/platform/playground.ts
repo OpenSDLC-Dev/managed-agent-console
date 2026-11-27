@@ -1,15 +1,17 @@
 import { parseSseStream } from "@/lib/session-trace/sse";
 import { assertOk, csrfHeaders, resourceURL } from "./http";
 
-const TENANCY = {
+import { tabWorkspace } from "./tenancy";
+const tenancyHeaders = () => ({
   "x-organization-uuid": "default",
-  "x-workspace-id": "default",
-};
+  "x-workspace-id": tabWorkspace(),
+});
 
-export const playgroundMessageHeaders = {
-  ...TENANCY,
-  "content-type": "application/json",
-} as const;
+export const playgroundMessageHeaders = () =>
+  ({
+    ...tenancyHeaders(),
+    "content-type": "application/json",
+  }) as const;
 
 // modelgateway/models.go describes the capabilities shared by every target.
 export type PlaygroundModel = {
@@ -35,7 +37,7 @@ export async function playgroundModels(signal: AbortSignal) {
     const query = new URLSearchParams({ limit: "1000" });
     if (after) query.set("after_id", after);
     const response = await fetch(resourceURL(`v1/models?${query}`), {
-      headers: TENANCY,
+      headers: tenancyHeaders(),
       cache: "no-store",
       signal,
     });
@@ -135,7 +137,7 @@ export async function runPlayground(
   const response = await fetch(resourceURL("v1/messages?beta=true"), {
     method: "POST",
     headers: {
-      ...playgroundMessageHeaders,
+      ...playgroundMessageHeaders(),
       ...(await csrfHeaders({ expectedPrincipalId: principalId, signal })),
     },
     body: JSON.stringify(request),

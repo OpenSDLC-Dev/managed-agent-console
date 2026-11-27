@@ -20,8 +20,8 @@ import {
 } from "@/lib/agent-config/quickstart";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import { TEST_SESSION } from "@/../test/session-fixture";
-import AgentCreatePage from "@/app/(console)/workspaces/default/agent-quickstart/page";
-import AgentsOverviewPage from "@/app/(console)/workspaces/default/agents-overview/page";
+import AgentCreatePage from "@/app/(console)/workspaces/[workspace]/agent-quickstart/page";
+import AgentsOverviewPage from "@/app/(console)/workspaces/[workspace]/agents-overview/page";
 import { AgentsOverview } from "./agents-overview";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
 import type { Agent } from "@/lib/platform/types";

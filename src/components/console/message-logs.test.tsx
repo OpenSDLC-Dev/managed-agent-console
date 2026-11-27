@@ -454,7 +454,12 @@ it("clears the rendered row and inspector when a background refresh revokes acce
 it("never carries rows across principals, roles, or an unconfirmed session", async () => {
   const { read, session } = openLogs([row(2)], "req_2");
   await screen.findByRole("dialog");
-  session({ ...TEST_SESSION, role: "user", playground_access: true });
+  session({
+    ...TEST_SESSION,
+    role: "user",
+    workspace_role: "user",
+    playground_access: true,
+  });
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.queryByRole("button", { name: "req_2" })).toBeNull();
   session({ ...TEST_SESSION, role: undefined });

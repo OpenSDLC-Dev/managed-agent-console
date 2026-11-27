@@ -10,13 +10,16 @@ export const MOCK_ACCOUNT = {
   }),
   id: "user_mockadmin01",
   role: "admin",
+  workspace_id: "default",
+  workspace_role: "admin",
+  workspace_name: "Default",
   role_source: "manual",
   email: "operator@example.com",
   name: "Test Operator",
   login_name: "operator",
 };
 const sessions = new Map();
-const cookieName = "map_mock_session";
+const cookieName = "map_session";
 export function resetSessions() {
   sessions.clear();
 }
@@ -175,8 +178,22 @@ export async function nativeAuthRoute(req, res, url, readBody) {
   }
   if (url.pathname === "/api/auth/session" && req.method === "GET") {
     const session = authenticateBrowser(req, res);
-    if (session)
-      reply(res, 200, { ...session, platform_version: "v0.6.0-dev-0123abcd" });
+    if (session) {
+      const id = req.headers["x-workspace-id"] ?? "default";
+      if (id !== "default" && id !== "wrkspc_00000000000000000000000002") {
+        reply(res, 404, {
+          type: "error",
+          error: { type: "not_found_error", message: "Workspace not found" },
+        });
+      } else {
+        reply(res, 200, {
+          ...session,
+          workspace_id: id,
+          workspace_name: id === "default" ? "Default" : "Research",
+          platform_version: "v0.6.0-dev-0123abcd",
+        });
+      }
+    }
     return true;
   }
   if (url.pathname === "/api/auth/logout" && req.method === "POST") {

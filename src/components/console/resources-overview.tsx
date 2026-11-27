@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import type { ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {

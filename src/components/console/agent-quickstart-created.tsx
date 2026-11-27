@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useState } from "react";
 import { ArrowLeft, Bot, Check, Code2 } from "lucide-react";
 import { Button } from "@/components/ui/button";

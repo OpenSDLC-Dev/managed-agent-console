@@ -2,8 +2,8 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useId, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from "@/components/shell/workspace-navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { ChevronsUpDown, Paperclip, X } from "lucide-react";
 import { RequestId, hostingTypeLabel } from "@/components/console/bits";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext, useRef, useState, type RefObject } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import {
   Ban,
   CheckCircle2,

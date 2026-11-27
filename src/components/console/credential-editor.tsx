@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { RequestId } from "@/components/console/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

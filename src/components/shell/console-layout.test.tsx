@@ -23,24 +23,34 @@ import { resetSignedOutBounceForTests } from "@/lib/identity/signed-out";
 
 const state = vi.hoisted(() => ({
   client: undefined as QueryClient | undefined,
+  resources: undefined as QueryClient | undefined,
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/members",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("./providers", async (original) => {
-  const { Providers } = await original<typeof import("./providers")>();
-  function Capture() {
+  const { Providers, QueryScope } =
+    await original<typeof import("./providers")>();
+  function Capture({ resources = false }: { resources?: boolean }) {
     const client = useQueryClient();
     client.setDefaultOptions({
       queries: { ...client.getDefaultOptions().queries, retryDelay: 0 },
     });
     useEffect(() => {
-      state.client = client;
-    }, [client]);
+      if (resources) state.resources = client;
+      else state.client = client;
+    }, [client, resources]);
     return null;
   }
   return {
+    QueryScope: ({ children }: { children: ReactNode }) => (
+      <QueryScope>
+        <Capture resources />
+        {children}
+      </QueryScope>
+    ),
     Providers: ({ children }: { children: ReactNode }) => (
       <Providers>
         <Capture />
@@ -356,6 +366,10 @@ it.each([false, true])(
       ).toHaveAccessibleName(/Actor A/);
       expect(mounts).toBe(1);
       const client = state.client;
+      const privateCache = state.resources!;
+      expect(
+        JSON.stringify(privateCache.getQueriesData({ queryKey: ["members"] })),
+      ).toContain("Sensitive A row");
       fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
       fireEvent.click(screen.getByTestId("sign-out"));
       await waitFor(() =>
@@ -384,10 +398,9 @@ it.each([false, true])(
       expect(
         state.client!.getQueryData<{ id: string }>(["console-session"])?.id,
       ).toBe(actor.id);
-      // Retain the cache hazard: withholding, not clearing, isolates B from A.
-      expect(
-        JSON.stringify(state.client!.getQueriesData({ queryKey: ["members"] })),
-      ).toContain("Sensitive A row");
+      expect(privateCache.getQueriesData({ queryKey: ["members"] })).toEqual(
+        [],
+      );
       expect(assign).not.toHaveBeenCalled();
       expect(screen.queryByText("Sensitive A row")).toBeNull();
       expect(screen.queryByTestId("private-page")).toBeNull();

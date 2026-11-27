@@ -5,7 +5,10 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { pathWorkspace } from "@/lib/platform/tenancy";
+import { WorkspaceContext } from "./workspace-navigation";
 import { Toaster } from "@/components/ui/sonner";
 import { Announcer } from "./announcer";
 import { useSignOutState } from "./sign-out";
@@ -58,6 +61,21 @@ export function retryUnlessSettled(
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const signOutState = useSignOutState();
+  const path = usePathname();
+  const params = useSearchParams();
+  const space =
+    pathWorkspace(path ?? "") ?? params?.get("workspace") ?? "default";
+  return (
+    <WorkspaceContext.Provider value={space}>
+      <QueryScope key={space}>
+        <Announcer>{children}</Announcer>
+        {signOutState === "idle" && <Toaster position="bottom-right" />}
+      </QueryScope>
+    </WorkspaceContext.Provider>
+  );
+}
+
+export function QueryScope({ children }: { children: React.ReactNode }) {
   const [client] = useState(
     () =>
       new QueryClient({
@@ -73,10 +91,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
         }),
       }),
   );
-  return (
-    <QueryClientProvider client={client}>
-      <Announcer>{children}</Announcer>
-      {signOutState === "idle" && <Toaster position="bottom-right" />}
-    </QueryClientProvider>
+  useEffect(
+    () => () => {
+      void client.cancelQueries();
+      client.clear();
+    },
+    [client],
   );
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }

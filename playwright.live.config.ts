@@ -39,6 +39,7 @@ export default defineConfig({
   webServer: [
     {
       command: `pnpm exec next start --port 3190`,
+      env: { CONSOLE_CONTROLPLANE_URL: baseUrl },
       url: "http://127.0.0.1:3190/api/health",
       reuseExistingServer: false,
       timeout: 60_000,

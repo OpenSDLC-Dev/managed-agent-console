@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { installHistoryGuard } from "@/lib/history-guard";
 import { Button } from "@/components/ui/button";
 import {

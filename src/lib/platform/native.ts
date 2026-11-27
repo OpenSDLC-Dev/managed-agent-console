@@ -1,12 +1,18 @@
+import { pathWorkspace, selectedOptions, workspaceHeaders } from "./tenancy";
 import { assertOk, csrfHeaders, queryString } from "./http";
 
-export type Role = "user" | "developer" | "admin";
+export type Role = "user" | "developer" | "admin" | "billing";
+export type WorkspaceRole = Role | "limited_developer";
 export type AuthConfig = {
   mode: "disabled" | "password" | "oidc" | "trusted_proxy";
   native_login: boolean;
 };
 export type NativeSession = {
   signed_in: true;
+  workspace_id?: string;
+  workspace_name?: string;
+  workspace_selection_required?: boolean;
+  workspace_role?: WorkspaceRole;
   id: string;
   role: Role;
   role_source: string;
@@ -62,6 +68,7 @@ export async function nativeGet<T>(
 ): Promise<T> {
   const response = await fetch(`${path}${queryString(params)}`, {
     cache: "no-store",
+    ...selectedOptions(),
     ...(signal && { signal }),
   });
   await assertOk(response);
@@ -91,7 +98,14 @@ export async function nativeWrite<T>(
 
 /** Optional only on the anonymous setup page. A missing cookie is expected. */
 export async function setupSession(): Promise<NativeSession | null> {
-  const response = await fetch("/api/auth/session", { cache: "no-store" });
+  const selected =
+    typeof window !== "undefined" &&
+    (pathWorkspace(window.location.pathname) ||
+      new URLSearchParams(window.location.search).has("workspace"));
+  const response = await fetch("/api/auth/session", {
+    cache: "no-store",
+    ...(selected && { headers: workspaceHeaders() }),
+  });
   if (response.status === 401) return null;
   await assertOk(response);
   return response.json() as Promise<NativeSession>;
@@ -106,13 +120,33 @@ export function passwordProblem(password: string): string | undefined {
 
 export function enterConsole(): void {
   // Full navigation drops the previous identity's Query caches and streams.
-  window.location.assign(new URL("/", window.location.origin).href);
+  const target = new URLSearchParams(window.location.search).get("return_to");
+  const url = new URL("/", window.location.origin);
+  if (
+    target?.startsWith("/") &&
+    !target.startsWith("//") &&
+    !target.includes("\\")
+  ) {
+    const requested = new URL(target, url);
+    if (requested.origin === url.origin && pathWorkspace(requested.pathname)) {
+      window.location.assign(requested.href);
+      return;
+    }
+  }
+  window.location.assign(url.href);
 }
 
 export async function readAccount(): Promise<
   (Partial<NativeSession> & { signed_in: boolean }) | null
 > {
-  const response = await fetch("/api/auth/session", { cache: "no-store" });
+  const selected =
+    typeof window !== "undefined" &&
+    (pathWorkspace(window.location.pathname) ||
+      new URLSearchParams(window.location.search).has("workspace"));
+  const response = await fetch("/api/auth/session", {
+    cache: "no-store",
+    ...(selected && { headers: workspaceHeaders() }),
+  });
   await assertOk(response);
   const session = (await response.json()) as
     (Partial<NativeSession> & { signed_in: boolean }) | null;

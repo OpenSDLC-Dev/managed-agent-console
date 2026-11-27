@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { Archive, ArrowUpRight, Ellipsis, Plus, Pencil } from "lucide-react";
 import { useUnsavedChanges } from "@/components/shell/unsaved-changes";
 import { Button } from "@/components/ui/button";

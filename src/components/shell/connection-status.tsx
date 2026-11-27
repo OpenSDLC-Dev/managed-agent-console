@@ -6,6 +6,7 @@ import { playgroundOnly } from "@/lib/routes";
 import { ConsoleSessionContext } from "./console-session";
 import { bounceToLogin, isSignedOut } from "@/lib/identity/signed-out";
 import { cn } from "@/lib/utils";
+import { selectedOptions } from "@/lib/platform/tenancy";
 import { resourceURL } from "@/lib/platform/http";
 
 type ProbeResult =
@@ -17,6 +18,7 @@ async function probe(): Promise<ProbeResult> {
   try {
     response = await fetch(`${resourceURL("v1/agents")}?limit=1`, {
       cache: "no-store",
+      ...selectedOptions(),
     });
   } catch {
     return { ok: false, message: "console server unreachable" };

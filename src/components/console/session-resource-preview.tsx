@@ -3,7 +3,7 @@ import { surfacePaths } from "@/lib/routes";
 import { ResourceDownload } from "./resource-download";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/shell/workspace-navigation";
 import { useFile, useFileText, useMemory } from "@/lib/platform/queries";
 import type { SessionResource } from "@/lib/platform/types";
 import { Button } from "@/components/ui/button";

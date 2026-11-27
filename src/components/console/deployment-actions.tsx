@@ -1,7 +1,7 @@
 "use client";
 
 import { surfacePaths } from "@/lib/routes";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { useLeaveConfirmation } from "@/components/shell/unsaved-changes";
 import { Pause, Play, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";

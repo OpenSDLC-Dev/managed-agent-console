@@ -1,0 +1,115 @@
+"use client";
+
+import { surfacePaths } from "@/lib/routes";
+import { use } from "react";
+import Link from "@/components/shell/workspace-navigation";
+import { PageHeader } from "@/components/shell/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Breadcrumb } from "@/components/console/breadcrumb";
+import { IdCell } from "@/components/console/copy-id";
+import { DetailSection, Field, FieldList } from "@/components/console/detail";
+import { DetailSkeleton, ErrorState, Time } from "@/components/console/bits";
+import { PlatformError } from "@/lib/platform/http";
+import { useDeploymentRun } from "@/lib/platform/queries";
+import { deploymentRunSessionHref } from "@/components/console/deployment-run-details";
+
+const PARENT_MISMATCH = new PlatformError(404, {
+  type: "error",
+  error: {
+    type: "not_found_error",
+    message: "deployment run not found",
+  },
+});
+
+export default function DeploymentRunPage({
+  params,
+}: {
+  params: Promise<{ id: string; runId: string }>;
+}) {
+  const { id, runId } = use(params);
+  const query = useDeploymentRun(runId);
+  if (query.error) return <ErrorState error={query.error} />;
+  if (query.isPending || !query.data) return <DetailSkeleton />;
+  const run = query.data;
+  if (run.deployment_id !== id) return <ErrorState error={PARENT_MISMATCH} />;
+  return (
+    <div>
+      <Breadcrumb
+        parent={{
+          href: `${surfacePaths.deployments}/${id}?tab=runs&run=${encodeURIComponent(runId)}`,
+          label: "Deployment",
+        }}
+        current={run.id}
+      />
+      <PageHeader
+        title="Deployment run"
+        subtitle={run.id}
+        actions={
+          <Badge
+            variant="outline"
+            data-run-result={run.error ? "failed" : "succeeded"}
+          >
+            {run.error ? "failed" : "succeeded"}
+          </Badge>
+        }
+      />
+      <DetailSection title="Overview">
+        <FieldList>
+          <Field label="ID">
+            <IdCell id={run.id} />
+          </Field>
+          <Field label="Deployment">
+            <Link
+              className="hover:underline"
+              href={`${surfacePaths.deployments}/${run.deployment_id}`}
+            >
+              {run.deployment_id}
+            </Link>
+          </Field>
+          <Field label="Trigger">
+            <span data-trigger-type={run.trigger_context.type}>
+              {run.trigger_context.type === "manual" ? (
+                "Manual"
+              ) : (
+                <>
+                  <Time iso={run.trigger_context.scheduled_at} /> · schedule
+                </>
+              )}
+            </span>
+          </Field>
+          <Field label="Agent">
+            <Link
+              className="hover:underline"
+              href={`${surfacePaths.agents}/${encodeURIComponent(run.agent.id)}?version=${run.agent.version}`}
+            >
+              {run.agent.id} · v{run.agent.version}
+            </Link>
+          </Field>
+          <Field label="Session">
+            {run.session_id ? (
+              <Link
+                className="hover:underline"
+                href={deploymentRunSessionHref(run)}
+              >
+                {run.session_id}
+              </Link>
+            ) : (
+              "—"
+            )}
+          </Field>
+          <Field label="Created">
+            <Time iso={run.created_at} />
+          </Field>
+        </FieldList>
+      </DetailSection>
+      {run.error && (
+        <DetailSection title="Error" testId="deployment-run-error">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <p className="font-medium">{run.error.type}</p>
+            <p className="text-muted-foreground">{run.error.message}</p>
+          </div>
+        </DetailSection>
+      )}
+    </div>
+  );
+}

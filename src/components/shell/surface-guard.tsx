@@ -1,7 +1,9 @@
 "use client";
 
+import { canonicalWorkspacePath, workspaceHref } from "@/lib/platform/tenancy";
 import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { redirect, usePathname, useRouter } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import {
   ErrorState,
   ListSkeleton,
@@ -105,13 +107,15 @@ function ServiceAccountAdmission({
  */
 export function SurfaceGuard({ children }: { children: React.ReactNode }) {
   const surfaces = useSurfaces();
-  const pathname = usePathname();
+  const pathname = canonicalWorkspacePath(usePathname());
   const account = useContext(ConsoleSessionContext);
   const session = account?.data;
   const surface = surfaceOfPath(pathname);
   if (playgroundOnly(session)) {
     if (isDashboardPath(pathname) || isReportPage(pathname))
-      redirect(PLAYGROUND_ROUTE);
+      redirect(
+        workspaceHref(PLAYGROUND_ROUTE, session?.workspace_id ?? "default"),
+      );
     if (surface)
       return (
         <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { use } from "react";
-import { useRouter } from "next/navigation";
+import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
 import { PageHeader } from "@/components/shell/page-header";
 import { DetailSection, Field, FieldList } from "@/components/console/detail";
 import { Day, DetailSkeleton, ErrorState } from "@/components/console/bits";

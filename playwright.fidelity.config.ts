@@ -40,6 +40,7 @@ export default defineConfig({
     },
     {
       command: `pnpm exec next start --port ${NEXT_PORT}`,
+      env: { CONSOLE_CONTROLPLANE_URL: `http://127.0.0.1:${MOCK_PORT}` },
       url: `http://127.0.0.1:${NEXT_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
