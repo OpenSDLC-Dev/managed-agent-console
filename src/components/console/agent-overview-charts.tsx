@@ -4,16 +4,9 @@ import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import { type AgentsOverviewReport } from "@/lib/platform/agents-overview";
+import { chartSeriesColor } from "@/lib/chart-colors";
 import { niceScale } from "./cost-chart";
 
-const colors = [
-  "#257de0",
-  "#f47230",
-  "#00b894",
-  "#f2a600",
-  "#ee7fac",
-  "#9b9a96",
-];
 export const chartCard =
   "min-w-0 rounded-xl border bg-card p-4 dark:bg-muted/60";
 const dayFormatter = new Intl.DateTimeFormat(undefined, {
@@ -123,7 +116,9 @@ export function AgentOverviewCharts({
                           className="w-full rounded-[2px]"
                           style={{
                             height: (s.counts[i] / top) * 100 + "%",
-                            background: colors[j],
+                            background: chartSeriesColor(
+                              s.id === null ? null : j,
+                            ),
                           }}
                         />
                       ))}
@@ -162,7 +157,9 @@ export function AgentOverviewCharts({
                 >
                   <i
                     className="size-2 rounded-full"
-                    style={{ background: colors[i] }}
+                    style={{
+                      background: chartSeriesColor(s.id === null ? null : i),
+                    }}
                   />
                   {s.name}
                 </span>
@@ -220,7 +217,7 @@ export function AgentOverviewCharts({
                 </span>
                 <span className="flex min-w-0 items-center gap-1 pr-7">
                   <i
-                    className="block h-4 shrink-0 rounded-r-sm bg-[#257de0]"
+                    className="block h-4 shrink-0 rounded-r-sm bg-chart-1"
                     style={{
                       width: ((a.median_seconds ?? 0) / longest) * 100 + "%",
                     }}

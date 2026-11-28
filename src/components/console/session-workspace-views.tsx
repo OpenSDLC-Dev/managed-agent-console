@@ -1,5 +1,6 @@
 "use client";
 
+import { EventTypeName } from "./event-type-name";
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import Link from "@/components/shell/workspace-navigation";
@@ -140,7 +141,9 @@ export function SessionEventIndex({
               className="w-full space-y-1 rounded-md px-2 py-2 text-left text-xs hover:bg-secondary aria-pressed:bg-secondary"
             >
               <div className="flex flex-wrap justify-between gap-1">
-                <code className="break-all">{event.type}</code>
+                <code className="break-all">
+                  <EventTypeName type={event.type} />
+                </code>
                 <Time iso={event.processed_at} />
               </div>
               <p className="truncate text-muted-foreground">

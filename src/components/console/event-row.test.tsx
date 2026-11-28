@@ -87,7 +87,12 @@ describe("TranscriptRow", () => {
     const row = screen.getByTestId("event-row");
     expect(row).toHaveAttribute("data-event-type", "user.message");
     expect(screen.getByText("Aug 2, 2026, 09:12")).toBeInTheDocument();
-    expect(screen.getByText("user.message")).toBeInTheDocument();
+    const badge = row
+      .querySelector('[data-event-domain="user"]')!
+      .closest('[data-slot="badge"]')!;
+    // One flex item keeps the namespace and its dotted suffix together.
+    expect(badge.childNodes).toHaveLength(1);
+    expect(badge.firstChild?.textContent).toBe("user.message");
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
@@ -102,7 +107,12 @@ describe("TranscriptRow", () => {
     ["span.model_request_end", "border-dashed"],
   ])("styles the %s type badge by domain", (type, expectedClass) => {
     renderRow(ev(type));
-    expect(screen.getByText(type).className).toContain(expectedClass);
+    const badge = screen
+      .getByTestId("event-row")
+      .querySelector("[data-event-domain]")
+      ?.closest('[data-slot="badge"]');
+    expect(badge).toHaveTextContent(type);
+    expect(badge).toHaveClass(expectedClass);
   });
 
   it("styles agent.thinking summaries as italic muted text", () => {

@@ -9,6 +9,10 @@ The [Agents workspace comparison](./agents-console-comparison.md) records the cu
 
 The page URLs follow the saved signed-in [Agents navigation](https://github.com/OpenSDLC-Dev/managed-agents-wire-recordings/blob/9180e22cd9eb24598f976d1d030f41128b29ba8d/2026-11-07-empty-tools-followup/console-session-archived.ax.txt) and the Messages, Resources and Settings observations below. Default uses the `default` path segment. Other workspaces use their public workspace ID. Dreams uses the same workspace prefix as the other agent resources. The self-hosted Model Gateway pages use `/models` and `/providers`.
 
+## Chart, icon and code colors
+
+The [color audit](./plan/12_console-color.md) records the signed-in comparison, including the effect of dark mode, the local model catalog and grouping local gateway costs.
+
 ## Workspace settings — checked 2026-11-27
 
 The signed-in Claude Settings page lists workspaces with a search field, an archived filter and a Create workspace action. The self-hosted page shows the permanent Default row and identifies inherited organization roles in the member list. The sidebar picker switches the current tab. Resource details open on their collection when changing workspace.

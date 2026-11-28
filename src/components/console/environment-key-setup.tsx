@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode } from "./syntax-code";
 import { useState, useSyncExternalStore } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
         aria-label={label.replace(/^Copy /, "")}
         className="overflow-x-auto p-3 pr-10 font-mono text-[12px] leading-5"
       >
-        {code}
+        <SyntaxCode language="bash">{code}</SyntaxCode>
       </pre>
       <button
         type="button"

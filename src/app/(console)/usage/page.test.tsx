@@ -248,6 +248,47 @@ describe("Usage overview", () => {
     );
   });
 
+  it("preserves a daily segment when its group's costs offset across days", async () => {
+    vi.setSystemTime(new Date("2026-03-03T12:00:00Z"));
+    window.history.replaceState(null, "", "/usage?range=7");
+    const rows = [
+      { ...daily[0], day: "2026-03-01", alias: "ranked", cost: 3 },
+      { ...daily[0], day: "2026-03-01", alias: "offset", cost: 2 },
+      { ...daily[0], day: "2026-03-02", alias: "offset", cost: -2 },
+      { ...daily[0], day: "2026-03-02", alias: "ranked", cost: 3 },
+      { ...daily[0], day: "2026-03-03", alias: "credit", cost: -1 },
+    ];
+    stubGatewayFetch((_method, rest) =>
+      rest === "usage/daily" ? Response.json({ data: rows }) : undefined,
+    );
+    renderPage(<UsagePage />);
+    const bars = await screen.findByRole("list", { name: "Cost per day" });
+    const day = bars.querySelector('[data-day="2026-03-01"]')!;
+    expect(day).toHaveAttribute("data-cost", "5");
+    expect(
+      Array.from(day.querySelectorAll("[data-series-cost]"), (part) =>
+        part.getAttribute("data-series-cost"),
+      ),
+    ).toEqual(["3", "2"]);
+    expect(screen.getByLabelText("Cost series")).toHaveTextContent("Other");
+    expect(screen.getByLabelText("Cost series")).toHaveTextContent(
+      "Net after credits",
+    );
+    const mixed = bars.querySelector<HTMLElement>('[data-day="2026-03-02"]')!;
+    expect(mixed).toHaveAttribute("data-cost", "1");
+    expect(mixed.querySelector("[data-net-cost]")).toHaveAttribute(
+      "data-net-cost",
+      "1",
+    );
+    expect(mixed.querySelector("[data-series-cost]")).toBeNull();
+    expect(mixed).toHaveAccessibleName(/ranked 3\.00, Other -2\.00/);
+    act(() => mixed.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Other · -2.00");
+    expect(
+      bars.querySelector('[data-day="2026-03-03"] [data-net-cost]'),
+    ).toHaveAttribute("data-net-cost", "-1");
+  });
+
   // A read can name thousands of keys or models; a row for each would stall
   // the page (PR #223 review).
   it("probe: shows the 100 costliest groups, and says how many more there are", async () => {
@@ -275,6 +316,16 @@ describe("Usage overview", () => {
     );
     expect(shown).toHaveLength(100);
     expect(shown[0]).toHaveAttribute("data-group", "model-149");
+    const legend = screen.getByLabelText("Cost series");
+    expect(legend).toHaveTextContent("Other");
+    const parts = Array.from(
+      document.querySelectorAll("[data-series-cost]"),
+      (el) => Number(el.getAttribute("data-series-cost")),
+    );
+    expect(parts).toEqual([149, 148, 147, 146, 145, (144 * 145) / 2]);
+    expect(parts.reduce((total, value) => total + value, 0)).toBe(
+      (149 * 150) / 2,
+    );
   });
 
   // Cache writes have a price of their own (deployments.go cache_write), so

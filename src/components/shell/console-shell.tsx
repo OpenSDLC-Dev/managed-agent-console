@@ -107,7 +107,7 @@ export function ConsoleShell({
           }}
           className="flex min-w-0 items-center gap-2 justify-self-start rounded-sm font-serif text-xl leading-none"
         >
-          <Terminal aria-hidden className="size-5 shrink-0" />
+          <Terminal aria-hidden className="size-5 shrink-0 text-product-mark" />
           <span className="truncate">Agent Console</span>
         </Link>
         {!limited && (

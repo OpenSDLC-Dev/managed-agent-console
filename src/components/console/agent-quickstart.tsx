@@ -334,7 +334,7 @@ export function AgentQuickstart() {
             <Button
               size="icon-sm"
               type="submit"
-              className="rounded-full"
+              className="rounded-lg bg-product-mark text-white hover:bg-product-mark/90 disabled:opacity-80 dark:text-black"
               aria-label="Create agent"
               disabled={!description.trim() || busy || waitingForModel}
             >
@@ -365,7 +365,7 @@ export function AgentQuickstart() {
         <p className="text-sm text-muted-foreground">
           Or{" "}
           <Link
-            className="text-foreground underline underline-offset-2"
+            className="text-link underline underline-offset-2"
             href={`${surfacePaths.agents}/new`}
           >
             start from a blank agent

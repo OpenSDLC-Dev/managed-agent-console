@@ -1,3 +1,4 @@
+import { SyntaxCode } from "./syntax-code";
 import { cn } from "@/lib/utils";
 
 export function DetailSection({
@@ -57,7 +58,7 @@ export function JsonBlock({ value }: { value: unknown }) {
       tabIndex={0}
       className="overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
     >
-      {JSON.stringify(value, null, 2)}
+      <SyntaxCode language="json">{JSON.stringify(value, null, 2)}</SyntaxCode>
     </pre>
   );
 }

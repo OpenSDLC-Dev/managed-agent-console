@@ -8,7 +8,8 @@ import {
   ListSkeleton,
   UnavailableSurface,
 } from "@/components/console/bits";
-import { CostChart } from "@/components/console/cost-chart";
+import { chartSeriesLimit } from "@/lib/chart-colors";
+import { CostChart, type CostSeries } from "@/components/console/cost-chart";
 import {
   USAGE_SELECT,
   UsageFilters,
@@ -167,19 +168,9 @@ function UsageOverview() {
 
   const rows = data?.data ?? [];
   const totals = sum(rows);
-  const byDay = groupBy(rows, (r) => r.day);
-  // Every day in the span, a day without traffic drawn as zero.
-  const perDay = Array.from({ length: days }, (_, i) => {
-    const day = new Date(Date.parse(`${range.from}T00:00:00Z`) + i * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    return { day, cost: sum(byDay.get(day) ?? []).cost };
-  });
-  const groups = [
-    ...groupBy(rows, (r) =>
-      by === "principal_id" ? r.principal_id || r.api_key_id : r[by],
-    ),
-  ]
+  const groupKey = (row: GatewayDailyUsage) =>
+    by === "principal_id" ? row.principal_id || row.api_key_id : row[by];
+  const groups = [...groupBy(rows, groupKey)]
     .map(([id, group]) => ({ id, ...sum(group) }))
     .sort((a, b) => b.cost - a.cost || b.requests - a.requests);
   const groupName = (id: string) =>
@@ -188,6 +179,32 @@ function UsageOverview() {
       : by === "deployment_id"
         ? names.upstreamName(id)
         : id;
+
+  const leading = groups
+    .filter((group) => group.cost > 0)
+    .slice(0, chartSeriesLimit);
+  const rank = new Map(leading.map((group, i) => [group.id, i]));
+  const series: CostSeries[] = leading.map((group, index) => ({
+    name: groupName(group.id),
+    index,
+  }));
+  // A group's costs can offset across days while individual days still need a segment.
+  if (rows.some((row) => row.cost !== 0 && !rank.has(groupKey(row))))
+    series.push({ name: "Other", index: null });
+  const byDay = groupBy(rows, (row) => row.day);
+  const perDay = Array.from({ length: days }, (_, i) => {
+    const day = new Date(Date.parse(`${range.from}T00:00:00Z`) + i * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const parts = Array<number>(series.length).fill(0);
+    let cost = 0;
+    for (const row of byDay.get(day) ?? []) {
+      if (!row.cost) continue;
+      parts[rank.get(groupKey(row)) ?? leading.length] += row.cost;
+      cost += row.cost;
+    }
+    return { day, cost, parts };
+  });
 
   return (
     <div>
@@ -277,7 +294,11 @@ function UsageOverview() {
               data={{ cost: totals.cost }}
             />
           </div>
-          <CostChart key={`${range.from}/${range.to}`} days={perDay} />
+          <CostChart
+            key={`${range.from}/${range.to}`}
+            days={perDay}
+            series={series}
+          />
           <div className="flex items-center justify-between pb-1.5">
             <span className="text-sm font-medium">By</span>
             <span className="inline-flex gap-0.5 rounded-lg border p-0.5">

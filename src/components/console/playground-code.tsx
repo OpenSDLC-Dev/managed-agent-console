@@ -141,6 +141,7 @@ export function PlaygroundCode({
         Tab to indent. Press Escape, then Tab to move focus.
       </span>
       <SchemaTextarea
+        language={onBack || language === "JSON" ? "json" : "bash"}
         id="playground-code"
         aria-describedby={
           error

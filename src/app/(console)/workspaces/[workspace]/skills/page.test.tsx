@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -102,7 +103,9 @@ describe("SkillsPage", () => {
     expect(await panel.findByText("Version description")).toBeVisible();
     expect(panel.getByText("Latest")).toHaveAttribute("data-latest", "true");
     await userEvent.click(panel.getByRole("radio", { name: "API" }));
-    expect(panel.getByText(/"display_name": "PDF tools"/)).toBeVisible();
+    expect(
+      panel.getByText(codeText(/"display_name": "PDF tools"/)),
+    ).toBeVisible();
     await userEvent.click(panel.getByRole("button", { name: "Close details" }));
     expect(pushSpy).toHaveBeenCalledWith("/workspaces/default/skills", {
       scroll: false,

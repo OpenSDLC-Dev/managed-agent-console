@@ -33,6 +33,7 @@ describe("usage formatters", () => {
     expect(costText(1204.5)).toBe("1,204.50");
     expect(costText(0.0485)).toBe("0.05");
     expect(costText(0.000512)).toBe("0.00051");
+    expect(costText(-0.000512)).toBe("-0.00051");
     expect(costText(0)).toBe("0.00");
     expect(costText(null)).toBe("—");
   });
@@ -79,14 +80,15 @@ describe("niceScale", () => {
 });
 
 describe("CostChart", () => {
+  const series = [{ name: "Model", index: 0 }];
   const days = [
-    { day: "2026-10-13", cost: 0 },
-    { day: "2026-10-14", cost: 42.5 },
-    { day: "2026-10-15", cost: 10 },
+    { day: "2026-10-13", cost: 0, parts: [0] },
+    { day: "2026-10-14", cost: 42.5, parts: [42.5] },
+    { day: "2026-10-15", cost: 10, parts: [10] },
   ];
 
   it("draws a bar a day, each carrying its day and cost", () => {
-    render(<CostChart days={days} />);
+    render(<CostChart series={series} days={days} />);
     const bars = screen.getAllByRole("listitem");
     expect(bars.map((b) => b.getAttribute("data-cost"))).toEqual([
       "0",
@@ -105,8 +107,9 @@ describe("CostChart", () => {
       const span = Array.from({ length: n }, (_, i) => ({
         day: new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10),
         cost: 1,
+        parts: [1],
       }));
-      render(<CostChart days={span} />);
+      render(<CostChart series={series} days={span} />);
       const shown = [...document.querySelectorAll("[data-axis-day]")];
       expect(shown).toHaveLength(labels);
       const apart =
@@ -118,7 +121,7 @@ describe("CostChart", () => {
   );
 
   it("answers hover and focus with the bar's day and value", () => {
-    render(<CostChart days={days} />);
+    render(<CostChart series={series} days={days} />);
     const bar = screen.getAllByRole("listitem")[1];
     fireEvent.mouseEnter(bar);
     expect(screen.getByRole("tooltip")).toHaveTextContent(

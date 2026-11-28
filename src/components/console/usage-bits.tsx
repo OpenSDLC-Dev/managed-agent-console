@@ -44,7 +44,11 @@ export const exactCount = (n: number | null) =>
  * with no cost.
  */
 export const costText = (n: number | null) =>
-  n === null ? "—" : n > 0 && n < 0.01 ? small.format(n) : money.format(n);
+  n === null
+    ? "—"
+    : n !== 0 && Math.abs(n) < 0.01
+      ? small.format(n)
+      : money.format(n);
 
 /** "8.4s"; under a second "12ms", and under 10 ms "0.4ms", so a fast call is not "0.0s". */
 export const duration = (ms: number) =>

@@ -1,5 +1,6 @@
 "use client";
 
+import { EventTypeName } from "./event-type-name";
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import Link from "@/components/shell/workspace-navigation";
@@ -265,7 +266,9 @@ export function SessionSummary({
                       className="py-2"
                     >
                       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                        <code>{event.type}</code>
+                        <code>
+                          <EventTypeName type={event.type} />
+                        </code>
                         {event.processed_at && (
                           <Time iso={event.processed_at} />
                         )}

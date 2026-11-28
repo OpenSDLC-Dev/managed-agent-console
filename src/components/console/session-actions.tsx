@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode } from "./syntax-code";
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
 import { useWorkspaceRouter as useRouter } from "@/components/shell/workspace-navigation";
@@ -141,7 +142,9 @@ export function SessionActions({
             <details className="text-xs">
               <summary>Current metadata</summary>
               <pre className="max-h-40 overflow-auto whitespace-pre-wrap">
-                {JSON.stringify(session.metadata, null, 2)}
+                <SyntaxCode language="json">
+                  {JSON.stringify(session.metadata, null, 2)}
+                </SyntaxCode>
               </pre>
             </details>
           </div>

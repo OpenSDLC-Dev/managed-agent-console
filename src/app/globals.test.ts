@@ -231,6 +231,39 @@ describe.each(Object.entries(THEMES))(
     const surface = () => solid(vars["--destructive-surface"]);
     const on = surfaces(vars);
 
+    it.each([
+      "syntax-key",
+      "syntax-string",
+      "syntax-command",
+      "syntax-literal",
+      "syntax-comment",
+      "link",
+      "trend-positive",
+      "event-user",
+      "event-span",
+    ])("keeps %s readable on code and card surfaces", (name) => {
+      for (const background of [on["page background"], on.card, on.muted]) {
+        expect(
+          contrast(solid(vars["--" + name]), background),
+        ).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    });
+    it.each([
+      "chart-1",
+      "chart-2",
+      "chart-3",
+      "chart-4",
+      "chart-5",
+      "chart-other",
+      "chart-volume",
+    ])("keeps the %s mark visible on a chart", (name) => {
+      for (const background of [on.card, on.muted]) {
+        expect(
+          contrast(solid(vars["--" + name]), background),
+        ).toBeGreaterThanOrEqual(AA_NON_TEXT);
+      }
+    });
+
     it.each(Object.keys(on))("reads destructive text on the %s", (where) => {
       expect(
         contrast(text(), on[where as keyof typeof on]),
