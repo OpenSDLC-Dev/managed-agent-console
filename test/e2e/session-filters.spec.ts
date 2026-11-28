@@ -62,6 +62,26 @@ test("batch archive keeps failed sessions selected and retries only those rows",
   );
 });
 
+test("changing list scope with Back dismisses an unsubmitted selection confirmation", async ({
+  page,
+}) => {
+  const id = "sesn_gatedbash00000000001";
+  await signIn(page, "/workspaces/default/sessions?status=all");
+  await page.getByRole("textbox", { name: "Find session by ID" }).fill(id);
+  await expect(page).toHaveURL(new RegExp("id=" + id));
+  await page.getByLabel("Select " + id, { exact: true }).check();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Delete 1 session?" }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL("/workspaces/default/sessions?status=all");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByLabel("Select " + id, { exact: true }),
+  ).not.toBeChecked();
+});
+
 test("All includes archived sessions and restores the exact result page through history and reload", async ({
   page,
   request,

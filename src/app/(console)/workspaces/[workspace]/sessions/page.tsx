@@ -541,6 +541,7 @@ function SessionsList() {
       </div>
       <div data-selected-count={selected.length}>
         <ResourceSelectionActions
+          key={scope}
           resource="session"
           selected={selected}
           clear={() => select([])}

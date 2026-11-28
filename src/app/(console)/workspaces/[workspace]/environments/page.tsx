@@ -207,6 +207,7 @@ function EnvironmentsList() {
       </div>
       <div data-selected-count={selectedRows.length}>
         <ResourceSelectionActions
+          key={scope}
           resource="environment"
           selected={selectedRows}
           clear={() => select([])}
