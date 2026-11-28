@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiKeyStatus } from "./api-key-status";
 import { useContext, type ReactNode } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import { Popover } from "@base-ui/react/popover";
@@ -21,7 +22,6 @@ import {
   apiKeyAccountLabel,
   apiKeyCreatorLabel,
   apiKeyDisplayName,
-  apiKeyStatusLabel,
 } from "./api-key-labels";
 import { CreateKeyButton } from "./api-keys";
 import { Day, EmptyState, ErrorState, ListSkeleton } from "./bits";
@@ -316,9 +316,7 @@ function RecentKeys({ canOpenAccount }: { canOpenAccount: boolean }) {
                           {apiKeyDisplayName(key)}
                         </span>
                         {key.status !== "active" && (
-                          <span className="rounded bg-muted px-1.5 text-xs">
-                            {apiKeyStatusLabel(key.status)}
-                          </span>
+                          <ApiKeyStatus status={key.status} />
                         )}
                       </span>
                       <span className="block truncate font-mono text-xs text-muted-foreground">
@@ -425,8 +423,8 @@ export function MessagesOverview() {
                 href={href}
                 className="flex items-start gap-3 rounded-xl bg-muted/70 p-4 hover:bg-muted"
               >
-                <span className="rounded-lg bg-accent p-2">
-                  <Icon aria-hidden className="size-4 text-muted-foreground" />
+                <span className="resource-icon">
+                  <Icon aria-hidden className="size-4" />
                 </span>
                 <div>
                   <p className="text-sm font-medium">{label}</p>

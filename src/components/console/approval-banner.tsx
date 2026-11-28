@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode } from "./syntax-code";
 import { useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import {
@@ -77,9 +78,13 @@ function PendingTool({
             </span>
           </div>
           <pre className="whitespace-pre-wrap break-all rounded-md bg-secondary p-2 font-mono text-xs">
-            {event.input === undefined
-              ? "Input unavailable"
-              : JSON.stringify(event.input, null, 2)}
+            {event.input === undefined ? (
+              "Input unavailable"
+            ) : (
+              <SyntaxCode language="json">
+                {JSON.stringify(event.input, null, 2)}
+              </SyntaxCode>
+            )}
           </pre>
         </div>
       )}

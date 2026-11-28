@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode } from "./syntax-code";
 import { useState, type ReactNode, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, Copy, KeyRound, Laptop } from "lucide-react";
@@ -142,7 +143,7 @@ function CliCommand({
           </Button>
         </div>
         <pre className="mt-2 whitespace-pre-wrap wrap-anywhere py-1 font-mono text-[13px] leading-5">
-          <code>{command}</code>
+          <SyntaxCode language="bash">{command}</SyntaxCode>
         </pre>
       </div>
       <p

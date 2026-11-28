@@ -275,6 +275,16 @@ describe("Usage overview", () => {
     );
     expect(shown).toHaveLength(100);
     expect(shown[0]).toHaveAttribute("data-group", "model-149");
+    const legend = screen.getByLabelText("Cost series");
+    expect(legend).toHaveTextContent("Other");
+    const parts = Array.from(
+      document.querySelectorAll("[data-series-cost]"),
+      (el) => Number(el.getAttribute("data-series-cost")),
+    );
+    expect(parts).toEqual([149, 148, 147, 146, 145, (144 * 145) / 2]);
+    expect(parts.reduce((total, value) => total + value, 0)).toBe(
+      (149 * 150) / 2,
+    );
   });
 
   // Cache writes have a price of their own (deployments.go cache_write), so

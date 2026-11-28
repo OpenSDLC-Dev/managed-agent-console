@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiKeyStatus } from "./api-key-status";
 import { useContext, useRef, useState, type RefObject } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import {
@@ -36,7 +37,6 @@ import {
   apiKeyAccountLabel,
   apiKeyCreatorLabel,
   apiKeyDisplayName,
-  apiKeyStatusLabel,
 } from "./api-key-labels";
 import { Time } from "./bits";
 import { IdCell } from "./copy-id";
@@ -310,9 +310,7 @@ export function ApiKeyDetails({
               {apiKey.expires_at ? <Time iso={apiKey.expires_at} /> : "Never"}
             </Field>
             <Field label="Status">
-              <span data-key-status={apiKey.status}>
-                {apiKeyStatusLabel(apiKey.status)}
-              </span>
+              <ApiKeyStatus status={apiKey.status} />
             </Field>
             <Field label="Model access">
               <ModelAccessCell apiKey={apiKey} />

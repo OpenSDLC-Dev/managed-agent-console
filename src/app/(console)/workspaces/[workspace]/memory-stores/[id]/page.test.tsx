@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import { useTestSearchParams } from "@/../test/search-params";
 import "@testing-library/jest-dom/vitest";
@@ -231,7 +232,9 @@ describe("MemoryStoreDetailPage", () => {
     );
     expect(screen.getAllByText("/brief.md").length).toBeGreaterThan(0);
     expect(screen.getAllByText("modified").length).toBeGreaterThan(0);
-    expect(screen.getByText(/"owner": "research"/)).toBeInTheDocument();
+    expect(
+      screen.getByText(codeText(/"owner": "research"/)),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Add memory" }));
     expect(push).toHaveBeenCalledWith(

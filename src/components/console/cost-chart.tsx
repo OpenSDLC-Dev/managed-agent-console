@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { chartSeriesColor } from "@/lib/chart-colors";
 import { cn } from "@/lib/utils";
 import { costText, dayLabel } from "./usage-bits";
 
@@ -28,12 +29,16 @@ export function niceScale(max: number): {
   return { top, step, decimals };
 }
 
-/**
- * Cost per UTC day, one bar a day. A single series in one neutral hue, so no
- * legend: the title names it. Each bar answers hover and focus with its day
- * and value; the grouped table under the chart is its table view.
- */
-export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
+export type CostSeries = { name: string; index: number | null };
+type CostDay = { day: string; cost: number; parts: number[] };
+
+export function CostChart({
+  days,
+  series,
+}: {
+  days: CostDay[];
+  series: CostSeries[];
+}) {
   const [active, setActive] = useState<number>();
   const { top, step, decimals } = niceScale(
     Math.max(0, ...days.map((d) => d.cost)),
@@ -46,7 +51,12 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
   // overlapped across a phone's 90 days (PR #223 review).
   const every = 7 * Math.ceil(days.length / 35);
   const label = (i: number) =>
-    `${dayLabel(days[i].day)}: ${costText(days[i].cost)}`;
+    [
+      `${dayLabel(days[i].day)}: ${costText(days[i].cost)}`,
+      ...days[i].parts.flatMap((value, j) =>
+        value > 0 ? [series[j].name + " " + costText(value)] : [],
+      ),
+    ].join(", ");
   return (
     <figure className="mb-4 rounded-lg border bg-card px-3.5 pt-3 pb-1.5">
       <figcaption className="pb-1 text-[13px] font-medium">
@@ -89,14 +99,28 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
             >
               <div
                 className={cn(
-                  "w-full rounded-t-[4px] bg-muted-foreground/70",
-                  active === i && "bg-foreground",
-                  "group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                  "flex w-full flex-col-reverse overflow-hidden rounded-t-[4px]",
+                  active === i && "outline-2 outline-offset-1 outline-ring",
                 )}
                 style={{
                   height: d.cost > 0 ? `max(1px, ${(d.cost / top) * 100}%)` : 0,
                 }}
-              />
+              >
+                {d.parts.map(
+                  (cost, j) =>
+                    cost > 0 && (
+                      <span
+                        key={j}
+                        data-series={j}
+                        data-series-cost={cost}
+                        style={{
+                          flexGrow: cost / d.cost,
+                          backgroundColor: chartSeriesColor(series[j].index),
+                        }}
+                      />
+                    ),
+                )}
+              </div>
               {i % every === 0 && (
                 <span
                   className="absolute -bottom-[20px] left-1/2 -translate-x-1/2 text-[11px] whitespace-nowrap text-muted-foreground"
@@ -128,9 +152,34 @@ export function CostChart({ days }: { days: { day: string; cost: number }[] }) {
           >
             {dayLabel(days[active].day)} ·{" "}
             <b className="font-medium">{costText(days[active].cost)}</b>
+            {days[active].parts.map(
+              (value, i) =>
+                value > 0 && (
+                  <div className="max-w-64 truncate" key={i}>
+                    {series[i].name} · {costText(value)}
+                  </div>
+                ),
+            )}
           </div>
         )}
       </div>
+      {series.length > 0 && (
+        <div
+          aria-label="Cost series"
+          className="my-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+        >
+          {series.map((group, i) => (
+            <span className="inline-flex min-w-0 items-center gap-1.5" key={i}>
+              <i
+                data-series={i}
+                className="size-2 shrink-0 rounded-sm"
+                style={{ backgroundColor: chartSeriesColor(group.index) }}
+              />
+              <span className="break-all">{group.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </figure>
   );
 }

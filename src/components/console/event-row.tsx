@@ -1,5 +1,7 @@
 "use client";
 
+import { EventTypeName } from "./event-type-name";
+import { SyntaxCode } from "./syntax-code";
 import { useState, type ReactNode } from "react";
 import { Check, Copy, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +32,7 @@ function TypeBadge({ type }: { type: string }) {
         domain === "span" && "border-dashed text-muted-foreground",
       )}
     >
-      {type}
+      <EventTypeName type={type} />
     </Badge>
   );
 }
@@ -300,9 +302,11 @@ export function TranscriptCard({
           data-event-actor={displayActor}
           className={cn(
             "rounded px-1.5 py-0.5 text-foreground",
-            event.type === "user.message"
-              ? "bg-pink-100 dark:bg-pink-950"
-              : "bg-secondary",
+            event.type.startsWith("user.")
+              ? "bg-event-user/10 text-event-user"
+              : event.type.startsWith("agent.")
+                ? "bg-link/10 text-link"
+                : "bg-secondary",
           )}
         >
           {displayActor}
@@ -336,7 +340,7 @@ export function TranscriptCard({
               message && "sr-only",
             )}
           >
-            {event.type}
+            <EventTypeName type={event.type} />
           </span>
           {event.name !== undefined && (
             <span className="block break-all font-medium">{event.name}</span>
@@ -406,7 +410,9 @@ export function DebugRow({ event }: { event: SessionEvent }) {
         <TypeBadge type={event.type} />
       </div>
       <pre className="mt-1.5 overflow-x-auto rounded-md border bg-card p-2 font-mono text-[12px] leading-relaxed">
-        {JSON.stringify(event, null, 2)}
+        <SyntaxCode language="json">
+          {JSON.stringify(event, null, 2)}
+        </SyntaxCode>
       </pre>
     </div>
   );

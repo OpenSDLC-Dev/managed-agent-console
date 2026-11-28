@@ -1,4 +1,6 @@
 "use client";
+import { SyntaxCode, sourceLanguage } from "./syntax-code";
+import { SchemaTextarea } from "./schema-textarea";
 import { useState } from "react";
 import { ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -72,19 +74,21 @@ export function AgentConfigView({
         </Button>
       </header>
       {onEdit && format === "YAML" ? (
-        <textarea
+        <SchemaTextarea
+          language="yaml"
+          indentWithTab={false}
           aria-label="Agent configuration"
           spellCheck={false}
           className="min-h-52 w-full flex-1 resize-y rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-5"
           value={code}
-          onChange={(e) => onEdit(e.target.value)}
+          onValueChange={onEdit}
         />
       ) : (
         <pre
           tabIndex={0}
           className="min-h-32 flex-1 overflow-auto rounded-lg bg-muted/70 p-3 text-xs leading-5"
         >
-          <code>{code}</code>
+          <SyntaxCode language={sourceLanguage(format)}>{code}</SyntaxCode>
         </pre>
       )}
     </section>

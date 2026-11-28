@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode, fileLanguage } from "./syntax-code";
 import { useState, type ComponentProps } from "react";
 import { FileText, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,9 @@ function FileContent({ file }: { file: PlatformFile }) {
   if (preview)
     return (
       <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted p-3 text-xs">
-        {content.data}
+        <SyntaxCode language={fileLanguage(file.mime_type, file.filename)}>
+          {content.data}
+        </SyntaxCode>
       </pre>
     );
   return (

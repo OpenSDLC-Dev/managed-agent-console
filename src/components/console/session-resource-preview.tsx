@@ -1,4 +1,5 @@
 "use client";
+import { SyntaxCode, fileLanguage } from "./syntax-code";
 import { surfacePaths } from "@/lib/routes";
 import { ResourceDownload } from "./resource-download";
 
@@ -186,7 +187,11 @@ function FilePreview({
               <p aria-busy="true">Loading content…</p>
             ) : (
               <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs">
-                {content.data}
+                <SyntaxCode
+                  language={fileLanguage(data.mime_type, data.filename)}
+                >
+                  {content.data}
+                </SyntaxCode>
               </pre>
             ))}
         </>

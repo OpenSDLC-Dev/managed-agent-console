@@ -33,7 +33,7 @@ function reportedTokens(row: GatewayDailyUsage) {
   );
 }
 
-type Day = { day: string; requests: number; tokens: number };
+type Day = { day: string; requests: number; tokens: number; cacheRead: number };
 
 function weeklyVolume(rows: GatewayDailyUsage[], from: string) {
   const start = Date.parse(`${from}T00:00:00Z`);
@@ -41,6 +41,7 @@ function weeklyVolume(rows: GatewayDailyUsage[], from: string) {
     day: new Date(start + i * 86_400_000).toISOString().slice(0, 10),
     requests: 0,
     tokens: 0,
+    cacheRead: 0,
   }));
   const byDay = new Map(days.map((d) => [d.day, d]));
   let requests = 0;
@@ -51,59 +52,90 @@ function weeklyVolume(rows: GatewayDailyUsage[], from: string) {
     const count = reportedTokens(row);
     day.requests += row.requests;
     day.tokens += count;
+    day.cacheRead += row.cache_read_tokens;
     requests += row.requests;
     tokens += count;
   }
   return { days, requests, tokens };
 }
 
-function TokenTrend({ days }: { days: Day[] }) {
-  const peak = Math.max(...days.map((d) => d.tokens));
+function WeeklyTrend({
+  days,
+  metric,
+}: {
+  days: Day[];
+  metric: "tokens" | "cacheRead";
+}) {
+  const peak = Math.max(...days.map((d) => d[metric]));
   if (!peak) return null;
-
-  // Rollups merge missing upstream counts with zero. Leave a gap for a day
-  // that has requests but no recorded tokens. An empty day is a known zero.
-  const points = days.map(({ day, requests, tokens }, i) => {
-    if (requests && !tokens) return { day, tokens: null };
-    const x = 2 + 26 * i;
-    const y = 38 - (tokens / peak) * 35;
-    const previous = days[i - 1];
-    const move = !previous || (previous.requests && !previous.tokens);
-    const command = `${move ? "M" : "L"}${x},${y}`;
-    return { day, tokens, x, y, command };
+  // An active day with no reported tokens has unknown usage, not a measured zero.
+  const points = days.map((d, i) => {
+    const value = d.requests && !d.tokens ? null : d[metric];
+    const height = value === null ? 0 : (value / peak) * 35;
+    return { day: d.day, value, x: 11 + 23 * i, y: 38 - height, height };
   });
   const description = points
     .map(
       (p) =>
-        `${dayLabel(p.day)}: ${p.tokens === null ? "no tokens recorded" : exactCount(p.tokens)}`,
+        dayLabel(p.day) +
+        ": " +
+        (p.value === null ? "no tokens recorded" : exactCount(p.value)),
     )
     .join(", ");
+  const tokens = metric === "tokens";
+  const label = tokens
+    ? "Reported tokens per UTC day"
+    : "Cache read tokens per UTC day, last 7 days";
   return (
     <svg
       role="img"
-      aria-label={`Reported tokens per UTC day. ${description}.`}
+      aria-label={label + ". " + description + "."}
       viewBox="0 0 160 42"
-      className="h-10 w-24 shrink-0 text-muted-foreground @min-[36rem]:w-40"
+      className={cn(
+        "h-10 w-24 shrink-0",
+        tokens ? "text-chart-volume @min-[36rem]:w-40" : "text-chart-1",
+      )}
     >
-      <path
-        d={points.map((p) => p.command).join(" ")}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
+      {!tokens && (
+        <path
+          d={points
+            .map((p, i) =>
+              p.value === null
+                ? ""
+                : `${i === 0 || points[i - 1].value === null ? "M" : "L"}${p.x},${p.y}`,
+            )
+            .join(" ")}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      )}
       {points.map(
         (p) =>
-          p.tokens !== null && (
+          p.value !== null &&
+          (tokens ? (
+            <rect
+              key={p.day}
+              x={p.x - 5}
+              y={p.y}
+              width="10"
+              height={p.height}
+              rx="1"
+              fill="currentColor"
+              data-day={p.day}
+              data-tokens={p.value}
+            />
+          ) : (
             <circle
               key={p.day}
               cx={p.x}
               cy={p.y}
-              r="1.75"
+              r="1.5"
               fill="currentColor"
               data-day={p.day}
-              data-tokens={p.tokens}
+              data-cache-read={p.value}
             />
-          ),
+          )),
       )}
     </svg>
   );
@@ -267,8 +299,10 @@ export function DashboardUsage() {
                 ? "No tokens recorded"
                 : "tokens reused this month"
           }
-          help="Cache read tokens reported by upstream models since the start of the UTC month."
-        />
+          help="Cache read tokens since the start of the UTC month. The trend shows the last seven UTC days."
+        >
+          {week && <WeeklyTrend days={week.days} metric="cacheRead" />}
+        </MetricCard>
         <MetricCard
           title="Token volume"
           metric="tokens"
@@ -283,7 +317,7 @@ export function DashboardUsage() {
           }
           help="Input, output, cache write and cache read tokens reported over the last seven UTC days."
         >
-          {week && <TokenTrend days={week.days} />}
+          {week && <WeeklyTrend days={week.days} metric="tokens" />}
         </MetricCard>
       </section>
     </TooltipProvider>

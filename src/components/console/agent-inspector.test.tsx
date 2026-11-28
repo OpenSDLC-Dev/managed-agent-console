@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
@@ -81,7 +82,7 @@ it("shows model/version and resolves the displayed tool rows through the existin
   expect(screen.getByText("No skills configured.")).toBeVisible();
   expect(screen.getByText("No subagents configured.")).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "API" }));
-  expect(screen.getByText(/"permission_policy":/)).toBeVisible();
+  expect(screen.getByText(codeText(/"permission_policy":/))).toBeVisible();
   await userEvent.click(screen.getByRole("button", { name: "Rendered" }));
   expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute(
     "href",
@@ -125,7 +126,7 @@ it("keeps server/unknown tool data readable and links custom skills and the pinn
     "/workspaces/default/agents/" + agents[1].id,
   );
   await userEvent.click(screen.getByText("Metadata"));
-  expect(screen.getByText(/"team": "research"/)).toBeVisible();
+  expect(screen.getByText(codeText(/"team": "research"/))).toBeVisible();
   await userEvent.click(
     screen.getByRole("button", { name: /Tool permissions/ }),
   );

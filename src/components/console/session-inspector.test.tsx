@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
@@ -166,8 +167,8 @@ it("renders pinned resources and bounded activity without inventing runtime or b
   expect(params.get("order")).toBe("desc");
   expect(params.get("limit")).toBe("40");
   await userEvent.click(screen.getByRole("button", { name: "API" }));
-  expect(screen.getByText(/"next_page": "older"/)).toBeVisible();
-  expect(screen.getByText(/"stats":/)).toBeVisible();
+  expect(screen.getByText(codeText(/"next_page": "older"/))).toBeVisible();
+  expect(screen.getByText(codeText(/"stats":/))).toBeVisible();
 });
 
 it("retains empty activity and closes or traverses the visible page", async () => {
@@ -195,7 +196,7 @@ it("keeps session details when only the activity endpoint fails", async () => {
   expect(screen.getByRole("heading", { name: session.title })).toBeVisible();
   expect(screen.queryByText("No events yet.")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "API" }));
-  expect(screen.getByText(/"stats":/)).toBeVisible();
+  expect(screen.getByText(codeText(/"stats":/))).toBeVisible();
   expect(screen.getByText("Activity unavailable")).toBeVisible();
 });
 

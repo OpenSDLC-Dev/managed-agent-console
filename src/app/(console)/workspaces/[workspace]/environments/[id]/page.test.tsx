@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -269,7 +270,7 @@ it("shows the complete environment response in inspector API view", async () => 
   await screen.findByRole("heading", { name: "Prod sandbox" });
   await userEvent.click(screen.getByRole("radio", { name: "API" }));
   expect(screen.getByText(/GET \/v1\/environments\/env_1/)).toBeInTheDocument();
-  const pre = screen.getByText(/"allowed_hosts"/);
+  const pre = screen.getByText(codeText(/"allowed_hosts"/));
   expect(JSON.parse(pre.textContent!)).toEqual(environment());
   await userEvent.click(screen.getByRole("radio", { name: "Rendered" }));
   expect(

@@ -2,6 +2,8 @@
 
 import { useLayoutEffect, useRef, type ComponentProps } from "react";
 
+import { SyntaxCode, highlightLimit, type SyntaxLanguage } from "./syntax-code";
+
 type Props = Omit<
   ComponentProps<"textarea">,
   "value" | "onChange" | "onKeyDown"
@@ -9,6 +11,7 @@ type Props = Omit<
   value: string;
   onValueChange: (value: string) => void;
   indentWithTab?: boolean;
+  language?: SyntaxLanguage;
 };
 
 /** A JSON draft editor that lets keyboard users indent without trapping focus. */
@@ -16,9 +19,35 @@ export function SchemaTextarea({
   value,
   onValueChange,
   indentWithTab = true,
+  language,
   ...props
 }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
+  const mirror = useRef<HTMLPreElement>(null);
+  const highlight = Boolean(language && value.length <= highlightLimit);
+  useLayoutEffect(() => {
+    const field = input.current;
+    const preview = mirror.current;
+    if (!field || !preview) return;
+    const sync = () => {
+      // clientWidth/Height exclude the native scrollbars on Windows and Linux.
+      preview.style.width = field.clientWidth + "px";
+      preview.style.height = field.clientHeight + "px";
+      preview.style.left = field.offsetLeft + field.clientLeft + "px";
+      preview.style.top = field.offsetTop + field.clientTop + "px";
+      preview.scrollLeft = field.scrollLeft;
+      preview.scrollTop = field.scrollTop;
+    };
+    sync();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+    observer?.observe(field);
+    field.addEventListener("scroll", sync);
+    return () => {
+      observer?.disconnect();
+      field.removeEventListener("scroll", sync);
+    };
+  }, [highlight]);
   const exitOnTab = useRef(false);
   const caret = useRef<number | null>(null);
   useLayoutEffect(() => {
@@ -27,10 +56,11 @@ export function SchemaTextarea({
       caret.current = null;
     }
   }, [value]);
-  return (
+  const textarea = (
     <textarea
       {...props}
       ref={input}
+      data-syntax-input={highlight || undefined}
       value={value}
       onBlur={() => {
         exitOnTab.current = false;
@@ -81,5 +111,23 @@ export function SchemaTextarea({
         }
       }}
     />
+  );
+  // Keep the native control mounted across the size limit to retain focus, undo and selection.
+  if (!language) return textarea;
+  return (
+    <div className="syntax-editor">
+      {textarea}
+      {highlight && (
+        <pre
+          aria-hidden="true"
+          ref={mirror}
+          className={props.className}
+          data-wrap={props.wrap}
+        >
+          <SyntaxCode language={language}>{value}</SyntaxCode>
+          {"\n"}
+        </pre>
+      )}
+    </div>
   );
 }

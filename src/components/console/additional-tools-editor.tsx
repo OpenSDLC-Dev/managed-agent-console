@@ -284,6 +284,7 @@ export function AdditionalToolsEditor({
                     out of the editor.
                   </p>
                   <SchemaTextarea
+                    language="json"
                     id={`${prefix}-tool-${index}-schema`}
                     rows={7}
                     spellCheck={false}

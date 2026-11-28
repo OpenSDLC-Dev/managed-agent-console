@@ -435,6 +435,7 @@ export function PlaygroundTools({
                   <div className="space-y-1.5">
                     <Label htmlFor={`${prefix}-schema`}>Input schema</Label>
                     <SchemaTextarea
+                      language="json"
                       id={`${prefix}-schema`}
                       value={
                         edit?.text ??

@@ -128,6 +128,7 @@ function Metric({
   help?: string;
   caption: string;
 }) {
+  const improvement = title === "Error rate" ? -(change ?? 0) : (change ?? 0);
   return (
     <section
       className={
@@ -162,9 +163,16 @@ function Metric({
           <span
             aria-label={pct(change) + " change"}
             data-change-percent={change}
-            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+            data-trend={
+              improvement === 0
+                ? "flat"
+                : improvement > 0
+                  ? "positive"
+                  : "negative"
+            }
+            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs data-[trend=positive]:bg-trend-positive/10 data-[trend=positive]:text-trend-positive data-[trend=negative]:bg-destructive/10 data-[trend=negative]:text-destructive"
           >
-            {change < 0 ? (
+            {change === 0 ? null : change < 0 ? (
               <ArrowDown className="size-3" />
             ) : (
               <ArrowUp className="size-3" />
@@ -377,7 +385,7 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                 )}
                 {data.total > data.agents.length && (
                   <Link
-                    className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted"
+                    className="mt-3 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-link underline underline-offset-2 hover:bg-muted"
                     href={surfacePaths.agents}
                   >
                     Show more
@@ -406,7 +414,9 @@ export function AgentsOverview({ agentId }: { agentId?: string }) {
                     " group flex items-start gap-3 hover:bg-muted/60"
                   }
                 >
-                  <x.icon className="mt-0.5 size-4" />
+                  <span className="resource-icon">
+                    <x.icon aria-hidden className="size-4" />
+                  </span>
                   <div className="grow">
                     <b className="text-sm font-medium">{x.title}</b>
                     <p className="mt-1 text-[13px] text-muted-foreground">

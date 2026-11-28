@@ -4,6 +4,10 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Plan 12 — Console color audit
+
+The [signed-in comparison](./plan/12_console-color.md) found neutral resource shortcuts and unhighlighted YAML on the previous build. Browser regressions now compare legend swatches to the painted bars and verify the edited source, clipboard, native scrolling and forced-color fallback. Local gateway fixtures exercise both themes without a model request.
+
 ## Plan 11 — Portable agent harness acceptance
 
 Windows Claude Code, Codex CLI and Linux Antigravity CLI discovered project skills and dispatched a named reviewer against isolated loopback endpoints. The parent and child used the same model and reasoning settings. Untrusted Codex hooks produced no startup receipt, and the trusted project guard refused a write from triage. A fresh Antigravity session named the damaged adapter. A plain Claude subdirectory launch required the root settings file to deliver the receipt. [Acceptance evidence](https://github.com/OpenSDLC-Dev/managed-agent-console/pull/289)

@@ -102,6 +102,15 @@ it("links UTC month and week totals to their matching Usage view and charts repo
   const chart = await screen.findByRole("img", {
     name: /Reported tokens per UTC day/,
   });
+  const cache = screen.getByRole("img", {
+    name: /Cache read tokens per UTC day/,
+  });
+  expect(cache.querySelector(`[data-day="${first}"]`)).toHaveAttribute(
+    "data-cache-read",
+    "6",
+  );
+  expect(cache.querySelector('[data-day="2028-02-27"]')).toBeNull();
+  expect(chart.querySelector("rect")).not.toBeNull();
   const overview = screen.getByRole("region", { name: "Usage overview" });
   expect(within(overview).getByRole("heading", { level: 2 })).toHaveTextContent(
     "Usage overview",

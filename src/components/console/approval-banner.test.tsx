@@ -1,3 +1,4 @@
+import { codeText } from "@/../test/code-text";
 import { withTestSession } from "@/../test/session-fixture";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -70,7 +71,7 @@ describe("ApprovalBanner", () => {
     expect(screen.getByText("Waiting on 2 tool approvals")).toBeDefined();
     expect(screen.getByText("Bash")).toBeDefined();
     expect(
-      screen.getByText(/"command": "rm -rf \/tmp\/scratch"/),
+      screen.getByText(codeText(/"command": "rm -rf \/tmp\/scratch"/)),
     ).toBeDefined();
     expect(screen.getByText("WebFetch")).toBeDefined();
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);

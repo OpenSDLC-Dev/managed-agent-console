@@ -1,5 +1,6 @@
 "use client";
 
+import { ApiKeyStatus } from "./api-key-status";
 import {
   useCallback,
   useContext,
@@ -30,7 +31,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUpdateApiKey } from "@/lib/platform/queries";
 import type { ApiKeyListItem } from "@/lib/platform/types";
-import { cn } from "@/lib/utils";
 import { Day, EmptyState, ErrorState } from "./bits";
 import { ApiKeyActions, ApiKeyDetails } from "./api-key-detail";
 import {
@@ -422,15 +422,7 @@ export function ApiKeysTable({
                         >
                           {apiKeyDisplayName(key)}
                         </button>
-                        <span
-                          data-key-status={key.status}
-                          className={cn(
-                            "rounded bg-muted px-1.5 text-xs text-muted-foreground",
-                            key.status === "active" && "sr-only",
-                          )}
-                        >
-                          {apiKeyStatusLabel(key.status)}
-                        </span>
+                        <ApiKeyStatus status={key.status} hideActive />
                       </div>
                       <p className="truncate text-[13px] text-muted-foreground">
                         {key.partial_key_hint}

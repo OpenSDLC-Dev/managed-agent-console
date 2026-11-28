@@ -4,6 +4,8 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
+[Plan 12](./docs/plan/12_console-color.md) records chart, icon and code color differences. Its [browser regressions](./test/e2e/console-colors.spec.ts) exercise both themes.
+
 [Workspace management](./test/e2e/workspace-management.spec.ts) covers creation, grants, switching and archive. Workspace URLs select their own scope per tab. Grant changes release resource caches and in-flight streams. The [two-tab browser contract](./test/e2e/workspace-clients.spec.ts) accompanies [Platform plan 42](https://github.com/OpenSDLC-Dev/managed-agent-platform/blob/main/docs/plan/42_multi-tenant-activation.md). See the [page addresses](./README.md), [change for existing bookmarks](./CHANGELOG.md) and [Agents directory reload and history checks](./test/e2e/agent-inspector.spec.ts).
 
 The Agents workspace Overview, guided Create and directory creation flows are ready for owner verification.

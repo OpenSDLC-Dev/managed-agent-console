@@ -1,5 +1,6 @@
 "use client";
 
+import { SyntaxCode } from "./syntax-code";
 import { surfacePaths } from "@/lib/routes";
 import {
   AdditionalToolsEditor,
@@ -360,7 +361,7 @@ function CurlBlock({
             </Button>
           </div>
           <pre className="mt-2 overflow-x-auto rounded-lg border bg-card p-3 font-mono text-[12px] leading-relaxed">
-            {command}
+            <SyntaxCode language="bash">{command}</SyntaxCode>
           </pre>
         </>
       )}
@@ -1378,7 +1379,7 @@ export function AgentEditorFields({
                 <pre
                   ref={gutter}
                   aria-hidden
-                  className="pointer-events-none absolute inset-y-px left-px w-9 overflow-hidden border-r bg-muted/40 py-3 pr-2 text-right font-mono text-[12px] leading-relaxed text-muted-foreground"
+                  className="pointer-events-none absolute z-10 inset-y-px left-px w-9 overflow-hidden border-r bg-muted/40 py-3 pr-2 text-right font-mono text-[12px] leading-relaxed text-muted-foreground"
                 >
                   {raw.text
                     .split("\n")
@@ -1387,6 +1388,7 @@ export function AgentEditorFields({
                 </pre>
               )}
               <SchemaTextarea
+                language={raw.format}
                 wrap={creationPage ? "off" : undefined}
                 onScroll={(event) => {
                   if (gutter.current)

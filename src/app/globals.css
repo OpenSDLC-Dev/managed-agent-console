@@ -16,6 +16,12 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-event-user: var(--event-user);
+  --color-event-span: var(--event-span);
+  --color-link: var(--link);
+  --color-product-mark: var(--product-mark);
+  --color-chart-volume: var(--chart-volume);
+  --color-trend-positive: var(--trend-positive);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -93,11 +99,23 @@
    * a fill of this very colour and the halo is the whole indicator.
    */
   --ring: #0b0b0b;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: #276fc3;
+  --chart-2: #c35722;
+  --chart-3: #00816b;
+  --chart-4: #a16b00;
+  --chart-5: #bb5283;
+  --chart-other: #858583;
+  --chart-volume: #197b38;
+  --event-user: #9e3265;
+  --event-span: #6341a3;
+  --link: #26599b;
+  --product-mark: #ae5035;
+  --trend-positive: #17663c;
+  --syntax-key: #af3035;
+  --syntax-string: #23682e;
+  --syntax-command: #334ca1;
+  --syntax-literal: #79448c;
+  --syntax-comment: #595d62;
   --radius: 0.5rem;
   --sidebar: #f9f9f7;
   --sidebar-foreground: #0b0b0b;
@@ -146,11 +164,23 @@
      `ring-ring/50` multiplied to 0.20 — 1.70:1. Opaque the border reads
      11.02:1 in Chrome and the halo 3.88:1. */
     --ring: hsl(51 16.5% 84.5%);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --chart-1: #76acff;
+    --chart-2: #ff975e;
+    --chart-3: #42c8aa;
+    --chart-4: #efb44d;
+    --chart-5: #ed96ba;
+    --chart-other: #a5a5a2;
+    --chart-volume: #62ca80;
+    --event-user: #f4a5cb;
+    --event-span: #cab2ff;
+    --link: #a4c7ff;
+    --product-mark: #eba688;
+    --trend-positive: #80d6a2;
+    --syntax-key: #ffa39f;
+    --syntax-string: #a1dca3;
+    --syntax-command: #a3bbff;
+    --syntax-literal: #dfb1ef;
+    --syntax-comment: #bcbfbf;
     --sidebar: hsl(30 3.3% 11.8%); /* bg-200 #1f1e1d */
     --sidebar-foreground: hsl(48 33.3% 97.1%);
     --sidebar-primary: hsl(48 33.3% 97.1%);
@@ -253,5 +283,86 @@ html:has([data-resource-library] [data-selected-count])
     --popover: #303030;
     --muted: #3b3b3b;
     --secondary: #4a4a4a;
+  }
+}
+
+.resource-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  color: var(--link);
+  background-color: color-mix(in srgb, var(--link) 11%, transparent);
+}
+
+.syntax-editor {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.syntax-editor:has(> textarea.flex-1) {
+  flex: 1;
+}
+.syntax-editor > pre {
+  position: absolute;
+  margin: 0;
+  border: 0;
+  pointer-events: none;
+  overflow: hidden;
+  resize: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-variant-ligatures: none;
+}
+.syntax-editor > pre[data-wrap="off"] {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.syntax-editor > textarea[data-syntax-input] {
+  position: relative;
+  z-index: 1;
+  background-color: transparent;
+  color: transparent;
+  caret-color: var(--foreground);
+  font-variant-ligatures: none;
+}
+.syntax-editor > textarea[data-syntax-input]::selection {
+  background-color: Highlight;
+  color: HighlightText;
+}
+.syntax-editor > textarea[data-syntax-input]::placeholder {
+  color: var(--muted-foreground);
+}
+.syntax-editor > pre > code {
+  font: inherit;
+}
+
+code[data-language] .token:is(.key, .property, .parameter, .tag, .attr-name) {
+  color: var(--syntax-key);
+}
+code[data-language] .token:is(.string, .char, .attr-value, .heredoc-string) {
+  color: var(--syntax-string);
+}
+code[data-language] .token:is(.function, .builtin, .keyword, .class-name) {
+  color: var(--syntax-command);
+}
+code[data-language] .token:is(.number, .boolean, .null, .variable, .constant) {
+  color: var(--syntax-literal);
+}
+code[data-language] .token.comment {
+  color: var(--syntax-comment);
+}
+
+@media (forced-colors: active), print {
+  .syntax-editor > pre {
+    display: none;
+  }
+  .syntax-editor > textarea[data-syntax-input] {
+    color: CanvasText;
+    caret-color: auto;
   }
 }

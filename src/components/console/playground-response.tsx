@@ -1,3 +1,4 @@
+import { SyntaxCode } from "./syntax-code";
 import { Popover } from "@base-ui/react/popover";
 import { ChevronRight, Copy, Wrench } from "lucide-react";
 import { useId, useLayoutEffect, useRef, useState } from "react";
@@ -78,7 +79,7 @@ function StreamingInput({ index, name, tail, clipped }: ToolInputPreview) {
         }}
       >
         {clipped && "…"}
-        {tail}
+        <SyntaxCode language="json">{tail}</SyntaxCode>
       </pre>
     </div>
   );
@@ -157,9 +158,11 @@ function ToolBlockCard({
         {open && (
           <>
             {!result && name + "("}
-            <code aria-label={`${result ? "Result" : "Arguments"} for ${name}`}>
-              {JSON.stringify(result ? block.content : block.input, null, 2)}
-            </code>
+            <span aria-label={`${result ? "Result" : "Arguments"} for ${name}`}>
+              <SyntaxCode language="json">
+                {JSON.stringify(result ? block.content : block.input, null, 2)}
+              </SyntaxCode>
+            </span>
             {!result && ")"}
           </>
         )}
@@ -318,7 +321,13 @@ export function PlaygroundResponse({
               className="overflow-x-auto rounded-lg bg-muted/40 p-3 font-mono text-xs leading-5"
               tabIndex={0}
             >
-              <code>{reply.raw}</code>
+              <SyntaxCode
+                language={
+                  reply.rawLabel === "Response body" ? "json" : undefined
+                }
+              >
+                {reply.raw}
+              </SyntaxCode>
             </pre>
           </>
         ) : status === "running" && !toolInputs.length ? (

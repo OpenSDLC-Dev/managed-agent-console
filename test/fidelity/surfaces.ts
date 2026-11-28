@@ -3315,6 +3315,16 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "agent-create-raw-yaml",
+    route: "/workspaces/default/agents/new",
+    fixture: "unsaved blank agent",
+    description: "Editable YAML syntax, native caret and line-number gutter.",
+    setup: async (page) => {
+      await page.getByRole("radio", { name: "raw", exact: true }).click();
+      await page.getByRole("textbox", { name: "Raw agent config" }).waitFor();
+    },
+  },
+  {
     id: "agent-create",
     route: "/workspaces/default/agents",
     fixture: "blank configuration form",
