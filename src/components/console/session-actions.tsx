@@ -28,11 +28,15 @@ export function SessionActions({
   session,
   onDeleted,
   compact = false,
+  ended = false,
 }: {
   session: Session;
   onDeleted?: () => void;
   compact?: boolean;
+  ended?: boolean;
 }) {
+  const canEdit =
+    !ended && !session.archived_at && session.status !== "terminated";
   const router = useRouter();
   const update = useUpdateSession(session.id);
   const interrupt = useSendEvents(session.id);
@@ -61,7 +65,7 @@ export function SessionActions({
 
   return (
     <>
-      {!session.archived_at && !compact && (
+      {canEdit && !compact && (
         <Button
           variant="outline"
           size="sm"
@@ -80,7 +84,7 @@ export function SessionActions({
       <ResourceActions
         resource="session"
         onInterrupt={
-          !session.archived_at
+          canEdit
             ? () => interrupt.mutate([{ type: "user.interrupt" }])
             : undefined
         }
@@ -109,7 +113,7 @@ export function SessionActions({
           {interrupt.error.message}
         </p>
       )}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && canEdit} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit session</DialogTitle>

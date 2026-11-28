@@ -19,7 +19,7 @@ import { ResourceActions } from "@/components/console/resource-actions";
 import { CreateEnvironmentButton } from "@/components/console/create-environment-dialog";
 import { ResourceInspector } from "@/components/console/resource-inspector";
 import { EnvironmentDetail } from "@/components/console/environment-detail";
-import { EnvironmentSelectionActions } from "@/components/console/environment-selection-actions";
+import { ResourceSelectionActions } from "@/components/console/resource-selection-actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusFilter } from "@/components/console/status-filter";
@@ -206,7 +206,9 @@ function EnvironmentsList() {
         />
       </div>
       <div data-selected-count={selectedRows.length}>
-        <EnvironmentSelectionActions
+        <ResourceSelectionActions
+          key={scope}
+          resource="environment"
           selected={selectedRows}
           clear={() => select([])}
           onComplete={(succeeded, action) => {

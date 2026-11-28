@@ -104,6 +104,7 @@ function setup(
     resources = [repository, memoryResources[0]] as unknown[],
     files = [] as PlatformFile[],
     filesStatus = 200,
+    status = sessions[0].status,
     // Rendered as the page renders it, the session read from its query, and
     // that read held where a test says so.
     live = false,
@@ -111,6 +112,7 @@ function setup(
 ) {
   const session = {
     ...sessions[0],
+    status,
     resources,
     archived_at: archived ? "2026-09-01T00:00:00Z" : null,
   } as unknown as Session;
@@ -964,6 +966,11 @@ it("submits replacement tokens only in the write request and clears the input", 
   expect(screen.getByLabelText("Authorization token")).toHaveValue("");
 });
 
+it("supports resource management until a terminal session is archived", () => {
+  setup(false, { status: "terminated" });
+  expect(screen.getByRole("button", { name: "Attach file" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Rotate token" })).toBeEnabled();
+});
 it("renders archived attachments without mutation controls", () => {
   setup(true);
   expect(screen.getByText(repository.url)).toBeInTheDocument();

@@ -38,7 +38,8 @@ test("edit metadata, archive and delete a session", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/workspaces/default/sessions/sesn_gatedbash00000000001");
   await expect(page.getByText("archived", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Message to the session")).toBeDisabled();
+  await expect(page.getByText("The session has terminated.")).toBeVisible();
+  await expect(page.getByLabel("Message to the session")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Approve", exact: true }),
   ).toBeHidden();

@@ -207,6 +207,109 @@ afterEach(() => {
 });
 
 describe("SessionDetailPage", () => {
+  it("shows the measured active time, complete input and a read-only footer for an unarchived terminal session", async () => {
+    setTrace("closed", [ev("old", "session.status_running")]);
+    const base = session();
+    stubFetch({
+      session: {
+        ...base,
+        status: "terminated",
+        usage: {
+          ...base.usage,
+          active_seconds: 2.5,
+          cache_creation: {
+            ephemeral_1h_input_tokens: 10,
+            ephemeral_5m_input_tokens: 20,
+          },
+        },
+      },
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+    expect(screen.getByTestId("session-effective-status")).toHaveAttribute(
+      "data-status",
+      "terminated",
+    );
+    expect(screen.getByTestId("usage-chip")).toHaveAttribute(
+      "data-total-input-tokens",
+      "1353",
+    );
+    expect(document.querySelector("[data-active-seconds]")).toHaveAttribute(
+      "data-active-seconds",
+      "2.5",
+    );
+    expect(screen.getByText("The session has terminated.")).toBeVisible();
+    expect(screen.queryByLabelText("Message to the session")).toBeNull();
+  });
+  it("stops elapsed time at termination even when the session is archived later", async () => {
+    setTrace("closed", [
+      ev("end", "session.status_terminated", {
+        processed_at: "2026-08-01T09:14:00Z",
+      }),
+    ]);
+    stubFetch({
+      session: session({
+        status: "terminated",
+        archived_at: "2026-08-02T08:00:00Z",
+      }),
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Debug run" });
+    expect(document.querySelector("[data-session-elapsed-ms]")).toHaveAttribute(
+      "data-session-elapsed-ms",
+      "120000",
+    );
+  });
+  it("counts pending calls but computes the median from measured results and isolates processed confirmations", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/workspaces/default/sessions/sess_1?inspector=tools",
+    );
+    setTrace("closed", [
+      ev("start", "user.message", { content: "Read three files" }),
+      ev("call1", "agent.tool_use", { name: "read" }),
+      ev("confirm", "user.tool_confirmation", {
+        tool_use_id: "call1",
+        result: "allow",
+        processed_at: "2026-08-01T09:12:01Z",
+      }),
+      ev("done", "agent.tool_result", {
+        tool_use_id: "call1",
+        processed_at: "2026-08-01T09:12:04Z",
+      }),
+      ev("call2", "agent.tool_use", { name: "read" }),
+      ev("failure", "agent.tool_result", {
+        tool_use_id: "call2",
+        is_error: true,
+        processed_at: "2026-08-01T09:12:08Z",
+      }),
+      ev("call3", "agent.tool_use", { name: "read", processed_at: null }),
+      ev("other", "agent.custom_tool_use", { name: "lookup" }),
+    ]);
+    stubFetch({ session: session() });
+    renderPage();
+    const search = await screen.findByRole("textbox", { name: "Filter tools" });
+    await userEvent.type(search, "read");
+    expect(document.querySelector('[data-tool-name="lookup"]')).toBeNull();
+    const row = document.querySelector<HTMLElement>('[data-tool-name="read"]')!;
+    expect(row).toHaveAttribute("data-call-count", "3");
+    expect(row).toHaveAttribute("data-failed-count", "1");
+    expect(row).toHaveAttribute("data-median-elapsed-ms", "6000");
+    await userEvent.click(row);
+    expect(document.querySelector('[data-call-id="call1"]')).toHaveAttribute(
+      "data-approval-wait-ms",
+      "1000",
+    );
+    expect(document.querySelector('[data-call-id="call2"]')).toHaveAttribute(
+      "data-outcome",
+      "Failed",
+    );
+    expect(
+      document.querySelector('[data-call-id="call3"]'),
+    ).not.toHaveAttribute("data-elapsed-ms");
+  });
+
   it("shows the detail skeleton while the session loads", async () => {
     setTrace("connecting");
     vi.stubGlobal(
@@ -294,7 +397,7 @@ describe("SessionDetailPage", () => {
     );
     expect(within(chips).getByText(/ago$/)).toHaveAttribute(
       "title",
-      "2026-08-01T09:12:00Z",
+      "2026-08-01T10:00:00Z",
     );
     // Offsets are relative to the session's created_at (same instant here).
     expect(screen.getAllByTitle("since session creation")[0]).toHaveTextContent(
@@ -793,7 +896,7 @@ describe("SessionDetailPage", () => {
       renderPage();
       await screen.findByRole("heading", { name: "Debug run" });
       expect(screen.queryByTestId("approval-banner")).toBeNull();
-      expect(screen.getByLabelText("Message to the session")).toBeDisabled();
+      expect(screen.queryByLabelText("Message to the session")).toBeNull();
     },
   );
 
@@ -835,7 +938,7 @@ describe("SessionDetailPage", () => {
       "stream closed",
     );
     expect(screen.getByText("No events")).toBeInTheDocument();
-    expect(screen.getByLabelText("Message to the session")).toBeDisabled();
+    expect(screen.queryByLabelText("Message to the session")).toBeNull();
     expect(screen.getByText("archived")).toBeInTheDocument();
   });
 });

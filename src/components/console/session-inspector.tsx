@@ -1,5 +1,7 @@
 "use client";
 
+import { latestStatus } from "@/lib/session-trace/store";
+import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { SessionTurnPreview } from "./session-turn-preview";
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
@@ -25,7 +27,11 @@ import {
   useSession,
   useVault,
 } from "@/lib/platform/queries";
-import { tokenAttr, tokenCount } from "@/lib/utils";
+import {
+  activeTimeLabel,
+  lastSessionActivity,
+  SessionTokenSummary,
+} from "./session-metrics";
 import type { DeploymentRun } from "@/lib/platform/types";
 import {
   DeploymentRunDetails,
@@ -96,6 +102,14 @@ export function SessionSummary({
   const query = useSession(id, 5000);
   const [api, setApi] = useState(false);
   const recent = useRecentSessionEvents(id, api && !!query.data);
+  const sessionTrace = useSessionTrace(
+    id,
+    undefined,
+    !!query.data && !api,
+    !!query.data &&
+      !query.data.archived_at &&
+      query.data.status !== "terminated",
+  );
   if (query.error && !query.data)
     return (
       <div className="space-y-4 overflow-y-auto">
@@ -105,6 +119,7 @@ export function SessionSummary({
     );
   if (!query.data) return <DetailSkeleton />;
   const session = query.data;
+  const active = activeTimeLabel(session.usage?.active_seconds);
   const href = run
     ? deploymentRunSessionHref(run)
     : `${surfacePaths.sessions}/${encodeURIComponent(session.id)}`;
@@ -120,7 +135,15 @@ export function SessionSummary({
         <Button size="sm" variant="outline" render={<Link href={href} />}>
           Open <ArrowRight className="size-3.5" />
         </Button>
-        <SessionActions session={session} onDeleted={onDeleted} compact />
+        <SessionActions
+          session={session}
+          onDeleted={onDeleted}
+          ended={
+            sessionTrace.trace.deleted ||
+            latestStatus(sessionTrace.trace) === "terminated"
+          }
+          compact
+        />
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
         {query.error && <ErrorState error={query.error} />}
@@ -177,18 +200,25 @@ export function SessionSummary({
               <Field label="Created">
                 <Time iso={session.created_at} />
               </Field>
+              {session.archived_at && (
+                <Field label="Archived">
+                  <Time iso={session.archived_at} />
+                </Field>
+              )}
               <Field label="Last activity">
-                <Time iso={session.updated_at} />
+                <Time
+                  iso={lastSessionActivity(session, sessionTrace.trace.events)}
+                />
               </Field>
-              {/* renderSession emits zero-only stats and no cost; keep those placeholders in API view. */}
+              {active && (
+                <Field label="Active time">
+                  <span data-active-seconds={session.usage.active_seconds}>
+                    {active}
+                  </span>
+                </Field>
+              )}
               <Field label="Tokens">
-                <span
-                  data-input-tokens={tokenAttr(session.usage.input_tokens)}
-                  data-output-tokens={tokenAttr(session.usage.output_tokens)}
-                >
-                  {tokenCount(session.usage.input_tokens)} /{" "}
-                  {tokenCount(session.usage.output_tokens)}
-                </span>
+                <SessionTokenSummary usage={session.usage} />
               </Field>
               <Field label="Resources">
                 {session.resources.length ? (
@@ -243,7 +273,11 @@ export function SessionSummary({
               )}
             </dl>
             {run && <DeploymentRunDetails run={run} />}
-            <SessionTurnPreview session={session} href={href} />
+            <SessionTurnPreview
+              session={session}
+              href={href}
+              sessionTrace={sessionTrace}
+            />
           </>
         )}
       </div>

@@ -1048,6 +1048,19 @@ export const SURFACES: Surface[] = [
     },
   },
 
+  {
+    id: "session-list-selected",
+    route: "/workspaces/default/sessions?status=all",
+    fixture: GATED,
+    description: "Selected session and batch actions beside the list filters.",
+    setup: async (page) => {
+      await page
+        .getByRole("checkbox", { name: "Select " + GATED, exact: true })
+        .check();
+      await page.getByRole("button", { name: "Clear selection" }).waitFor();
+    },
+  },
+
   ...[false, true].map((narrow): Surface => ({
     id: "session-filters" + (narrow ? "-narrow" : ""),
     route: "/workspaces/default/sessions",

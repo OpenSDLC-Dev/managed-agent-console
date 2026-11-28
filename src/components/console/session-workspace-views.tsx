@@ -4,6 +4,13 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { EventTypeName } from "./event-type-name";
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
+import {
+  isToolCall,
+  toolOutcome,
+  type SessionTurn,
+  type TranscriptEntry,
+} from "@/lib/session-trace/turns";
+import { durationLabel } from "@/lib/session-trace/timing";
 import Link from "@/components/shell/workspace-navigation";
 import { Input } from "@/components/ui/input";
 import { Field, JsonBlock } from "./detail";
@@ -161,31 +168,47 @@ export function SessionEventIndex({
   );
 }
 
+function elapsed(start: string | null, end: string | null | undefined) {
+  if (!start || !end) return undefined;
+  const ms = Date.parse(end) - Date.parse(start);
+  return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+}
+
+function callTimes(entry: TranscriptEntry) {
+  const result = entry.replies.find((reply) =>
+    reply.type.endsWith("tool_result"),
+  );
+  const confirmation = entry.replies.find(
+    (reply) => reply.type === "user.tool_confirmation",
+  );
+  return {
+    total: elapsed(entry.event.processed_at, result?.processed_at),
+    wait: elapsed(entry.event.processed_at, confirmation?.processed_at),
+  };
+}
+
 export function SessionToolIndex({
   agent,
-  events,
+  turns,
   onSelect,
 }: {
   agent: Session["agent"] | SessionThread["agent"];
-  events: SessionEvent[];
+  turns: SessionTurn[];
   onSelect: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const { toolset, others } = parseTools(agent.tools);
-  const calls = events.filter((event) =>
-    ["agent.tool_use", "agent.mcp_tool_use", "agent.custom_tool_use"].includes(
-      event.type,
-    ),
-  );
-  const names = [
-    ...new Set([
-      ...(toolset ? TOOL_NAMES : []),
-      ...calls.flatMap((event) =>
-        typeof event.name === "string" ? [event.name] : [],
-      ),
-    ]),
-  ];
+  const calls = new Map<string, TranscriptEntry[]>();
+  for (const turn of turns) {
+    for (const entry of turn.entries) {
+      if (!isToolCall(entry.event) || !entry.event.name) continue;
+      const group = calls.get(entry.event.name) ?? [];
+      group.push(entry);
+      calls.set(entry.event.name, group);
+    }
+  }
+  const names = [...new Set([...(toolset ? TOOL_NAMES : []), ...calls.keys()])];
   return (
     <div className="space-y-3">
       <Input
@@ -195,10 +218,14 @@ export function SessionToolIndex({
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
-      <div className="grid grid-cols-[minmax(0,1fr)_80px_48px] gap-2 border-b px-2 pb-2 text-xs text-muted-foreground">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_2rem_2.5rem_4rem] gap-2 border-b px-2 pb-2 text-xs text-muted-foreground">
         <span>Name</span>
         <span>Permission</span>
         <span>Calls</span>
+        <span>Failed</span>
+        <span title="Median call-to-result time, including approval and queue time">
+          p50 elapsed
+        </span>
       </div>
       <ul>
         {names
@@ -212,43 +239,77 @@ export function SessionToolIndex({
                   ? "Ask"
                   : "Allow"
               : "—";
-            const count = calls.filter((event) => event.name === name).length;
+            const entries = calls.get(name) ?? [];
+            const count = entries.length;
+            const failed = entries.filter(
+              (entry) => toolOutcome(entry) === "Failed",
+            ).length;
+            const times = entries
+              .flatMap((entry) => callTimes(entry).total ?? [])
+              .sort((a, b) => a - b);
+            const middle = Math.floor(times.length / 2);
+            const median = times.length
+              ? (times[middle] + times[Math.floor((times.length - 1) / 2)]) / 2
+              : undefined;
             return (
               <li key={name}>
                 <button
                   onClick={() => setSelected(name)}
                   aria-pressed={selected === name}
-                  className="grid w-full grid-cols-[minmax(0,1fr)_80px_48px] gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-secondary aria-pressed:bg-secondary"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto_2rem_2.5rem_4rem] gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-secondary aria-pressed:bg-secondary"
                   data-tool-name={name}
                   data-permission={permission}
                   data-call-count={count}
+                  data-failed-count={failed}
+                  data-median-elapsed-ms={median}
                 >
                   <code className="break-all">{name}</code>
                   <span>{permission}</span>
                   <span>{count}</span>
+                  <span>{failed}</span>
+                  <span>
+                    {median === undefined ? "—" : durationLabel(median)}
+                  </span>
                 </button>
               </li>
             );
           })}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Calls in the loaded trace.
+        Elapsed time runs from call to result and includes approval and queue
+        time.
       </p>
       {selected && (
         <section className="space-y-2 border-t pt-3">
           <h3 className="text-sm font-medium">{selected}</h3>
-          {calls
-            .filter((event) => event.name === selected)
-            .map((event) => (
+          {(calls.get(selected) ?? []).map((entry) => {
+            const event = entry.event;
+            const { total, wait } = callTimes(entry);
+            const state = toolOutcome(entry) ?? "Awaiting result";
+            return (
               <button
                 key={event.id}
                 onClick={() => onSelect(event.id)}
+                data-call-id={event.id}
+                data-outcome={state}
+                data-elapsed-ms={total}
+                data-approval-wait-ms={wait}
                 className="block w-full rounded-md border p-2 text-left text-xs hover:bg-secondary"
               >
-                <Time iso={event.processed_at} />
+                <span className="flex flex-wrap justify-between gap-2">
+                  <Time iso={event.processed_at} />
+                  <span>{state}</span>
+                </span>
                 <p className="truncate pt-1">{summaryOf(event)}</p>
+                {total !== undefined && (
+                  <span>Elapsed {durationLabel(total)} </span>
+                )}
+                {wait !== undefined && (
+                  <span>· To processed confirmation {durationLabel(wait)}</span>
+                )}
               </button>
-            ))}
+            );
+          })}
         </section>
       )}
       {others.length > 0 && (

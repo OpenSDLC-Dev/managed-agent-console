@@ -179,7 +179,9 @@ export function CreatedFilter({
         : CREATED_PRESETS.find((preset) => preset.key === value)?.label;
   return (
     <div className="flex min-w-0 max-w-full items-center gap-1.5 text-sm">
-      <span className="text-muted-foreground">Created</span>
+      {!sessionPresets && (
+        <span className="text-muted-foreground">Created</span>
+      )}
       <Select
         value={value}
         open={open}
@@ -197,10 +199,19 @@ export function CreatedFilter({
       >
         <SelectTrigger
           size="sm"
-          className="h-8 min-w-0 rounded-lg"
+          className={
+            sessionPresets
+              ? "h-8 min-w-0 rounded-lg border-transparent bg-secondary shadow-none"
+              : "h-8 min-w-0 rounded-lg"
+          }
           aria-label="Created filter"
           data-value={value}
         >
+          {sessionPresets && (
+            <span aria-hidden="true" className="text-muted-foreground">
+              Created
+            </span>
+          )}
           <span className="truncate">{label}</span>
         </SelectTrigger>
         <SelectContent

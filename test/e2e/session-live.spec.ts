@@ -136,9 +136,7 @@ test("token and duration formatting", async ({ page }) => {
     { timeout: 15_000 },
   );
 
-  await expect(page.getByTestId("usage-chip")).toHaveText(
-    "5,412 in · 890 out · 3,100 cache read",
-  );
+  await expect(page.getByTestId("usage-chip")).toHaveText("9,712 in · 890 out");
   await expect(
     page
       .getByTestId("event-row")

@@ -131,6 +131,7 @@ export const SessionStatusSchema = z.enum([
 
 /** internal/domain/session.go:20-31 — every field non-pointer. */
 export const SessionUsageSchema = z.object({
+  active_seconds: z.number().nonnegative().optional(),
   input_tokens: z.number(),
   output_tokens: z.number(),
   cache_read_input_tokens: z.number(),

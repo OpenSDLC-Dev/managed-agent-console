@@ -1,5 +1,5 @@
 ---
-status: active
+status: archived
 ---
 
 # Sessions list and transcript

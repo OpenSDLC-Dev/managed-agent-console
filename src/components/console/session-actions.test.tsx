@@ -167,6 +167,18 @@ it("keeps the Session page when the platform refuses to archive", async () => {
   expect(push).not.toHaveBeenCalled();
 });
 
+it("keeps archive and deletion available for a terminal session and closes its metadata editor", async () => {
+  const { refresh } = setup();
+  await userEvent.click(screen.getByRole("button", { name: "Edit session" }));
+  refresh({ ...session, status: "terminated", archived_at: null });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  expect(screen.queryByRole("button", { name: "Edit session" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "More actions" }));
+  expect(screen.queryByRole("menuitem", { name: "Send interrupt" })).toBeNull();
+  expect(screen.getByRole("menuitem", { name: "Archive" })).toBeEnabled();
+  expect(screen.getByRole("menuitem", { name: "Delete" })).toBeEnabled();
+});
+
 it("keeps archived sessions read-only and allows confirmed deletion", async () => {
   const { fetch, client } = setup(true);
   client.setQueryData(["session", session.id], session);

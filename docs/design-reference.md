@@ -794,17 +794,17 @@ the Deployments button at x=382. The row now scrolls within its container. The
 same inspection found the roster grid exceeding its form; its column and member
 selector now shrink and long IDs wrap. Browser checks cover 360px and 390px.
 
-## Session list inspector — checked 2026-09-12
+## Session list inspector — checked 2026-11-28
 
 The signed-in [Sessions list](https://platform.claude.com/workspaces/default/sessions?status=all) and [archived detail](https://platform.claude.com/workspaces/default/sessions/sesn_01Dsszg4casRWLETpVK76p23) were checked on 2026-11-28. All covers all four statuses including archived sessions. ID and title enter the standalone page. Quickview opens the `?session=ID` drawer with a latest-turn transcript and previous/next turn controls. The API view exposes the bounded recent-event response.
 
-The full transcript groups user turns, with confirmations and results attached to their originating tool call. The raw chronological log and event links are available in the inspector and Debug. Self-hosted list cost and budgets have a separate [Platform definition task](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/1102).
+Exact ID search filters in place and can locate a session outside the current list page. Batch actions operate on the checked rows and retain failed items for retry. The full transcript groups user turns, with confirmations and results attached to their originating tool call. The raw chronological log and event links are available in the inspector and Debug. Self-hosted list cost and budgets have a separate [Platform definition task](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/1102).
 
 ## Session workspace — checked 2026-09-12
 
 Records ec8c4c6, frames 30–45: the transcript sits beside Session/Events/Tools/Resources/Threads; `inspector=thread` selects Threads and `event=ID` restores event detail. Message/tool cards retain full content and place approval controls beside the pending call. Debug and the platform Outcomes projection remain available.
 
-Platform `threads.go:renderThread` emits zero-only runtime stats, as Sessions do. The workspace omits measured runtime/billing claims; Tools counts only calls in the loaded trace, with permission configuration from the selected saved Agent snapshot. The later multiagent recording and its implemented boundaries follow below. Raw SSE follow-up is separate from this UI change.
+Session active time comes from `usage.active_seconds`. Total input includes uncached input, cache reads and both cache-write counters. Elapsed time runs from creation to the termination event or archive, or to the current time for an open session. The latest activity includes persisted event timestamps. A terminated session shows its closing notice. Tools shows calls, failures, the median observed call-to-result time and time to a processed confirmation. Exact tool execution time and creator filtering require additional Platform data. Thread runtime statistics are placeholders.
 
 Filtering exposed a second approval control before SSE delivered an accepted confirmation. Request state now lives for the Session workspace lifetime; regression checks cover acceptance and in-flight failure across filters and Debug. Sparse-usage probes also caught an unguarded counter in the new overview.
 
