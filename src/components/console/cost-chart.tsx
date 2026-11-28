@@ -42,6 +42,9 @@ export function CostChart({
   const [hoveredDay, setHoveredDay] = useState<string>();
   const [focusedDay, setFocusedDay] = useState<string>();
   const active = days.findIndex((d) => d.day === (hoveredDay ?? focusedDay));
+  // A positive stack cannot show a credit. Mark that day's net and keep each
+  // signed contribution in the accessible label and tooltip.
+  const netBars = days.map((day) => day.parts.some((value) => value < 0));
   const { top, step, decimals } = niceScale(
     Math.max(0, ...days.map((d) => d.cost)),
   );
@@ -56,7 +59,7 @@ export function CostChart({
     [
       `${dayLabel(days[i].day)}: ${costText(days[i].cost)}`,
       ...days[i].parts.flatMap((value, j) =>
-        value > 0 ? [series[j].name + " " + costText(value)] : [],
+        value !== 0 ? [series[j].name + " " + costText(value)] : [],
       ),
     ].join(", ");
   return (
@@ -103,29 +106,36 @@ export function CostChart({
               onBlur={() => setFocusedDay(undefined)}
             >
               <div
+                data-net-cost={netBars[i] ? d.cost : undefined}
                 className={cn(
                   "flex w-full flex-col-reverse overflow-hidden rounded-t-[4px]",
+                  netBars[i] &&
+                    "border border-dashed border-muted-foreground bg-muted",
                   hoveredDay === d.day &&
                     "outline-2 outline-offset-1 outline-ring",
                 )}
                 style={{
-                  height: d.cost > 0 ? `max(1px, ${(d.cost / top) * 100}%)` : 0,
+                  height:
+                    d.cost > 0 || netBars[i]
+                      ? `max(1px, ${(d.cost / top) * 100}%)`
+                      : 0,
                 }}
               >
-                {d.parts.map(
-                  (cost, j) =>
-                    cost > 0 && (
-                      <span
-                        key={j}
-                        data-series={j}
-                        data-series-cost={cost}
-                        style={{
-                          flexGrow: cost / d.cost,
-                          backgroundColor: chartSeriesColor(series[j].index),
-                        }}
-                      />
-                    ),
-                )}
+                {!netBars[i] &&
+                  d.parts.map(
+                    (cost, j) =>
+                      cost > 0 && (
+                        <span
+                          key={j}
+                          data-series={j}
+                          data-series-cost={cost}
+                          style={{
+                            flexGrow: cost / d.cost,
+                            backgroundColor: chartSeriesColor(series[j].index),
+                          }}
+                        />
+                      ),
+                  )}
               </div>
               {i % every === 0 && (
                 <span
@@ -160,7 +170,7 @@ export function CostChart({
             <b className="font-medium">{costText(days[active].cost)}</b>
             {days[active].parts.map(
               (value, i) =>
-                value > 0 && (
+                value !== 0 && (
                   <div className="max-w-64 truncate" key={i}>
                     {series[i].name} · {costText(value)}
                   </div>
@@ -184,6 +194,15 @@ export function CostChart({
               <span className="break-all">{group.name}</span>
             </span>
           ))}
+          {netBars.includes(true) && (
+            <span className="inline-flex items-center gap-1.5">
+              <i
+                aria-hidden
+                className="size-2 rounded-sm border border-dashed border-muted-foreground bg-muted"
+              />
+              Net after credits
+            </span>
+          )}
         </div>
       )}
     </figure>

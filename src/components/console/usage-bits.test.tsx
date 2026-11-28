@@ -33,6 +33,7 @@ describe("usage formatters", () => {
     expect(costText(1204.5)).toBe("1,204.50");
     expect(costText(0.0485)).toBe("0.05");
     expect(costText(0.000512)).toBe("0.00051");
+    expect(costText(-0.000512)).toBe("-0.00051");
     expect(costText(0)).toBe("0.00");
     expect(costText(null)).toBe("—");
   });
