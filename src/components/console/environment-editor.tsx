@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { surfacePaths } from "@/lib/routes";
 import { Plus, X } from "lucide-react";
 import { EnvironmentSection } from "./environment-section";
@@ -386,7 +387,7 @@ export function EnvironmentEditor({
                   <Label htmlFor={"env-manager-" + index} className="text-xs">
                     Manager
                   </Label>
-                  <select
+                  <NativeSelect
                     id={"env-manager-" + index}
                     ref={(element) => {
                       if (element && focusPackage.current === index) {
@@ -408,7 +409,7 @@ export function EnvironmentEditor({
                     {PACKAGE_MANAGERS.map((manager) => (
                       <option key={manager}>{manager}</option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <Label htmlFor={"env-package-" + index} className="text-xs">

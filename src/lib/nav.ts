@@ -159,7 +159,7 @@ export const NAV_SECTIONS: { heading: string; groups: GroupEntry[] }[] = [
       {
         label: "Spending & usage",
         icon: ChartColumn,
-        items: [surfaceEntry("usage", ChartColumn)],
+        items: [surfaceEntry("usage", ChartColumn, "API usage")],
       },
       {
         label: "Settings",
@@ -183,12 +183,7 @@ export const NAV_DESTINATIONS: Destination[] = [
   ...NAV_SECTIONS.flatMap(({ groups }) =>
     groups.flatMap((group) =>
       group.items.map((item) => {
-        const pageLabel =
-          item.surface === "usage"
-            ? "API usage"
-            : item.surface === "api-keys"
-              ? "API keys"
-              : item.label;
+        const pageLabel = item.surface === "api-keys" ? "API keys" : item.label;
         return { ...item, label: `${group.label} › ${pageLabel}` };
       }),
     ),

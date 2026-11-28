@@ -13,6 +13,10 @@ The page URLs follow the saved signed-in [Agents navigation](https://github.com/
 
 The [color audit](./plan/12_console-color.md) records the signed-in comparison, including the effect of dark mode, the local model catalog and grouping local gateway costs.
 
+## Usage controls — checked 2026-11-28
+
+In signed-in Chrome the sidebar selected **API usage** and the page heading read **Usage**. Each 28px filter placed the caption, value and inset chevron on a neutral background. The Model menu opened against the left edge of the trigger with a 320px panel and 28px rows. Range opened a calendar with presets. Self-hosted Range offers the gateway's existing UTC presets. Principal, API key, Model and Upstream filter the dimensions recorded by the gateway. [Claude Usage](https://platform.claude.com/usage)
+
 ## Workspace settings — checked 2026-11-27
 
 The signed-in Claude Settings page lists workspaces with a search field, an archived filter and a Create workspace action. The self-hosted page shows the permanent Default row and identifies inherited organization roles in the member list. The sidebar picker switches the current tab. Resource details open on their collection when changing workspace.

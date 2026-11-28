@@ -80,7 +80,7 @@ describe("Usage overview", () => {
         : undefined,
     );
     renderPage(<UsagePage />);
-    const select = screen.getByRole("combobox", { name: "Key" });
+    const select = screen.getByRole("combobox", { name: "API key" });
     await within(select).findByRole("option", { name: "ci-deploy" });
     expect(select).toHaveDisplayValue(id);
   });
@@ -95,7 +95,7 @@ describe("Usage overview", () => {
       );
     await waitFor(() => expect(bars()).toHaveLength(7));
     await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Period" }),
+      screen.getByRole("combobox", { name: "Range" }),
       "90",
     );
     await waitFor(() => expect(bars()).toHaveLength(90));
@@ -132,10 +132,10 @@ describe("Usage overview", () => {
         to,
         api_key_id: "apikey_ci01",
       });
-      expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue(
+      expect(screen.getByRole("combobox", { name: "Range" })).toHaveValue(
         "mtd",
       );
-      expect(screen.getByRole("combobox", { name: "Key" })).toHaveValue(
+      expect(screen.getByRole("combobox", { name: "API key" })).toHaveValue(
         "apikey_ci01",
       );
     },
@@ -149,14 +149,14 @@ describe("Usage overview", () => {
     );
     const fetchMock = stub();
     renderPage(<UsagePage />);
-    const key = await screen.findByRole("combobox", { name: "Key" });
+    const key = await screen.findByRole("combobox", { name: "API key" });
     expect(key).toHaveValue("apikey_old");
     await userEvent.selectOptions(key, "");
     expect(new URLSearchParams(window.location.search).has("api_key")).toBe(
       false,
     );
     await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Period" }),
+      screen.getByRole("combobox", { name: "Range" }),
       "7",
     );
     expect(window.location.search).toBe("?range=7");
@@ -179,7 +179,7 @@ describe("Usage overview", () => {
         reads(fetchMock, "usage/daily").at(-1)?.searchParams.get("api_key_id"),
       ).toBe("retired/2026"),
     );
-    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("mtd");
+    expect(screen.getByRole("combobox", { name: "Range" })).toHaveValue("mtd");
   });
 
   it("keeps principal rollups separate when their key field is empty", async () => {
@@ -196,8 +196,9 @@ describe("Usage overview", () => {
           : undefined,
     );
     renderPage(<UsagePage />);
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Principal" }),
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "Group by" }),
+      "principal_id",
     );
     expect(document.querySelectorAll("[data-group]")).toHaveLength(3);
     expect(
@@ -374,8 +375,10 @@ describe("Usage overview", () => {
   it("keeps legacy key names when grouping by principal", async () => {
     stub();
     renderPage(<UsagePage />);
-    await screen.findByRole("button", { name: "Principal" });
-    await userEvent.click(screen.getByRole("button", { name: "Principal" }));
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "Group by" }),
+      "principal_id",
+    );
     const row = await waitFor(() => {
       const r = document.querySelector("[data-group=apikey_ci01]");
       expect(r).not.toBeNull();
@@ -387,7 +390,7 @@ describe("Usage overview", () => {
   it("sends a filter it is given, and leaves an unset one out", async () => {
     const fetchMock = stub();
     renderPage(<UsagePage />);
-    await screen.findByRole("button", { name: "Model" });
+    await screen.findByRole("table");
     await waitFor(() =>
       expect(
         screen.getByRole("option", { name: "agent-default" }),

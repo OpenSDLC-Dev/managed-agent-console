@@ -26,6 +26,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Changed
 
+- Spending & usage labels its destination **API usage**. Usage filters show their label and value together. Dropdowns throughout the Console leave room for the arrow and selection mark, including on narrow screens.
+
 - **Breaking page URL change.** Agents, Messages, Playground, Resources and Dreams now open under `/workspaces/default/`. Organization keys, members and service accounts open under `/settings/`. Replace bookmarks to the retired flat pages, which return HTTP 404.
 
 - The Agents directory opens a centered creation form with six starting templates, description generation, model settings, editable YAML and JSON, collapsed optional sections and a persistent action bar. The Agents sidebar now reads Memory and Credential vaults.

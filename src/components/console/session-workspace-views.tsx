@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { EventTypeName } from "./event-type-name";
 import { surfacePaths } from "@/lib/routes";
 import { useState } from "react";
@@ -117,7 +118,7 @@ export function SessionEventIndex({
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <select
+        <NativeSelect
           aria-label="Event type"
           className="h-8 min-w-0 max-w-full rounded-md border bg-background px-2 text-xs"
           value={type}
@@ -127,7 +128,7 @@ export function SessionEventIndex({
           {types.map((value) => (
             <option key={value}>{value}</option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
       <ol className="max-h-64 overflow-y-auto divide-y">
         {visible.map((event) => (

@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useContext, useRef, useState } from "react";
 import {
   useInfiniteQuery,
@@ -161,7 +162,7 @@ function InitiatorForm({
       </DialogHeader>
       <div className="space-y-3 py-4">
         <Label htmlFor="deployment-initiator-account">Service account</Label>
-        <select
+        <NativeSelect
           id="deployment-initiator-account"
           className="h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm"
           value={selected}
@@ -174,7 +175,7 @@ function InitiatorForm({
               {account.name || account.id}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         {accounts.isFetching && <p role="status">Loading service accounts…</p>}
         {accounts.isSuccess && services.length === 0 && (
           <p>No active service accounts.</p>

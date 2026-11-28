@@ -408,8 +408,8 @@ test("walk native manifest in owned Chrome (not a current-reference comparison)"
           }
           if (surface.id === "native-principal-usage")
             await page
-              .getByRole("button", { name: "Principal", exact: true })
-              .click();
+              .getByRole("combobox", { name: "Group by", exact: true })
+              .selectOption("principal_id");
           if (surface.id === "native-owned-key-list") {
             await expect(
               page.locator(`[data-owner-id="${session.id}"]`).first(),

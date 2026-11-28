@@ -11,7 +11,7 @@ import {
 import { chartSeriesLimit } from "@/lib/chart-colors";
 import { CostChart, type CostSeries } from "@/components/console/cost-chart";
 import {
-  USAGE_SELECT,
+  UsageSelect,
   UsageFilters,
   UsageViews,
   costText,
@@ -27,6 +27,10 @@ import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
 import type { GatewayDailyUsage } from "@/lib/platform/types";
 
 const PERIODS = [7, 30, 90] as const;
+const RANGE_OPTIONS: readonly (readonly [string, string])[] = [
+  ["mtd", "Month to date"],
+  ...PERIODS.map((days) => [String(days), `Last ${days} days`] as const),
+];
 /**
  * The grouped table's rows, highest cost first. A read can name thousands of
  * keys or models, and a row for each would stall the page; the filters reach
@@ -211,6 +215,17 @@ function UsageOverview() {
       <PageHeader
         title="Usage"
         subtitle={`${SURFACES.usage.blurb} Days are UTC.`}
+        className="flex-wrap"
+        actions={
+          <UsageSelect
+            label="Range"
+            value={String(period)}
+            options={RANGE_OPTIONS}
+            onChange={(value) =>
+              update({ range: value === "30" ? null : value })
+            }
+          />
+        }
       />
       <UsageViews />
       <UsageFilters
@@ -224,25 +239,15 @@ function UsageOverview() {
             deployment_id: next.deployment_id ?? null,
           })
         }
-      >
-        <label className="flex items-center gap-1.5 text-sm">
-          <span className="sr-only">Period</span>
-          <select
-            className={USAGE_SELECT}
-            value={period}
-            onChange={(e) =>
-              update({ range: e.target.value === "30" ? null : e.target.value })
-            }
-          >
-            <option value="mtd">Month to date</option>
-            {PERIODS.map((n) => (
-              <option key={n} value={n}>
-                Last {n} days
-              </option>
-            ))}
-          </select>
-        </label>
-      </UsageFilters>
+        grouping={
+          <UsageSelect
+            label="Group by"
+            value={by}
+            options={BY}
+            onChange={setBy}
+          />
+        }
+      />
       {error ? (
         <ErrorState error={error} />
       ) : isPending ? (
@@ -299,25 +304,6 @@ function UsageOverview() {
             days={perDay}
             series={series}
           />
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-sm font-medium">By</span>
-            <span className="inline-flex gap-0.5 rounded-lg border p-0.5">
-              {BY.map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={by === value}
-                  className={cn(
-                    "rounded-md px-2.5 py-0.5 text-[13px]",
-                    by === value && "bg-secondary font-medium",
-                  )}
-                  onClick={() => setBy(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </span>
-          </div>
           {by === "principal_id" && (
             <p className="pb-2 text-xs text-muted-foreground">
               Owned keys share their principal&apos;s totals. Historical and

@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { surfacePaths } from "@/lib/routes";
 import { useRef, type ReactNode } from "react";
 import Link from "@/components/shell/workspace-navigation";
@@ -159,7 +160,7 @@ export function InitialResources({
               </div>
               <div className="space-y-1">
                 <Label htmlFor={`repo-checkout-${index}`}>Checkout</Label>
-                <select
+                <NativeSelect
                   id={`repo-checkout-${index}`}
                   className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                   value={resource.checkout?.type ?? "default"}
@@ -178,7 +179,7 @@ export function InitialResources({
                   <option value="default">Default branch</option>
                   <option value="branch">Named branch</option>
                   <option value="commit">Commit SHA</option>
-                </select>
+                </NativeSelect>
               </div>
               {resource.checkout && (
                 <div className="space-y-1">
@@ -248,7 +249,7 @@ export function InitialResources({
               </div>
               <div className="space-y-1">
                 <Label htmlFor={`memory-access-${index}`}>Access</Label>
-                <select
+                <NativeSelect
                   id={`memory-access-${index}`}
                   className="h-9 w-full rounded-md border bg-background px-2 text-sm"
                   value={resource.access ?? "read_write"}
@@ -261,7 +262,7 @@ export function InitialResources({
                 >
                   <option value="read_write">Read and write</option>
                   <option value="read_only">Read only</option>
-                </select>
+                </NativeSelect>
               </div>
               <div className="space-y-1">
                 <Label htmlFor={`memory-instructions-${index}`}>

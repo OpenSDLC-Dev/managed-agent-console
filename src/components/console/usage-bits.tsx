@@ -1,6 +1,8 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useContext, useMemo } from "react";
+import { ChevronDown } from "lucide-react";
 import { ConsoleSessionContext } from "@/components/shell/console-session";
 import Link from "@/components/shell/workspace-navigation";
 import { usePathname } from "next/navigation";
@@ -133,7 +135,50 @@ export function useUsageNames() {
   };
 }
 
-const SELECT = "h-8 rounded-md border bg-transparent px-2 text-sm";
+type UsageOption<T extends string = string> = readonly [value: T, text: string];
+
+export function UsageSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly UsageOption<T>[];
+  onChange: (value: T) => void;
+}) {
+  const selected = options.find(([id]) => id === value);
+  return (
+    <label className="relative inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-muted/85 pe-2.5 ps-2 text-sm has-[:open]:outline has-[:open]:outline-link has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ring forced-colors:border">
+      <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+        {label}
+      </span>
+      <span aria-hidden="true" className="truncate">
+        {selected?.[1]}
+      </span>
+      <ChevronDown
+        aria-hidden="true"
+        className="size-3.5 shrink-0 text-muted-foreground"
+      />
+      <NativeSelect
+        aria-label={label}
+        data-usage-filter
+        className="absolute inset-0 size-full cursor-pointer opacity-0"
+        value={value}
+        onChange={(event) =>
+          onChange(options[event.currentTarget.selectedIndex][0])
+        }
+      >
+        {options.map(([id, text]) => (
+          <option key={id} value={id}>
+            {text}
+          </option>
+        ))}
+      </NativeSelect>
+    </label>
+  );
+}
 
 /**
  * Key, model and upstream filters, each the read's own parameter. Usage
@@ -145,6 +190,7 @@ export function UsageFilters({
   onChange,
   seen,
   children,
+  grouping,
 }: {
   filter: GatewayUsageFilter;
   onChange: (filter: GatewayUsageFilter) => void;
@@ -152,12 +198,12 @@ export function UsageFilters({
     principal_id?: string | null;
   })[];
   children?: React.ReactNode;
+  grouping?: React.ReactNode;
 }) {
   const names = useUsageNames();
   const field = (
     label: string,
     key: keyof GatewayUsageFilter,
-    all: string,
     catalog: [string, string][],
   ) => {
     const known = new Set(catalog.map(([value]) => value));
@@ -166,53 +212,43 @@ export function UsageFilters({
         (v): v is string => !!v && !known.has(v),
       ),
     );
-    const options = [...catalog, ...[...gone].map((v) => [v, v])];
+    const options: UsageOption[] = [["", "All"], ...catalog];
+    for (const id of gone) options.push([id, id]);
     return (
-      <label className="flex items-center gap-1.5 text-sm">
-        <span className="text-muted-foreground">{label}</span>
-        <select
-          className={SELECT}
-          value={filter[key] ?? ""}
-          onChange={(e) =>
-            onChange({ ...filter, [key]: e.target.value || undefined })
-          }
-        >
-          <option value="">{all}</option>
-          {options.map(([value, text]) => (
-            <option key={value} value={value}>
-              {text}
-            </option>
-          ))}
-        </select>
-      </label>
+      <UsageSelect
+        label={label}
+        value={filter[key] ?? ""}
+        options={options}
+        onChange={(id) => onChange({ ...filter, [key]: id || undefined })}
+      />
     );
   };
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pb-4">
+    <div className="flex flex-wrap items-center gap-2 pb-4">
       {children}
       {(filter.principal_id ||
         seen.some((r) => r.principal_id !== undefined)) &&
-        field("Principal", "principal_id", "All principals", [])}
+        field("Principal", "principal_id", [])}
       {field(
-        "Key",
+        "API key",
         "api_key_id",
-        "All keys",
         names.keys.map((k) => [k.id, names.keyName(k.id)]),
       )}
       {field(
         "Model",
         "alias",
-        "All models",
         names.aliases.map((a) => [a.name, a.name]),
       )}
       {field(
         "Upstream",
         "deployment_id",
-        "All upstream models",
         names.deployments.map((d) => [d.id, d.upstream_model]),
+      )}
+      {grouping && (
+        <div className="flex max-w-full items-center sm:gap-3 sm:before:h-4 sm:before:border-s sm:before:border-border">
+          {grouping}
+        </div>
       )}
     </div>
   );
 }
-
-export { SELECT as USAGE_SELECT };

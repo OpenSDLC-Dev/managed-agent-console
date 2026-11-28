@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "@/components/ui/native-select";
 import Link from "@/components/shell/workspace-navigation";
 import { useState } from "react";
 import { ArrowLeft, Bot, Check, Code2 } from "lucide-react";
@@ -100,7 +101,7 @@ export function CreatedAgent({ id }: { id: string }) {
                 {envs.error && <ErrorState error={envs.error} />}
                 <label className="block text-sm">
                   Choose an environment
-                  <select
+                  <NativeSelect
                     className="mt-1 block w-full rounded-lg border bg-background p-2"
                     value={environment}
                     onChange={(e) =>
@@ -116,7 +117,7 @@ export function CreatedAgent({ id }: { id: string }) {
                         {e.name}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <div className="mt-3 flex gap-2">
                   <Button

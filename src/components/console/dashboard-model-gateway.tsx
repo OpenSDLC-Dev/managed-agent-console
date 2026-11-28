@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { PLAYGROUND_ROUTE, surfacePaths } from "@/lib/routes";
 import { Bot, BookOpen, ChevronDown } from "lucide-react";
 import Link from "@/components/shell/workspace-navigation";
@@ -83,7 +84,7 @@ function PopupActions({
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       {aliases.length > 0 && (!single || single.mixed || !selected) && (
-        <select
+        <NativeSelect
           aria-label="Gateway alias"
           className="h-7 max-w-full min-w-0 rounded-md border bg-background px-1.5 text-sm outline-ring focus-visible:outline-2"
           value={selected?.name ?? ""}
@@ -95,7 +96,7 @@ function PopupActions({
               {alias.name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       )}
       {status && (
         <span role="status" className="text-muted-foreground">
