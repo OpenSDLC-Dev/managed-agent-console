@@ -75,7 +75,10 @@ export function groupSessionTurns(
     } else if (
       event.type === "user.interrupt" ||
       event.type === "session.thread_status_terminated" ||
-      event.type === "session.status_terminated"
+      event.type === "session.status_terminated" ||
+      ((event.type === "session.thread_status_idle" ||
+        event.type === "session.status_idle") &&
+        event.stop_reason?.type === "end_turn")
     ) {
       for (const entry of interruptResults) entry.interrupted = true;
       interruptResults = [];

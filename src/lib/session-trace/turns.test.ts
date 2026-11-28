@@ -9,6 +9,31 @@ const ev = (
 ): SessionEvent => ({ id, type, processed_at: null, ...fields });
 
 describe("session turns", () => {
+  it.each(["session.status_idle", "session.thread_status_idle"])(
+    "recognizes an interrupted result settled directly to %s on archive or a child-wide stop",
+    (type) => {
+      const events = [
+        ev("call", "agent.tool_use"),
+        ev("r", "agent.tool_result", {
+          tool_use_id: "call",
+          is_error: true,
+          content: [
+            {
+              type: "text",
+              text: "Tool execution was interrupted before completion. Please retry.",
+            },
+          ],
+        }),
+        ev("outcome", "span.outcome_evaluation_end", { result: "interrupted" }),
+        ev("idle", type, { stop_reason: { type: "end_turn" } }),
+      ];
+      expect(
+        toolOutcome(
+          groupSessionTurns(events, type.includes("thread"))[0].entries[0],
+        ),
+      ).toBe("Interrupted");
+    },
+  );
   it("starts a new child turn when a received message wakes a finished thread", () => {
     const events = [
       ev("a", "agent.thread_message_received"),
