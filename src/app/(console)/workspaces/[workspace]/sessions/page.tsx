@@ -93,6 +93,13 @@ const STATUS_OPTIONS: SessionStatus[] = [
   "terminated",
 ];
 
+function encodeStatuses(values: SessionStatus[]) {
+  if (values.length === STATUS_OPTIONS.length) return "all";
+  if (!values.length || (values.length === 3 && !values.includes("terminated")))
+    return null;
+  return STATUS_OPTIONS.filter((status) => values.includes(status)).join(",");
+}
+
 export default function SessionsPage() {
   return (
     <Suspense
@@ -122,22 +129,14 @@ function SessionsList() {
   function changeFilters(changes: Record<string, string | null>) {
     if (
       Object.entries(changes).some(
-        ([name, value]) => filters.params.get(name) !== value,
+        ([name, value]) => effectiveFilters[name] !== value,
       )
     ) {
       filters.update({ ...changes, page: null });
     }
   }
   function setStatuses(values: SessionStatus[]) {
-    const active = values.length === 3 && !values.includes("terminated");
-    changeFilters({
-      status:
-        values.length === STATUS_OPTIONS.length
-          ? "all"
-          : !values.length || active
-            ? null
-            : STATUS_OPTIONS.filter((s) => values.includes(s)).join(","),
-    });
+    changeFilters({ status: encodeStatuses(values) });
   }
   function setOrder(value: "asc" | "desc") {
     changeFilters({ order: value === "desc" ? null : value });
@@ -162,6 +161,13 @@ function SessionsList() {
   // The gte freezes at selection time so the query key stays stable.
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
+  const effectiveFilters: Record<string, string | null> = {
+    created: encodeCreatedFilter(created.key, created.range),
+    status: encodeStatuses(statuses),
+    agent: agentId === "all" ? null : agentId,
+    deployment: deploymentId === "all" ? null : deploymentId,
+    order: order === "desc" ? null : order,
+  };
   const agentOptions = useAgentOptions();
   const { data, error, isPending, isPlaceholderData } = useSessions({
     page,

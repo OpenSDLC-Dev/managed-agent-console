@@ -26,7 +26,7 @@ test("All includes archived sessions and restores the exact result page through 
     url.searchParams.set("limit", "1");
     await route.fulfill({ response: await route.fetch({ url: url.href }) });
   });
-  const list = "/workspaces/default/sessions?status=all&order=asc";
+  const list = "/workspaces/default/sessions?status=all&order=asc&created=all";
   const first = page
     .getByRole("row")
     .filter({ hasText: "Install deps and run tests" });
