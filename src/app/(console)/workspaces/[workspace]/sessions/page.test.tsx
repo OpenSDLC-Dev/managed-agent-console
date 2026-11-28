@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -192,6 +193,72 @@ afterEach(() => {
 });
 
 describe("SessionsPage", () => {
+  it("distinguishes an exact match outside the list from a missing ID and restores filters on reset", async () => {
+    const hidden = session({ id: "sesn_direct", title: "Direct lookup" });
+    const current = session({ id: "sesn_list", title: "Listed session" });
+    const fetchMock = stubFetch((url) => {
+      if (url.pathname.endsWith("/sesn_direct")) return json(hidden);
+      if (url.pathname.endsWith("/sesn_absent"))
+        return json(
+          { error: { type: "not_found_error", message: "Session missing" } },
+          404,
+        );
+      return json({ data: [current] });
+    });
+    renderPage();
+    await screen.findByRole("link", { name: "Listed session" });
+    const lookup = screen.getByRole("textbox", { name: "Find session by ID" });
+    fireEvent.change(lookup, { target: { value: hidden.id } });
+    await screen.findByRole("link", { name: "Direct lookup" });
+    expect(screen.queryByRole("link", { name: "Listed session" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await screen.findByRole("link", { name: "Listed session" });
+    fireEvent.change(lookup, { target: { value: "sesn_absent" } });
+    await screen.findByText("No matching sessions");
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/sessions/sesn_absent"),
+      ),
+    ).toBe(true);
+  });
+
+  it("updates the page selection, restores partial selection, and archives only the requested rows", async () => {
+    const first = session({ id: "sesn_one", status: "idle", title: "First" });
+    const second = session({ id: "sesn_two", status: "idle", title: "Second" });
+    const archived: string[] = [];
+    stubFetch((url, init) => {
+      if (init?.method === "POST" && url.pathname.endsWith("/archive")) {
+        const id = url.pathname.split("/").at(-2)!;
+        archived.push(id);
+        return json({ ...first, archived_at: "2026-11-28T10:00:00Z" });
+      }
+      return json({ data: [first, second] });
+    });
+    renderPage();
+    await screen.findByRole("link", { name: "First" });
+    const all = screen.getByRole("checkbox", { name: "Select all rows" });
+    const one = screen.getByRole("checkbox", { name: "Select " + first.id });
+    const two = screen.getByRole("checkbox", { name: "Select " + second.id });
+    await userEvent.click(all);
+    expect(one).toBeChecked();
+    expect(two).toBeChecked();
+    await userEvent.click(two);
+    expect(all).toBePartiallyChecked();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Clear selection" }),
+    );
+    expect(one).not.toBeChecked();
+    await userEvent.click(one);
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    const dialog = screen.getByRole("dialog", { name: "Archive 1 session?" });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Archive sessions" }),
+    );
+    await waitFor(() => expect(one).not.toBeChecked());
+    expect(archived).toEqual([first.id]);
+    expect(two).not.toBeChecked();
+  });
+
   it("loads archived and unarchived terminated sessions for the shared All URL", async () => {
     window.history.replaceState(
       null,

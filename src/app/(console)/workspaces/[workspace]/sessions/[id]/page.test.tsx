@@ -260,6 +260,56 @@ describe("SessionDetailPage", () => {
       "120000",
     );
   });
+  it("counts pending calls but computes the median from measured results and isolates processed confirmations", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/workspaces/default/sessions/sess_1?inspector=tools",
+    );
+    setTrace("closed", [
+      ev("start", "user.message", { content: "Read three files" }),
+      ev("call1", "agent.tool_use", { name: "read" }),
+      ev("confirm", "user.tool_confirmation", {
+        tool_use_id: "call1",
+        result: "allow",
+        processed_at: "2026-08-01T09:12:01Z",
+      }),
+      ev("done", "agent.tool_result", {
+        tool_use_id: "call1",
+        processed_at: "2026-08-01T09:12:04Z",
+      }),
+      ev("call2", "agent.tool_use", { name: "read" }),
+      ev("failure", "agent.tool_result", {
+        tool_use_id: "call2",
+        is_error: true,
+        processed_at: "2026-08-01T09:12:08Z",
+      }),
+      ev("call3", "agent.tool_use", { name: "read", processed_at: null }),
+      ev("other", "agent.custom_tool_use", { name: "lookup" }),
+    ]);
+    stubFetch({ session: session() });
+    renderPage();
+    const search = await screen.findByRole("textbox", { name: "Filter tools" });
+    await userEvent.type(search, "read");
+    expect(document.querySelector('[data-tool-name="lookup"]')).toBeNull();
+    const row = document.querySelector<HTMLElement>('[data-tool-name="read"]')!;
+    expect(row).toHaveAttribute("data-call-count", "3");
+    expect(row).toHaveAttribute("data-failed-count", "1");
+    expect(row).toHaveAttribute("data-median-elapsed-ms", "6000");
+    await userEvent.click(row);
+    expect(document.querySelector('[data-call-id="call1"]')).toHaveAttribute(
+      "data-approval-wait-ms",
+      "1000",
+    );
+    expect(document.querySelector('[data-call-id="call2"]')).toHaveAttribute(
+      "data-outcome",
+      "Failed",
+    );
+    expect(
+      document.querySelector('[data-call-id="call3"]'),
+    ).not.toHaveAttribute("data-elapsed-ms");
+  });
+
   it("shows the detail skeleton while the session loads", async () => {
     setTrace("connecting");
     vi.stubGlobal(
