@@ -23,6 +23,20 @@ describe("trace store", () => {
     expect(state.events.map((e) => e.id)).toEqual(["sevt_1", "sevt_2"]);
   });
 
+  it("fills a pending processing timestamp on replay without moving the event or regressing it", () => {
+    const pending = ev("result", "user.custom_tool_result", {
+      processed_at: null,
+      custom_tool_use_id: "call",
+    });
+    const after = ev("next", "agent.message");
+    const first = applyPersisted(emptyTrace(), [pending, after]);
+    const stamp = "2026-08-01T10:00:04Z";
+    const replay = applyPersisted(first, [{ ...pending, processed_at: stamp }]);
+    expect(replay.events.map((event) => event.id)).toEqual(["result", "next"]);
+    expect(replay.events[0].processed_at).toBe(stamp);
+    expect(first.events[0].processed_at).toBeNull();
+    expect(applyPersisted(replay, [pending])).toBe(replay);
+  });
   it("appends content deltas by (event_id, index) and replaces the preview with the persisted event", () => {
     let state = emptyTrace();
     state = applyFrame(state, {

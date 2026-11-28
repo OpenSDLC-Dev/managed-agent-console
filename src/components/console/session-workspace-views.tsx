@@ -305,7 +305,7 @@ export function SessionToolIndex({
                   <span>Elapsed {durationLabel(total)} </span>
                 )}
                 {wait !== undefined && (
-                  <span>· To confirmation {durationLabel(wait)}</span>
+                  <span>· To processed confirmation {durationLabel(wait)}</span>
                 )}
               </button>
             );

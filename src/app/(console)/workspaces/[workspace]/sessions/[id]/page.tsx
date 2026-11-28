@@ -503,7 +503,7 @@ function SessionWorkspace({ id }: { id: string }) {
               </span>
             )}
             <ArchivedBadge archivedAt={data.archived_at} />
-            <SessionActions session={data} />
+            <SessionActions session={data} ended={ended} />
           </span>
         }
       />

@@ -1,5 +1,6 @@
 "use client";
 
+import { latestStatus } from "@/lib/session-trace/store";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { SessionTurnPreview } from "./session-turn-preview";
 import { surfacePaths } from "@/lib/routes";
@@ -134,7 +135,15 @@ export function SessionSummary({
         <Button size="sm" variant="outline" render={<Link href={href} />}>
           Open <ArrowRight className="size-3.5" />
         </Button>
-        <SessionActions session={session} onDeleted={onDeleted} compact />
+        <SessionActions
+          session={session}
+          onDeleted={onDeleted}
+          ended={
+            sessionTrace.trace.deleted ||
+            latestStatus(sessionTrace.trace) === "terminated"
+          }
+          compact
+        />
       </div>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pb-4">
         {query.error && <ErrorState error={query.error} />}

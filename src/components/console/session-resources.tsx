@@ -274,7 +274,7 @@ export function SessionResources({ session }: { session: Session }) {
       ?.data.some((row) => row.id === file.id);
     closeDelete();
   };
-  const editable = !session.archived_at && session.status !== "terminated";
+  const editable = !session.archived_at;
   const close = () => {
     setDialog(null);
     setToken("");

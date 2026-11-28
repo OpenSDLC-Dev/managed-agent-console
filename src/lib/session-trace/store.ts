@@ -49,6 +49,7 @@ export function applyPersisted(
   const events = [...state.events];
   const seen = new Set(state.seen);
   let previews = state.previews;
+  const settled = new Map<string, string>();
   for (const event of incoming) {
     // Same guard the frame path applies (see `applyFrame`'s default arm): an
     // event with no id cannot be keyed, deduped, or opened in the detail
@@ -58,7 +59,11 @@ export function applyPersisted(
     // through (plan 04 slice 2).
     if (typeof event?.id !== "string" || typeof event.type !== "string")
       continue;
-    if (seen.has(event.id)) continue;
+    if (seen.has(event.id)) {
+      if (event.processed_at && !settled.has(event.id))
+        settled.set(event.id, event.processed_at);
+      continue;
+    }
     seen.add(event.id);
     events.push(event);
     if (previews.has(event.id)) {
@@ -66,6 +71,16 @@ export function applyPersisted(
       previews.delete(event.id);
     }
     changed = true;
+  }
+  // A reseed can supply an inbound event's processing time after settlement.
+  if (settled.size) {
+    for (const [index, event] of events.entries()) {
+      const stamp = settled.get(event.id);
+      if (stamp && !event.processed_at) {
+        events[index] = { ...event, processed_at: stamp };
+        changed = true;
+      }
+    }
   }
   return changed ? { ...state, events, seen, previews } : state;
 }
