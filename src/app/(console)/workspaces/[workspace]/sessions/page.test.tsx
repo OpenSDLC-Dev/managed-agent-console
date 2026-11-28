@@ -346,7 +346,13 @@ describe("SessionsPage", () => {
       expect(cell).toHaveAttribute("data-output-tokens", "567");
     }
 
-    await userEvent.click(screen.getByText("Nightly run"));
+    expect(table.getByRole("link", { name: "Nightly run" })).toHaveAttribute(
+      "href",
+      "/workspaces/default/sessions/sess_1",
+    );
+    await userEvent.click(
+      table.getAllByRole("button", { name: "Quickview" })[0],
+    );
     expect(location.search).toBe("?session=sess_1");
     expect(
       screen.getByRole("region", { name: "Session details" }),

@@ -34,6 +34,11 @@ test("trace readability: chips, offsets, span durations, idle band, copy all", a
 
   // Span duration pairs start/end; offsets are relative to created_at —
   // the fixture idles 21h45m after the session was created.
+  await page
+    .locator("summary")
+    .filter({ hasText: "Session events (" })
+    .first()
+    .click();
   await expect(
     page
       .getByTestId("event-row")
@@ -76,6 +81,11 @@ test("a row opens the detail panel and Debug shows the raw wire", async ({
   );
 
   // Clicking the span-end row opens the panel with its token usage.
+  await page
+    .locator("summary")
+    .filter({ hasText: "Session events (" })
+    .first()
+    .click();
   await page
     .getByTestId("event-row")
     .filter({ hasText: "span.model_request_end" })

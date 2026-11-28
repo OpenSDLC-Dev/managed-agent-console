@@ -204,9 +204,10 @@ export function useSession(id: string, refetchInterval?: number) {
 }
 
 /** events.go:listEvents supports a bounded descending page, independently of SSE. */
-export function useRecentSessionEvents(id: string) {
+export function useRecentSessionEvents(id: string, enabled = true) {
   return useQuery({
     queryKey: ["session-events", id, "recent"],
+    enabled,
     queryFn: () =>
       platformGet<Page<SessionEvent>>(
         `v1/sessions/${encodeURIComponent(id)}/events`,

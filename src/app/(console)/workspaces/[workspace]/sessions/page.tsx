@@ -14,13 +14,14 @@ import {
 } from "@/components/console/created-filter-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { CreateSessionButton } from "@/components/console/create-session-dialog";
-import { IdCell } from "@/components/console/copy-id";
+import { CopyIdButton } from "@/components/console/copy-id";
 import { DataTable, type Column } from "@/components/console/data-table";
 import { Pager } from "@/components/console/pager";
 import {
   ArchivedBadge,
   EmptyState,
   ErrorState,
+  IdCode,
   StatusBadge,
   Time,
   UnavailableSurface,
@@ -43,14 +44,39 @@ import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
-  { key: "id", header: "ID", cell: (s) => <IdCell id={s.id} /> },
+  {
+    key: "id",
+    header: "ID",
+    cell: (s) => (
+      <span
+        className="inline-flex items-center gap-1"
+        data-testid="id-cell"
+        data-id={s.id}
+      >
+        <Link
+          href={`${surfacePaths.sessions}/${encodeURIComponent(s.id)}`}
+          onClick={(e) => e.stopPropagation()}
+          className="hover:underline"
+        >
+          <IdCode id={s.id} />
+        </Link>
+        <CopyIdButton id={s.id} />
+      </span>
+    ),
+  },
   {
     key: "title",
     header: "Name",
     className: "w-full",
     cell: (s) => (
       <span className="flex items-center gap-2">
-        {s.title || <span className="text-muted-foreground">Untitled</span>}
+        <Link
+          href={`${surfacePaths.sessions}/${encodeURIComponent(s.id)}`}
+          onClick={(e) => e.stopPropagation()}
+          className="hover:underline"
+        >
+          {s.title || "Untitled"}
+        </Link>
         <ArchivedBadge archivedAt={s.archived_at} />
       </span>
     ),
@@ -63,7 +89,15 @@ const COLUMNS: Column<Session>[] = [
   {
     key: "agent",
     header: "Agent",
-    cell: (s) => `${s.agent.name} · v${s.agent.version}`,
+    cell: (s) => (
+      <Link
+        href={`${surfacePaths.agents}/${encodeURIComponent(s.agent.id)}?version=${s.agent.version}`}
+        onClick={(e) => e.stopPropagation()}
+        className="whitespace-nowrap rounded-md bg-secondary px-2 py-1 text-xs hover:underline"
+      >
+        {s.agent.name} · v{s.agent.version}
+      </Link>
+    ),
   },
   {
     key: "tokens",
@@ -198,14 +232,12 @@ function SessionsList() {
           <Button
             size="sm"
             variant="outline"
-            onClick={(event) => event.stopPropagation()}
-            render={
-              <Link
-                href={`${surfacePaths.sessions}/${encodeURIComponent(session.id)}`}
-              />
-            }
+            onClick={(event) => {
+              event.stopPropagation();
+              inspect(session.id);
+            }}
           >
-            Open
+            Quickview
           </Button>
           <SessionActions
             session={session}

@@ -72,7 +72,7 @@ test("direct archive preserves an inspector's filters and prevents duplicate pen
   await signIn(page, url);
   const panel = page.getByRole("region", { name: "Session details" });
   await expect(
-    panel.getByRole("heading", { name: "Latest activity" }),
+    panel.getByRole("heading", { name: "Transcript" }),
   ).toBeVisible();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

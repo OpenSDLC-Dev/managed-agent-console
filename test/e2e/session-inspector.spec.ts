@@ -9,18 +9,85 @@ test.beforeEach(async ({ request }) => {
   await request.post(MOCK + "/__reset");
 });
 
+test("Quickview opens the last complete turn and the detail retains a late failed result with its original call", async ({
+  page,
+}) => {
+  const event = (id: string, type: string, extra: object = {}) => ({
+    id,
+    type,
+    processed_at: "2026-08-01T10:00:00Z",
+    ...extra,
+  });
+  const first = [
+    event("first", "user.message", { content: "First request" }),
+    event("call", "agent.tool_use", {
+      name: "read",
+      input: { path: "readme" },
+    }),
+  ];
+  const next = [
+    event("second", "user.message", { content: "Second request" }),
+    event("failure", "agent.tool_result", {
+      tool_use_id: "call",
+      is_error: true,
+      content: "Read failed",
+    }),
+    event("reply", "agent.message", { content: "Second answer" }),
+  ];
+  await page.route("**/proxy/v1/sessions/" + GATED + "/events?*", (route) => {
+    const p = new URL(route.request().url()).searchParams.get("page");
+    return route.fulfill({
+      json: p
+        ? { data: next, next_page: null }
+        : { data: first, next_page: "second-page" },
+    });
+  });
+  await signIn(page, "/workspaces/default/sessions?session=" + GATED);
+  const drawer = page.getByRole("region", { name: "Session details" });
+  const count = drawer.locator("[data-current-turn]");
+  await expect(count).toHaveAttribute("data-current-turn", "2");
+  await expect(count).toHaveAttribute("data-turn-count", "2");
+  await expect(
+    drawer.getByText("Second answer", { exact: true }),
+  ).toBeVisible();
+  await drawer.getByRole("button", { name: "Previous turn" }).click();
+  const call = drawer.locator('[data-tool-call="call"]');
+  await expect(call).toHaveAttribute("data-tool-outcome", "Failed");
+  await call.locator("summary").click();
+  await expect(call.getByText("Read failed")).toBeVisible();
+  await drawer.getByRole("button", { name: "Next turn" }).click();
+  await expect(count).toHaveAttribute("data-current-turn", "2");
+  await drawer.getByRole("link", { name: "Open", exact: true }).click();
+  const t1 = page.locator('[data-turn-id="first"]');
+  const t2 = page.locator('[data-turn-id="second"]');
+  await expect(t2.getByText("Second answer")).toBeVisible();
+  await t1.locator("summary").filter({ hasText: "Failed" }).click();
+  await t1.getByText("Read failed").click();
+  await expect(page.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-id",
+    "failure",
+  );
+  await page.reload();
+  await expect(page.getByTestId("event-detail")).toHaveAttribute(
+    "data-event-id",
+    "failure",
+  );
+});
+
 test("Session selection restores filters and history, supports API and opens the full page explicitly", async ({
   page,
 }) => {
   await signIn(page, "/workspaces/default/sessions?order=asc");
   await page
-    .getByRole("cell", { name: "Install deps and run tests", exact: true })
+    .getByRole("row")
+    .filter({ hasText: "Install deps and run tests" })
+    .getByRole("button", { name: "Quickview" })
     .click();
   const panel = page.getByRole("region", { name: "Session details" });
   await expect(panel).toHaveAttribute("data-session-id", GATED);
   await expect(page).toHaveURL(new RegExp("order=asc&session=" + GATED));
   await expect(
-    panel.getByRole("heading", { name: "Latest activity" }),
+    panel.getByRole("heading", { name: "Transcript" }),
   ).toBeVisible();
   await expect(panel.locator("[data-event-id]").first()).toBeVisible();
   await panel.getByRole("button", { name: "API", exact: true }).click();
@@ -76,10 +143,14 @@ test("inspecting a row on page two retains its cursor when selecting and closing
     if (new URL(req.url()).pathname.endsWith("/v1/sessions"))
       queries.push(new URL(req.url()).searchParams.get("page") ?? "");
   });
-  await page.locator("tbody tr").first().getByRole("cell").nth(1).click();
+  await page
+    .locator("tbody tr")
+    .first()
+    .getByRole("button", { name: "Quickview" })
+    .click();
   const panel = page.getByRole("region", { name: "Session details" });
   await expect(
-    panel.getByRole("heading", { name: "Latest activity" }),
+    panel.getByRole("heading", { name: "Transcript" }),
   ).toBeVisible();
   await panel.getByRole("button", { name: "Close details" }).click();
   expect(await page.locator("tbody tr").allTextContents()).toEqual(rows);
@@ -144,7 +215,10 @@ test("row Open enters the full session without inserting an inspector history en
         exact: true,
       }),
     });
-    const open = row.getByRole("link", { name: "Open", exact: true });
+    const open = row.getByRole("link", {
+      name: "Install deps and run tests",
+      exact: true,
+    });
     if (activation === "click") await open.click();
     else await open.press("Enter");
     await expect(page).toHaveURL("/workspaces/default/sessions/" + GATED);

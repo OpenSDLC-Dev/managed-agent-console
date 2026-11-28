@@ -496,6 +496,7 @@ export const SessionEventSchema = z.looseObject({
   tool_use_id: z.string().optional(),
   // internal/executor/mcpexec.go:mcpResultEvent — the MCP result correlation key.
   mcp_tool_use_id: z.string().optional(),
+  custom_tool_use_id: z.string().optional(),
   is_error: z.boolean().nullable().optional(),
   // Tool confirmations and outcome evaluation ends share this flat key.
   result: z
