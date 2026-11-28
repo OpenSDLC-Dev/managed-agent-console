@@ -28,14 +28,14 @@ test("All includes archived sessions and restores the exact result page through 
   });
   const list = "/workspaces/default/sessions?status=all&order=asc";
   const first = page
-    .locator("tbody")
-    .getByText("Install deps and run tests", { exact: true });
+    .getByRole("row")
+    .filter({ hasText: "Install deps and run tests" });
   const second = page
-    .locator("tbody")
-    .getByText("Survey agent frameworks", { exact: true });
+    .getByRole("row")
+    .filter({ hasText: "Survey agent frameworks" });
   await signIn(page, list);
   await expect(first).toBeVisible();
-  await expect(page.locator("tbody [data-status=terminated]")).toBeVisible();
+  await expect(first.getByText("terminated", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Next page" }).click();
   await expect(second).toBeVisible();
   const paged = new URL(page.url());
