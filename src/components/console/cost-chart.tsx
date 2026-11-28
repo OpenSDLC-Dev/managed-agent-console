@@ -39,7 +39,9 @@ export function CostChart({
   days: CostDay[];
   series: CostSeries[];
 }) {
-  const [active, setActive] = useState<number>();
+  const [hoveredDay, setHoveredDay] = useState<string>();
+  const [focusedDay, setFocusedDay] = useState<string>();
+  const active = days.findIndex((d) => d.day === (hoveredDay ?? focusedDay));
   const { top, step, decimals } = niceScale(
     Math.max(0, ...days.map((d) => d.cost)),
   );
@@ -82,7 +84,7 @@ export function CostChart({
           role="list"
           aria-label="Cost per day"
           className="absolute inset-0 bottom-[22px] left-10 flex items-end gap-[2px]"
-          onMouseLeave={() => setActive(undefined)}
+          onMouseLeave={() => setHoveredDay(undefined)}
         >
           {days.map((d, i) => (
             <div
@@ -92,15 +94,19 @@ export function CostChart({
               aria-label={label(i)}
               data-day={d.day}
               data-cost={d.cost}
-              className="group relative flex h-full flex-1 items-end outline-none"
-              onMouseEnter={() => setActive(i)}
-              onFocus={() => setActive(i)}
-              onBlur={() => setActive(undefined)}
+              className="relative flex h-full flex-1 items-end focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-solid focus-visible:outline-ring"
+              onMouseEnter={() => setHoveredDay(d.day)}
+              onFocus={() => {
+                setFocusedDay(d.day);
+                setHoveredDay(undefined);
+              }}
+              onBlur={() => setFocusedDay(undefined)}
             >
               <div
                 className={cn(
                   "flex w-full flex-col-reverse overflow-hidden rounded-t-[4px]",
-                  active === i && "outline-2 outline-offset-1 outline-ring",
+                  hoveredDay === d.day &&
+                    "outline-2 outline-offset-1 outline-ring",
                 )}
                 style={{
                   height: d.cost > 0 ? `max(1px, ${(d.cost / top) * 100}%)` : 0,
@@ -133,7 +139,7 @@ export function CostChart({
             </div>
           ))}
         </div>
-        {active !== undefined && (
+        {active >= 0 && (
           <div
             role="tooltip"
             className={cn(

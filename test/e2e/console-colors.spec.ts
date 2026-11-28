@@ -7,7 +7,7 @@ const workspace = "/workspaces/default";
 // Resolve CSS colors through the browser, including custom properties and color-mix().
 function rgb(
   node: Locator,
-  property: "color" | "backgroundColor" | "fill" = "color",
+  property: "color" | "backgroundColor" | "fill" | "stroke" = "color",
 ) {
   return node.evaluate((element, name) => {
     const canvas = document.createElement("canvas");
@@ -33,6 +33,13 @@ for (const scheme of ["light", "dark"] as const) {
       "fill",
     );
     expect(volumeGreen - volumeRed).toBeGreaterThan(35);
+    const [cacheRed, , cacheBlue] = await rgb(
+      page
+        .getByRole("img", { name: /Cache read tokens per UTC day/ })
+        .locator("path"),
+      "stroke",
+    );
+    expect(cacheBlue - cacheRed).toBeGreaterThan(35);
     await page.goto(workspace + "/agents-overview");
     const resources = page
       .getByRole("heading", { name: "Resources", exact: true })
@@ -69,6 +76,18 @@ for (const scheme of ["light", "dark"] as const) {
       ).toEqual(color);
     }
     const costs = chart.locator("[data-day]");
+    await costs.first().focus();
+    await page.keyboard.press("Tab");
+    const focused = costs.nth(1);
+    await expect(focused).toBeFocused();
+    const tooltip = chart.getByRole("tooltip");
+    const focusedValue = await tooltip.innerText();
+    await costs.last().hover();
+    await expect(tooltip).not.toHaveText(focusedValue);
+    await expect(focused).toHaveCSS("outline-style", "solid");
+    await expect(focused).toHaveCSS("outline-width", "2px");
+    await chart.locator("figcaption").hover();
+    await expect(tooltip).toHaveText(focusedValue);
     const totals = () =>
       costs.evaluateAll((nodes) =>
         nodes.map((n) => n.getAttribute("data-cost")),
@@ -135,6 +154,20 @@ test("Playground keeps cURL and JSON source aligned through editing, scrolling a
   );
   await editor.fill(source);
   expect(await code.textContent()).toBe(source);
+  // A native resize can reach the textarea's CSS minimum. Its client area
+  // excludes the border and any scrollbars, even at that minimum.
+  await editor.evaluate((element: HTMLTextAreaElement) => {
+    element.style.height = "0px";
+  });
+  await expect
+    .poll(() =>
+      editor.evaluate(
+        (input: HTMLTextAreaElement) =>
+          input.parentElement!.querySelector("pre")!.clientHeight -
+          input.clientHeight,
+      ),
+    )
+    .toBe(0);
   await editor.evaluate((element: HTMLTextAreaElement) => {
     element.scrollTop = element.scrollHeight;
     element.scrollLeft = element.scrollWidth;

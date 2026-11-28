@@ -4,7 +4,7 @@ export function EventTypeName({ type }: { type: string }) {
   if (dot < 0) return type;
   const domain = type.slice(0, dot);
   return (
-    <>
+    <span>
       <span
         data-event-domain={domain}
         className="data-[event-domain=agent]:text-link data-[event-domain=user]:text-event-user data-[event-domain=span]:text-event-span"
@@ -12,6 +12,6 @@ export function EventTypeName({ type }: { type: string }) {
         {domain}
       </span>
       {type.slice(dot)}
-    </>
+    </span>
   );
 }

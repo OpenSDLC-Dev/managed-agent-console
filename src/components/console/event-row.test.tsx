@@ -87,9 +87,12 @@ describe("TranscriptRow", () => {
     const row = screen.getByTestId("event-row");
     expect(row).toHaveAttribute("data-event-type", "user.message");
     expect(screen.getByText("Aug 2, 2026, 09:12")).toBeInTheDocument();
-    expect(
-      row.querySelector('[data-event-domain="user"]')?.parentElement,
-    ).toHaveTextContent("user.message");
+    const badge = row
+      .querySelector('[data-event-domain="user"]')!
+      .closest('[data-slot="badge"]')!;
+    // One flex item keeps the namespace and its dotted suffix together.
+    expect(badge.childNodes).toHaveLength(1);
+    expect(badge.firstChild?.textContent).toBe("user.message");
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
@@ -106,7 +109,8 @@ describe("TranscriptRow", () => {
     renderRow(ev(type));
     const badge = screen
       .getByTestId("event-row")
-      .querySelector("[data-event-domain]")?.parentElement;
+      .querySelector("[data-event-domain]")
+      ?.closest('[data-slot="badge"]');
     expect(badge).toHaveTextContent(type);
     expect(badge).toHaveClass(expectedClass);
   });
