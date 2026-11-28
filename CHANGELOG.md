@@ -55,6 +55,8 @@ format. This file holds the **cycle in progress**; released cycles are filed und
 
 ### Fixed
 
+- The Sessions All filter includes terminated and archived sessions. Refreshing, sharing a paged list and returning through browser history restore its page and filters.
+
 - Restore color to usage charts, resource and event icons, and syntax in agent configuration, Playground requests and API previews in both themes. Copy and edit preserve the original source.
 
 - Header search now shows page breadcrumbs and popular Claude guides. Search results group documentation, accessible workspaces and resources, and opening a result takes you to the selected workspace.

@@ -3858,6 +3858,7 @@ const server = createServer(async (req, res) => {
     if (archiving) {
       if (!session.archived_at)
         session.updated_at = session.archived_at = now();
+      session.status = "terminated";
     } else {
       if (session.archived_at) {
         fail(400, "session is archived");

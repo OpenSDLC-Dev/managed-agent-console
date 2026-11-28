@@ -2,7 +2,7 @@
 
 import { surfacePaths } from "@/lib/routes";
 import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import { useState, Suspense, useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import { Button } from "@/components/ui/button";
 import { SessionInspector } from "@/components/console/session-inspector";
@@ -93,6 +93,13 @@ const STATUS_OPTIONS: SessionStatus[] = [
   "terminated",
 ];
 
+function encodeStatuses(values: SessionStatus[]) {
+  if (values.length === STATUS_OPTIONS.length) return "all";
+  if (!values.length || (values.length === 3 && !values.includes("terminated")))
+    return null;
+  return STATUS_OPTIONS.filter((status) => values.includes(status)).join(",");
+}
+
 export default function SessionsPage() {
   return (
     <Suspense
@@ -109,26 +116,30 @@ function SessionsList() {
   const inspected = filters.params.get("session");
   const inspect = (id: string) => filters.update({ session: id });
   const closeInspector = () => filters.update({ session: null });
-  const pageParams = new URLSearchParams(filters.params);
-  pageParams.delete("session");
-  const cursorKey = pageParams.toString();
-  const selectedStatuses = (filters.params.get("status") ?? "")
-    .split(",")
-    .filter((status): status is SessionStatus =>
-      STATUS_OPTIONS.includes(status as SessionStatus),
-    );
+  const page = filters.params.get("page") || undefined;
+  const rawStatuses = (filters.params.get("status") ?? "").split(",");
+  const selectedStatuses =
+    rawStatuses.length === 1 && rawStatuses[0] === "all"
+      ? STATUS_OPTIONS
+      : STATUS_OPTIONS.filter((status) => rawStatuses.includes(status));
   const statuses: SessionStatus[] = selectedStatuses.length
-    ? [...new Set(selectedStatuses)]
+    ? selectedStatuses
     : ["running", "idle", "rescheduling"];
   const order = filters.params.get("order") === "asc" ? "asc" : "desc";
+  function changeFilters(changes: Record<string, string | null>) {
+    if (
+      Object.entries(changes).some(
+        ([name, value]) => effectiveFilters[name] !== value,
+      )
+    ) {
+      filters.update({ ...changes, page: null });
+    }
+  }
   function setStatuses(values: SessionStatus[]) {
-    const active = values.length === 3 && !values.includes("terminated");
-    filters.update({
-      status: !values.length || active ? null : values.join(","),
-    });
+    changeFilters({ status: encodeStatuses(values) });
   }
   function setOrder(value: "asc" | "desc") {
-    filters.update({ order: value === "desc" ? null : value });
+    changeFilters({ order: value === "desc" ? null : value });
   }
   const statusLabel =
     statuses.length === 4
@@ -140,30 +151,29 @@ function SessionsList() {
             .join(", ");
   const deploymentId = filters.params.get("deployment") || "all";
   function setDeploymentId(value: string) {
-    filters.update({ deployment: value === "all" ? null : value });
+    changeFilters({ deployment: value === "all" ? null : value });
   }
   const deployments = useDeploymentOptions();
   const agentId = filters.params.get("agent") || "all";
   function setAgentId(value: string) {
-    filters.update({ agent: value === "all" ? null : value });
+    changeFilters({ agent: value === "all" ? null : value });
   }
   // The gte freezes at selection time so the query key stays stable.
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
-  // Sessions are the one bidirectional list: the wire supplies both cursors.
-  const [cursor, setCursor] = useState<{ key: string; page?: string }>({
-    key: cursorKey,
-  });
-  const page = cursor.key === cursorKey ? cursor.page : undefined;
-  if (cursor.key !== cursorKey) setCursor({ key: cursorKey });
-  function setPage(page: string | undefined) {
-    setCursor({ key: cursorKey, page });
-  }
+  const effectiveFilters: Record<string, string | null> = {
+    created: encodeCreatedFilter(created.key, created.range),
+    status: encodeStatuses(statuses),
+    agent: agentId === "all" ? null : agentId,
+    deployment: deploymentId === "all" ? null : deploymentId,
+    order: order === "desc" ? null : order,
+  };
   const agentOptions = useAgentOptions();
-  const { data, error, isPending } = useSessions({
+  const { data, error, isPending, isPlaceholderData } = useSessions({
     page,
     deployment_id: deploymentId === "all" ? undefined : deploymentId,
     statuses,
+    include_archived: statuses.includes("terminated") || undefined,
     order,
     agent_id: agentId === "all" ? undefined : agentId,
     "created_at[gte]": created.gte,
@@ -209,14 +219,13 @@ function SessionsList() {
     },
   ];
   function resetFilters() {
-    filters.update({
+    changeFilters({
       deployment: null,
       agent: null,
       created: null,
       status: null,
       order: null,
     });
-    setPage(undefined);
   }
 
   if (isUnimplemented(error)) return <UnavailableSurface surface="sessions" />;
@@ -241,8 +250,7 @@ function SessionsList() {
           range={created.range}
           sessionPresets
           onChange={(key, range) => {
-            filters.update({ created: encodeCreatedFilter(key, range) });
-            setPage(undefined);
+            changeFilters({ created: encodeCreatedFilter(key, range) });
           }}
         />
 
@@ -252,7 +260,6 @@ function SessionsList() {
             value={agentId}
             onValueChange={(value) => {
               setAgentId(value ?? "all");
-              setPage(undefined);
             }}
           >
             <SelectTrigger
@@ -305,7 +312,6 @@ function SessionsList() {
             value={deploymentId}
             onValueChange={(value) => {
               setDeploymentId(value ?? "all");
-              setPage(undefined);
             }}
           >
             <SelectTrigger
@@ -359,7 +365,6 @@ function SessionsList() {
                   ? (value as SessionStatus[])
                   : ["running", "idle", "rescheduling"],
               );
-              setPage(undefined);
             }}
           >
             <SelectTrigger
@@ -380,7 +385,6 @@ function SessionsList() {
                     className="mt-1 w-full border-t"
                     onClick={() => {
                       setStatuses(["running", "idle", "rescheduling"]);
-                      setPage(undefined);
                     }}
                   >
                     Clear selection
@@ -433,7 +437,6 @@ function SessionsList() {
                         }
                         onClick={() => {
                           setOrder(order === "desc" ? "asc" : "desc");
-                          setPage(undefined);
                         }}
                       >
                         Created{" "}
@@ -469,10 +472,14 @@ function SessionsList() {
             }
           />
           <Pager
-            hasPrev={!!data?.prev_page}
-            hasNext={!!data?.next_page}
-            onPrev={() => setPage(data?.prev_page ?? undefined)}
-            onNext={() => data?.next_page && setPage(data.next_page)}
+            hasPrev={!isPlaceholderData && !!data?.prev_page}
+            hasNext={!isPlaceholderData && !!data?.next_page}
+            onPrev={() =>
+              data?.prev_page && filters.update({ page: data.prev_page })
+            }
+            onNext={() =>
+              data?.next_page && filters.update({ page: data.next_page })
+            }
           />
         </>
       )}

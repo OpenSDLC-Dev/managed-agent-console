@@ -4,6 +4,8 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
+[Sessions parity](./docs/plan/14_sessions-parity.md) tracks the list URL, Quickview and turn transcripts. The [browser regression](./test/e2e/session-filters.spec.ts) covers archived sessions and pagination.
+
 The [Usage controls browser checks](./test/e2e/select-spacing.spec.ts) cover the sidebar destination, narrow filters, keyboard selection and system pickers.
 
 [Plan 12](./docs/plan/12_console-color.md) records chart, icon and code color differences. Its [browser regressions](./test/e2e/console-colors.spec.ts) exercise both themes.
