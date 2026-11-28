@@ -7,6 +7,61 @@ test.beforeEach(async ({ request }) => {
   await request.post(MOCK + "/__reset");
 });
 
+test("batch archive keeps failed sessions selected and retries only those rows", async ({
+  page,
+  request,
+}) => {
+  const created = await request.post(MOCK + "/v1/sessions", {
+    headers: {
+      "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+    },
+    data: {
+      agent: "agent_taskrunner0000000001",
+      environment_id: "env_egress000000000000001",
+      title: "Batch retry session",
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const { id } = await created.json();
+  const gated = "sesn_gatedbash00000000001";
+  await signIn(page, "/workspaces/default/sessions?status=all");
+  await page.getByLabel("Select " + gated, { exact: true }).check();
+  await page.getByLabel("Select " + id, { exact: true }).check();
+  const archive = page.getByRole("button", { name: "Archive", exact: true });
+  await page.route(
+    "**/proxy/v1/sessions/" + id + "/archive",
+    (route) =>
+      route.fulfill({
+        status: 409,
+        json: {
+          error: {
+            type: "conflict_error",
+            message: "Session changed while archiving",
+          },
+        },
+      }),
+    { times: 1 },
+  );
+  await archive.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading")).toHaveText("Archive 2 sessions?");
+  await dialog.getByRole("button", { name: "Archive sessions" }).click();
+  await expect(page.getByText("Session changed while archiving")).toBeVisible();
+  await expect(
+    page.getByLabel("Select " + gated, { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.getByLabel("Select " + id, { exact: true })).toBeChecked();
+  await archive.click();
+  await expect(dialog.getByRole("heading")).toHaveText("Archive 1 session?");
+  await dialog.getByRole("button", { name: "Archive sessions" }).click();
+  await expect(
+    page.getByLabel("Select " + id, { exact: true }),
+  ).not.toBeChecked();
+  await expect(page.getByText("Session changed while archiving")).toHaveCount(
+    0,
+  );
+});
+
 test("All includes archived sessions and restores the exact result page through history and reload", async ({
   page,
   request,
@@ -105,16 +160,20 @@ test("deployment filtering reaches archived options and exact lookup escapes a f
   await page
     .getByRole("textbox", { name: "Find session by ID" })
     .fill("sesn_research0000000000001");
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Survey agent frameworks" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Quickview" }).click();
   await expect(page).toHaveURL(/session=sesn_research0000000000001/);
   await page.goBack();
   await page
     .getByRole("textbox", { name: "Find session by ID" })
     .fill(run.session_id);
-  await page
-    .getByRole("textbox", { name: "Find session by ID" })
-    .press("Enter");
-  await expect(page).toHaveURL(new RegExp("session=" + run.session_id + "$"));
+  await expect(page.locator("tbody [data-id]")).toHaveAttribute(
+    "data-id",
+    run.session_id,
+  );
+  await expect(page).toHaveURL(new RegExp("id=" + run.session_id + "$"));
 });
 
 test("status multi-select defaults to active and Created sorts on the server", async ({
@@ -157,13 +216,12 @@ test("status multi-select defaults to active and Created sorts on the server", a
     .toBeLessThanOrEqual(390);
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page
-    .getByRole("textbox", { name: "Find session by ID" })
-    .fill("sesn_missing?limit=100");
   const rejected = page.waitForResponse(
     (r) => r.url().includes("sesn_missing") && r.status() === 404,
   );
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Find session by ID" })
+    .fill("sesn_missing?limit=100");
   const refusal = await rejected;
   expect(new URL(refusal.url()).search).toBe("");
   expect(new URL(refusal.url()).pathname).toContain(

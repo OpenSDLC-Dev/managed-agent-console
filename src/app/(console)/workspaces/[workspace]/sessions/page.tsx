@@ -1,8 +1,10 @@
 "use client";
 
 import { surfacePaths } from "@/lib/routes";
-import { ExactResourceLookup } from "@/components/console/exact-resource-lookup";
-import { Suspense, useMemo, useRef } from "react";
+import { Input } from "@/components/ui/input";
+import { ResourceSelectionActions } from "@/components/console/resource-selection-actions";
+import { PlatformError } from "@/lib/platform/http";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import { Button } from "@/components/ui/button";
 import { SessionInspector } from "@/components/console/session-inspector";
@@ -38,9 +40,10 @@ import {
   useAgentOptions,
   useDeploymentOptions,
   useSessions,
+  useSession,
 } from "@/lib/platform/queries";
 import { SURFACES, isUnimplemented } from "@/lib/platform/surfaces";
-import { tokenAttr, tokenCount } from "@/lib/utils";
+import { SessionTokenSummary } from "@/components/console/session-metrics";
 import type { Session, SessionStatus } from "@/lib/platform/types";
 
 const COLUMNS: Column<Session>[] = [
@@ -77,14 +80,10 @@ const COLUMNS: Column<Session>[] = [
         >
           {s.title || "Untitled"}
         </Link>
+        <StatusBadge status={s.status} />
         <ArchivedBadge archivedAt={s.archived_at} />
       </span>
     ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    cell: (s) => <StatusBadge status={s.status} />,
   },
   {
     key: "agent",
@@ -102,16 +101,7 @@ const COLUMNS: Column<Session>[] = [
   {
     key: "tokens",
     header: "Tokens in / out",
-    cell: (s) => (
-      <span
-        data-testid="tokens-cell"
-        data-input-tokens={tokenAttr(s.usage?.input_tokens)}
-        data-output-tokens={tokenAttr(s.usage?.output_tokens)}
-      >
-        {tokenCount(s.usage?.input_tokens)} /{" "}
-        {tokenCount(s.usage?.output_tokens)}
-      </span>
-    ),
+    cell: (s) => <SessionTokenSummary usage={s.usage} compact />,
   },
   {
     key: "created",
@@ -147,6 +137,20 @@ export default function SessionsPage() {
 function SessionsList() {
   const filters = useListFilters();
   const lookup = useRef<HTMLInputElement>(null);
+  const rawId = filters.params.get("id") ?? "";
+  const id = rawId.trim();
+  const validId = /^[a-zA-Z0-9_-]+$/.test(id);
+  const [settledId, setSettledId] = useState(id);
+  useEffect(() => {
+    if (id === settledId) return;
+    const timer = setTimeout(() => setSettledId(id), 220);
+    return () => clearTimeout(timer);
+  }, [id, settledId]);
+  const lookupSession = useSession(
+    settledId,
+    undefined,
+    validId && id === settledId,
+  );
   const inspected = filters.params.get("session");
   const inspect = (id: string) => filters.update({ session: id });
   const closeInspector = () => filters.update({ session: null });
@@ -166,7 +170,7 @@ function SessionsList() {
         ([name, value]) => effectiveFilters[name] !== value,
       )
     ) {
-      filters.update({ ...changes, page: null });
+      filters.update({ ...changes, page: null, id: null });
     }
   }
   function setStatuses(values: SessionStatus[]) {
@@ -196,6 +200,7 @@ function SessionsList() {
   const createdKey = filters.params.get("created");
   const created = useMemo(() => decodeCreatedFilter(createdKey), [createdKey]);
   const effectiveFilters: Record<string, string | null> = {
+    id: rawId || null,
     created: encodeCreatedFilter(created.key, created.range),
     status: encodeStatuses(statuses),
     agent: agentId === "all" ? null : agentId,
@@ -203,26 +208,93 @@ function SessionsList() {
     order: order === "desc" ? null : order,
   };
   const agentOptions = useAgentOptions();
-  const { data, error, isPending, isPlaceholderData } = useSessions({
-    page,
-    deployment_id: deploymentId === "all" ? undefined : deploymentId,
-    statuses,
-    include_archived: statuses.includes("terminated") || undefined,
-    order,
-    agent_id: agentId === "all" ? undefined : agentId,
-    "created_at[gte]": created.gte,
-    "created_at[lte]": created.lte,
-  });
+  const list = useSessions(
+    {
+      page,
+      deployment_id: deploymentId === "all" ? undefined : deploymentId,
+      statuses,
+      include_archived: statuses.includes("terminated") || undefined,
+      order,
+      agent_id: agentId === "all" ? undefined : agentId,
+      "created_at[gte]": created.gte,
+      "created_at[lte]": created.lte,
+    },
+    !id,
+  );
+  const { data, isPlaceholderData } = list;
+  const missing =
+    lookupSession.error instanceof PlatformError &&
+    lookupSession.error.status === 404;
+  const error = id
+    ? validId && id === settledId && !missing
+      ? lookupSession.error
+      : null
+    : list.error;
+  const isPending = id
+    ? validId && (id !== settledId || lookupSession.isPending)
+    : list.isPending;
 
   const filtered =
+    !!id ||
     deploymentId !== "all" ||
     agentId !== "all" ||
     created.key !== "all" ||
     statuses.length !== 3 ||
     statuses.includes("terminated");
-  const rows = data?.data ?? [];
+  const rows = id
+    ? validId && id === settledId && lookupSession.data && !error && !missing
+      ? [lookupSession.data]
+      : []
+    : (data?.data ?? []);
+  const scopeParams = new URLSearchParams(filters.params);
+  scopeParams.delete("session");
+  const scope = scopeParams.toString();
+  const [selection, setSelection] = useState<{ scope: string; ids: string[] }>({
+    scope,
+    ids: [],
+  });
+  if (selection.scope !== scope) setSelection({ scope, ids: [] });
+  const ids = selection.scope === scope ? selection.ids : [];
+  const selected = rows.filter((row) => ids.includes(row.id));
+  const select = (ids: string[]) => setSelection({ scope, ids });
+  const stale = !id && isPlaceholderData;
   const inspectedIndex = rows.findIndex((row) => row.id === inspected);
   const columns: Column<Session>[] = [
+    {
+      key: "selection",
+      header: (
+        <input
+          type="checkbox"
+          aria-label="Select all rows"
+          disabled={stale || !rows.length}
+          checked={!!rows.length && selected.length === rows.length}
+          ref={(el) => {
+            if (el)
+              el.indeterminate =
+                selected.length > 0 && selected.length < rows.length;
+          }}
+          onChange={(e) =>
+            select(e.target.checked ? rows.map((s) => s.id) : [])
+          }
+        />
+      ),
+      cell: (s) => (
+        <input
+          type="checkbox"
+          aria-label={"Select " + s.id}
+          disabled={stale}
+          checked={ids.includes(s.id)}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) =>
+            select(
+              e.target.checked
+                ? [...ids, s.id]
+                : ids.filter((id) => id !== s.id),
+            )
+          }
+        />
+      ),
+    },
     ...COLUMNS,
     {
       key: "actions",
@@ -252,6 +324,7 @@ function SessionsList() {
   ];
   function resetFilters() {
     changeFilters({
+      id: null,
       deployment: null,
       agent: null,
       created: null,
@@ -271,11 +344,19 @@ function SessionsList() {
         actions={<CreateSessionButton />}
       />
       <div className="flex flex-wrap items-center gap-3 pb-4 text-sm">
-        <ExactResourceLookup
-          resource="session"
-          path={surfacePaths.sessions}
-          onOpen={inspect}
-          inputRef={lookup}
+        <Input
+          ref={lookup}
+          aria-label="Find session by ID"
+          placeholder="Session ID"
+          value={rawId}
+          className="h-8 w-52 min-w-0"
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            filters.update(
+              { id: value || null, session: null, page: null },
+              rawId && value ? "replace" : "push",
+            );
+          }}
         />
         <CreatedFilter
           value={created.key}
@@ -287,7 +368,6 @@ function SessionsList() {
         />
 
         <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Agent</span>
           <Select
             value={agentId}
             onValueChange={(value) => {
@@ -296,10 +376,16 @@ function SessionsList() {
           >
             <SelectTrigger
               size="sm"
-              className="h-8 rounded-lg"
+              className="h-8 rounded-lg border-transparent bg-secondary shadow-none"
               aria-label="Agent filter"
               data-value={agentId}
             >
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-muted-foreground"
+              >
+                Agent
+              </span>
               <SelectValue>
                 {agentId === "all"
                   ? "All"
@@ -339,7 +425,6 @@ function SessionsList() {
           ) : null}
         </div>
         <div className="flex min-w-0 max-w-full items-center gap-1.5">
-          <span className="text-muted-foreground">Deployment</span>
           <Select
             value={deploymentId}
             onValueChange={(value) => {
@@ -348,8 +433,14 @@ function SessionsList() {
           >
             <SelectTrigger
               aria-label="Deployment filter"
-              className="h-8 min-w-0 max-w-64"
+              className="h-8 min-w-0 max-w-64 border-transparent bg-secondary shadow-none"
             >
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-muted-foreground"
+              >
+                Deployment
+              </span>
               <SelectValue>
                 {deploymentId === "all"
                   ? "All"
@@ -387,7 +478,6 @@ function SessionsList() {
           </span>
         )}
         <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Status</span>
           <Select
             multiple
             value={statuses}
@@ -401,10 +491,16 @@ function SessionsList() {
           >
             <SelectTrigger
               size="sm"
-              className="h-8 rounded-lg"
+              className="h-8 rounded-lg border-transparent bg-secondary shadow-none"
               aria-label="Status filter"
               data-value={statuses.join(",")}
             >
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-muted-foreground"
+              >
+                Status
+              </span>
               <SelectValue>{statusLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent
@@ -433,10 +529,33 @@ function SessionsList() {
           </Select>
         </div>
         {(filtered || order !== "desc") && (
-          <Button size="sm" variant="ghost" onClick={resetFilters}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={resetFilters}
+          >
             Reset
           </Button>
         )}
+      </div>
+      <div data-selected-count={selected.length}>
+        <ResourceSelectionActions
+          resource="session"
+          selected={selected}
+          clear={() => select([])}
+          onComplete={(succeeded, action) => {
+            setSelection((current) => ({
+              ...current,
+              ids: current.ids.filter((id) => !succeeded.includes(id)),
+            }));
+            const open = new URLSearchParams(window.location.search).get(
+              "session",
+            );
+            if (action === "delete" && open && succeeded.includes(open))
+              closeInspector();
+          }}
+        />
       </div>
       {inspected && (
         <SessionInspector
@@ -478,11 +597,10 @@ function SessionsList() {
                   }
                 : column,
             )}
-            rows={data?.data ?? []}
+            rows={rows}
             rowKey={(s) => s.id}
             loading={isPending}
             activeRowKey={inspected ?? undefined}
-            onRowClick={(s) => inspect(s.id)}
             empty={
               filtered ? (
                 <EmptyState
@@ -503,16 +621,18 @@ function SessionsList() {
               )
             }
           />
-          <Pager
-            hasPrev={!isPlaceholderData && !!data?.prev_page}
-            hasNext={!isPlaceholderData && !!data?.next_page}
-            onPrev={() =>
-              data?.prev_page && filters.update({ page: data.prev_page })
-            }
-            onNext={() =>
-              data?.next_page && filters.update({ page: data.next_page })
-            }
-          />
+          {!id && (
+            <Pager
+              hasPrev={!isPlaceholderData && !!data?.prev_page}
+              hasNext={!isPlaceholderData && !!data?.next_page}
+              onPrev={() =>
+                data?.prev_page && filters.update({ page: data.prev_page })
+              }
+              onNext={() =>
+                data?.next_page && filters.update({ page: data.next_page })
+              }
+            />
+          )}
         </>
       )}
     </div>

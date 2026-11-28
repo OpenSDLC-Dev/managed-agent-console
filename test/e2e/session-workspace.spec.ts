@@ -110,8 +110,9 @@ test("narrow transcript and inspector remain accessible, resizable and keyboard 
     page.getByRole("combobox", { name: "Command palette" }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
-  await page.getByRole("tab", { name: "Session", exact: true }).focus();
-  await page.keyboard.press("End");
+  // Focus remains trapped until the closing popup's exit animation unmounts it.
+  await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
+  await page.getByRole("tab", { name: "Session", exact: true }).press("End");
   await expect(
     page.getByRole("tab", { name: "Threads", exact: true }),
   ).toHaveAttribute("aria-selected", "true");

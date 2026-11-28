@@ -4,6 +4,10 @@ One entry per archived plan: what it delivered, and what **running** it proved o
 no diff records. The decisions and their rejected alternatives stay in the plan files linked here;
 a change's narrative is in [CHANGELOG.md](../CHANGELOG.md) and [docs/changelog/](./changelog/).
 
+## Plan 14 — Sessions list and transcript
+
+The [Sessions plan](./plan/14_sessions-parity.md) couples URL-backed pagination with the status filter. The browser fixtures reproduce omitted archived sessions and a lost cursor on reload, including an explicit all-time date filter. A result arriving after a second user message still opens under its original tool in Quickview and the full transcript. The Tools view measures call-to-result and approval intervals wherever the log supplies both timestamps. [Regression coverage](../test/e2e/session-inspector.spec.ts)
+
 ## Plan 13 — Usage navigation and select controls
 
 The [Usage controls plan](./plan/13_usage-selects.md) covers the sidebar and shared dropdowns. A selected historical model ID pushed a 390px page to 1490px even though its filter fit the viewport. The [browser regression](../test/e2e/select-spacing.spec.ts) measures both the page and the open option, and checks that a keyboard-selected range survives a reload.

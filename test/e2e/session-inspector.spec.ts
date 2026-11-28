@@ -26,11 +26,17 @@ test("Quickview opens the last complete turn and the detail retains a late faile
     }),
   ];
   const next = [
+    event("approved", "user.tool_confirmation", {
+      tool_use_id: "call",
+      result: "allow",
+      processed_at: "2026-08-01T10:00:01Z",
+    }),
     event("second", "user.message", { content: "Second request" }),
     event("failure", "agent.tool_result", {
       tool_use_id: "call",
       is_error: true,
       content: "Read failed",
+      processed_at: "2026-08-01T10:00:04Z",
     }),
     event("reply", "agent.message", { content: "Second answer" }),
   ];
@@ -72,6 +78,15 @@ test("Quickview opens the last complete turn and the detail retains a late faile
     "data-event-id",
     "failure",
   );
+  await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  const read = page.locator('[data-tool-name="read"]');
+  await expect(read).toHaveAttribute("data-call-count", "1");
+  await expect(read).toHaveAttribute("data-failed-count", "1");
+  await expect(read).toHaveAttribute("data-median-elapsed-ms", "4000");
+  await read.click();
+  const timing = page.locator('[data-call-id="call"]');
+  await expect(timing).toHaveAttribute("data-elapsed-ms", "4000");
+  await expect(timing).toHaveAttribute("data-approval-wait-ms", "1000");
 });
 
 test("Session selection restores filters and history, supports API and opens the full page explicitly", async ({
@@ -105,7 +120,7 @@ test("Session selection restores filters and history, supports API and opens the
   await expect(page).toHaveURL("/workspaces/default/sessions?order=asc");
   await expect(page.getByLabel("Find session by ID")).toBeFocused();
   await page.getByLabel("Find session by ID").fill(RESEARCH);
-  await page.getByLabel("Find session by ID").press("Enter");
+  await page.getByRole("button", { name: "Quickview" }).click();
   await expect(panel).toHaveAttribute("data-session-id", RESEARCH);
   await panel.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL("/workspaces/default/sessions/" + RESEARCH);
@@ -194,8 +209,7 @@ test("deep links, missing sessions, resizing and narrow inspector accessibility 
     expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   }
   await panel.getByRole("button", { name: "Close details" }).click();
-  await page.getByLabel("Find session by ID").fill("sesn_missing");
-  await page.getByLabel("Find session by ID").press("Enter");
+  await page.goto("/workspaces/default/sessions?session=sesn_missing");
   await expect(panel.getByTestId("error-state")).toHaveAttribute(
     "data-error-status",
     "404",
@@ -210,7 +224,7 @@ test("row Open enters the full session without inserting an inspector history en
   await signIn(page, "/workspaces/default/sessions?order=asc");
   for (const activation of ["click", "keyboard"]) {
     const row = page.getByRole("row").filter({
-      has: page.getByRole("cell", {
+      has: page.getByRole("link", {
         name: "Install deps and run tests",
         exact: true,
       }),

@@ -11,19 +11,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ErrorState } from "./bits";
-import type { Environment } from "@/lib/platform/types";
-import { useBatchEnvironments } from "@/lib/platform/queries";
+import type { Environment, Session } from "@/lib/platform/types";
+import { useBatchResourceActions } from "@/lib/platform/queries";
 
-export function EnvironmentSelectionActions({
+export function ResourceSelectionActions({
+  resource,
   selected,
   clear,
   onComplete,
 }: {
-  selected: Environment[];
+  resource: "session" | "environment";
+  selected: (Session | Environment)[];
   clear: () => void;
   onComplete: (ids: string[], action: "archive" | "delete") => void;
 }) {
-  const batch = useBatchEnvironments();
+  const batch = useBatchResourceActions(resource);
+  const plural = resource + "s";
   const [confirm, setConfirm] = useState<{
     action: "archive" | "delete";
     ids: string[];
@@ -32,7 +35,7 @@ export function EnvironmentSelectionActions({
     NonNullable<typeof batch.data>["failed"]
   >([]);
   const visibleFailures = failed.filter(({ id }) =>
-    selected.some((environment) => environment.id === id),
+    selected.some((item) => item.id === id),
   );
   if (visibleFailures.length !== failed.length) setFailed(visibleFailures);
   if (
@@ -42,12 +45,15 @@ export function EnvironmentSelectionActions({
     !batch.isPending
   )
     return null;
+  const running = selected.some(
+    (item) => item.type === "session" && item.status === "running",
+  );
   const actionLabel = confirm?.action === "delete" ? "Delete" : "Archive";
   return (
     <div className="space-y-3 pb-4">
       {batch.isPending && (
         <p role="status" className="text-sm text-muted-foreground">
-          Processing environments…
+          Processing {plural}…
         </p>
       )}
       {selected.length > 0 && (
@@ -70,14 +76,15 @@ export function EnvironmentSelectionActions({
             size="sm"
             disabled={
               batch.isPending ||
-              selected.every((environment) => !!environment.archived_at)
+              selected.every((item) => !!item.archived_at) ||
+              running
             }
             onClick={() =>
               setConfirm({
                 action: "archive",
                 ids: selected
-                  .filter((environment) => !environment.archived_at)
-                  .map((environment) => environment.id),
+                  .filter((item) => !item.archived_at)
+                  .map((item) => item.id),
               })
             }
           >
@@ -86,11 +93,11 @@ export function EnvironmentSelectionActions({
           <Button
             variant="outline"
             size="sm"
-            disabled={batch.isPending}
+            disabled={batch.isPending || running}
             onClick={() =>
               setConfirm({
                 action: "delete",
-                ids: selected.map((environment) => environment.id),
+                ids: selected.map((item) => item.id),
               })
             }
           >
@@ -113,14 +120,21 @@ export function EnvironmentSelectionActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {actionLabel} {confirm?.ids.length} environments?
+              {actionLabel} {confirm?.ids.length}{" "}
+              {confirm?.ids.length === 1 && resource === "session"
+                ? resource
+                : plural}
+              ?
             </DialogTitle>
             <DialogDescription>
-              {confirm?.action === "delete"
-                ? "Deletion is permanent. Environments still referenced by sessions cannot be deleted."
-                : "Archiving is terminal. New sessions cannot use these environments. Already archived environments are skipped."}{" "}
-              Each environment is processed separately; failures remain selected
-              for retry.
+              {resource === "session"
+                ? confirm?.action === "delete"
+                  ? "Permanently delete the selected sessions, their event histories and session files."
+                  : "Archived sessions retain their history and stop accepting new work."
+                : confirm?.action === "delete"
+                  ? "Deletion is permanent. Environments still referenced by sessions cannot be deleted."
+                  : "Archiving is terminal. New sessions cannot use these environments. Already archived environments are skipped."}{" "}
+              Failed {plural} remain selected for retry.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -142,7 +156,7 @@ export function EnvironmentSelectionActions({
                 });
               }}
             >
-              {actionLabel} environments
+              {actionLabel} {plural}
             </Button>
           </DialogFooter>
         </DialogContent>

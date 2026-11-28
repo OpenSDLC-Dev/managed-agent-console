@@ -16,6 +16,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, PanelRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useListFilters } from "@/lib/use-list-filters";
+import { CopyIdButton } from "@/components/console/copy-id";
+import {
+  activeTimeLabel,
+  lastSessionActivity,
+  SessionElapsed,
+  SessionTokenSummary,
+} from "@/components/console/session-metrics";
 import { TurnContents } from "@/components/console/session-turn";
 import { groupSessionTurns } from "@/lib/session-trace/turns";
 import { SessionTimeline } from "@/components/console/session-timeline";
@@ -61,9 +68,13 @@ import { SessionThreads } from "@/components/console/session-threads";
 import { SessionOutcomes } from "@/components/console/session-outcomes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn, tokenAttr, tokenCount } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/copy-text";
-import { useSession, useSessionThreads } from "@/lib/platform/queries";
+import {
+  useSession,
+  useSessionThreads,
+  useEnvironment,
+} from "@/lib/platform/queries";
 import { PlatformError } from "@/lib/platform/http";
 import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { latestStatus, pendingToolUses } from "@/lib/session-trace/store";
@@ -143,24 +154,28 @@ const CONNECTION_LABEL = {
   closed: "stream closed",
 } as const;
 
-/**
- * The session's metadata as one chip row (plan 03 slice 1) — the reference
- * console's density, from fields the wire already serves. The reference's
- * duration chip is deliberately absent: the platform serves `stats` empty by
- * recorded divergence.
- */
-function SessionChips({ session }: { session: Session }) {
+function SessionChips({
+  session,
+  events,
+}: {
+  session: Session;
+  events: SessionEvent[];
+}) {
   const chip = "flex items-center gap-1 font-normal";
-  // Clock-driven re-render: without it the age label freezes while the
-  // page sits open with no data changes (review finding, PR #26).
-  const age = ageLabel(session.created_at, useNow());
+  const environment = useEnvironment(session.environment_id);
+  const last = useMemo(
+    () => lastSessionActivity(session, events),
+    [session, events],
+  );
+  const age = ageLabel(last, useNow());
+  const active = activeTimeLabel(session.usage?.active_seconds);
   return (
     <div
       className="flex flex-wrap items-center gap-1.5 pb-3"
       data-testid="session-chips"
     >
       <Badge variant="outline" className={chip}>
-        <IdCode id={session.id} />
+        <CopyIdButton id={session.id} showValue />
       </Badge>
       <Badge variant="outline" className={chip}>
         <Link
@@ -175,7 +190,7 @@ function SessionChips({ session }: { session: Session }) {
           href={`${surfacePaths.environments}/${session.environment_id}`}
           className="hover:underline"
         >
-          <IdCode id={session.environment_id} />
+          {environment.data?.name || <IdCode id={session.environment_id} />}
         </Link>
       </Badge>
       {session.resources.length > 0 && (
@@ -199,27 +214,28 @@ function SessionChips({ session }: { session: Session }) {
           </Link>
         </Badge>
       ))}
-      <Badge
-        variant="outline"
-        className={cn(chip, "text-muted-foreground")}
-        data-testid="usage-chip"
-        data-input-tokens={tokenAttr(session.usage?.input_tokens)}
-        data-output-tokens={tokenAttr(session.usage?.output_tokens)}
-        data-cache-read-tokens={tokenAttr(
-          session.usage?.cache_read_input_tokens,
-        )}
-      >
-        {tokenCount(session.usage?.input_tokens)} in ·{" "}
-        {tokenCount(session.usage?.output_tokens)} out ·{" "}
-        {tokenCount(session.usage?.cache_read_input_tokens)} cache read
+      <Badge variant="outline" className={cn(chip, "text-muted-foreground")}>
+        <SessionTokenSummary usage={session.usage} />
       </Badge>
+      {active && (
+        <Badge
+          variant="outline"
+          className={chip}
+          data-active-seconds={session.usage.active_seconds}
+        >
+          Active {active}
+        </Badge>
+      )}
+      <span className="rounded-md border px-2 py-0.5 text-xs empty:hidden">
+        <SessionElapsed session={session} events={events} />
+      </span>
       {age && (
         <Badge
           variant="outline"
           className={cn(chip, "text-muted-foreground")}
-          title={session.created_at}
+          title={last}
         >
-          {age}
+          Last activity {age}
         </Badge>
       )}
     </div>
@@ -384,10 +400,15 @@ function SessionWorkspace({ id }: { id: string }) {
     (thread) => thread.id === selectedThread?.parent_thread_id,
   );
 
-  const status = session.data?.archived_at
-    ? session.data.status
-    : (latestStatus(sessionTrace.trace) ?? session.data?.status);
+  const status =
+    session.data?.archived_at || session.data?.status === "terminated"
+      ? session.data.status
+      : (latestStatus(sessionTrace.trace) ?? session.data?.status);
   const running = status === "running";
+  const ended =
+    !!session.data?.archived_at ||
+    status === "terminated" ||
+    sessionTrace.trace.deleted;
 
   const pending = useMemo(
     () => pendingToolUses(trace.events, selectedThreadId === null),
@@ -486,47 +507,48 @@ function SessionWorkspace({ id }: { id: string }) {
           </span>
         }
       />
-      <SessionChips session={data} />
-      <SessionTimeline
-        key={id}
-        scopeId={id}
-        events={sessionTrace.trace.events}
-        threads={threads.data?.data}
-        selectedThreadId={selectedThreadId}
-        onSelectThread={selectThread}
-        selectedId={selectedId}
-        onSelect={(event) =>
-          filters.update({ thread: null, event, inspector: "events" })
-        }
-        actions={
-          <>
-            <CopyAllButton events={sessionTrace.trace.events} />
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Open session inspector"
-              aria-expanded={inspector !== "closed"}
-              onClick={() =>
-                filters.update({
-                  inspector: inspector === "closed" ? null : "closed",
-                })
-              }
-            >
-              <PanelRight /> Inspector
-            </Button>
-          </>
-        }
-      >
-        <Input
-          aria-label="Find in transcript"
-          placeholder="Find in transcript"
-          className="h-8 w-56 max-w-full"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </SessionTimeline>
+      <SessionChips session={data} events={sessionTrace.trace.events} />
+
       <div className="relative flex min-h-0 flex-1 gap-3 pt-3">
         <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <SessionTimeline
+            key={id}
+            scopeId={id}
+            events={sessionTrace.trace.events}
+            threads={threads.data?.data}
+            selectedThreadId={selectedThreadId}
+            onSelectThread={selectThread}
+            selectedId={selectedId}
+            onSelect={(event) =>
+              filters.update({ thread: null, event, inspector: "events" })
+            }
+            actions={
+              <>
+                <CopyAllButton events={sessionTrace.trace.events} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Open session inspector"
+                  aria-expanded={inspector !== "closed"}
+                  onClick={() =>
+                    filters.update({
+                      inspector: inspector === "closed" ? null : "closed",
+                    })
+                  }
+                >
+                  <PanelRight /> Inspector
+                </Button>
+              </>
+            }
+          >
+            <Input
+              aria-label="Find in transcript"
+              placeholder="Find in transcript"
+              className="h-8 w-56 max-w-full"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </SessionTimeline>
           {selectedThreadId && (
             <div
               className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 text-sm"
@@ -547,7 +569,7 @@ function SessionWorkspace({ id }: { id: string }) {
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {!selectedThreadId && !data.archived_at && !trace.deleted && (
+            {!selectedThreadId && !ended && (
               <ApprovalBanner
                 pending={pending.filter(
                   (tool) =>
@@ -678,7 +700,7 @@ function SessionWorkspace({ id }: { id: string }) {
                               onSelectThread={selectThread}
                               threadNames={threadNames}
                               approval={
-                                !data.archived_at &&
+                                !ended &&
                                 !trace.deleted &&
                                 pending.some((tool) => tool.id === e.id) ? (
                                   selectedThreadId ? (
@@ -730,13 +752,23 @@ function SessionWorkspace({ id }: { id: string }) {
           </div>
 
           <div className="mx-auto w-full max-w-[720px]">
-            <Composer
-              sessionId={id}
-              running={running}
-              disabled={!!data.archived_at || sessionTrace.trace.deleted}
-              threadId={selectedThreadId ?? undefined}
-              threadName={selectedThread?.agent.name}
-            />
+            {ended ? (
+              <p
+                role="status"
+                className="rounded-lg bg-secondary p-3 text-center text-sm text-muted-foreground"
+              >
+                {sessionTrace.trace.deleted
+                  ? "The session was deleted."
+                  : "The session has terminated."}
+              </p>
+            ) : (
+              <Composer
+                sessionId={id}
+                running={running}
+                threadId={selectedThreadId ?? undefined}
+                threadName={selectedThread?.agent.name}
+              />
+            )}
           </div>
         </div>
         {inspector !== "closed" && (
@@ -755,7 +787,7 @@ function SessionWorkspace({ id }: { id: string }) {
                   <SessionOutcomes
                     sessionId={id}
                     outcomes={outcomeEvaluations}
-                    disabled={!!data.archived_at || trace.deleted}
+                    disabled={ended || trace.deleted}
                   />
                 )}
               </div>
@@ -784,7 +816,7 @@ function SessionWorkspace({ id }: { id: string }) {
             {inspector === "tools" && (
               <SessionToolIndex
                 agent={selectedThread?.agent ?? data.agent}
-                events={trace.events}
+                turns={turns}
                 onSelect={setSelectedId}
               />
             )}

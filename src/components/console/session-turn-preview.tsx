@@ -7,23 +7,20 @@ import { Button } from "@/components/ui/button";
 import type { Session, SessionEvent } from "@/lib/platform/types";
 import { groupSessionTurns } from "@/lib/session-trace/turns";
 import { summaryOf, textOf } from "@/lib/session-trace/summary";
-import { useSessionTrace } from "@/lib/session-trace/use-session-trace";
+import type { useSessionTrace } from "@/lib/session-trace/use-session-trace";
 import { ErrorState, ListSkeleton, Time } from "./bits";
 import { TurnContents } from "./session-turn";
 
 export function SessionTurnPreview({
   session,
   href,
+  sessionTrace,
 }: {
   session: Session;
   href: string;
+  sessionTrace: ReturnType<typeof useSessionTrace>;
 }) {
-  const { trace, history, connection } = useSessionTrace(
-    session.id,
-    undefined,
-    true,
-    !session.archived_at && session.status !== "terminated",
-  );
+  const { trace, history, connection } = sessionTrace;
   const groups = useMemo(() => groupSessionTurns(trace.events), [trace.events]);
   const turns = groups.filter((turn) => turn.number !== null);
   // Null follows the newest turn. Reading an older one pins its event ID

@@ -171,19 +171,23 @@ export function useEnvironment(id: string) {
   });
 }
 
-export function useSessions(params: {
-  page?: string;
-  deployment_id?: string;
-  statuses?: SessionStatus[];
-  agent_id?: string;
-  agent_version?: string;
-  order?: "asc" | "desc";
-  include_archived?: boolean;
-  "created_at[gte]"?: string;
-  "created_at[lte]"?: string;
-}) {
+export function useSessions(
+  params: {
+    page?: string;
+    deployment_id?: string;
+    statuses?: SessionStatus[];
+    agent_id?: string;
+    agent_version?: string;
+    order?: "asc" | "desc";
+    include_archived?: boolean;
+    "created_at[gte]"?: string;
+    "created_at[lte]"?: string;
+  },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["sessions", params],
+    enabled,
     queryFn: () =>
       platformGet<Page<Session>>("v1/sessions", {
         limit: 20,
@@ -194,9 +198,14 @@ export function useSessions(params: {
   });
 }
 
-export function useSession(id: string, refetchInterval?: number) {
+export function useSession(
+  id: string,
+  refetchInterval?: number,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["session", id],
+    enabled,
     queryFn: () =>
       platformGet<Session>(`v1/sessions/${encodeURIComponent(id)}`),
     refetchInterval,
@@ -1732,7 +1741,7 @@ export function useDeleteFile({
   });
 }
 /** Apply the existing single-resource routes; retain each failure for retry. */
-export function useBatchEnvironments() {
+export function useBatchResourceActions(resource: "session" | "environment") {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorToast: false },
@@ -1743,20 +1752,29 @@ export function useBatchEnvironments() {
       ids: string[];
       action: "archive" | "delete";
     }) => {
+      const workspace = tabWorkspace();
       const succeeded: string[] = [];
       const failed: { id: string; error: unknown }[] = [];
       for (const id of ids) {
         try {
-          const path = "v1/environments/" + encodeURIComponent(id);
+          if (tabWorkspace() !== workspace)
+            throw new Error("The selected workspace changed.");
+          const path = "v1/" + resource + "s/" + encodeURIComponent(id);
           if (action === "archive") {
-            const environment = await platformPost<Environment>(
+            const updated = await platformPost<Session | Environment>(
               path + "/archive",
               {},
             );
-            queryClient.setQueryData(["environment", id], environment);
+            queryClient.setQueryData([resource, id], updated);
+            if (resource === "session")
+              void queryClient.invalidateQueries({
+                queryKey: ["session-files", id],
+              });
           } else {
             await platformDelete<{ id: string; type: string }>(path);
-            queryClient.removeQueries({ queryKey: ["environment", id] });
+            queryClient.removeQueries({ queryKey: [resource, id] });
+            if (resource === "session")
+              queryClient.removeQueries({ queryKey: ["session-files", id] });
           }
           succeeded.push(id);
         } catch (error) {
@@ -1766,7 +1784,7 @@ export function useBatchEnvironments() {
       return { succeeded, failed };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["environments"] });
+      void queryClient.invalidateQueries({ queryKey: [resource + "s"] });
     },
   });
 }

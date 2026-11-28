@@ -115,6 +115,7 @@ test("sessions list filters by status", async ({ page }) => {
     .filter({ hasText: "Install deps and run tests" })
     .getByTestId("tokens-cell");
   await expect(tokens).toHaveAttribute("data-input-tokens", "5412");
+  await expect(tokens).toHaveAttribute("data-total-input-tokens", "9712");
   await expect(tokens).toHaveAttribute("data-output-tokens", "890");
 
   await page.getByRole("combobox", { name: "Status filter" }).click();
