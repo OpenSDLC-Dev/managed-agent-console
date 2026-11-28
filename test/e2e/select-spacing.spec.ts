@@ -115,7 +115,10 @@ test("a long linked account name leaves the native form chevron clear", async ({
   await page.route("**/workspaces/default/service_accounts?*", (route) =>
     route.fulfill({
       json: {
-        data: [{ id: "svc_long", name: "W".repeat(100) }],
+        data: [
+          { id: "svc_short", name: "Short" },
+          { id: "svc_long", name: "W".repeat(100) },
+        ],
         next_page: null,
       },
     }),
@@ -123,6 +126,7 @@ test("a long linked account name leaves the native form chevron clear", async ({
   await signIn(page, "/settings/keys");
   const form = await openApiKeyForm(page);
   const owner = form.getByLabel("Linked account", { exact: true });
+  await owner.selectOption("svc_short");
   const trailingEdge = async () => {
     const bounds = (await owner.boundingBox())!;
     return page.screenshot({
