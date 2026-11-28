@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select";
 import { ArrowLeft, Check, Copy, ExternalLink, Settings2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -76,7 +77,7 @@ export function PlaygroundCode({
           <label className="sr-only" htmlFor="playground-code-language">
             Code language
           </label>
-          <select
+          <NativeSelect
             id="playground-code-language"
             className="h-8 rounded-lg bg-muted/70 px-2 text-sm font-medium"
             value={language}
@@ -86,7 +87,7 @@ export function PlaygroundCode({
           >
             <option>cURL</option>
             <option>JSON</option>
-          </select>
+          </NativeSelect>
           <DropdownMenu>
             <DropdownMenuTrigger
               type="button"

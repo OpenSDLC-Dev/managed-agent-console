@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
 import Link from "@/components/shell/workspace-navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -369,7 +370,7 @@ export function ModelSetupDialog({
           <div className="flex flex-wrap items-end gap-4">
             <div className="min-w-48 flex-1 space-y-1.5">
               <Label htmlFor="setup-vendor">Vendor</Label>
-              <select
+              <NativeSelect
                 id="setup-vendor"
                 className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
                 disabled={!!made.provider}
@@ -381,7 +382,7 @@ export function ModelSetupDialog({
                     {p.display_name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {profile && isRegional(profile) && (
               <fieldset className="space-y-1.5">

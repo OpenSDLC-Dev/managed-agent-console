@@ -1,4 +1,5 @@
 "use client";
+import { NativeSelect } from "@/components/ui/native-select";
 import { TimezonePicker } from "./timezone-picker";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export function DeploymentSchedule({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="deployment-frequency">Frequency</Label>
-          <select
+          <NativeSelect
             id="deployment-frequency"
             className="h-8 w-full rounded-lg border bg-background px-2 text-sm"
             value={draft.frequency}
@@ -105,7 +106,7 @@ export function DeploymentSchedule({
             {FREQUENCIES.map((value) => (
               <option key={value}>{value}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div className="space-y-1.5">
           <TimezonePicker value={timezone} onChange={onTimezoneChange} />
@@ -175,7 +176,7 @@ export function DeploymentSchedule({
               {draft.frequency === "Weekly" && (
                 <div className="space-y-1.5">
                   <Label htmlFor="deployment-weekday">On</Label>
-                  <select
+                  <NativeSelect
                     id="deployment-weekday"
                     className="h-8 rounded-lg border bg-background px-2 text-sm"
                     value={draft.weekday}
@@ -188,7 +189,7 @@ export function DeploymentSchedule({
                         {day}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </div>
               )}
             </div>

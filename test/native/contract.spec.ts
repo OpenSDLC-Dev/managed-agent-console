@@ -1640,7 +1640,9 @@ test("native model limits persist and principal usage keeps credential attributi
     page.locator("[data-limit=output_tokens_per_minute]"),
   ).toHaveAttribute("data-value", "700");
   await page.goto("/usage");
-  await page.getByRole("button", { name: "Principal", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Group by", exact: true })
+    .selectOption("principal_id");
   for (const id of usagePrincipals)
     await expect(page.locator(`[data-group=${id}]`)).toBeVisible();
   await expect(page.locator("[data-group=apikey_historical]")).toBeVisible();

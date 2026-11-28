@@ -116,7 +116,7 @@ test("dashboard opens the usage period and each admitted resource shown on its c
     // The title link extends across the card, including the painted value.
     const bounds = (await value.boundingBox())!;
     await page.mouse.click(bounds.x + 2, bounds.y + bounds.height / 2);
-    await expect(page.getByRole("combobox", { name: "Period" })).toHaveValue(
+    await expect(page.getByRole("combobox", { name: "Range" })).toHaveValue(
       range,
     );
     await page.goBack();

@@ -273,7 +273,9 @@ describe("Nav", () => {
             ? "Memory"
             : surface === "vaults"
               ? "Credential vaults"
-              : SURFACES[surface].label,
+              : surface === "usage"
+                ? "API usage"
+                : SURFACES[surface].label,
           surfacePaths[surface],
           surface,
         ]),

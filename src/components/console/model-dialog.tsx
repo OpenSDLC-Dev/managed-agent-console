@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -224,7 +225,7 @@ export function ModelDialog({
                       key={i}
                       className="grid grid-cols-[minmax(0,1fr)_72px_44px_32px] items-center gap-2 py-1"
                     >
-                      <select
+                      <NativeSelect
                         aria-label={label}
                         className="h-9 min-w-0 rounded-md border bg-transparent px-3 font-mono text-sm"
                         disabled={fixed}
@@ -251,7 +252,7 @@ export function ModelDialog({
                               {d.enabled ? "" : " (disabled)"}
                             </option>
                           ))}
-                      </select>
+                      </NativeSelect>
                       {single ? (
                         <span className="col-span-3" />
                       ) : (

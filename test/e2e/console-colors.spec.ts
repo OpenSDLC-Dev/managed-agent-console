@@ -93,7 +93,9 @@ for (const scheme of ["light", "dark"] as const) {
         nodes.map((n) => n.getAttribute("data-cost")),
       );
     const original = await totals();
-    await page.getByRole("button", { name: "Principal", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Group by", exact: true })
+      .selectOption("principal_id");
     await expect(page.locator("table[data-by=principal_id]")).toBeVisible();
     expect(await totals()).toEqual(original);
   });

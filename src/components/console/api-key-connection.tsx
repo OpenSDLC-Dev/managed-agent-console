@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { SyntaxCode } from "./syntax-code";
 import { useState, type ReactNode, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -228,7 +229,7 @@ export function KeyCliLogin({ onBack }: { onBack: () => void }) {
             command={installCommands[method]}
             copyLabel="Copy install command"
           >
-            <select
+            <NativeSelect
               aria-label="Installation method"
               className="max-w-full rounded bg-transparent focus-visible:outline-2 focus-visible:outline-ring"
               value={method}
@@ -238,7 +239,7 @@ export function KeyCliLogin({ onBack }: { onBack: () => void }) {
             >
               <option value="homebrew">Homebrew (macOS)</option>
               <option value="go">Go</option>
-            </select>
+            </NativeSelect>
           </CliCommand>
         </CliStep>
         <CliStep n={2} title="Sign in">

@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useId } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Check, ChevronDown } from "lucide-react";
@@ -105,7 +106,7 @@ export function AgentModelMenu({
               )}
               <div className="mt-1 flex items-center justify-between border-t px-2 py-2">
                 <label htmlFor={id + "-effort"}>Effort</label>
-                <select
+                <NativeSelect
                   id={id + "-effort"}
                   className="rounded-md border bg-background px-2 py-1"
                   value={effort}
@@ -119,7 +120,7 @@ export function AgentModelMenu({
                         : level[0].toUpperCase() + level.slice(1)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <label className="flex items-center justify-between border-t px-2 py-2">
                 Fast speed

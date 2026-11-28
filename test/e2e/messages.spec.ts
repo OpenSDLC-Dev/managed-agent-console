@@ -114,7 +114,7 @@ test("Messages navigation, Overview links and the selected API key", async ({
   await page.goBack();
   await main.getByRole("link", { name: "Open caching" }).click();
   await expect(page).toHaveURL(/\/usage\?range=7#input-tokens$/);
-  await expect(main.getByRole("combobox", { name: "Period" })).toHaveValue("7");
+  await expect(main.getByRole("combobox", { name: "Range" })).toHaveValue("7");
   await expect(main.locator("#input-tokens")).toBeVisible();
   await page.goBack();
   await main.getByRole("link", { name: "Open logs" }).click();
@@ -198,7 +198,7 @@ test("a cold seven-day caching link scrolls to Input tokens when the daily repor
   );
   await page.goto("/usage?range=7#input-tokens");
   const main = page.getByRole("main");
-  await expect(main.getByRole("combobox", { name: "Period" })).toHaveValue("7");
+  await expect(main.getByRole("combobox", { name: "Range" })).toHaveValue("7");
   await expect(main.locator("#input-tokens")).toBeInViewport({ ratio: 0.8 });
   expect(delayed).toBe(true);
 });

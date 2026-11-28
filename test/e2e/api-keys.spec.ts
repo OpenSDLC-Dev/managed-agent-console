@@ -322,7 +322,7 @@ test("View cost opens the actual key's UTC month-to-date query and survives relo
   const url = new URL(page.url());
   expect(url.searchParams.get("api_key")).toBe("apikey_ci01");
   expect(url.searchParams.get("range")).toBe("mtd");
-  const key = page.getByRole("combobox", { name: "Key", exact: true });
+  const key = page.getByRole("combobox", { name: "API key", exact: true });
   await expect(key).toHaveValue("apikey_ci01");
   await page.reload();
   await expect(key).toHaveValue("apikey_ci01");
@@ -366,7 +366,7 @@ test("expired keys remain inspectable and billable while only deletion is offere
   await menu.getByRole("menuitem", { name: "View cost" }).click();
   await expect(page).toHaveURL(/\/usage\?/);
   await expect(
-    page.getByRole("combobox", { name: "Key", exact: true }),
+    page.getByRole("combobox", { name: "API key", exact: true }),
   ).toHaveValue(/apikey_new/);
 });
 

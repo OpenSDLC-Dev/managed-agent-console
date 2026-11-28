@@ -1766,6 +1766,31 @@ export const SURFACES: Surface[] = [
     },
   },
   {
+    id: "usage-model-picker",
+    route: "/usage",
+    fixture: "model filter open over the usage report",
+    description:
+      "API usage navigation, filter captions and the model menu with its selected option.",
+    setup: async (page) => {
+      await page.locator("table[data-by]").waitFor();
+      await page.getByRole("combobox", { name: "Model", exact: true }).click();
+    },
+  },
+  {
+    id: "usage-long-filter-narrow",
+    route:
+      "/usage?alias=retired-provider-with-a-long-unbroken-model-identifier-for-testing",
+    fixture: "a saved model filter on a narrow viewport",
+    description:
+      "The selected model and its chevron fit the wrapped Usage toolbar.",
+    setup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page
+        .getByRole("combobox", { name: "Model", exact: true })
+        .waitFor();
+    },
+  },
+  {
     id: "usage-chart-tooltip",
     route: "/usage",
     fixture: "the latest day's bar, hovered",
@@ -3251,7 +3276,9 @@ export const SURFACES: Surface[] = [
     setup: async (page) => {
       const menu = await openApiKeyMenu(page, "ci-deploy");
       await menu.getByRole("menuitem", { name: "View cost" }).click();
-      await page.getByRole("combobox", { name: "Key", exact: true }).waitFor();
+      await page
+        .getByRole("combobox", { name: "API key", exact: true })
+        .waitFor();
     },
   },
   {

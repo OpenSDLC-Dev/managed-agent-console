@@ -215,6 +215,93 @@
   }
 }
 
+/* The chevron is 14px wide, inset 10px at the trailing edge. Reserve its
+   space even when a field's own horizontal padding is smaller. */
+[data-slot="native-select"] {
+  appearance: none;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline-end: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23767676' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 6 4.5 4.5L12.5 6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 0.875rem;
+}
+[data-slot="native-select"]:dir(rtl) {
+  background-position: left 0.625rem center;
+}
+
+/* Keep the system picker on touch devices and in forced colors. */
+@supports (appearance: base-select) and selector(::picker(select)) {
+  @media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+    [data-slot="native-select"],
+    [data-slot="native-select"]::picker(select) {
+      appearance: base-select;
+    }
+    [data-slot="native-select"] {
+      align-items: center;
+      /* Chromium paints its anonymous selected text into padding unless the
+         clip ends at the content box. Keep the chevron's space clear. */
+      overflow: clip;
+      overflow-clip-margin: content-box;
+    }
+    [data-slot="native-select"]::picker-icon {
+      display: none;
+    }
+    [data-slot="native-select"]::picker(select) {
+      margin-block: 0.25rem;
+      min-inline-size: anchor-size(width);
+      max-inline-size: min(28rem, calc(100vw - 1rem));
+      max-block-size: min(20rem, 50dvh);
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.25rem;
+      background: var(--popover);
+      color: var(--popover-foreground);
+      box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+    }
+    [data-usage-filter]::picker(select) {
+      inline-size: min(20rem, calc(100vw - 1rem));
+      min-inline-size: 0;
+      border-radius: 0.875rem;
+      padding: 0.375rem;
+    }
+    [data-slot="native-select"] option {
+      align-items: center;
+      gap: 0.625rem;
+      min-block-size: 2rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.25rem;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    [data-usage-filter] option {
+      min-block-size: 1.75rem;
+      padding-block: 0.25rem;
+    }
+    [data-slot="native-select"] option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+    }
+    [data-slot="native-select"] option:is(:hover, :focus-visible):enabled {
+      background: var(--accent);
+      color: var(--accent-foreground);
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  [data-slot="native-select"] {
+    appearance: auto;
+    background-image: none;
+    padding-inline-end: 0.625rem;
+  }
+}
+
 /* Files and Skills, sampled from the signed-in Resources pages. Dialogs use
    a dimmed, sharp backdrop so the invoking table remains recognizable. */
 [data-resource-library] [data-copy-feedback],

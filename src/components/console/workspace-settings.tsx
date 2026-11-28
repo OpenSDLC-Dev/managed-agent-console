@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useContext, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -360,7 +361,7 @@ export function WorkspaceDetails({ id }: { id: string }) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="grant-role">Workspace role</Label>
-              <select
+              <NativeSelect
                 id="grant-role"
                 className="h-9 rounded-md border bg-background px-3 text-sm"
                 value={role}
@@ -373,7 +374,7 @@ export function WorkspaceDetails({ id }: { id: string }) {
                     {roleLabels[r]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             <Button type="submit" disabled={change.isPending || !alias.trim()}>
               Save grant

@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { surfacePaths } from "@/lib/routes";
 import { useContext, useEffect, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -102,7 +103,7 @@ function ExpirySelect({
     return () => window.clearInterval(timer);
   }, []);
   return (
-    <select
+    <NativeSelect
       id="api-key-expires"
       data-testid="api-key-expires"
       className={SELECT_CLASS}
@@ -135,7 +136,7 @@ function ExpirySelect({
           </option>
         );
       })}
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -548,7 +549,7 @@ export function KeyCreation({
                           </Link>
                         )}
                     </div>
-                    <select
+                    <NativeSelect
                       id="api-key-owner"
                       aria-describedby="key-owner-description"
                       className={SELECT_CLASS}
@@ -571,7 +572,7 @@ export function KeyCreation({
                           Service account · {account.name || account.id}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                     <p
                       id="key-owner-description"
                       className="text-[13px] text-muted-foreground"
@@ -620,7 +621,7 @@ export function KeyCreation({
                 )}
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="api-key-scope">Scope</Label>
-                  <select
+                  <NativeSelect
                     id="api-key-scope"
                     className={SELECT_CLASS}
                     value={tabWorkspace()}
@@ -630,7 +631,7 @@ export function KeyCreation({
                     <option value={tabWorkspace()}>
                       {session?.workspace_name ?? tabWorkspace()}
                     </option>
-                  </select>
+                  </NativeSelect>
                   <p
                     id="key-scope-description"
                     className="text-[13px] text-muted-foreground"

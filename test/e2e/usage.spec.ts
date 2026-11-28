@@ -22,7 +22,9 @@ test("read the month's usage, grouped and filtered", async ({ page }) => {
   const all = Number(await requests.getAttribute("data-requests"));
   await expect(page.getByRole("listitem")).toHaveCount(30);
 
-  await page.getByRole("button", { name: "Principal", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Group by", exact: true })
+    .selectOption("principal_id");
   await expect(page.locator("table[data-by=principal_id]")).toBeVisible();
   await expect(page.locator("[data-group=apikey_ci01]")).toContainText(
     "ci-deploy",

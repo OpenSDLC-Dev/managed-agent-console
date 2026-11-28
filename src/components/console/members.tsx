@@ -1,5 +1,6 @@
 "use client";
 
+import { NativeSelect } from "@/components/ui/native-select";
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -155,7 +156,7 @@ export function Members() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="member-filter-role">Filter by role</Label>
-          <select
+          <NativeSelect
             id="member-filter-role"
             className={roleClass}
             value={role}
@@ -165,7 +166,7 @@ export function Members() {
             {["user", "developer", "admin"].map((r) => (
               <option key={r}>{r}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <Button variant="outline" type="submit">
           Apply filters
@@ -213,7 +214,7 @@ export function Members() {
                     </span>
                   </div>
                 ) : (
-                  <select
+                  <NativeSelect
                     aria-label={`Role for ${m.name || m.login_name || m.id}`}
                     className={roleClass}
                     value={m.role}
@@ -230,7 +231,7 @@ export function Members() {
                     {["user", "developer", "admin"].map((r) => (
                       <option key={r}>{r}</option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 ),
             },
             {
@@ -348,7 +349,7 @@ export function Members() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="new-role">Role</Label>
-              <select
+              <NativeSelect
                 id="new-role"
                 name="role"
                 defaultValue="user"
@@ -357,7 +358,7 @@ export function Members() {
                 {["user", "developer", "admin"].map((r) => (
                   <option key={r}>{r}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {error && (
               <p role="alert" className="text-sm text-destructive">
