@@ -117,9 +117,13 @@ for (const scheme of ["light", "dark"] as const) {
     expect(key[0]).toBeGreaterThan(key[1]);
     expect(string[1]).toBeGreaterThan(string[0]);
     await page.getByRole("button", { name: "Copy configuration" }).click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
-      source,
-    );
+    await expect(
+      page.getByText("Configuration copied", { exact: true }),
+    ).toBeVisible();
+    // The Windows clipboard stores CRLF; the native editor restores its LF text on paste.
+    await input.fill("");
+    await input.press("ControlOrMeta+v");
+    await expect(input).toHaveValue(source);
     await page.emulateMedia({ forcedColors: "active" });
     await expect(input).not.toHaveCSS("color", "rgba(0, 0, 0, 0)");
     await expect(code).toBeHidden();
