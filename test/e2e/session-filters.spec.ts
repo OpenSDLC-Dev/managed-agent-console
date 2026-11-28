@@ -236,18 +236,25 @@ test("status multi-select defaults to active and Created sorts on the server", a
     .toBeLessThanOrEqual(390);
   await settleMotion(page);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  const lookups: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/proxy/v1/sessions/sesn_missing"))
+      lookups.push(request.url());
+  });
+  const lookup = page.getByRole("textbox", { name: "Find session by ID" });
+  await lookup.fill("sesn_missing?limit=100");
+  await expect(page.getByText("No matching sessions")).toBeVisible();
   const rejected = page.waitForResponse(
-    (r) => r.url().includes("sesn_missing") && r.status() === 404,
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/sessions/sesn_missing") &&
+      response.status() === 404,
   );
-  await page
-    .getByRole("textbox", { name: "Find session by ID" })
-    .fill("sesn_missing?limit=100");
+  await lookup.fill("sesn_missing");
   const refusal = await rejected;
+  expect(lookups).toEqual([refusal.url()]);
   expect(new URL(refusal.url()).search).toBe("");
-  expect(new URL(refusal.url()).pathname).toContain(
-    "sesn_missing%3Flimit%3D100",
-  );
   expect(await refusal.json()).toMatchObject({
     error: { type: "not_found_error" },
   });
+  await expect(page.getByText("No matching sessions")).toBeVisible();
 });
