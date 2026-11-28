@@ -180,15 +180,17 @@ function UsageOverview() {
         ? names.upstreamName(id)
         : id;
 
-  const priced = groups.filter((group) => group.cost > 0);
-  const leading = priced.slice(0, chartSeriesLimit);
+  const leading = groups
+    .filter((group) => group.cost > 0)
+    .slice(0, chartSeriesLimit);
+  const rank = new Map(leading.map((group, i) => [group.id, i]));
   const series: CostSeries[] = leading.map((group, index) => ({
     name: groupName(group.id),
     index,
   }));
-  if (priced.length > leading.length)
+  // A group's costs can offset across days while individual days still need a segment.
+  if (rows.some((row) => row.cost !== 0 && !rank.has(groupKey(row))))
     series.push({ name: "Other", index: null });
-  const rank = new Map(leading.map((group, i) => [group.id, i]));
   const byDay = groupBy(rows, (row) => row.day);
   const perDay = Array.from({ length: days }, (_, i) => {
     const day = new Date(Date.parse(`${range.from}T00:00:00Z`) + i * 86_400_000)

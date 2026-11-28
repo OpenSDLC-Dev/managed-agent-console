@@ -248,6 +248,33 @@ describe("Usage overview", () => {
     );
   });
 
+  it("preserves a daily segment when its group's costs offset across days", async () => {
+    vi.setSystemTime(new Date("2026-03-03T12:00:00Z"));
+    window.history.replaceState(null, "", "/usage?range=7");
+    const rows = [
+      { ...daily[0], day: "2026-03-01", alias: "ranked", cost: 3 },
+      { ...daily[0], day: "2026-03-01", alias: "offset", cost: 2 },
+      { ...daily[0], day: "2026-03-02", alias: "offset", cost: -2 },
+    ];
+    stubGatewayFetch((_method, rest) =>
+      rest === "usage/daily" ? Response.json({ data: rows }) : undefined,
+    );
+    renderPage(<UsagePage />);
+    const bars = await screen.findByRole("list", { name: "Cost per day" });
+    const day = bars.querySelector('[data-day="2026-03-01"]')!;
+    expect(day).toHaveAttribute("data-cost", "5");
+    expect(
+      Array.from(day.querySelectorAll("[data-series-cost]"), (part) =>
+        part.getAttribute("data-series-cost"),
+      ),
+    ).toEqual(["3", "2"]);
+    expect(screen.getByLabelText("Cost series")).toHaveTextContent("Other");
+    expect(bars.querySelector('[data-day="2026-03-02"]')).toHaveAttribute(
+      "data-cost",
+      "-2",
+    );
+  });
+
   // A read can name thousands of keys or models; a row for each would stall
   // the page (PR #223 review).
   it("probe: shows the 100 costliest groups, and says how many more there are", async () => {
