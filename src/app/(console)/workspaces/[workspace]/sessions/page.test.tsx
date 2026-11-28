@@ -192,6 +192,69 @@ afterEach(() => {
 });
 
 describe("SessionsPage", () => {
+  it("loads archived and unarchived terminated sessions for the shared All URL", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/workspaces/default/sessions?status=all",
+    );
+    const ended = session({
+      id: "sesn_failed",
+      title: "Ended by failure",
+      status: "terminated",
+    });
+    const archived = session({
+      id: "sesn_archived",
+      title: "Archived run",
+      status: "terminated",
+      archived_at: "2026-08-10T00:00:00Z",
+    });
+    const fetchMock = stubFetch((url) =>
+      json({
+        data: [ended, archived].filter(
+          (row) =>
+            url.searchParams.getAll("statuses").includes(row.status) &&
+            (!row.archived_at ||
+              url.searchParams.get("include_archived") === "true"),
+        ),
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText("Ended by failure")).toBeVisible();
+    expect(screen.getByText("Archived run")).toBeVisible();
+    expect(sessionUrls(fetchMock)[0].searchParams.getAll("statuses")).toEqual([
+      "running",
+      "idle",
+      "rescheduling",
+      "terminated",
+    ]);
+  });
+
+  it("reads a shared opaque page cursor before making the first list request", async () => {
+    const cursor = "next/row+=end";
+    window.history.replaceState(
+      null,
+      "",
+      "/workspaces/default/sessions?page=" + encodeURIComponent(cursor),
+    );
+    const fetchMock = stubFetch((url) =>
+      json({
+        data: [
+          session({
+            id: "sesn_row",
+            title:
+              url.searchParams.get("page") === cursor
+                ? "Second page"
+                : "First page",
+          }),
+        ],
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText("Second page")).toBeVisible();
+    expect(sessionUrls(fetchMock)).toHaveLength(1);
+  });
+
   it("shows skeleton rows while the list loads", () => {
     vi.stubGlobal(
       "fetch",

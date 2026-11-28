@@ -7,6 +7,65 @@ test.beforeEach(async ({ request }) => {
   await request.post(MOCK + "/__reset");
 });
 
+test("All includes archived sessions and restores the exact result page through history and reload", async ({
+  page,
+  request,
+}) => {
+  const archived = await request.post(
+    MOCK + "/v1/sessions/sesn_gatedbash00000000001/archive",
+    {
+      headers: {
+        "x-api-key": "sk-map-api01-mock-owned-test-key-00000000000000000000001",
+      },
+      data: {},
+    },
+  );
+  expect(archived.ok()).toBe(true);
+  await page.route("**/proxy/v1/sessions?*", async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.set("limit", "1");
+    await route.fulfill({ response: await route.fetch({ url: url.href }) });
+  });
+  const list = "/workspaces/default/sessions?status=all&order=asc";
+  const first = page
+    .locator("tbody")
+    .getByText("Install deps and run tests", { exact: true });
+  const second = page
+    .locator("tbody")
+    .getByText("Survey agent frameworks", { exact: true });
+  await signIn(page, list);
+  await expect(first).toBeVisible();
+  await expect(page.locator("tbody [data-status=terminated]")).toBeVisible();
+  await page.getByRole("button", { name: "Next page" }).click();
+  await expect(second).toBeVisible();
+  const paged = new URL(page.url());
+  expect(paged.searchParams.get("page")).toBeTruthy();
+  await page.reload();
+  await expect(second).toBeVisible();
+  await page.goBack();
+  await expect(first).toBeVisible();
+  await page.goForward();
+  await expect(second).toBeVisible();
+  await page.goto(paged.href);
+  await expect(second).toBeVisible();
+
+  // Applying the same filter must not discard the cursor. A changed filter
+  // and its cursor reset share one history entry.
+  await page.getByLabel("Created filter").click();
+  await page.getByRole("button", { name: "Custom range" }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page).toHaveURL(paged.href);
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(page).toHaveURL("/workspaces/default/sessions");
+  await expect(second).toBeVisible();
+  await expect(first).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(paged.href);
+  await expect(second).toBeVisible();
+  await page.getByRole("button", { name: "Previous page" }).click();
+  await expect(first).toBeVisible();
+});
+
 test("deployment filtering reaches archived options and exact lookup escapes a filter", async ({
   page,
   request,
@@ -79,6 +138,8 @@ test("status multi-select defaults to active and Created sorts on the server", a
     "running",
     "terminated",
   ]);
+  expect(params.get("include_archived")).toBe("true");
+  await expect(page).toHaveURL(/status=all$/);
   await page.getByRole("button", { name: "Clear selection" }).click();
   await expect(page.getByLabel("Status filter")).toHaveAttribute(
     "data-value",
