@@ -243,6 +243,10 @@
     }
     [data-slot="native-select"] {
       align-items: center;
+      /* Chromium paints its anonymous selected text into padding unless the
+         clip ends at the content box. Keep the chevron's space clear. */
+      overflow: clip;
+      overflow-clip-margin: content-box;
     }
     [data-slot="native-select"]::picker-icon {
       display: none;
@@ -261,7 +265,8 @@
       box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
     }
     [data-usage-filter]::picker(select) {
-      min-inline-size: max(anchor-size(width), min(20rem, calc(100vw - 1rem)));
+      inline-size: min(20rem, calc(100vw - 1rem));
+      min-inline-size: 0;
       border-radius: 0.875rem;
       padding: 0.375rem;
     }
