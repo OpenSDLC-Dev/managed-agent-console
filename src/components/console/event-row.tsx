@@ -465,6 +465,7 @@ export function EventDetailPanel({
   return (
     <aside
       data-testid="event-detail"
+      data-event-id={event.id}
       data-event-type={event.type}
       {...usageAttrs(event)}
       aria-label="Event details"

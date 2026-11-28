@@ -16,6 +16,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, PanelRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useListFilters } from "@/lib/use-list-filters";
+import { TurnContents } from "@/components/console/session-turn";
+import { groupSessionTurns } from "@/lib/session-trace/turns";
 import { SessionTimeline } from "@/components/console/session-timeline";
 import { SessionThreadPreview } from "@/components/console/session-thread-preview";
 import {
@@ -416,6 +418,14 @@ function SessionWorkspace({ id }: { id: string }) {
           eventSearchText(e).toLowerCase().includes(search.toLowerCase())),
     );
   }, [filter, search, trace.events]);
+  const turns = useMemo(
+    () => groupSessionTurns(trace.events, selectedThreadId !== null),
+    [trace.events, selectedThreadId],
+  );
+  const visibleIds = useMemo(
+    () => new Set(visible.map((e) => e.id)),
+    [visible],
+  );
   const selected = selectedId
     ? trace.events.find((e) => e.id === selectedId)
     : undefined;
@@ -647,48 +657,64 @@ function SessionWorkspace({ id }: { id: string }) {
               ) : (
                 <div className="mx-auto w-full min-w-0 max-w-[720px]">
                   <div>
-                    {visible.map((e) => (
-                      <Fragment key={e.id}>
-                        <TranscriptCard
-                          event={e}
-                          offset={offsetLabel(data.created_at, e.processed_at)}
-                          durationMs={durations.get(e.id)}
-                          selected={e.id === selectedId}
-                          actor={actorFor(e)}
-                          onSelectThread={selectThread}
-                          threadNames={threadNames}
-                          approval={
-                            !data.archived_at &&
-                            !trace.deleted &&
-                            pending.some((tool) => tool.id === e.id) ? (
-                              selectedThreadId ? (
-                                <p
-                                  className="text-xs text-muted-foreground"
-                                  data-approval-state={
-                                    approvals.states[e.id]?.status ?? "required"
-                                  }
-                                >
-                                  {approvals.states[e.id]?.status === "success"
-                                    ? "Confirmation sent"
-                                    : "Requires approval"}
-                                </p>
-                              ) : (
-                                <ApprovalBanner
-                                  inline
-                                  pending={[e]}
-                                  approvals={approvals}
-                                />
-                              )
-                            ) : undefined
-                          }
-                          onSelect={() =>
-                            setSelectedId((current) =>
-                              current === e.id ? null : e.id,
-                            )
-                          }
-                        />
-                        {gaps.has(e.id) && <IdleBand ms={gaps.get(e.id)!} />}
-                      </Fragment>
+                    {turns.map((turn) => (
+                      <TurnContents
+                        key={turn.id}
+                        turn={turn}
+                        visible={visibleIds}
+                        expand={filter !== "all" || !!search}
+                        selectedId={selectedId}
+                        renderEvent={(e) => (
+                          <Fragment key={e.id}>
+                            <TranscriptCard
+                              event={e}
+                              offset={offsetLabel(
+                                data.created_at,
+                                e.processed_at,
+                              )}
+                              durationMs={durations.get(e.id)}
+                              selected={e.id === selectedId}
+                              actor={actorFor(e)}
+                              onSelectThread={selectThread}
+                              threadNames={threadNames}
+                              approval={
+                                !data.archived_at &&
+                                !trace.deleted &&
+                                pending.some((tool) => tool.id === e.id) ? (
+                                  selectedThreadId ? (
+                                    <p
+                                      className="text-xs text-muted-foreground"
+                                      data-approval-state={
+                                        approvals.states[e.id]?.status ??
+                                        "required"
+                                      }
+                                    >
+                                      {approvals.states[e.id]?.status ===
+                                      "success"
+                                        ? "Confirmation sent"
+                                        : "Requires approval"}
+                                    </p>
+                                  ) : (
+                                    <ApprovalBanner
+                                      inline
+                                      pending={[e]}
+                                      approvals={approvals}
+                                    />
+                                  )
+                                ) : undefined
+                              }
+                              onSelect={() =>
+                                setSelectedId((current) =>
+                                  current === e.id ? null : e.id,
+                                )
+                              }
+                            />
+                            {gaps.has(e.id) && (
+                              <IdleBand ms={gaps.get(e.id)!} />
+                            )}
+                          </Fragment>
+                        )}
+                      />
                     ))}
                     {visiblePreviews.map((preview) => (
                       <StreamingPreview

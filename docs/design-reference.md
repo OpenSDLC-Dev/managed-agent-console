@@ -796,14 +796,9 @@ selector now shrink and long IDs wrap. Browser checks cover 360px and 390px.
 
 ## Session list inspector — checked 2026-09-12
 
-Records ec8c4c6, frames 46–48, use `?session=ID` for list selection and a 560px
-inspector with Open, actions, Rendered/API and a descending page of 40 events.
-Selection must not change the list cursor; detail navigation remains explicit.
+The signed-in [Sessions list](https://platform.claude.com/workspaces/default/sessions?status=all) and [archived detail](https://platform.claude.com/workspaces/default/sessions/sesn_01Dsszg4casRWLETpVK76p23) were checked on 2026-11-28. All covers all four statuses including archived sessions. ID and title enter the standalone page. Quickview opens the `?session=ID` drawer with a latest-turn transcript and previous/next turn controls. The API view exposes the bounded recent-event response.
 
-Platform `sessions.go:renderSession` emits zero-only runtime stats, and
-`domain.Usage` has no cost fields. These placeholders remain in API view;
-Rendered does not claim measured duration, active time or billing. Full Session
-inspection and nested resource facts follow below.
+The full transcript groups user turns, with confirmations and results attached to their originating tool call. The raw chronological log and event links are available in the inspector and Debug. Self-hosted list cost and budgets have a separate [Platform definition task](https://github.com/OpenSDLC-Dev/managed-agent-platform/issues/1102).
 
 ## Session workspace — checked 2026-09-12
 

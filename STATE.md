@@ -4,7 +4,7 @@ Conventions: [AGENTS.md](./AGENTS.md) · changes: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Active work
 
-[Sessions parity](./docs/plan/14_sessions-parity.md) tracks the list URL, Quickview and turn transcripts. The [browser regression](./test/e2e/session-filters.spec.ts) covers archived sessions and pagination.
+[Sessions parity](./docs/plan/14_sessions-parity.md) tracks the list URL, Quickview and turn transcripts. The [list regressions](./test/e2e/session-filters.spec.ts) cover archived sessions and pagination and the [Quickview regressions](./test/e2e/session-inspector.spec.ts) cover turn navigation and linked tool results.
 
 The [Usage controls browser checks](./test/e2e/select-spacing.spec.ts) cover the sidebar destination, narrow filters, keyboard selection and system pickers.
 

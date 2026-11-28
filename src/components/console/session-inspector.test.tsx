@@ -63,7 +63,11 @@ function setup({
             { error: { type: "api_error", message: "Activity unavailable" } },
             { status: 500 },
           )
-        : Response.json({ data: events, next_page: "older" });
+        : Response.json(
+            url.searchParams.get("order") === "desc"
+              ? { data: [...events].reverse(), next_page: "older" }
+              : { data: events, next_page: null },
+          );
     if (url.pathname.endsWith("/archive")) {
       if (init?.method !== "POST")
         return Response.json(
@@ -159,14 +163,15 @@ it("renders pinned resources and bounded activity without inventing runtime or b
       0,
     ),
   );
+  await userEvent.click(screen.getByRole("button", { name: "API" }));
+  await screen.findByText(codeText(/"next_page": "older"/));
   const eventCall = fetch.mock.calls.find(([input]) =>
-    String(input).includes("/events"),
+    String(input).includes("order=desc"),
   );
   const params = new URL(String(eventCall?.[0]), "http://console.test")
     .searchParams;
   expect(params.get("order")).toBe("desc");
   expect(params.get("limit")).toBe("40");
-  await userEvent.click(screen.getByRole("button", { name: "API" }));
   expect(screen.getByText(codeText(/"next_page": "older"/))).toBeVisible();
   expect(screen.getByText(codeText(/"stats":/))).toBeVisible();
 });

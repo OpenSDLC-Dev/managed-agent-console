@@ -930,7 +930,7 @@ export const SURFACES: Surface[] = [
         await panel.getByTestId("error-state").waitFor();
         return;
       }
-      await panel.getByRole("heading", { name: "Latest activity" }).waitFor();
+      await panel.getByRole("heading", { name: "Transcript" }).waitFor();
       if (view === "empty-resources")
         await panel.getByText("No events yet.").waitFor();
       else await panel.locator("[data-event-id]").first().waitFor();

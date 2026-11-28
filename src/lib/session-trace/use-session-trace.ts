@@ -32,11 +32,15 @@ export function useSessionTrace(
   sessionId: string,
   threadId?: string,
   enabled = true,
+  live = true,
 ) {
   const scope = `${sessionId}/${threadId ?? ""}`;
   const [loadedScope, setLoadedScope] = useState(scope);
   const [trace, setTrace] = useState<TraceState>(emptyTrace);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [history, setHistory] = useState<{ ready: boolean; error?: unknown }>({
+    ready: false,
+  });
   // The store is also read/written inside the stream loop between renders.
   const traceRef = useRef<TraceState>(trace);
 
@@ -49,6 +53,7 @@ export function useSessionTrace(
     traceRef.current = emptyTrace();
     setTrace(traceRef.current);
     setConnection("connecting");
+    setHistory({ ready: false });
     setLoadedScope(scope);
     if (!enabled) return;
 
@@ -67,6 +72,7 @@ export function useSessionTrace(
 
     async function seed(signal: AbortSignal) {
       let page: string | undefined;
+      const cursors = new Set<string>();
       for (;;) {
         const eventPath = threadId
           ? `v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/events`
@@ -84,6 +90,9 @@ export function useSessionTrace(
         if (cancelled) return;
         update(applyPersisted(traceRef.current, result.data));
         if (!result.next_page) return;
+        if (cursors.has(result.next_page))
+          throw new Error("Session history returned a repeated cursor.");
+        cursors.add(result.next_page);
         page = result.next_page;
       }
     }
@@ -96,6 +105,11 @@ export function useSessionTrace(
         try {
           await seed(controller.signal);
           if (cancelled) return;
+          setHistory({ ready: true });
+          if (!live) {
+            setConnection("closed");
+            return;
+          }
           const streamPath = resourceURL(
             threadId
               ? `v1/sessions/${encodeURIComponent(sessionId)}/threads/${encodeURIComponent(threadId)}/stream`
@@ -197,6 +211,9 @@ export function useSessionTrace(
         } catch (error) {
           if (cancelled || controller.signal.aborted) return;
           controller.abort();
+          setHistory((previous) =>
+            previous.ready ? previous : { ready: false, error },
+          );
           update(clearPreviews(traceRef.current));
           // The seed above goes through `assertOk`, which bounces on its own —
           // so by the time a signed-out failure lands here the navigation has
@@ -229,10 +246,14 @@ export function useSessionTrace(
       clearTimeout(retryTimer);
       finishWait?.();
     };
-  }, [sessionId, threadId, enabled, scope]);
+  }, [sessionId, threadId, enabled, live, scope]);
 
   // A URL switch must never paint the previous child's events under a new name.
   return loadedScope === scope
-    ? { trace, connection }
-    : { trace: emptyTrace(), connection: "connecting" as const };
+    ? { trace, connection, history }
+    : {
+        trace: emptyTrace(),
+        connection: "connecting" as const,
+        history: { ready: false, error: undefined },
+      };
 }

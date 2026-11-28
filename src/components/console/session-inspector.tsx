@@ -1,6 +1,6 @@
 "use client";
 
-import { EventTypeName } from "./event-type-name";
+import { SessionTurnPreview } from "./session-turn-preview";
 import { surfacePaths } from "@/lib/routes";
 import { useState, type ComponentProps } from "react";
 import Link from "@/components/shell/workspace-navigation";
@@ -25,7 +25,6 @@ import {
   useSession,
   useVault,
 } from "@/lib/platform/queries";
-import { summaryOf } from "@/lib/session-trace/summary";
 import { tokenAttr, tokenCount } from "@/lib/utils";
 import type { DeploymentRun } from "@/lib/platform/types";
 import {
@@ -95,8 +94,8 @@ export function SessionSummary({
   run?: DeploymentRun;
 }) {
   const query = useSession(id, 5000);
-  const recent = useRecentSessionEvents(id);
   const [api, setApi] = useState(false);
+  const recent = useRecentSessionEvents(id, api && !!query.data);
   if (query.error && !query.data)
     return (
       <div className="space-y-4 overflow-y-auto">
@@ -244,49 +243,7 @@ export function SessionSummary({
               )}
             </dl>
             {run && <DeploymentRunDetails run={run} />}
-            <section>
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-sm font-medium">Latest activity</h3>
-                <Link
-                  className="inline-flex items-center gap-1 text-xs hover:underline"
-                  href={href}
-                >
-                  View events <ArrowRight className="size-3.5" />
-                </Link>
-              </div>
-              {recent.error && <ErrorState error={recent.error} />}
-              {recent.isPending ? (
-                <ListSkeleton />
-              ) : recent.data?.data.length ? (
-                <ol className="divide-y">
-                  {recent.data.data.map((event) => (
-                    <li
-                      key={event.id}
-                      data-event-id={event.id}
-                      className="py-2"
-                    >
-                      <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
-                        <code>
-                          <EventTypeName type={event.type} />
-                        </code>
-                        {event.processed_at && (
-                          <Time iso={event.processed_at} />
-                        )}
-                      </div>
-                      <p className="break-words pt-1 text-sm">
-                        {summaryOf(event)}
-                      </p>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                !recent.error && (
-                  <p className="text-sm text-muted-foreground">
-                    No events yet.
-                  </p>
-                )
-              )}
-            </section>
+            <SessionTurnPreview session={session} href={href} />
           </>
         )}
       </div>
