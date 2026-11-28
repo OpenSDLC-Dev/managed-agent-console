@@ -9,6 +9,44 @@ const ev = (
 ): SessionEvent => ({ id, type, processed_at: null, ...fields });
 
 describe("session turns", () => {
+  it("starts a new child turn when a received message wakes a finished thread", () => {
+    const events = [
+      ev("a", "agent.thread_message_received"),
+      ev("busy", "agent.thread_message_received"),
+      ev("idle", "session.thread_status_idle", {
+        stop_reason: { type: "end_turn" },
+      }),
+      ev("wake", "session.thread_status_running"),
+      ev("b", "agent.thread_message_received"),
+    ];
+    expect(groupSessionTurns(events, true).map((t) => t.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect(groupSessionTurns(events).map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("distinguishes the linked interrupt batch from generic tool failures with the same text", () => {
+    const payload = {
+      is_error: true,
+      content: [
+        {
+          type: "text" as const,
+          text: "Tool execution was interrupted before completion. Please retry.",
+        },
+      ],
+    };
+    const events = [
+      ev("a", "agent.tool_use"),
+      ev("r1", "agent.tool_result", { tool_use_id: "a", ...payload }),
+      ev("b", "agent.tool_use"),
+      ev("r2", "agent.tool_result", { tool_use_id: "b", ...payload }),
+      ev("stop", "user.interrupt"),
+    ];
+    const calls = groupSessionTurns(events)[0].entries;
+    expect(toolOutcome(calls[0])).toBe("Failed");
+    expect(toolOutcome(calls[1])).toBe("Interrupted");
+  });
   it("keeps late confirmations and results with their originating call across user turns", () => {
     const events = [
       ev("init", "session.status_idle"),

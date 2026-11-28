@@ -418,7 +418,10 @@ function SessionWorkspace({ id }: { id: string }) {
           eventSearchText(e).toLowerCase().includes(search.toLowerCase())),
     );
   }, [filter, search, trace.events]);
-  const turns = useMemo(() => groupSessionTurns(trace.events), [trace.events]);
+  const turns = useMemo(
+    () => groupSessionTurns(trace.events, selectedThreadId !== null),
+    [trace.events, selectedThreadId],
+  );
   const visibleIds = useMemo(
     () => new Set(visible.map((e) => e.id)),
     [visible],

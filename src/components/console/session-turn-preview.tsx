@@ -18,7 +18,7 @@ export function SessionTurnPreview({
   session: Session;
   href: string;
 }) {
-  const { trace, history } = useSessionTrace(
+  const { trace, history, connection } = useSessionTrace(
     session.id,
     undefined,
     true,
@@ -97,6 +97,11 @@ export function SessionTurnPreview({
           </div>
         )}
       </div>
+      {history.ready && connection === "reconnecting" && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Reconnecting to session updates…
+        </p>
+      )}
       {history.error ? (
         <ErrorState error={history.error} />
       ) : !history.ready ? (
